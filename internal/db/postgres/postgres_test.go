@@ -226,3 +226,24 @@ func TestExecEach(t *testing.T) {
 		t.Fatalf("after the cancel: %v %v", r.Rows, err)
 	}
 }
+
+// A connection the server drops in a transaction is in none: the server
+// rolled it back, though pgconn's status stays 'T' (F5.11).
+func TestTxStatusDropped(t *testing.T) {
+	ctx := context.Background()
+	c, other := connect(t, false), connect(t, false)
+	if _, err := c.Exec(ctx, "begin", 0); err != nil || c.TxStatus() != 'T' {
+		t.Fatalf("begin: %v %c", err, c.TxStatus())
+	}
+	pid, err := c.Query(ctx, "select pg_backend_pid()")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.Query(ctx, "select pg_terminate_backend($1::int)", pid.Rows[0][0]); err != nil {
+		t.Fatal(err)
+	}
+	c.Query(ctx, "select 1") // finds it gone
+	if got := c.TxStatus(); got != 'I' {
+		t.Errorf("dropped: %c", got)
+	}
+}

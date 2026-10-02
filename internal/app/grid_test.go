@@ -385,14 +385,17 @@ func TestColType(t *testing.T) {
 // refresh; the pointer on refresh lights it alone (§7.8「工具按钮」).
 func TestGoldenToolButtons(t *testing.T) {
 	var rows []string
-	for _, w := range []int{160, 110, 90, 70, 160} {
-		a := wide(w, 20)
+	for _, c := range []struct {
+		w     int
+		hover string // the button the pointer is on
+	}{{160, ""}, {110, ""}, {90, ""}, {70, ""}, {160, "grid.refresh"}} {
+		a := wide(c.w, 20)
 		tab := loadOrders(t, a, 3)
 		tab.auto, tab.out = 5*time.Second, 1
 		tab.edits = map[editKey]edit{{"1", "note"}: {val: db.Val{S: "x"}}, {"2", "note"}: {val: db.Val{S: "y"}}}
 		r := a.layout()[a.focused().ID]
-		if len(rows) == 8 {
-			at := find(t, a, ui.Target{Kind: ui.KindHint, Pane: a.focused().ID, Action: "grid.refresh"}).Min
+		if c.hover != "" {
+			at := find(t, a, ui.Target{Kind: ui.KindHint, Pane: a.focused().ID, Action: c.hover}).Min
 			a.Update(tea.MouseMotionMsg{X: at.X, Y: at.Y})
 		}
 		f := a.render()

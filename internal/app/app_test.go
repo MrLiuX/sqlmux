@@ -49,7 +49,7 @@ func (noDB) Close() error                                                { retur
 func testSession() *Session {
 	c := readyConn("doraemon")
 	c.Schema, c.Schemas, c.home, c.DB = "public", []string{"agentable", "public"}, "public", "doraemon"
-	s := newSession("doraemon", []*Conn{c}, c)
+	s := newSession("doraemon", []*Conn{c}, c, 1)
 	consoleOf(s.Windows[0].Root.B.Pane).schema = "public" // as the catalog's coming sets it
 	c.Tables = []db.Table{{Schema: "agentable", Name: "planner", Rows: 3}}
 	for _, t := range []struct {
@@ -83,7 +83,8 @@ func m0Layout(a *App) *App {
 	for _, name := range []string{"t_order", "t_user"} { // not fetched, nor in the catalog: opening public.t_order finds no tab of it
 		data.Tabs = append(data.Tabs, Tab{Name: name, Data: newDataTab(a.sess.Conns[0], db.Table{Schema: "m0", Name: name})})
 	}
-	a.sess.Windows = append(a.sess.Windows, &Window{Name: "report"})
+	a.sess.winID++
+	a.sess.Windows = append(a.sess.Windows, &Window{ID: a.sess.winID, Name: "report", Tree: &Pane{ID: 0}, Root: leaf(&Pane{ID: 1, Prev: -1}), lastID: 1})
 	return a
 }
 
@@ -152,6 +153,16 @@ func bgs(a *App, f *ui.Frame, y, x0, x1 int) string {
 		}
 	}
 	return b.String()
+}
+
+// A toast is one row: a driver's error of many lines, tabs too, is
+// flattened (§7.8).
+func TestToastOneRow(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	a.showToast("play：failed to connect\n\t127.0.0.1: refused", toastTTL)
+	if a.toast != "play：failed to connect； 127.0.0.1: refused" {
+		t.Errorf("toast %q", a.toast)
+	}
 }
 
 // teaKey turns a key in vim notation back into the press a terminal sends.

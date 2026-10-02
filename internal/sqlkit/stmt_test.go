@@ -164,7 +164,7 @@ func TestIsQuery(t *testing.T) {
 
 // pgCommands are the first words of PG 17's SQL Commands (the docs'
 // Reference, I. SQL Commands), each statement's.
-var pgCommands = strings.Fields(`abort alter analyze begin call checkpoint close cluster comment commit
+var pgCommands = strings.Fields(`abort alter analyse analyze begin call checkpoint close cluster comment commit
 	copy create deallocate declare delete discard do drop end execute explain fetch grant import
 	insert listen load lock merge move notify prepare reassign refresh reindex release reset revoke
 	rollback savepoint security select set show start table truncate unlisten update vacuum values with`)

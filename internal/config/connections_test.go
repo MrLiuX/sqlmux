@@ -110,3 +110,28 @@ func TestSecret(t *testing.T) {
 		t.Error("an unset password_env: no error")
 	}
 }
+
+// A connection made in the app goes at the end of connections.toml, as
+// text after the user's, comments and all; none there, the file is made
+// the user's only (§14).
+func TestAppendConnection(t *testing.T) {
+	path := connectionsFile(t, "# mine\n[[connection]]\nname = \"a\" # the first\nengine = \"postgres\"\ndsn = \"x\"", 0o600)
+	if err := AppendConnection(Connection{Name: "b", Engine: "postgres", DSN: "postgres://localhost/b", ReadOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	want := "# mine\n[[connection]]\nname = \"a\" # the first\nengine = \"postgres\"\ndsn = \"x\"\n\n[[connection]]\nname = \"b\"\nengine = \"postgres\"\ndsn = \"postgres://localhost/b\"\nread_only = true\n"
+	if string(data) != want {
+		t.Errorf("file:\n%s", data)
+	}
+	if cs, _, _, err := LoadConnections("b"); err != nil || len(cs) != 2 || !cs[1].ReadOnly {
+		t.Errorf("loaded back: %+v %v", cs, err)
+	}
+	os.Remove(path)
+	if err := AppendConnection(Connection{Name: "c", Engine: "postgres", DSN: "y"}); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("made: %v %v", info, err)
+	}
+}

@@ -87,7 +87,16 @@ func (t Tabs) Draw(f *Frame, r uv.Rectangle) {
 		x = f.Text(x, y, r.Max.X, " + ", plus)
 	}
 
-	if w := hintRowWidth(t.Hints); w > 0 && x+1+w+1 <= r.Max.X {
+	// The cell an unmarked last tab's × takes with no + after it is kept
+	// for it, hovered or not: the hints stay or go alike (F5.6).
+	spare := 0
+	if n := len(t.Names); t.NoNew && t.Close.Text != "" && n > t.Keep && n-1 != t.Cur && n-1 != t.Prev {
+		spare = 1
+		if took {
+			x--
+		}
+	}
+	if w := hintRowWidth(t.Hints); w > 0 && x+spare+1+w+1 <= r.Max.X {
 		hintRow(f, r.Max.X-1-w, y, r.Max.X, t.Hints, base, Target{Kind: KindHint, Pane: t.Pane})
 	}
 }

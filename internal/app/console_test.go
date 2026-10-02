@@ -166,7 +166,12 @@ func TestConsoleConn(t *testing.T) {
 	if feed(t, a, "doraemon<CR>"); c.conn != seed || a.toast != "当前连接有未提交的事务，先提交或回滚" {
 		t.Errorf("in a transaction: on %s, toast %q", c.conn.Spec.Name, a.toast)
 	}
-	seed.tx = 'I'
+	seed.tx, c.running = 'I', &run{}
+	a.run("console.conn", 0)
+	if feed(t, a, "doraemon<CR>"); c.conn != seed || a.toast != "正在执行，结束后再换连接" {
+		t.Errorf("running: on %s, toast %q", c.conn.Spec.Name, a.toast)
+	}
+	c.running = nil
 	a.run("console.conn", 0)
 	if feed(t, a, "idle<CR>"); c.conn != seed || c.want != idle || idle.State != connConnecting {
 		t.Fatalf("idle: on %s, want %v, %v", c.conn.Spec.Name, c.want, idle.State)
@@ -176,34 +181,34 @@ func TestConsoleConn(t *testing.T) {
 	}
 }
 
-// A console opens where its file last ran (§11): on a connection
-// connected, now; on one not, once it connects; on one gone, the current
-// one. console_1 too, at start.
+// console_1 of the layout started with opens where its file last ran:
+// on a connection connected, now; on one not, once it connects; a schema
+// gone, the connection's once its catalog is in. A new console goes on the
+// current connection, in its Schema, kept for its file (§11, F5.11).
 func TestConsoleRestore(t *testing.T) {
 	a, c1 := inConsole(t, "", "")
 	seed, idle := readyConn("seed"), newConn(config.Connection{Name: "idle"})
 	seed.Schema = "s1"
 	a.sess.Conns = append(a.sess.Conns, seed, idle)
-	a.state.Consoles = map[string]config.ConsoleState{"console_1": {Conn: "seed", Schema: "s0"}, "console_2": {Conn: "seed"}, "console_3": {Conn: "idle", Schema: "x"}, "console_4": {Conn: "gone"}}
-	if a.Init(); c1.conn != seed || c1.schema != "s0" {
+	a.state.Consoles = map[string]config.ConsoleState{"console_1": {Conn: "seed", Schema: "dropped"}, "console_2": {Conn: "idle", Schema: "x"}}
+	if a.Init(); c1.conn != seed || c1.schema != "dropped" {
 		t.Errorf("console_1 at start: on %s.%s", c1.conn.Spec.Name, c1.schema)
 	}
-	opened := func() *consoleTab { a.run("console.new", 0); return consoleOf(a.focused()) }
-	if c := opened(); c.conn != seed || c.schema != "s1" {
-		t.Errorf("console_2: on %s.%s", c.conn.Spec.Name, c.schema)
+	a.Update(catalogMsg{conn: seed, schemas: []string{"s1"}, current: "s1"})
+	if c1.schema != "s1" || a.state.Consoles["console_1"].Schema != "s1" {
+		t.Errorf("its schema gone: %s, kept %+v", c1.schema, a.state.Consoles["console_1"])
 	}
-	if c := opened(); c.conn != seed || c.want != idle || c.wantSchema != "x" || idle.State != connConnecting {
-		t.Errorf("console_3: on %s, want %v %q, %v", c.conn.Spec.Name, c.want, c.wantSchema, idle.State)
-	}
-	if c := opened(); c.conn != seed || c.want != nil {
-		t.Errorf("console_4: on %s, want %v", c.conn.Spec.Name, c.want)
+	a.run("console.new", 0)
+	c := consoleOf(a.focused())
+	if c.conn != seed || c.schema != "s1" || c.want != nil || idle.State != connIdle || a.state.Consoles["console_2"] != (config.ConsoleState{Conn: "seed", Schema: "s1"}) {
+		t.Errorf("console_2: on %s.%s, want %v, kept %+v", c.conn.Spec.Name, c.schema, c.want, a.state.Consoles["console_2"])
 	}
 }
 
 // soloSession is a new session over doraemon alone, not connected.
 func soloSession() *Session {
 	c := newConn(config.Connection{Name: "doraemon"})
-	return newSession("doraemon", []*Conn{c}, c)
+	return newSession("doraemon", []*Conn{c}, c, 1)
 }
 
 // A console file that cannot be read is not opened, empty or not: a toast

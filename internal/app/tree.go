@@ -52,7 +52,7 @@ func (a *App) connect(c *Conn) tea.Cmd {
 func (a *App) gotConnected(m connected) tea.Cmd {
 	c := m.conn
 	var waiting []*consoleTab
-	for _, t := range a.sess.consoles() {
+	for _, t := range a.consoles() {
 		if t.want == c {
 			t.want, waiting = nil, append(waiting, t)
 		}
@@ -64,8 +64,8 @@ func (a *App) gotConnected(m connected) tea.Cmd {
 	c.take(m.d)
 	cmds := []tea.Cmd{a.loadCatalog(c)}
 	for _, t := range waiting {
-		if t.conn.inTx() { // begun meanwhile
-			cmds = append(cmds, a.showToast("当前连接有未提交的事务，先提交或回滚", toastTTL))
+		if why := a.stayReason(t); why != "" { // begun, or running, meanwhile
+			cmds = append(cmds, a.showToast(why, toastTTL))
 			continue
 		}
 		cmds = append(cmds, a.switchConn(t, c, cmp.Or(t.wantSchema, c.Schema)))
@@ -99,7 +99,7 @@ func (a *App) loadCatalog(c *Conn) tea.Cmd {
 
 func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	if m.err != nil {
-		return a.showToast(m.err.Error(), toastTTL)
+		return a.showToast(m.conn.Spec.Name+"："+m.err.Error(), toastTTL)
 	}
 	c := m.conn
 	c.Schemas, c.Tables = m.schemas, m.tables
@@ -109,13 +109,14 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	if !slices.Contains(c.Schemas, c.Schema) { // the first load, or the schema is gone (§7.8)
 		c.Schema = c.home
 	}
-	for _, t := range a.sess.consoles() { // opened before the tree had a schema, or in one gone: the connection's (§8.6)
+	var cmds []tea.Cmd
+	for _, t := range a.consoles() { // opened before the tree had a schema, or in one gone: the connection's (§8.6)
 		if t.conn == c && !slices.Contains(c.Schemas, t.schema) {
 			t.schema = c.Schema
+			cmds = append(cmds, a.keepConsole(t))
 		}
 	}
 	a.clampTree()
-	var cmds []tea.Cmd
 	for _, t := range c.Tables { // R dropped the columns; an open table keeps showing them (§7.8)
 		if _, ok := c.cols[idOf(t)]; !ok && a.opened(tableNode(c, t), false) {
 			cmds = append(cmds, a.fetchCols(c, t))
@@ -141,9 +142,9 @@ func groupNode(c *Conn, sc string, views bool) string {
 	return schemaNode(c, sc) + "/tables"
 }
 
-func windowNode(wi int) string { return fmt.Sprintf("window:%d", wi) }
+func windowNode(w *Window) string { return fmt.Sprintf("window:%d", w.ID) }
 
-func paneNode(wi int, p *Pane) string { return fmt.Sprintf("%s/pane:%d", windowNode(wi), p.ID) }
+func paneNode(w *Window, p *Pane) string { return fmt.Sprintf("%s/pane:%d", windowNode(w), p.ID) }
 
 // revealTab puts the tree's cursor on the node of pane p's current tab,
 // the nodes above it opened, as nvim-tree's find_file (F3.29): a table's
@@ -154,7 +155,7 @@ func (a *App) revealTab(p *Pane) {
 	if tab == nil || p == a.win().Tree {
 		return
 	}
-	path := []string{"workspace", windowNode(a.sess.Active), paneNode(a.sess.Active, p)}
+	path := []string{"workspace", windowNode(a.win()), paneNode(a.win(), p)}
 	is := func(n node) bool { return n.kind == nodeTab && n.pane == p && n.tab == p.Cur && n.win == a.sess.Active }
 	if t := tab.Data; t != nil {
 		path = []string{connNode(t.conn), schemaNode(t.conn, t.table.Schema), groupNode(t.conn, t.table.Schema, t.table.View())}
@@ -333,12 +334,12 @@ func (a *App) treeNodes() (ns []node, matches int) {
 		if w.Root != nil {
 			leaves = w.Root.Leaves()
 		}
-		wid := windowNode(wi)
+		wid := windowNode(w)
 		if !add(node{id: wid, kind: nodeWindow, win: wi, TreeNode: ui.TreeNode{Depth: 1, Branch: len(leaves) > 0, Open: a.opened(wid, true), Icon: ic.Window, IconFg: th.Info, Text: w.Name}}) {
 			continue
 		}
 		for n, p := range leaves { // pane-<n> by ⟨n⟩: the sidebar is 0; no icon, the tabs have theirs (§7.8)
-			pid := paneNode(wi, p)
+			pid := paneNode(w, p)
 			if !add(node{id: pid, kind: nodePane, win: wi, pane: p, TreeNode: ui.TreeNode{Depth: 2, Branch: len(p.Tabs) > 0, Open: a.opened(pid, true), Icon: ui.Icon{Text: " "}, Text: fmt.Sprintf("pane-%d", n+1)}}) {
 				continue
 			}
@@ -508,8 +509,8 @@ func (a *App) treeCollapse() tea.Cmd {
 }
 
 // treeOpen is ↵ (and t, tablesOnly) on the cursor's node (§7.8): a table
-// opens, a column opens its table on that column, a tab of this window is
-// switched to; the rest, panes too, open and close. t only opens tables,
+// opens, a column opens its table on that column, a tab is switched to, a
+// window too; the rest, panes too, open and close. t only opens tables,
 // as ↵ does since a pane has a tab of a table at most (F3.37).
 func (a *App) treeOpen(tablesOnly bool) tea.Cmd {
 	n, ok := a.treeNode()
@@ -522,9 +523,12 @@ func (a *App) treeOpen(tablesOnly bool) tea.Cmd {
 		cmd := a.openTable(n.conn, n.table)
 		a.gotoColumn(n.conn, n.table, n.column)
 		return cmd
-	case n.kind == nodeTab && n.win == a.sess.Active:
+	case n.kind == nodeTab: // another window's: that window first (F5.2)
+		a.selectWindow(n.win)
 		a.showTab(n.pane, n.tab)
-	case n.kind != nodeTab: // a window's switch waits for M5, as another's tabs
+	case n.kind == nodeWindow: // l and h open and close it
+		a.selectWindow(n.win)
+	default:
 		return a.treeFold(n, !n.Open)
 	}
 	return nil

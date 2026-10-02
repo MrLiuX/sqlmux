@@ -202,7 +202,8 @@ func TestStatusPendingKeys(t *testing.T) {
 	for _, c := range []struct{ in, want string }{
 		{"", "·"},
 		{"<Space>", "SPC"},
-		{"s", "·"}, // SPC s completes (session.list comes later) and clears
+		{"s", "·"}, // SPC s completes: the session list, which esc closes
+		{"<Esc>", "·"},
 		{"g", "g"},
 		{"t", "·"},
 		{"5", "5"},

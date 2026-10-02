@@ -1,6 +1,6 @@
 # M5 工作现场与 MySQL · 任务清单
 
-- **状态**：M2–M4 验收通过（2026-10-02）。先做 M4 验收意见 F5.5–F5.9（节点 0）；之后按 F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，都是 todo（2026-10-02 按 worker 起草的清单定，§5「一个 session 多个连接」牵动的各节已改好）。
+- **状态**：M2–M4 验收通过（2026-10-02）。先做 M4 验收意见 F5.5–F5.9（节点 0，2026-10-02 通过）；之后按 F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，都是 todo（2026-10-02 按 worker 起草的清单定，§5「一个 session 多个连接」牵动的各节已改好）。
 - **目标**：
   - 一个 session 多个连接：目录树的根是 connections.toml 里的全部连接，用到时才连；
   - 支持多个 session、多个 window；
@@ -86,6 +86,12 @@
   - n 先在当前 session 里算，F5.1 有了多 session 后改成遍历所有 session；
   - 重跑显式传入连接和 schema：console 执行传它自己的，结果区重跑传结果 tab 记下的；
   - config 里 name 的字符限制保留，注释的理由改成 state 的键和树的节点 ID。
+- [ ] 审查时定（reviewer 提问，2026-10-02）：
+  - 新建的 console（`c`、引导页按钮、面板命令、`C-e`）一律用当前连接和它的 Schema，并写回 state；state 里的记录只在启动时恢复默认布局的 console_1 时用（§8.6、§11）；
+  - console 自己的执行还没回来时也不能换连接，toast「正在执行，结束后再换连接」；
+  - 连接下拉暂时不画每项的图标，F5.3 加 `lock`、F5.4 加 MySQL 图标时给 Dropdown 加每项一个图标；
+  - `password_cmd` 照 §13 按连接名缓存，测试里换密码来源时先清缓存；
+  - toast 里的换行换成「；」、Tab 换成空格，在显示 toast 的那一处统一做（§7.8）。
 
 **验收**
 - [ ] 单测：有事务时换连接被拦下；文件路径；n 的取法；从 state 恢复连接和 schema。
@@ -113,6 +119,14 @@
   - 校验同 LoadConnections（必填、名字规则、不能重名）；
   - 写入：在 connections.toml 末尾追加一段 `[[connection]]` 文本，不重新编码，保留用户的注释；文件不存在就新建，权限 0600；
   - 写入后所有 session 的树里都多出这个连接，状态是未连接；保存时不试连，展开时才连。
+- [ ] 细节（worker 提议，已定）：
+  - 新建 session：先在后台给新 session 的那份当前连接建连，toast「正在连接 <名字>…」，连上之后才建出 session 并 attach；连不上 toast `<名字>：<错误>`，不建 session（保住 F5.10「当前连接一定是连上的」）；
+  - session 列表没有过滤框，`j` / `k` 是移动键；行不画图标，session 行是名字加 `dim` 色的 `N windows`，window 行缩进一级写 `0: data`；打开时光标在当前 session 上；`n` 建好后直接 attach、关掉列表；
+  - `x` 关的是当前 session 时，attach 到它的上一个（它是第一个就下一个），列表不关，光标留在原来的行号；关之前先把它的 console 文件写盘，再在 Cmd 里关它的连接，断开时服务端自动回滚未提交的事务，确认之后不另发 ROLLBACK；确认框把这个 session 里所有表格的未保存修改数加起来，它的连接里有一个在事务中就加上「有未提交的事务，关闭会回滚」；
+  - `$` 重命名：空名字等于放弃，和已有 session 重名时 toast「已有同名 session」、名字不变；window 行上 `x` / `$` 不做事（F5.2 走面板和状态栏）；
+  - 面板 `$` 范围：名称是 session 名，所在位置 `N windows`，类型标签「会话」，图标 `conn`；当前 session 上 `↵` 只关面板；session 项不记进「最近用过」（ponytail，同 F4.3 的 tab 项）；
+  - 应答可能属于后台的 session：按应答里带的 conn / tab 指针处理，焦点、布局类的副作用只对当前 session 做；console_n 的 n 改成遍历所有 session；
+  - 表单：config 加 `ReadOnly`（F5.1 只写进文件，F5.3 才生效）；`Connection.Check(names)` 返回出错的字段和原因，LoadConnections 也用它；追加时用 BurntSushi 的 encoder 只编码这一条，原文件末尾没有换行先补一个，没填的可选字段不写；键位 `[keys.form]`：`form.next` / `form.prev`（Tab / S-Tab）、`form.save`（↵）、`form.cancel`（esc）。
 
 **验收**
 - [ ] e2e：
@@ -134,6 +148,13 @@
 - [ ] 面板里 window 项 `↵` 切过去；别的 window 的 tab 项 `↵` 先切 window、再选 tab、聚焦它的 pane（F4.3 留下的那一半）；树的工作区里 window 节点 `↵` / 单击也切过去（§7.8、§12）。
 - [ ] 重命名：状态栏上这个 window 的位置原地变成输入框（INSERT，`↵` 确定、`esc` 放弃）。
 - [ ] 关闭：有未保存的修改时先确认（§10.5）；关的是最后一个 window 时不做事，同「最后一个普通 pane 关不掉」（§5）。
+- [ ] 细节（worker 提议，已定）：
+  - `SPC c` 新建的 window：照 §5 默认布局，侧栏、一个空 pane，旁边放一个新的 console_n，比例同新 session；名字 `data`，重名不拦（同 tmux）；放在最后并切过去；
+  - `SPC n` / `SPC p` 到头绕回（同 tmux）；`SPC l` 回到上一个用过的 window，那个 window 已关掉就不做事；
+  - 关闭：先把这个 window 的 console 写盘，有未保存的修改先确认；关的是当前 window 时切到上一个用过的，没有就切到它前面那个（它是第一个就后面那个）。未提交事务的确认在 F5.3 加（让某个连接上不再有 console 时）；
+  - 重命名：状态栏上当前 window 那一段原地变成输入框（INSERT，没绑定的键当文字，`↵` 确定、`esc` 放弃），空名字等于放弃；
+  - 状态栏 window 列表的每一段可以点击，执行不带标题的 `window.select <i>`（同 `palette.scope`）；
+  - Window 加一个稳定 ID（同 Pane 的做法，session 里递增），树的展开状态和 `SPC l` 的「上一个用过的」都按 ID 记，不按下标：下标在关掉 window 后会前移，展开状态会错到后一个 window 上，`SPC l` 也会指错（决策者定，没有采用 worker 提的「按下标、用 ponytail 标出」）。
 
 **验收**
 - [ ] e2e：
@@ -203,65 +224,65 @@
 
 以下为 M2–M4 用户验收的意见（2026-10-02），在 F5.10 之前做，审查节点 0。
 
-## F5.5 工具按钮共用一条底色、竖线分隔 · 状态：todo
+## F5.5 工具按钮共用一条底色、竖线分隔 · 状态：passed（4179aca；e2e 0e2db7a）
 
 - **依赖**：F3.26
 - **涉及**：`internal/ui`（querybar）
 
 **开发**
-- [ ] 按 §7.8「工具按钮」：整排按钮共用一条 `sep` 底，组之间用 `border` 色的 `│` 分隔（参考 DataGrip 的工具栏，用户嫌一组一块底色有割裂感），转置也在这条底里；悬停只亮那一个按钮；让位顺序不变。
-- [ ] 细节（worker 提议，已定）：`│` 占 1 列、前后不另留空，组间距从 2 列变 1 列；`│` 是 `sep` 底、没有命中区；某组让位后 `│` 只画在仍显示的组之间；`ui.ButtonGroup.Bare` 没人用了，删掉。
+- [x] 按 §7.8「工具按钮」：整排按钮共用一条 `sep` 底，组之间用 `border` 色的 `│` 分隔（参考 DataGrip 的工具栏，用户嫌一组一块底色有割裂感），转置也在这条底里；悬停只亮那一个按钮；让位顺序不变。
+- [x] 细节（worker 提议，已定）：`│` 占 1 列、前后不另留空，组间距从 2 列变 1 列；`│` 是 `sep` 底、没有命中区；某组让位后 `│` 只画在仍显示的组之间；`ui.ButtonGroup.Bare` 没人用了，删掉。
 
 **验收**
-- [ ] golden：几种宽度下的按钮条，含悬停。
+- [x] golden：几种宽度下的按钮条，含悬停。
 
-## F5.6 tab 上悬停的 `×` 底色画满 · 状态：todo
+## F5.6 tab 上悬停的 `×` 底色画满 · 状态：passed（4179aca；e2e 0e2db7a）
 
 - **依赖**：F3.35
 - **涉及**：`internal/ui`（tab 栏）
 
 **开发**
-- [ ] 悬停时 `×` 的 `select` 底只盖住了一半（用户截图）：nerd 图标在终端里会画出格子外，按 §7.7「图标后面留空格」，`×` 后面跟一个空格、一起画底色，命中区同样覆盖这两格；悬停时 tab 栏仍不移位。原因和做法由 worker 确认后在提交说明里写明。
-- [ ] 细节（worker 提议，已定）：根因是 U+F00D 按字素宽度算 1 格，终端却画进右边一格。有标记（`*` / `-`）的 tab，`×` 替换标记，和后面的空格两格一起亮、一起做命中区；没有标记的 tab，悬停时把右边的 `│` 画成亮着的空格并算进命中区，结果区最后一个 tab 后面直接画一个亮着的空格。平时和悬停时布局都不变，不给每个 tab 预留标记位。
+- [x] 悬停时 `×` 的 `select` 底只盖住了一半（用户截图）：nerd 图标在终端里会画出格子外，按 §7.7「图标后面留空格」，`×` 后面跟一个空格、一起画底色，命中区同样覆盖这两格；悬停时 tab 栏仍不移位。原因和做法由 worker 确认后在提交说明里写明。
+- [x] 细节（worker 提议，已定）：根因是 U+F00D 按字素宽度算 1 格，终端却画进右边一格。有标记（`*` / `-`）的 tab，`×` 替换标记，和后面的空格两格一起亮、一起做命中区；没有标记的 tab，悬停时把右边的 `│` 画成亮着的空格并算进命中区，结果区最后一个 tab 后面直接画一个亮着的空格。平时和悬停时布局都不变，不给每个 tab 预留标记位。
 
 **验收**
-- [ ] golden：悬停时 `×` 和它后面的空格都是 `select` 底。
+- [x] golden：悬停时 `×` 和它后面的空格都是 `select` 底。
 
-## F5.7 转置视图左对齐 · 状态：todo
+## F5.7 转置视图左对齐 · 状态：passed（4179aca；e2e 0e2db7a）
 
 - **依赖**：F1.3
 - **涉及**：`internal/ui`（grid）
 
 **开发**
-- [ ] 转置视图里所有值一律左对齐，数字也是（§7.6：一列里混着各种类型，右对齐的数字看着乱）；不转置时照旧。
+- [x] 转置视图里所有值一律左对齐，数字也是（§7.6：一列里混着各种类型，右对齐的数字看着乱）；不转置时照旧。
 
 **验收**
-- [ ] golden：转置后的 t_order，`id`、`amount` 左对齐。
+- [x] golden：转置后的 t_order，`id`、`amount` 左对齐。
 
-## F5.8 `:` 打开「所有」范围 · 状态：todo
+## F5.8 `:` 打开「所有」范围 · 状态：passed（4179aca；e2e 0e2db7a）
 
 - **依赖**：F0.13
 - **涉及**：`internal/keymap/default.toml`、`internal/app`（palette 的排序）
 
 **开发**
-- [ ] `[keys.grid]`、`[keys.tree]`、`[keys.landing]` 里的 `:` 改绑 `palette.open`（「所有」范围，同 `C-p`）；在「所有」范围里，输入和某个 ex 别名完全相同时这条命令也排第一，`:q↵`、`:qa↵`、`:w↵` 照旧（§12「ex 别名」）。想要原来的命令范围，把 `:` 绑到 `palette.command`（不另加配置项）。
-- [ ] 细节（worker 提议，已定）：`palette.command` 保留标题、不再有默认键，导出时是 normal 节里的 `# "" = "palette.command"`；ex 别名在「所有」和 `>` 范围都生效，去掉首尾空白后完全相同才算，排在最近用过的前面。
+- [x] `[keys.grid]`、`[keys.tree]`、`[keys.landing]` 里的 `:` 改绑 `palette.open`（「所有」范围，同 `C-p`）；在「所有」范围里，输入和某个 ex 别名完全相同时这条命令也排第一，`:q↵`、`:qa↵`、`:w↵` 照旧（§12「ex 别名」）。想要原来的命令范围，把 `:` 绑到 `palette.command`（不另加配置项）。
+- [x] 细节（worker 提议，已定）：`palette.command` 保留标题、不再有默认键，导出时是 normal 节里的 `# "" = "palette.command"`；ex 别名在「所有」和 `>` 范围都生效，去掉首尾空白后完全相同才算，排在最近用过的前面。
 
 **验收**
-- [ ] e2e：表格里按 `:` 打开的是「所有」；`:q↵` 关掉 tab、`:w↵` 保存。
+- [x] e2e：表格里按 `:` 打开的是「所有」；`:q↵` 关掉 tab、`:w↵` 保存。
 
-## F5.9 键位挪到 keymaps.toml · 状态：todo
+## F5.9 键位挪到 keymaps.toml · 状态：passed（4179aca；e2e 0e2db7a）
 
 - **依赖**：F1.13
 - **涉及**：`internal/config`、`internal/keymap`、`cmd/sqlmux`（`keys --format toml`）
 
 **开发**
-- [ ] `[keys]`（含 leader）、`[keys.*]`、`[map.*]` 从 config.toml 挪到 `~/.config/sqlmux/keymaps.toml`（§14）；config.toml 里还写着它们时启动报错，提示挪到 keymaps.toml。
-- [ ] `sqlmux keys --format toml` 输出一份完整的 keymaps.toml（§6.7）：各作用域都有，和默认相同的绑定写成注释行、值是默认键，后面注释标题；没有默认键的写 `# "" = …`；`leader` 和各层 `[map.*]` 的示例也注释着放进去。用户去掉 `#` 才生效，新版本改了默认键不会被旧文件盖住。用户改过的（改键、解绑、leader、映射）照旧写成生效的行（tester 提问后定，保留 F1.13「导出的是当前生效的键位」的往返）。`--check` 读 keymaps.toml。
-- [ ] 细节（worker 提议，已定）：config.toml 里有顶层 `keys` / `map` 时报 `<路径>/config.toml: [keys] / [map] 要写在 keymaps.toml 里（sqlmux keys --format toml 生成一份完整的参考）`，走现有的启动报错、退出码 1，`keys --check` 同样报；keymaps.toml 里写了别的顶层键时报 `<路径>/keymaps.toml: <键>：这里只能写 [keys] 和 [map.*]`，文件不存在就当没有改动；config 包加 `ParseKeys`，`default.toml` 也走它，不加新类型。导出：`[keys]` 和各作用域的表头不注释，leader 是默认值时写 `# leader = …`；每个作用域按 default.toml 的顺序，相同的写注释行、改了的和解绑的在原位置写生效的行，然后是用户新加的绑定，最后是没绑定的 `# "" = …`；`[map.*]` 只出用户写了的表，末尾照旧附注释掉的示例；空作用域不出，文件头不加说明。
+- [x] `[keys]`（含 leader）、`[keys.*]`、`[map.*]` 从 config.toml 挪到 `~/.config/sqlmux/keymaps.toml`（§14）；config.toml 里还写着它们时启动报错，提示挪到 keymaps.toml。
+- [x] `sqlmux keys --format toml` 输出一份完整的 keymaps.toml（§6.7）：各作用域都有，和默认相同的绑定写成注释行、值是默认键，后面注释标题；没有默认键的写 `# "" = …`；`leader` 和各层 `[map.*]` 的示例也注释着放进去。用户去掉 `#` 才生效，新版本改了默认键不会被旧文件盖住。用户改过的（改键、解绑、leader、映射）照旧写成生效的行（tester 提问后定，保留 F1.13「导出的是当前生效的键位」的往返）。`--check` 读 keymaps.toml。
+- [x] 细节（worker 提议，已定）：config.toml 里有顶层 `keys` / `map` 时报 `<路径>/config.toml: [keys] / [map] 要写在 keymaps.toml 里（sqlmux keys --format toml 生成一份完整的参考）`，走现有的启动报错、退出码 1，`keys --check` 同样报；keymaps.toml 里写了别的顶层键时报 `<路径>/keymaps.toml: <键>：这里只能写 [keys] 和 [map.*]`，文件不存在就当没有改动；config 包加 `ParseKeys`，`default.toml` 也走它，不加新类型。导出：`[keys]` 和各作用域的表头不注释，leader 是默认值时写 `# leader = …`；每个作用域按 default.toml 的顺序，相同的写注释行、改了的和解绑的在原位置写生效的行，然后是用户新加的绑定，最后是没绑定的 `# "" = …`；`[map.*]` 只出用户写了的表，末尾照旧附注释掉的示例；空作用域不出，文件头不加说明。
 - [ ] 通过后决策者把用户的 config.toml 里的键位挪出去：生成 keymaps.toml，用户的 `Y` 映射保留为生效的行，config.toml 里只留主题等常规选项（各留备份）。
 
 **验收**
-- [ ] 单测：没有用户改动时，导出的全是注释，原样加载后和默认完全一样；有改动时导出再加载，生效的键位不变（往返）；去掉一行的 `#` 改了键后生效；config.toml 里写 `[keys]` 时报错。
-- [ ] e2e：只有 keymaps.toml、里面改了一个键时，界面上的键位提示跟着变。
+- [x] 单测：没有用户改动时，导出的全是注释，原样加载后和默认完全一样；有改动时导出再加载，生效的键位不变（往返）；去掉一行的 `#` 改了键后生效；config.toml 里写 `[keys]` 时报错。
+- [x] e2e：只有 keymaps.toml、里面改了一个键时，界面上的键位提示跟着变。
 

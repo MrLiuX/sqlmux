@@ -29,7 +29,7 @@ func settle(a *App, cmd tea.Cmd) {
 		for _, c := range m {
 			settle(a, c)
 		}
-	case connected, catalogMsg:
+	case connected, catalogMsg, sessionDialed:
 		_, next := a.Update(m)
 		settle(a, next)
 	}
@@ -91,6 +91,7 @@ func TestSecretCached(t *testing.T) {
 		return config.Connection{Name: "play", Engine: "postgres", DSN: u.String(), PasswordCmd: "echo >> " + runs + "; printf " + pw}
 	}
 	count := func() int { b, _ := os.ReadFile(runs); return strings.Count(string(b), "\n") }
+	secrets.Clear() // another test's play
 	for range 2 {
 		d, err := dial(context.Background(), spec(pw))
 		if err != nil {
@@ -102,6 +103,7 @@ func TestSecretCached(t *testing.T) {
 	if count() != 1 {
 		t.Errorf("two dials ran password_cmd %d times", count())
 	}
+	secrets.Clear() // a password source written anew: a run's are by name (§13)
 	for range 2 {
 		if _, err := dial(context.Background(), spec("wrong")); err == nil {
 			t.Fatal("a wrong password connects")
@@ -151,5 +153,36 @@ func TestConsolesShareMain(t *testing.T) {
 	run(c2, "rollback")
 	if settle(a, a.pickConn(c2, seed)); play.tx != 'I' || c2.conn != seed || seed.State != connReady {
 		t.Errorf("rolled back: %c, on %s, seed %v", play.tx, c2.conn.Spec.Name, seed.State)
+	}
+}
+
+// n makes a session of its own connections, the current one connected for
+// it first, then attached: named 1, console_n the next free, the other
+// connections not connected (§7.8「新建 session」).
+func TestNewSession(t *testing.T) {
+	dsn := postgres.IntegrationDSN(t)
+	sess, err := Open(context.Background(), []config.Connection{
+		{Name: "play", Engine: "postgres", DSN: dsn},
+		{Name: "seed", Engine: "postgres", DSN: dsn},
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Default()
+	keys, _ := keymap.New(cfg)
+	a := New(cfg, keys, sess, &config.State{}, "")
+	defer a.Close()
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
+	settle(a, a.loadCatalog(sess.Conns[0]))
+	a.Update(teaKey("<Space>"))
+	a.Update(teaKey("s"))
+	_, cmd := a.Update(teaKey("n"))
+	settle(a, cmd)
+	s := a.sess
+	if len(a.sessions) != 2 || s == sess || s.Name != "1" || s.Conns[0] == sess.Conns[0] || s.Conns[0].State != connReady || len(s.Conns[0].Tables) == 0 || s.Conns[1].State != connIdle {
+		t.Fatalf("sessions %d, attached %s, %v / %v", len(a.sessions), s.Name, s.Conns[0].State, s.Conns[1].State)
+	}
+	if c := consoleOf(s.Windows[0].Root.B.Pane); c == nil || c.key() != "console_2" || c.conn != s.Conns[0] {
+		t.Errorf("its console: %+v", c)
 	}
 }

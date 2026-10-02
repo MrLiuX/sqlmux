@@ -143,8 +143,8 @@ func TestPaletteTogglesAndRecent(t *testing.T) {
 		t.Fatalf("after ↵: palette %v rows %v zoom %d", a.palette, rowsOf(a), a.win().Zoom)
 	}
 	feed(t, a, "<Esc><C-p>split<Down><CR><C-p>")
-	// the split also left the zoom: OFF; then the first window
-	if rows := rowsOf(a); !strings.HasPrefix(rows[0], "pane.split.right=") || rows[1] != "pane.zoom=OFF" || rows[2] != "doraemon=" {
+	// the split also left the zoom: OFF; then the session
+	if rows := rowsOf(a); !strings.HasPrefix(rows[0], "pane.split.right=") || rows[1] != "pane.zoom=OFF" || rows[2] != "1 windows=" {
 		t.Errorf("recent first, then by id: %v", rows[:3])
 	}
 }
@@ -239,7 +239,7 @@ func namesOf(a *App) []string {
 func TestPaletteScopesCycle(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	feed(t, a, "<C-p>ord")
-	for _, want := range []string{"%ord", "@ord", ">ord", ";ord", "ord"} {
+	for _, want := range []string{"$ord", "%ord", "@ord", ">ord", ";ord", "ord"} {
 		feed(t, a, "<Tab>")
 		if got := a.palette.input.Text; got != want {
 			t.Fatalf("Tab: %q, want %q", got, want)
@@ -249,7 +249,7 @@ func TestPaletteScopesCycle(t *testing.T) {
 	if in := a.palette.input; in.Text != ";ord" || in.Pos != len(";ord") {
 		t.Fatalf("S-Tab wraps round: %+v", in)
 	}
-	click(a, find(t, a, ui.Target{Kind: ui.KindButton, Action: "palette.scope 2"}).Min)
+	click(a, find(t, a, ui.Target{Kind: ui.KindButton, Action: "palette.scope 3"}).Min)
 	if a.palette.input.Text != "@ord" {
 		t.Errorf("clicking 表: %q", a.palette.input.Text)
 	}
@@ -273,7 +273,7 @@ func TestPaletteScopesFilter(t *testing.T) {
 			t.Errorf("所有 lacks %s", s)
 		}
 	}
-	if want := "窗口:0: data Pane:⓪ schema Pane:① table · t_order Tab:t_order Tab:t_user Pane:② console · console_1 Tab:console_1 窗口:1: report 表:"; !strings.HasPrefix(all, want) {
+	if want := "会话:doraemon 窗口:0: data Pane:⓪ schema Pane:① table · t_order Tab:t_order Tab:t_user Pane:② console · console_1 Tab:console_1 窗口:1: report 表:"; !strings.HasPrefix(all, want) {
 		t.Errorf("as the tree's workspace, when nothing is typed: a window, its panes, each pane's tabs:\n%.200s", all)
 	}
 }
@@ -327,8 +327,8 @@ func TestPaletteOpensTables(t *testing.T) {
 		t.Error("C-t is for tables only")
 	}
 	feed(t, a, "<CR>")
-	if a.palette != nil || a.sess.Active != 0 {
-		t.Error("a window's ↵ only closes the palette until M5")
+	if a.palette != nil || a.sess.Active != 1 {
+		t.Error("a window's ↵ switches to it (F5.2)")
 	}
 
 	a = twoPanes(160, 45, "nerd")
@@ -391,7 +391,7 @@ func TestPaletteLayout(t *testing.T) {
 		a := sized(160, 45, icons)
 		feed(t, a, "<C-p>ab")
 		lines := strings.Split(a.render().String(), "\n")
-		if tabs := lines[8]; !strings.Contains(tabs, " 所有   窗口·Pane %   表 @   命令 > ") {
+		if tabs := lines[8]; !strings.Contains(tabs, " 所有   会话 $   窗口·Pane %   表 @   命令 > ") {
 			t.Errorf("%s: scope tabs row %q", icons, tabs)
 		}
 		if in := lines[9]; !strings.Contains(in, "│ "+search+" ab ") {
@@ -533,8 +533,8 @@ func TestPaletteTabs(t *testing.T) {
 	if rows := a.paletteView().Rows; len(rows) == 0 || rows[0].Where != "doraemon › 0: data" {
 		t.Errorf("a pane's place: %+v", rows)
 	}
-	// another window's tab is listed, not its pane; ↵ on it does nothing till M5
-	// its pane's ID is ①'s: IDs go by window
+	// another window's tab is listed, not its pane; ↵ on it switches to that
+	// window first (F5.2); its pane's ID is ①'s: IDs go by window
 	a.sess.Windows[1].Root = leaf(&Pane{ID: 1, Tabs: []Tab{{Name: "t_sku", Data: newDataTab(a.sess.Conns[0], tableNamed(a, "t_sku"))}, landing()}, Cur: 1})
 	feed(t, a, "<Esc><C-p>%report")
 	var tab ui.PaletteRow
@@ -550,9 +550,9 @@ func TestPaletteTabs(t *testing.T) {
 		t.Fatalf("another window's tab: %+v", tab)
 	}
 	a.win().focus(2)
-	focus, cur, one := a.win().Focus, a.sess.Windows[1].Root.Pane.Cur, a.win().pane(1).Cur
+	one := a.win().pane(1).Cur
 	feed(t, a, "<C-u>%t_sku<CR>")
-	if a.win().Focus != focus || a.sess.Windows[1].Root.Pane.Cur != cur || a.win().pane(1).Cur != one || a.sess.Active != 0 {
-		t.Errorf("↵ on another window's tab: focus %d, cur %d, ①'s %d", a.win().Focus, a.sess.Windows[1].Root.Pane.Cur, a.win().pane(1).Cur)
+	if a.sess.Active != 1 || a.win().Focus != 1 || a.win().Root.Pane.Cur != 0 || a.sess.Windows[0].pane(1).Cur != one {
+		t.Errorf("↵ on another window's tab: window %d, focus %d, cur %d, data's ① %d", a.sess.Active, a.win().Focus, a.win().Root.Pane.Cur, a.sess.Windows[0].pane(1).Cur)
 	}
 }

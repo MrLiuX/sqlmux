@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -29,6 +28,7 @@ type consoleTab struct {
 	want       *Conn
 	wantSchema string
 	ed         *editor.Editor
+	n          int // console_n: the state keeps where it runs by it
 	path       string
 	ver, saved int       // changes made, and the one the file has
 	failed     int       // the first line of the statement whose last run failed, its ▶ red; -1 for none
@@ -60,11 +60,11 @@ func openConsole(c *Conn, n int) (*consoleTab, error) {
 	if err != nil {
 		return nil, fmt.Errorf("读取失败：%w", err)
 	}
-	return &consoleTab{conn: c, schema: c.Schema, ed: editor.New(text), path: path, failed: -1}, nil
+	return &consoleTab{conn: c, schema: c.Schema, ed: editor.New(text), n: n, path: path, failed: -1}, nil
 }
 
 // key is t's file name, console_1, which the state keeps where it runs by.
-func (t *consoleTab) key() string { return strings.TrimSuffix(filepath.Base(t.path), ".sql") }
+func (t *consoleTab) key() string { return fmt.Sprintf("console_%d", t.n) }
 
 func consoleOf(p *Pane) *consoleTab {
 	if p.Cur < len(p.Tabs) {
@@ -84,7 +84,7 @@ func (a *App) focusedConsole() *consoleTab {
 
 // overlaid reports whether an overlay has the keys (§7.8).
 func (a *App) overlaid() bool {
-	return a.palette != nil || a.drop != nil || a.cols != nil || a.confirm != nil || a.keyHelp != nil
+	return a.palette != nil || a.drop != nil || a.cols != nil || a.confirm != nil || a.keyHelp != nil || a.sessList != nil || a.form != nil || a.winRename != nil
 }
 
 // vim is the editor that has the keys, with nothing over it: the focused
@@ -246,7 +246,7 @@ var autosaveDelay = time.Second
 func (a *App) consoleDid(t *consoleTab, eff editor.Effect) tea.Cmd {
 	t.comp = nil
 	cmds := a.vimCmds(eff, func(text string, p editor.ClipPut) tea.Cmd {
-		if !slices.Contains(a.sess.consoles(), t) {
+		if !slices.Contains(a.consoles(), t) {
 			return nil
 		}
 		return a.consoleDid(t, t.ed.PutClip(text, p))

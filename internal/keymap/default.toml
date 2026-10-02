@@ -161,6 +161,23 @@ leader = "<Space>"
 "/" = "cols.filter"
 "<Esc>" = "cols.close"
 
+[keys.sessions] # the session list (§7.8, S-03)
+"j" = "sessions.down"
+"k" = "sessions.up"
+"l" = "sessions.expand"
+"h" = "sessions.collapse"
+"<CR>" = "sessions.attach"
+"n" = "sessions.new"
+"x" = "sessions.kill"
+"$" = "sessions.rename"
+"<Esc>" = "sessions.close"
+
+[keys.form] # the new connection form (§7.8); space flips a switch, the form's own
+"<Tab>" = "form.next"
+"<S-Tab>" = "form.prev"
+"<CR>" = "form.save"
+"<Esc>" = "form.cancel"
+
 [keys.confirm] # §10.5: before changes are thrown away
 "y" = "confirm.yes"
 "<CR>" = "confirm.yes"

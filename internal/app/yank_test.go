@@ -76,6 +76,10 @@ func TestYankRow(t *testing.T) {
 	if feed(t, a, "p"); len(tab.added) != 1 {
 		t.Error("another table's row pasted")
 	}
+	a.rowCopy.table, a.rowCopy.conn = idOf(tab.table), readyConn("seed") // seed's t_order: another table (F5.10)
+	if feed(t, a, "p"); len(tab.added) != 1 {
+		t.Error("another connection's t_order row pasted")
+	}
 }
 
 // A console's yanks flash what they took, as vim.hl.on_yank: a line, a

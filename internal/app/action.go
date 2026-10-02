@@ -40,7 +40,7 @@ var actions map[string]Action
 func init() {
 	actions = map[string]Action{
 		"palette.open":    {Title: "命令面板", Run: do(func(a *App, _ Args) { a.openPalette("") })},
-		"palette.command": {Title: "命令面板：命令", Run: do(func(a *App, _ Args) { a.openPalette(">") })}, // as if > was typed: : did up to F5.8
+		"palette.command": {Title: "命令面板：命令", Run: do(func(a *App, _ Args) { a.openPalette(">") })}, // as if > was typed; bind : to it for the command scope (§6.8)
 		"palette.sql":     {Title: "快速 SQL", Run: do(func(a *App, _ Args) { a.openPalette(";") })},  // ; as if ; was typed (§12)
 		// Keys inside the palette. Like every overlay's own actions they are
 		// Local, which the palette does not list (§12); bound elsewhere in
@@ -69,7 +69,7 @@ func init() {
 		}},
 		"cancel": {Title: "取消 / 连按两次退出", Run: func(a *App, _ Args) tea.Cmd {
 			if p := a.palette; p != nil && p.quick != nil && p.quick.running != "" { // the palette stays (§12)
-				a.conn().Meta.Cancel()
+				p.conn.Meta.Cancel()
 				return nil
 			}
 			if a.mode() != keymap.Normal || inWhere(a) { // in any input C-c is esc, as in vim (§6.8), in a WHERE's NORMAL too (F3.39)
@@ -123,7 +123,7 @@ func init() {
 				a.palette.into = p
 			}
 		})},
-		"console.new": {Title: "新建 console", Run: func(a *App, _ Args) tea.Cmd { return a.newConsole() }},
+		"console.new": {Title: "新建 console", Run: func(a *App, _ Args) tea.Cmd { cmd, _ := a.newConsole(a.conn()); return cmd }},
 		// "console.run <line>" is a click on a ▶ (§11「执行」).
 		"console.run":    {Title: "执行", Run: func(a *App, args Args) tea.Cmd { return a.consoleRun(args.Arg) }},
 		"console.schema": {Title: "切换 schema", Run: do(func(a *App, _ Args) { a.openConsoleDrop(dropSchema) })},
@@ -196,15 +196,45 @@ func init() {
 			return cmd
 		}},
 		// The WHERE input in its vim's NORMAL (F3.39).
-		"where.run":   {Title: "执行", Local: true, Run: when(inWhere, func(a *App) tea.Cmd { return a.runWhere(a.typingTab()) })},
-		"where.leave": {Title: "回到表格", Local: true, Run: when(inWhere, func(a *App) tea.Cmd { a.typingTab().stopTyping(); return nil })},
-		"cols.up":     {Title: "上移", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsMove(-1); return nil })},
-		"cols.down":   {Title: "下移", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsMove(1); return nil })},
-		"cols.toggle": {Title: "显示 / 隐藏这一列", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsToggle(a.cols.sel); return nil })},
-		"cols.all":    {Title: "全部显示", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsSetAll(true); return nil })},
-		"cols.none":   {Title: "全部隐藏", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsSetAll(false); return nil })},
-		"cols.filter": {Title: "过滤列", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.cols.typing = true; return nil })},
-		"cols.close":  {Title: "关闭 COLS", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsEsc(); return nil })},
+		"where.run":    {Title: "执行", Local: true, Run: when(inWhere, func(a *App) tea.Cmd { return a.runWhere(a.typingTab()) })},
+		"where.leave":  {Title: "回到表格", Local: true, Run: when(inWhere, func(a *App) tea.Cmd { a.typingTab().stopTyping(); return nil })},
+		"session.list": {Title: "session 列表", Run: do(func(a *App, _ Args) { a.openSessions() })},
+		"conn.new":     {Title: "新建连接…", Run: do(func(a *App, _ Args) { a.openConnForm() })},
+		"window.new":   {Title: "新建 window", Run: func(a *App, _ Args) tea.Cmd { return a.addWindow() }},
+		"window.next":  {Title: "下一个 window", Run: do(func(a *App, _ Args) { a.cycleWindow(1) })},
+		"window.prev":  {Title: "上一个 window", Run: do(func(a *App, _ Args) { a.cycleWindow(-1) })},
+		"window.last":  {Title: "上次用的 window", Run: do(func(a *App, _ Args) { a.selectWindow(a.sess.windowByID(a.sess.prevWin)) })},
+		"window.close": {Title: "关闭 window", Run: func(a *App, _ Args) tea.Cmd { return a.closeWindow() }},
+		"window.rename": {Title: "重命名 window", Run: do(func(a *App, _ Args) {
+			a.winRename = &ui.Input{Text: a.win().Name, Pos: len(a.win().Name)}
+		})},
+		// "window.select <i>" is a click on the status bar's window i.
+		"window.select": {Run: do(func(a *App, args Args) {
+			if i, err := strconv.Atoi(args.Arg); err == nil {
+				a.selectWindow(i)
+			}
+		})},
+		"form.next":   {Title: "下一项", Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formMove(1); return nil })},
+		"form.prev":   {Title: "上一项", Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formMove(-1); return nil })},
+		"form.save":   {Title: "保存", Local: true, Run: when(inForm, func(a *App) tea.Cmd { return a.saveConnForm() })},
+		"form.cancel": {Title: "取消", Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.form = nil; return nil })},
+		// the session list's (§7.8)
+		"sessions.new":      {Title: "新建 session", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { return a.newSession() })},
+		"sessions.down":     {Title: "下移", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsMove(1); return nil })},
+		"sessions.up":       {Title: "上移", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsMove(-1); return nil })},
+		"sessions.expand":   {Title: "展开", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsFold(true); return nil })},
+		"sessions.collapse": {Title: "收起", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsFold(false); return nil })},
+		"sessions.attach":   {Title: "attach", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsAttach(a.sessList.sel); return nil })},
+		"sessions.kill":     {Title: "关闭 session", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { return a.killSession() })},
+		"sessions.rename":   {Title: "重命名 session", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.renameSession(); return nil })},
+		"sessions.close":    {Title: "关闭列表", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessList = nil; return nil })},
+		"cols.up":           {Title: "上移", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsMove(-1); return nil })},
+		"cols.down":         {Title: "下移", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsMove(1); return nil })},
+		"cols.toggle":       {Title: "显示 / 隐藏这一列", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsToggle(a.cols.sel); return nil })},
+		"cols.all":          {Title: "全部显示", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsSetAll(true); return nil })},
+		"cols.none":         {Title: "全部隐藏", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsSetAll(false); return nil })},
+		"cols.filter":       {Title: "过滤列", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.cols.typing = true; return nil })},
+		"cols.close":        {Title: "关闭 COLS", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsEsc(); return nil })},
 		"pane.error.close": {Title: "关闭错误栏", Run: func(a *App, args Args) tea.Cmd { // "pane.error.close <id>" is its ×
 			p := a.focused()
 			if id, err := strconv.Atoi(args.Arg); err == nil {
@@ -351,9 +381,6 @@ func init() {
 	// default.toml binds, the palette lists them all (§6.8); running them
 	// does nothing yet.
 	for id, title := range map[string]string{
-		"session.list": "session 列表", "session.new": "新建连接",
-		"window.new": "新建 window", "window.rename": "重命名 window", "window.close": "关闭 window",
-		"window.next": "下一个 window", "window.prev": "上一个 window", "window.last": "上次用的 window",
 		"grid.yank.insert": "复制为 INSERT",
 	} {
 		actions[id] = Action{Title: title}
@@ -408,6 +435,8 @@ func onCell(f func(*dataTab)) func(*App, Args) tea.Cmd {
 }
 
 func inPalette(a *App) bool  { return a.palette != nil }
+func inSessions(a *App) bool { return a.sessList != nil }
+func inForm(a *App) bool     { return a.form != nil }
 func inConfirm(a *App) bool  { return a.confirm != nil }
 func inDrop(a *App) bool     { return a.drop != nil }
 func inCols(a *App) bool     { return a.cols != nil }

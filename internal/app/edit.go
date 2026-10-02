@@ -735,13 +735,12 @@ func (a *App) unlessUnsaved(n int, what, verb string, then func() tea.Cmd) tea.C
 	return nil
 }
 
-// quit ends the program, asking first when changes would go (§10.5).
+// quit ends the program, asking first when changes of any session would
+// go (§10.5).
 func (a *App) quit() tea.Cmd {
 	var ps []*Pane
-	for _, w := range a.sess.Windows {
-		if w.Root != nil {
-			ps = append(ps, w.Root.Leaves()...)
-		}
+	for _, s := range a.sessions {
+		ps = append(ps, s.panes()...)
 	}
 	return a.unlessUnsaved(unsaved(ps...), "", "退出", func() tea.Cmd {
 		if cmd, ok := a.flushAll(ps...); !ok { // the consoles' text is not lost (§11)
