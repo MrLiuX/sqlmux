@@ -73,7 +73,7 @@ func TestKeyHelpWhere(t *testing.T) {
 	if feed(t, a, "?"); a.keyHelp == nil || !slices.Contains(helpItems(a), "t "+title("tree.open.tab")+" [keys.tree]") {
 		t.Fatalf("tree: %v", helpItems(a))
 	}
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	if feed(t, a, "?"); a.keyHelp == nil || !slices.Contains(helpItems(a), "↵ "+title("console.run")+" [keys.console]") {
 		t.Fatalf("a console's ? in NORMAL: %v", helpItems(a))
 	}
@@ -160,7 +160,7 @@ func TestKeyHelpTitle(t *testing.T) {
 	if feed(t, a, "g?"); a.keyHelp == nil || a.keyHelpView().Prefix != "g?" {
 		t.Fatalf("g?: %+v", a.keyHelp)
 	}
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	if feed(t, a, "<Space>?"); a.keyHelp == nil || a.keyHelpView().Prefix != "?" || c == nil {
 		t.Errorf("a console's: %q", a.keyHelpView().Prefix)
 	}

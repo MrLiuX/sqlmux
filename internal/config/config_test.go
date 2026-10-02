@@ -10,7 +10,7 @@ import (
 	"sqlmux/internal/ui"
 )
 
-func TestParseBindingsInFileOrder(t *testing.T) {
+func TestParse(t *testing.T) {
 	c, err := Parse(`
 icons = "ascii"
 timeoutlen = 300
@@ -21,6 +21,17 @@ formatprg = "pg_format -"
 autopairs = false
 [console]
 max_rows = 50
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Icons != ui.ASCIIIcons || c.Timeoutlen != 300 || c.TabWidth != 4 || c.ResultHeight != 0.3 || c.MaxRows != 50 || c.KeywordCase != "upper" || c.FormatPrg != "pg_format -" || c.AutoPairs {
+		t.Fatalf("got %+v", c)
+	}
+}
+
+func TestParseKeysInFileOrder(t *testing.T) {
+	leader, bs, err := ParseKeys(`
 [keys]
 leader = "<C-a>"
 [keys.normal]
@@ -31,20 +42,18 @@ J = "5j"
 [map.console.normal]
 L = "5l"
 `)
-	if err != nil {
-		t.Fatal(err)
-	}
 	want := []Binding{
 		{"keys.normal", "<C-w>v", "pane.split.right"},
 		{"keys.normal", "x", ""},
 		{"map.normal", "J", "5j"},
 		{"map.console.normal", "L", "5l"},
 	}
-	if c.Icons != ui.ASCIIIcons || c.Timeoutlen != 300 || c.TabWidth != 4 || c.ResultHeight != 0.3 || c.MaxRows != 50 || c.KeywordCase != "upper" || c.FormatPrg != "pg_format -" || c.AutoPairs || c.Leader != "<C-a>" || !reflect.DeepEqual(c.Bindings, want) {
-		t.Fatalf("got %+v", c)
+	if err != nil || leader != "<C-a>" || !reflect.DeepEqual(bs, want) {
+		t.Fatalf("leader %q, bindings %+v, %v", leader, bs, err)
 	}
 }
 
+// Keys belong in keymaps.toml, and only keys (F5.9).
 func TestParseErrors(t *testing.T) {
 	for _, s := range []string{
 		`icons = "emoji"`,
@@ -54,26 +63,53 @@ func TestParseErrors(t *testing.T) {
 		`keyword_case = "title"`,
 		`autopairs = "yes"`,
 		"[console]\nmax_rows = 0",
-		"[keys.normal]\nx = 1",
-		"[keys]\nx = \"a\"",
+		"[keys]\nleader = \"<C-a>\"",
+		"[map.normal]\nJ = \"5j\"",
 		"[keys.normal\n",
 	} {
 		if _, err := Parse(s); err == nil {
-			t.Errorf("%q: expected an error", s)
+			t.Errorf("config.toml %q: expected an error", s)
+		}
+	}
+	for _, s := range []string{
+		"[keys.normal]\nx = 1",
+		"[keys]\nx = \"a\"",
+		`theme = "x"`,
+		"[console]\nmax_rows = 50",
+		"[keys.normal\n",
+	} {
+		if _, _, err := ParseKeys(s); err == nil {
+			t.Errorf("keymaps.toml %q: expected an error", s)
 		}
 	}
 }
 
+// Load reads config.toml and keymaps.toml, each optional; an error names
+// its file, and one with keys in config.toml says where they go (F5.9).
 func TestLoadUsesXDGConfigHome(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	if c, err := Load(); err != nil || c.Icons != ui.NerdIcons {
-		t.Fatalf("missing file: %+v %v", c, err)
+		t.Fatalf("missing files: %+v %v", c, err)
 	}
+	conf, keys := filepath.Join(dir, "sqlmux", "config.toml"), filepath.Join(dir, "sqlmux", "keymaps.toml")
 	os.MkdirAll(filepath.Join(dir, "sqlmux"), 0o755)
-	os.WriteFile(filepath.Join(dir, "sqlmux", "config.toml"), []byte(`icons = "ascii"`), 0o644)
-	if c, err := Load(); err != nil || c.Icons != ui.ASCIIIcons {
+	os.WriteFile(keys, []byte("[keys.grid]\nx = \"\""), 0o644)
+	if c, err := Load(); err != nil || len(c.Bindings) != 1 {
+		t.Fatalf("keymaps.toml alone: %+v %v", c, err)
+	}
+	os.WriteFile(conf, []byte(`icons = "ascii"`), 0o644)
+	if c, err := Load(); err != nil || c.Icons != ui.ASCIIIcons || len(c.Bindings) != 1 {
 		t.Fatalf("got %+v %v", c, err)
+	}
+	os.WriteFile(conf, []byte("[keys.grid]\nx = \"\""), 0o644)
+	if _, err := Load(); err == nil || !strings.HasPrefix(err.Error(), conf+": ") || !strings.Contains(err.Error(), "keymaps.toml") {
+		t.Errorf("keys in config.toml: %v", err)
+	}
+	os.WriteFile(conf, nil, 0o644)
+	os.WriteFile(keys, []byte(`theme = "x"`), 0o644)
+	if _, err := Load(); err == nil || !strings.HasPrefix(err.Error(), keys+": theme：") {
+		t.Errorf("theme in keymaps.toml: %v", err)
 	}
 }
 

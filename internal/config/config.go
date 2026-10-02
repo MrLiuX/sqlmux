@@ -1,4 +1,5 @@
-// Package config reads config.toml from the XDG config dir (tech-design §14).
+// Package config reads config.toml and keymaps.toml from the XDG config dir
+// (tech-design §14).
 package config
 
 import (
@@ -30,8 +31,8 @@ type Config struct {
 	AutoPairs   bool   // brackets and quotes typed get their other half (§7.9)
 	theme       string // the name Parse read; Load finds the theme, as it touches the disk
 
-	// Leader and Bindings are the raw [keys] and [map.*] entries; the keymap
-	// package gives them meaning.
+	// Leader and Bindings are keymaps.toml's raw [keys] and [map.*]
+	// entries; the keymap package gives them meaning.
 	Leader   string
 	Bindings []Binding
 }
@@ -57,31 +58,42 @@ func Dir() string {
 	return filepath.Join(home, ".config", "sqlmux")
 }
 
-// Load reads config.toml; a missing file means all defaults.
+// Load reads config.toml, then keymaps.toml; a missing file means its
+// defaults.
 func Load() (*Config, error) {
+	c := Default()
 	path := filepath.Join(Dir(), "config.toml")
 	data, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return Default(), nil
-	}
-	if err != nil {
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+	case err != nil:
 		return nil, err
-	}
-	c, err := Parse(string(data))
-	if err == nil && c.theme != "" {
-		if c.Theme, c.Icons, err = loadTheme(c.theme, c.Icons); err != nil {
-			err = fmt.Errorf("theme = %q: %w", c.theme, err)
+	default:
+		if c, err = Parse(string(data)); err == nil && c.theme != "" {
+			if c.Theme, c.Icons, err = loadTheme(c.theme, c.Icons); err != nil {
+				err = fmt.Errorf("theme = %q: %w", c.theme, err)
+			}
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
 		}
 	}
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+	path = filepath.Join(Dir(), "keymaps.toml")
+	data, err = os.ReadFile(path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+	case err != nil:
+		return nil, err
+	default:
+		if c.Leader, c.Bindings, err = ParseKeys(string(data)); err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
 	}
 	return c, nil
 }
 
-// Parse reads config TOML over the defaults. It reads no other file: Load
-// finds the theme it names. Binding order follows the file, so "first
-// binding" questions have a stable answer.
+// Parse reads config.toml's TOML over the defaults. It reads no other
+// file: Load finds the theme it names, and the keys in keymaps.toml.
 func Parse(data string) (*Config, error) {
 	c := Default()
 	raw := struct {
@@ -96,12 +108,14 @@ func Parse(data string) (*Config, error) {
 		Console    struct {
 			MaxRows *int `toml:"max_rows"`
 		} `toml:"console"`
-		Keys map[string]any `toml:"keys"`
-		Map  map[string]any `toml:"map"`
+		Keys any `toml:"keys"`
+		Map  any `toml:"map"`
 	}{}
-	md, err := toml.Decode(data, &raw)
-	if err != nil {
+	if _, err := toml.Decode(data, &raw); err != nil {
 		return nil, err
+	}
+	if raw.Keys != nil || raw.Map != nil { // F5.9 moved them
+		return nil, errors.New("[keys] / [map] 要写在 keymaps.toml 里（sqlmux keys --format toml 生成一份完整的参考）")
 	}
 	if raw.Icons != nil {
 		if *raw.Icons != "nerd" && *raw.Icons != "ascii" {
@@ -146,25 +160,39 @@ func Parse(data string) (*Config, error) {
 		}
 		c.MaxRows = *n
 	}
-	tables := map[string]map[string]any{"keys": raw.Keys, "map": raw.Map}
+	return c, nil
+}
+
+// ParseKeys reads keymaps.toml's TOML (§14): [keys]' leader, and the
+// [keys.*] and [map.*] lines in file order, so "first binding" questions
+// have a stable answer.
+func ParseKeys(data string) (leader string, bindings []Binding, err error) {
+	var raw map[string]any
+	md, err := toml.Decode(data, &raw)
+	if err != nil {
+		return "", nil, err
+	}
 	for _, k := range md.Keys() {
-		if tables[k[0]] == nil || md.Type(k...) == "Hash" {
+		if k[0] != "keys" && k[0] != "map" {
+			return "", nil, fmt.Errorf("%s：这里只能写 [keys] 和 [map.*]", k[0])
+		}
+		if md.Type(k...) == "Hash" {
 			continue
 		}
-		v, ok := lookup(tables[k[0]], k[1:]).(string)
+		v, ok := lookup(raw, k).(string)
 		if !ok {
-			return nil, fmt.Errorf("%s：值必须是字符串", k)
+			return "", nil, fmt.Errorf("%s：值必须是字符串", k)
 		}
 		if k.String() == "keys.leader" {
-			c.Leader = v
+			leader = v
 			continue
 		}
 		if len(k) < 3 {
-			return nil, fmt.Errorf("%s：键位要写在 [keys.normal]、[map.normal] 这样的表里", k)
+			return "", nil, fmt.Errorf("%s：键位要写在 [keys.normal]、[map.normal] 这样的表里", k)
 		}
-		c.Bindings = append(c.Bindings, Binding{strings.Join(k[:len(k)-1], "."), k[len(k)-1], v})
+		bindings = append(bindings, Binding{strings.Join(k[:len(k)-1], "."), k[len(k)-1], v})
 	}
-	return c, nil
+	return leader, bindings, nil
 }
 
 // loadTheme finds a theme by name (§7.3): themes/<name>.toml first, then a

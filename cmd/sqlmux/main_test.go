@@ -11,34 +11,43 @@ import (
 	"sqlmux/internal/app"
 )
 
-func writeConfig(t *testing.T, toml string) {
+// writeConfig makes a config dir of the test's own with file name in it.
+func writeConfig(t *testing.T, name, toml string) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("XDG_DATA_HOME", t.TempDir()) // open() reads the consoles there
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	os.MkdirAll(filepath.Join(dir, "sqlmux"), 0o755)
-	if err := os.WriteFile(filepath.Join(dir, "sqlmux", "config.toml"), []byte(toml), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "sqlmux", name), []byte(toml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
 
+// --check reads keymaps.toml; keys left in config.toml fail it as they
+// fail the start (F5.9).
 func TestKeysCheck(t *testing.T) {
-	writeConfig(t, "")
+	writeConfig(t, "keymaps.toml", "")
 	var out, errb bytes.Buffer
 	if code := keysCmd([]string{"--check"}, &out, &errb); code != 0 || errb.Len() > 0 {
 		t.Fatalf("clean config: exit %d, stderr %q", code, errb.String())
 	}
 
-	writeConfig(t, "[keys.normal]\n\"<C-x>\" = \"a\"\n\"<c-x>\" = \"b\"\n")
+	writeConfig(t, "keymaps.toml", "[keys.normal]\n\"<C-x>\" = \"a\"\n\"<c-x>\" = \"b\"\n")
 	errb.Reset()
 	if code := keysCmd([]string{"--check"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "[keys.normal] <c-x>") {
 		t.Fatalf("duplicate: exit %d, stderr %q", code, errb.String())
 	}
+
+	writeConfig(t, "config.toml", "[keys.normal]\nx = \"\"\n")
+	errb.Reset()
+	if code := keysCmd([]string{"--check"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "config.toml: [keys] / [map] 要写在 keymaps.toml 里") {
+		t.Fatalf("keys in config.toml: exit %d, stderr %q", code, errb.String())
+	}
 }
 
 func TestKeysFormats(t *testing.T) {
-	writeConfig(t, "[keys.grid]\nx = \"\"\n")
+	writeConfig(t, "keymaps.toml", "[keys.grid]\nx = \"\"\n")
 	for format, want := range map[string]string{"md": "| global | `C-p` | palette.open |", "toml": "[keys.grid]"} {
 		var out, errb bytes.Buffer
 		if code := keysCmd([]string{"--format", format}, &out, &errb); code != 0 || !strings.Contains(out.String(), want) {
@@ -47,9 +56,10 @@ func TestKeysFormats(t *testing.T) {
 	}
 }
 
-// The toml export is the full reference (§6.7): loaded back as config.toml it
-// changes nothing, and every titled action is in it, on its binding lines or,
-// bound nowhere, on exactly one commented line.
+// The toml export is the full reference (§6.7): loaded back as keymaps.toml
+// it changes nothing, and every titled action is in it, on its binding
+// lines, defaults commented, or, bound nowhere, on exactly one commented
+// "" line.
 func TestKeysTOMLReference(t *testing.T) {
 	keys := func(args ...string) string {
 		var out, errb bytes.Buffer
@@ -58,9 +68,9 @@ func TestKeysTOMLReference(t *testing.T) {
 		}
 		return out.String()
 	}
-	writeConfig(t, "")
+	writeConfig(t, "keymaps.toml", "")
 	md, toml := keys(), keys("--format", "toml")
-	writeConfig(t, toml)
+	writeConfig(t, "keymaps.toml", toml)
 	if got := keys(); got != md {
 		t.Errorf("loaded back, the keymap changed:\n%s", got)
 	}
@@ -71,7 +81,7 @@ func TestKeysTOMLReference(t *testing.T) {
 		}
 	}
 	for id, title := range app.Titles() {
-		bound := len(regexp.MustCompile(`(?m)^".*" = "`+regexp.QuoteMeta(id)+`( .*)?"  # `+regexp.QuoteMeta(title)+`$`).FindAllString(toml, -1))
+		bound := len(regexp.MustCompile(`(?m)^(# )?"[^"].*" = "`+regexp.QuoteMeta(id)+`( .*)?"  # `+regexp.QuoteMeta(title)+`$`).FindAllString(toml, -1))
 		commented := strings.Count(toml, `# "" = "`+id+`"  # `+title+"\n")
 		if !(bound > 0 && commented == 0 || bound == 0 && commented == 1) {
 			t.Errorf("%s: %d binding lines, %d commented lines", id, bound, commented)
@@ -81,7 +91,7 @@ func TestKeysTOMLReference(t *testing.T) {
 
 // Startup errors name the file to fix (§14).
 func TestOpenWithoutConnections(t *testing.T) {
-	writeConfig(t, "")
+	writeConfig(t, "config.toml", "")
 	_, _, err := open("")
 	if err == nil || !strings.Contains(err.Error(), filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "sqlmux", "connections.toml")) {
 		t.Fatalf("no connections.toml: %v", err)

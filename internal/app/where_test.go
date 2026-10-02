@@ -175,14 +175,14 @@ func TestAutoPairs(t *testing.T) {
 		t.Errorf("off: %q", in.Text)
 	}
 
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	if feed(t, a, "icount("); text(c) != "count()" || c.ed.Cursor().Col != 6 {
 		t.Fatalf("console: %q at %v", text(c), c.ed.Cursor())
 	}
 	if feed(t, a, "<Esc>u"); text(c) != "" {
 		t.Errorf("one u takes the INSERT: %q", text(c))
 	}
-	a, c = inConsole(t, "autopairs = false")
+	a, c = inConsole(t, "autopairs = false", "")
 	if feed(t, a, "i("); text(c) != "(" {
 		t.Errorf("console off: %q", text(c))
 	}

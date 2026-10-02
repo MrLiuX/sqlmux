@@ -10,10 +10,12 @@ import (
 	"sqlmux/internal/config"
 )
 
+// load builds the keymap with toml as the user's keymaps.toml.
 func load(t *testing.T, toml string) (*Map, []Problem) {
 	t.Helper()
-	c, err := config.Parse(toml)
-	if err != nil {
+	c := config.Default()
+	var err error
+	if c.Leader, c.Bindings, err = config.ParseKeys(toml); err != nil {
 		t.Fatal(err)
 	}
 	return New(c)
@@ -282,6 +284,8 @@ leader = "<Bad>"
 	}
 }
 
+// The export keeps the user's changes live, each in its default's place,
+// and gives the same keymap loaded back (§6.7).
 func TestTOMLRoundTrip(t *testing.T) {
 	m := mustLoad(t, `
 [keys]
@@ -289,6 +293,7 @@ leader = "<C-a>"
 [keys.grid]
 x = ""
 "<C-w>v" = "pane.split.right"
+R = "grid.page.prev"
 [map.console.normal]
 L = "5l"
 `)
@@ -300,13 +305,15 @@ L = "5l"
 	}
 	normal := out[strings.Index(out, "[keys.normal]"):strings.Index(out, "[keys.global]")]
 	for _, want := range []string{
+		"[keys]\nleader = \"<C-a>\"\n",
 		"# 焦点在表格（NORMAL）\n[keys.grid]\n",
-		`"gt" = "tab.next"  # 下一个 tab` + "\n",
-		`"<C-w>v" = "pane.split.right"  # 左右分割` + "\n",
-		`"<C-p>" = "palette.open"` + "\n", // untitled: no comment
-		// an unbound default is exported as an unbind; a titled action bound
-		// nowhere comes after, commented, in the scope its prefix names
-		`"x" = ""` + "\n" + `# "" = "grid.nope"  # 没绑的` + "\n",
+		`# "gt" = "tab.next"  # 下一个 tab` + "\n",
+		`# "<C-p>" = "palette.open"` + "\n", // untitled: no comment
+		// a rebinding and an unbinding in the default's place, the user's
+		// own keys after the defaults, then a titled action bound nowhere,
+		// commented, in the scope its prefix names
+		`# "dd" = "grid.row.delete"` + "\n" + `"R" = "grid.page.prev"` + "\n" + `# "T" = "grid.transpose"` + "\n" + `"x" = ""` + "\n",
+		`"<C-w>v" = "pane.split.right"  # 左右分割` + "\n" + `# "" = "grid.nope"  # 没绑的` + "\n",
 		`"L" = "5l"` + "\n",
 		"# [map.grid.normal]\n# \"J\" = \"5j\"\n",
 	} {
@@ -319,6 +326,31 @@ L = "5l"
 	}
 	if !strings.Contains(m.Markdown(), "| normal | `C-a %` | pane.split.right |\n") {
 		t.Errorf("markdown lacks the leader binding:\n%s", m.Markdown())
+	}
+}
+
+// With nothing changed the export is all comments but its table headers,
+// so loaded back it is the defaults; a line taken out of its comment and
+// given another action is a rebinding, the rest staying comments when
+// exported again (§6.7, F5.9).
+func TestTOMLDefaultsCommented(t *testing.T) {
+	m := mustLoad(t, "")
+	out := m.TOML(map[string]string{"tab.next": "下一个 tab"})
+	for _, l := range strings.Split(out, "\n") {
+		if l != "" && !strings.HasPrefix(l, "# ") && !regexp.MustCompile(`^\[[a-z.]+\]$`).MatchString(l) {
+			t.Errorf("a live line: %q", l)
+		}
+	}
+	if !reflect.DeepEqual(mustLoad(t, out).tables, m.tables) {
+		t.Error("loaded back, the defaults changed")
+	}
+	mine := strings.Replace(out, `# "gt" = "tab.next"`, `"gt" = "tab.prev"`, 1)
+	again := mustLoad(t, mine)
+	if again.Hint("tab.prev", "normal") != "gt" || again.Hint("tab.next", "normal") != "" {
+		t.Errorf("gt rebound: tab.prev %q, tab.next %q", again.Hint("tab.prev", "normal"), again.Hint("tab.next", "normal"))
+	}
+	if live := regexp.MustCompile(`(?m)^"`).FindAllString(again.TOML(nil), -1); len(live) != 1 {
+		t.Errorf("%d live lines, want gt's", len(live))
 	}
 }
 

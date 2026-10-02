@@ -45,20 +45,23 @@ type Map struct {
 	Leader  []Key
 	Timeout time.Duration
 
-	tables   map[string][]Binding
-	defaults map[string][]Binding // for the export's unbind lines
-	tries    map[string]*node     // merged per context, see trie
+	tables        map[string][]Binding
+	defaults      map[string][]Binding // for the export: what the user changed
+	defaultLeader []Key
+	tries         map[string]*node // merged per context, see trie
 }
 
-// New builds the keymap from the embedded defaults and the user's config.
-// Lines with problems are skipped; the rest still apply.
+// New builds the keymap from the embedded defaults and the user's
+// keymaps.toml in user. Lines with problems are skipped; the rest still
+// apply.
 func New(user *config.Config) (*Map, []Problem) {
-	def, err := config.Parse(defaultTOML)
+	leader, def, err := config.ParseKeys(defaultTOML)
 	if err != nil {
 		panic("default.toml: " + err.Error())
 	}
 	m := &Map{tables: map[string][]Binding{}, tries: map[string]*node{}}
-	m.Leader, _ = Parse(def.Leader)
+	m.Leader, _ = Parse(leader)
+	m.defaultLeader = m.Leader
 	var problems []Problem
 	if user.Leader != "" {
 		if ks, err := Parse(user.Leader); err != nil || len(ks) == 0 || slices.Contains(ks, Leader) {
@@ -77,16 +80,16 @@ func New(user *config.Config) (*Map, []Problem) {
 		m.defaults[t] = slices.Clone(bs)
 	}
 	m.Timeout = time.Duration(user.Timeoutlen) * time.Millisecond
-	problems = append(problems, m.apply(user)...)
+	problems = append(problems, m.apply(user.Bindings)...)
 	return m, append(problems, m.ambiguities()...)
 }
 
-// apply merges one config's bindings: a key already bound in the same table
+// apply merges one file's bindings: a key already bound in the same table
 // is rebound in place (an ordinary remap, not a conflict), "" unbinds.
-func (m *Map) apply(c *config.Config) []Problem {
+func (m *Map) apply(bs []config.Binding) []Problem {
 	var ps []Problem
 	seen := map[string]string{} // table + normalized key → spelling, within this file
-	for _, b := range c.Bindings {
+	for _, b := range bs {
 		bad := func(format string, a ...any) { ps = append(ps, Problem{b.Table, b.Key, fmt.Sprintf(format, a...)}) }
 		if !slices.Contains(tables, b.Table) {
 			bad("没有这个表")
@@ -237,12 +240,14 @@ var when = map[string]string{
 	"keys.keyhelp":     "? 键位帮助打开时",
 }
 
-// TOML renders the effective keymap as a config that, loaded back, gives the
-// same keymap (`sqlmux keys --format toml`), commented to read as the full
-// reference (§6.7). titles come from app's registry, which keymap cannot
-// import. Defaults the user unbound come out as `"key" = ""`; titled actions
-// bound nowhere as a commented `"" = "<action>"` under the scope their ID
-// prefix names.
+// TOML renders the effective keymap as a whole keymaps.toml (`sqlmux keys
+// --format toml`, §6.7): every scope, with its defaults commented out, so
+// an old export never pins a new version's defaults, and only what the
+// user changed live, in the default's place: a rebinding, an unbinding
+// `"key" = ""`, then keys of their own. Loaded back it gives the same
+// keymap. titles come from app's registry, which keymap cannot import;
+// titled actions bound nowhere come as a commented `"" = "<action>"` under
+// the scope their ID prefix names.
 func (m *Map) TOML(titles map[string]string) string {
 	bound := m.Actions()
 	unbound := map[string][]string{}
@@ -257,24 +262,27 @@ func (m *Map) TOML(titles map[string]string) string {
 		unbound[t] = append(unbound[t], fmt.Sprintf(`# "" = %s  # %s`, strconv.Quote(id), titles[id]))
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "[keys]\nleader = %s\n", strconv.Quote(String(m.Leader)))
+	leader := "leader = " + strconv.Quote(String(m.Leader))
+	if slices.Equal(m.Leader, m.defaultLeader) {
+		leader = "# " + leader
+	}
+	fmt.Fprintf(&b, "[keys]\n%s\n", leader)
 	for _, t := range tables {
 		lines := []string{}
-		for _, bd := range m.tables[t] {
-			line := strconv.Quote(String(bd.Keys)) + " = "
-			if bd.RHS != nil {
-				line += strconv.Quote(String(bd.RHS))
-			} else {
-				line += strconv.Quote(bd.Action)
-				if id, _, _ := strings.Cut(bd.Action, " "); titles[id] != "" {
-					line += "  # " + titles[id]
-				}
-			}
-			lines = append(lines, line)
-		}
 		for _, d := range m.defaults[t] {
-			if !slices.ContainsFunc(m.tables[t], func(o Binding) bool { return m.same(o.Keys, d.Keys) }) {
+			i := slices.IndexFunc(m.tables[t], func(o Binding) bool { return m.same(o.Keys, d.Keys) })
+			switch {
+			case i < 0:
 				lines = append(lines, strconv.Quote(String(d.Keys))+` = ""`)
+			case m.tables[t][i].Action == d.Action && slices.Equal(m.tables[t][i].RHS, d.RHS):
+				lines = append(lines, "# "+tomlLine(d, titles))
+			default:
+				lines = append(lines, tomlLine(m.tables[t][i], titles))
+			}
+		}
+		for _, bd := range m.tables[t] {
+			if !slices.ContainsFunc(m.defaults[t], func(d Binding) bool { return m.same(d.Keys, bd.Keys) }) {
+				lines = append(lines, tomlLine(bd, titles))
 			}
 		}
 		lines = append(lines, unbound[t]...)
@@ -288,4 +296,17 @@ func (m *Map) TOML(titles map[string]string) string {
 	}
 	b.WriteString("\n# 用户映射（§6.6）：键 → 一串键（noremap）。[map.normal] 所有 pane 通用，下面这种只在表格里生效\n# [map.grid.normal]\n# \"J\" = \"5j\"\n")
 	return b.String()
+}
+
+// tomlLine is b as a keymaps.toml line, with its action's title.
+func tomlLine(b Binding, titles map[string]string) string {
+	line := strconv.Quote(String(b.Keys)) + " = "
+	if b.RHS != nil {
+		return line + strconv.Quote(String(b.RHS))
+	}
+	line += strconv.Quote(b.Action)
+	if id, _, _ := strings.Cut(b.Action, " "); titles[id] != "" {
+		line += "  # " + titles[id]
+	}
+	return line
 }

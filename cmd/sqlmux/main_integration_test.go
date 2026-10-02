@@ -27,7 +27,7 @@ func testDB(t *testing.T) (dsn, password string) {
 
 func writeConnection(t *testing.T, dsn, extra string) {
 	t.Helper()
-	writeConfig(t, "")
+	writeConfig(t, "config.toml", "")
 	body := "[[connection]]\nname = \"test\"\nengine = \"postgres\"\ndsn = \"" + dsn + "\"\n" + extra
 	if err := os.WriteFile(filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "sqlmux", "connections.toml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)

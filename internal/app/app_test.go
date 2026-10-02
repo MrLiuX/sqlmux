@@ -112,14 +112,24 @@ func sizedWith(w, h int, c *config.Config) *App {
 	return a
 }
 
-// configured is an App with toml as the user's config.toml.
+// configured is an App with toml as the user's keymaps.toml.
 func configured(t *testing.T, w, h int, toml string) *App {
 	t.Helper()
-	c, err := config.Parse(toml)
+	return sizedWith(w, h, userConfig(t, "", toml))
+}
+
+// userConfig is the config from the user's config.toml conf and
+// keymaps.toml keys.
+func userConfig(t *testing.T, conf, keys string) *config.Config {
+	t.Helper()
+	c, err := config.Parse(conf)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return sizedWith(w, h, c)
+	if c.Leader, c.Bindings, err = config.ParseKeys(keys); err != nil {
+		t.Fatal(err)
+	}
+	return c
 }
 
 // bgs is row y's backgrounds from x0 to x1, a letter a column: " " the

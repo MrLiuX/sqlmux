@@ -1,5 +1,5 @@
 # Default key bindings (tech-design §6.8). Same format as the user's
-# config.toml, which is loaded on top. Only keys every terminal can tell apart
+# keymaps.toml, which is loaded on top. Only keys every terminal can tell apart
 # (§6.2): no Alt, no Ctrl+Shift, no modified Enter, no Ctrl+digit, no C-i/C-m/C-[.
 
 [keys]
@@ -16,7 +16,7 @@ leader = "<Space>"
 "<C-k>" = "pane.focus.up"
 "<C-l>" = "pane.focus.right"
 # Only the common keys (§6.8). Everything else runs from the palette, or
-# gets a key in config.toml: "<Leader>h" = "pane.focus.left".
+# gets a key in keymaps.toml: "<Leader>h" = "pane.focus.left".
 "<Leader>s" = "session.list"
 "<Leader>c" = "window.new"
 "<Leader>n" = "window.next"

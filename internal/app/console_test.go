@@ -19,11 +19,12 @@ import (
 )
 
 // inConsole is the default layout with focus on console_1 (⟨2⟩), whose
-// file is in a directory of the test's own.
-func inConsole(t *testing.T, toml string) (*App, *consoleTab) {
+// file is in a directory of the test's own, with the user's config.toml
+// conf and keymaps.toml keys.
+func inConsole(t *testing.T, conf, keys string) (*App, *consoleTab) {
 	t.Helper()
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
-	a := configured(t, 160, 45, toml)
+	a := sizedWith(160, 45, userConfig(t, conf, keys))
 	feed(t, a, "<C-l>")
 	c := consoleOf(a.focused())
 	if c == nil {
@@ -37,7 +38,7 @@ func text(c *consoleTab) string { return strings.Join(c.ed.Lines(), "\n") }
 // Keys the keymap leaves go to the editor; one waiting for more takes the
 // next key itself, so f<Space>x is no SPC x (§6.4). : and ; are its vim's.
 func TestConsoleKeys(t *testing.T) {
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	feed(t, a, "ione two three<CR>four<Esc>gg0f<Space>x")
 	if text(c) != "onetwo three\nfour" || len(a.win().Root.Leaves()) != 2 {
 		t.Fatalf("f<Space>x: %q, panes %d", text(c), len(a.win().Root.Leaves()))
@@ -68,7 +69,7 @@ func TestConsoleKeys(t *testing.T) {
 // the right-hand side goes in as typed, meeting the editor as it then is
 // (§6.6): after i, a space is typed, no leader.
 func TestConsoleMaps(t *testing.T) {
-	a, c := inConsole(t, "tab_width = 4\n[map.console.normal]\nL = \"5l\"\nQ = \"iselect x<Esc>\"\nX = \"f<Space>\"\n[map.console.visual]\nH = \"2h\"\n")
+	a, c := inConsole(t, "tab_width = 4", "[map.console.normal]\nL = \"5l\"\nQ = \"iselect x<Esc>\"\nX = \"f<Space>\"\n[map.console.visual]\nH = \"2h\"\n")
 	feed(t, a, "Q")
 	if text(c) != "select x" || c.ed.Mode() != editor.Normal || len(a.win().Root.Leaves()) != 2 {
 		t.Fatalf("Q = iselect x<Esc>: %q in %v, panes %d", text(c), c.ed.Mode(), len(a.win().Root.Leaves()))
@@ -96,7 +97,7 @@ func TestConsoleMaps(t *testing.T) {
 // writes and closes; a new session has it back. The autosave writes only
 // for the latest change.
 func TestConsoleFile(t *testing.T) {
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	if c.path != config.ConsolePath("doraemon", 1) {
 		t.Fatalf("path %s", c.path)
 	}
@@ -146,7 +147,7 @@ func TestConsoleUnreadable(t *testing.T) {
 
 // A console that cannot be written says so, and neither closes nor quits.
 func TestConsoleSaveFails(t *testing.T) {
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	c.path = filepath.Join(os.DevNull, "console_1.sql")
 	feed(t, a, "ix<Esc>:w<CR>")
 	if !strings.HasPrefix(a.toast, "保存失败：") {
@@ -171,7 +172,7 @@ func TestConsoleSaveFails(t *testing.T) {
 // the clipboard, a plain one not; "+p asks the terminal for it and puts
 // what comes back (F3.38).
 func TestConsolePasteAndYank(t *testing.T) {
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	feed(t, a, "iab<Esc>0")
 	a.Update(tea.PasteMsg{Content: "dd\r\nx"})
 	if text(c) != "add\nxb" || c.ed.Mode() != editor.Normal {
@@ -195,7 +196,7 @@ func TestConsolePasteAndYank(t *testing.T) {
 // the selection's size with the key that runs it, what the editor waits
 // on (§7.8).
 func TestConsoleStatusBar(t *testing.T) {
-	a, _ := inConsole(t, "")
+	a, _ := inConsole(t, "", "")
 	feed(t, a, "iabc<CR>def<Esc>gg")
 	th := a.theme
 	for _, c := range []struct {
@@ -227,7 +228,7 @@ func TestConsoleStatusBar(t *testing.T) {
 // The terminal cursor is vim's: a block, a bar in INSERT, a line under in
 // REPLACE (§11).
 func TestConsoleCursorShape(t *testing.T) {
-	a, _ := inConsole(t, "")
+	a, _ := inConsole(t, "", "")
 	for _, c := range []struct {
 		keys string
 		want tea.CursorShape
@@ -242,7 +243,7 @@ func TestConsoleCursorShape(t *testing.T) {
 // A click puts the cursor there, a drag selects, the wheel scrolls the
 // console under the pointer without taking the focus (§11).
 func TestConsoleMouse(t *testing.T) {
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	feed(t, a, "i"+strings.Repeat("select 1;<CR>", 60)+"<Esc>gg")
 	feed(t, a, "<C-h>") // focus back on ⟨1⟩
 	text := c.ed.Top()
@@ -274,7 +275,7 @@ func TestConsoleMouse(t *testing.T) {
 // $EDITOR edits the file, written first; what it holds after is one undo
 // step (§11).
 func TestConsoleExternal(t *testing.T) {
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	feed(t, a, "iselect 1<Esc>")
 	if a.run("console.external", 0) == nil {
 		t.Fatal("no editor run")
@@ -299,7 +300,7 @@ func TestConsoleExternal(t *testing.T) {
 // step, and is a newline when that changes nothing; esc closes the list
 // and leaves INSERT, as nvim-cmp; a character not of a name closes it.
 func TestConsoleCompletion(t *testing.T) {
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	table, cols, _ := ordersTable(0)
 	for i, tb := range a.sess.Tables {
 		if tb.Name == "t_order" {
@@ -385,7 +386,7 @@ func TestSQLCompleteQualifier(t *testing.T) {
 // dropdown there, its own schema marked, ↵ picks; a new console takes the
 // tree's, then each keeps its own; completion lists its schema's tables.
 func TestConsoleSchema(t *testing.T) {
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	title := func() string { return strings.Split(a.render().String(), "\n")[0] }
 	if !strings.Contains(title(), " doraemon.public ▾  ▶ run ") {
 		t.Fatalf("title %q", title())
@@ -432,7 +433,7 @@ func TestConsoleSchema(t *testing.T) {
 // A console with no schema yet, or one gone, takes the tree's when the
 // catalog comes in (§8.6).
 func TestConsoleSchemaFromCatalog(t *testing.T) {
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	for _, was := range []string{"", "gone"} {
 		c.schema = was
 		a.Update(catalogMsg{schemas: []string{"agentable", "public"}, current: "public", tables: a.sess.Tables})
@@ -451,7 +452,7 @@ func TestConsoleSchemaFromCatalog(t *testing.T) {
 func TestGoldenConsoleTitle(t *testing.T) {
 	var titles []string
 	for _, w := range []int{200, 160, 130, 110, 100, 90} {
-		a, _ := inConsole(t, "")
+		a, _ := inConsole(t, "", "")
 		a.Update(tea.WindowSizeMsg{Width: w, Height: 20})
 		r := a.layout()[a.focused().ID]
 		titles = append(titles, ansi.Cut(strings.Split(a.render().String(), "\n")[r.Min.Y], r.Min.X, r.Max.X))
@@ -461,7 +462,7 @@ func TestGoldenConsoleTitle(t *testing.T) {
 
 // The console's candidates open under the word they complete (§9.7).
 func TestGoldenConsoleCompletion160x45(t *testing.T) {
-	a, _ := inConsole(t, "")
+	a, _ := inConsole(t, "", "")
 	feed(t, a, "iselect 1;<CR>select * from t_o")
 	golden.RequireEqual(t, a.render().String())
 }
@@ -469,7 +470,7 @@ func TestGoldenConsoleCompletion160x45(t *testing.T) {
 // What the console draws is the editor's state: the selection by kind,
 // the command line.
 func TestConsoleView(t *testing.T) {
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	c.ed.Load("ab\nc\td")
 	feed(t, a, "Gfd")
 	view := func() ui.Console { v, _ := a.consoleView(a.focused(), c); return v }

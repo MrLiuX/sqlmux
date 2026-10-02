@@ -81,7 +81,7 @@ func TestYankRow(t *testing.T) {
 // A console's yanks flash what they took, as vim.hl.on_yank: a line, a
 // word; a delete does not (F3.32).
 func TestYankFlashConsole(t *testing.T) {
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	c.ed.Load("select 1\nfrom t")
 	p := a.focused()
 	keys(t, a, "yy")

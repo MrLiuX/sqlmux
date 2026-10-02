@@ -110,7 +110,7 @@ func runOf(t *testing.T, cmd tea.Cmd) runDone {
 // text, with no schema of its own: no search_path is set (TestRunSchema).
 func inRun(t *testing.T, d *execDB, text string) (*App, *consoleTab) {
 	t.Helper()
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	a.sess.Main = db.NewWorker(d)
 	c.ed.Load(text)
 	c.schema = ""
@@ -458,7 +458,7 @@ func TestGoldenResult(t *testing.T) {
 	defer func() { clock = time.Now }()
 	var titles []string
 	for _, w := range []int{160, 90, 70, 62, 56, 50, 46, 42} { // ascii: the buttons can be read
-		a, c := inConsole(t, `icons = "ascii"`)
+		a, c := inConsole(t, `icons = "ascii"`, "")
 		a.sess.Main = db.NewWorker(d)
 		c.ed.Load("select 1")
 		a.Update(tea.WindowSizeMsg{Width: w, Height: 30})

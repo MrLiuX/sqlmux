@@ -30,7 +30,7 @@ func gqIn(t *testing.T, a *App, c *consoleTab, keys string) {
 // last line as vim's gq; gq and a motion the statements it touches, first
 // to last; a selection what it holds, and VISUAL ends.
 func TestFormatStatement(t *testing.T) {
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	a.consoleDid(c, c.ed.Load("x;\nselect a,b from t;"))
 	gqIn(t, a, c, "jgqq")
 	if got := text(c); got != "x;\nselect\n  a,\n  b\nfrom\n  t;" || c.ed.Cursor() != (editor.Pos{Line: 5, Col: 2}) {
@@ -54,7 +54,7 @@ func TestFormatStatement(t *testing.T) {
 // What comes back after the text changed, or into INSERT, is dropped; a
 // failure, no output or a timeout says so and changes nothing (§9.5).
 func TestFormatDropsAndFails(t *testing.T) {
-	a, c := inConsole(t, "")
+	a, c := inConsole(t, "", "")
 	for _, k := range []string{"x", "A"} {
 		a.consoleDid(c, c.ed.Load("select a from t"))
 		feed(t, a, "gg0gq")
@@ -72,14 +72,14 @@ func TestFormatDropsAndFails(t *testing.T) {
 	if text(c) != "select 'a" || !strings.HasPrefix(a.toast, "格式化失败：Parse error") {
 		t.Errorf("%q, toast %q", text(c), a.toast)
 	}
-	a, c = inConsole(t, `formatprg = "true"`)
+	a, c = inConsole(t, `formatprg = "true"`, "")
 	a.consoleDid(c, c.ed.Load("select a from t;"))
 	if gqIn(t, a, c, "gqq"); text(c) != "select a from t;" || a.toast != "格式化失败：没有输出" {
 		t.Errorf("no output: %q, toast %q", text(c), a.toast)
 	}
 	defer func(d time.Duration) { sqlkit.FormatTimeout = d }(sqlkit.FormatTimeout)
 	sqlkit.FormatTimeout = 200 * time.Millisecond
-	a, c = inConsole(t, `formatprg = "sleep 10; echo x"`)
+	a, c = inConsole(t, `formatprg = "sleep 10; echo x"`, "")
 	a.consoleDid(c, c.ed.Load("select a from t"))
 	start := time.Now()
 	if gqIn(t, a, c, "gqq"); text(c) != "select a from t" || a.toast != "格式化超时（200ms）" || time.Since(start) > 2*time.Second {
@@ -90,13 +90,13 @@ func TestFormatDropsAndFails(t *testing.T) {
 // formatprg formats instead: stdin in, stdout out; its stderr's first
 // line when it fails (§9.5).
 func TestFormatPrg(t *testing.T) {
-	a, c := inConsole(t, `formatprg = "tr a-z A-Z"`)
+	a, c := inConsole(t, `formatprg = "tr a-z A-Z"`, "")
 	a.consoleDid(c, c.ed.Load("select a from t"))
 	gqIn(t, a, c, "gqq")
 	if text(c) != "SELECT A FROM T" {
 		t.Errorf("%q", text(c))
 	}
-	a, c = inConsole(t, `formatprg = "echo 'no good' >&2; echo second >&2; exit 3"`)
+	a, c = inConsole(t, `formatprg = "echo 'no good' >&2; echo second >&2; exit 3"`, "")
 	a.consoleDid(c, c.ed.Load("select a from t"))
 	gqIn(t, a, c, "gqq")
 	if text(c) != "select a from t" || a.toast != "格式化失败：no good" {
