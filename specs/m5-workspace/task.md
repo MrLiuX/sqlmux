@@ -113,6 +113,14 @@
   - 校验同 LoadConnections（必填、名字规则、不能重名）；
   - 写入：在 connections.toml 末尾追加一段 `[[connection]]` 文本，不重新编码，保留用户的注释；文件不存在就新建，权限 0600；
   - 写入后所有 session 的树里都多出这个连接，状态是未连接；保存时不试连，展开时才连。
+- [ ] 细节（worker 提议，已定）：
+  - 新建 session：先在后台给新 session 的那份当前连接建连，toast「正在连接 <名字>…」，连上之后才建出 session 并 attach；连不上 toast `<名字>：<错误>`，不建 session（保住 F5.10「当前连接一定是连上的」）；
+  - session 列表没有过滤框，`j` / `k` 是移动键；行不画图标，session 行是名字加 `dim` 色的 `N windows`，window 行缩进一级写 `0: data`；打开时光标在当前 session 上；`n` 建好后直接 attach、关掉列表；
+  - `x` 关的是当前 session 时，attach 到它的上一个（它是第一个就下一个），列表不关，光标留在原来的行号；关之前先把它的 console 文件写盘，再在 Cmd 里关它的连接，断开时服务端自动回滚未提交的事务，确认之后不另发 ROLLBACK；确认框把这个 session 里所有表格的未保存修改数加起来，它的连接里有一个在事务中就加上「有未提交的事务，关闭会回滚」；
+  - `$` 重命名：空名字等于放弃，和已有 session 重名时 toast「已有同名 session」、名字不变；window 行上 `x` / `$` 不做事（F5.2 走面板和状态栏）；
+  - 面板 `$` 范围：名称是 session 名，所在位置 `N windows`，类型标签「会话」，图标 `conn`；当前 session 上 `↵` 只关面板；session 项不记进「最近用过」（ponytail，同 F4.3 的 tab 项）；
+  - 应答可能属于后台的 session：按应答里带的 conn / tab 指针处理，焦点、布局类的副作用只对当前 session 做；console_n 的 n 改成遍历所有 session；
+  - 表单：config 加 `ReadOnly`（F5.1 只写进文件，F5.3 才生效）；`Connection.Check(names)` 返回出错的字段和原因，LoadConnections 也用它；追加时用 BurntSushi 的 encoder 只编码这一条，原文件末尾没有换行先补一个，没填的可选字段不写；键位 `[keys.form]`：`form.next` / `form.prev`（Tab / S-Tab）、`form.save`（↵）、`form.cancel`（esc）。
 
 **验收**
 - [ ] e2e：
