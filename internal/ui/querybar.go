@@ -45,12 +45,11 @@ type Button struct {
 	Plain  bool        // a state button unlit: Fg, whatever [icon] says
 }
 
-// ButtonGroup is buttons side by side on one sep box, or none when Bare
-// (§7.8「工具按钮」). On a short row the group with the least Stay gives
-// way first.
+// ButtonGroup is buttons side by side, a │ between it and the next on the
+// row's one sep strip (§7.8「工具按钮」). On a short row the group with the
+// least Stay gives way first.
 type ButtonGroup struct {
 	Buttons []Button
-	Bare    bool
 	Stay    int
 }
 
@@ -111,14 +110,14 @@ func (q QueryBar) ButtonRect(r uv.Rectangle, action string) uv.Rectangle {
 }
 
 // buttonRects is where the buttons of groups, the shown ones, go on the
-// second row past chips chips, by group: side by side, two columns
+// second row past chips chips, by group: side by side, a column for the │
 // between groups; none for a group given way.
 func (q QueryBar) buttonRects(r uv.Rectangle, chips int, groups []int) [][]uv.Rectangle {
 	x := q.end(r, chips, nil)
 	out := make([][]uv.Rectangle, len(q.Buttons))
 	for i, g := range groups {
 		if i > 0 {
-			x += 2
+			x++
 		}
 		for _, b := range q.Buttons[g].Buttons {
 			out[g] = append(out[g], uv.Rect(x, r.Min.Y+1, b.width(), 1))
@@ -190,14 +189,14 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 			f.Text(x+Width(c.Icon.Text), y, cr.Max.X, " ", uv.Style{Bg: ist.Bg})
 		}
 	}
-	for i, g := range q.buttonRects(r, chips, groups) { // a group's box on sep, a button lit whole under the pointer (§7.8)
-		box := th.Sep
-		if q.Buttons[i].Bare {
-			box = th.PaneBg
+	rects := q.buttonRects(r, chips, groups)
+	for k, i := range groups { // one sep strip, │ between groups, a button lit whole under the pointer (§7.8)
+		if k > 0 {
+			f.Text(rects[i][0].Min.X-1, y, r.Max.X-1, "│", uv.Style{Fg: th.Border, Bg: th.Sep})
 		}
-		for j, br := range g {
+		for j, br := range rects[i] {
 			b := q.Buttons[i].Buttons[j]
-			st := uv.Style{Fg: cmp.Or[color.Color](b.Fg, th.Info), Bg: box}
+			st := uv.Style{Fg: cmp.Or[color.Color](b.Fg, th.Info), Bg: th.Sep}
 			if b.Action != "" && f.Region(br, Target{Kind: KindHint, Pane: q.Pane, Action: b.Action}) {
 				st.Bg = th.Select
 			}
@@ -259,7 +258,7 @@ func (q QueryBar) end(r uv.Rectangle, chips int, groups []int) int {
 	}
 	for i, g := range groups {
 		if i > 0 {
-			x += 2 // two between groups
+			x++ // the │ between groups
 		}
 		for _, b := range q.Buttons[g].Buttons {
 			x += b.width()

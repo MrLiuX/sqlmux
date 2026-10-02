@@ -525,7 +525,7 @@ func (a *App) toolButtons(t *dataTab) []ui.ButtonGroup {
 		{Buttons: []ui.Button{{Icon: ic.RowAdd, Action: "grid.row.add", Fg: th.Focus}, {Icon: ic.RowDelete, Action: "grid.row.delete", Fg: th.Error}}, Stay: 2},
 		{Buttons: []ui.Button{save, {Icon: ic.Refresh, Action: "grid.refresh", Fg: th.Info}}, Stay: 3},
 		{Buttons: []ui.Button{auto, stop}, Stay: 1},
-		{Buttons: []ui.Button{{Icon: ic.Transpose, Action: "grid.transpose", Fg: th.Info}}, Bare: true},
+		{Buttons: []ui.Button{{Icon: ic.Transpose, Action: "grid.transpose", Fg: th.Info}}},
 	}
 }
 

@@ -2,8 +2,10 @@ package app
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
+	"image/color"
 	"math"
 	"os"
 	"reflect"
@@ -118,6 +120,20 @@ func configured(t *testing.T, w, h int, toml string) *App {
 		t.Fatal(err)
 	}
 	return sizedWith(w, h, c)
+}
+
+// bgs is row y's backgrounds from x0 to x1, a letter a column: " " the
+// pane's, "-" sep, "#" select, "?" any other.
+func bgs(a *App, f *ui.Frame, y, x0, x1 int) string {
+	th := a.theme
+	letters := map[color.Color]string{th.PaneBg: " ", th.Sep: "-", th.Select: "#"}
+	var b strings.Builder
+	for x := x0; x < x1; x++ {
+		if c := f.Buf.CellAt(x, y); c.Width > 0 { // a wide one's letter for its columns, as the text has them
+			b.WriteString(strings.Repeat(cmp.Or(letters[c.Style.Bg], "?"), c.Width))
+		}
+	}
+	return b.String()
 }
 
 // teaKey turns a key in vim notation back into the press a terminal sends.

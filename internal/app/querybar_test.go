@@ -506,7 +506,7 @@ func TestCustomLimit(t *testing.T) {
 }
 
 // The tool buttons: + −, save and refresh, auto refresh and stop,
-// transpose on no box (§7.8「工具按钮」). Auto refresh picks
+// transpose (§7.8「工具按钮」). Auto refresh picks
 // an interval from its dropdown and shows it lit; stop lights while a
 // request of the tab's is out and runs grid.stop. An [icon] color is the
 // lit one: stop idle stays dim. With the button given way, auto refresh's
@@ -516,7 +516,7 @@ func TestToolButtons(t *testing.T) {
 	a.removePane(2)
 	tab.out = 0 // the count loadOrders asked for: never answered here
 	bs := a.toolButtons(tab)
-	if len(bs) != 4 || len(bs[0].Buttons) != 2 || bs[1].Buttons[0].Action != "save" || bs[1].Buttons[1].Action != "grid.refresh" || bs[3].Buttons[0].Action != "grid.transpose" || !bs[3].Bare {
+	if len(bs) != 4 || len(bs[0].Buttons) != 2 || bs[1].Buttons[0].Action != "save" || bs[1].Buttons[1].Action != "grid.refresh" || bs[3].Buttons[0].Action != "grid.transpose" {
 		t.Fatalf("groups %+v", bs)
 	}
 	if stop := bs[2].Buttons[1]; stop.Action != "" || stop.Fg != a.theme.Dim || !stop.Plain {
@@ -547,16 +547,19 @@ func TestToolButtons(t *testing.T) {
 	}
 }
 
-// A group of buttons is one sep box, transpose on none; the pointer
-// lights one button alone (§7.8「工具按钮」).
-func TestToolButtonBoxes(t *testing.T) {
+// The buttons are one sep strip, transpose too, a border │ between
+// groups; the pointer lights one button alone (§7.8「工具按钮」).
+func TestToolButtonStrip(t *testing.T) {
 	a, tab, _ := withRecorder(t, 160, 45)
 	a.removePane(2)
 	q, body := a.queryBar(a.focused(), tab), bodyRect(a.layout()[1])
-	add, del, tr := q.ButtonRect(body, "grid.row.add"), q.ButtonRect(body, "grid.row.delete"), q.ButtonRect(body, "grid.transpose")
+	add, del, save, tr := q.ButtonRect(body, "grid.row.add"), q.ButtonRect(body, "grid.row.delete"), q.ButtonRect(body, "save"), q.ButtonRect(body, "grid.transpose")
 	bg := func(x int) color.Color { return a.render().Buf.CellAt(x, add.Min.Y).Style.Bg }
-	if add.Max.X != del.Min.X || bg(add.Max.X-1) != a.theme.Sep || bg(del.Min.X) != a.theme.Sep || bg(tr.Min.X) != a.theme.PaneBg {
-		t.Errorf("boxes: + %v, − %v, transpose %v", add, del, tr)
+	if add.Max.X != del.Min.X || bg(add.Max.X-1) != a.theme.Sep || bg(del.Min.X) != a.theme.Sep || bg(tr.Min.X) != a.theme.Sep {
+		t.Errorf("one strip: + %v, − %v, transpose %v", add, del, tr)
+	}
+	if c := a.render().Buf.CellAt(del.Max.X, add.Min.Y); save.Min.X != del.Max.X+1 || c.Content != "│" || c.Style.Fg != a.theme.Border || c.Style.Bg != a.theme.Sep {
+		t.Errorf("between − %v and save %v: %q %+v", del, save, c.Content, c.Style)
 	}
 	a.Update(tea.MouseMotionMsg{X: del.Min.X, Y: del.Min.Y})
 	if bg(del.Min.X) != a.theme.Select || bg(del.Max.X-1) != a.theme.Select || bg(add.Max.X-1) != a.theme.Sep {
