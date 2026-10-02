@@ -200,10 +200,24 @@ func init() {
 		"where.leave":  {Title: "回到表格", Local: true, Run: when(inWhere, func(a *App) tea.Cmd { a.typingTab().stopTyping(); return nil })},
 		"session.list": {Title: "session 列表", Run: do(func(a *App, _ Args) { a.openSessions() })},
 		"conn.new":     {Title: "新建连接…", Run: do(func(a *App, _ Args) { a.openConnForm() })},
-		"form.next":    {Title: "下一项", Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formMove(1); return nil })},
-		"form.prev":    {Title: "上一项", Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formMove(-1); return nil })},
-		"form.save":    {Title: "保存", Local: true, Run: when(inForm, func(a *App) tea.Cmd { return a.saveConnForm() })},
-		"form.cancel":  {Title: "取消", Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.form = nil; return nil })},
+		"window.new":   {Title: "新建 window", Run: func(a *App, _ Args) tea.Cmd { return a.addWindow() }},
+		"window.next":  {Title: "下一个 window", Run: do(func(a *App, _ Args) { a.cycleWindow(1) })},
+		"window.prev":  {Title: "上一个 window", Run: do(func(a *App, _ Args) { a.cycleWindow(-1) })},
+		"window.last":  {Title: "上次用的 window", Run: do(func(a *App, _ Args) { a.selectWindow(a.sess.windowByID(a.sess.prevWin)) })},
+		"window.close": {Title: "关闭 window", Run: func(a *App, _ Args) tea.Cmd { return a.closeWindow() }},
+		"window.rename": {Title: "重命名 window", Run: do(func(a *App, _ Args) {
+			a.winRename = &ui.Input{Text: a.win().Name, Pos: len(a.win().Name)}
+		})},
+		// "window.select <i>" is a click on the status bar's window i.
+		"window.select": {Run: do(func(a *App, args Args) {
+			if i, err := strconv.Atoi(args.Arg); err == nil {
+				a.selectWindow(i)
+			}
+		})},
+		"form.next":   {Title: "下一项", Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formMove(1); return nil })},
+		"form.prev":   {Title: "上一项", Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formMove(-1); return nil })},
+		"form.save":   {Title: "保存", Local: true, Run: when(inForm, func(a *App) tea.Cmd { return a.saveConnForm() })},
+		"form.cancel": {Title: "取消", Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.form = nil; return nil })},
 		// the session list's (§7.8)
 		"sessions.new":      {Title: "新建 session", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { return a.newSession() })},
 		"sessions.down":     {Title: "下移", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsMove(1); return nil })},
@@ -367,8 +381,6 @@ func init() {
 	// default.toml binds, the palette lists them all (§6.8); running them
 	// does nothing yet.
 	for id, title := range map[string]string{
-		"window.new": "新建 window", "window.rename": "重命名 window", "window.close": "关闭 window",
-		"window.next": "下一个 window", "window.prev": "上一个 window", "window.last": "上次用的 window",
 		"grid.yank.insert": "复制为 INSERT",
 	} {
 		actions[id] = Action{Title: title}

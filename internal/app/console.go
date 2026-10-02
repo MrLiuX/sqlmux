@@ -84,7 +84,7 @@ func (a *App) focusedConsole() *consoleTab {
 
 // overlaid reports whether an overlay has the keys (§7.8).
 func (a *App) overlaid() bool {
-	return a.palette != nil || a.drop != nil || a.cols != nil || a.confirm != nil || a.keyHelp != nil || a.sessList != nil || a.form != nil
+	return a.palette != nil || a.drop != nil || a.cols != nil || a.confirm != nil || a.keyHelp != nil || a.sessList != nil || a.form != nil || a.winRename != nil
 }
 
 // vim is the editor that has the keys, with nothing over it: the focused

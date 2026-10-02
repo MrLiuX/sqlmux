@@ -83,7 +83,8 @@ func m0Layout(a *App) *App {
 	for _, name := range []string{"t_order", "t_user"} { // not fetched, nor in the catalog: opening public.t_order finds no tab of it
 		data.Tabs = append(data.Tabs, Tab{Name: name, Data: newDataTab(a.sess.Conns[0], db.Table{Schema: "m0", Name: name})})
 	}
-	a.sess.Windows = append(a.sess.Windows, &Window{Name: "report"})
+	a.sess.winID++
+	a.sess.Windows = append(a.sess.Windows, &Window{ID: a.sess.winID, Name: "report", Tree: &Pane{ID: 0}, Root: leaf(&Pane{ID: 1, Prev: -1}), lastID: 1})
 	return a
 }
 

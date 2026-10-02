@@ -108,6 +108,15 @@ func (a *App) render() *ui.Frame {
 
 	y := a.h - 1
 	a.statusLine().Draw(f, uv.Rect(0, y, a.w, 1))
+	if in := a.winRename; in != nil { // over the window's segment, past its number (§5)
+		for _, h := range f.Hits {
+			if h.Target.Action == fmt.Sprintf("window.select %d", a.sess.Active) {
+				x := h.Rect.Min.X + ui.Width(fmt.Sprintf(" %d: ", a.sess.Active))
+				c := in.Draw(f, uv.Rect(x, y, max(h.Rect.Max.X-1-x, 1), 1), uv.Style{Fg: th.Fg, Bg: th.Border})
+				f.Cursor = &c
+			}
+		}
+	}
 	if a.keyHelp != nil {
 		a.keyHelpView().Draw(f, a.overlayArea())
 	}
@@ -438,10 +447,13 @@ func (a *App) statusLine() ui.StatusLine {
 		{Text: a.sess.Name, Style: sess, Shrink: true},
 		{Text: " ▾ ", Style: sess},
 	}, Action: "session.list"}}
-	for i, w := range a.sess.Windows {
-		seg := ui.Segment{Runs: []ui.Run{{Text: fmt.Sprintf(" %d: %s ", i, w.Name), Style: bar(th.Dim)}}, Drop: dropWindow}
-		if i == a.sess.Active {
-			seg = ui.Segment{Runs: []ui.Run{{Text: fmt.Sprintf(" %d: %s* ", i, w.Name), Style: uv.Style{Fg: th.Fg, Bg: th.Border}}}}
+	for i, w := range a.sess.Windows { // a click switches to it (§7.8)
+		seg := ui.Segment{Runs: []ui.Run{{Text: fmt.Sprintf(" %d: %s ", i, w.Name), Style: bar(th.Dim)}}, Drop: dropWindow, Action: fmt.Sprintf("window.select %d", i)}
+		switch cur := (uv.Style{Fg: th.Fg, Bg: th.Border}); {
+		case i == a.sess.Active && a.winRename != nil: // its name typed in its place: render puts the input over it
+			seg = ui.Segment{Runs: []ui.Run{{Text: fmt.Sprintf(" %d: %s  ", i, a.winRename.Text), Style: cur}}, Action: seg.Action}
+		case i == a.sess.Active:
+			seg = ui.Segment{Runs: []ui.Run{{Text: fmt.Sprintf(" %d: %s* ", i, w.Name), Style: cur}}, Action: seg.Action}
 		}
 		s.Left = append(s.Left, seg)
 	}

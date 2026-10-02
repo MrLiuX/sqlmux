@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -137,5 +138,77 @@ func TestConnForm(t *testing.T) {
 	data, _ := os.ReadFile(filepath.Join(config.Dir(), "connections.toml"))
 	if string(data) != "[[connection]]\nname = \"play\"\nengine = \"postgres\"\ndsn = \"postgres://localhost/x\"\npassword_cmd = \"printf pw\"\nread_only = true\n" {
 		t.Errorf("file:\n%s", data)
+	}
+}
+
+// SPC c makes a window of the default layout at the end, shown, its
+// console the next free; SPC n / SPC p go round; SPC l goes back to the
+// one used before, by its ID, gone with it; a click on the status bar's
+// window switches; the tree's window node too (§5, F5.2).
+func TestWindows(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	data := a.win()
+	feed(t, a, "<Space>c")
+	w := a.win()
+	if len(a.sess.Windows) != 2 || a.sess.Active != 1 || w.Name != "data" || w.ID != 2 || consoleOf(w.Root.B.Pane).key() != "console_2" {
+		t.Fatalf("SPC c: %d windows, on %d %q", len(a.sess.Windows), a.sess.Active, w.Name)
+	}
+	feed(t, a, "<Space>c<Space>n")
+	if a.sess.Active != 0 {
+		t.Errorf("SPC n round the end: %d", a.sess.Active)
+	}
+	if feed(t, a, "<Space>p"); a.sess.Active != 2 {
+		t.Errorf("SPC p round the start: %d", a.sess.Active)
+	}
+	feed(t, a, "<Space>p<Space>l")
+	if a.sess.Active != 2 {
+		t.Errorf("SPC l: %d", a.sess.Active)
+	}
+	click(a, find(t, a, ui.Target{Kind: ui.KindButton, Action: "window.select 0"}).Min)
+	if a.win() != data {
+		t.Errorf("a click on 0: data: %d", a.sess.Active)
+	}
+	a.win().focus(0)
+	ns, _ := a.treeNodes()
+	a.treeGo(slices.IndexFunc(ns, func(n node) bool { return n.kind == nodeWindow && n.win == 1 }))
+	if feed(t, a, "<CR>"); a.sess.Active != 1 {
+		t.Errorf("↵ on a window node: %d", a.sess.Active)
+	}
+}
+
+// window.close: asked first with changes, its consoles written; the one
+// used before shown, else the one before; the last one stays. window.rename
+// types the name in the status bar, in its place: ↵ takes it but a blank
+// one, esc drops it (§5, F5.2).
+func TestWindowCloseRename(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	feed(t, a, "<Space>c<Space>c<Space>p") // on 1, 2 used before
+	if a.run("window.close", 0); len(a.sess.Windows) != 2 || a.sess.Active != 1 || a.win().ID != 3 {
+		t.Fatalf("closed 1: %d left, on %d (ID %d)", len(a.sess.Windows), a.sess.Active, a.win().ID)
+	}
+	tab := loadOrders(t, a, 3)
+	tab.edits = map[editKey]edit{{"1", "note"}: {val: db.Val{S: "x"}}}
+	if a.run("window.close", 0); a.confirm == nil || len(a.sess.Windows) != 2 {
+		t.Fatalf("with changes: %+v", a.confirm)
+	}
+	if feed(t, a, "y"); len(a.sess.Windows) != 1 || a.sess.Active != 0 {
+		t.Fatalf("closed 2: %d left, on %d", len(a.sess.Windows), a.sess.Active)
+	}
+	if a.run("window.close", 0); len(a.sess.Windows) != 1 || a.confirm != nil {
+		t.Error("the last window closed")
+	}
+	a.run("window.rename", 0)
+	if a.mode().String() != "insert" || a.render().Cursor == nil || !strings.Contains(statusRow(a), " 0: data  ") {
+		t.Fatalf("rename: mode %v, bar %q", a.mode(), statusRow(a))
+	}
+	feed(t, a, "<C-u>main<CR>")
+	if a.win().Name != "main" || a.winRename != nil {
+		t.Errorf("↵: %q", a.win().Name)
+	}
+	a.run("window.rename", 0)
+	feed(t, a, "<C-u> <CR>")
+	a.run("window.rename", 0)
+	if feed(t, a, "x<Esc>"); a.win().Name != "main" || !strings.Contains(statusRow(a), " 0: main* ") {
+		t.Errorf("blank, then esc: %q", a.win().Name)
 	}
 }

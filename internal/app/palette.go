@@ -552,11 +552,14 @@ func (a *App) paletteDo(it paletteItem) tea.Cmd {
 	case itemPane:
 		id, _ := strconv.Atoi(it.id)
 		a.showPane(id)
-	case itemTab: // this window's; another's waits for M5, as its window's switch
+	case itemWindow:
+		i, _ := strconv.Atoi(it.id)
+		a.selectWindow(i)
+	case itemTab: // another window's: that window first (F5.2)
 		var wi, id, i int
 		fmt.Sscan(it.id, &wi, &id, &i)
-		if p := a.win().pane(id); wi == a.sess.Active && p != nil {
-			a.showTab(p, i)
+		if a.selectWindow(wi); a.win().pane(id) != nil {
+			a.showTab(a.win().pane(id), i)
 		}
 	}
 	return nil

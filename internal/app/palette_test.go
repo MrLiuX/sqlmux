@@ -327,8 +327,8 @@ func TestPaletteOpensTables(t *testing.T) {
 		t.Error("C-t is for tables only")
 	}
 	feed(t, a, "<CR>")
-	if a.palette != nil || a.sess.Active != 0 {
-		t.Error("a window's ↵ only closes the palette until M5")
+	if a.palette != nil || a.sess.Active != 1 {
+		t.Error("a window's ↵ switches to it (F5.2)")
 	}
 
 	a = twoPanes(160, 45, "nerd")
@@ -533,8 +533,8 @@ func TestPaletteTabs(t *testing.T) {
 	if rows := a.paletteView().Rows; len(rows) == 0 || rows[0].Where != "doraemon › 0: data" {
 		t.Errorf("a pane's place: %+v", rows)
 	}
-	// another window's tab is listed, not its pane; ↵ on it does nothing till M5
-	// its pane's ID is ①'s: IDs go by window
+	// another window's tab is listed, not its pane; ↵ on it switches to that
+	// window first (F5.2); its pane's ID is ①'s: IDs go by window
 	a.sess.Windows[1].Root = leaf(&Pane{ID: 1, Tabs: []Tab{{Name: "t_sku", Data: newDataTab(a.sess.Conns[0], tableNamed(a, "t_sku"))}, landing()}, Cur: 1})
 	feed(t, a, "<Esc><C-p>%report")
 	var tab ui.PaletteRow
@@ -550,9 +550,9 @@ func TestPaletteTabs(t *testing.T) {
 		t.Fatalf("another window's tab: %+v", tab)
 	}
 	a.win().focus(2)
-	focus, cur, one := a.win().Focus, a.sess.Windows[1].Root.Pane.Cur, a.win().pane(1).Cur
+	one := a.win().pane(1).Cur
 	feed(t, a, "<C-u>%t_sku<CR>")
-	if a.win().Focus != focus || a.sess.Windows[1].Root.Pane.Cur != cur || a.win().pane(1).Cur != one || a.sess.Active != 0 {
-		t.Errorf("↵ on another window's tab: focus %d, cur %d, ①'s %d", a.win().Focus, a.sess.Windows[1].Root.Pane.Cur, a.win().pane(1).Cur)
+	if a.sess.Active != 1 || a.win().Focus != 1 || a.win().Root.Pane.Cur != 0 || a.sess.Windows[0].pane(1).Cur != one {
+		t.Errorf("↵ on another window's tab: window %d, focus %d, cur %d, data's ① %d", a.sess.Active, a.win().Focus, a.win().Root.Pane.Cur, a.sess.Windows[0].pane(1).Cur)
 	}
 }

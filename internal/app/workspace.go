@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 
 	tea "charm.land/bubbletea/v2"
@@ -64,6 +65,7 @@ func putTab(p *Pane, tab Tab, over bool) {
 }
 
 type Window struct {
+	ID       int // stable within its session, as a pane's: the tree's expansion and SPC l go by it
 	Name     string
 	TreeOpen bool  // the ⟨0⟩ sidebar is open, not folded to its thin bar
 	TreeW    int   // the sidebar's width once dragged (§7.8); 0 is the default
@@ -127,6 +129,8 @@ type Session struct {
 	open    map[string]bool // tree nodes opened or closed by hand, by node ID; the rest as §7.8 says
 	Windows []*Window
 	Active  int
+	winID   int    // the highest window ID handed out
+	prevWin int    // the ID of the window used before the one shown, SPC l's; 0 for none
 	RunSeq  int    // the last run's number, #42 on its result tabs (§11)
 	warning string // console_1's file could not be read: a toast on start (§11)
 }
@@ -222,14 +226,26 @@ func (c *Conn) dropCols() {
 // too: opened empty, the autosave would write over it.
 func newSession(name string, conns []*Conn, start *Conn, n int) *Session {
 	s := &Session{Name: name, Conns: conns, last: start, open: map[string]bool{}}
+	var w *Window
+	w, s.warning = s.newWindow(start, n)
+	s.Windows = []*Window{w}
+	return s
+}
+
+// newWindow is a window of the default layout (§5): the sidebar, a pane
+// with no tab and console_n on conn beside it at 5 : 4 (§7.8), named data;
+// warning says why the console's file could not be read.
+func (s *Session) newWindow(conn *Conn, n int) (w *Window, warning string) {
 	data := &Pane{ID: 1, Prev: -1}
 	console := &Pane{ID: 2, Prev: -1}
-	if cons, err := openConsole(start, n); err != nil {
-		s.warning = err.Error()
+	if cons, err := openConsole(conn, n); err != nil {
+		warning = err.Error()
 	} else {
 		console.Tabs = []Tab{{Name: fmt.Sprintf("console_%d", n), Console: cons}}
 	}
-	w := &Window{
+	s.winID++
+	w = &Window{
+		ID:       s.winID,
 		Name:     "data",
 		TreeOpen: true,
 		Tree:     &Pane{ID: 0},
@@ -237,8 +253,84 @@ func newSession(name string, conns []*Conn, start *Conn, n int) *Session {
 		lastID:   2,
 	}
 	w.focus(1)
-	s.Windows = []*Window{w}
-	return s
+	return w, warning
+}
+
+// selectWindow shows window i of the session, the one shown so far being
+// SPC l's way back.
+func (a *App) selectWindow(i int) {
+	s := a.sess
+	if i == s.Active || i < 0 || i >= len(s.Windows) {
+		return
+	}
+	s.prevWin, s.Active = s.Windows[s.Active].ID, i
+}
+
+// windowByID is the index of the session's window id; -1 for none.
+func (s *Session) windowByID(id int) int {
+	return slices.IndexFunc(s.Windows, func(w *Window) bool { return w.ID == id })
+}
+
+// addWindow is SPC c: a window of the default layout at the end, shown,
+// its console_n on the current connection, where its file last ran (§11).
+func (a *App) addWindow() tea.Cmd {
+	w, warning := a.sess.newWindow(a.conn(), a.freeConsole())
+	a.sess.Windows = append(a.sess.Windows, w)
+	a.selectWindow(len(a.sess.Windows) - 1)
+	if warning != "" {
+		return a.showToast(warning, toastTTL)
+	}
+	return a.restoreConsole(consoleOf(w.Root.B.Pane))
+}
+
+// cycleWindow is SPC n (d 1) and SPC p (d -1): the next or previous
+// window, around the ends.
+func (a *App) cycleWindow(d int) {
+	n := len(a.sess.Windows)
+	a.selectWindow((a.sess.Active + d + n) % n)
+}
+
+// renameWindowKey edits the name typed in the status bar: ↵ takes it but a
+// blank one, esc drops it (§5).
+func (a *App) renameWindowKey(k keymap.Key) {
+	switch k {
+	case keymap.Esc:
+	case "<CR>":
+		if name := strings.TrimSpace(a.winRename.Text); name != "" {
+			a.win().Name = name
+		}
+	default:
+		editInput(a.winRename, k)
+		return
+	}
+	a.winRename = nil
+}
+
+// closeWindow is window.close (§5): the window's consoles written, asked
+// first when changes would go; the one used before it shown, else the one
+// before it. The last one stays, as the last pane.
+func (a *App) closeWindow() tea.Cmd {
+	s := a.sess
+	if len(s.Windows) == 1 {
+		return nil
+	}
+	w := a.win()
+	var ps []*Pane
+	if w.Root != nil {
+		ps = w.Root.Leaves()
+	}
+	return a.unlessUnsaved(unsaved(ps...), "", "关闭", func() tea.Cmd {
+		if cmd, ok := a.flushAll(ps...); !ok {
+			return cmd
+		}
+		i := s.Active
+		s.Windows = slices.Delete(s.Windows, i, i+1)
+		if s.Active = s.windowByID(s.prevWin); s.Active < 0 {
+			s.Active = max(i-1, 0)
+		}
+		s.prevWin = 0
+		return nil
+	})
 }
 
 // Open is a session over specs, start the connection it connects now
