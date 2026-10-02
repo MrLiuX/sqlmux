@@ -34,6 +34,19 @@ func quickResult(n int) db.Result {
 	return r
 }
 
+// argDB records the text arguments of what it is asked.
+type argDB struct {
+	noDB
+	args []string
+}
+
+func (d *argDB) Query(_ context.Context, _ string, args ...db.Val) (db.Result, error) {
+	for _, v := range args {
+		d.args = append(d.args, v.S)
+	}
+	return db.Result{}, nil
+}
+
 // answerQuick hands the palette the quick SQL's answer.
 func answerQuick(a *App, r db.Result, err error) tea.Cmd {
 	_, cmd := a.Update(quickMsg{a.palette, a.sess.Conns[0], "public", r, err})
@@ -363,9 +376,15 @@ func TestQuickSQLToResult(t *testing.T) {
 	}
 	feed(t, a, "<Esc>")
 	a.win().focus(res.ID)
+	a.sess.Conns[0].Schema = "agentable" // R keeps the schema it ran in
+	rec := &argDB{}
+	a.sess.Conns[0].Meta = db.NewWorker(rec)
 	_, cmd := a.Update(teaKey("R"))
 	if cmd == nil || a.sess.Conns[0].busy != 1 || resultOf(res).run.done {
 		t.Fatalf("R: busy %d", a.sess.Conns[0].busy)
+	}
+	if cmd().(tea.BatchMsg)[0](); !slices.Contains(rec.args, `"public"`) {
+		t.Errorf("R's search_path: %v", rec.args)
 	}
 	a.Update(quickRerun{resultOf(res), quickResult(5), nil})
 	if rt := resultOf(res); a.sess.Conns[0].busy != 0 || len(rt.page.Rows) != 5 || !rt.run.done {
@@ -413,5 +432,28 @@ func TestQuickSQLEdit(t *testing.T) {
 	}
 	if feed(t, a, "<C-p>;select 9<C-e>"); a.palette == nil || a.palette.input.Text != ";select 9" || a.toast == "" {
 		t.Errorf("no console: the palette and its SQL go (%v, toast %q)", a.palette, a.toast)
+	}
+}
+
+// The palette goes by the connection current as it opened (F5.11): its
+// quick SQL runs there, its history kept there, and C-e opens the console
+// there, kept for the file, whatever the file last ran on and whatever is
+// current meanwhile.
+func TestQuickSQLConn(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a, seed := withConns()
+	doraemon := a.sess.Conns[0]
+	a.state.Consoles = map[string]config.ConsoleState{"console_2": {Conn: "idle"}}
+	feed(t, a, "<C-p>;select 1")
+	a.win().focus(0)
+	treeTo(t, a, "seed")
+	if feed(t, a, "<CR>"); a.conn() != seed || doraemon.busy != 1 || seed.busy != 0 || len(a.state.SQL["doraemon"]) != 1 {
+		t.Fatalf("on %s: busy %d / %d, history %v", a.conn().Spec.Name, doraemon.busy, seed.busy, a.state.SQL)
+	}
+	answerQuick(a, quickResult(1), nil)
+	feed(t, a, "<C-e>")
+	c := consoleOf(a.focused())
+	if a.palette != nil || c == nil || c.conn != doraemon || c.want != nil || a.state.Consoles["console_2"].Conn != "doraemon" {
+		t.Errorf("C-e: palette %v, console %+v, kept %+v", a.palette, c, a.state.Consoles)
 	}
 }

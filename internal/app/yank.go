@@ -18,6 +18,7 @@ import (
 // copiedRow is the row yy took, for p (§10.6): its table, and each
 // column's value as it showed, changes in; none for a DEFAULT.
 type copiedRow struct {
+	conn  *Conn // two connections' t_order are two tables (F5.10)
 	table tableID
 	vals  map[string]db.Val
 }
@@ -96,7 +97,7 @@ func (a *App) yankGrid(row bool) tea.Cmd {
 			cells = append(cells, vals[t.page.Cols[f].Name].S)
 		}
 		if row {
-			a.rowCopy = &copiedRow{idOf(t.table), vals}
+			a.rowCopy = &copiedRow{t.conn, idOf(t.table), vals}
 		}
 	case gs.row < len(tab.Result.page.Rows): // a result's
 		for _, v := range tab.Result.page.Rows[gs.row] {
@@ -133,7 +134,7 @@ func tsv(vals []string) string {
 // on it; leave those out when the catalog tells them apart
 func (a *App) pasteRow() tea.Cmd {
 	_, t, ok := a.focusedGrid()
-	if !ok || a.rowCopy == nil || a.rowCopy.table != idOf(t.table) {
+	if !ok || a.rowCopy == nil || a.rowCopy.conn != t.conn || a.rowCopy.table != idOf(t.table) {
 		return nil
 	}
 	cmd := a.addRow()

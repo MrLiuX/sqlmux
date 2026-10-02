@@ -25,10 +25,12 @@ func testDB(t *testing.T) (dsn, password string) {
 	return u.String(), password
 }
 
-func writeConnection(t *testing.T, dsn, extra string) {
+// writeConnection writes connection name; a run caches passwords by name
+// (§13), so each password source gets one of its own.
+func writeConnection(t *testing.T, name, dsn, extra string) {
 	t.Helper()
 	writeConfig(t, "config.toml", "")
-	body := "[[connection]]\nname = \"test\"\nengine = \"postgres\"\ndsn = \"" + dsn + "\"\n" + extra
+	body := "[[connection]]\nname = \"" + name + "\"\nengine = \"postgres\"\ndsn = \"" + dsn + "\"\n" + extra
 	if err := os.WriteFile(filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "sqlmux", "connections.toml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -47,15 +49,15 @@ func TestOpenPasswordSources(t *testing.T) {
 	}{
 		"password_cmd": {extra: "password_cmd = \"printf '%s\\\\n' '" + pw + "'\"\n"},
 		"password_env": {extra: "password_env = \"SQLMUX_TEST_PW\"\n", env: "SQLMUX_TEST_PW", val: pw},
-		"~/.pgpass":    {env: "PGPASSFILE", val: pgpass},
+		"pgpass":       {env: "PGPASSFILE", val: pgpass},
 		"none":         {fails: true},
 	} {
 		t.Run(name, func(t *testing.T) {
-			writeConnection(t, dsn, c.extra)
+			writeConnection(t, name, dsn, c.extra)
 			if c.env != "" {
 				t.Setenv(c.env, c.val)
 			}
-			sess, _, err := open("test")
+			sess, _, err := open(name)
 			if (err != nil) != c.fails {
 				t.Fatalf("error %v, want one: %v", err, c.fails)
 			}
@@ -69,7 +71,7 @@ func TestOpenPasswordSources(t *testing.T) {
 // A wrong password prints the server's error, no UI (§14).
 func TestOpenWrongPassword(t *testing.T) {
 	dsn, _ := testDB(t)
-	writeConnection(t, dsn, "password = \"wrong\"\n")
+	writeConnection(t, "test", dsn, "password = \"wrong\"\n")
 	_, _, err := open("")
 	if err == nil || !strings.HasPrefix(err.Error(), "test: ") || !strings.Contains(err.Error(), "password authentication failed") {
 		t.Fatalf("wrong password: %v", err)

@@ -69,7 +69,7 @@ func init() {
 		}},
 		"cancel": {Title: "取消 / 连按两次退出", Run: func(a *App, _ Args) tea.Cmd {
 			if p := a.palette; p != nil && p.quick != nil && p.quick.running != "" { // the palette stays (§12)
-				a.conn().Meta.Cancel()
+				p.conn.Meta.Cancel()
 				return nil
 			}
 			if a.mode() != keymap.Normal || inWhere(a) { // in any input C-c is esc, as in vim (§6.8), in a WHERE's NORMAL too (F3.39)
@@ -123,7 +123,7 @@ func init() {
 				a.palette.into = p
 			}
 		})},
-		"console.new": {Title: "新建 console", Run: func(a *App, _ Args) tea.Cmd { return a.newConsole() }},
+		"console.new": {Title: "新建 console", Run: func(a *App, _ Args) tea.Cmd { cmd, _ := a.newConsole(a.conn()); return cmd }},
 		// "console.run <line>" is a click on a ▶ (§11「执行」).
 		"console.run":    {Title: "执行", Run: func(a *App, args Args) tea.Cmd { return a.consoleRun(args.Arg) }},
 		"console.schema": {Title: "切换 schema", Run: do(func(a *App, _ Args) { a.openConsoleDrop(dropSchema) })},

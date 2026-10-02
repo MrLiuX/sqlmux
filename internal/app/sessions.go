@@ -134,8 +134,8 @@ func (a *App) gotSessionDialed(m sessionDialed) tea.Cmd {
 	if s.warning != "" {
 		cmds = append(cmds, a.showToast(s.warning, toastTTL))
 	}
-	for _, t := range s.consoles() {
-		cmds = append(cmds, a.restoreConsole(t))
+	for _, t := range s.consoles() { // new: on the current connection, kept for its file (§11)
+		cmds = append(cmds, a.keepConsole(t))
 	}
 	return tea.Batch(cmds...)
 }

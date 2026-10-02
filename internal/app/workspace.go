@@ -272,7 +272,7 @@ func (s *Session) windowByID(id int) int {
 }
 
 // addWindow is SPC c: a window of the default layout at the end, shown,
-// its console_n on the current connection, where its file last ran (§11).
+// its console_n on the current connection, kept for the file (§11).
 func (a *App) addWindow() tea.Cmd {
 	w, warning := a.sess.newWindow(a.conn(), a.freeConsole())
 	a.sess.Windows = append(a.sess.Windows, w)
@@ -280,7 +280,7 @@ func (a *App) addWindow() tea.Cmd {
 	if warning != "" {
 		return a.showToast(warning, toastTTL)
 	}
-	return a.restoreConsole(consoleOf(w.Root.B.Pane))
+	return a.keepConsole(consoleOf(w.Root.B.Pane))
 }
 
 // cycleWindow is SPC n (d 1) and SPC p (d -1): the next or previous
@@ -353,31 +353,30 @@ type dialed struct {
 	main, meta *postgres.Conn
 }
 
-// secrets caches what a connection's password source gave (§13): the
-// keychain asks once a run, not once a session; a failed dial drops it,
-// the next one asks again. By the whole connection, not its name alone,
-// so a source written anew is asked anew.
+// secrets caches what a connection's password source gave, by its name
+// (§13): the keychain asks once a run, not once a session; a failed dial
+// drops it, the next one asks again.
 var secrets sync.Map
 
 // dial connects spec's Main and then its Meta (§8.2).
 func dial(ctx context.Context, spec config.Connection) (dialed, error) {
-	pw, cached := secrets.Load(spec)
+	pw, cached := secrets.Load(spec.Name)
 	if !cached {
 		s, err := spec.Secret()
 		if err != nil {
 			return dialed{}, err
 		}
 		pw = s
-		secrets.Store(spec, s)
+		secrets.Store(spec.Name, s)
 	}
 	main, err := postgres.Connect(ctx, spec.DSN, pw.(string), false)
 	if err != nil {
-		secrets.Delete(spec)
+		secrets.Delete(spec.Name)
 		return dialed{}, err
 	}
 	meta, err := postgres.Connect(ctx, spec.DSN, pw.(string), true)
 	if err != nil {
-		secrets.Delete(spec)
+		secrets.Delete(spec.Name)
 		main.Close()
 		return dialed{}, err
 	}
@@ -467,23 +466,25 @@ func (a *App) newTab() {
 }
 
 // newConsole is console.new (§5, §11): console_n, n the least no session
-// has open, with what its file keeps, on the connection it last ran on,
-// else the current one, in place of a landing tab or in a new tab of
-// openTarget's pane.
-func (a *App) newConsole() tea.Cmd {
+// has open, with what its file keeps, on conn, in its Schema, kept for the
+// file, in place of a landing tab or in a new tab of openTarget's pane.
+// ok is false when the file cannot be read: no console, a toast.
+func (a *App) newConsole(conn *Conn) (cmd tea.Cmd, ok bool) {
 	p, n := a.openTarget(), a.freeConsole()
-	c, err := openConsole(a.conn(), n)
+	c, err := openConsole(conn, n)
 	if err != nil {
-		return a.showToast(err.Error(), toastTTL)
+		return a.showToast(err.Error(), toastTTL), false
 	}
 	a.showPane(p.ID)
 	putTab(p, Tab{Name: fmt.Sprintf("console_%d", n), Console: c}, p.tab().landing())
-	return a.restoreConsole(c)
+	return a.keepConsole(c), true
 }
 
-// restoreConsole puts console t on the connection and schema its file
-// last ran on (§11): connected, now; not yet, once it is, t staying where
-// it opened meanwhile. One gone from connections.toml leaves t as it is.
+// restoreConsole puts console t, console_1 of the layout started with, on
+// the connection and schema its file last ran on (§11): connected, now;
+// not yet, once it is, t staying where it opened meanwhile. One gone from
+// connections.toml leaves t as it is; a schema gone, gotCatalog's fallback
+// takes it back. New consoles go on the current connection (newConsole).
 func (a *App) restoreConsole(t *consoleTab) tea.Cmd {
 	st, ok := a.state.Consoles[t.key()]
 	i := slices.IndexFunc(a.sess.Conns, func(c *Conn) bool { return c.Spec.Name == st.Conn })
@@ -499,20 +500,36 @@ func (a *App) restoreConsole(t *consoleTab) tea.Cmd {
 }
 
 // pickConn is console t's connection dropdown taking c (§7.8「console
-// 标题」): not while t's own is in a transaction; one not connected
-// connects first, t going over once it is.
+// 标题」): not while t's own is in a transaction, nor while t runs (a run
+// may begin one); one not connected connects first, t going over once it
+// is.
 func (a *App) pickConn(t *consoleTab, c *Conn) tea.Cmd {
 	t.want = nil
 	switch {
 	case c == t.conn:
 		return nil
-	case t.conn.inTx():
-		return a.showToast("当前连接有未提交的事务，先提交或回滚", toastTTL)
+	case !a.mayLeave(t):
+		return a.showToast(a.stayReason(t), toastTTL)
 	case c.State == connReady:
 		return a.switchConn(t, c, c.Schema)
 	}
 	t.want, t.wantSchema = c, ""
 	return a.connect(c)
+}
+
+// mayLeave reports whether console t may go to another connection: not
+// while its own is in a transaction, nor while it runs (§7.8).
+func (a *App) mayLeave(t *consoleTab) bool { return a.stayReason(t) == "" }
+
+// stayReason is why console t stays on its connection, "" for none.
+func (a *App) stayReason(t *consoleTab) string {
+	switch {
+	case t.running != nil:
+		return "正在执行，结束后再换连接"
+	case t.conn.inTx():
+		return "当前连接有未提交的事务，先提交或回滚"
+	}
+	return ""
 }
 
 // switchConn puts console t on connection c and schema: its next run runs

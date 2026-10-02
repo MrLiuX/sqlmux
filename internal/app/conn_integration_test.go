@@ -91,6 +91,7 @@ func TestSecretCached(t *testing.T) {
 		return config.Connection{Name: "play", Engine: "postgres", DSN: u.String(), PasswordCmd: "echo >> " + runs + "; printf " + pw}
 	}
 	count := func() int { b, _ := os.ReadFile(runs); return strings.Count(string(b), "\n") }
+	secrets.Clear() // another test's play
 	for range 2 {
 		d, err := dial(context.Background(), spec(pw))
 		if err != nil {
@@ -102,6 +103,7 @@ func TestSecretCached(t *testing.T) {
 	if count() != 1 {
 		t.Errorf("two dials ran password_cmd %d times", count())
 	}
+	secrets.Clear() // a password source written anew: a run's are by name (§13)
 	for range 2 {
 		if _, err := dial(context.Background(), spec("wrong")); err == nil {
 			t.Fatal("a wrong password connects")

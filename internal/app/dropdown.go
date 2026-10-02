@@ -148,7 +148,10 @@ func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 	case dropSchema, dropConsoleConn:
 		r := a.layout()[d.pane.ID]
 		entry = uv.Rect(r.Max.X-w, r.Min.Y, w, 1)
-		action := map[dropKind]string{dropSchema: "console.schema", dropConsoleConn: "console.conn"}[d.kind]
+		action := "console.schema"
+		if d.kind == dropConsoleConn {
+			action = "console.conn"
+		}
 		for _, h := range hits {
 			if h.Target == (ui.Target{Kind: ui.KindHint, Pane: d.pane.ID, Action: action}) {
 				entry, w = h.Rect, max(w, r.Max.X-h.Rect.Min.X)

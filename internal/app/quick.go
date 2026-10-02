@@ -76,7 +76,7 @@ func (a *App) runQuick(sql string) tea.Cmd {
 	if a.state.SQL == nil {
 		a.state.SQL = map[string][]string{}
 	}
-	c := a.conn()
+	c := p.conn
 	h := slices.Insert(slices.DeleteFunc(a.state.SQL[c.Spec.Name], func(s string) bool { return s == sql }), 0, sql)
 	a.state.SQL[c.Spec.Name] = h[:min(len(h), quickHistory)]
 	if q := p.quick; sqlkit.IsWrite(sql, sqlkit.PG) { // a write is for a console, where running it is the user's own ↵ (F-05)
@@ -227,8 +227,9 @@ func (a *App) quickEdit() tea.Cmd {
 	if scope != sqlScope || strings.TrimSpace(sql) == "" {
 		return nil
 	}
-	if cmd := a.newConsole(); cmd != nil { // its file can't be read: the palette stays, the SQL in it
-		return cmd
+	kept, ok := a.newConsole(a.palette.conn)
+	if !ok { // its file can't be read: the palette stays, the SQL in it
+		return kept
 	}
 	a.palette = nil
 	t := consoleOf(a.focused())
@@ -242,7 +243,7 @@ func (a *App) quickEdit() tea.Cmd {
 	}
 	cmd := a.consoleDid(t, t.ed.Load(pre+sql))
 	t.ed.Click(strings.Count(pre, "\n"), 0)
-	return cmd
+	return tea.Batch(kept, cmd)
 }
 
 // copyQuick puts the result on the clipboard as CSV (F-04):
@@ -268,7 +269,7 @@ func (a *App) completeSQL() tea.Cmd {
 	if p.asked == nil {
 		p.asked = map[tableID]bool{}
 	}
-	c := a.conn()
+	c := p.conn
 	comp, cmds := a.sqlComplete(c, sql, pos, c.Schema, p.asked, false)
 	if comp != nil {
 		comp.start += len(scopes[scope].prefix)

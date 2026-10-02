@@ -69,6 +69,9 @@ type App struct {
 	lastClickAt time.Time
 }
 
+// toastLine flattens a toast onto its one row (§7.8).
+var toastLine = strings.NewReplacer("\n", "；", "\t", " ")
+
 // toastTTL is how long a toast stays up (§7.8).
 var toastTTL = 3 * time.Second
 
@@ -591,7 +594,7 @@ func (a *App) focused() *Pane {
 }
 
 func (a *App) showToast(s string, ttl time.Duration) tea.Cmd {
-	a.toast = s
+	a.toast = toastLine.Replace(s) // one row: a driver's error may have many (§7.8)
 	a.toastSeq++
 	seq := a.toastSeq
 	return tea.Tick(ttl, func(time.Time) tea.Msg { return toastExpired{seq} })

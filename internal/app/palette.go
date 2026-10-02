@@ -25,6 +25,9 @@ type palette struct {
 	input    ui.Input
 	sel, top int   // selected candidate, first one shown
 	into     *Pane // a landing tab's 打开表: the table picked opens there (§5)
+	// conn is the current connection as it opened (§5): its quick SQL, C-c,
+	// C-e and the tables' order go by it, whatever connects meanwhile.
+	conn *Conn
 
 	// The table item the selection was on when last looked at, the
 	// preview's timer for it, and what stops the DDL fetches out once the
@@ -109,7 +112,7 @@ const recentRows = 50
 var exAliases = map[string]string{"q": "tab.close", "qa": "quit", "w": "save", "wq": "tab.save.close"}
 
 func (a *App) openPalette(text string) {
-	a.palette = &palette{input: ui.Input{Text: text, Pos: len(text)}}
+	a.palette = &palette{input: ui.Input{Text: text, Pos: len(text)}, conn: a.conn()}
 }
 
 // paletteScope splits the input into its scope and the query after the prefix.
@@ -154,7 +157,7 @@ func (a *App) paletteItems() []paletteItem {
 	}
 	// the current connection's Schema first, as the tree lists it, its other
 	// schemas, then the other connections connected (§12)
-	cur := a.conn()
+	cur := a.palette.conn
 	for _, c := range append([]*Conn{cur}, slices.DeleteFunc(slices.Clone(a.sess.Conns), func(c *Conn) bool { return c == cur })...) {
 		for _, here := range []bool{true, false} {
 			for _, t := range c.Tables {
@@ -354,7 +357,10 @@ func (a *App) previewed() (id string, c *Conn, t db.Table, ok bool) {
 func (a *App) tableByID(id string) (*Conn, db.Table, bool) {
 	name, table, _ := strings.Cut(id, "/")
 	for _, c := range a.sess.Conns {
-		if i := slices.IndexFunc(c.Tables, func(t db.Table) bool { return t.Schema+"."+t.Name == table }); c.Spec.Name == name && i >= 0 {
+		if c.Spec.Name != name {
+			continue
+		}
+		if i := slices.IndexFunc(c.Tables, func(t db.Table) bool { return t.Schema+"."+t.Name == table }); i >= 0 {
 			return c, c.Tables[i], true
 		}
 	}

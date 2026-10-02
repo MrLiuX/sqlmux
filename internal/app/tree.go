@@ -64,8 +64,8 @@ func (a *App) gotConnected(m connected) tea.Cmd {
 	c.take(m.d)
 	cmds := []tea.Cmd{a.loadCatalog(c)}
 	for _, t := range waiting {
-		if t.conn.inTx() { // begun meanwhile
-			cmds = append(cmds, a.showToast("当前连接有未提交的事务，先提交或回滚", toastTTL))
+		if why := a.stayReason(t); why != "" { // begun, or running, meanwhile
+			cmds = append(cmds, a.showToast(why, toastTTL))
 			continue
 		}
 		cmds = append(cmds, a.switchConn(t, c, cmp.Or(t.wantSchema, c.Schema)))
@@ -99,7 +99,7 @@ func (a *App) loadCatalog(c *Conn) tea.Cmd {
 
 func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	if m.err != nil {
-		return a.showToast(m.err.Error(), toastTTL)
+		return a.showToast(m.conn.Spec.Name+"："+m.err.Error(), toastTTL)
 	}
 	c := m.conn
 	c.Schemas, c.Tables = m.schemas, m.tables
@@ -109,13 +109,14 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	if !slices.Contains(c.Schemas, c.Schema) { // the first load, or the schema is gone (§7.8)
 		c.Schema = c.home
 	}
+	var cmds []tea.Cmd
 	for _, t := range a.consoles() { // opened before the tree had a schema, or in one gone: the connection's (§8.6)
 		if t.conn == c && !slices.Contains(c.Schemas, t.schema) {
 			t.schema = c.Schema
+			cmds = append(cmds, a.keepConsole(t))
 		}
 	}
 	a.clampTree()
-	var cmds []tea.Cmd
 	for _, t := range c.Tables { // R dropped the columns; an open table keeps showing them (§7.8)
 		if _, ok := c.cols[idOf(t)]; !ok && a.opened(tableNode(c, t), false) {
 			cmds = append(cmds, a.fetchCols(c, t))

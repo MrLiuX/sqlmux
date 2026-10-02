@@ -155,6 +155,16 @@ func bgs(a *App, f *ui.Frame, y, x0, x1 int) string {
 	return b.String()
 }
 
+// A toast is one row: a driver's error of many lines, tabs too, is
+// flattened (§7.8).
+func TestToastOneRow(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	a.showToast("play：failed to connect\n\t127.0.0.1: refused", toastTTL)
+	if a.toast != "play：failed to connect； 127.0.0.1: refused" {
+		t.Errorf("toast %q", a.toast)
+	}
+}
+
 // teaKey turns a key in vim notation back into the press a terminal sends.
 func teaKey(k keymap.Key) tea.KeyPressMsg {
 	switch k {

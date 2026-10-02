@@ -113,7 +113,12 @@ func (c *Conn) Close() error { return c.pg.Close(context.Background()) }
 // TxStatus is where the last request left the connection, as the
 // server's ReadyForQuery said: 'I' out of a transaction, 'T' in one, 'E'
 // in one that failed (§8.6).
-func (c *Conn) TxStatus() byte { return c.pg.TxStatus() }
+func (c *Conn) TxStatus() byte {
+	if c.pg.IsClosed() { // the server rolled it back as it went; pgconn's status stays as it was
+		return 'I'
+	}
+	return c.pg.TxStatus()
+}
 
 // types names the built-in OIDs; others (enums, domains) are left unnamed.
 var types = pgtype.NewMap()

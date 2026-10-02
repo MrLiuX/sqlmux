@@ -205,6 +205,42 @@ func TestCurrentConn(t *testing.T) {
 	if feed(t, a, "<C-p>tab.new<CR>"); !data.tab().landing() || a.conn() != seed {
 		t.Errorf("a landing tab: %s, want the last, seed", a.conn().Spec.Name)
 	}
+	console := a.win().Root.B.Pane
+	consoleOf(console).conn = seed
+	if a.win().focus(console.ID); a.conn() != seed {
+		t.Errorf("a console on seed: %s", a.conn().Spec.Name)
+	}
+	res := a.resultPane(a.win())
+	res.Tabs = append(res.Tabs, Tab{Name: "quick #1", Result: &resultTab{run: &run{conn: doraemon}}})
+	a.win().focus(res.ID)
+	if selectTab(res, 1); a.conn() != doraemon {
+		t.Errorf("a result of doraemon's: %s", a.conn().Spec.Name)
+	}
+	a.Update(nil)
+	if selectTab(res, 0); a.conn() != doraemon { // the log: the last one, from the result tab
+		t.Errorf("the log: %s", a.conn().Spec.Name)
+	}
+}
+
+// The palette's tables: the current connection's Schema first, its other
+// schemas, then the other connections connected; ↵ on seed's opens seed's
+// (§12, F5.10).
+func TestPaletteTablesOfConns(t *testing.T) {
+	a, seed := withConns()
+	seed.Tables = append(seed.Tables, db.Table{Schema: "s2", Name: "planner"})
+	a.sess.Conns[0].Tables = a.sess.Conns[0].Tables[:3] // planner, agent, agent_version
+	feed(t, a, "<C-p>@")
+	var wheres []string
+	for _, r := range a.paletteView().Rows {
+		wheres = append(wheres, r.Name+"@"+r.Where)
+	}
+	if got := strings.Join(wheres, " "); got != "agent@doraemon.public agent_version@doraemon.public planner@doraemon.agentable t_order@seed.public planner@seed.s2" {
+		t.Errorf("order: %s", got)
+	}
+	feed(t, a, "t_order<CR>")
+	if tab := dataOf(a.focused()); tab == nil || tab.conn != seed || tab.table.Name != "t_order" {
+		t.Errorf("↵ on seed's t_order: %+v", tab)
+	}
 }
 
 // j / k / gg / G move over the nodes showing, with counts (§7.8).
@@ -528,7 +564,7 @@ func TestCatalogLoad(t *testing.T) {
 		t.Errorf("gone from the catalog: schema %q, want the first", a.sess.Conns[0].Schema)
 	}
 	a.Update(catalogMsg{conn: a.sess.Conns[0], err: errors.New("permission denied")})
-	if a.toast != "permission denied" || a.sess.Conns[0].Schema != "a" {
+	if a.toast != "doraemon：permission denied" || a.sess.Conns[0].Schema != "a" {
 		t.Errorf("a failed load: toast %q", a.toast)
 	}
 }
