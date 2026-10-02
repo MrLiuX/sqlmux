@@ -142,6 +142,13 @@
 - [ ] 面板里 window 项 `↵` 切过去；别的 window 的 tab 项 `↵` 先切 window、再选 tab、聚焦它的 pane（F4.3 留下的那一半）；树的工作区里 window 节点 `↵` / 单击也切过去（§7.8、§12）。
 - [ ] 重命名：状态栏上这个 window 的位置原地变成输入框（INSERT，`↵` 确定、`esc` 放弃）。
 - [ ] 关闭：有未保存的修改时先确认（§10.5）；关的是最后一个 window 时不做事，同「最后一个普通 pane 关不掉」（§5）。
+- [ ] 细节（worker 提议，已定）：
+  - `SPC c` 新建的 window：照 §5 默认布局，侧栏、一个空 pane，旁边放一个新的 console_n，比例同新 session；名字 `data`，重名不拦（同 tmux）；放在最后并切过去；
+  - `SPC n` / `SPC p` 到头绕回（同 tmux）；`SPC l` 回到上一个用过的 window，那个 window 已关掉就不做事；
+  - 关闭：先把这个 window 的 console 写盘，有未保存的修改先确认；关的是当前 window 时切到上一个用过的，没有就切到它前面那个（它是第一个就后面那个）。未提交事务的确认在 F5.3 加（让某个连接上不再有 console 时）；
+  - 重命名：状态栏上当前 window 那一段原地变成输入框（INSERT，没绑定的键当文字，`↵` 确定、`esc` 放弃），空名字等于放弃；
+  - 状态栏 window 列表的每一段可以点击，执行不带标题的 `window.select <i>`（同 `palette.scope`）；
+  - Window 加一个稳定 ID（同 Pane 的做法，session 里递增），树的展开状态和 `SPC l` 的「上一个用过的」都按 ID 记，不按下标：下标在关掉 window 后会前移，展开状态会错到后一个 window 上，`SPC l` 也会指错（决策者定，没有采用 worker 提的「按下标、用 ponytail 标出」）。
 
 **验收**
 - [ ] e2e：
