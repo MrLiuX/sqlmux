@@ -57,7 +57,7 @@ check "[icon] fg only: same glyph, new color" eval 'text_is $ICON $ICON 1 "$NF_C
 conf 'theme = "x"\nicons = "ascii"\n' '[icon]\nconsole = { text = "C", fg = "#ff0000" }\n'; SOLO= start -C "$D"
 check "[icon] still applies with icons = ascii" eval 'text_is $ICON_ASCII $ICON_ASCII 1 C && style_has $ICON_ASCII 1 fg=#ff0000'
 conf 'theme = "x"\n' '[icon]\nconn = { fg = "#ff00ff" }\n'; start -C "$D"
-check "[icon] conn: the status bar connection icon changes color" eval 'c=$(e2e_find sqlmux@localhost 45); style_has $((c - 2)) 45 fg=#ff00ff && style_has $c 45 fg=#7dcfff'
+check "[icon] conn: the status bar connection icon changes color" eval 'c=$(e2e_find "doraemon · sqlmux@localhost" 45); style_has $((c - 2)) 45 fg=#ff00ff && style_has $c 45 fg=#7dcfff'
 conf 'theme = "x"\n' '[icon]\nfoo = { text = "F" }\n';            check "[icon] unknown name → error" fails "foo"
 conf 'theme = "x"\n' '[icon]\nconsole = { bg = "#ff0000" }\n';    check "[icon] unknown sub-key (bg) → error" fails "bg"
 conf 'theme = "x"\n' '[icon]\nconsole = { fg = "red" }\n';        check "[icon] bad color → error" fails '"red"'

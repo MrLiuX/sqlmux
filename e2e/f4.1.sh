@@ -2,14 +2,15 @@
 # F4.1 快速 SQL 接上 M3（specs/m4-palette/task.md F4.1；tech-design §12「写语句」「C-t 送到结果区」「C-e 在 console 中打开」、§9.3、§13）
 # 提示和按钮的位置、按钮的让位交给 golden / 单测；这里测真实 PG 上写语句一句不发、C-t 的 quick #n 与 R、C-e 进 console（文件、撤销、目标 pane）。
 # 默认布局：① 空、② console_1，焦点在 ①；有结果后 ③ 结果区在底部全宽。自建库：要改函数、插数据；console 的文件放在 -D 的目录里。
+# 连接名取 d：F5.11 起 console 标题是 <连接> · <库>.<schema> ▾，长库名加长连接名在 ② 里放不下、下拉框会让位。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 
-D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); CD=$D/data/sqlmux/consoles/doraemon
+D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); CD=$D/data/sqlmux/consoles   # F5.11 起不按连接分目录
 trap 'e2e_stop; rm -rf "$D"' EXIT
 e2e_own_db || { echo "e2e: could not create the private database" >&2; exit 1; }
 APP=e2e-f41-$$
-mkdir -p "$D/own"; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s&application_name=%s"\n' "$E2E_DB" "$APP" >"$D/own/connections.toml"; chmod 600 "$D/own/connections.toml"
+mkdir -p "$D/own"; printf '[[connection]]\nname = "d"\nengine = "postgres"\ndsn = "%s&application_name=%s"\n' "$E2E_DB" "$APP" >"$D/own/connections.toml"; chmod 600 "$D/own/connections.toml"
 # console_2 已有内容（C-e 追加在它后面）；console_4.sql 是个目录（读不出来）
 (umask 077; mkdir -p "$CD/console_4.sql"; printf 'select 1;\n-- old' >"$CD/console_2.sql")
 . "$(dirname "$0")/palette.sh"
@@ -123,7 +124,7 @@ pal; sql "select current_schema()"; e2e_keys C-t; sleep 0.5; e2e_keys Escape; sl
 check "树在 public：quick #7 里是 public" eval '[[ $(rval) == public ]] || { rrow 3; false; }'
 TREE_AGENTABLE="12 5"; e2e_click $TREE_AGENTABLE; sleep 0.3                  # 点树上的 agentable：焦点和光标都到那里
 click_tab $RP "7:"; key R; done_run
-check "树的光标移到 agentable 后在 quick #7 上 R：search_path 取按 R 时树的 schema" eval '[[ $(rval) == agentable ]] || { rrow 3; false; }'
+check "树的光标移到 agentable 后在 quick #7 上 R：用 quick #7 记下的 schema（F5.10 起），还是 public" eval '[[ $(rval) == public ]] || { rrow 3; false; }'
 pal; sql "select e2e_f()"; e2e_keys C-t; sleep 0.5; e2e_keys Escape; sleep 0.3
 psql_n "create or replace function e2e_f() returns int language plpgsql as \$\$ begin raise exception 'bad' using detail = 'the detail', hint = 'the hint'; end \$\$" >/dev/null
 key R; done_run
@@ -138,7 +139,7 @@ check "输入 agent_v：补全列表开着（树在 agentable，补全用它的�
 e2e_keys C-e; sleep 0.5
 check "焦点在树上时 C-e：开到最近聚焦过的 ②，新开 tab console_3（当前不是引导 tab，不替换），焦点在 ②" eval 'closed && focus_is 2 && tabs_are 2 "1:console_1- │ 2:console_3*"'
 check "取的是输入框里的文字（delete from agent_v，不是上次执行的 select 2 as y）；新文件只有这一行，光标在 1,1" eval '[[ $(cline 2 1) == "delete from agent_v" && -z $(cline 2 2) ]] && [[ $(ccur 2) == 1,1 ]] || { cline 2 1; ccur 2; false; }'
-check "console_3 的 schema 取树当前的 agentable" eval 'text_has 105 160 1 ".agentable ▾"'
+check "console_3 取当前连接（树光标所在的 d）和它的 Schema agentable" eval 'text_has 105 160 1 " d · sqlmux_e2e_$$.agentable ▾"'
 pal; sql "select 3 as z"; e2e_keys C-e; sleep 0.5
 check "console_4.sql 读不出来：toast「读取失败」，面板不关，SQL 还在输入框里" eval 'screen_has "读取失败" && screen_has "console_4.sql" && is_open && [[ $(input) == ";select 3 as z" ]]'
 rmdir "$CD/console_4.sql"
