@@ -3,9 +3,9 @@
 │──────────────────────────────│ │  ORDER id    LIMIT 100   PAGE 1/?   COLS 7/7       │    │    │                                     auto · … 行 · 0s │
 │ ▾  doraemon                 │ │            │ 1                            │ 2                                   │ 3                            │ 4          │
 │   ▸  agentable              │ │────────────┼──────────────────────────────┼─────────────────────────────────────┼──────────────────────────────┼────────────│
-│   ▾  public                 │ │  id       │                            1 │                                   2 │                            3 │            │
+│   ▾  public                 │ │  id       │ 1                            │ 2                                   │ 3                            │ 4          │
 │     ▾  Tables (14)          │ │ status     │ running                      │ done                                │ failed                       │ pending    │
-│       ▸  agent          124 │ │ amount     │                         1.99 │                                2.99 │                         3.99 │            │
+│       ▸  agent          124 │ │ amount     │ 1.99                         │ 2.99                                │ 3.99                         │ 4.99       │
 │       ▸  agent_version  530 │ │ paid       │ t                            │ t                                   │ t                            │ t          │
 │       ▸  goal            57 │ │ meta       │ {"n": 1, "tags": ["a", "b"]} │ {"n": 2, "tags": ["a", "b"]}        │ {"n": 3, "tags": ["a", "b"]} │ {"n": 4, "t│
 │       ▸  mt_task        812 │ │ note       │ note 1                       │ line one↵line two after tab [31mred │ <null>                       │ note 4     │

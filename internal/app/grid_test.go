@@ -91,6 +91,8 @@ func TestGoldenQueryBarNarrow(t *testing.T) {
 	golden.RequireEqual(t, strings.Join(rows, "\n")+"\n")
 }
 
+// Transposed, every value is left-aligned, numbers too: a column mixes
+// types (§7.6, F5.7).
 func TestGoldenTableTransposed160x45(t *testing.T) {
 	a := wide(160, 45)
 	loadOrders(t, a, 60)

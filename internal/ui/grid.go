@@ -20,7 +20,8 @@ type GridCol struct {
 }
 
 // ColType is the class of a column's values: it picks their color, and
-// numbers are right-aligned (§7.6).
+// numbers are right-aligned but transposed, a column then mixing types
+// (§7.6).
 type ColType int
 
 const (
@@ -376,7 +377,7 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 				st.Fg = th.Dim
 			}
 			x := cellX(i)
-			if typ == ColNumber {
+			if typ == ColNumber && !g.Transpose {
 				x += ws[c] - Width(s)
 			}
 			cell := uv.Rect(cellX(i)-1, y, ws[c]+2, 1).Intersect(area)
