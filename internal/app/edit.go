@@ -646,6 +646,7 @@ func (a *App) save() tea.Cmd {
 func (a *App) gotSave(m saveMsg) tea.Cmd {
 	t := m.tab
 	t.conn.busy--
+	t.conn.tx = 'I' // a save ends in commit or rollback, a transaction begun in a console with it (§11)
 	t.saving = false
 	t.out--
 	closing := t.closing

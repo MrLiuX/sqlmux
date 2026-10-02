@@ -47,14 +47,30 @@ func (a *App) connect(c *Conn) tea.Cmd {
 	}
 }
 
+// gotConnected takes c's connections in, or marks it failed; the consoles
+// waiting on it go over, or stay (§7.8「console 标题」).
 func (a *App) gotConnected(m connected) tea.Cmd {
 	c := m.conn
+	var waiting []*consoleTab
+	for _, t := range a.sess.consoles() {
+		if t.want == c {
+			t.want, waiting = nil, append(waiting, t)
+		}
+	}
 	if m.err != nil {
 		c.State = connFailed
 		return a.showToast(c.Spec.Name+"："+m.err.Error(), toastTTL)
 	}
 	c.take(m.d)
-	return a.loadCatalog(c)
+	cmds := []tea.Cmd{a.loadCatalog(c)}
+	for _, t := range waiting {
+		if t.conn.inTx() { // begun meanwhile
+			cmds = append(cmds, a.showToast("当前连接有未提交的事务，先提交或回滚", toastTTL))
+			continue
+		}
+		cmds = append(cmds, a.switchConn(t, c, cmp.Or(t.wantSchema, c.Schema)))
+	}
+	return tea.Batch(cmds...)
 }
 
 // catalogMsg is what loadCatalog read.

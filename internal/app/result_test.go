@@ -368,6 +368,23 @@ func TestRerunAfterEdit(t *testing.T) {
 	}
 }
 
+// R runs again where the run ran, on its connection and schema, the
+// console since on another (F5.11).
+func TestRerunWhereItRan(t *testing.T) {
+	d := &execDB{res: map[string]db.Result{"select 1": rows(1)}}
+	a, c := inRun(t, d, "select 1")
+	c.schema = "public"
+	press(t, a, "<CR>")
+	seed := readyConn("seed")
+	c.conn, c.schema = seed, "s1"
+	res := a.win().Result
+	a.win().focus(res.ID)
+	selectTab(res, 1)
+	if r := runOf(t, a.rerun()).r; r.conn != a.sess.Conns[0] || r.schema != "public" {
+		t.Errorf("again on %s.%s", r.conn.Spec.Name, r.schema)
+	}
+}
+
 // The result area closed while a run goes on takes the tabs it took the
 // place of along: back with no result set, the run brings none back (§11).
 func TestResultAreaClosedWhileRunning(t *testing.T) {

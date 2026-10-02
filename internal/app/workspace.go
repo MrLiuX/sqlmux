@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -148,6 +149,10 @@ type Conn struct {
 	Main, Meta *db.Worker // §8.2; nil till connected
 	Addr       string     // shown in the status bar, e.g. ctw@localhost:5432
 	busy       int        // its requests out that C-c cancels (§8.3)
+	// tx is where Main's transaction was as its last request ended: 'I'
+	// out of one, 'T' in one, 'E' in one that failed; 0 before any. The
+	// replies bring it: Main may be busy, its lock not to wait on (F5.11).
+	tx byte
 
 	Schema    string   // its Schema: the tree cursor's under it, or the last it was under (§7.8)
 	Schemas   []string // the catalog's (§8.4)
@@ -192,6 +197,10 @@ func (a *App) conn() *Conn {
 	}
 	return a.sess.last
 }
+
+// inTx reports whether c's Main is in a transaction, as far as its last
+// request tells.
+func (c *Conn) inTx() bool { return c.tx != 0 && c.tx != 'I' }
 
 // cancel cancels what c's Main and Meta are running (§8.3).
 func (c *Conn) cancel() {
@@ -365,22 +374,76 @@ func (a *App) newTab() {
 	putTab(p, landing(), false)
 }
 
-// newConsole is console.new (§5, §11): console_n of the current
-// connection, n the least not open in the session, with what its file
-// keeps, in place of a landing tab or in a new tab of openTarget's pane.
+// newConsole is console.new (§5, §11): console_n, n the least not open
+// in the session, with what its file keeps, on the connection it last ran
+// on, else the current one, in place of a landing tab or in a new tab of
+// openTarget's pane.
+// ponytail: this session's consoles only; every session's when F5.1 makes
+// more than one, two sharing a file overwriting each other's autosaves
 func (a *App) newConsole() tea.Cmd {
-	p, conn := a.openTarget(), a.conn()
+	p := a.openTarget()
 	n := 1
-	for a.consoleOpen(config.ConsolePath(conn.Spec.Name, n)) {
+	for a.consoleOpen(config.ConsolePath(n)) {
 		n++
 	}
-	c, err := openConsole(conn, n)
+	c, err := openConsole(a.conn(), n)
 	if err != nil {
 		return a.showToast(err.Error(), toastTTL)
 	}
 	a.showPane(p.ID)
 	putTab(p, Tab{Name: fmt.Sprintf("console_%d", n), Console: c}, p.tab().landing())
-	return nil
+	return a.restoreConsole(c)
+}
+
+// restoreConsole puts console t on the connection and schema its file
+// last ran on (§11): connected, now; not yet, once it is, t staying where
+// it opened meanwhile. One gone from connections.toml leaves t as it is.
+func (a *App) restoreConsole(t *consoleTab) tea.Cmd {
+	st, ok := a.state.Consoles[t.key()]
+	i := slices.IndexFunc(a.sess.Conns, func(c *Conn) bool { return c.Spec.Name == st.Conn })
+	switch {
+	case !ok || i < 0:
+		return nil
+	case a.sess.Conns[i].State == connReady:
+		t.conn, t.schema = a.sess.Conns[i], cmp.Or(st.Schema, a.sess.Conns[i].Schema)
+		return nil
+	}
+	t.want, t.wantSchema = a.sess.Conns[i], st.Schema
+	return a.connect(t.want)
+}
+
+// pickConn is console t's connection dropdown taking c (§7.8「console
+// 标题」): not while t's own is in a transaction; one not connected
+// connects first, t going over once it is.
+func (a *App) pickConn(t *consoleTab, c *Conn) tea.Cmd {
+	t.want = nil
+	switch {
+	case c == t.conn:
+		return nil
+	case t.conn.inTx():
+		return a.showToast("当前连接有未提交的事务，先提交或回滚", toastTTL)
+	case c.State == connReady:
+		return a.switchConn(t, c, c.Schema)
+	}
+	t.want, t.wantSchema = c, ""
+	return a.connect(c)
+}
+
+// switchConn puts console t on connection c and schema: its next run runs
+// there; its file keeps them (§11).
+func (a *App) switchConn(t *consoleTab, c *Conn, schema string) tea.Cmd {
+	t.conn, t.schema, t.comp, t.asked = c, schema, nil, nil
+	return a.keepConsole(t)
+}
+
+// keepConsole writes where console t runs to the state, by its file
+// (§11, §14).
+func (a *App) keepConsole(t *consoleTab) tea.Cmd {
+	if a.state.Consoles == nil {
+		a.state.Consoles = map[string]config.ConsoleState{}
+	}
+	a.state.Consoles[t.key()] = config.ConsoleState{Conn: t.conn.Spec.Name, Schema: t.schema}
+	return a.saveState()
 }
 
 // consoleOpen is whether a console of the session is open on path.

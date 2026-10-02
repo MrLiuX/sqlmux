@@ -106,6 +106,9 @@ func (a *App) Init() tea.Cmd {
 	if a.warning != "" {
 		cmds = append(cmds, a.showToast(a.warning, toastTTL))
 	}
+	for _, t := range a.sess.consoles() { // console_1, where it last ran (§11)
+		cmds = append(cmds, a.restoreConsole(t))
+	}
 	return tea.Batch(cmds...)
 }
 

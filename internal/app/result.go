@@ -124,6 +124,7 @@ type (
 		rs  []db.Result
 		err error
 		set string // the SET of search_path when it is what failed
+		tx  byte   // where Main's transaction was as the run ended (F5.11)
 	}
 	runTick struct{ r *run }
 )
@@ -140,7 +141,7 @@ func (a *App) consoleRun(arg string) tea.Cmd {
 	if from < 0 {
 		return nil
 	}
-	return a.runSQL(t, p.Object(), text[from:to], from, t.ver)
+	return a.runSQL(t, t.conn, t.schema, p.Object(), text[from:to], from, t.ver)
 }
 
 // consoleSpan is what ↵ takes of console t (§11): the statement under the
@@ -184,17 +185,18 @@ func consoleSpan(t *consoleTab, arg string) (text string, from, to int) {
 }
 
 // runSQL runs sql of console t, named name, which is at base in its text
-// at version ver: in Main, a statement at a time, each committing on its
-// own, stopping at the first that fails (§11). Reads get a LIMIT a row
-// past max_rows, to tell there are more. The result area shows a
-// placeholder meanwhile; the console's red ▶ goes until this run fails.
-func (a *App) runSQL(t *consoleTab, name, sql string, base, ver int) tea.Cmd {
+// at version ver: in conn's Main, schema first on search_path, a statement
+// at a time, each committing on its own, stopping at the first that fails
+// (§11). Reads get a LIMIT a row past max_rows, to tell there are more.
+// The result area shows a placeholder meanwhile; the console's red ▶ goes
+// until this run fails.
+func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, ver int) tea.Cmd {
 	stmts := sqlkit.Statements(sql, sqlkit.PG)
 	if len(stmts) == 0 || t.running != nil {
 		return nil
 	}
 	a.sess.RunSeq++
-	r := &run{from: t, conn: t.conn, schema: t.schema, name: name, sql: sql, base: base, ver: ver, seq: a.sess.RunSeq, start: time.Now(), win: a.win(), stmts: stmts}
+	r := &run{from: t, conn: conn, schema: schema, name: name, sql: sql, base: base, ver: ver, seq: a.sess.RunSeq, start: time.Now(), win: a.win(), stmts: stmts}
 	t.running, t.failed, t.bar = r, -1, nil
 	p := a.showResult(r.win)
 	at, old := a.placeRun(r, []Tab{{Name: r.label(1), Result: &resultTab{run: r}}})
@@ -221,6 +223,7 @@ func (a *App) runSQL(t *consoleTab, name, sql string, base, ver int) tea.Cmd {
 			// kept out of transactions only: in a failed one a SET fails too
 			// and the user's rollback would never run; in one going on, a
 			// rollback may take the SET back.
+			defer func() { m.tx = txStatus(c) }()
 			switch tx := txStatus(c); {
 			case schema == "":
 			case tx == 'E':
@@ -298,6 +301,9 @@ func (a *App) placeRun(r *run, tabs []Tab) (at int, old []Tab) {
 func (a *App) gotRun(m runDone) tea.Cmd {
 	r := m.r
 	r.conn.busy--
+	if m.tx != 0 { // 0: it never got Main
+		r.conn.tx = m.tx
+	}
 	r.done, r.from.running = true, nil
 	var tabs []Tab
 	var cmds []tea.Cmd
@@ -403,7 +409,7 @@ func (a *App) rerun() tea.Cmd {
 	if r.from == nil {
 		return a.rerunQuick(rt)
 	}
-	return a.runSQL(r.from, r.name, r.sql, r.base, r.ver) // base holds only while the text is still r.ver
+	return a.runSQL(r.from, r.conn, r.schema, r.name, r.sql, r.base, r.ver) // base holds only while the text is still r.ver
 }
 
 // exportResult writes the result tab to <console>-<n>.csv in the current

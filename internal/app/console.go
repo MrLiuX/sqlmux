@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -21,7 +22,12 @@ import (
 // consoleTab is a console open in a pane (§5, §11): its editor and the
 // file that keeps its text.
 type consoleTab struct {
-	conn       *Conn // where it runs, on its Main (§5)
+	conn *Conn // where it runs, on its Main (§5)
+	// want is the connection it goes to once connected, picked or kept
+	// for its file, with wantSchema, "" for that one's Schema (§7.8
+	// 「console 标题」); nil for none.
+	want       *Conn
+	wantSchema string
 	ed         *editor.Editor
 	path       string
 	ver, saved int       // changes made, and the one the file has
@@ -46,16 +52,19 @@ type compWait struct {
 	manual bool
 }
 
-// openConsole is connection c's console n, with what its file keeps (§11),
-// in c's Schema.
+// openConsole is console n on connection c, in its Schema, with what its
+// file keeps (§11).
 func openConsole(c *Conn, n int) (*consoleTab, error) {
-	path := config.ConsolePath(c.Spec.Name, n)
+	path := config.ConsolePath(n)
 	text, err := config.ReadConsole(path)
 	if err != nil {
 		return nil, fmt.Errorf("读取失败：%w", err)
 	}
 	return &consoleTab{conn: c, schema: c.Schema, ed: editor.New(text), path: path, failed: -1}, nil
 }
+
+// key is t's file name, console_1, which the state keeps where it runs by.
+func (t *consoleTab) key() string { return strings.TrimSuffix(filepath.Base(t.path), ".sql") }
 
 func consoleOf(p *Pane) *consoleTab {
 	if p.Cur < len(p.Tabs) {

@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -40,8 +39,6 @@ func settle(a *App, cmd tea.Cmd) {
 // in the tree, open on its current_schema(); one that cannot is marked
 // failed, named in a toast, the others as they were (§7.8「连接节点」).
 func TestConnectOnOpen(t *testing.T) {
-	defer func(d time.Duration) { toastTTL = d }(toastTTL)
-	toastTTL = time.Millisecond // settle runs the toast's tick
 	dsn := postgres.IntegrationDSN(t)
 	sess, err := Open(context.Background(), []config.Connection{
 		{Name: "play", Engine: "postgres", DSN: dsn},
@@ -112,5 +109,47 @@ func TestSecretCached(t *testing.T) {
 	}
 	if count() != 3 {
 		t.Errorf("a failed dial kept the password: %d runs", count())
+	}
+}
+
+// Two consoles on one connection share its Main, its transaction too: one
+// begins, the other is in it and stays on the connection till it ends;
+// then it goes to another once that connects (§5, F5.11).
+func TestConsolesShareMain(t *testing.T) {
+	dsn := postgres.IntegrationDSN(t)
+	sess, err := Open(context.Background(), []config.Connection{
+		{Name: "play", Engine: "postgres", DSN: dsn},
+		{Name: "seed", Engine: "postgres", DSN: dsn},
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sess.Close()
+	cfg := config.Default()
+	keys, _ := keymap.New(cfg)
+	a := New(cfg, keys, sess, &config.State{}, "")
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
+	settle(a, a.loadCatalog(sess.Conns[0]))
+	play, seed := sess.Conns[0], sess.Conns[1]
+	c1 := consoleOf(a.win().Root.B.Pane)
+	a.win().focus(a.win().Root.B.Pane.ID)
+	a.run("console.new", 0)
+	c2 := consoleOf(a.focused())
+	run := func(c *consoleTab, sql string) {
+		t.Helper()
+		deliver(a, a.runSQL(c, c.conn, c.schema, "console", sql, 0, c.ver))
+	}
+	if run(c1, "begin"); play.tx != 'T' {
+		t.Fatalf("begin: %c", play.tx)
+	}
+	if run(c2, "select 1"); play.tx != 'T' || c2.conn != play {
+		t.Fatalf("the other console's run: %c", play.tx)
+	}
+	if a.pickConn(c2, seed); c2.conn != play || c2.want != nil {
+		t.Error("left its connection in a transaction")
+	}
+	run(c2, "rollback")
+	if settle(a, a.pickConn(c2, seed)); play.tx != 'I' || c2.conn != seed || seed.State != connReady {
+		t.Errorf("rolled back: %c, on %s, seed %v", play.tx, c2.conn.Spec.Name, seed.State)
 	}
 }

@@ -13,13 +13,14 @@ import (
 )
 
 // dropKind is what an open dropdown picks: a table's ORDER or LIMIT (§7.8
-// 「查询条」), a console's schema (§8.6).
+// 「查询条」), a console's schema (§8.6) or connection (§7.8「console 标题」).
 type dropKind int
 
 const (
 	dropOrder dropKind = iota
 	dropLimit
 	dropSchema
+	dropConsoleConn
 	dropAuto // auto refresh's interval (§7.8「自动刷新」)
 )
 
@@ -62,12 +63,12 @@ func (a *App) openDrop(k dropKind) {
 	a.dropMove(0)
 }
 
-// openSchemaDrop opens the focused console's schema dropdown (gs, §8.6),
-// its selection on the schema it has.
-func (a *App) openSchemaDrop() {
+// openConsoleDrop opens the focused console's dropdown of kind k, schema
+// (gs, §8.6) or connection, its selection on the one it has.
+func (a *App) openConsoleDrop(k dropKind) {
 	p := a.focused()
-	if c := consoleOf(p); c != nil && len(c.conn.Schemas) > 0 {
-		a.drop = &dropdown{kind: dropSchema, console: c, pane: p}
+	if c := consoleOf(p); c != nil && (k == dropConsoleConn || len(c.conn.Schemas) > 0) {
+		a.drop = &dropdown{kind: k, console: c, pane: p}
 		_, a.drop.sel = a.dropItems()
 		a.dropMove(0)
 	}
@@ -79,6 +80,11 @@ func (a *App) dropItems() (items []string, current int) {
 	switch d.kind {
 	case dropSchema:
 		return d.console.conn.Schemas, slices.Index(d.console.conn.Schemas, d.console.schema)
+	case dropConsoleConn:
+		for _, c := range a.sess.Conns {
+			items = append(items, c.Spec.Name)
+		}
+		return items, slices.Index(a.sess.Conns, d.console.conn)
 	case dropOrder: // first the row identity, "默认"; then the columns
 		items = []string{"默认"}
 		current = 0
@@ -125,11 +131,11 @@ func (a *App) dropMatches() []ui.Match {
 }
 
 // dropBox is where v, the dropdown as drawn, opens (§8.6, §7.8): under its
-// chip, left aligned with it, as wide as its longest item. A schema one
-// opens under the console title's button, as hits, the frame's, have it,
-// its right edge on the pane's right border; with the button left out, at
-// that border. Auto refresh's under its button, or given way, at the query
-// bar's right end as a schema one.
+// chip, left aligned with it, as wide as its longest item. A schema or a
+// connection one opens under its part of the console title, as hits, the
+// frame's, have it, its right edge on the pane's right border; with the
+// part left out, at that border. Auto refresh's under its button, or given
+// way, at the query bar's right end as a schema one.
 func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 	d := a.drop
 	w := 16
@@ -139,11 +145,12 @@ func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 	}
 	var entry uv.Rectangle
 	switch d.kind {
-	case dropSchema:
+	case dropSchema, dropConsoleConn:
 		r := a.layout()[d.pane.ID]
 		entry = uv.Rect(r.Max.X-w, r.Min.Y, w, 1)
+		action := map[dropKind]string{dropSchema: "console.schema", dropConsoleConn: "console.conn"}[d.kind]
 		for _, h := range hits {
-			if h.Target == (ui.Target{Kind: ui.KindHint, Pane: d.pane.ID, Action: "console.schema"}) {
+			if h.Target == (ui.Target{Kind: ui.KindHint, Pane: d.pane.ID, Action: action}) {
 				entry, w = h.Rect, max(w, r.Max.X-h.Rect.Min.X)
 			}
 		}
@@ -181,7 +188,9 @@ func (a *App) dropPick(i int) tea.Cmd {
 	switch t := d.tab; d.kind {
 	case dropSchema: // the next run sets it (§8.6)
 		d.console.schema = item
-		return nil
+		return a.keepConsole(d.console)
+	case dropConsoleConn:
+		return a.pickConn(d.console, a.sess.Conns[at])
 	case dropAuto: // the ticking so far stops; this interval's starts
 		if t.auto, t.autoGen = autoIntervals[at], t.autoGen+1; t.auto == 0 {
 			return nil

@@ -75,7 +75,7 @@ func (c Connection) problem() string {
 			return "缺少 " + f[0]
 		}
 	}
-	// the name is the directory of its console files (§11)
+	// the name keys state.json's tables and tree node IDs (§14)
 	if strings.ContainsAny(c.Name, `/\`) || strings.HasPrefix(c.Name, ".") {
 		return fmt.Sprintf(`name = %q：不能含 / 或 \，也不能以 . 开头`, c.Name)
 	}

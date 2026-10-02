@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -98,7 +99,7 @@ func TestConsoleMaps(t *testing.T) {
 // for the latest change.
 func TestConsoleFile(t *testing.T) {
 	a, c := inConsole(t, "", "")
-	if c.path != config.ConsolePath("doraemon", 1) {
+	if c.path != config.ConsolePath(1) {
 		t.Fatalf("path %s", c.path)
 	}
 	feed(t, a, "iselect 1;<Esc>")
@@ -129,6 +130,76 @@ func TestConsoleFile(t *testing.T) {
 	}
 }
 
+// A console runs on the connection its title's dropdown picks (§7.8
+// 「console 标题」): only that part lights under the pointer; a connected
+// one at once, in its Schema, kept for the file (§11); not while its own
+// is in a transaction; one not connected once it connects, the console
+// staying meanwhile, and on, it failing.
+func TestConsoleConn(t *testing.T) {
+	a, c := inConsole(t, "", "")
+	seed := readyConn("seed")
+	seed.Schema, seed.Schemas, seed.DB = "s1", []string{"s1", "s2"}, "seeddb"
+	idle := newConn(config.Connection{Name: "idle"})
+	a.sess.Conns = append(a.sess.Conns, seed, idle)
+	r := find(t, a, ui.Target{Kind: ui.KindHint, Pane: a.focused().ID, Action: "console.conn"})
+	a.Update(tea.MouseMotionMsg{X: r.Min.X, Y: r.Min.Y})
+	if f := a.render(); f.Buf.CellAt(r.Max.X-1, r.Min.Y).Style.Bg != a.theme.Select || f.Buf.CellAt(r.Max.X+1, r.Min.Y).Style.Bg == a.theme.Select {
+		t.Error("the pointer on the connection lights it alone, not the ·")
+	}
+	click(a, r.Min)
+	if v := a.dropView(); a.drop == nil || strings.Join(v.Items, " ") != "doraemon seed idle" || v.Mark != 0 {
+		t.Fatalf("dropdown %+v", a.drop)
+	}
+	feed(t, a, "seed<CR>")
+	if c.conn != seed || c.schema != "s1" || a.state.Consoles["console_1"] != (config.ConsoleState{Conn: "seed", Schema: "s1"}) {
+		t.Fatalf("seed: on %s.%s, state %+v", c.conn.Spec.Name, c.schema, a.state.Consoles)
+	}
+	if top := strings.Split(a.render().String(), "\n")[r.Min.Y]; !strings.Contains(top, "seed · seeddb.s1 ▾") {
+		t.Errorf("title %q", top)
+	}
+	feed(t, a, "gs<C-n><CR>")
+	if c.schema != "s2" || a.state.Consoles["console_1"].Schema != "s2" {
+		t.Errorf("schema %s, kept %+v", c.schema, a.state.Consoles)
+	}
+	seed.tx = 'T'
+	a.run("console.conn", 0)
+	if feed(t, a, "doraemon<CR>"); c.conn != seed || a.toast != "当前连接有未提交的事务，先提交或回滚" {
+		t.Errorf("in a transaction: on %s, toast %q", c.conn.Spec.Name, a.toast)
+	}
+	seed.tx = 'I'
+	a.run("console.conn", 0)
+	if feed(t, a, "idle<CR>"); c.conn != seed || c.want != idle || idle.State != connConnecting {
+		t.Fatalf("idle: on %s, want %v, %v", c.conn.Spec.Name, c.want, idle.State)
+	}
+	if a.Update(connected{conn: idle, err: errors.New("no route")}); c.conn != seed || c.want != nil || a.toast != "idle：no route" {
+		t.Errorf("idle failing: on %s, want %v, toast %q", c.conn.Spec.Name, c.want, a.toast)
+	}
+}
+
+// A console opens where its file last ran (§11): on a connection
+// connected, now; on one not, once it connects; on one gone, the current
+// one. console_1 too, at start.
+func TestConsoleRestore(t *testing.T) {
+	a, c1 := inConsole(t, "", "")
+	seed, idle := readyConn("seed"), newConn(config.Connection{Name: "idle"})
+	seed.Schema = "s1"
+	a.sess.Conns = append(a.sess.Conns, seed, idle)
+	a.state.Consoles = map[string]config.ConsoleState{"console_1": {Conn: "seed", Schema: "s0"}, "console_2": {Conn: "seed"}, "console_3": {Conn: "idle", Schema: "x"}, "console_4": {Conn: "gone"}}
+	if a.Init(); c1.conn != seed || c1.schema != "s0" {
+		t.Errorf("console_1 at start: on %s.%s", c1.conn.Spec.Name, c1.schema)
+	}
+	opened := func() *consoleTab { a.run("console.new", 0); return consoleOf(a.focused()) }
+	if c := opened(); c.conn != seed || c.schema != "s1" {
+		t.Errorf("console_2: on %s.%s", c.conn.Spec.Name, c.schema)
+	}
+	if c := opened(); c.conn != seed || c.want != idle || c.wantSchema != "x" || idle.State != connConnecting {
+		t.Errorf("console_3: on %s, want %v %q, %v", c.conn.Spec.Name, c.want, c.wantSchema, idle.State)
+	}
+	if c := opened(); c.conn != seed || c.want != nil {
+		t.Errorf("console_4: on %s, want %v", c.conn.Spec.Name, c.want)
+	}
+}
+
 // soloSession is a new session over doraemon alone, not connected.
 func soloSession() *Session {
 	c := newConn(config.Connection{Name: "doraemon"})
@@ -139,7 +210,7 @@ func soloSession() *Session {
 // says so and the rest starts (§11).
 func TestConsoleUnreadable(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
-	os.MkdirAll(config.ConsolePath("doraemon", 1), 0o700) // a directory where the file goes
+	os.MkdirAll(config.ConsolePath(1), 0o700) // a directory where the file goes
 	s := soloSession()
 	if p := s.Windows[0].Root.B.Pane; len(p.Tabs) != 0 || !strings.HasPrefix(s.warning, "读取失败：") {
 		t.Fatalf("tabs %v, warning %q", p.Tabs, s.warning)
@@ -454,7 +525,8 @@ func TestConsoleSchemaFromCatalog(t *testing.T) {
 }
 
 // The console's title as the window narrows: ▶ run stays longest, then
-// the schema, then ↵ (§7.8); at 200 columns everything and the name.
+// the connection and the schema, together, then ↵ (§7.8); at 200 columns
+// everything and the name.
 func TestGoldenConsoleTitle(t *testing.T) {
 	var titles []string
 	for _, w := range []int{200, 160, 130, 110, 100, 90} {

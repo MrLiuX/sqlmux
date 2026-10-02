@@ -83,12 +83,11 @@ func TestSmallSizes(t *testing.T) {
 	}
 }
 
-// §7.8: at 160×45 the console title has its name and "▶ run ↵"; the
-// schema dropdown comes in F3.11.
+// §7.8: at 160×45 the console title has "▶ run ↵", the connection and the
+// schema; its name, cut, the rest (no "console" beside its icon, §7.7).
 func TestConsoleTitleAt160(t *testing.T) {
 	top := strings.Split(twoPanes(160, 45, "nerd").render().String(), "\n")[0]
-	// no "console" beside its icon (§7.7), so the tab name fits whole
-	for _, want := range []string{"② " + ui.NerdIcons.Console.Text + " console_1 ─", " ▶ run  ↵ ─┐"} {
+	for _, want := range []string{"② " + ui.NerdIcons.Console.Text + " conso…  doraemon · doraemon.public ▾  ▶ run  ↵ ─┐"} {
 		if !strings.Contains(top, want) {
 			t.Errorf("top row lacks %q: %q", want, top)
 		}
@@ -293,10 +292,10 @@ table = { fg = "#a9dc76" }
 	if bg := f.Buf.CellAt(80, a.h-1).Style.Bg; bg != th.Bar || th.Bar == th.Row {
 		t.Errorf("status bar %v, want bar %v whatever row is", bg, th.Bar)
 	}
-	if st := cell(0, " C console"); st.Fg != th.Dim {
+	if st := cell(0, " C conso"); st.Fg != th.Dim {
 		t.Fatal("the title around the icon keeps its color")
 	}
-	if st := cell(0, "C console"); st.Fg != ic.Console.Fg {
+	if st := cell(0, "C conso"); st.Fg != ic.Console.Fg {
 		t.Errorf("console icon %v, want %v", st.Fg, ic.Console.Fg)
 	}
 	if st := cell(7, ui.NerdIcons.Table.Text); st.Fg != ic.Table.Fg { // the first table, under doraemon, public and Tables
