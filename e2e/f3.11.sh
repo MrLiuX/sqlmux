@@ -2,6 +2,7 @@
 # F3.11 console 的 schema 下拉框（specs/m3-console/task.md F3.11；tech-design §8.6）
 # 标题栏的退让在 f0.2；这里测下拉框的打开与选择，以及选的 schema 在真实 PG 上怎么生效（search_path 的比较与重设）。
 # 自建库（库名 sqlmux_e2e_<pid>）；默认布局，② console_1 的文字从 x 111 起。
+# F5.11 起标题是 <连接> · <库>.<schema> ▾：连接名取 d，否则长库名放不下、下拉框整个让位（让位由 golden 覆盖）。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 
@@ -9,7 +10,7 @@ D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")
 trap 'e2e_stop; rm -rf "$D"' EXIT
 e2e_own_db || { echo "e2e: could not create the private database" >&2; exit 1; }
 APP=e2e-f311-$$ DB=sqlmux_e2e_$$ PK=#73daca
-mkdir -p "$D/own"; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s&application_name=%s"\n' "$E2E_DB" "$APP" >"$D/own/connections.toml"; chmod 600 "$D/own/connections.toml"
+mkdir -p "$D/own"; printf '[[connection]]\nname = "d"\nengine = "postgres"\ndsn = "%s&application_name=%s"\n' "$E2E_DB" "$APP" >"$D/own/connections.toml"; chmod 600 "$D/own/connections.toml"
 psql "$E2E_DB" -q -c "create table public.agent (who text)" -c "insert into public.agent values ('public')"   # 同名表：查错 schema 会读到这张
 paste() { t set-buffer -b e2e "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 setsql() { key Escape; key g g; key d G; key i; paste "$1"; key Escape; key g g; }
@@ -22,14 +23,14 @@ logs() { local g y; g=($(geom 3)); for ((y = g[1] + 1; y < g[1] + g[3] - 2; y++)
 psql_n() { psql "$E2E_DB" -At -c "$1"; }
 
 start -C "$D/own"
-check "② 标题：<库名>.<schema> ▾，默认是树当前的 public" eval '[[ $(title 2) == *" $DB.public ▾  ▶ run  ↵ ─┐" ]] || { echo "  $(title 2)"; false; }'
+check "② 标题：<连接> · <库名>.<schema> ▾，默认是树当前的 public" eval '[[ $(title 2) == *" d · $DB.public ▾  ▶ run  ↵ ─┐" ]] || { echo "  $(title 2)"; false; }'
 key C-l; key g; key s
 check "gs：打开下拉框，输入直接进过滤框（COMMAND）" eval '[[ -n $(pop) && $(bar) == *" COMMAND " ]]'
 g=($(pop)); x=$(e2e_find "$DB.public" 1 | cut -d" " -f1)
 check "下拉框在按钮下方、与按钮左对齐，右边框和 ② 的右边框对齐" eval '[[ ${g[0]} == $x && ${g[1]} == 2 && $(( g[0] + g[2] - 1 )) == 160 ]] || { echo "  box ${g[*]}, button x $x"; false; }'
 check "当前的 public 用 pk 色标出；系统 schema 不列" eval 'y=$(for y in $(seq 3 12); do [[ $(e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $y) == *" public "* ]] && echo $y; done | head -1); [[ -n $y ]] && c=$(e2e_find public $y | tr " " "\n" | awk -v l=${g[0]} "\$1 > l { print; exit }") && style_has $c $y fg=$PK && ! screen_has pg_catalog && ! screen_has information_schema'
 e2e_type agen; sleep 0.3; key Enter
-check "过滤出 agentable、↵：标题变成 $DB.agentable ▾" eval '[[ -z $(pop) && $(title 2) == *" $DB.agentable ▾  ▶ run  ↵ ─┐" ]]'
+check "过滤出 agentable、↵：标题变成 $DB.agentable ▾" eval '[[ -z $(pop) && $(title 2) == *" d · $DB.agentable ▾  ▶ run  ↵ ─┐" ]]'
 setsql "select count(*) as n from agent"
 run
 check "选了 agentable：不带 schema 的 agent 查的是 agentable.agent" eval '[[ $(rrow 3) == *" $(psql_n "select count(*) from agentable.agent")"* ]] || { echo "  $(rrow 3)"; false; }'

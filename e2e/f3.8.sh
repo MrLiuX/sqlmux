@@ -20,7 +20,7 @@ rtabs() { tabbar $RP | sed -E 's/ {3,}.*//; s/- │/ │/g; s/-$//'; }          
 rtabs_are() { [[ $(rtabs) == "$1" ]] || { echo "  ③ tabs: '$(rtabs)', want '$1'"; false; }; }
 rrow() { local g; g=($(geom $RP)); e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $((g[1] + $1)) | sed 's/^ //; s/ *$//'; }   # ③ 内容区第 N 行
 logs() { local g y; g=($(geom $RP)); for ((y = g[1] + 1; y < g[1] + g[3] - 2; y++)); do e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $y | sed 's/^ //; s/ *$//'; done | sed '/^$/d'; }
-pending() { bar | grep -oE '[^ ]+ +[^ ]+ [^ ]+@.*$' | awk '{ print $1 }'; }   # 状态栏的待输入一块（空闲时是 ·）
+pending() { local c; c=$(pending_col); e2e_text "$c" $((c + 12)) "$(H)" | awk '{ print $1 }'; }   # 状态栏的待输入一块（空闲时是 ·）；F5.10 起地址块带连接名，从入口往右数（lib.sh pending_col）
 done_run() { wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 0.3; }
 run() { key Enter; done_run; }
 

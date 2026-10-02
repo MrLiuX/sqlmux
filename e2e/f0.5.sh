@@ -20,9 +20,9 @@ BAR=#292e42 FOCUS=#9ece6a BG=#1f2335 FG=#c0caf5 DIM=#565f89 WARN=#e0af68 INFO=#7
 
 # ---- 160 宽 NORMAL：内容与顺序
 start
-check "没有打开表：不显示行,列（F1.3，§7.8）" bar_is " @ doraemon ▾  0: data* $(printf '%93s')@  @ ·    @ sqlmux@localhost:55432  NORMAL "
+check "没有打开表：不显示行,列（F1.3，§7.8）" bar_is " doraemon ▾  0: data* $(printf '%84s')@  @ ·    @ doraemon · sqlmux@localhost:55432  NORMAL "
 start_t
-check "160 宽状态栏（F0.16：命令面板入口只有图标）" bar_is " @ doraemon ▾  0: data* $(printf '%88s')@  @ ·    1,1  @ sqlmux@localhost:55432  NORMAL "
+check "160 宽状态栏（F0.16：命令面板入口只有图标；F5.10：session 块不画引擎图标，地址块带连接名）" bar_is " doraemon ▾  0: data* $(printf '%79s')@  @ ·    1,1  @ doraemon · sqlmux@localhost:55432  NORMAL "
 check "状态栏底色 #292e42" eval 'style_has 40 45 bg=$BAR && style_has 100 45 bg=$BAR'
 check "session 块：focus 底、bg 字、粗体" eval 'at doraemon bg=$FOCUS && at doraemon fg=$BG && at doraemon bold && style_has 1 45 bg=$FOCUS'
 check "当前 window：#3b4261 底、fg 字" eval 'at "0: data*" bg=#3b4261 && at "0: data*" fg=$FG && at "0: data*" bg=#3b4261 -1'
@@ -46,7 +46,7 @@ e2e_keys Space; sleep 0.1; e2e_keys Escape; sleep 0.2; check "SPC 后 esc：清�
 
 # ---- COMMAND 模式：F0.13 起由命令面板进入，状态栏不再有命令行；面板打开时背景（含状态栏）变暗 60%
 e2e_type ':'; sleep 0.3
-check "按 : 打开面板：模式块显示 COMMAND，状态栏左侧仍是 session 与 window" eval 'bar_has "@ doraemon ▾  0: data*" && [[ $(bar) == *" COMMAND " ]]'
+check "按 : 打开面板：模式块显示 COMMAND，状态栏左侧仍是 session 与 window" eval 'bar_has " doraemon ▾  0: data*" && [[ $(bar) == *" COMMAND " ]]'
 check "COMMAND 模式块的底色是 info 变暗后的颜色（不是 focus）" eval 'at COMMAND bold && ! at COMMAND bg=$FOCUS >/dev/null && ! at COMMAND bg=$INFO >/dev/null'
 e2e_keys Escape; sleep 0.2
 check "esc 回到 NORMAL" eval 'at NORMAL bg=$FOCUS && bar_has doraemon'
@@ -56,11 +56,11 @@ check "80 宽：面板打开时模式块 COMMAND 仍然可见" eval '[[ $(bar) =
 e2e_keys Escape; sleep 0.2
 
 # ---- NORMAL 逐步变窄：连接地址 →（非当前 window，M5）→ 光标位置 → 截短 session 名
-start_t -x 73; check "73 宽：全部显示" bar_has "0: data*  @  @ ·    1,1  @ sqlmux@localhost:55432  NORMAL "
-start_t -x 72; check "72 宽：先省略连接地址" eval 'bar_lacks sqlmux@ && bar_has "1,1"'
-start_t -x 47; check "47 宽：光标位置还在" bar_has "1,1  NORMAL "
-start_t -x 46; check "46 宽：去掉光标位置，session 名完整" eval 'bar_lacks "1,1" && bar_has " doraemon ▾"'
-start_t -x 41; check "41 宽：截短 session 名" bar_has " doraem… ▾"
+start_t -x 82; check "82 宽：全部显示" bar_has "0: data*  @  @ ·    1,1  @ doraemon · sqlmux@localhost:55432  NORMAL "
+start_t -x 81; check "81 宽：先省略连接地址（连同连接名）" eval 'bar_lacks sqlmux@ && bar_lacks "· sqlmux" && bar_has "1,1"'
+start_t -x 45; check "45 宽：光标位置还在" bar_has "1,1  NORMAL "
+start_t -x 44; check "44 宽：去掉光标位置，session 名完整" eval 'bar_lacks "1,1" && bar_has " doraemon ▾"'
+start_t -x 39; check "39 宽：截短 session 名" bar_has " doraem… ▾"
 monotonic() {  # 省略顺序：有连接地址 ⇒ 有 1,1 ⇒ session 名完整；且必留的块都在
   local b; b=$(bar)
   local c=0 p=0 s=0
