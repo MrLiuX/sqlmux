@@ -242,10 +242,11 @@ func TestStatusNarrowing(t *testing.T) {
 		w          int
 		has, lacks []string
 	}{
-		{160, []string{"doraemon ▾", " 0: data* ", " 1: report ", " 1,1 ", "pg@localhost:5432", " NORMAL "}, nil},
+		{160, []string{"doraemon ▾", " 0: data* ", " 1: report ", " 1,1 ", "doraemon · pg@localhost:5432", " NORMAL "}, nil},
 		{78, []string{"doraemon ▾", " 1: report ", " 1,1 ", " NORMAL "}, []string{"pg@localhost"}},
 		{55, []string{"doraemon ▾", " 0: data* ", " 1,1 "}, []string{" 1: report "}},
-		{40, []string{" 0: data* ", "·", " NORMAL "}, []string{" 1,1 ", "doraemon"}},
+		{40, []string{"doraemon ▾", " 0: data* ", "·", " NORMAL "}, []string{" 1,1 "}},
+		{36, []string{" 0: data* ", "·", " NORMAL "}, []string{" 1,1 ", "doraemon"}},
 	} {
 		a := twoPanes(c.w, 24, "nerd")
 		loadOrders(t, a, 3) // row,col shows with a table loaded (§7.8)

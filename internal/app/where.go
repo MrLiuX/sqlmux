@@ -142,10 +142,9 @@ func wordStart(rs []rune, i int) bool {
 	return i == 0 || strings.ContainsRune("_.-$", rs[i-1]) || unicode.IsLower(rs[i-1]) && unicode.IsUpper(rs[i])
 }
 
-// tableNamed is the session's table name of schema, as PG folds what
-// isn't quoted.
-func (a *App) tableNamed(schema, name string) (db.Table, bool) {
-	for _, t := range a.sess.Tables {
+// table is c's table name of schema, as PG folds what isn't quoted.
+func (c *Conn) table(schema, name string) (db.Table, bool) {
+	for _, t := range c.Tables {
 		if strings.EqualFold(t.Schema, schema) && strings.EqualFold(t.Name, name) {
 			return t, true
 		}
@@ -153,16 +152,16 @@ func (a *App) tableNamed(schema, name string) (db.Table, bool) {
 	return db.Table{}, false
 }
 
-// sqlNames tells the names in SQL text apart for their colors (§7.3): a
-// table is one of the session's, any schema's; a column is one of the
+// sqlNames tells the names in SQL text on c apart for their colors
+// (§7.3): a table is one of c's, any schema's; a column is one of the
 // tables its statement names, of schema when unqualified, or with cols
 // given, one of those (a WHERE's table's). missing is the statements'
 // tables whose columns the cache lacks.
 // ponytail: by the tokens alone: a CTE or an alias named as a table is
 // colored as one, as is a column; a table's name wins over a column's
-func (a *App) sqlNames(text, schema string, cols *db.Columns) (names ui.SQLNames, missing []db.Table) {
+func (a *App) sqlNames(c *Conn, text, schema string, cols *db.Columns) (names ui.SQLNames, missing []db.Table) {
 	tables := map[string]bool{}
-	for _, t := range a.sess.Tables {
+	for _, t := range c.Tables {
 		tables[t.Name] = true
 	}
 	type span struct {
@@ -186,13 +185,13 @@ func (a *App) sqlNames(text, schema string, cols *db.Columns) (names ui.SQLNames
 	}
 	for _, st := range stmts {
 		add(st.End, db.Columns{})
-		c := sqlkit.CompletionContext(text[st.Start:st.End], 0, sqlkit.PG)
-		for _, r := range c.Tables {
-			if r.Schema == "" && slices.ContainsFunc(c.CTEs, func(n string) bool { return strings.EqualFold(n, r.Name) }) {
+		cc := sqlkit.CompletionContext(text[st.Start:st.End], 0, sqlkit.PG)
+		for _, r := range cc.Tables {
+			if r.Schema == "" && slices.ContainsFunc(cc.CTEs, func(n string) bool { return strings.EqualFold(n, r.Name) }) {
 				continue
 			}
-			t, ok := a.tableNamed(cmp.Or(r.Schema, schema), r.Name)
-			cs, cached := a.sess.cols[idOf(t)]
+			t, ok := c.table(cmp.Or(r.Schema, schema), r.Name)
+			cs, cached := c.cols[idOf(t)]
 			if ok && !cached {
 				missing = append(missing, t)
 			}
@@ -200,7 +199,7 @@ func (a *App) sqlNames(text, schema string, cols *db.Columns) (names ui.SQLNames
 		}
 	}
 	schemas := map[string]bool{}
-	for _, s := range a.sess.Schemas {
+	for _, s := range c.Schemas {
 		schemas[s] = true
 	}
 	return func(at int, word string) ui.SQLName {
@@ -234,29 +233,30 @@ func (a *App) sqlNames(text, schema string, cols *db.Columns) (names ui.SQLNames
 // drawn; keep the tables a console names per change if a big file lags
 func (a *App) wantCols() tea.Cmd {
 	var cmds []tea.Cmd
-	want := func(text, schema string) {
-		_, missing := a.sqlNames(text, schema, nil)
+	want := func(c *Conn, text, schema string) {
+		_, missing := a.sqlNames(c, text, schema, nil)
 		for _, t := range missing {
-			if !a.sess.colsAsked[idOf(t)] {
-				a.sess.colsAsked[idOf(t)] = true
-				cmds = append(cmds, a.fetchCols(t))
+			if !c.colsAsked[idOf(t)] {
+				c.colsAsked[idOf(t)] = true
+				cmds = append(cmds, a.fetchCols(c, t))
 			}
 		}
 	}
 	for id := range a.layout() {
-		if c := consoleOf(a.win().pane(id)); c != nil {
-			want(strings.Join(c.ed.Lines(), "\n"), cmp.Or(c.schema, a.sess.Schema))
+		if t := consoleOf(a.win().pane(id)); t != nil {
+			want(t.conn, strings.Join(t.ed.Lines(), "\n"), cmp.Or(t.schema, t.conn.Schema))
 		}
 	}
-	if text, schema := a.previewedView(); text != "" {
-		want(text, schema)
+	if c, text, schema := a.previewedView(); text != "" {
+		want(c, text, schema)
 	}
 	return tea.Batch(cmds...)
 }
 
-// sqlComplete is the candidates for the cursor at pos in sql, a console's
-// or the quick SQL's (§9.7): by what CompletionContext says goes there,
-// tables of schema (the console's; the tree's for the quick SQL, §8.6), of
+// sqlComplete is the candidates for the cursor at pos in sql on conn, a
+// console's or the quick SQL's (§9.7): by what CompletionContext says goes
+// there, tables of schema (the console's; the connection's for the quick
+// SQL, §8.6), of
 // X. after a schema X, a table's columns
 // after its name or alias, else the statement's tables' columns, those at
 // the cursor's depth first, the other tables and keywords. It opens with a
@@ -264,18 +264,18 @@ func (a *App) wantCols() tea.Cmd {
 // nothing. The columns the cache lacks are fetched, a table once per asked.
 // ponytail: names go in bare, as the catalog has them; one that wants
 // quotes (upper case, a space) needs them typed.
-func (a *App) sqlComplete(sql string, pos int, schema string, asked map[tableID]bool, manual bool) (*completion, []tea.Cmd) {
+func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked map[tableID]bool, manual bool) (*completion, []tea.Cmd) {
 	c := sqlkit.CompletionContext(sql, pos, sqlkit.PG)
 	if !c.OK {
 		return nil, nil
 	}
 	var cmds []tea.Cmd
-	table := func(in, name string) (db.Table, bool) { return a.tableNamed(cmp.Or(in, schema), name) }
+	table := func(in, name string) (db.Table, bool) { return conn.table(cmp.Or(in, schema), name) }
 	columns := func(t db.Table) (out []candidate) {
-		cs, ok := a.sess.cols[idOf(t)]
+		cs, ok := conn.cols[idOf(t)]
 		if !ok && !asked[idOf(t)] {
 			asked[idOf(t)] = true
-			cmds = append(cmds, a.fetchCols(t))
+			cmds = append(cmds, a.fetchCols(conn, t))
 		}
 		for _, col := range cs.Cols {
 			out = append(out, candidate{label: col.Name, insert: col.Name, note: col.Type + " · " + t.Name})
@@ -283,7 +283,7 @@ func (a *App) sqlComplete(sql string, pos int, schema string, asked map[tableID]
 		return out
 	}
 	tables := func(in string, skip map[tableID]bool) (out []candidate) {
-		for _, t := range a.sess.Tables {
+		for _, t := range conn.Tables {
 			if t.Schema == in && !skip[idOf(t)] {
 				note := "表"
 				if t.View() {
@@ -324,8 +324,8 @@ func (a *App) sqlComplete(sql string, pos int, schema string, asked map[tableID]
 		default: // what the statement names is not a table, or it names none: a table, else a schema (from agentable.)
 			if t, ok := table("", q); ok {
 				groups, resolved = [][]candidate{columns(t)}, true
-			} else if j := slices.IndexFunc(a.sess.Schemas, func(s string) bool { return strings.EqualFold(s, q) }); j >= 0 {
-				groups, resolved = [][]candidate{tables(a.sess.Schemas[j], nil)}, true
+			} else if j := slices.IndexFunc(conn.Schemas, func(s string) bool { return strings.EqualFold(s, q) }); j >= 0 {
+				groups, resolved = [][]candidate{tables(conn.Schemas[j], nil)}, true
 			}
 		}
 	case sqlkit.CompTables:
@@ -551,7 +551,7 @@ type histEntry struct {
 
 // tableState is t's history and favorites, made on first use.
 func (a *App) tableState(t *dataTab) *config.TableState {
-	key := a.sess.Name + "/" + t.table.Schema + "." + t.table.Name
+	key := t.conn.Spec.Name + "/" + t.table.Schema + "." + t.table.Name
 	if a.state.Tables == nil {
 		a.state.Tables = map[string]*config.TableState{}
 	}

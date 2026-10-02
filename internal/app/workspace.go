@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"sync"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -116,23 +117,46 @@ func (w *Window) pane(id int) *Pane {
 	return nil
 }
 
-// Session is one connection (tech-design §5).
+// Session is a workspace (tech-design §5): its windows, and every
+// connection of connections.toml, each connected when first used.
 type Session struct {
-	Name       string
-	Addr       string          // shown in the status bar, e.g. ctw@localhost:5432
-	Main, Meta *db.Worker      // §8.2
-	Schema     string          // the tree's schema: the cursor's, or the last it was under (§7.8)
-	Schemas    []string        // the catalog's (§8.4)
-	home       string          // current_schema(), whose Tables the tree opens with
-	open       map[string]bool // tree nodes opened or closed by hand, by node ID; the rest as §7.8 says
-	Tables     []db.Table      // every schema's, by schema and name
-	cols       map[tableID]db.Columns
-	colsAsked  map[tableID]bool    // for names' colors (§7.3): asked once, till cols is dropped
-	ddl        map[tableID]ddlText // the palette's previews (F4.2), dropped with cols
-	Windows    []*Window
-	Active     int
-	RunSeq     int    // the last run's number, #42 on its result tabs (§11)
-	warning    string // console_1's file could not be read: a toast on start (§11)
+	Name    string
+	Conns   []*Conn         // connections.toml's, in its order: the tree's roots (§7.8)
+	last    *Conn           // the current connection where nothing focused names one (§5)
+	open    map[string]bool // tree nodes opened or closed by hand, by node ID; the rest as §7.8 says
+	Windows []*Window
+	Active  int
+	RunSeq  int    // the last run's number, #42 on its result tabs (§11)
+	warning string // console_1's file could not be read: a toast on start (§11)
+}
+
+// connState is how far a Conn got with connecting (§7.8「连接节点」).
+type connState int
+
+const (
+	connIdle connState = iota
+	connConnecting
+	connFailed
+	connReady
+)
+
+// Conn is one connection of connections.toml as a session has it (§5):
+// its Main and Meta once connected, its catalog and what is cached of it.
+type Conn struct {
+	Spec       config.Connection
+	State      connState
+	Main, Meta *db.Worker // §8.2; nil till connected
+	Addr       string     // shown in the status bar, e.g. ctw@localhost:5432
+	busy       int        // its requests out that C-c cancels (§8.3)
+
+	Schema    string   // its Schema: the tree cursor's under it, or the last it was under (§7.8)
+	Schemas   []string // the catalog's (§8.4)
+	home      string   // current_schema(), whose Tables the tree opens with
+	Tables    []db.Table
+	cols      map[tableID]db.Columns
+	colsAsked map[tableID]bool    // for names' colors (§7.3): asked once, till cols is dropped
+	ddl       map[tableID]ddlText // the palette's previews (F4.2), dropped with cols
+
 	// DB is the database, on console titles; startedPath Main's search_path
 	// as it connected; mainPath the schema a console's run last put first
 	// on it, "" when not known, touched in Main's requests only (§8.6).
@@ -140,24 +164,58 @@ type Session struct {
 	startedPath, mainPath string
 }
 
-func (a *App) win() *Window { return a.sess.Windows[a.sess.Active] }
-
-// dropCols forgets the columns fetched: the catalog loads anew (§7.8).
-func (s *Session) dropCols() {
-	clear(s.cols)
-	clear(s.colsAsked)
-	clear(s.ddl)
+func newConn(spec config.Connection) *Conn {
+	return &Conn{Spec: spec, cols: map[tableID]db.Columns{}, colsAsked: map[tableID]bool{}, ddl: map[tableID]ddlText{}}
 }
 
-// newSession is a session's default workspace (§5): one window, data, with
-// the sidebar, a pane with no tab and console_1 beside it at 5 : 4 (§7.8),
-// which has what its file kept (§11). A file that cannot be read leaves
-// that pane with no tab too: opened empty, the autosave would write over it.
-func newSession(name, addr string, main, meta *db.Worker) *Session {
-	s := &Session{Name: name, Addr: addr, Main: main, Meta: meta, open: map[string]bool{}, cols: map[tableID]db.Columns{}, colsAsked: map[tableID]bool{}, ddl: map[tableID]ddlText{}}
+func (a *App) win() *Window { return a.sess.Windows[a.sess.Active] }
+
+// conn is the current connection (§5): the focused tab's, a result tab's
+// where it ran; on the tree, the one the cursor is under once connected;
+// else the last one, so it is always connected.
+func (a *App) conn() *Conn {
+	p := a.focused()
+	if p == a.win().Tree {
+		if n, ok := a.treeNode(); ok && n.conn != nil && n.conn.State == connReady {
+			return n.conn
+		}
+		return a.sess.last
+	}
+	switch t := p.tab(); {
+	case t == nil:
+	case t.Data != nil:
+		return t.Data.conn
+	case t.Console != nil:
+		return t.Console.conn
+	case t.Result != nil && t.Result.run != nil:
+		return t.Result.run.conn
+	}
+	return a.sess.last
+}
+
+// cancel cancels what c's Main and Meta are running (§8.3).
+func (c *Conn) cancel() {
+	c.Meta.Cancel()
+	c.Main.Cancel()
+}
+
+// dropCols forgets the columns fetched: the catalog loads anew (§7.8).
+func (c *Conn) dropCols() {
+	clear(c.cols)
+	clear(c.colsAsked)
+	clear(c.ddl)
+}
+
+// newSession is a session's default workspace (§5) over conns, start the
+// one connected: one window, data, with the sidebar, a pane with no tab
+// and console_1 on start beside it at 5 : 4 (§7.8), which has what its
+// file kept (§11). A file that cannot be read leaves that pane with no tab
+// too: opened empty, the autosave would write over it.
+func newSession(name string, conns []*Conn, start *Conn) *Session {
+	s := &Session{Name: name, Conns: conns, last: start, open: map[string]bool{}}
 	data := &Pane{ID: 1, Prev: -1}
 	console := &Pane{ID: 2, Prev: -1}
-	if cons, err := openConsole(name, 1); err != nil {
+	if cons, err := openConsole(start, 1); err != nil {
 		s.warning = err.Error()
 	} else {
 		console.Tabs = []Tab{{Name: "console_1", Console: cons}}
@@ -174,42 +232,84 @@ func newSession(name, addr string, main, meta *db.Worker) *Session {
 	return s
 }
 
-// Open connects a session's Main and then its Meta (§8.2).
-func Open(ctx context.Context, c config.Connection) (*Session, error) {
-	pw, err := c.Secret()
+// Open is a session over specs, start the connection it connects now
+// (§5); the others wait to be used.
+func Open(ctx context.Context, specs []config.Connection, start int) (*Session, error) {
+	conns := make([]*Conn, len(specs))
+	for i, spec := range specs {
+		conns[i] = newConn(spec)
+	}
+	d, err := dial(ctx, specs[start])
 	if err != nil {
 		return nil, err
 	}
-	main, err := postgres.Connect(ctx, c.DSN, pw, false)
-	if err != nil {
-		return nil, err
+	conns[start].take(d)
+	return newSession(specs[start].Name, conns, conns[start]), nil
+}
+
+// dialed is a connection's Main and Meta as dial connected them.
+type dialed struct {
+	main, meta *postgres.Conn
+}
+
+// secrets caches what a connection's password source gave (§13): the
+// keychain asks once a run, not once a session; a failed dial drops it,
+// the next one asks again. By the whole connection, not its name alone,
+// so a source written anew is asked anew.
+var secrets sync.Map
+
+// dial connects spec's Main and then its Meta (§8.2).
+func dial(ctx context.Context, spec config.Connection) (dialed, error) {
+	pw, cached := secrets.Load(spec)
+	if !cached {
+		s, err := spec.Secret()
+		if err != nil {
+			return dialed{}, err
+		}
+		pw = s
+		secrets.Store(spec, s)
 	}
-	meta, err := postgres.Connect(ctx, c.DSN, pw, true)
+	main, err := postgres.Connect(ctx, spec.DSN, pw.(string), false)
 	if err != nil {
+		secrets.Delete(spec)
+		return dialed{}, err
+	}
+	meta, err := postgres.Connect(ctx, spec.DSN, pw.(string), true)
+	if err != nil {
+		secrets.Delete(spec)
 		main.Close()
-		return nil, err
+		return dialed{}, err
 	}
-	s := newSession(c.Name, main.Addr, db.NewWorker(main), db.NewWorker(meta))
-	s.DB, s.startedPath = main.Database, main.SearchPath
-	return s, nil
+	return dialed{main, meta}, nil
 }
 
+// take makes c connected over d.
+func (c *Conn) take(d dialed) {
+	c.State, c.Main, c.Meta = connReady, db.NewWorker(d.main), db.NewWorker(d.meta)
+	c.Addr, c.DB, c.startedPath = d.main.Addr, d.main.Database, d.main.SearchPath
+}
+
+// Close closes the session's connections.
 func (s *Session) Close() {
-	s.Main.Close()
-	s.Meta.Close()
+	for _, c := range s.Conns {
+		if c.State == connReady {
+			c.Main.Close()
+			c.Meta.Close()
+		}
+	}
 }
 
-// openTable shows table t in openTarget's pane and focuses it (§7.8
+// openTable shows c's table t in openTarget's pane and focuses it (§7.8
 // 「打开已有的表」, §12).
-func (a *App) openTable(t db.Table) tea.Cmd { return a.openTableIn(a.openTarget(), t) }
+func (a *App) openTable(c *Conn, t db.Table) tea.Cmd { return a.openTableIn(a.openTarget(), c, t) }
 
-// openTableIn shows table t in pane p and focuses it: p's tab of t, a pane
-// having one at most (F3.37), else a new one. A landing tab current gives
-// way to it, replaced, or closed for the tab there (§5「引导页」).
-func (a *App) openTableIn(p *Pane, t db.Table) tea.Cmd {
+// openTableIn shows c's table t in pane p and focuses it: p's tab of it, a
+// pane having one at most (F3.37), else a new one. A landing tab current
+// gives way to it, replaced, or closed for the tab there (§5「引导页」).
+func (a *App) openTableIn(p *Pane, c *Conn, t db.Table) tea.Cmd {
 	a.showPane(p.ID)
 	landing := p.tab().landing()
-	if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Data != nil && idOf(tb.Data.table) == idOf(t) }); i >= 0 {
+	if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Data != nil && tb.Data.conn == c && idOf(tb.Data.table) == idOf(t) }); i >= 0 {
 		if closed := p.Cur; landing {
 			if a.closeTab(p, closed); closed < i {
 				i--
@@ -218,7 +318,10 @@ func (a *App) openTableIn(p *Pane, t db.Table) tea.Cmd {
 		selectTab(p, i)
 		return nil
 	}
-	tab := Tab{Name: t.Name, Data: newDataTab(t)}
+	// ponytail: named by the table alone; two connections' t_order tabs read
+	// the same, the status bar telling the focused one's (§7.8). Add the
+	// connection, t_order [seed], if that confuses.
+	tab := Tab{Name: t.Name, Data: newDataTab(c, t)}
 	putTab(p, tab, landing)
 	return a.fetch(tab.Data, true)
 }
@@ -262,20 +365,19 @@ func (a *App) newTab() {
 	putTab(p, landing(), false)
 }
 
-// newConsole is console.new (§5, §11): console_n, n the least not open in
-// the session, with what its file keeps, in place of a landing tab or in a
-// new tab of openTarget's pane.
+// newConsole is console.new (§5, §11): console_n of the current
+// connection, n the least not open in the session, with what its file
+// keeps, in place of a landing tab or in a new tab of openTarget's pane.
 func (a *App) newConsole() tea.Cmd {
-	p := a.openTarget()
+	p, conn := a.openTarget(), a.conn()
 	n := 1
-	for a.consoleOpen(config.ConsolePath(a.sess.Name, n)) {
+	for a.consoleOpen(config.ConsolePath(conn.Spec.Name, n)) {
 		n++
 	}
-	c, err := openConsole(a.sess.Name, n)
+	c, err := openConsole(conn, n)
 	if err != nil {
 		return a.showToast(err.Error(), toastTTL)
 	}
-	c.schema = a.sess.Schema // then its own (§8.6)
 	a.showPane(p.ID)
 	putTab(p, Tab{Name: fmt.Sprintf("console_%d", n), Console: c}, p.tab().landing())
 	return nil

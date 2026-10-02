@@ -56,7 +56,7 @@ func ordersTable(n int) (db.Table, db.Columns, db.Result) {
 func loadOrders(t *testing.T, a *App, n int) *dataTab {
 	t.Helper()
 	table, cols, page := ordersTable(n)
-	if a.openTable(table) == nil {
+	if a.openTable(a.sess.Conns[0], table) == nil {
 		t.Fatal("opening a table fetches it")
 	}
 	tab := dataOf(a.focused())
@@ -182,19 +182,19 @@ func TestTabCloseClick(t *testing.T) {
 func TestGridFetch(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	table, cols, page := ordersTable(3)
-	a.openTable(table)
+	a.openTable(a.sess.Conns[0], table)
 	tab := dataOf(a.focused())
-	if a.busy != 1 || !strings.Contains(statusRow(a), " busy · C-c 取消 ") {
-		t.Fatalf("while fetching: busy %d, status %q", a.busy, statusRow(a))
+	if a.sess.Conns[0].busy != 1 || !strings.Contains(statusRow(a), " busy · C-c 取消 ") {
+		t.Fatalf("while fetching: busy %d, status %q", a.sess.Conns[0].busy, statusRow(a))
 	}
 	a.Update(pageMsg{tab: tab, seq: tab.seq - 1, cols: cols, page: page})
-	if len(tab.page.Rows) != 0 || a.sess.cols[idOf(table)].PK == nil {
+	if len(tab.page.Rows) != 0 || a.sess.Conns[0].cols[idOf(table)].PK == nil {
 		t.Fatalf("a stale answer: rows %d; its columns are still worth caching", len(tab.page.Rows))
 	}
 	a.fetch(tab, false)
 	a.Update(pageMsg{tab: tab, seq: tab.seq, cols: cols, page: page})
-	if a.busy != 0 || len(tab.page.Rows) != 3 || strings.Contains(statusRow(a), "busy") {
-		t.Fatalf("answered: busy %d, rows %d", a.busy, len(tab.page.Rows))
+	if a.sess.Conns[0].busy != 0 || len(tab.page.Rows) != 3 || strings.Contains(statusRow(a), "busy") {
+		t.Fatalf("answered: busy %d, rows %d", a.sess.Conns[0].busy, len(tab.page.Rows))
 	}
 	if st := statusRow(a); !strings.Contains(st, " 1,1 ") {
 		t.Errorf("row,col with a table loaded: %q", st)
@@ -356,7 +356,7 @@ func TestGridKeepsItsColumns(t *testing.T) {
 	loadOrders(t, a, 3)
 	before := styleOf(t, a.render(), "1.99")
 	a.run("tree.refresh", 0)
-	if len(a.sess.cols) != 0 {
+	if len(a.sess.Conns[0].cols) != 0 {
 		t.Fatal("R clears the cache")
 	}
 	f := a.render()

@@ -35,17 +35,19 @@ type resultTab struct {
 // run is one run of a console's SQL (§11「执行」), or a quick SQL's rows
 // C-t put in the result area, from no console (§12).
 type run struct {
-	from  *consoleTab
-	name  string // the console's tab name as it ran: console_1
-	sql   string // what ran, for 重跑
-	base  int    // where sql is in the console's text, for the red ▶
-	ver   int    // the console's version base is of: a ▶ goes red only while the text is still that
-	seq   int    // Session.RunSeq: #42
-	start time.Time
-	win   *Window
-	stmts []sqlkit.Stmt
-	done  bool
-	prev  []Tab // the tabs it took the place of, back when it has no result set
+	from   *consoleTab
+	conn   *Conn  // where it ran, and runs again (§5)
+	schema string // first on search_path as it ran
+	name   string // the console's tab name as it ran: console_1
+	sql    string // what ran, for 重跑
+	base   int    // where sql is in the console's text, for the red ▶
+	ver    int    // the console's version base is of: a ▶ goes red only while the text is still that
+	seq    int    // Session.RunSeq: #42
+	start  time.Time
+	win    *Window
+	stmts  []sqlkit.Stmt
+	done   bool
+	prev   []Tab // the tabs it took the place of, back when it has no result set
 }
 
 // label is the name of the run's part-th result tab: console_1 #42, then #42·2.
@@ -192,13 +194,13 @@ func (a *App) runSQL(t *consoleTab, name, sql string, base, ver int) tea.Cmd {
 		return nil
 	}
 	a.sess.RunSeq++
-	r := &run{from: t, name: name, sql: sql, base: base, ver: ver, seq: a.sess.RunSeq, start: time.Now(), win: a.win(), stmts: stmts}
+	r := &run{from: t, conn: t.conn, schema: t.schema, name: name, sql: sql, base: base, ver: ver, seq: a.sess.RunSeq, start: time.Now(), win: a.win(), stmts: stmts}
 	t.running, t.failed, t.bar = r, -1, nil
 	p := a.showResult(r.win)
 	at, old := a.placeRun(r, []Tab{{Name: r.label(1), Result: &resultTab{run: r}}})
 	r.prev = old
 	selectTab(p, at)
-	a.busy++
+	r.conn.busy++
 	texts := make([]string, len(stmts))
 	// ponytail: select set_config('search_path', …) goes by unseen (its first
 	// word is select): the next run then trusts mainPath still
@@ -210,7 +212,7 @@ func (a *App) runSQL(t *consoleTab, name, sql string, base, ver int) tea.Cmd {
 			resets = true
 		}
 	}
-	s, schema, maxRows := a.sess, t.schema, a.maxRows
+	s, schema, maxRows := r.conn, r.schema, a.maxRows
 	return tea.Batch(func() tea.Msg {
 		m := runDone{r: r}
 		m.err = s.Main.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
@@ -295,7 +297,7 @@ func (a *App) placeRun(r *run, tabs []Tab) (at int, old []Tab) {
 // again.
 func (a *App) gotRun(m runDone) tea.Cmd {
 	r := m.r
-	a.busy--
+	r.conn.busy--
 	r.done, r.from.running = true, nil
 	var tabs []Tab
 	var cmds []tea.Cmd
@@ -345,8 +347,8 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 		selectTab(p, at)
 	}
 	if ddl {
-		a.sess.dropCols() // as tree.refresh
-		cmds = append(cmds, a.loadCatalog())
+		r.conn.dropCols() // as tree.refresh
+		cmds = append(cmds, a.loadCatalog(r.conn))
 	}
 	return tea.Batch(cmds...)
 }

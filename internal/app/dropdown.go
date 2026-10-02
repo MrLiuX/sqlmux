@@ -66,7 +66,7 @@ func (a *App) openDrop(k dropKind) {
 // its selection on the schema it has.
 func (a *App) openSchemaDrop() {
 	p := a.focused()
-	if c := consoleOf(p); c != nil && len(a.sess.Schemas) > 0 {
+	if c := consoleOf(p); c != nil && len(c.conn.Schemas) > 0 {
 		a.drop = &dropdown{kind: dropSchema, console: c, pane: p}
 		_, a.drop.sel = a.dropItems()
 		a.dropMove(0)
@@ -78,7 +78,7 @@ func (a *App) dropItems() (items []string, current int) {
 	d := a.drop
 	switch d.kind {
 	case dropSchema:
-		return a.sess.Schemas, slices.Index(a.sess.Schemas, d.console.schema)
+		return d.console.conn.Schemas, slices.Index(d.console.conn.Schemas, d.console.schema)
 	case dropOrder: // first the row identity, "默认"; then the columns
 		items = []string{"默认"}
 		current = 0

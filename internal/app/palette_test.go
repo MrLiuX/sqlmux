@@ -425,7 +425,7 @@ func rest(a *App) tea.Cmd {
 }
 
 func tableNamed(a *App, name string) db.Table {
-	return a.sess.Tables[slices.IndexFunc(a.sess.Tables, func(t db.Table) bool { return t.Name == name })]
+	return a.sess.Conns[0].Tables[slices.IndexFunc(a.sess.Conns[0].Tables, func(t db.Table) bool { return t.Name == name })]
 }
 
 // The selection resting on a table asks for its DDL once the delay is
@@ -440,7 +440,7 @@ func TestPalettePreview(t *testing.T) {
 	p := a.palette
 	first := previewDue{p, p.previewSeq}
 	feed(t, a, "<Down>") // t_order_item
-	if _, cmd := a.Update(first); cmd != nil || len(a.sess.ddl) != 0 {
+	if _, cmd := a.Update(first); cmd != nil || len(a.sess.Conns[0].ddl) != 0 {
 		t.Fatal("moved on: t_order's asked for")
 	}
 	feed(t, a, "<Up>")
@@ -448,8 +448,8 @@ func TestPalettePreview(t *testing.T) {
 		t.Fatal("rested on t_order: not asked for")
 	}
 	order := tableNamed(a, "t_order")
-	a.Update(ddlMsg{table: order, text: ddlOrder, cols: db.Columns{Cols: []db.Column{{Name: "status"}}}})
-	if pv := a.paletteView().Preview; pv == nil || pv.Text != ddlOrder || a.sess.cols[idOf(order)].Cols == nil {
+	a.Update(ddlMsg{conn: a.sess.Conns[0], table: order, text: ddlOrder, cols: db.Columns{Cols: []db.Column{{Name: "status"}}}})
+	if pv := a.paletteView().Preview; pv == nil || pv.Text != ddlOrder || a.sess.Conns[0].cols[idOf(order)].Cols == nil {
 		t.Fatalf("the preview: %+v", pv)
 	}
 	if st := styleOf(t, a.render(), "status order_status"); st.Fg != a.theme.SQLColumn {
@@ -460,26 +460,26 @@ func TestPalettePreview(t *testing.T) {
 	if a.paletteView().Preview == nil || p.previewSeq != seq+1 {
 		t.Errorf("back on t_order: cached, not timed again (seq %d, was %d)", p.previewSeq, seq)
 	}
-	a.sess.dropCols()
-	if len(a.sess.ddl) != 0 {
+	a.sess.Conns[0].dropCols()
+	if len(a.sess.Conns[0].ddl) != 0 {
 		t.Fatal("R keeps the DDL")
 	}
 	feed(t, a, "<Down>")
 	rest(a)
 	item := tableNamed(a, "t_order_item")
-	if a.Update(ddlMsg{table: item, err: context.DeadlineExceeded}); len(a.sess.ddl) != 0 {
+	if a.Update(ddlMsg{conn: a.sess.Conns[0], table: item, err: context.DeadlineExceeded}); len(a.sess.Conns[0].ddl) != 0 {
 		t.Error("out of time: cached")
 	}
 	feed(t, a, "<Up><Down>")
 	rest(a)
-	a.Update(ddlMsg{table: item, err: errors.New(`ERROR: relation "t_order_item" does not exist (SQLSTATE 42P01)`)})
+	a.Update(ddlMsg{conn: a.sess.Conns[0], table: item, err: errors.New(`ERROR: relation "t_order_item" does not exist (SQLSTATE 42P01)`)})
 	if pv := a.paletteView().Preview; pv == nil || pv.Err == "" || styleOf(t, a.render(), "relation").Fg != a.theme.Error {
 		t.Errorf("an error: %+v", pv)
 	}
 	feed(t, a, "<Up>")
 	rest(a)
-	a.sess.dropCols()
-	if a.Update(ddlMsg{table: order, text: ddlOrder}); len(a.sess.ddl) != 0 {
+	a.sess.Conns[0].dropCols()
+	if a.Update(ddlMsg{conn: a.sess.Conns[0], table: order, text: ddlOrder}); len(a.sess.Conns[0].ddl) != 0 {
 		t.Error("an answer R dropped: kept")
 	}
 	if feed(t, a, "<BS><BS><BS><BS><BS><BS><BS>>"); a.paletteView().Preview != nil {
@@ -501,7 +501,7 @@ func TestGoldenPalettePreview160x45(t *testing.T) {
 	a := wide(160, 45)
 	feed(t, a, "<C-p>@t_order")
 	rest(a)
-	a.Update(ddlMsg{table: tableNamed(a, "t_order"), text: ddlOrder})
+	a.Update(ddlMsg{conn: a.sess.Conns[0], table: tableNamed(a, "t_order"), text: ddlOrder})
 	f := a.render()
 	if st := styleOf(t, f, "create table"); st.Fg != a.theme.Keyword {
 		t.Errorf("create table: %+v", st)
@@ -535,7 +535,7 @@ func TestPaletteTabs(t *testing.T) {
 	}
 	// another window's tab is listed, not its pane; ↵ on it does nothing till M5
 	// its pane's ID is ①'s: IDs go by window
-	a.sess.Windows[1].Root = leaf(&Pane{ID: 1, Tabs: []Tab{{Name: "t_sku", Data: newDataTab(tableNamed(a, "t_sku"))}, landing()}, Cur: 1})
+	a.sess.Windows[1].Root = leaf(&Pane{ID: 1, Tabs: []Tab{{Name: "t_sku", Data: newDataTab(a.sess.Conns[0], tableNamed(a, "t_sku"))}, landing()}, Cur: 1})
 	feed(t, a, "<Esc><C-p>%report")
 	var tab ui.PaletteRow
 	for _, r := range a.paletteView().Rows {

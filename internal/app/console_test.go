@@ -124,9 +124,15 @@ func TestConsoleFile(t *testing.T) {
 	if data, _ := os.ReadFile(c.path); string(data) != "select 1; -- one\n2\n" || len(a.win().Root.Leaves()) != 1 {
 		t.Fatalf(":wq: %q, panes %d", data, len(a.win().Root.Leaves()))
 	}
-	if s := newSession("doraemon", "", nil, nil); text(consoleOf(s.Windows[0].Root.B.Pane)) != "select 1; -- one\n2" || s.warning != "" {
+	if s := soloSession(); text(consoleOf(s.Windows[0].Root.B.Pane)) != "select 1; -- one\n2" || s.warning != "" {
 		t.Fatalf("a new session: %q", s.warning)
 	}
+}
+
+// soloSession is a new session over doraemon alone, not connected.
+func soloSession() *Session {
+	c := newConn(config.Connection{Name: "doraemon"})
+	return newSession("doraemon", []*Conn{c}, c)
 }
 
 // A console file that cannot be read is not opened, empty or not: a toast
@@ -134,7 +140,7 @@ func TestConsoleFile(t *testing.T) {
 func TestConsoleUnreadable(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	os.MkdirAll(config.ConsolePath("doraemon", 1), 0o700) // a directory where the file goes
-	s := newSession("doraemon", "", nil, nil)
+	s := soloSession()
 	if p := s.Windows[0].Root.B.Pane; len(p.Tabs) != 0 || !strings.HasPrefix(s.warning, "读取失败：") {
 		t.Fatalf("tabs %v, warning %q", p.Tabs, s.warning)
 	}
@@ -302,9 +308,9 @@ func TestConsoleExternal(t *testing.T) {
 func TestConsoleCompletion(t *testing.T) {
 	a, c := inConsole(t, "", "")
 	table, cols, _ := ordersTable(0)
-	for i, tb := range a.sess.Tables {
+	for i, tb := range a.sess.Conns[0].Tables {
 		if tb.Name == "t_order" {
-			a.sess.Tables[i] = table
+			a.sess.Conns[0].Tables[i] = table
 		}
 	}
 	feed(t, a, "iselect * from t_o")
@@ -319,7 +325,7 @@ func TestConsoleCompletion(t *testing.T) {
 	if !c.asked[idOf(table)] || c.comp != nil {
 		t.Fatalf("o.: asked %v, list %+v", c.asked, c.comp)
 	}
-	a.Update(colsMsg{table, cols, nil})
+	a.Update(colsMsg{a.sess.Conns[0], table, cols, nil})
 	if c.comp == nil || c.comp.items[0].label != "id" || c.comp.items[0].note != "bigint · t_order" {
 		t.Fatalf("the columns in: %+v", c.comp)
 	}
@@ -359,9 +365,9 @@ func TestConsoleCompletion(t *testing.T) {
 func TestSQLCompleteQualifier(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	table, cols, _ := ordersTable(0)
-	a.sess.cols[idOf(table)] = cols
-	a.sess.cols[tableID{"public", "t_user"}] = db.Columns{Cols: []db.Column{{Name: "email", Type: "text"}}}
-	a.sess.cols[tableID{"agentable", "planner"}] = db.Columns{Cols: []db.Column{{Name: "goal", Type: "text"}}}
+	a.sess.Conns[0].cols[idOf(table)] = cols
+	a.sess.Conns[0].cols[tableID{"public", "t_user"}] = db.Columns{Cols: []db.Column{{Name: "email", Type: "text"}}}
+	a.sess.Conns[0].cols[tableID{"agentable", "planner"}] = db.Columns{Cols: []db.Column{{Name: "goal", Type: "text"}}}
 	for _, c := range []struct{ sql, first string }{
 		{"select * from agentable.|", "planner"},
 		{"select * from t_order join agentable.| on", "planner"},
@@ -371,7 +377,7 @@ func TestSQLCompleteQualifier(t *testing.T) {
 		{"select a.| from (select * from t_user a) sub", ""},
 	} {
 		pos := strings.Index(c.sql, "|")
-		got, _ := a.sqlComplete(strings.Replace(c.sql, "|", "", 1), pos, "public", map[tableID]bool{}, true)
+		got, _ := a.sqlComplete(a.sess.Conns[0], strings.Replace(c.sql, "|", "", 1), pos, "public", map[tableID]bool{}, true)
 		first := ""
 		if got != nil {
 			first = got.items[0].label
@@ -436,13 +442,13 @@ func TestConsoleSchemaFromCatalog(t *testing.T) {
 	a, c := inConsole(t, "", "")
 	for _, was := range []string{"", "gone"} {
 		c.schema = was
-		a.Update(catalogMsg{schemas: []string{"agentable", "public"}, current: "public", tables: a.sess.Tables})
+		a.Update(catalogMsg{conn: a.sess.Conns[0], schemas: []string{"agentable", "public"}, current: "public", tables: a.sess.Conns[0].Tables})
 		if c.schema != "public" {
 			t.Errorf("%q: %q", was, c.schema)
 		}
 	}
 	c.schema = "agentable"
-	if a.Update(catalogMsg{schemas: []string{"agentable", "public"}, current: "public", tables: a.sess.Tables}); c.schema != "agentable" {
+	if a.Update(catalogMsg{conn: a.sess.Conns[0], schemas: []string{"agentable", "public"}, current: "public", tables: a.sess.Conns[0].Tables}); c.schema != "agentable" {
 		t.Errorf("its own: %q", c.schema)
 	}
 }

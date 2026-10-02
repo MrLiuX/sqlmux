@@ -204,8 +204,8 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 	case consoleOf(p) != nil:
 		// Drawn left to right; Prio says what goes first when space runs out
 		// (§7.8): ▶ run, the schema, ↵.
-		if s := consoleOf(p).schema; s != "" {
-			b.Hints = append(b.Hints, ui.Hint{Label: a.sess.DB + "." + s + " ▾", Action: "console.schema", Color: th.PK, Prio: 1})
+		if c := consoleOf(p); c.schema != "" {
+			b.Hints = append(b.Hints, ui.Hint{Label: c.conn.DB + "." + c.schema + " ▾", Action: "console.schema", Color: th.PK, Prio: 1})
 		}
 		b.Hints = append(b.Hints, ui.Hint{Label: "▶ run", Action: "console.run", Button: true})
 		b.Hints = append(b.Hints, bound(ui.Hint{Key: a.keys.Hint("console.run", "console"), Action: "console.run", Prio: 2, Attached: true})...)
@@ -245,7 +245,7 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 	}
 	if c := consoleOf(p); c != nil {
 		view, body := a.consoleView(p, c)
-		view.Names, _ = a.sqlNames(strings.Join(view.Lines, "\n"), cmp.Or(c.schema, a.sess.Schema), nil) // for the drawing alone: consoleView goes with every key
+		view.Names, _ = a.sqlNames(c.conn, strings.Join(view.Lines, "\n"), cmp.Or(c.schema, c.conn.Schema), nil) // for the drawing alone: consoleView goes with every key
 		if cur := view.Draw(f, body); cur.X >= 0 && b.Focused && a.focusedConsole() == c {
 			f.Cursor = &cur
 		}
@@ -295,8 +295,12 @@ func (a *App) drawSidebar(f *ui.Frame, r uv.Rectangle) {
 	}
 	in := b.Draw(f, r)
 	ns, matches := a.treeNodes()
+	total := 0 // the connections connected (§7.8)
+	for _, c := range a.sess.Conns {
+		total += len(c.Tables)
+	}
 	t := ui.Tree{
-		Total:     len(a.sess.Tables),
+		Total:     total,
 		Matches:   matches,
 		Filter:    win.tree.filter,
 		Filtering: win.tree.filtering,
@@ -417,11 +421,11 @@ func (a *App) statusLine() ui.StatusLine {
 	var s ui.StatusLine
 
 	sess := uv.Style{Fg: th.Bg, Bg: th.Focus, Attrs: uv.AttrBold}
-	// ponytail: postgres only; pick the icon by a.sess.Engine when MySQL lands (M5).
-	s.Left = []ui.Segment{{Runs: append(iconRuns(ic.Postgres, sess, " "),
-		ui.Run{Text: a.sess.Name, Style: sess, Shrink: true},
-		ui.Run{Text: " ▾ ", Style: sess},
-	)}}
+	s.Left = []ui.Segment{{Runs: []ui.Run{ // a workspace: no engine's icon (§7.8)
+		{Text: " ", Style: sess},
+		{Text: a.sess.Name, Style: sess, Shrink: true},
+		{Text: " ▾ ", Style: sess},
+	}}}
 	for i, w := range a.sess.Windows {
 		seg := ui.Segment{Runs: []ui.Run{{Text: fmt.Sprintf(" %d: %s ", i, w.Name), Style: bar(th.Dim)}}, Drop: dropWindow}
 		if i == a.sess.Active {
@@ -459,8 +463,9 @@ func (a *App) statusLine() ui.StatusLine {
 		at := fmt.Sprintf(" %s,%d ", g.Number(gs.row), gs.col+1)
 		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: at, Style: bar(th.FgMuted)}}, Drop: dropCursor})
 	}
-	s.Right = append(s.Right, ui.Segment{Runs: iconRuns(ic.Conn, conn, " "+a.sess.Addr+" "), Drop: dropConn})
-	if a.busy > 0 { // a click cancels it, as C-c does (§8.3)
+	c := a.conn() // its name too: two often differ by the database alone (§7.8)
+	s.Right = append(s.Right, ui.Segment{Runs: iconRuns(ic.Conn, conn, " "+c.Spec.Name+" · "+c.Addr+" "), Drop: dropConn})
+	if c.busy > 0 { // a click cancels it, as C-c does (§8.3)
 		busy := " busy "
 		if k := a.keys.Hint("cancel", "global"); k != "" {
 			busy += "· " + k + " 取消 "

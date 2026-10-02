@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -53,7 +55,8 @@ func statePath() string { return filepath.Join(StateDir(), "state.json") }
 
 // LoadState reads state.json; a missing file is an empty state. One that
 // doesn't read is moved to state.json.broken, so the next save can't
-// overwrite what the user had, and the state starts empty (§14).
+// overwrite what the user had, and the state starts empty (§14). A table
+// picked before its id named the connection (F5.10) is dropped.
 func LoadState() (*State, error) {
 	data, err := os.ReadFile(statePath())
 	if errors.Is(err, fs.ErrNotExist) {
@@ -69,6 +72,7 @@ func LoadState() (*State, error) {
 		}
 		return &State{}, fmt.Errorf("%s: %w", statePath(), err)
 	}
+	s.Recent = slices.DeleteFunc(s.Recent, func(r Recent) bool { return r.Kind == "table" && !strings.Contains(r.ID, "/") })
 	return s, nil
 }
 

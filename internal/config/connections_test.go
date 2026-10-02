@@ -37,15 +37,16 @@ dsn = "postgres://localhost/b"
 password = "pw"
 `
 
-func TestLoadConnectionByName(t *testing.T) {
+// Every connection comes, the one named the start, else the first (§5).
+func TestLoadConnectionsByName(t *testing.T) {
 	connectionsFile(t, twoConns, 0o600)
-	for name, want := range map[string]string{"": "a", "b": "b"} {
-		c, warn, err := LoadConnection(name)
-		if err != nil || c.Name != want || warn != "" {
-			t.Errorf("LoadConnection(%q) = %q %q %v, want %q", name, c.Name, warn, err, want)
+	for name, want := range map[string]int{"": 0, "b": 1} {
+		cs, start, warn, err := LoadConnections(name)
+		if err != nil || len(cs) != 2 || cs[1].Name != "b" || start != want || warn != "" {
+			t.Errorf("LoadConnections(%q) = %d of %d %q %v, want %d", name, start, len(cs), warn, err, want)
 		}
 	}
-	_, _, err := LoadConnection("x")
+	_, _, _, err := LoadConnections("x")
 	if err == nil || !strings.Contains(err.Error(), `没有名为 "x" 的连接，已有：a, b`) {
 		t.Errorf("an unknown name: %v", err)
 	}
@@ -54,11 +55,11 @@ func TestLoadConnectionByName(t *testing.T) {
 // A plain password in a file group or others can read warns (§13).
 func TestLoadConnectionWarnsOnReadablePassword(t *testing.T) {
 	connectionsFile(t, twoConns, 0o644)
-	if _, warn, _ := LoadConnection("a"); !strings.Contains(warn, "明文密码") {
+	if _, _, warn, _ := LoadConnections("a"); !strings.Contains(warn, "明文密码") {
 		t.Errorf("0644 with a password: warning %q", warn)
 	}
 	connectionsFile(t, strings.ReplaceAll(twoConns, `password = "pw"`, ""), 0o644)
-	if _, warn, _ := LoadConnection("a"); warn != "" {
+	if _, _, warn, _ := LoadConnections("a"); warn != "" {
 		t.Errorf("0644 without a password: warning %q", warn)
 	}
 }
@@ -66,20 +67,21 @@ func TestLoadConnectionWarnsOnReadablePassword(t *testing.T) {
 func TestLoadConnectionErrors(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	path := filepath.Join(Dir(), "connections.toml")
-	if _, _, err := LoadConnection(""); err == nil || !strings.Contains(err.Error(), path) {
+	if _, _, _, err := LoadConnections(""); err == nil || !strings.Contains(err.Error(), path) {
 		t.Errorf("no file: %v, want the path %s", err, path)
 	}
 	for body, want := range map[string]string{
 		"":                               "里面没有 [[connection]]",
 		"[[connection]]\nname = \"a\"\n": "第 1 个连接：缺少 engine",
-		"[[connection]]\nengine = \"postgres\"\n":                              "第 1 个连接：缺少 name",
-		"[[connection]]\nname = \"a\"\nengine = \"mysql\"\ndsn = \"x\"\n":      `第 1 个连接：engine = "mysql"，目前只支持 postgres`,
-		"[[connection]]\nname = \"a/b\"\nengine = \"postgres\"\ndsn = \"x\"\n": `第 1 个连接：name = "a/b"：不能含 / 或 \，也不能以 . 开头`,
-		"[[connection]]\nname = 'a\\b'\nengine = \"postgres\"\ndsn = \"x\"\n":  `第 1 个连接：name = "a\\b"：不能含 / 或 \，也不能以 . 开头`,
-		"[[connection]]\nname = \"..\"\nengine = \"postgres\"\ndsn = \"x\"\n":  `第 1 个连接：name = ".."：不能含 / 或 \，也不能以 . 开头`,
+		"[[connection]]\nengine = \"postgres\"\n":                                       "第 1 个连接：缺少 name",
+		"[[connection]]\nname = \"a\"\nengine = \"mysql\"\ndsn = \"x\"\n":               `第 1 个连接：engine = "mysql"，目前只支持 postgres`,
+		"[[connection]]\nname = \"a/b\"\nengine = \"postgres\"\ndsn = \"x\"\n":          `第 1 个连接：name = "a/b"：不能含 / 或 \，也不能以 . 开头`,
+		"[[connection]]\nname = 'a\\b'\nengine = \"postgres\"\ndsn = \"x\"\n":           `第 1 个连接：name = "a\\b"：不能含 / 或 \，也不能以 . 开头`,
+		"[[connection]]\nname = \"..\"\nengine = \"postgres\"\ndsn = \"x\"\n":           `第 1 个连接：name = ".."：不能含 / 或 \，也不能以 . 开头`,
+		twoConns + "[[connection]]\nname = \"a\"\nengine = \"postgres\"\ndsn = \"x\"\n": `第 3 个连接：name = "a" 重复了`,
 	} {
 		path := connectionsFile(t, body, 0o600)
-		if _, _, err := LoadConnection(""); err == nil || !strings.Contains(err.Error(), path+": "+want) {
+		if _, _, _, err := LoadConnections(""); err == nil || !strings.Contains(err.Error(), path+": "+want) {
 			t.Errorf("%q: %v, want %q", body, err, want)
 		}
 	}

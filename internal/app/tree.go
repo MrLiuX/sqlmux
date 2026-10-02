@@ -18,7 +18,7 @@ import (
 )
 
 // treeState is one window's schema tree (§7.8); what it shows is the
-// session's.
+// session's: its connections, then its workspace.
 type treeState struct {
 	cursor, top int    // into the nodes showing
 	at          string // the cursor's node: it stays on it as others come and go
@@ -26,26 +26,58 @@ type treeState struct {
 	filtering   bool // the filter row has the keys (INSERT)
 }
 
+// connected answers connect: c's Main and Meta, or why not.
+type connected struct {
+	conn *Conn
+	d    dialed
+	err  error
+}
+
+// connect connects c, not connected yet or failed before; then its
+// catalog loads (§7.8「连接节点」).
+func (a *App) connect(c *Conn) tea.Cmd {
+	if c.State == connConnecting || c.State == connReady {
+		return nil
+	}
+	c.State = connConnecting
+	spec := c.Spec
+	return func() tea.Msg {
+		d, err := dial(context.Background(), spec)
+		return connected{c, d, err}
+	}
+}
+
+func (a *App) gotConnected(m connected) tea.Cmd {
+	c := m.conn
+	if m.err != nil {
+		c.State = connFailed
+		return a.showToast(c.Spec.Name+"："+m.err.Error(), toastTTL)
+	}
+	c.take(m.d)
+	return a.loadCatalog(c)
+}
+
 // catalogMsg is what loadCatalog read.
 type catalogMsg struct {
+	conn    *Conn
 	schemas []string
 	current string
 	tables  []db.Table
 	err     error
 }
 
-// loadCatalog reads the schemas and every schema's tables on Meta; a
+// loadCatalog reads c's schemas and every schema's tables on its Meta; a
 // table's columns wait until it is opened (§8.4).
-func (a *App) loadCatalog() tea.Cmd {
-	meta := a.sess.Meta
+func (a *App) loadCatalog(c *Conn) tea.Cmd {
+	meta := c.Meta
 	return func() tea.Msg {
 		ctx := context.Background()
 		schemas, current, err := postgres.Schemas(ctx, meta)
 		if err != nil {
-			return catalogMsg{err: err}
+			return catalogMsg{conn: c, err: err}
 		}
 		tables, err := postgres.Tables(ctx, meta)
-		return catalogMsg{schemas: schemas, current: current, tables: tables, err: err}
+		return catalogMsg{conn: c, schemas: schemas, current: current, tables: tables, err: err}
 	}
 }
 
@@ -53,40 +85,44 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	if m.err != nil {
 		return a.showToast(m.err.Error(), toastTTL)
 	}
-	s := a.sess
-	s.Schemas, s.Tables = m.schemas, m.tables
-	if s.home = m.current; s.home == "" && len(s.Schemas) > 0 {
-		s.home = s.Schemas[0]
+	c := m.conn
+	c.Schemas, c.Tables = m.schemas, m.tables
+	if c.home = m.current; c.home == "" && len(c.Schemas) > 0 {
+		c.home = c.Schemas[0]
 	}
-	if !slices.Contains(s.Schemas, s.Schema) { // the first load, or the schema is gone (§7.8)
-		s.Schema = s.home
+	if !slices.Contains(c.Schemas, c.Schema) { // the first load, or the schema is gone (§7.8)
+		c.Schema = c.home
 	}
-	for _, c := range s.consoles() { // opened before the tree had a schema, or in one gone: the tree's (§8.6)
-		if !slices.Contains(s.Schemas, c.schema) {
-			c.schema = s.Schema
+	for _, t := range a.sess.consoles() { // opened before the tree had a schema, or in one gone: the connection's (§8.6)
+		if t.conn == c && !slices.Contains(c.Schemas, t.schema) {
+			t.schema = c.Schema
 		}
 	}
 	a.clampTree()
 	var cmds []tea.Cmd
-	for _, t := range s.Tables { // R dropped the columns; an open table keeps showing them (§7.8)
-		if _, ok := s.cols[idOf(t)]; !ok && a.opened(tableNode(t), false) {
-			cmds = append(cmds, a.fetchCols(t))
+	for _, t := range c.Tables { // R dropped the columns; an open table keeps showing them (§7.8)
+		if _, ok := c.cols[idOf(t)]; !ok && a.opened(tableNode(c, t), false) {
+			cmds = append(cmds, a.fetchCols(c, t))
 		}
 	}
 	return tea.Batch(cmds...)
 }
 
-// tableNode is table t's node ID; schemaNode, groupNode, windowNode and
-// paneNode the others' above a table or a tab.
-func tableNode(t db.Table) string { return "table:" + t.Schema + "." + t.Name }
+// connNode is connection c's node ID; schemaNode, groupNode and tableNode
+// those under it, windowNode and paneNode the workspace's.
+func connNode(c *Conn) string { return "conn:" + c.Spec.Name }
 
-func schemaNode(sc string) string { return "schema:" + sc }
+func tableNode(c *Conn, t db.Table) string {
+	return connNode(c) + "/table:" + t.Schema + "." + t.Name
+}
 
-func groupNode(sc string, views bool) string {
+func schemaNode(c *Conn, sc string) string { return connNode(c) + "/schema:" + sc }
+
+func groupNode(c *Conn, sc string, views bool) string {
 	if views {
-		return schemaNode(sc) + "/views"
+		return schemaNode(c, sc) + "/views"
 	}
-	return schemaNode(sc) + "/tables"
+	return schemaNode(c, sc) + "/tables"
 }
 
 func windowNode(wi int) string { return fmt.Sprintf("window:%d", wi) }
@@ -105,8 +141,8 @@ func (a *App) revealTab(p *Pane) {
 	path := []string{"workspace", windowNode(a.sess.Active), paneNode(a.sess.Active, p)}
 	is := func(n node) bool { return n.kind == nodeTab && n.pane == p && n.tab == p.Cur && n.win == a.sess.Active }
 	if t := tab.Data; t != nil {
-		path = []string{"session", schemaNode(t.table.Schema), groupNode(t.table.Schema, t.table.View())}
-		is = func(n node) bool { return n.kind == nodeTable && idOf(n.table) == idOf(t.table) }
+		path = []string{connNode(t.conn), schemaNode(t.conn, t.table.Schema), groupNode(t.conn, t.table.Schema, t.table.View())}
+		is = func(n node) bool { return n.kind == nodeTable && n.conn == t.conn && idOf(n.table) == idOf(t.table) }
 	}
 	was := maps.Clone(a.sess.open)
 	for _, id := range path {
@@ -124,7 +160,7 @@ func (a *App) revealTab(p *Pane) {
 type nodeKind int
 
 const (
-	nodeSession nodeKind = iota
+	nodeConn nodeKind = iota
 	nodeSchema
 	nodeGroup // Tables or Views
 	nodeTable // a table or a view
@@ -140,6 +176,7 @@ type node struct {
 	ui.TreeNode
 	id     string // stable while the node exists: expansion and the cursor go by it
 	kind   nodeKind
+	conn   *Conn    // the connection it is under; nil in the workspace
 	schema string   // the schema it is under; "" outside them
 	table  db.Table // a table's, or a column's table
 	column string
@@ -157,10 +194,11 @@ func (a *App) opened(id string, def bool) bool {
 	return def
 }
 
-// treeNodes is what the tree shows, top to bottom (§7.8): the session's
-// schemas, their Tables and Views, tables and, opened, their columns; then
-// the workspace's windows, panes and tabs. A filter keeps the tables and
-// views it matches with the nodes above them, opened; matches is how many.
+// treeNodes is what the tree shows, top to bottom (§7.8): the
+// connections, a connected one's schemas, their Tables and Views, tables
+// and, opened, their columns; then the workspace's windows, panes and
+// tabs. A filter keeps the tables and views it matches with the nodes
+// above them, opened; matches is how many.
 //
 // ponytail: rebuilt on every call, 4–5 times a key press. Measured at
 // 160×45: 1.7ms a call at 10 schemas × 100 tables, 4ms at 50 × 100, 19ms at
@@ -169,37 +207,53 @@ func (a *App) opened(id string, def bool) bool {
 func (a *App) treeNodes() (ns []node, matches int) {
 	s, ic, th := a.sess, a.icons, a.theme
 	filter := a.win().tree.filter.Text
-	pos := map[tableID][]int{} // what the filter kept
-	names := make([]string, len(s.Tables))
-	for i, t := range s.Tables {
-		names[i] = t.Name
-	}
-	for _, m := range ui.Filter(filter, names) {
-		pos[idOf(s.Tables[m.Index])] = m.Pos
-	}
 	filtering := filter != ""
+	pos := map[string][]int{} // what the filter kept, by table node ID
+	for _, c := range s.Conns {
+		names := make([]string, len(c.Tables))
+		for i, t := range c.Tables {
+			names[i] = t.Name
+		}
+		for _, m := range ui.Filter(filter, names) {
+			pos[tableNode(c, c.Tables[m.Index])] = m.Pos
+		}
+	}
 	open := func(id string, def bool) bool { return filtering || a.opened(id, def) }
-	var current tableID // the table ↵ lands on, and its tab (§7.8)
+	current := "" // the node of the table ↵ lands on, and its tab (§7.8)
 	target := a.openTarget()
 	if t := dataOf(target); t != nil {
-		current = idOf(t.table)
+		current = tableNode(t.conn, t.table)
 	}
 	add := func(n node) bool {
 		ns = append(ns, n)
 		return n.Branch && n.Open
 	}
 
-	if add(node{id: "session", kind: nodeSession, TreeNode: ui.TreeNode{Branch: true, Open: open("session", true), Icon: ic.Postgres, IconFg: th.Info, Text: s.Name}}) {
-		for _, sc := range s.Schemas {
+	for _, c := range s.Conns {
+		cid := connNode(c)
+		cn := node{id: cid, kind: nodeConn, conn: c, TreeNode: ui.TreeNode{Branch: true, Open: c.State == connReady && open(cid, true), Icon: ic.Postgres, IconFg: th.Info, Text: c.Spec.Name}}
+		switch c.State {
+		case connConnecting:
+			cn.Aside = "…"
+		case connFailed:
+			cn.TextFg = th.Error
+		}
+		if filtering && !slices.ContainsFunc(c.Tables, func(t db.Table) bool { _, ok := pos[tableNode(c, t)]; return ok }) {
+			continue
+		}
+		if !add(cn) {
+			continue
+		}
+		for _, sc := range c.Schemas {
 			var groups [2][]db.Table // Tables, Views
-			for _, t := range s.Tables {
+			for _, t := range c.Tables {
 				if t.Schema == sc {
 					groups[b2i(t.View())] = append(groups[b2i(t.View())], t)
 				}
 			}
 			kept := func(ts []db.Table) (out []db.Table) {
 				for _, t := range ts {
-					if _, ok := pos[idOf(t)]; ok {
+					if _, ok := pos[tableNode(c, t)]; ok {
 						out = append(out, t)
 					}
 				}
@@ -208,12 +262,12 @@ func (a *App) treeNodes() (ns []node, matches int) {
 			if len(kept(groups[0]))+len(kept(groups[1])) == 0 && filtering {
 				continue
 			}
-			id := schemaNode(sc)
-			if !add(node{id: id, kind: nodeSchema, schema: sc, TreeNode: ui.TreeNode{Depth: 1, Branch: true, Open: open(id, sc == s.home), Icon: ic.Schema, IconFg: th.PK, Text: sc}}) {
+			id := schemaNode(c, sc)
+			if !add(node{id: id, kind: nodeSchema, conn: c, schema: sc, TreeNode: ui.TreeNode{Depth: 1, Branch: true, Open: open(id, sc == c.home), Icon: ic.Schema, IconFg: th.PK, Text: sc}}) {
 				continue
 			}
 			for g, ts := range groups {
-				label, icon, gid := "Tables", ic.Table, groupNode(sc, g == 1)
+				label, icon, gid := "Tables", ic.Table, groupNode(c, sc, g == 1)
 				if g == 1 {
 					label, icon = "Views", ic.View
 				}
@@ -221,32 +275,32 @@ func (a *App) treeNodes() (ns []node, matches int) {
 				if filtering && len(shown) == 0 {
 					continue
 				}
-				gn := node{id: gid, kind: nodeGroup, schema: sc, TreeNode: ui.TreeNode{Depth: 2, Branch: len(ts) > 0, Open: open(gid, sc == s.home && g == 0), Icon: icon, IconFg: th.Func, Text: fmt.Sprintf("%s (%d)", label, len(ts))}}
+				gn := node{id: gid, kind: nodeGroup, conn: c, schema: sc, TreeNode: ui.TreeNode{Depth: 2, Branch: len(ts) > 0, Open: open(gid, sc == c.home && g == 0), Icon: icon, IconFg: th.Func, Text: fmt.Sprintf("%s (%d)", label, len(ts))}}
 				if !add(gn) {
 					continue
 				}
 				for _, t := range shown {
-					tid := tableNode(t)
+					tid := tableNode(c, t)
 					rows := ui.Magnitude(t.Rows)
 					if t.Kind == "v" { // a plain view has no rows to count
 						rows = ""
 					}
-					tn := node{id: tid, kind: nodeTable, schema: sc, table: t, TreeNode: ui.TreeNode{
-						Depth: 3, Branch: true, Open: !filtering && a.opened(tid, false), Icon: icon, IconFg: th.Func, Text: t.Name, Pos: pos[idOf(t)],
-						Note: rows, NoteFg: th.Border, Current: idOf(t) == current,
+					tn := node{id: tid, kind: nodeTable, conn: c, schema: sc, table: t, TreeNode: ui.TreeNode{
+						Depth: 3, Branch: true, Open: !filtering && a.opened(tid, false), Icon: icon, IconFg: th.Func, Text: t.Name, Pos: pos[tid],
+						Note: rows, NoteFg: th.Border, Current: tid == current,
 					}}
 					if !add(tn) {
 						continue
 					}
-					cols := s.cols[idOf(t)] // none until fetched: no children, no "loading" (§7.8)
-					for _, c := range cols.Cols {
-						cn := node{id: tid + "/" + c.Name, kind: nodeColumn, schema: sc, table: t, column: c.Name, TreeNode: ui.TreeNode{
-							Depth: 4, Icon: ic.Column, IconFg: th.Dim, Text: c.Name, Note: c.Type, NoteFg: th.Dim,
+					cols := c.cols[idOf(t)] // none until fetched: no children, no "loading" (§7.8)
+					for _, col := range cols.Cols {
+						coln := node{id: tid + "/" + col.Name, kind: nodeColumn, conn: c, schema: sc, table: t, column: col.Name, TreeNode: ui.TreeNode{
+							Depth: 4, Icon: ic.Column, IconFg: th.Dim, Text: col.Name, Note: col.Type, NoteFg: th.Dim,
 						}}
-						if slices.Contains(cols.PK, c.Name) {
-							cn.Icon, cn.IconFg = ic.Key, th.PK
+						if slices.Contains(cols.PK, col.Name) {
+							coln.Icon, coln.IconFg = ic.Key, th.PK
 						}
-						add(cn)
+						add(coln)
 					}
 				}
 			}
@@ -320,8 +374,8 @@ func (a *App) treeAt(ns []node) (cursor, top int) {
 	return treeView(t.cursor, t.top, len(ns), a.treeRows())
 }
 
-// clampTree settles the cursor on a node; its schema is the tree's
-// schema from now on, until the cursor is under another (§7.8).
+// clampTree settles the cursor on a node; its schema is its connection's
+// Schema from now on, until the cursor is under another (§7.8).
 func (a *App) clampTree() {
 	ns, _ := a.treeNodes()
 	t := &a.win().tree
@@ -329,7 +383,7 @@ func (a *App) clampTree() {
 	if t.cursor < len(ns) {
 		n := ns[t.cursor]
 		if t.at = n.id; n.schema != "" {
-			a.sess.Schema = n.schema
+			n.conn.Schema = n.schema
 		}
 	}
 }
@@ -368,17 +422,35 @@ func (a *App) scrollTree(notches int) {
 }
 
 // treeFold opens or closes n; a table opening fetches its columns unless
-// the catalog has them (§8.4).
+// the catalog has them (§8.4), a connection not connected connects
+// (§7.8「连接节点」).
 func (a *App) treeFold(n node, open bool) tea.Cmd {
 	if !n.Branch {
 		return nil
 	}
 	a.sess.open[n.id] = open
 	a.clampTree()
-	if _, ok := a.sess.cols[idOf(n.table)]; open && n.kind == nodeTable && !ok {
-		return a.fetchCols(n.table)
+	switch {
+	case open && n.kind == nodeConn:
+		return a.connect(n.conn)
+	case open && n.kind == nodeTable:
+		if _, ok := n.conn.cols[idOf(n.table)]; !ok {
+			return a.fetchCols(n.conn, n.table)
+		}
 	}
 	return nil
+}
+
+// refreshTree is R (§7.8): the current connection's catalog loads anew,
+// its columns dropped; on a connection not connected, or failed, the tree
+// cursor's, it connects instead, as opening it does.
+func (a *App) refreshTree() tea.Cmd {
+	if n, ok := a.treeNode(); ok && a.focused() == a.win().Tree && n.kind == nodeConn && n.conn.State != connReady {
+		return a.treeFold(n, true)
+	}
+	c := a.conn()
+	c.dropCols()
+	return a.loadCatalog(c)
 }
 
 // treeExpand is l: a closed node opens, an open one hands the cursor to its
@@ -428,11 +500,11 @@ func (a *App) treeOpen(tablesOnly bool) tea.Cmd {
 	switch {
 	case !ok:
 	case n.kind == nodeTable:
-		return a.openTable(n.table)
+		return a.openTable(n.conn, n.table)
 	case tablesOnly:
 	case n.kind == nodeColumn:
-		cmd := a.openTable(n.table)
-		a.gotoColumn(n.table, n.column)
+		cmd := a.openTable(n.conn, n.table)
+		a.gotoColumn(n.conn, n.table, n.column)
 		return cmd
 	case n.kind == nodeTab && n.win == a.sess.Active:
 		a.showTab(n.pane, n.tab)
@@ -456,9 +528,9 @@ func tabSummary(t *dataTab) (out []string) {
 
 // gotoColumn puts the cursor of the table just opened on column col: now,
 // or once its page is in. Hidden by COLS, it stays where it is (§7.8).
-func (a *App) gotoColumn(t db.Table, col string) {
+func (a *App) gotoColumn(c *Conn, t db.Table, col string) {
 	dt := dataOf(a.focused())
-	if dt == nil || idOf(dt.table) != idOf(t) {
+	if dt == nil || dt.conn != c || idOf(dt.table) != idOf(t) {
 		return
 	}
 	dt.wantCol = col

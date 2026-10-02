@@ -69,15 +69,14 @@ func init() {
 		}},
 		"cancel": {Title: "取消 / 连按两次退出", Run: func(a *App, _ Args) tea.Cmd {
 			if p := a.palette; p != nil && p.quick != nil && p.quick.running != "" { // the palette stays (§12)
-				a.sess.Meta.Cancel()
+				a.conn().Meta.Cancel()
 				return nil
 			}
 			if a.mode() != keymap.Normal || inWhere(a) { // in any input C-c is esc, as in vim (§6.8), in a WHERE's NORMAL too (F3.39)
 				return a.press(keymap.Esc)
 			}
-			if a.busy > 0 { // a query or a save is running: cancel it (§8.3, §10.3)
-				a.sess.Meta.Cancel()
-				a.sess.Main.Cancel()
+			if c := a.conn(); c.busy > 0 { // a query or a save of the current connection is running: cancel it (§8.3, §10.3)
+				c.cancel()
 				return nil
 			}
 			if a.toast != "" && a.toastSeq == a.quitToast { // the first press's toast is still up
@@ -164,7 +163,7 @@ func init() {
 		"tree.open":     {Title: "打开", Run: func(a *App, _ Args) tea.Cmd { return a.treeOpen(false) }},
 		"tree.open.tab": {Title: "打开", Run: func(a *App, _ Args) tea.Cmd { return a.treeOpen(true) }},
 		"tree.filter":   {Title: "过滤", Run: do(func(a *App, _ Args) { a.treeFilter() })},
-		"tree.refresh":  {Title: "刷新表列表", Run: func(a *App, _ Args) tea.Cmd { a.sess.dropCols(); return a.loadCatalog() }},
+		"tree.refresh":  {Title: "刷新表列表", Run: func(a *App, _ Args) tea.Cmd { return a.refreshTree() }},
 		// Keys inside the dropdowns and the COLS list (§6.8): untitled, like the palette's.
 		"dropdown.up":     {Title: "上移", Local: true, Run: when(inDrop, func(a *App) tea.Cmd { a.dropMove(-1); return nil })},
 		"dropdown.down":   {Title: "下移", Local: true, Run: when(inDrop, func(a *App) tea.Cmd { a.dropMove(1); return nil })},
@@ -272,10 +271,7 @@ func init() {
 		"result.toggle": {Title: "显示 / 隐藏结果区", Run: do(func(a *App, _ Args) { a.toggleResult() }),
 			On: func(a *App) bool { return a.win().Result != nil && !a.win().resultHidden }},
 		"grid.refresh.auto": {Title: "自动刷新", Run: do(func(a *App, _ Args) { a.openDrop(dropAuto) })},
-		"grid.stop": {Title: "停止", Run: do(func(a *App, _ Args) { // the query bar's stop: what C-c cancels (§8.3)
-			a.sess.Meta.Cancel()
-			a.sess.Main.Cancel()
-		})},
+		"grid.stop":         {Title: "停止", Run: do(func(a *App, _ Args) { a.conn().cancel() })}, // the query bar's stop: what C-c cancels (§8.3)
 		// ↵ and esc end a cell's edit alike, keeping it (G-02); text no value
 		// of the column, ↵ waits, esc drops it (§10.7)
 		"cell.accept": {Title: "确定这一格", Local: true, Run: onCell(func(t *dataTab) { t.acceptCell() })},

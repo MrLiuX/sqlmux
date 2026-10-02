@@ -626,9 +626,9 @@ func (a *App) save() tea.Cmd {
 		ch.Inserts = append(ch.Inserts, cols)
 	}
 	t.saving = true
-	a.busy++
+	t.conn.busy++
 	t.out++
-	main, table, key := a.sess.Main, t.table, t.cols.Key()
+	main, table, key := t.conn.Main, t.table, t.cols.Key()
 	return func() tea.Msg {
 		start := time.Now()
 		m.failed, m.err = postgres.Save(context.Background(), main, table.Schema, table.Name, key, ch)
@@ -644,8 +644,8 @@ func (a *App) save() tea.Cmd {
 // by its row identity (it may be on another page) and marked, a row added
 // by its place among them (§10.3, §10.6).
 func (a *App) gotSave(m saveMsg) tea.Cmd {
-	a.busy--
 	t := m.tab
+	t.conn.busy--
 	t.saving = false
 	t.out--
 	closing := t.closing

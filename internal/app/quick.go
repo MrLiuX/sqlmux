@@ -20,6 +20,8 @@ import (
 // shows, and the one out on Meta.
 type quickSQL struct {
 	ran, running string // "" for none; running is the SQL scope's input as ↵ ran it
+	conn         *Conn  // where ran ran, schema first on its search_path: C-t's tab runs again there (§12)
+	schema       string
 	res          db.Result
 	err          string
 	write        bool // ran is a write, not run: a console runs it (F-05)
@@ -35,13 +37,16 @@ const (
 
 // quickMsg answers runQuick.
 type quickMsg struct {
-	p   *palette
-	res db.Result
-	err error
+	p      *palette
+	conn   *Conn
+	schema string
+	res    db.Result
+	err    error
 }
 
 // colsMsg brings the columns of a table the quick SQL names (§12「补全」).
 type colsMsg struct {
+	conn  *Conn
 	table db.Table
 	cols  db.Columns
 	err   error
@@ -56,8 +61,9 @@ func (q *quickSQL) last() string {
 	return q.ran
 }
 
-// runQuick runs sql on Meta for the palette (§12), unless one is running
-// already, and puts it at the top of the connection's history.
+// runQuick runs sql on the current connection's Meta for the palette
+// (§12), unless one is running already, and puts it at the top of the
+// connection's history.
 func (a *App) runQuick(sql string) tea.Cmd {
 	p := a.palette
 	if p.quick == nil {
@@ -70,25 +76,26 @@ func (a *App) runQuick(sql string) tea.Cmd {
 	if a.state.SQL == nil {
 		a.state.SQL = map[string][]string{}
 	}
-	h := slices.Insert(slices.DeleteFunc(a.state.SQL[a.sess.Name], func(s string) bool { return s == sql }), 0, sql)
-	a.state.SQL[a.sess.Name] = h[:min(len(h), quickHistory)]
+	c := a.conn()
+	h := slices.Insert(slices.DeleteFunc(a.state.SQL[c.Spec.Name], func(s string) bool { return s == sql }), 0, sql)
+	a.state.SQL[c.Spec.Name] = h[:min(len(h), quickHistory)]
 	if q := p.quick; sqlkit.IsWrite(sql, sqlkit.PG) { // a write is for a console, where running it is the user's own ↵ (F-05)
 		q.ran, q.res, q.err, q.write, q.top, q.left = sql, db.Result{}, "", true, 0, 0
 		return a.saveState()
 	}
 	p.quick.running = sql
-	a.busy++
-	meta, schema := a.sess.Meta, a.sess.Schema
+	c.busy++
+	meta, schema := c.Meta, c.Schema
 	return tea.Batch(a.saveState(), func() tea.Msg {
 		r, err := postgres.Quick(context.Background(), meta, sql, schema, quickRows)
-		return quickMsg{p, r, err}
+		return quickMsg{p, c, schema, r, err}
 	})
 }
 
 // gotQuick shows a quick SQL's answer, if its palette is still open: the
 // result goes with the palette (§12). Cancelled, the last result stays.
 func (a *App) gotQuick(m quickMsg) tea.Cmd {
-	a.busy--
+	m.conn.busy--
 	if m.p != a.palette {
 		return nil
 	}
@@ -99,6 +106,7 @@ func (a *App) gotQuick(m quickMsg) tea.Cmd {
 		return a.showToast("查询已取消", toastTTL)
 	}
 	q.ran, q.res, q.err, q.write, q.top, q.left = sql, m.res, "", false, 0, 0
+	q.conn, q.schema = m.conn, m.schema
 	if m.err != nil {
 		q.res, q.err = db.Result{Took: m.res.Took}, m.err.Error()
 	}
@@ -158,7 +166,7 @@ func (a *App) quickToResult() tea.Cmd {
 		return nil
 	}
 	a.sess.RunSeq++
-	r := &run{name: "quick", sql: q.ran, seq: a.sess.RunSeq, start: time.Now(), win: a.win(), done: true}
+	r := &run{conn: q.conn, schema: q.schema, name: "quick", sql: q.ran, seq: a.sess.RunSeq, start: time.Now(), win: a.win(), done: true}
 	p := a.showResult(r.win)
 	a.log(r, r.sql, resultText(q.res), false)
 	p.Tabs = append(p.Tabs, Tab{Name: r.label(1), Result: &resultTab{gridState: gridState{page: q.res}, run: r, part: 1, pinned: true}})
@@ -174,16 +182,16 @@ type quickRerun struct {
 }
 
 // rerunQuick is R on a quick SQL's tab (§12): its SQL again as the palette
-// runs it, on Meta, read only, the tree's schema first; the rows in the
-// tab's place, a line in the log.
+// ran it, on the same connection's Meta, read only, the same schema first;
+// the rows in the tab's place, a line in the log.
 func (a *App) rerunQuick(rt *resultTab) tea.Cmd {
 	r := rt.run
 	if !r.done {
 		return nil
 	}
 	r.done, r.start = false, time.Now()
-	a.busy++
-	meta, sql, schema := a.sess.Meta, r.sql, a.sess.Schema
+	r.conn.busy++
+	meta, sql, schema := r.conn.Meta, r.sql, r.schema
 	return tea.Batch(func() tea.Msg {
 		res, err := postgres.Quick(context.Background(), meta, sql, schema, quickRows)
 		return quickRerun{rt, res, err}
@@ -193,8 +201,8 @@ func (a *App) rerunQuick(rt *resultTab) tea.Cmd {
 // gotQuickRerun shows what rerunQuick got: the rows, or a failure in the
 // log, which shows, the rows as they were; a cancel says so (§11).
 func (a *App) gotQuickRerun(m quickRerun) tea.Cmd {
-	a.busy--
 	rt, r := m.rt, m.rt.run
+	r.conn.busy--
 	r.done = true
 	switch {
 	case errors.Is(m.err, context.Canceled):
@@ -260,20 +268,21 @@ func (a *App) completeSQL() tea.Cmd {
 	if p.asked == nil {
 		p.asked = map[tableID]bool{}
 	}
-	c, cmds := a.sqlComplete(sql, pos, a.sess.Schema, p.asked, false)
-	if c != nil {
-		c.start += len(scopes[scope].prefix)
+	c := a.conn()
+	comp, cmds := a.sqlComplete(c, sql, pos, c.Schema, p.asked, false)
+	if comp != nil {
+		comp.start += len(scopes[scope].prefix)
 	}
-	p.comp = c
+	p.comp = comp
 	return tea.Batch(cmds...)
 }
 
-// fetchCols reads table's columns on Meta for completion.
-func (a *App) fetchCols(t db.Table) tea.Cmd {
-	meta := a.sess.Meta
+// fetchCols reads the columns of c's table t on its Meta for completion.
+func (a *App) fetchCols(c *Conn, t db.Table) tea.Cmd {
+	meta := c.Meta
 	return func() tea.Msg {
 		cols, err := postgres.TableColumns(context.Background(), meta, t.Schema, t.Name)
-		return colsMsg{t, cols, err}
+		return colsMsg{c, t, cols, err}
 	}
 }
 
@@ -283,7 +292,7 @@ func (a *App) gotCols(m colsMsg) tea.Cmd {
 	if m.err != nil {
 		return nil
 	}
-	a.sess.cols[idOf(m.table)] = m.cols
+	m.conn.cols[idOf(m.table)] = m.cols
 	if a.palette != nil {
 		return a.completeSQL()
 	}

@@ -44,6 +44,7 @@ type gridState struct {
 // shows the columns COLS leaves.
 type dataTab struct {
 	gridState
+	conn  *Conn // the connection the table is on (§5)
 	table db.Table
 	cols  db.Columns // the catalog's, as fetched: PK and types for the grid
 	next  bool       // a page follows (§8.5)
@@ -106,9 +107,9 @@ var countTimeout = 3 * time.Second
 // bigTable is past where a table without WHERE shows its estimate (§8.5).
 const bigTable = 1_000_000
 
-func newDataTab(t db.Table) *dataTab {
+func newDataTab(c *Conn, t db.Table) *dataTab {
 	r := request{limit: limits[0]}
-	return &dataTab{table: t, request: r, shown: r, hidden: map[string]bool{}}
+	return &dataTab{conn: c, table: t, request: r, shown: r, hidden: map[string]bool{}}
 }
 
 type tableID struct{ schema, name string }
@@ -157,10 +158,10 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 		return nil
 	}
 	t.recount = t.recount || recount
-	a.busy++
+	t.conn.busy++
 	t.out++
-	seq, table, meta, q := t.seq, t.table, a.sess.Meta, t.query()
-	cols, cached := a.sess.cols[idOf(table)]
+	seq, table, meta, q := t.seq, t.table, t.conn.Meta, t.query()
+	cols, cached := t.conn.cols[idOf(table)]
 	page := func() tea.Msg {
 		ctx := context.Background()
 		if !cached {
@@ -182,10 +183,10 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 // dropped; a cancelled one goes back to what is shown, rows and all, with
 // its count as it was (§7.6, §8.3).
 func (a *App) gotPage(m pageMsg) tea.Cmd {
-	a.busy--
+	m.tab.conn.busy--
 	m.tab.out--
 	if m.cols.Cols != nil {
-		a.sess.cols[idOf(m.tab.table)] = m.cols
+		m.tab.conn.cols[idOf(m.tab.table)] = m.cols
 	}
 	t := m.tab
 	switch {
@@ -249,7 +250,7 @@ func (a *App) count(t *dataTab) tea.Cmd {
 	t.countSeq++
 	t.counted = counting
 	t.out++
-	seq, meta, q := t.countSeq, a.sess.Meta, t.query()
+	seq, meta, q := t.countSeq, t.conn.Meta, t.query()
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), countTimeout)
 		defer cancel()
@@ -483,7 +484,7 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 	if t.page.Cols != nil {
 		right += " · " + t.page.Took.Round(time.Millisecond).String()
 	}
-	names, _ := a.sqlNames(t.where.Text, "", &t.cols)
+	names, _ := a.sqlNames(t.conn, t.where.Text, "", &t.cols)
 	where := t.where
 	if t.typing == "where" {
 		where.Sel = vimSel(t.ed)

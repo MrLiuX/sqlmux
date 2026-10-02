@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"fmt"
 	"image/color"
 	"strconv"
@@ -18,7 +19,8 @@ type TreeNode struct {
 	Icon         Icon
 	IconFg       color.Color
 	Text         string
-	Pos          []int // filter match positions in Text
+	TextFg       color.Color // fg when nil: a failed connection's is error (§7.8)
+	Pos          []int       // filter match positions in Text
 	Aside        string
 	Note         string
 	NoteFg       color.Color
@@ -86,7 +88,7 @@ func (t Tree) Draw(f *Frame, in uv.Rectangle) uv.Position {
 			bg = th.Row
 		}
 		f.Fill(line, uv.Style{Bg: bg})
-		icon, text := uv.Style{Fg: n.IconFg, Bg: bg}, uv.Style{Fg: th.Fg, Bg: bg}
+		icon, text := uv.Style{Fg: n.IconFg, Bg: bg}, uv.Style{Fg: cmp.Or[color.Color](n.TextFg, th.Fg), Bg: bg}
 		if n.IconFg == nil {
 			icon.Fg = th.Fg
 		}

@@ -4,12 +4,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 )
 
 // state.json round-trips, is 0600, and an older snapshot never overwrites
-// a newer one (§14).
+// a newer one (§14); a table picked before its id named the connection is
+// dropped (F5.10).
 func TestState(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	if s, err := LoadState(); err != nil || len(s.Tables) != 0 {
@@ -17,7 +19,7 @@ func TestState(t *testing.T) {
 	}
 	at := time.Date(2026, 9, 24, 14, 5, 0, 0, time.UTC)
 	want := &State{
-		Recent: []Recent{{Kind: "table", ID: "public.t_order"}},
+		Recent: []Recent{{Kind: "table", ID: "doraemon/public.t_order"}, {Kind: "table", ID: "public.t_order"}, {Kind: "command", ID: "quit"}},
 		Tables: map[string]*TableState{"doraemon/public.t_order": {
 			History:   []Query{{Where: "id > 5", At: at}},
 			Favorites: []Query{{Where: "status = 'done'", Order: "amount", Desc: true, Limit: 500, At: at}},
@@ -31,6 +33,7 @@ func TestState(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := LoadState()
+	want.Recent = slices.Delete(want.Recent, 1, 2)
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v %v", got, err)
 	}

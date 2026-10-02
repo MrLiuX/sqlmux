@@ -57,15 +57,16 @@ func run(args []string) error {
 	return err
 }
 
-// open connects to connection name, or the first one when name is "".
+// open is a session over connections.toml, connected to connection
+// name, or the first one when name is "" (§5).
 func open(name string) (*app.Session, string, error) {
-	c, warning, err := config.LoadConnection(name)
+	conns, start, warning, err := config.LoadConnections(name)
 	if err != nil {
 		return nil, "", err
 	}
-	sess, err := app.Open(context.Background(), c)
+	sess, err := app.Open(context.Background(), conns, start)
 	if err != nil {
-		return nil, "", fmt.Errorf("%s: %w", c.Name, err)
+		return nil, "", fmt.Errorf("%s: %w", conns[start].Name, err)
 	}
 	return sess, warning, nil
 }
