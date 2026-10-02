@@ -712,7 +712,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
     5. 截短 session 名。
 
     始终保留的是：session 块（名称可以被截短）、当前 window、`C-p` 入口、待输入序列、模式块。
-- **COMMAND 模式**：命令面板打开时，模式块显示 COMMAND；接管按键的浮层（schema / ORDER / LIMIT 下拉、COLS 列表、WHERE 历史 / 收藏下拉）打开时也是 COMMAND，不论焦点在列表还是过滤框，因为它们和面板一样把 normal 作用域的键（leader、`C-hjkl`）挡在浮层外，不另设模式名；keymap 里 COMMAND 和 INSERT 一样算「在打字」，没绑定的可打印字符照样进过滤框。which-key 不算：它不是作用域（§6.5），弹出时序列还没按完，剩下的键仍在 normal 里解析，所以照旧显示 NORMAL。补全列表也不算：它不接管输入，只是挂在输入框下面，显示 INSERT。状态栏里不再有命令行：M0 用户体验后改由命令面板取代（§12），`:` 打开面板的命令范围。
+- **COMMAND 模式**：命令面板打开时，模式块显示 COMMAND；接管按键的浮层（schema / ORDER / LIMIT 下拉、COLS 列表、WHERE 历史 / 收藏下拉）打开时也是 COMMAND，不论焦点在列表还是过滤框，因为它们和面板一样把 normal 作用域的键（leader、`C-hjkl`）挡在浮层外，不另设模式名；keymap 里 COMMAND 和 INSERT 一样算「在打字」，没绑定的可打印字符照样进过滤框。which-key 不算：它不是作用域（§6.5），弹出时序列还没按完，剩下的键仍在 normal 里解析，所以照旧显示 NORMAL。补全列表也不算：它不接管输入，只是挂在输入框下面，显示 INSERT。状态栏里不再有命令行：M0 用户体验后改由命令面板取代（§12），`:` 打开面板（F5.8 起是「所有」范围）。
 - **错误栏**（M2/M3 验收时定，参考 DataGrip 在编辑区下方的报错区）：数据库的报错显示在出错那个 pane 的内容区底部、tab 栏上方，不再挤在查询条右侧或者占掉表格。
   - 第一行是 `error` 色的 `[SQLSTATE] <Message>`，下面依次是 DETAIL、HINT、位置（PG 返回时才有），一项一行，DETAIL 自带的换行照拆，`error_bg` 底；每行放不下时右边截短加 `…`，不折行；最多 6 行，超出时第 6 行画成 `…`；右端是可以点击的 `×`。不是数据库返回的错误（如「WHERE 里不能有 ;」、保存时行数据已变化）没有 `[SQLSTATE]`，只有文字。
   - 位置：console 的报错换算成 console 文件里的「位置：第 3 行第 12 列」；表格取数的 SQL 是拼出来的，不显示位置。
@@ -1289,7 +1289,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 
 命令面板是执行命令的主要入口，取代了 M0 最初的 `:` 命令行（M0 用户反馈）。M0 先做面板本身，包括命令、表、pane、window 四个范围（F0.13、F0.14）；表在 M0 里用侧栏的假数据，M1 换成 catalog。session、SQL 范围和 DDL 预览在后面的里程碑。
 
-- **打开**：`C-p`（`palette.open`）打开，范围为「所有」；NORMAL 下按 `:`（`palette.command`）打开并直接进入命令范围，相当于输入了 `>`。
+- **打开**：`C-p`（`palette.open`）打开，范围为「所有」；表格、树、引导页里的 `:` 也绑 `palette.open`（F5.8 起；原来绑 `palette.command`，打开并直接进入命令范围，相当于输入了 `>`；它保留、不带默认键）。
 - **ex 别名**：命令可以带别名，如 `q`（关闭 tab）、`qa`（退出）、`w`（保存）。在命令范围和「所有」范围里，输入与某个别名完全相同时，这条命令排第一，所以 `:q↵`、`:qa↵` 的用法不变（F5.8 起 `:` 打开「所有」）。
 - **数据来源**：session、window、pane 取自工作现场；表取自 catalog；命令取自 Action 注册表（带标题的 Action）；SQL 取自快速查询的历史。
   - 只在浮层或输入状态里用的 Action 不作为候选：离开那个上下文，执行它们没有意义，标题单独看也看不懂。包括：
@@ -1324,7 +1324,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - pane：聚焦。
   - window：切换。M5 之前只列出，`↵` 只关闭面板。
 - **预览（K-05）**：光标在某张表上停留 150ms 后，从 `Meta` 获取 DDL，获取后缓存。窗口高度不够时先压缩预览区：列表和预览各自最多 12 行，放不下时先把预览压到 3 行，还放不下再把列表压到 3 行，还放不下就不显示预览；预览被压到不足 3 行时不显示（DDL 本身只有 1–2 行的照它自己的行数显示），底部提示始终显示（M4 F4.2 审查时定：80×24 下原来的「预览只拿剩下的」让「所有」范围一直看不到预览，或只剩一个 `…`）。
-- **快速 SQL**（`;` 前缀或「SQL」标签）：NORMAL 下按 `;` 直接打开面板的 SQL 范围，输入框预填 `;`，与 `:` 进入命令范围同理（M1 用户反馈）。核心部分在 M1 F1.7 实现，用户体验 M0 时要求提前；依赖 console 的部分随 M3 补上。
+- **快速 SQL**（`;` 前缀或「SQL」标签）：NORMAL 下按 `;` 直接打开面板的 SQL 范围，输入框预填 `;`，与 `palette.command` 预填 `>` 同理（M1 用户反馈）。核心部分在 M1 F1.7 实现，用户体验 M0 时要求提前；依赖 console 的部分随 M3 补上。
   - **结果区**：执行后，结果显示在面板的下半部分，用和 table pane 相同的表格组件和网格样式（§7.6）；结果区的标题行显示行数、耗时和「只读」。SQL 范围下面板向下扩展，结果区至少 8 行。
   - **补全**：M1 用 catalog 里的表名、列名和 SQL 关键字做模糊补全，复用 F1.5 的补全列表；能看懂别名、CTE、子查询的补全要等 M3 F3.7。关键字取 lazysql `builtinKeywords` 里常用的约 40 个（小写）；表名取树当前 schema 的；列名按 §9.7「第一次用到时才获取」：输入里出现和某张表同名的标识符时，取那张表的列并缓存（与打开表共用列缓存），不预拉全库的列。顺序为列 → 表 → 关键字，组内按 fzf 分数；右侧注释是列的类型和所属表、「表」、「关键字」。补全状态从 data tab 挪出来，面板和 WHERE 共用。
   - **执行**：在 `Meta` 上执行，PG 用 `BEGIN READ ONLY`，MySQL 用 `START TRANSACTION READ ONLY`，执行完一律 ROLLBACK。同一事务里先 `SET LOCAL search_path TO <树当前的 schema>, <建连时的原始 search_path>`（§8.6 的写法），这样树停在 `agentable` 时 `;select * from agent` 也能找到表，ROLLBACK 后自动恢复。最多显示 100 行，更多时显示 `100+`。
@@ -1378,7 +1378,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 | 文件 | 写入方 | 内容 |
 |---|---|---|
 | `~/.config/sqlmux/config.toml` | 只有用户写 | 常规选项、主题 |
-| `~/.config/sqlmux/keymaps.toml` | 只有用户写 | 键位 `[keys.*]`、leader、映射 `[map.*]`（M5 F5.9 起从 config.toml 挪出来；`sqlmux keys --format toml` 生成一份全部注释掉的完整参考）。config.toml 里还写着 `[keys]` / `[map]` 时启动报错，提示挪到 keymaps.toml |
+| `~/.config/sqlmux/keymaps.toml` | 只有用户写 | 键位 `[keys.*]`、leader、映射 `[map.*]`（M5 F5.9 起从 config.toml 挪出来；`sqlmux keys --format toml` 生成一份完整的参考：和默认相同的写成注释行，用户改过的写成生效的行，没有改动时全是注释）。config.toml 里还写着 `[keys]` / `[map]` 时启动报错，提示挪到 keymaps.toml |
 | `~/.config/sqlmux/connections.toml` | 由应用写入（S-03 新建连接） | 连接定义 |
 | `~/.config/sqlmux/themes/*.toml` | 只有用户写 | 自定义主题 |
 | `~/.local/state/sqlmux/state.json` | 由应用写入 | 最近使用、每张表的 WHERE 历史与收藏、快速 SQL 历史；以后还有工作现场 |
@@ -1417,7 +1417,7 @@ max_rows = 1000
 ```
 
 ```toml
-# keymaps.toml（M5 F5.9 起；sqlmux keys --format toml 生成的是全部注释掉的完整版，这里只列改动过的几行）
+# keymaps.toml（M5 F5.9 起；sqlmux keys --format toml 生成完整版，默认键位是注释行，这里只列改动过的几行）
 [keys]
 leader = "<Space>"               # 改成 "<C-a>" 即为 tmux 式的全局前缀
 
@@ -1538,7 +1538,7 @@ PRD 10.2 中影响实现的几条：
 | 16 | console 编辑器支持块选择 `C-v` | C-01、6.1 |
 | 17 | console 标题右侧增加 schema 下拉框（仅 PG，与 DataGrip 一致），每个 console 单独选择 schema | 5.7、3 章 Session 行 |
 | 18 | 取消 `SPC 0-9`（原 C-a 0-9）按编号切换 window，改为 `SPC n` / `SPC p` / `SPC l` 和命令面板的 window 范围；默认键位只保留常用的，其余在命令面板里执行，或者自己绑定 | W-02、6.2 |
-| 19 | `:` 命令行由命令面板取代：`:` 打开面板的命令范围，`:q` 等用法不变 | B-02、K-01 |
+| 19 | `:` 命令行由命令面板取代：`:` 打开面板（F5.8 起是「所有」范围），`:q` 等用法不变 | B-02、K-01 |
 | 20 | 侧栏标题显示当前 schema，可以点击切换；侧栏宽度可以拖动 | D-01~D-04、第 4 章 |
 | 21 | 主题可以写成 `~/.config/sqlmux/themes/` 下的文件；表格按列的类型着色 | 第 8 章 |
 | 22 | COLS 下拉框打开时焦点在列表上，`/` 才进过滤框；PRD 的「打开时焦点在过滤框」与 `j/k/space/a/A` 冲突 | Q-04 |
