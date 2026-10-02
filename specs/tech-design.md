@@ -13,7 +13,7 @@
 | 渲染 | 立即模式：每帧把画面画进一块 cell 缓冲区，同时生成鼠标命中表 |
 | 输入 | 键盘、鼠标、命令面板统一转成 Action。默认键位只用所有终端都能区分的键，不依赖 kitty 键盘协议，也不假设用户在用 tmux |
 | 键位模型 | 不做 tmux 式的全局前缀键。NORMAL 模式下用空格（`SPC`）作 leader，按下后弹出可点击的键位提示（已确认） |
-| 数据库 | pgx/pgconn、go-sql-driver/mysql；每个 session 两条连接；所有值按文本处理 |
+| 数据库 | pgx/pgconn、go-sql-driver/mysql；每个连接两条（Meta / Main），用到时才连；所有值按文本处理 |
 | SQL 处理 | 自研词法扫描器，负责分句、高亮、读写判定、自动 LIMIT |
 | SQL 格式化 | 通过 goja 在进程内运行 sql-formatter（JS 库），已做可行性验证 |
 | SQL 编辑器 | 自研 vim 编辑器，覆盖 nvim 的基础操作：文本对象、操作符加移动、大小写转换、注释、撤销与重做、`:s` 替换。不做宏和 `.` 重复。键位映射（如 J → 5j）可以按 pane 类型分别配置。行为用 nvim 做差分测试来校验 |
@@ -179,14 +179,14 @@ Tab 的种类：
 
 **一个 session 多个连接**（M5，用户 2026-09-29 提出、2026-10-02 定，参考 DataGrip 的多个数据源）：
 
-- **连接列表**：每个 session 都能看到 connections.toml 里的全部连接。目录树的根就是这些连接（引擎图标、名字、只读时加锁的标记），展开或第一次用到时才建 `Meta` / `Main`；连不上时节点标成失败、错误进 toast，可以再展开重试。`sqlmux play` 启动时只连 play 并展开它；不带参数时连第一个（M6 起恢复 `last` 布局）。启动时的连接连不上，照 §14 打印错误退出；其他连接失败不影响启动。
+- **连接列表**：每个 session 都能看到 connections.toml 里的全部连接。目录树的根就是这些连接（引擎图标、名字、只读时加锁的标记），展开或第一次用到时才建 `Meta` / `Main`；连不上时节点标成失败、错误进 toast，可以再展开重试。连接名不能重复，重复时启动报错。`sqlmux play` 启动时只连 play 并展开它；不带参数时连第一个（M6 起恢复 `last` 布局）。启动时的连接连不上，照 §14 打印错误退出；其他连接失败不影响启动。
 - **多个 session 保留**，作工作区用，像 tmux 的多个 session：各有自己的 window、布局，以及自己的一套连接对象（互不共享事务、search_path）。
 - **console 复用所属连接的 `Main`**（用户 2026-10-02 定，先不做每个 console 一条连接）：同一个连接上的 console 共用 `Main` 的事务；search_path 照 §8.6 在每次执行前按这个 console 选的 schema 设好；两个 console 同时执行时排队（Worker 的锁）。M3「在 console 里 begin 不提交，表格的保存也会进这个事务」的已知上限照旧，由事务模式和状态栏的「事务中」提示兜住。
 - **console 标题**：`<连接> · <库>.<schema> ▾`，连接和 schema 各是一个下拉框。换连接只改这个 console 下次执行用哪个连接；它当前所在的连接有未提交的事务时不让换（提示先提交或回滚）。console 的文件不再按连接名分目录（§11），记着它最后用的连接和 schema。
-- **事务模式按连接**（F5.3）：每个 console 标题上 `Tx: 自动 ▾` 显示的是它所在连接的模式，在任一个 console 里切换，同一个连接上的 console 都跟着变；手动时旁边是提交 ✓、回滚 ↺，作用于这个连接的 `Main`。手动模式下表格的保存也进这个事务、不自动提交，表格取数改走 `Main` 才看得到自己没提交的修改（§8.2、§10.3 原来的写法）。有未提交的事务时，退出、关掉这个连接上的最后一个 console 都要确认。
+- **事务模式按连接**（F5.3）：每个 console 标题上 `Tx: 自动 ▾` 显示的是它所在连接的模式，在任一个 console 里切换，同一个连接上的 console 都跟着变；手动时旁边是提交 ✓、回滚 ↺，作用于这个连接的 `Main`。手动模式下表格的保存也进这个事务、不自动提交，表格取数改走 `Main` 才看得到自己没提交的修改（§8.2、§10.3 原来的写法）。有未提交的事务时，退出、关闭 session、关掉这个连接上的最后一个 console 都要确认，确认后先回滚（§10.5）；从手动切回自动被拦下，提示先提交或回滚。
 - **只读按连接**：connections.toml 里写 `read_only = true`。这个连接的 `Meta`、`Main` 都设成只读（§13 两层拦截照旧），树和 console 标题上画锁的标记，表格不能进入编辑。
-- **当前连接**：表 tab、console tab 各属于一个连接；快速 SQL、命令面板的表范围、新 console 默认用「当前连接」：焦点 tab 所属的连接，焦点在树上时用树光标所在的连接。状态栏的地址块显示当前连接的 `<用户>@<host>:<port>`。
-- 开发清单由 worker 按这一节起草，§8.2、§8.6、§11、§12、§13、§14 里写着「每个 session 两条连接」「树当前的 schema」的地方，起草时一并列出要改的条目，决策者确认后改文档。
+- **当前连接**：表 tab、console tab 各属于一个连接，结果 tab 记着来源的连接。「当前连接」是焦点 tab 所属的连接（结果 tab 取它的来源连接），焦点在树上时是树光标所在的连接，引导页、空 pane 沿用上一次的。快速 SQL、新 console、`C-e`、`tree.refresh`、`C-c` 取消和 busy 提示、事务命令都按当前连接；命令面板的表范围列出所有已连上的连接的表，当前连接的排前面（§12）。状态栏的地址块显示当前连接的名字和 `<用户>@<host>:<port>`（§7.8）。
+- 开发清单见 [`m5-workspace/task.md`](m5-workspace/task.md) 的 F5.10、F5.11、F5.1–F5.4（2026-10-02 定）；§7.8、§8、§10、§11–§14 已跟着改。
 
 默认 window 的布局：
 
@@ -262,7 +262,7 @@ type Action struct {                // 注册表是 map[id]Action，id 如 "pane
 
 | 作用域 | 何时生效 |
 |---|---|
-| `palette` / `where` / `cols` / `dropdown` / `sessions` / `complete` / `options` / `segments` / `confirm` / `keyhelp` | 对应的浮层打开时，取最上层的一个。`options` 是单元格的选项浮层，`segments` 是时间列的分段浮层，都只在展开时生效（§10.2）；`keyhelp` 是 `?` 的键位帮助（§6.5）。which-key 浮层不是作用域（§6.5） |
+| `palette` / `where` / `cols` / `dropdown` / `sessions` / `form` / `complete` / `options` / `segments` / `confirm` / `keyhelp` | 对应的浮层打开时，取最上层的一个。`options` 是单元格的选项浮层，`segments` 是时间列的分段浮层，都只在展开时生效（§10.2）；`keyhelp` 是 `?` 的键位帮助（§6.5）；`sessions` 是 session 列表，`form` 是新建连接的表单（M5 F5.1，§7.8）。which-key 浮层不是作用域（§6.5） |
 | `wherenormal` | WHERE 输入框在 NORMAL 下（F3.39）：`↵` 执行、`/` 历史 / 收藏、`esc` 回表格，其余交给编辑器；`normal` 照常在它下面 |
 | `newrow` | 编辑还没保存的新行的格时生效（F3.33），叠在 `options` / `segments` 之上：浮层层级里它在最上，没绑的键再落到下面那层浮层。默认只有 `Tab` / `S-Tab`（`cell.field.next` / `cell.field.prev`） |
 | `cell` | 正在编辑单元格（INSERT） |
@@ -401,6 +401,8 @@ H = "0"
 
 不提供「切换到第 n 个 window」这类按编号的命令：window 用 `SPC n` / `SPC p` / `SPC l` 切换，或者在命令面板的 window 范围里搜，也可以点击状态栏上的 window 名。
 
+M5 新增的命令都不带默认键，在命令面板里执行：`conn.new`「新建连接…」、`console.conn`「切换连接…」、`tx.mode`「手动提交事务」（开关类，手动时为 ON）、`tx.commit`「提交」、`tx.rollback`「回滚」。
+
 console 里的 `x` 是 vim 的删除字符，所以 console 的 tab 用 `:q` 关闭。
 
 各浮层内的键位如下，全部取自 PRD。等到相应的浮层实现时，再加进 `default.toml`。
@@ -409,11 +411,12 @@ console 里的 `x` 是 vim 的删除字符，所以 console 的 tab 用 `:q` 关
 |---|---|---|---|
 | WHERE 历史 / 收藏下拉（`where`） | `C-r` · `C-n` / `Tab` / `↓` · `C-p` / `S-Tab` / `↑` · `↵` · `C-f` · `esc` | 打开 · 下一项 · 上一项（到头绕回）· 应用 · 收藏或取消收藏 · 关闭 | Q-02 |
 | COLS 下拉（`cols`） | `/` · `j` / `k` · `space` · `a` · `A` · `esc` | 聚焦过滤框 · 移动 · 勾选 · 全选 · 全不选 · 先清空过滤，再按一次关闭。打开时焦点在列表上，PRD 写的「打开时焦点在过滤框」与这些键冲突，按这里做（§18） | Q-04 |
-| session 列表（`sessions`） | `j` / `k` · `l` / `h` · `↵` · `n` · `x` · `$` · `esc` | 移动 · 展开 / 收起 · attach · 新建连接 · 关闭 · 重命名 · 关闭列表 | S-03 |
+| session 列表（`sessions`） | `j` / `k` · `l` / `h` · `↵` · `n` · `x` · `$` · `esc` | 移动 · 展开 / 收起（session 下面是它的 window）· attach（停在 window 上时还切到这个 window）· 新建 session · 关闭 · 重命名 · 关闭列表。`n` 原为新建连接：M5 起 session 是工作区，新建连接改为命令 `conn.new`（§18） | S-03 |
 | 命令面板（`palette`） | `↑` / `↓` 或 `C-n` / `C-p` · `Tab` / `S-Tab` · `↵` · `C-t` · `C-y` · `C-e` · `esc` | 移动 · 切换范围 · 执行 · 打开表（同 `↵`）/ 把结果送到结果区 · 复制 CSV · 在 console 中打开 · 关闭 | K-01~K-04、F-04 |
 | 通用下拉（`dropdown`）：schema、ORDER、LIMIT | `C-n` / `C-p` / `↑` / `↓` · `↵` · `esc` | 移动 · 选中 · 关闭。输入直接进过滤框，所以不用 j/k。Action 为 `dropdown.up/down/select/close` | §8.6 |
 | 补全列表（`complete`） | `Tab` / `C-n` / `↓` · `S-Tab` / `C-p` / `↑` | 下一项 · 上一项，到头绕回；弹出时第一项已选中。`↵`（接受，文字不变时照常执行）和 `esc`（第一次关列表）由输入框处理，不在这个作用域里 | §9.7 |
 | 确认框（`confirm`） | `y` / `↵` · `n` / `esc` | 确认 · 取消；`C-c` 等同 `esc`；两个按钮都能点击 | §10.5 |
+| 新建连接表单（`form`） | `Tab` / `S-Tab` · `↵` · `esc` | 下一个 · 上一个字段（到头绕回）· 保存 · 取消；`C-c` 等同 `esc`。开关字段（engine、read_only）上的 `space` 由表单自己处理、不进作用域，文字字段里照常输入空格 | 新增（M5 F5.1） |
 
 ## 7. 渲染与鼠标
 
@@ -586,7 +589,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
 - 写了 `fg` 的图标在任何位置都用这个颜色；没写时跟随所在位置的颜色，比如标题聚焦时是 `focus` 色。
 - **图标后面留 1 个空格再接文字**（M1 用户反馈）：树、面板的搜索行与候选、pane 标题、侧栏标题、状态栏、查询条都一样。Nerd Font 图标按 1 列计算（§7.1），但不少终端和字体把它画得比 1 列宽，溢出到后一格，紧挨着文字时看起来贴在一起，悬停底色也只盖住半个。留一格空白正好接住溢出的部分。
 - 默认颜色：`save`、`refresh`、`transpose` 用 `info` 色，`sort_asc` / `sort_desc` 和 WHERE 历史下拉里的 `star` 用 `warn` 色（收藏和历史只靠图标区分，黄星一眼能认出）；都可以在 `[icon]` 里用 `fg` 覆盖。
-- 可以覆盖的图标：`schema`、`table`、`data`、`console`、`filter`、`search`、`keys`、`conn`、`key`、`postgres`，以及命令面板用的 `command`（nf-fa-bolt，U+F0E7，ascii 为 `:`）和 `window`（nf-fa-window_restore，U+F2D2，ascii 为 `[]`）；查询条的 `save`（U+F0C7，ascii `[S]`）、`refresh`（U+F021，ascii `[R]`）、`transpose`（U+F0EC，ascii `[T]`）、`sort_asc`（nf-fa-sort_amount_asc，U+F160，ascii `↑`）、`sort_desc`（nf-fa-sort_amount_desc，U+F161，ascii `↓`）；树的 `view`（nf-fa-eye，U+F06E，ascii `v`）、`column`（nf-cod-symbol_field，U+EB5F，ascii `-`）；查询条新增的 `row_add`（nf-fa-plus，U+F067，ascii `+`）、`row_delete`（nf-fa-minus，U+F068，ascii `-`）、`auto_refresh`（nf-fa-clock_o，U+F017，ascii `@`）、`stop`（nf-fa-stop，U+F04D，ascii `#`）；结果区的 `result`（nf-fa-list_alt，U+F022，ascii `=`）、`pin`（nf-oct-pin，U+F435，ascii `*`）、`export`（nf-fa-download，U+F019，ascii `>`）、`close`（nf-fa-times，U+F00D，ascii `x`）、日志 tab 的 `log`（nf-fa-file_text_o，U+F0F6，ascii `L`）；WHERE 历史下拉的 `star`（nf-fa-star，U+F005，ascii `*`）、`history`（nf-fa-history，U+F1DA，ascii `h`）。M3 起去掉 `data`：表 tab 在 pane 标题、tab 栏、树的工作区、面板的 pane 行里一律用 `table` 图标，console tab 用 `console`，引导 tab 不画图标。以后新增的图标（如 `mysql`、视图）也按名字加入。名字写错时启动报错。
+- 可以覆盖的图标：`schema`、`table`、`data`、`console`、`filter`、`search`、`keys`、`conn`、`key`、`postgres`，以及命令面板用的 `command`（nf-fa-bolt，U+F0E7，ascii 为 `:`）和 `window`（nf-fa-window_restore，U+F2D2，ascii 为 `[]`）；查询条的 `save`（U+F0C7，ascii `[S]`）、`refresh`（U+F021，ascii `[R]`）、`transpose`（U+F0EC，ascii `[T]`）、`sort_asc`（nf-fa-sort_amount_asc，U+F160，ascii `↑`）、`sort_desc`（nf-fa-sort_amount_desc，U+F161，ascii `↓`）；树的 `view`（nf-fa-eye，U+F06E，ascii `v`）、`column`（nf-cod-symbol_field，U+EB5F，ascii `-`）、只读连接的 `lock`（nf-fa-lock，U+F023，ascii `RO`，M5 F5.3）；查询条新增的 `row_add`（nf-fa-plus，U+F067，ascii `+`）、`row_delete`（nf-fa-minus，U+F068，ascii `-`）、`auto_refresh`（nf-fa-clock_o，U+F017，ascii `@`）、`stop`（nf-fa-stop，U+F04D，ascii `#`）；结果区的 `result`（nf-fa-list_alt，U+F022，ascii `=`）、`pin`（nf-oct-pin，U+F435，ascii `*`）、`export`（nf-fa-download，U+F019，ascii `>`）、`close`（nf-fa-times，U+F00D，ascii `x`）、日志 tab 的 `log`（nf-fa-file_text_o，U+F0F6，ascii `L`）；WHERE 历史下拉的 `star`（nf-fa-star，U+F005，ascii `*`）、`history`（nf-fa-history，U+F1DA，ascii `h`）。M3 起去掉 `data`：表 tab 在 pane 标题、tab 栏、树的工作区、面板的 pane 行里一律用 `table` 图标，console tab 用 `console`，引导 tab 不画图标。以后新增的图标（如 `mysql`、视图）也按名字加入。名字写错时启动报错。
 
 ### 7.8 默认尺寸与样式（取自设计稿）
 
@@ -602,12 +605,12 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
   - 标题为 `⟨0⟩ <conn 图标> <session 名>`，例如 `⓪  seed`，右侧提示仍是 `SPC b`；放不下时先去掉 `SPC b`，再截短 session 名。点击标题只聚焦树。schema 不再放在标题上、也不再用下拉框切换，改成树里的节点（M1 用户反馈：用下拉框切 schema，看不出还有别的 schema；参考 sqmeow.nvim 的层级树）。
   - 折叠后是 3 列宽的细栏（设计稿为 24px），左右各 1 列边框、中间 1 列内容：顶部显示 `»`，下面竖排 `schema · SPC b`，每行一个字符。
   - 侧栏内部从上到下依次是：
-    - 第一行：过滤图标（`info` 色）、`160 tables`（`dim` 色，所有 schema 的表和视图总数）；ascii 图标下，图标后面还有 `/`（`fg` 色）（§7.7）。按 `/` 后这一行变成输入框（INSERT），照 nvim-tree 的 live filter：边输入边过滤，只匹配表和视图的名字，匹配项的上级节点全部展开显示，其余节点隐藏（包括工作区整块，以及已展开的表下面的列），顺序不变，匹配到的字符高亮；清空过滤后回到原来的展开状态；`↵` 退出输入框、保留过滤、光标放到第一个匹配上；`esc`（及等同 esc 的 `C-c`）清空过滤并退出。有过滤条件时这一行显示 `<图标> <过滤文字>`，右侧 dim 色显示 `3/14`；
+    - 第一行：过滤图标（`info` 色）、`160 tables`（`dim` 色，已连上的各个连接所有 schema 的表和视图总数）；ascii 图标下，图标后面还有 `/`（`fg` 色）（§7.7）。按 `/` 后这一行变成输入框（INSERT），照 nvim-tree 的 live filter：边输入边过滤，只匹配表和视图的名字，匹配项的上级节点全部展开显示，其余节点隐藏（包括工作区整块，以及已展开的表下面的列），顺序不变，匹配到的字符高亮；清空过滤后回到原来的展开状态；`↵` 退出输入框、保留过滤、光标放到第一个匹配上；`esc`（及等同 esc 的 `C-c`）清空过滤并退出。有过滤条件时这一行显示 `<图标> <过滤文字>`，右侧 dim 色显示 `3/14`；
     - 一条分隔线（`sep` 色）；
     - 层级树（M1 F1.12）：
 
       ```
-      ▾ <postgres> seed
+      ▾ <postgres> play
         ▾ <schema> public
           ▾ <table> Tables (8)
             ▸ <table> t_order                6.0k
@@ -616,6 +619,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
                 <column> name                text
           ▸ <view> Views (1)
         ▸ <schema> agentable
+      ▸ <postgres> seed <lock>
       ▾ <window> 工作区
         ▾ <window> data
           ▾ ① <data>
@@ -624,13 +628,13 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
       ```
 
       - 每层缩进 2 列。有子节点的节点前面是 `▸`（折叠）/ `▾`（展开），`dim` 色；叶子节点在同一位置留空。
-      - **session 节点**：引擎图标加 session 名。M1 只有一个，M5 多 session 时每个 session 一个。
+      - **连接节点**（M5 F5.10 起，原来是 session 节点）：connections.toml 里的每个连接一个，按文件顺序；引擎图标加连接名，只读连接（F5.3）名字后面加 `lock` 图标。四种状态：未连接时折叠、没有子节点；连接中名字后面跟 `dim` 色的 `…`；失败时名字用 `error` 色，错误进 toast；已连接时下面是 schema。在未连接或失败的节点上展开（`l`、`↵`、单击）就去连，失败的就是重试；`password_cmd` 也在 Cmd 里跑；连上后加载 catalog，并照「默认展开」展开它。
       - **schema 节点**：非系统 schema，按名字排。
       - **分组节点**：`Tables (n)`、`Views (n)`，n 为这个 schema 下的个数；n 为 0 时照样显示，没有 `▸`。Tables 含普通表、分区表的父表、外部表；Views 含视图和物化视图。函数、序列、角色等不列：目前对它们没有可做的操作，有用处时再加。
       - **表 / 视图节点**：图标（`func` 色）+ 名字 + 右对齐的行数量级（`border` 色）；普通视图没有行数，不显示。
       - **列节点**：展开表的时候才从 `Meta` 取列，与打开表共用列缓存（§8.4），取回之前不显示子节点，也不显示「加载中」。每行是图标 + 列名 + 右侧 `dim` 色的类型（`format_type`）；主键列用 `key` 图标（`pk` 色），其余用 `column` 图标。
       - **工作区节点**：当前 session 的 window → pane → tab，最小粒度是 tab（M1 用户反馈）。pane 节点显示为 `pane-<n>`、不画图标（图标那一格留空对齐，M2/M3 验收时定，单独一个编号太单薄），只列普通 pane 和结果区，空 pane 没有子节点；tab 节点比 pane 节点多缩进一级，结果区的「日志」tab 画图标 `log`（F3.30）；在 pane 节点上 `↵` 或单击是展开 / 折叠，不跳转；在 tab 节点上才聚焦过去；tab 节点显示表名加 `dim` 色的条件摘要（WHERE、非默认的 ORDER）。打开、关闭、切换 tab 后跟着变。
-      - **默认展开**：session、`current_schema()` 所在的 schema 和它的 Tables、工作区及其下所有节点；其余折叠。展开状态记在 session 上，只在内存里。
+      - **默认展开**：启动时的连接、它 `current_schema()` 所在的 schema 和那个 schema 的 Tables、工作区及其下所有节点；其余折叠，其他连接也折叠着、不连。之后连上的连接同样展开它的 `current_schema()` 和 Tables。展开状态记在 session 上（节点按连接区分），只在内存里。
       - 行数量级：n < 1000 原样显示；1000 以上用 k / m / b 后缀，一律向下取整，首位只有一位数字时保留一位小数（`8.1k`、`2.1m`），否则取整（`48k`、`410k`）；`reltuples < 0` 显示 `?`。
       - 右侧注释（行数、列的类型）放不下时整个不显示，先保名字；侧栏只有 24 列时列节点的名字只剩十来列，可以拖宽侧栏。
       - 名字放不下时按字素簇截短并加 `…`，与 pane 标题、面板、表格一致；直接截掉会让 `mv_order_by_stat` 看起来像另一张表的全名（tester 在 F1.3 提出）。
@@ -638,20 +642,22 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
       - 光标移出可视区域时列表跟着滚；滚轮只滚视图，光标被夹回视图内（与 nvim 相同）。
     - 一条分隔线；
     - 提示行，复用 tab 栏 / 面板底栏的 `hintRow`：`j/k move · ↵ open`（F3.37 起去掉 `t tab`），全部 `dim` 色，` · ` 分隔，每一项都能点击（§7.4），放不下的项整项不显示。
-  - **按键**：`j` / `k` / `gg` / `G` 在所有可见节点间移动，支持次数前缀。`l` 展开，已展开时移到第一个子节点；`h` 折叠，已折叠或是叶子时移到父节点（nvim-tree、neo-tree 的习惯）。`↵`：表 / 视图节点打开表（§7.8「打开已有的表」）；列节点打开所属的表，并把光标移到这一列；工作区的 tab 节点切过去并聚焦，pane 节点展开或折叠（window 节点在 M1 只有一个，只展开、折叠，M5 再做切换）；其余节点展开或折叠。列节点打开已有的 tab 时，光标移到这一列；这一列被 COLS 隐藏了的话，光标不动，也不取消隐藏。叶子节点上按 `l` 不做事。`t`：表 / 视图节点上和 `↵` 相同（F3.37 起），其他节点上无效；Action `tree.open.tab`、`palette.open.tab` 的标题都叫「打开」。`/` 过滤，`R` 刷新。树里不再用 `gs`。
-  - **鼠标**：单击 `▸` / `▾` 或分组、schema、session 节点，展开或折叠；单击表 / 视图 / 列节点与 `↵` 相同，中键与 `t` 相同；单击工作区的 tab 节点切过去，单击 pane 节点展开或折叠；和点树上别的节点一样，焦点到树上，不会跳到那个 pane。
-  - **树当前的 schema**（快速 SQL 的 search_path、面板表范围的排序、补全的表名都用它）：光标所在节点所属的 schema；光标不在任何 schema 下（在 session 节点或工作区里）时沿用上一次的值；初始为 `current_schema()`，为 NULL 时取第一个 schema。
+  - **按键**：`j` / `k` / `gg` / `G` 在所有可见节点间移动，支持次数前缀。`l` 展开，已展开时移到第一个子节点；`h` 折叠，已折叠或是叶子时移到父节点（nvim-tree、neo-tree 的习惯）。`↵`：表 / 视图节点打开表（§7.8「打开已有的表」）；列节点打开所属的表，并把光标移到这一列；工作区的 tab 节点切过去并聚焦（在别的 window 里时先切 window），pane 节点展开或折叠，window 节点切到这个 window（F5.2；`l` / `h` 照常展开、折叠）；连接节点见上；其余节点展开或折叠。列节点打开已有的 tab 时，光标移到这一列；这一列被 COLS 隐藏了的话，光标不动，也不取消隐藏。叶子节点上按 `l` 不做事。`t`：表 / 视图节点上和 `↵` 相同（F3.37 起），其他节点上无效；Action `tree.open.tab`、`palette.open.tab` 的标题都叫「打开」。`/` 过滤，`R` 刷新。树里不再用 `gs`。
+  - **鼠标**：单击 `▸` / `▾` 或分组、schema、连接节点，展开或折叠（未连接的连接节点同时去连）；单击表 / 视图 / 列节点与 `↵` 相同，中键与 `t` 相同；单击工作区的 tab 节点切过去，单击 window 节点切到这个 window（F5.2），单击 pane 节点展开或折叠；和点树上别的节点一样，焦点到树上，不会跳到那个 pane。
+  - **每个连接的 Schema**（M5 起，原来是「树当前的 schema」；快速 SQL 的 search_path、新 console 的默认 schema、面板表范围的排序、快速 SQL 补全的表名，都用当前连接的）：光标停在某个连接的 schema 或它下面的节点上时，这个连接的 Schema 跟着变成那个 schema；光标在连接节点或工作区里时不变；初始为 `current_schema()`，为 NULL 时取第一个 schema。
   - **从树里打开表**（`↵` / `t` / 单击 / 中键）后，焦点移到 data pane，与命令面板一致（§12「打开表就是为了接着看数据」），也与 nvim-tree 的 `<CR>` 一致。要连续浏览几张表时按 `C-h` 回到树。
-  - **树是空的直到 catalog 加载完成**，不显示「加载中」；加载出错用 toast 显示数据库的错误。`R` 重新加载 schema 和表列表，并清掉缓存的列信息（Action `tree.refresh`）；展开状态保留。
+  - **连接节点下是空的直到 catalog 加载完成**，不显示「加载中」；加载出错用 toast 显示数据库的错误。`R` 重新加载当前连接（焦点在树上时是光标所在的连接）的 schema 和表列表，并清掉它缓存的列信息（Action `tree.refresh`）；展开状态保留。
 - **pane 标题**：
   - 格式为 `⟨n⟩ <图标> 对象名`，ascii 图标下为 `⟨n⟩ <图标> 类型 · 对象名`（§7.7）。从左上角往右 1 列开始，两侧各留 1 个空格。
   - 编号 `⟨n⟩` 在 Nerd Font 图标下显示为带圈数字 `⓪ ① ② … ⑳`，只占 1 列（M0 用户反馈）；超过 20 时仍写成 `⟨21⟩`。ascii 图标下照旧是 `⟨n⟩`。标题、侧栏标题、命令面板里 pane 那一行都照此显示。`SPC q` 在 pane 中央显示的编号仍是普通数字，因为那是要按的键。
   - 带圈数字按 1 列计算，已知上限见 §7.1「宽度」。
   - 右侧提示离右上角 1 列。
-  - console 标题的右侧是 `▶ run`（`focus` 底、`bg` 色字、粗体）加上 `↵`（`dim` 色）；schema 下拉框 `doraemon.public ▾` 放在 run 的左边。
+  - console 标题的右侧从左到右是：事务控件 `Tx: 自动 ▾`（F5.3，手动时后面跟着提交 ✓、回滚 ↺）、连接和 schema 的下拉框 `play · sqlmux_play.public ▾`（F5.11 起加上连接；原来只有 `doraemon.public ▾`）、`▶ run`（`focus` 底、`bg` 色字、粗体）加上 `↵`（`dim` 色）。
+    - 连接名和 `<库>.<schema>` 各是一个下拉框，点哪一段开哪一个；`gs` 照旧打开 schema 下拉，命令「切换连接…」（`console.conn`）打开连接下拉。连接下拉列出全部连接（引擎图标、名字，只读的带 `lock`），当前的用 `pk` 色标出；选了未连接的就去连，连上之后才换过去，连不上 toast 报错、留在原来的连接。所在连接有未提交的事务时不能换（§5）。MySQL 只有连接这一段（§8.6）。
+    - `Tx: 自动 ▾` / `Tx: 手动 ▾` 点开是自动、手动两项的下拉，显示的是所在连接的模式（§5）。✓ 为 `focus` 色、↺ 为 `info` 色，悬停 `select` 底；所在连接不在事务里时两个都是 `dim` 色、不能点（同 DataGrip，也同查询条的停止按钮）。
   - **空间不够时，提示优先于标题的对象名**，因为提示都是可点击的按钮（§7.4）。按下面的顺序分配空间：
     1. 先给最短的标题 `⟨n⟩ <图标>`（ascii 下是 `⟨n⟩ <图标> 类型`）留出位置。
-    2. 按优先级从高到低依次摆放右侧的提示：放得下就保留；放不下就跳过这一个，继续试下一个。每个 pane 的提示按重要性排序，console 的顺序是 `▶ run` > schema 下拉框 > 键位文字 `↵`。所以宽度较窄时，可能显示 `▶ run ↵`，但没有下拉框。
+    2. 按优先级从高到低依次摆放右侧的提示：放得下就保留；放不下就跳过这一个，继续试下一个。每个 pane 的提示按重要性排序，console 的顺序是 `▶ run` > 连接和 schema 的下拉框（两段算一项）> 事务控件（`Tx ▾` 和 ✓ ↺ 算一项）> 键位文字 `↵`。所以宽度较窄时，可能显示 `▶ run ↵`，但没有下拉框。
        键位文字依附于它所属的按钮：按钮没显示，它的键位文字也不显示。例如 `↵` 只能跟着 `▶ run` 一起出现，不会单独出现。
     3. 剩下的空间再给标题里的对象名；放不下的部分截掉，末尾加 `…`，如 `⟨2⟩ console · cons…`。
     4. 连最短的标题都放不下时，只保留 `⟨n⟩`。
@@ -691,7 +697,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
 - **状态栏**：
   - 底色为 `bar`（#292e42）。各段是扁平色块，不用 powerline 箭头，每段左右各留 1 列内边距。
   - 左侧依次为：
-    - ` <引擎图标> doraemon ▾ `：`focus` 底、`bg` 色字、粗体；
+    - ` doraemon ▾ `（session 名）：`focus` 底、`bg` 色字、粗体。M5 起 session 不再对应一个连接，不画引擎图标；点击打开 session 列表（F5.1）；
     - window 列表，如 ` 0: data* `：当前 window 用 #3b4261 底、`fg` 色字，其余 window 用 `dim` 色字、无底色。
   - 右侧右对齐，依次为：
     - 模式附加信息：`dim` 色，过长时用省略号。内容取自设计稿，随当前模式变化：
@@ -702,7 +708,8 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
     - ` <搜索图标> `：`info` 色，点击打开命令面板；ascii 图标下显示为 ` ~ C-p `（§7.7）；
     - ` <键盘图标> 待输入序列 `：序列用 `warn` 色粗体。没有待输入的键时，显示 `dim` 色的 `·`；这一块始终占着位置，序列部分至少 3 列宽（放得下 `SPC`），内容靠左，这样按键时右侧各块不会左右跳动，序列超过 3 列时才变宽；
     - ` 行,列 `：`fg_muted` 色。只在焦点所在的 data pane 或结果区有已加载的表时显示（M3 起结果区也算）：行号是绝对行号（页偏移 + 1），列号从 1 起；树聚焦、空 pane、空表都不显示这一块（M0 的 `1,1` 占位就此去掉）；
-    - ` <图标> sqlmux@localhost:5432 `：`info` 色，`sep` 底。内容是 `<用户>@<host>:<port>`，引擎已由 session 块的图标表示，所以 `@` 前面放数据库用户名；unix socket 时 host 就是目录，照样显示，如 `ctw@/tmp:5432`。设计稿里的 `pg@` 按此理解；
+    - ` <图标> play · sqlmux@localhost:5432 `：`info` 色，`sep` 底。内容是当前连接（§5）的 `<连接名> · <用户>@<host>:<port>`（M5 起加上连接名：两个连接常常只差库名，比如 play 和 seed），`@` 前面放数据库用户名；unix socket 时 host 就是目录，照样显示，如 `ctw@/tmp:5432`。设计稿里的 `pg@` 按此理解；
+    - ` 事务中 `（`warn` 色）/ ` 事务出错 `（`error` 色）：当前连接的 `Main` 在事务里 / 处在出错的事务里时显示（M5 F5.3），自动模式下用户自己 `begin` 的也算；在 busy 提示（§8.3）的左边，和它一样不让位；
     - ` NORMAL `：模式色底、`bg` 色字、粗体。
   - 窗口太窄、放不下时，按下面的顺序依次省略：
     1. 模式附加信息；
@@ -720,6 +727,9 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
   - 关闭：点 `×`，或者在这个 pane 的 NORMAL 下按 `esc`（Action `pane.error.close`）。同一个 tab 下一次同类操作成功时自动消失：取数成功清掉取数的报错，保存成功清掉保存的报错，console 每次开始执行就清掉上一次的；编辑单元格不清。`esc` 绑在 `[keys.normal]`，console 的 VISUAL 下和编辑器有待定键时照旧交给 vim。
   - 用在：表格的取数与 WHERE 报错、保存失败（「id = 42：…，已回滚」这一类，§10.3）、console 的执行报错（日志 tab 照旧记，出错语句的 ▶ 照旧变红；结果区 `R` 重跑出错时显示在来源 console 的 tab 上，来源已关就只记日志）。保存被取消的「已取消，已回滚」不是错误，仍在查询条右侧。
 - **toast**：显示在状态栏上方一行的右侧，默认 3 秒后消失；「再按一次 C-c 退出」这一条显示 2 秒，正好是连按的窗口（§6.8）。样式为 `warn` 色字、#292e42 底、左右各留 1 列。设计稿里没有 toast，这个样式是后定的。加底色是因为那一行正好是 pane 的下边框，不加底色，文字会和边框混在一起。data pane 中保存 / 刷新的结果按 Q-06 的要求显示在查询条的右侧，不通过 toast 显示。
+- **session 列表**（M5 F5.1，S-02、S-03；`SPC s` 或点击状态栏的 session 块）：框和行的样式、位置、宽度照命令面板，标题「session」。每行是 session 名和 `dim` 色的 window 数（如 `3 windows`），当前 session 用 `focus` 色；`l` 展开后下面一级是它的 window（`0: data`），当前 window 同样标出。`$` 把这一行原地变成输入框（INSERT，`↵` 确定、`esc` 放弃）；`x` 关闭 session：有未保存的修改或未提交的事务时先确认（§10.5），关的是最后一个 session 等于退出。单击一行等于移过去再按 `↵`。键位见 §6.8 的浮层表。
+- **新建 session**（`n`）：名字照 tmux 取最小的没用过的数字（`1`、`2`……）；默认布局（§5），带一个新的 console_n；连上当前连接并照「默认展开」展开它，其余连接不连。
+- **新建连接表单**（M5 F5.1，命令 `conn.new`「新建连接…」）：居中的框，单线 `focus` 色边框，标题「新建连接」。一个字段一行，左边是 `dim` 色的字段名：name、dsn、password_cmd 是单行输入框（`ui.Input`，同面板，不是 vim）；engine、read_only 是开关，`space` 或单击切换（engine 在 F5.4 之前只有 postgres）。底栏是键位提示（`Tab 下一项 · ↵ 保存 · esc 取消`，从 keymap 读，可以点击）。`↵` 保存：校验同启动时读 connections.toml（必填、名字的字符规则、不能重名），不通过就在底栏上方一行用 `error` 色写原因、焦点移到出错的字段；通过就追加到 connections.toml（§14），所有 session 的树里多出这个连接，状态是未连接，保存时不试连。
 
 ### 7.9 文本输入：删词与自动配对（M2/M3 验收时定）
 
@@ -772,9 +782,9 @@ type Result struct {
 
 ### 8.2 连接模型
 
-每个 session 两条连接（M5 起改为每个数据源 `Conn` 两条 `Meta` / `Main`，这个连接上的 console 共用 `Main`，见 §5「一个 session 多个连接」；本节的分工不变）。每条连接由一个 `db.Worker` 独占，用互斥锁保证同一时刻只跑一个请求，因为连接对象不能并发使用。`tea.Cmd` 本来就各在自己的 goroutine 里执行，所以 Worker 不再单开 goroutine 和 channel；请求的先后由 tab 的 `seq` 兜底（§8.3）。`Worker.Cancel()` 取消当前请求的 ctx。
+每个 session 的每个连接（`Conn`，§5「一个 session 多个连接」）用到时建两条：`Meta` / `Main`，这个连接上的 console 共用 `Main`（M5 起；原来是每个 session 两条，分工不变）。每条连接由一个 `db.Worker` 独占，用互斥锁保证同一时刻只跑一个请求，因为连接对象不能并发使用。`tea.Cmd` 本来就各在自己的 goroutine 里执行，所以 Worker 不再单开 goroutine 和 channel；请求的先后由 tab 的 `seq` 兜底（§8.3）。`Worker.Cancel()` 取消当前请求的 ctx。
 
-**启动**：`main` 里同步建连，先 `Main` 后 `Meta`，两条都连上才进入界面，期间不显示提示（每条最多 10s）。任何一步失败都按 §14「启动时找不到连接」处理。
+**启动**：`main` 里同步给启动时的连接（`sqlmux <名字>` 指定的，不带参数时是第一个）建连，先 `Main` 后 `Meta`，两条都连上才进入界面，期间不显示提示（每条最多 10s）。任何一步失败都按 §14「启动时找不到连接」处理。其他连接在用到时（树里展开、console 选它、新 session）在 Cmd 里连，失败只标在树上、进 toast（§7.8）。
 
 | 连接 | 用途 |
 |---|---|
@@ -783,12 +793,12 @@ type Result struct {
 
 - 拆成两条的原因：console 里跑长查询时，树、命令面板和表格浏览不会跟着卡住。
 - manual 事务模式下表格读取改走 `Main`，这样能看到自己还没提交的修改。
-- `Meta` 建连后设为只读：PG 设 `default_transaction_read_only = on`（和 DateStyle 一样放在 RuntimeParams 里，效果等同 `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`），MySQL 执行 `SET SESSION TRANSACTION READ ONLY`。`Meta` 上只有读操作，写入只走 `Main`，所以 WHERE 里就算调用了会写数据的函数，也改不了数据。和 §13 一样，这是为了防误操作，不是权限边界。
+- `Meta` 建连后设为只读：PG 设 `default_transaction_read_only = on`（和 DateStyle 一样放在 RuntimeParams 里，效果等同 `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`），MySQL 执行 `SET SESSION TRANSACTION READ ONLY`。`Meta` 上只有读操作，写入只走 `Main`，所以 WHERE 里就算调用了会写数据的函数，也改不了数据。和 §13 一样，这是为了防误操作，不是权限边界。只读连接（`read_only = true`，§13）的 `Main` 也放同样的 RuntimeParams（M5 F5.3），`RESET` / `DISCARD ALL` 之后仍是只读。
 
 ### 8.3 取消、超时、过期响应
 
-- **取消**：连接忙碌时（`Main` 上的 console 执行，或 `Meta` 上的表格取数），状态栏在模式块左边显示 ` busy · C-c 取消 `（`warn` 色，键位文字从 keymap 读），点击执行 Action `cancel`。`C-c` 在本 session 有请求执行中时取消它，空闲时照旧是连按两次退出（§6.8）。取消后 toast 显示「查询已取消」，tab 保留之前的数据，第一次打开就是空表。
-  - PG：取消请求的 ctx。pgconn 默认的 `DeadlineContextWatcherHandler` 会在 context 取消时给连接设 deadline，连接随之断开。每个 session 只有两条长连接，所以改用 `CancelRequestContextWatcherHandler`，由它发 CancelRequest，取消之后连接还能继续用。`DeadlineDelay` 取 5s：取消发出 5 秒后服务端还没停，就断开连接；断开的连接不自动重连，M1 不做，代码里用 `ponytail:` 注释标出。
+- **取消**：当前连接（§5，M5 起；原来是本 session）忙碌时（`Main` 上的 console 执行，或 `Meta` 上的表格取数），状态栏在模式块左边显示 ` busy · C-c 取消 `（`warn` 色，键位文字从 keymap 读），点击执行 Action `cancel`。`C-c` 在当前连接有请求执行中时取消它，空闲时照旧是连按两次退出（§6.8）。取消后 toast 显示「查询已取消」，tab 保留之前的数据，第一次打开就是空表。
+  - PG：取消请求的 ctx。pgconn 默认的 `DeadlineContextWatcherHandler` 会在 context 取消时给连接设 deadline，连接随之断开。每个连接只有两条长连接，所以改用 `CancelRequestContextWatcherHandler`，由它发 CancelRequest，取消之后连接还能继续用。`DeadlineDelay` 取 5s：取消发出 5 秒后服务端还没停，就断开连接；断开的连接不自动重连，M1 不做，代码里用 `ponytail:` 注释标出。
   - MySQL（M5）：`Query` 自己监听 ctx，取消时另开一条临时连接执行 `KILL QUERY <connection_id>`，id 在建连时记录。只取消 context 的话，驱动会关掉连接，但服务端上的查询会继续跑。
 - **超时**：建连 10s。计数查询 3s，用 ctx 超时实现：取消由 `CancelRequestContextWatcherHandler` 发出，返回 `context.DeadlineExceeded` 后显示 `?`（用户按 `C-c` 取消返回的是 `context.Canceled`）。不用 `SET LOCAL statement_timeout`：那要 begin / set / count / rollback 四次往返，且必须在 Worker 同一把锁里执行，否则别的请求会插进事务，等于要给 Worker 加 Tx；ctx 的做法引擎无关，MySQL 也能用。计数用 `tea.Sequence` 排在取数之后，3s 从页面数据回来后才开始算；计数不算 busy，不显示忙碌提示。
 - **过期响应**：每个 tab 维护一个递增的 `seq`，请求时带上。结果回来时 `seq` 已经不是最新的就丢弃，避免快速翻页时旧结果覆盖新结果。
@@ -812,7 +822,7 @@ PG 的几处细节（M1 核对时对照 lazysql、pgtui 确认，两者各有问
 - **可用于定位行的唯一索引**：`indisunique AND indisvalid AND indpred IS NULL AND 0 <> ALL(indkey)`；只看前 `indnkeyatts` 个键列（INCLUDE 列不算），并要求这些列都是 `attnotnull`。
 - **枚举值**：`array_agg(enumlabel ORDER BY enumsortorder)`，按列的 `atttypid` 关联。
 
-catalog 按 session 缓存。console 执行 DDL 后（由 §9.3 的判定得知）或用户执行刷新命令时，重新加载。
+catalog 按连接缓存（每个 session 的每个 `Conn` 一份，M5 起；原来按 session）。console 执行 DDL 后（由 §9.3 的判定得知）或用户执行刷新命令时，重新加载。
 
 **加载时机**：Init 时在 `Meta` 上异步查两样，各一条查询：非系统 schema 的列表，以及这些 schema 里所有表的名字和行数估计。列属性、主键、唯一索引、枚举按表查，第一次打开这张表时才查，查过就缓存，刷新时清掉。这样大库启动时不用把整张 `pg_attribute` 读回来。
 
@@ -844,24 +854,24 @@ catalog 按 session 缓存。console 执行 DDL 后（由 §9.3 的判定得知�
 
 **方案**：与 DataGrip 一致，每个 console 可以单独选择 schema。
 
-- **入口**：console pane 标题的右侧显示 `<库名>.<schema> ▾`（库名取连接的 database，记在 session 上），位于 `▶ run ↵` 旁边。
+- **入口**：console pane 标题的右侧显示 `<连接> · <库名>.<schema> ▾`（M5 F5.11 起加上连接；库名取连接的 database，记在 `Conn` 上），位于 `▶ run ↵` 旁边；连接那一段见 §7.8「console 标题」。
   - 点击它，或在 console 的 NORMAL 模式下按 `gs`，打开 schema 下拉框。
   - 下拉框列出当前库的 schema，系统 schema（`pg_catalog`、`information_schema` 等）不列出。顶部有过滤输入框，支持模糊匹配（§9.7）。
   - 下拉框照命令面板的做法：打开后输入直接进过滤框（模式为 COMMAND，§7.8），`C-n` / `C-p` / `↑` / `↓` 移动，`↵` 选中，`esc` 关闭；`j` / `k` 会被当成输入，所以不用。鼠标：点选，点浮层外部关闭，悬停 `row` 底。
   - 位置在入口（console 标题的 schema 按钮、查询条的 chip）下方、与入口左对齐，宽度取 max(最长 schema 名 + 边距, 入口所在栏的右边界 − 入口起点 x)，这样右边框和所在栏的右边框对齐；仍放不下时向左移。当前所在的 schema 用 `pk` 色标出（§7.3 里 pk 也用于 schema 值）。键位在 `[keys.dropdown]`，Action 为 `dropdown.up` / `dropdown.down` / `dropdown.select` / `dropdown.close`，ORDER、LIMIT 下拉框共用（F1.2 时叫 `schema.*`，F1.4 改名），只在浮层里用，不带标题。
   - 组件放在 `ui` 里，M1 用于 ORDER、LIMIT，M3 给 console 选 schema。树不再用它：M1 F1.12 起 schema 是树里的节点（§7.8）。
   - 命令面板里也有对应的「Switch schema…」命令。
-- **默认值**：新建的 console，默认使用 schema 树当前所在的 schema；之后两者互不影响。
-- **执行方式**：同一个 session 的所有 console 共用 `Main` 连接，所以每次执行前比较一下（session 记下 `Main` 当前的 search_path，初始为建连时读到的值；一次执行里有 SET / RESET / DISCARD 语句时把记下的值作废，下次一定重新 SET。代价是用户在 console 里自己 `set search_path` 只持续到这次执行结束，以下拉框为准）：如果连接当前的 `search_path` 与这个 console 选择的 schema 不一致，先执行 `SET search_path TO <所选 schema>, <建连时的原始 search_path>`。
+- **默认值**：新建的 console 用当前连接和这个连接的 Schema（§5、§7.8）；之后两者互不影响。console 文件记着它最后用的连接和 schema，下次打开时恢复（§11）。
+- **执行方式**：同一个连接上的 console 共用 `Main`，所以每次执行前比较一下（`Conn` 记下 `Main` 当前的 search_path，初始为建连时读到的值；一次执行里有 SET / RESET / DISCARD 语句时把记下的值作废，下次一定重新 SET。代价是用户在 console 里自己 `set search_path` 只持续到这次执行结束，以下拉框为准）：如果连接当前的 `search_path` 与这个 console 选择的 schema 不一致，先执行 `SET search_path TO <所选 schema>, <建连时的原始 search_path>`。
   - 原始路径在建连时用 `SHOW search_path` 读取，接在后面，这样装在 `public` 等 schema 里的扩展函数仍然能找到。设置时用 `set_config('search_path', $1, false)` 带参数的写法，不把原始值拼进 SQL：服务器上设了 `search_path = ''`，或者 DSN 里写了 `$user,public` 时，拼接会报语法错（快速 SQL 已经这样写）。
   - **只在事务外记住 search_path**（M3 审查时在真 PG 上复现）：
     - `Main` 处在出错的事务里时（pgconn 的 TxStatus 为 `E`），跳过 SET 直接执行，并清掉记下的值。否则 SET 本身报 25P02，按「SET 失败时后面的语句不执行」，用户的 `rollback` 永远执行不到，session 卡死到重启。
     - 做 SET 的那一刻或者执行结束时，只要有一个时刻连接处在事务里（TxStatus 不是 `I`），就不记这次的 SET，下次一定重新 SET。否则事务里做的 SET 被用户的 `rollback` 撤掉之后，记下的值还当它在，下一次悄悄按别的 schema 查表。只看结束时的状态不够：SET 做在事务里、这次执行又以 `rollback` 结束时，结束时已经在事务外，SET 却已被撤掉（M3 复审时在真 PG 上复现）。
-  - **schema 被删掉之后**：PG 接受不存在的 schema，SET 照样成功，只是找表时跳过它。catalog 重新加载后，选中的 schema 已经不存在的 console 退回树当前的 schema，不弹提示，同树退回 `current_schema()` 的做法。
+  - **schema 被删掉之后**：PG 接受不存在的 schema，SET 照样成功，只是找表时跳过它。catalog 重新加载后，选中的 schema 已经不存在的 console 退回这个连接的 Schema，不弹提示，同树退回 `current_schema()` 的做法。
   - 已知上限：用 `select set_config('search_path', …)` 改 search_path 不会让记下的值作废（首词是 select），代码里用 `ponytail:` 标出。
 - **影响范围**：console 的补全以它自己选择的 schema 为准。表格查询始终带 schema 前缀，不受影响。
 
-MySQL 的 schema 就是 database，按 PRD，切换 database 会新建 session，所以 MySQL 的 console 不显示这个下拉框。
+MySQL 的 schema 就是 database。PRD 原来写切换 database 会新建 session；M5 起 session 不再绑定连接，改为：MySQL 的 console 标题只有连接那一段，database 由连接的 DSN 决定（§18）。要不要像 PG 一样能选 database，F5.4 开工时再定。
 
 ## 9. SQL 处理（`internal/sqlkit`）
 
@@ -900,7 +910,7 @@ MySQL 的 schema 就是 database，按 PRD，切换 database 会新建 session�
 6. WITH 之后在任何括号深度出现 INSERT、UPDATE、DELETE、MERGE 都判为写：CTE 里的写语句在括号里，只看顶层会漏掉。EXPLAIN 括号写法里的 `ANALYZE false` / `off` / `0` 不算 ANALYZE。
 7. 其余一律判为写。
 
-这个判定只用于提示（F-05 的黄色提示、只读 session 的拦截说明），保护靠数据库层（§13）。
+这个判定用于提示和应用层的拦截（快速 SQL 的写语句，§12；只读连接，§13）；判为读却会写数据的（比如调用了写数据的函数），靠数据库层的只读兜住（§13）。
 
 ### 9.4 自动 LIMIT（F-05）
 
@@ -931,7 +941,7 @@ MySQL 的 schema 就是 database，按 PRD，切换 database 会新建 session�
 
 - **`gq` 是操作符**（M3 审查时定）：`gq{移动}` 格式化移动碰到的那几条语句（从第一条到最后一条），`gqq` 和 `gqgq` 是当前语句，VISUAL 下按选区。否则 vim 用户习惯的 `gqap`、`gqip` 会把 `a`、`i` 当成进入 INSERT。编辑器识别这个操作符，产生「格式化这个范围」的效果，由 app 执行。
 - 第一次格式化时才初始化 VM，之后一直复用。goja 不是线程安全的，所以用一把互斥锁保护。
-- 语言按 session 的引擎选择；`tab_width` 原样传给 sql-formatter；`keyword_case` 同时设 `keywordCase` 和 `dataTypeCase`（PG 的类型名本身就是关键字，15.x 把它分成了单独的选项，默认 preserve），`functionCase` 保持 preserve。
+- 语言按 console 所在连接的引擎选择；`tab_width` 原样传给 sql-formatter；`keyword_case` 同时设 `keywordCase` 和 `dataTypeCase`（PG 的类型名本身就是关键字，15.x 把它分成了单独的选项，默认 preserve），`functionCase` 保持 preserve。
 - **5s 超时**：goja 跑 sql-formatter 时耗时增长比输入快得多，100 行的 insert（2KB）要 3s，200 行要 6.9s，17KB 要 122s，同样的包在 node 里只要 28–146ms，时间都花在 goja 的 Unicode 正则上（M3 审查时实测）。所以和 `formatprg` 一样 5s 超时，用 `vm.Interrupt` 打断后 `ClearInterrupt`，同一个 VM 还能继续用；toast「格式化超时（5s）」，缓冲区不变。已知上限：一两百行以上的语句用内置格式化会超时，这时配 `formatprg`（如 `pg_format -`）。
 - 格式化失败时给出 toast 提示，缓冲区保持不变。输出为空也按失败处理（toast「格式化失败：没有输出」），不能把用户的 SQL 删成只剩 `;`。
 - 配置了 `formatprg`（例如 `"pg_format -"`）时，改为调用外部命令：从 stdin 输入，读取 stdout 输出，与 vim 的 formatprg 一致。
@@ -1010,8 +1020,8 @@ MySQL 的 schema 就是 database，按 PRD，切换 database 会新建 session�
   1. 主键；
   2. 没有主键时，取一个所有列都不可空的唯一索引，效果与主键相同；
   3. 两者都没有，这张表只读，在 toast 中说明原因。
-- **进入编辑**：表有行标识列、且 session 不是只读时才能进入编辑，否则用 toast 说明原因。result pane 里的表格只读，因为无法可靠地确定来源表和主键。
-- **没有行标识列时**：`↵` / `i` / 双击 / 粘贴都不进入编辑，toast 说明原因，如「t_log 没有主键，也没有全部列都非空的唯一索引，只读」。视图、物化视图、外部表没有主键，也走这条。只读 session 的拦截（S-04）随 M5 的 `read_only` 一起加。
+- **进入编辑**：表有行标识列、且所属连接不是只读（M5 F5.3）时才能进入编辑，否则用 toast 说明原因。只读连接上编辑、新增行、删除行、粘贴都拦下，toast「<连接> 是只读连接」。result pane 里的表格只读，因为无法可靠地确定来源表和主键。
+- **没有行标识列时**：`↵` / `i` / 双击 / 粘贴都不进入编辑，toast 说明原因，如「t_log 没有主键，也没有全部列都非空的唯一索引，只读」。视图、物化视图、外部表没有主键，也走这条。只读连接的拦截（S-04）见上。
 - **粘贴**：在表格 NORMAL 下粘贴（bracketed paste），会以粘贴的内容开始编辑当前单元格。
 - **行内输入框**：就画在单元格上，至少和单元格一样宽；文字更长时向右延伸，最多到 pane 右边框，盖住右边的格子；再长就在框内横向滚动，跟着光标走。转置视图下编辑光标所在的格。
   - 进入时内容全选（`select` 底）：第一个可打印字符替换全部，退格清空，`←` / `→` 取消全选、光标落到对应的一端。起始文字：原值是 NULL 或 DEFAULT 时为空，已有修改时取修改后的值。
@@ -1120,7 +1130,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - 失败：整体回滚，修改标记保留，原因显示在 pane 底部的错误栏里（§7.8「错误栏」，M2/M3 验收时从查询条挪过去，查询条右侧只留成功的提示），并用行标识值指明是哪一行（它可能不在当前页；多列时用逗号连起来，如 `order_id = 3, line_no = 1`，值照读到的文本写、不加引号）：影响行数不是 1 时为「id = 42 的行数据已变化或行不存在，已回滚」；数据库报错时为「id = 42：<数据库的错误>，已回滚」。数据库的错误只取 PG 错误的 Message，去掉 `ERROR:` 前缀和 `(SQLSTATE …)` 后缀；放不下时截短中间的错误原文并加 `…`，开头的「id = 42：」和末尾的「，已回滚」始终完整显示（tester 在 F2.2 发现：原来放不下就整条不显示，PG 的报错大多超过 60 列）。那一行在当前页上时，行号画成 `error` 色。
 
 - **auto 事务模式**：所有 UPDATE 放在同一个事务里，每条都必须恰好影响 1 行。否则整体回滚，保留修改标记，并在出问题的行上提示「数据已变化或行不存在」，以免悄悄覆盖别人的修改。
-- **manual 事务模式**：UPDATE 直接在用户当前的事务中执行，不自动提交。
+- **manual 事务模式**（M5 F5.3）：不在事务里就先 BEGIN；整次保存包在 `SAVEPOINT sqlmux_save` … `RELEASE SAVEPOINT sqlmux_save` 里，任何一步出错就 `ROLLBACK TO SAVEPOINT sqlmux_save`，只撤掉这一次保存，用户在这个事务里之前做的修改都还在；不 COMMIT，成功时查询条显示「已保存 N 行（未提交）· 12ms」；失败的提示同 auto 模式，其中的「已回滚」指撤掉了这次保存。提交、回滚用 console 标题上的 ✓ ↺ 或 `tx.commit` / `tx.rollback`。
 - **保存成功后**：重新加载当前页，拿到数据库规整过的值，例如数值格式、触发器写入的字段。
 
 ### 10.4 刷新（R）
@@ -1129,14 +1139,16 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 
 ### 10.5 未保存修改的确认框
 
-通用的确认浮层 `ui.Confirm`：在整个窗口里居中的小框，不压暗背景，点框外等于取消；一句话加两个按钮，按钮的键位文字从 keymap 读（`confirm.yes` / `confirm.no`）。文字按场合写，N 是修改的格数：退出「有 N 处修改未保存，退出会丢弃。」`y 退出`；关 tab「t_order 有 N 处修改未保存，关闭会丢弃。」`y 关闭`；关 pane「这个 pane 里有 N 处修改未保存，关闭会丢弃。」`y 关闭`；R「有 N 处修改未保存，刷新会丢弃。」`y 刷新`；都配 `n 取消`。统计范围：关 tab 只算这个 tab，关 pane 算它的所有 tab，退出算所有 window 的所有 tab。作用域 `confirm`，`y` / `↵` 确认，`n` / `esc` 取消，`C-c` 在浮层里等同 `esc`；按钮可以点击。
+通用的确认浮层 `ui.Confirm`：在整个窗口里居中的小框，不压暗背景，点框外等于取消；一句话加两个按钮，按钮的键位文字从 keymap 读（`confirm.yes` / `confirm.no`）。文字按场合写，N 是修改的格数：退出「有 N 处修改未保存，退出会丢弃。」`y 退出`；关 tab「t_order 有 N 处修改未保存，关闭会丢弃。」`y 关闭`；关 pane「这个 pane 里有 N 处修改未保存，关闭会丢弃。」`y 关闭`；R「有 N 处修改未保存，刷新会丢弃。」`y 刷新`；都配 `n 取消`。M5 F5.3 起，有未提交的事务时同样确认：「<连接> 有未提交的事务，<动作>会回滚。」，按 `y` 先 ROLLBACK 再执行；同时有未保存的修改时，一个框里两句都写。统计范围：关 tab 只算这个 tab，关 pane 算它的所有 tab，退出算所有 window 的所有 tab。作用域 `confirm`，`y` / `↵` 确认，`n` / `esc` 取消，`C-c` 在浮层里等同 `esc`；按钮可以点击。
 
 触发的地方：
 
 - `:qa` 和第二次 `C-c` 退出：统计所有 window、所有 tab 的修改；
 - `x` / `:q` 关闭有修改的 tab；
 - `SPC x` 关闭的 pane 里有带修改的 tab；
-- 有修改时按 `R`（§10.4）。
+- 有修改时按 `R`（§10.4）；
+- 关闭 window（F5.2）、关闭 session（F5.1）：统计其中所有 tab 的修改；
+- 有未提交的事务时（F5.3）：退出、关闭 session，以及让这个连接上不再有 console 的关闭（关 tab、关 pane、关 window）。
 
 从树或面板按 `↵` 打开表、而当前 tab 有修改时，不弹确认，改为新开 tab（§12）。
 
@@ -1219,16 +1231,16 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 
 **文件**：
 
-- 每个 console tab 对应 `$XDG_DATA_HOME/sqlmux/consoles/<连接名>/console_<n>.sql`。新建时 n 取这个 session 里没被打开的最小值，文件已经存在就载入，所以默认的 console_1 每次启动都带着上次写的 SQL，文件也不会越积越多。
+- 每个 console tab 对应 `$XDG_DATA_HOME/sqlmux/consoles/console_<n>.sql`（M5 F5.11 起不再按连接名分目录）。新建时 n 取所有 session 里都没被打开的最小值（两个 session 打开同一个文件，自动保存会互相覆盖），文件已经存在就载入，所以默认的 console_1 每次启动都带着上次写的 SQL，文件也不会越积越多。state.json 记着每个文件最后用的连接和 schema（§14），打开时恢复；记下的连接已经不在 connections.toml 里时用当前连接。旧版本 `consoles/<连接名>/` 下的文件不写迁移代码。
 - 最后一次修改后 1s 自动保存（去抖），写临时文件再 rename，目录 0700、文件 0600（§13）；`:w`、`C-s`、关闭 tab、退出时立即写；没改过就不写。写入失败用 toast 提示。文件存在但读不出来时（是目录、权限为 000 等），toast「读取失败：<err>」，这个 console tab 不打开（pane 显示引导页），程序照常启动；不能用空内容打开，否则自动保存会把那个读不出的文件覆盖掉。`:q` 关闭 tab 不弹确认，内容已经写盘。`:wq` 是先 `:w` 再 `:q`：console 上等同 `:q`；表 tab 上先保存修改（§10.3），保存成功后才关闭，失败时 tab 留着、查询条显示原因，不弹丢弃确认。console 文件写不进去时，`:q`、关 pane、退出都不执行，toast「保存失败：<err>」。
 
 **执行（C-02）**：
 
 - 在 NORMAL 或 VISUAL 下按 `↵`、点击 gutter 的 ▶、点击标题栏的 `▶ run` 都可以执行。有选区时执行选区（块选区执行它覆盖到的那几整行，同 V-LINE），执行后退出 VISUAL、光标不动，同 vim 的操作符；要再跑一次用 `gv` 重新选中，或点结果区的重跑。否则执行光标所在的语句。点 gutter 的 ▶ 执行那一行开始的语句，不移动光标。
 - 每次最多取 `console.max_rows` 行（默认 1000），读语句用自动 LIMIT（§9.4），其余靠 `Exec` 的 `maxRows` 截断；截断时显示 `1000+ 行`。
-- 在 `Main` 的一次 `Worker.Run` 里逐条执行，每条是单独的简单协议请求、各自自动提交；遇到错误就停，后面的不执行。不一次发出整段：PG 简单协议里一次发送的多条语句属于同一个隐式事务，一条出错全部回滚，也没法知道错在哪一条、把哪个 ▶ 标红。
-- 首个关键字是 create / alter / drop 的语句成功后，重新加载 catalog、清空列缓存（同 `tree.refresh`）。
-- 已知上限：用户在 console 里自己 `begin` 之后不提交，`Main` 会一直在事务里，表格的保存也会进这个事务。M5 做 manual 事务模式时处理。
+- 在所选连接的 `Main` 的一次 `Worker.Run` 里逐条执行，每条是单独的简单协议请求：自动事务模式下各自自动提交；手动模式下（F5.3）`Main` 不在事务里时，先在同一次 Run 里 BEGIN，出错后事务停在出错状态，由用户回滚。遇到错误就停，后面的不执行。不一次发出整段：PG 简单协议里一次发送的多条语句属于同一个隐式事务，一条出错全部回滚，也没法知道错在哪一条、把哪个 ▶ 标红。
+- 首个关键字是 create / alter / drop 的语句成功后，重新加载这个 console 所在连接的 catalog、清空列缓存（同 `tree.refresh`）。
+- 用户在自动模式下自己 `begin`：`Main` 进了事务，这个连接上表格的保存也会进这个事务；状态栏显示「事务中」（§7.8），提交、回滚同手动模式（M5 F5.3 起，原来是已知上限）。
 
 **结果区（C-04 至 C-07，已确认）**
 
@@ -1267,7 +1279,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - 一次执行多条语句时，每个结果集各占一个 tab（`#42`、`#42·2`……），下次执行时整组替换。
   - 非查询语句（如 `UPDATE 3`）只写进日志，不单独开 tab。一次执行完全没有结果集时，保留上一次的结果 tab，结果区切到日志。
 - **执行中**：结果 tab 先显示占位内容（执行中、已用时、`C-c` 取消），完成后再替换成结果。这一做法参考了 pgtui 的 `result_tabs`。
-- **重跑**：来源 console 已经关掉时照样执行，结果进它原来那一组；这时可能出现两组同名的结果（比如新开的 console_1 也有一组），靠序号区分。
+- **重跑**：用结果 tab 记下的连接和 schema 执行（M5 F5.11），来源 console 已经关掉或换了连接都照样；结果进它原来那一组；这时可能出现两组同名的结果（比如新开的 console_1 也有一组），靠序号区分。
 - **出错标记**：同一个 console 每次执行开始时先清掉旧的红 ▶，这次有出错的再标上；缓冲区一有改动也清掉。
 - **固定与关闭**：
   - `P` 固定当前结果 tab：它不会再被替换，下次执行另开新 tab（C-06）。固定的 tab 画 `pin` 图标，不写「（已固定）」（有图标就不配文字）。`R` 重跑（`result.rerun`）。
@@ -1296,14 +1308,15 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
     - 浮层作用域里的，比如面板自己的 `palette.up` / `palette.down` / `palette.run` / `palette.close`，以及以后的 `where.*`、`cols.*`；
     - `cell`、`input` 作用域里的，比如 `cell.accept`「确定」、`cell.up`「加一」。
   - 判断方法是「只在这些作用域里有绑定」。
-- **范围与前缀**：按 PRD K-02，范围标签为 所有 / 会话 / 窗口·Pane / 表 / 命令 / SQL，M0 先有 所有、窗口·Pane、表、命令。`Tab` / `S-Tab` 切换范围标签；输入前缀直接限定范围：`>` 命令、`@` 表、`%` 窗口·Pane、`$` 会话、`;` SQL。
+- **范围与前缀**：按 PRD K-02，范围标签为 所有 / 会话 / 窗口·Pane / 表 / 命令 / SQL，M0 先有 所有、窗口·Pane、表、命令，M5 F5.1 加上会话。`Tab` / `S-Tab` 切换范围标签；输入前缀直接限定范围：`>` 命令、`@` 表、`%` 窗口·Pane、`$` 会话、`;` SQL。
   - 范围只由输入里的前缀决定，不另存状态：`Tab` / `S-Tab` 就是改写前缀（「命令」→ `>`、「表」→ `@`、「窗口·Pane」→ `%`，「所有」去掉前缀），输入的其余内容保留；范围标签按当前前缀高亮。`palette.command` 相当于输入了 `>`，也是同一套机制；F5.8 起 `:` 默认绑 `palette.open`，打开「所有」。
 - **每一行**（K-03）：图标、名称、所在位置（`dim` 色）、右侧的键位或 ON / OFF、类型标签（命令 / 表 / Pane / 窗口）。图标都放在最左列对齐。
   - pane 的名称是 `⟨1⟩ data · t_order`，所在位置是它所在的 window，如 `0: data`（M4 F4.3 起写全层级 `play › 0: data`）；
   - window 的名称是 `0: data`，所在位置是 session 名。
+  - session（M5 F5.1）：名称是 session 名，所在位置是 window 数，类型标签「会话」。window、pane、tab 只列当前 session 的。
   - tab（M4 F4.3 起）：每个打开着的表、console、结果 tab 都是一项，名称是 tab 名，所在位置是完整层级 `play › 0: data › pane-1`，和树的工作区一致，`↵` 切过去。
   - 命令的名称是中文标题，所在位置显示它的 action id，如 `左右分割  pane.split.right`。匹配的对象是「名称 + 空格 + 所在位置」这一整串，两部分都能高亮，所以输入 `split` 也能找到；action id 也正是在 config.toml 里绑键时要写的名字。
-  - 表的所在位置是 `session.schema`，如 `doraemon.public`。
+  - 表的所在位置是 `<连接>.<schema>`，如 `play.public`（M5 起；原来是 `session.schema`）。
 - **布局**（M0 用户体验后调整，参照设计稿）：宽度 min(100, 窗口宽 − 4)，水平居中；上边缘固定在状态栏以上区域高度的 1/6 处，即 (H−1)/6，列表变长变短时输入行不动。比最初的 1/4 更靠上，是为了给 SQL 范围的结果留出下半部分。单线边框、`focus` 色，标题「命令面板」。从上到下：
   - 范围标签，每个标签带上它的前缀，如 `窗口·Pane %`、`表 @`、`命令 >`、`SQL ;`，「所有」没有前缀；
   - 输入行：前面是搜索图标，`>` 等前缀照常显示在输入里；
@@ -1315,19 +1328,21 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 - **开关类命令**（M0）：`tree.toggle`（侧栏展开时为 ON）、`pane.zoom`（缩放中为 ON）、`result.toggle`（结果区显示着为 ON，F3.28）。
 - **匹配**：使用 fzf 的算法，并支持它的扩展语法（§9.7），匹配到的字符用 `match` 色的前景标出，不加底色（§7.3）。
   - 输入为空时，先列最近用过的（不分种类）；其余按范围标签的顺序：window、pane（按 ⟨n⟩）→ 表 → 命令（按 action id）。
-  - 表范围列出所有非系统 schema 的表，所在位置显示 `session.schema`，这样树停在 `public` 时也能搜到 `agentable.agent`。顺序：树当前所在 schema 的表在前（按树的顺序），其余按 schema 名、表名排。
+  - 表范围列出所有已连上的连接里所有非系统 schema 的表（M5 F5.10 起；没连上的连接没有 catalog，不列），所在位置显示 `<连接>.<schema>`，这样树停在 `public` 时也能搜到 `agentable.agent`。顺序：当前连接的 Schema 的表在前（按树的顺序），然后是当前连接的其余 schema，再是其他连接，各按 schema 名、表名排。打开的表属于它所在的连接。
   - 输入不为空时，各种类混在一起按 fzf 的分数排。
-  - 最近使用 M0 只记在内存里，M1 有了 state.json 之后持久化。
+  - 最近使用 M0 只记在内存里，M1 有了 state.json 之后持久化；M5 起表的 id 带连接名（§14）。
 - **执行**：按 K-04。底栏右侧显示当前项按回车会做什么。
   - 命令：执行；开关类命令只切换状态，不关闭面板。
   - 表：打开到焦点所在的普通 pane（表格和 console 所在的 pane 都算，F3.37 起不再跳过 console 的 pane）；焦点不在普通 pane 上时（比如在树上），用这个 window 里最近聚焦过的普通 pane，与按方向切焦点选最近用过的 pane 同理（§5）；从没聚焦过 data pane 时用第一个；一个都没有时什么都不做。M1 F1.12 起如此：原来固定用第一个 data pane，从 ② 按 `C-h` 回到树再打开表，表会开到 ①，对比时很别扭。目标 pane 里已经开着这张表时，按 §7.8「打开已有的表」切过去。打开后焦点移到那个 data pane，因为打开表就是为了接着看数据。`↵`：目标 pane 里这张表已经开着就切过去，没开就在那个 pane 新开一个 tab，不替换当前 tab；`C-t` 同样（F3.37 起同一个 pane 里一张表只开一个）；底栏显示 `↵ 打开`（F3.37 起 `C-t` 和 `↵` 打开表的效果相同，不再单列）。选中的不是表时，`C-t` 不起作用。
   - pane：聚焦。
-  - window：切换。M5 之前只列出，`↵` 只关闭面板。
-- **预览（K-05）**：光标在某张表上停留 150ms 后，从 `Meta` 获取 DDL，获取后缓存。窗口高度不够时先压缩预览区：列表和预览各自最多 12 行，放不下时先把预览压到 3 行，还放不下再把列表压到 3 行，还放不下就不显示预览；预览被压到不足 3 行时不显示（DDL 本身只有 1–2 行的照它自己的行数显示），底部提示始终显示（M4 F4.2 审查时定：80×24 下原来的「预览只拿剩下的」让「所有」范围一直看不到预览，或只剩一个 `…`）。
+  - window：切换（M5 F5.2；之前只列出，`↵` 只关闭面板）。
+  - tab：切过去；在别的 window 里时先切 window，再选这个 tab、聚焦它的 pane（F5.2 补上 F4.3 留下的这一半）。
+  - session：attach（F5.1）。
+- **预览（K-05）**：光标在某张表上停留 150ms 后，从这张表所在连接的 `Meta` 获取 DDL，获取后缓存。窗口高度不够时先压缩预览区：列表和预览各自最多 12 行，放不下时先把预览压到 3 行，还放不下再把列表压到 3 行，还放不下就不显示预览；预览被压到不足 3 行时不显示（DDL 本身只有 1–2 行的照它自己的行数显示），底部提示始终显示（M4 F4.2 审查时定：80×24 下原来的「预览只拿剩下的」让「所有」范围一直看不到预览，或只剩一个 `…`）。
 - **快速 SQL**（`;` 前缀或「SQL」标签）：NORMAL 下按 `;` 直接打开面板的 SQL 范围，输入框预填 `;`，与 `palette.command` 预填 `>` 同理（M1 用户反馈）。核心部分在 M1 F1.7 实现，用户体验 M0 时要求提前；依赖 console 的部分随 M3 补上。
   - **结果区**：执行后，结果显示在面板的下半部分，用和 table pane 相同的表格组件和网格样式（§7.6）；结果区的标题行显示行数、耗时和「只读」。SQL 范围下面板向下扩展，结果区至少 8 行。
-  - **补全**：M1 用 catalog 里的表名、列名和 SQL 关键字做模糊补全，复用 F1.5 的补全列表；能看懂别名、CTE、子查询的补全要等 M3 F3.7。关键字取 lazysql `builtinKeywords` 里常用的约 40 个（小写）；表名取树当前 schema 的；列名按 §9.7「第一次用到时才获取」：输入里出现和某张表同名的标识符时，取那张表的列并缓存（与打开表共用列缓存），不预拉全库的列。顺序为列 → 表 → 关键字，组内按 fzf 分数；右侧注释是列的类型和所属表、「表」、「关键字」。补全状态从 data tab 挪出来，面板和 WHERE 共用。
-  - **执行**：在 `Meta` 上执行，PG 用 `BEGIN READ ONLY`，MySQL 用 `START TRANSACTION READ ONLY`，执行完一律 ROLLBACK。同一事务里先 `SET LOCAL search_path TO <树当前的 schema>, <建连时的原始 search_path>`（§8.6 的写法），这样树停在 `agentable` 时 `;select * from agent` 也能找到表，ROLLBACK 后自动恢复。最多显示 100 行，更多时显示 `100+`。
+  - **补全**：M1 用 catalog 里的表名、列名和 SQL 关键字做模糊补全，复用 F1.5 的补全列表；能看懂别名、CTE、子查询的补全要等 M3 F3.7。关键字取 lazysql `builtinKeywords` 里常用的约 40 个（小写）；表名取当前连接的 Schema 的；列名按 §9.7「第一次用到时才获取」：输入里出现和某张表同名的标识符时，取那张表的列并缓存（与打开表共用列缓存），不预拉全库的列。顺序为列 → 表 → 关键字，组内按 fzf 分数；右侧注释是列的类型和所属表、「表」、「关键字」。补全状态从 data tab 挪出来，面板和 WHERE 共用。
+  - **执行**：在当前连接（§5）的 `Meta` 上执行，PG 用 `BEGIN READ ONLY`，MySQL 用 `START TRANSACTION READ ONLY`，执行完一律 ROLLBACK。同一事务里先 `SET LOCAL search_path TO <当前连接的 Schema>, <建连时的原始 search_path>`（§8.6 的写法），这样树停在 `agentable` 时 `;select * from agent` 也能找到表，ROLLBACK 后自动恢复。最多显示 100 行，更多时显示 `100+`。
     - **不让服务端算完整个结果集**（M1 F1.7 定，参考 PG16 psql 的 `FETCH_COUNT`：common.c 的 `is_select_command` 跳过空白、注释和左括号后只认 `select` / `values`；PG17 起 psql 改用 chunked rows mode，删掉了这个函数）：跳过开头的空白、注释和左括号后，第一个词是 `select` / `values` / `table` / `with` 的（`table` 和 `with` 是这里另加的，大表上的 WITH … SELECT 很常见，限行更要紧），用 `DECLARE <游标> NO SCROLL CURSOR FOR <语句>` + `FETCH FORWARD 101`，服务端只算到第 101 行；其余语句（SHOW、EXPLAIN、写语句等）直接执行，写语句由只读事务拒绝，显示数据库原文。两条路径都走扩展协议，所以一次只能执行一条语句。
     - 否掉的做法：lazysql 读到上限后停，但关 rows 时 pgx 会把剩下的读完，服务端照样算完；usql 不限制；扩展协议 Execute 带行数上限（pgjdbc 的做法）最通用，但 pgconn 没有暴露，要绕过 pgconn 自己收发协议消息、自己处理取消，与 §8.1「取消走 ctx」冲突。
     - 已知上限：`explain analyze` 这类非 SELECT 语句仍会算完；`with … delete` 这类 WITH 后面接写语句的，走 DECLARE 报的是 `syntax error at or near "delete"`，而不是只读事务的错误，M3 由读写判定（§9.3）解决；首词判断是临时的，代码里用 `ponytail:` 标出。M4 起改为：先用 §9.3 的读写判定，判为写的不执行（见下面「写语句」）；判为读、且首词是 select / with / table / values 的仍走游标 + `FETCH FORWARD 101`，不改用 §9.4 的自动 LIMIT：游标让服务端只算到第 101 行，而自动 LIMIT 对已经带 LIMIT、或者包在括号里的查询不起作用，碰到这些照样算完（M4 起草时定）。
@@ -1337,8 +1352,8 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - **历史**：执行过的都记，不论成败；去重后挪到最前，最多 50 条，按连接存在 state.json。「所有」范围不列 SQL 历史，M1 只在 SQL 范围列。已修改的判断按全文比较（去掉 `;` 前缀）。
   - **`C-y`**：CSV 为表头加显示的行（最多 100 行），NULL 写空串（同 lazysql `helpers/csv.go`），写系统剪贴板走和 `"+` 寄存器同一处（§11「寄存器」：先 pbcopy 等本地工具，找不到才 OSC 52）；没有结果时不做事，复制后不加 toast。
   - **写语句（F-05）**：判为写的语句不执行（只拦首词是 SQL 关键字、且判为写的；首词不是关键字的，比如打错的 `selec 1`，照旧发给数据库，在只读事务里报语法错误，M4 全量 e2e 发现。关键字表要包含 PG 全部语句的首词，因为只读事务兜不住其中几条：reviewer 在 PG 17 上实测 `copy … to '<文件>'` / `to program`、`reindex`、`cluster`、`load`、`checkpoint` 在 `begin read only` 里都能执行），结果区显示 `warn` 色的「写语句不在这里执行 · C-e 在 console 中打开」，键位文字从 keymap 读。在 console 里由用户自己按下执行，这一步就是确认，不再需要 C-S-↵。M1–M3 还没接读写判定，写语句由只读事务拒绝，显示数据库返回的错误；M4 起改为这里的做法。
-  - **`C-t` 送到结果区**（M4）：把结果作为固定的结果 tab 放进结果区，tab 名 `quick #n`（n 取 session 的执行序号），日志记一行 `quick  <首行>  N 行`；在这个 tab 上重跑（`R`），在 `Meta` 的只读事务里重新执行，search_path 用树当前的 schema，结果原地替换、`#n` 和导出名不变（不同于 console 的固定 tab 另开新 tab：quick 没有要续的那一组）；导出文件名 `quick-42.csv`；面板不关。
-  - **`C-e` 在 console 中打开**（M4）：在打开表的目标 pane（§12 的规则）里按 `console.new` 的规则新开 console（取最小的 console_n，当前是引导 tab 就原地替换）；文件已有内容时把这条 SQL 追加到末尾、前面空一行，光标落在 SQL 第一行；关掉面板、聚焦这个 console。新 console 的 schema 取树当前的，与快速 SQL 执行时用的一致。
+  - **`C-t` 送到结果区**（M4）：把结果作为固定的结果 tab 放进结果区，tab 名 `quick #n`（n 取 session 的执行序号），日志记一行 `quick  <首行>  N 行`；在这个 tab 上重跑（`R`），在 tab 记下的连接的 `Meta` 的只读事务里重新执行，search_path 用执行时记下的 schema（M5 起；原来用树当前的），结果原地替换、`#n` 和导出名不变（不同于 console 的固定 tab 另开新 tab：quick 没有要续的那一组）；导出文件名 `quick-42.csv`；面板不关。
+  - **`C-e` 在 console 中打开**（M4）：在打开表的目标 pane（§12 的规则）里按 `console.new` 的规则新开 console（取最小的 console_n，当前是引导 tab 就原地替换）；文件已有内容时把这条 SQL 追加到末尾、前面空一行，光标落在 SQL 第一行；关掉面板、聚焦这个 console。新 console 的连接和 schema 取当前连接和它的 Schema，与快速 SQL 执行时用的一致。
   - **错误**：语法错误显示红色提示。
   - **已修改提示（F-03）**：当前输入与上次执行的语句不同时，提示「已修改，↵ 重新执行」。
   - **后续操作（F-04）**：`C-t` 把结果送到一个新的、已固定的 result pane；`C-y` 用 `encoding/csv` 生成 CSV，再写进系统剪贴板（同 §11「寄存器」）；`C-e` 在 console 中打开。结果区标题栏上的按钮都可以点击。M1 先做 `C-y`，另外两个要等 M3 有了 console 和结果区。
@@ -1346,19 +1361,19 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 
 ## 13. 安全
 
-- **只读 session（S-04）**：
+- **只读连接（S-04；M5 起按连接，connections.toml 的 `read_only = true`）**：
   - **应用层**：
-    - 判为写的语句一律拦截，同时禁止进入单元格编辑。
-    - SET 语句中，会解除只读的一律拦截：`SET TRANSACTION`、`SET SESSION CHARACTERISTICS`、`default_transaction_read_only`、`transaction_read_only`。
+    - console 执行前检查这一次的全部语句：判为写的、会解除只读的，有一条就整次都不发，日志记原因并切到日志 tab；表格的编辑、新增、删除、粘贴都拦下（§10.1）。
+    - SET 语句中，会解除只读的一律拦截：`SET TRANSACTION`、`SET SESSION CHARACTERISTICS`、`default_transaction_read_only`、`transaction_read_only`；还有带 `READ WRITE` 的 `BEGIN` / `START TRANSACTION`（PG 里它盖过 `default_transaction_read_only`）。最终清单以在 PG 上逐条实测的集成测试为准（F5.3）。
     - 其他不影响只读的 SET（如 `search_path`、`statement_timeout`）放行。
-  - **数据库层**：连接建立后执行 PG 的 `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`，或 MySQL 的 `SET SESSION TRANSACTION READ ONLY`，兜住判定漏掉的情况（例如会写数据的函数）。
+  - **数据库层**：`Meta`、`Main` 两条都设只读：PG 在 RuntimeParams 里设 `default_transaction_read_only = on`（同 §8.2 的 `Meta`，`RESET` / `DISCARD ALL` 之后仍是 on），MySQL 执行 `SET SESSION TRANSACTION READ ONLY`，兜住判定漏掉的情况（例如会写数据的函数）。已知上限：`select set_config('default_transaction_read_only', 'off', false)` 判为读，两层都挡不住，代码里用 `ponytail:` 标出。
   - 只读是为了防止误操作，不是权限边界。真正需要限制权限时，应使用只读的数据库账号。这一点要写进用户文档。
 - **快速 SQL**：只读由数据库事务保证，即使一条会写数据的 select 被判为读，也写不进去。但只读事务挡不住 `copy … to` 文件 / program、`reindex`、`cluster`、`load`、`checkpoint` 这类语句（M4 审查时实测），所以这些首词在应用层判为写、拦下（§12「写语句」）。
 - **凭据**：
   - `connections.toml` 支持 `password_cmd`（例如 macOS 的 `security` 命令、`pass`）、`password_env`；PG 还会被 pgconn 自动读取 `~/.pgpass`。
   - 也允许直接写明文 `password`。但如果此时文件对同组或其他用户可读（`mode & 0o044 != 0`），进入界面后用 toast 警告 3 秒（§7.8），例如「connections.toml 里有明文密码，且其他用户可读，建议 chmod 600」。不打到 stderr，因为 alt screen 会把它盖住。DSN 里写的密码（`postgres://u:p@…`）不检查。
   - 密码来源的优先级：`password_cmd` > `password_env` > `password` > DSN 里写的 / `~/.pgpass`（后两者交给 pgconn）。写了多个只取优先级最高的，不报错。
-  - `password_cmd` 用 `sh -c` 执行，只执行一次（`Main`、`Meta` 共用），去掉末尾的换行；非 0 退出时报错退出，错误里带上它的 stderr。`password_env` 指的变量没设置或为空时，报错退出。
+  - `password_cmd` 用 `sh -c` 执行，去掉末尾的换行；结果在进程内按连接名缓存，`Main`、`Meta` 和别的 session 建同一个连接时都用它（免得钥匙串一再弹窗），建连失败时丢掉缓存，下次重新执行。非 0 退出时报错，错误里带上它的 stderr；`password_env` 指的变量没设置或为空时报错。这些错误对启动时的连接是打印后退出（§14），对其他连接是标成失败、进 toast（§7.8）。
 - **注入**：值一律参数化，标识符一律按方言加引号。
 - **日志与文件**：
   - 只有带 `--debug` 启动时才写日志，DSN 中的密码会被脱敏。
@@ -1379,16 +1394,17 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 |---|---|---|
 | `~/.config/sqlmux/config.toml` | 只有用户写 | 常规选项、主题 |
 | `~/.config/sqlmux/keymaps.toml` | 只有用户写 | 键位 `[keys.*]`、leader、映射 `[map.*]`（M5 F5.9 起从 config.toml 挪出来；`sqlmux keys --format toml` 生成一份完整的参考：和默认相同的写成注释行，用户改过的写成生效的行，没有改动时全是注释）。config.toml 里还写着 `[keys]` / `[map]` 时启动报错，提示挪到 keymaps.toml |
-| `~/.config/sqlmux/connections.toml` | 由应用写入（S-03 新建连接） | 连接定义 |
+| `~/.config/sqlmux/connections.toml` | 用户手写，也由应用追加（M5 F5.1 新建连接） | 连接定义 |
 | `~/.config/sqlmux/themes/*.toml` | 只有用户写 | 自定义主题 |
-| `~/.local/state/sqlmux/state.json` | 由应用写入 | 最近使用、每张表的 WHERE 历史与收藏、快速 SQL 历史；以后还有工作现场 |
-| `~/.local/share/sqlmux/consoles/` | 由应用写入 | console 的 SQL 文件 |
+| `~/.local/state/sqlmux/state.json` | 由应用写入 | 最近使用、每张表的 WHERE 历史与收藏、快速 SQL 历史、console 文件最后用的连接和 schema（M5） |
+| `~/.local/share/sqlmux/consoles/` | 由应用写入 | console 的 SQL 文件 `console_<n>.sql`（M5 起不再按连接分目录） |
 | `~/.config/sqlmux/layouts/*.toml` | 用户手写，或「保存布局为…」写入 | 命名布局（M6 F6.5） |
 | `~/.local/state/sqlmux/last.toml` | 由应用写入 | 退出时的工作现场，`sqlmux` 不带参数时恢复（M6 F6.5） |
 
 - 连接定义单独放一个文件，是因为应用改写 TOML 时会丢掉注释，所以不能去改用户手写的 config.toml。
-- `name`、`engine`、`dsn` 必填。`name` 会用作 console 文件的目录名（§11），所以不允许含 `/`、`\`，也不能以 `.` 开头，否则启动报错。`engine` 在 M1 只接受 `postgres`，其他值报错「目前只支持 postgres」。
-- **启动时找不到连接**：没有 `connections.toml`、文件里没有连接，或者 `sqlmux <名字>` 找不到这个名字时，在终端打印错误就退出（退出码 1），不进入界面。错误里写明配置文件的路径；名字找不到时列出已有的连接名。连接失败（比如密码错误）也一样，打印驱动返回的错误后退出；pgconn 逐个地址尝试时会打出多行（标题一行，每个地址一行），照样输出，不压成一行。在界面里新建连接（S-03）要到 M5。
+- `name`、`engine`、`dsn` 必填，`name` 不能重复，`read_only` 可选（默认 false，M5 F5.3）。`name` 是 state.json 里的键（M5 起不再用作 console 文件的目录名，§11），规则照旧：不允许含 `/`、`\`，也不能以 `.` 开头，否则启动报错。`engine` 在 M1 只接受 `postgres`，其他值报错「目前只支持 postgres」。
+- **启动时找不到连接**：没有 `connections.toml`、文件里没有连接，或者 `sqlmux <名字>` 找不到这个名字时，在终端打印错误就退出（退出码 1），不进入界面。错误里写明配置文件的路径；名字找不到时列出已有的连接名。启动时的连接连不上（比如密码错误）也一样，打印驱动返回的错误后退出；pgconn 逐个地址尝试时会打出多行（标题一行，每个地址一行），照样输出，不压成一行。其他连接连不上不影响启动（§8.2）。
+- **新建连接**（M5 F5.1，§7.8「新建连接表单」）：在 connections.toml 末尾追加一段 `[[connection]]` 文本，不重新编码整个文件，用户的注释都保留；文件不存在就新建，权限 0600。
 - **界面语言**（M6，用户要求）：`language = "zh" | "en"`，默认 `zh`，写错启动报错。
   - 界面上所有文案都走一处翻译：toast、提示、确认框、查询条与结果区的文字、状态栏的模式附加信息、面板的范围标签与底栏、Action 的标题、引导页、日志、错误说明（数据库返回的原文不翻译）。
   - 做法照 gettext：中文原文就是 key，`en` 是一张「中文 → 英文」的表，找不到就显示原文。这样现有代码只需要把字符串包一层，不用先给每条文案起名字。带参数的文案用占位符（如「已保存 %d 行」）。
@@ -1396,7 +1412,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - 键位文字不属于文案，照旧从 keymap 读（§6.7）。
   - 测试：单测扫一遍所有包，找出没走翻译的中文字面量；`en` 表里缺的条目也由单测报出来。golden 和 e2e 照旧按 `zh` 断言，`en` 另加几张 golden。
 - **state.json**（M1 F1.5 起）：路径 `$XDG_STATE_HOME/sqlmux/state.json`，读写都在 `config` 包里。
-  - 内容：`recent` 是面板的最近使用，记成 `{"kind": "table", "id": "public.t_order"}`，kind 为 window / pane / table / command；`tables` 的键是 `"<连接名>/<schema>.<表>"`（不同连接可能有同名表），每张表下存 history 和 favorites。
+  - 内容：`recent` 是面板的最近使用，记成 `{"kind": "table", "id": "play/public.t_order"}`，kind 为 window / pane / table / command，M5 起表的 id 带连接名，旧的不带连接名的条目读到时丢掉；`consoles` 记每个 console 文件最后用的连接和 schema，如 `{"console_1": {"conn": "play", "schema": "public"}}`，换连接或 schema 时写入（M5 F5.11）；`tables` 的键是 `"<连接名>/<schema>.<表>"`（不同连接可能有同名表），每张表下存 history 和 favorites。
   - 启动时读一次；每次改动（执行 WHERE、收藏、面板运行）都写一次。写入：在 Update 里序列化，在 Cmd 里写临时文件再 rename，权限 0600；用互斥锁和版本号，丢掉比已写入版本更旧的快照，避免两个 Cmd 并发时旧内容覆盖新内容。
   - 读取失败（文件损坏）：先把坏文件改名为 `state.json.broken`，再用 toast 报错，当作空状态继续，不退出。改名是为了下次写入不会把用户的历史直接覆盖掉。
 
@@ -1546,5 +1562,9 @@ PRD 10.2 中影响实现的几条：
 | 24 | schema 树改为层级树：session → schema → Tables / Views → 表 → 列，外加工作区（window → pane → tab）；schema 不再用下拉框切换 | D-01~D-04 |
 | 25 | NORMAL 下 `;` 直接打开命令面板的 SQL 范围 | F-01、K-01 |
 | 26 | 补全列表弹出时默认选中第一项，`Tab` / `S-Tab` 为下一项 / 上一项，`↵` 接受 | C-06、Q-01 |
+| 27 | session 改为工作区，不再绑定一个连接：每个 session 都能看到 connections.toml 里的全部连接，目录树的根是这些连接，用到时才连；状态栏的 session 块不画引擎图标，地址块加上连接名 | 第 3 章 Session 行、S-01~S-04、D-01、B-01 |
+| 28 | session 列表的 `n` 改为新建 session；新建连接改为命令面板里的「新建连接…」表单 | S-03 |
+| 29 | console 标题加上连接下拉和事务控件 `Tx: 自动 ▾`、提交 ✓、回滚 ↺（照 DataGrip）；只读和事务模式都按连接 | 5.7、S-04 |
+| 30 | MySQL 切换 database 不再新建 session：console 只有连接下拉，database 由连接决定 | 第 9 章 |
 
 设计稿里写死的键位文字（如 `C-a b`、`run ⌥↵`、`C-↵ 送到 result pane`）会按新的默认键位显示；实现中这些文字都从 keymap 读取，不写死。

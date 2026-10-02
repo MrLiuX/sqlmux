@@ -1,13 +1,14 @@
 # M5 工作现场与 MySQL · 任务清单
 
-- **状态**：M2–M4 验收通过（2026-10-02）。先做 M4 验收意见 F5.5–F5.9（todo，可以开工）；F5.1–F5.4 仍是 draft：§5「一个 session 多个连接」已重写（2026-10-02，用户定），worker 按它补 F5.1–F5.4 的开发清单（可以重新拆分 feature），一并列出 §8.2、§8.6、§11、§12、§13、§14 要改的条目，决策者确认后改为 todo。
+- **状态**：M2–M4 验收通过（2026-10-02）。先做 M4 验收意见 F5.5–F5.9（节点 0）；之后按 F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，都是 todo（2026-10-02 按 worker 起草的清单定，§5「一个 session 多个连接」牵动的各节已改好）。
 - **目标**：
+  - 一个 session 多个连接：目录树的根是 connections.toml 里的全部连接，用到时才连；
   - 支持多个 session、多个 window；
-  - 支持只读 session 和两种事务模式；
+  - 支持只读连接和两种事务模式；
   - 支持 MySQL。
 - **范围**：
   - PRD：S-01~S-04、W-01~W-02、第 9 章中的 MySQL
-  - tech-design：§8（MySQL 部分）、§13
+  - tech-design：§5、§7.8（树、console 标题、状态栏、session 列表、新建连接表单）、§8、§10.1、§10.3、§10.5、§11–§14
 - **依赖**：M1–M4 全部 passed。
 - **设计变更**（M2/M3 验收时用户提出，2026-10-02 定，已写进 §5「一个 session 多个连接」）：
   - session 变成工作区，每个 session 能看到 connections.toml 里的全部连接，目录树的根是这些连接，用到时才连；多个 session 照样保留。
@@ -15,35 +16,110 @@
   - 事务模式按连接：每个 console 标题上 `Tx: 自动 ▾`，手动时有提交 ✓、回滚 ↺（照 DataGrip，用户给的截图）；同一个连接上的 console 和表格保存共用这个事务。
   - 只读按连接：connections.toml 的 `read_only = true`。
 - **完成标准**：
-  - F5.1–F5.9 全部 passed；
+  - F5.1–F5.11 全部 passed；
   - 前面各阶段的集成测试在 MySQL 上也全部通过；
   - 用户验收通过后，打 tag `m5`。
 - **审查节点**：
   0. F5.9 之后：F5.5–F5.9，M4 验收意见，先做；
-  1. F5.3 之后：F5.1–F5.3，多 session、多 window、只读与事务模式；
-  2. F5.4 之后：MySQL 单独一批。
+  1. F5.11 之后：F5.10、F5.11，连接模型。几乎所有用到 `a.sess` 的地方都要改，后面几个 feature 都建在它上面，先单独审；
+  2. F5.3 之后：F5.1–F5.3，多 session、多 window、只读与事务模式；
+  3. F5.4 之后：MySQL 单独一批。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
 
 ---
 
-## F5.1 多 session · 状态：draft
+## F5.10 连接模型与连接树 · 状态：todo
 
-- **session 列表浮层**：支持 S-02、S-03 规定的全部按键（`j/k`、`l/h`、`↵`、`n`、`x`、`$`）。
-- **新建连接**：通过表单新建，结果写入 `connections.toml`。
-- **管理 session**：attach、关闭、重命名；点击状态栏的 session 块也能打开列表。
-- **命令面板的会话范围 `$`**（从 M4 挪来，§12）：列出 session，`↵` attach。
+- **依赖**：F5.5–F5.9
+- **涉及**：`internal/app`（Session / Conn、树、状态栏、面板、快速 SQL）、`internal/config`（connections、state）、`internal/ui`（树、状态栏）
+
+**开发**
+- [ ] 拆 `app.Session`（§5）：
+  - `Session`（工作区）保留 Name、Windows、Active、RunSeq，加上 `Conns`；
+  - 新增 `Conn`，放 Spec、State、Meta、Main、Schema、Schemas、Tables、home，列 / 存在性 / DDL 三个缓存，DB、Addr，以及 search_path 的记账 startedPath、mainPath；
+  - 树的展开状态仍记在 Session 上，节点 ID 加上连接名前缀。
+- [ ] `config.LoadConnections` 读出全部连接，名字重复时启动报错。`sqlmux [名字]` 选启动时连哪一个（不带参数时连第一个），照旧同步建连，失败照 §14 退出；其他连接都不连。
+- [ ] 树的根是各个连接（§7.8「连接节点」）：未连接、连接中、失败、已连接四种状态。在未连接或失败的根上展开、`↵` 或单击时，在 Cmd 里建连（`password_cmd` 也在 Cmd 里跑），连上后加载 catalog，照「默认展开」展开它的 `current_schema()` 和 Tables。
+- [ ] 表 tab 属于一个 Conn：tab 的 id 带上连接名，两个连接上的同名表是不同的 tab、各有各的缓存。state.json 的表键本来就是 `<连接>/<schema>.<表>`，不用改；`recent` 里表的 id 加上连接名，旧的不带连接名的条目读到时丢掉（§14）。
+- [ ] 「当前连接」（§5）：焦点 tab 的连接，结果 tab 取它记下的来源连接；焦点在树上时取光标所在的连接；引导页、空 pane 沿用上一次的。用到它的有：快速 SQL（`Meta` 加它的 Schema，历史照旧按连接记）、`C-e`、新 console、`tree.refresh`、`C-c` 和 busy 提示。DDL 预览取表所属连接的 `Meta`。`quick #n` 的结果 tab 记下连接和 schema，`R` 用它们重跑。
+- [ ] 命令面板的表范围列出所有已连上的连接的表，所在位置是 `<连接>.<schema>`；当前连接的 Schema 排最前，然后是当前连接的其余 schema，再是其他连接（§12）。
+- [ ] 状态栏（§7.8）：session 块不再画引擎图标；地址块显示当前连接的 `<连接名> · <用户>@<host>:<port>`。侧栏第一行的表数是已连上的各个连接的合计。
+- [ ] ponytail：连接断了不自动重连（和现在一样）。
+
+**验收**
+- [ ] 单测：当前连接的规则；两个连接上的同名表是两个 tab，缓存分开。
+- [ ] 集成测试：坏 DSN 的连接标成失败，不影响别的连接。
+- [ ] e2e：connections.toml 里写两个连接（同一个库起两个名字就行）。启动时另一个连接是折叠的、没有连上；展开它出现 schema；从它打开表；状态栏的地址块跟着焦点变。
+- [ ] golden：连接节点的四种状态；状态栏的 session 块和地址块。
+
+## F5.11 console 的连接与文件 · 状态：todo
+
+- **依赖**：F5.10
+- **涉及**：`internal/app`（console、结果区）、`internal/db`（postgres.Conn 暴露 TxStatus）、`internal/config`（state 的 consoles）、`internal/ui`（console 标题、下拉框）
+
+**开发**
+- [ ] console 标题改成 `<连接> · <库>.<schema> ▾`，连接和 schema 各是一个下拉框（§7.8「console 标题」）：
+  - 连接下拉列出全部连接。选到未连接的就去连，连上之后才换过去；连不上就 toast 报错，留在原来的连接。命令「切换连接…」（`console.conn`）打开它，不绑默认键；
+  - schema 下拉照旧（`gs`），列的是这个 console 所在连接的 schema；
+  - 让位顺序：`▶ run` > 连接和 schema 的下拉框（两段算一项）> `↵`。
+- [ ] 执行走所选连接的 `Main`，search_path 的记账（mainPath / startedPath）挪到 Conn 上（§8.6）。
+- [ ] 所在连接的 `Main` 在事务里（TxStatus 不是 `I`）时不让换连接，toast「当前连接有未提交的事务，先提交或回滚」。在 postgres.Conn 上暴露 TxStatus，经 Worker 取，F5.3 也用它。
+- [ ] 文件（§11、§14）：
+  - 路径改成 `consoles/console_<n>.sql`；
+  - n 取**所有 session** 里都没打开的最小值：文件不再按连接分目录之后，两个 session 同时打开同一个 console_1，自动保存会互相覆盖；
+  - state.json 加 `consoles: {"console_1": {"conn", "schema"}}`，换连接或 schema 时写入，打开文件时恢复；记下的连接已经不在 connections.toml 里时，用当前连接；
+  - 新 console 的连接和 schema 取当前连接和它的 Schema；
+  - 旧的 `consoles/<连接名>/` 下的文件不写迁移代码，通过后由决策者手工帮用户挪过去（同 F5.9 的键位）。
+- [ ] 补全、执行 DDL 之后刷新 catalog，都用这个 console 的连接。结果 tab 记下连接和 schema，重跑用它们，不管 console 之后关了还是换了连接。
+
+**验收**
+- [ ] 单测：有事务时换连接被拦下；文件路径；n 的取法；从 state 恢复连接和 schema。
+- [ ] 集成测试：同一个连接上的两个 console 共用事务（一个里 begin，另一个也在事务里）。
+- [ ] e2e：用下拉框换连接后，在新连接上执行；重启后连接和 schema 都恢复。
+- [ ] golden：几种宽度下的 console 标题（连接和 schema 的下拉框让位）。
+
+## F5.1 多 session 与新建连接 · 状态：todo
+
+- **依赖**：F5.11
+- **涉及**：`internal/app`（多个 session、session 列表、面板的会话范围、表单）、`internal/ui`（session 列表、表单）、`internal/config`（追加连接）、`internal/keymap/default.toml`（`[keys.sessions]`、`[keys.form]`）
+
+**开发**
+- [ ] App 改成持有多个 session，`a.sess` 指当前那个；切换 session 时关掉浮层。
+- [ ] session 列表浮层（§7.8「session 列表」，键位在 `[keys.sessions]`，§6.8）：
+  - `j` / `k` 移动；`l` / `h` 展开、收起（session 下面是它的 window）；`↵` attach，停在 window 上时还切到这个 window；
+  - `n` 新建 session（PRD S-03 原为新建连接，§18）；
+  - `x` 关闭：有未保存的修改或未提交的事务时先确认（§10.5）；关的是最后一个 session 时等于退出；
+  - `$` 原地重命名；`esc` 关闭列表；
+  - 框和行的样式照命令面板，每行是名字和 window 数，当前 session 用 `focus` 色标出；单击一行等于移过去再按 `↵`。
+- [ ] 新建 session（§7.8）：名字按 tmux 的习惯取最小的没用过的数字（`1`、`2`……）；默认布局，带一个新的 console_n；连上当前连接并展开它，其余连接不连。
+- [ ] 点击状态栏的 session 块打开列表（`SPC s` 已经有了）。面板的 `$` 范围列出 session，`↵` attach；「所有」范围也列 session（§12）。
+- [ ] 新建连接：命令 `conn.new`「新建连接…」，不绑默认键，打开表单（§7.8「新建连接表单」，作用域 `[keys.form]`）：
+  - 字段：name、engine（F5.4 之前只有 postgres）、dsn、password_cmd、read_only；
+  - 校验同 LoadConnections（必填、名字规则、不能重名）；
+  - 写入：在 connections.toml 末尾追加一段 `[[connection]]` 文本，不重新编码，保留用户的注释；文件不存在就新建，权限 0600；
+  - 写入后所有 session 的树里都多出这个连接，状态是未连接；保存时不试连，展开时才连。
 
 **验收**
 - [ ] e2e：
-  - 新建连接后，`connections.toml` 中出现这条连接，且不会破坏文件中已有的内容；
-  - 在两个 session 之间切换后，各自的界面状态保持不变。
+  - 新建连接后，`connections.toml` 中出现这条连接，且不会破坏文件中已有的内容（含注释）；
+  - 在两个 session 之间切换后，各自的界面状态保持不变；
+  - 新建 session 的名字与布局；
+  - 关掉最后一个 session 等于退出。
+- [ ] golden：session 列表（含展开的 window）；新建连接表单（含校验报错）。
 
-## F5.2 多 window · 状态：draft
+## F5.2 多 window · 状态：todo
 
-- **按键**：`SPC n` / `SPC p` / `SPC l` 切到下一个 / 上一个 / 上次用的 window，`SPC c` 新建；重命名、关闭默认不绑键，在命令面板里执行（§6.8）。不提供按编号切换 window。
-- **鼠标**：点击状态栏上的 window 列表可切换。
-- **独立性**：每个 window 有自己的布局和结果区。
+- **依赖**：F5.1
+- **涉及**：`internal/app`（window、面板、树的工作区）、`internal/ui`（状态栏）
+
+**开发**
+- [ ] **按键**：`SPC n` / `SPC p` / `SPC l` 切到下一个 / 上一个 / 上次用的 window，`SPC c` 新建；重命名、关闭默认不绑键，在命令面板里执行（§6.8）。不提供按编号切换 window。
+- [ ] **鼠标**：点击状态栏上的 window 列表可切换。
+- [ ] **独立性**：每个 window 有自己的布局和结果区。
+- [ ] 面板里 window 项 `↵` 切过去；别的 window 的 tab 项 `↵` 先切 window、再选 tab、聚焦它的 pane（F4.3 留下的那一半）；树的工作区里 window 节点 `↵` / 单击也切过去（§7.8、§12）。
+- [ ] 重命名：状态栏上这个 window 的位置原地变成输入框（INSERT，`↵` 确定、`esc` 放弃）。
+- [ ] 关闭：有未保存的修改时先确认（§10.5）；关的是最后一个 window 时不做事，同「最后一个普通 pane 关不掉」（§5）。
 
 **验收**
 - [ ] e2e：
@@ -51,35 +127,59 @@
   - 各 window 的布局互不影响。
 - [ ] 补回 M0 里因 F1.1 去掉第二个 window 而删掉的 3 项 e2e（tester 在 F1.1 结论里列出，2026-09-24）：f0.5 其余 window 为 dim 字、无底色；窄宽度下省略非当前 window（含省略顺序单调性检查里的这一环）；f0.14 window 范围 `↵`（`%report`）。
 
-## F5.3 只读 session 与事务模式 · 状态：draft
+## F5.3 只读连接与事务模式 · 状态：todo
 
-- **只读**（S-04）：应用层拦截与数据库层设置两层同时生效；SET 语句按 §13 的规则区分放行和拦截。
-- **只读 session 禁止编辑单元格**（§10.1）：M2 没做，随 `connections.toml` 的 `read_only` 一起加（M1 F1.1 时去掉了这个字段）。
-- **事务模式**：在 auto 和 manual 之间切换；提供 Commit 和 Rollback 命令；manual 模式下保存修改不自动提交。有未提交的事务时，退出前需要确认。
-- **console 标题上的事务控件**（M2/M3 验收时用户要求，照 DataGrip）：`Tx: 自动 ▾` 下拉切换自动 / 手动；手动时旁边显示提交 ✓、回滚 ↺ 按钮，点击即执行，也有对应的命令。M3 已知上限「在 console 里自己 begin 之后不提交」在这里一并处理：状态栏显示事务中。
-- **状态显示**：状态栏和查询条显示当前事务模式。
+- **依赖**：F5.2
+- **涉及**：`internal/db`（RuntimeParams、TxStatus）、`internal/sqlkit`（解除只读的语句）、`internal/app`（console 执行、保存、确认、状态栏）、`internal/ui`（console 标题、图标）
+
+**开发**
+- [ ] **只读，数据库层**（§8.2、§13）：`read_only` 打开时，`Main` 也在 RuntimeParams 里设 `default_transaction_read_only = on`（现在只有 `Meta` 设），`RESET` / `DISCARD ALL` 之后仍是 on。
+- [ ] **只读，应用层**（§13）：console 执行前检查这一次的全部语句，判为写的、以及会解除只读的语句，有一条就整次都不发，日志记原因并切到日志 tab。
+  - 会解除只读的：§13 那四种 SET，加上 `BEGIN READ WRITE` / `START TRANSACTION READ WRITE`（PG 里它会盖过 `default_transaction_read_only`）；
+  - 照 AGENTS.md 先写集成测试，在 PG 上逐条实测再定清单；其他 SET 放行；
+  - ponytail：`select set_config('default_transaction_read_only', 'off', false)` 判为读，两层都挡不住（§13：只读是防误操作，不是权限边界）。
+- [ ] **只读，界面**：表格的编辑、新增行、删除行、粘贴都拦下，toast「<连接> 是只读连接」（§10.1）。树的连接节点、console 标题的连接下拉里画 `lock` 图标（nf-fa-lock U+F023，ascii `RO`，§7.7）。
+- [ ] **事务模式**记在 `Conn.Tx`：
+  - console 标题上 `Tx: 自动 ▾`（自动 / 手动），手动时旁边是 ✓ ↺，不在事务里时 `dim`、不能点（§7.8「console 标题」）；让位顺序 `▶ run` > 连接和 schema 的下拉框 > 事务控件（`Tx ▾` 和 ✓ ↺ 算一项）> `↵`；
+  - 命令 `tx.mode`「手动提交事务」（开关类，手动时为 ON）、`tx.commit`「提交」、`tx.rollback`「回滚」，都作用于当前连接，都不绑默认键；
+  - 手动模式下 console 执行：`Main` 的 TxStatus 是 `I` 时，先在同一个 Worker.Run 里 BEGIN。出错后事务停在 `E` 状态，由用户回滚；
+  - 手动模式下保存（§10.3）：不在事务里就先 BEGIN；整次保存包在 `SAVEPOINT sqlmux_save … RELEASE` 里，失败时 `ROLLBACK TO SAVEPOINT`，否则一次保存失败会把用户在这个事务里之前做的修改全部作废；不 COMMIT，提示「已保存 N 行（未提交）」；
+  - 手动模式下表格取数走 `Main`。ponytail：计数仍在 `Meta` 上，看不到未提交的增删；
+  - 有未提交的事务时从手动切回自动被拦下，toast 提示先提交或回滚，同换连接的规则。
+- [ ] **状态栏**（§7.8）：当前连接的 `Main` 在事务里时显示 `warn` 色的「事务中」，自动模式下用户自己 begin 的也算；处在出错的事务里（`E`）显示 `error` 色的「事务出错」。查询条不显示事务模式（原清单的「查询条显示事务模式」去掉）。
+- [ ] **确认**（§10.5）：有未提交的事务时，退出、关闭 session、让这个连接上不再有 console 的关闭（关 tab、关 pane、关 window）都弹确认框「<连接> 有未提交的事务，<动作>会回滚。」，按 `y` 先 ROLLBACK 再执行。
 
 **验收**
 - [ ] 集成测试：
-  - 只读 session 中，写语句被拦截；
-  - 解除只读的 SET 被拦截，`SET search_path` 等可以执行。
+  - 只读连接中，写语句被拦截；
+  - 解除只读的 SET、`BEGIN READ WRITE` 被拦截，`SET search_path` 等可以执行；
+  - 手动模式下保存失败后，之前的修改还在。
 - [ ] e2e：manual 模式下保存后不提交；执行 Rollback 后修改被撤销。
+- [ ] golden：console 标题的事务控件（自动、手动、在事务里）；状态栏的「事务中」「事务出错」；只读连接的锁。
 
-## F5.4 MySQL · 状态：draft
+## F5.4 MySQL · 状态：todo
 
-- **驱动**：对应 §8.1–§8.3 中 MySQL 的部分：
+- **依赖**：F5.3
+- **涉及**：`internal/db/mysql`、`internal/sqlkit`、`testdata/seed/mysql.sql`
+
+**开发**
+- [ ] 开工前在主工作区起 MySQL 容器：`docker compose up -d mysql`（AGENTS.md「集成测试环境」）。
+- [ ] **驱动**：对应 §8.1–§8.3 中 MySQL 的部分：
   - 走文本协议，开启 `interpolateParams`；
   - 取消执行用 `KILL QUERY`。
-- **catalog**：取 §8.4 表格中 MySQL 那一列的数据：
+- [ ] **catalog**：取 §8.4 表格中 MySQL 那一列的数据：
   - `TABLE_ROWS`、`STATISTICS`；
   - 从 `COLUMN_TYPE` 解析出 enum 的可选值；
   - DDL 用 `SHOW CREATE TABLE` 获取。
-- **方言**：
+- [ ] **方言**：
   - 标识符用反引号；
   - 空值安全比较用 `<=>`；
   - 布尔值写入 1 / 0。
-- **种子数据**：`testdata/seed/mysql.sql`，覆盖的情况与 PG 的种子数据相同。
-- **扫描器**：MySQL 会执行的注释 `/*! … */`（如 `SELECT 5 /*! +1 */` 返回 6，dump 开头的 `/*!40101 SET NAMES utf8 */;`）M3 的扫描器当作注释，分句和读写判定会错；M5 接 MySQL 时处理（M3 审查时发现）。
+- [ ] **种子数据**：`testdata/seed/mysql.sql`，覆盖的情况与 PG 的种子数据相同。
+- [ ] **扫描器**：MySQL 会执行的注释 `/*! … */`（如 `SELECT 5 /*! +1 */` 返回 6，dump 开头的 `/*!40101 SET NAMES utf8 */;`）M3 的扫描器当作注释，分句和读写判定会错；M5 接 MySQL 时处理（M3 审查时发现）。
+- [ ] **console 标题**只有连接下拉，没有 schema 下拉，database 由连接的 DSN 决定（§8.6）；要不要像 PG 一样能选 database，开工时提给决策者。
+- [ ] **事务状态**：MySQL 拿不到 TxStatus，按执行过的 begin / start transaction / commit / rollback 来记（ponytail：DDL 的隐式提交这类情况记不准）。
+- [ ] 新建连接表单的 engine 可以选 mysql；树和面板里的 MySQL 连接用 `mysql` 图标（§7.7）。
 
 **验收**
 - [ ] M1–M4 的集成测试在 MySQL 上全部通过。
@@ -87,7 +187,7 @@
 
 ---
 
-以下为 M2–M4 用户验收的意见（2026-10-02），在 F5.1 之前做，审查节点 0。
+以下为 M2–M4 用户验收的意见（2026-10-02），在 F5.10 之前做，审查节点 0。
 
 ## F5.5 工具按钮共用一条底色、竖线分隔 · 状态：todo
 
