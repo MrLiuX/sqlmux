@@ -59,7 +59,7 @@ const (
 var itemTags = [...]string{itemSession: "会话", itemWindow: "窗口", itemPane: "Pane", itemTab: "Tab", itemTable: "表", itemCommand: "命令", itemSQL: ""}
 
 // scopes are the palette's tabs (K-02). The prefix typed in the input is the
-// only scope state: Tab rewrites it, and `:` is `>` typed (§12).
+// only scope state: Tab rewrites it, and palette.command is `>` typed (§12).
 var scopes = []struct {
 	label, prefix string
 	kinds         []itemKind

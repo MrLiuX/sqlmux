@@ -23,7 +23,7 @@ func init() {
 		returning revoke right rollback row rows savepoint schema select set share show similar skip
 		some table temp temporary then ties to top trailing transaction trigger true truncate
 		unbounded union unique update use using values view when where while window with within
-		abort checkpoint close cluster comment copy deallocate discard import listen load move notify
+		abort analyse checkpoint close cluster comment copy deallocate discard import listen load move notify
 		prepare reassign refresh reindex reset security start unlisten vacuum`) {
 		keywords[w] = true
 	}

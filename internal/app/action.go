@@ -40,7 +40,7 @@ var actions map[string]Action
 func init() {
 	actions = map[string]Action{
 		"palette.open":    {Title: "命令面板", Run: do(func(a *App, _ Args) { a.openPalette("") })},
-		"palette.command": {Title: "命令面板：命令", Run: do(func(a *App, _ Args) { a.openPalette(">") })}, // as if > was typed: : did up to F5.8
+		"palette.command": {Title: "命令面板：命令", Run: do(func(a *App, _ Args) { a.openPalette(">") })}, // as if > was typed; bind : to it for the command scope (§6.8)
 		"palette.sql":     {Title: "快速 SQL", Run: do(func(a *App, _ Args) { a.openPalette(";") })},  // ; as if ; was typed (§12)
 		// Keys inside the palette. Like every overlay's own actions they are
 		// Local, which the palette does not list (§12); bound elsewhere in

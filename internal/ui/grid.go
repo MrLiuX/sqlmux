@@ -20,7 +20,7 @@ type GridCol struct {
 }
 
 // ColType is the class of a column's values: it picks their color, and
-// numbers are right-aligned but transposed, a column then mixing types
+// numbers are right-aligned, except transposed, where a column mixes types
 // (§7.6).
 type ColType int
 
