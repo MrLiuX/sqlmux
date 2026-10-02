@@ -2,7 +2,8 @@
 # F5.10 连接模型与连接树（specs/m5-workspace/task.md F5.10；tech-design §5「一个 session 多个连接」、§7.8「连接节点」「状态栏」、§12）
 # 连接节点的四种状态、状态栏的画法由 golden 覆盖；这里在真实 PG 上测：用到时才连、password_cmd 在后台跑、连不上不影响别的、
 # 表 tab 属于连接、当前连接跟着焦点走（地址块、快速 SQL）、面板列出各个连接的表、sqlmux <名字> 选启动时的连接。
-# connections.toml 里三个连接：doraemon（共用的 sqlmux 库）、seed（同一个库，password_cmd 先睡 2 秒）、bad（库不存在）。只读，不用自建库。
+# connections.toml 里四个连接：doraemon（共用的 sqlmux 库）、seed（同一个库，password_cmd 先睡 2 秒）、bad（库不存在）、
+# multi（localhost:1，解析出两个地址、驱动报两行错）。只读，不用自建库。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 . "$(dirname "$0")/palette.sh"
@@ -28,6 +29,11 @@ password_cmd = "sleep 2; echo $PW"
 name = "bad"
 engine = "postgres"
 dsn = "${SQLMUX_TEST_PG%%\?*}_nosuchdb?sslmode=disable"
+
+[[connection]]
+name = "multi"
+engine = "postgres"
+dsn = "postgres://nobody@localhost:1/x?sslmode=disable"
 EOF
 )
 conns() { psql "$SQLMUX_TEST_PG" -At -c "select count(*) from pg_stat_activity where application_name = '$1'"; }
@@ -49,19 +55,24 @@ check "状态栏的地址块是启动时的连接：doraemon · sqlmux@localhost
 # ---- 展开 seed：去连（password_cmd 在后台跑），连上后展开 current_schema() 和 Tables
 click_node seed
 check "单击 seed：连接中，名字后面跟 dim 色的 …，界面照常能动" eval 'y=$(nth_row seed 1); x=$(e2e_find "…" "$y" | cut -d" " -f1); [[ -n $x ]] && (( x < 32 )) && style_has "$x" "$y" fg=$DIM && running'
-key C-l; key C-h                                                                  # password_cmd 还在睡：照样能换焦点
-check "连接中：焦点照常能换" focus_is 0
+# 树光标停在连接中的 seed 上，当前连接沿用 doraemon；这时打开的面板就按 doraemon，seed 在面板开着时连上也不换（审查时定）
+pal '\;'; e2e_type "select current_setting('application_name') as app"; sleep 0.3
+check "连接中：面板照常能打开、能输入" eval 'is_open && [[ $(input) == ";select current_setting('"'application_name'"') as app" ]]'
 check "连上之后：seed 展开，下面是 public 的 Tables（同一个库，两份 t_order），侧栏 22 tables，seed 建了连接" wait_for 6 eval '[[ -n $(nth_row t_order 2) && $(tables_n) == "22 tables" ]] && (( $(conns "$APP_B") >= 1 ))'
+e2e_keys Enter; wait_for 5 eval '[[ -n $(title) && $(title) != "… 行"* ]]'
+check "面板是 seed 连上之前打开的：快速 SQL 照样走 doraemon" eval '[[ $(grid) == "$APP_A" ]] || { grid; false; }'
+e2e_keys C-e; sleep 0.5
+check "C-e 开的 console 也在 doraemon 上（① 的 console_2，标题 doraemon · sqlmux.public ▾）" eval 'closed && tabs_are 1 "1:console_2*" && [[ $(e2e_text 34 103 1) == *" doraemon · sqlmux.public ▾"* ]] || { e2e_text 34 103 1; false; }'
 
 # ---- 从 seed 打开表：表 tab 属于 seed，取数走 seed 的连接
 mark; click_node t_order 2; wait_for 8 settled
-check "单击 seed 下的 t_order：① 开出 t_order，取数走 seed 的连接" eval 'tabs_are 1 "1:t_order*" && fetched "$APP_B"'
+check "单击 seed 下的 t_order：① 开出 t_order，取数走 seed 的连接" eval 'tabs_are 1 "1:console_2- │ 2:t_order*" && fetched "$APP_B"'
 check "地址块跟着焦点：seed · sqlmux@localhost:55432" addr_is seed
 pal "@t_order"
 check "面板的表范围列出两个连接的 t_order：位置 seed.public、doraemon.public，当前连接 seed 的排前面；bad 没连上，不列" eval '[[ $(list | cut -d"|" -f1 | grep "^t_order  " | tr "\n" /) == "t_order  seed.public  表/t_order  doraemon.public  表/" ]] || { list; false; }'
 pick() { local i; for ((i = 0; i < 12; i++)); do [[ $(selected) == "$1"* ]] && return; e2e_keys Down; sleep 0.1; done; }
 pick "t_order  doraemon.public"; mark; e2e_keys Enter; wait_for 8 settled
-check "选 doraemon 的 t_order ↵：另开一个 tab（两个连接上的同名表是两个 tab），取数走 doraemon" eval 'tabs_are 1 "1:t_order- │ 2:t_order*" && fetched "$APP_A" && addr_is doraemon'
+check "选 doraemon 的 t_order ↵：另开一个 tab（两个连接上的同名表是两个 tab），取数走 doraemon" eval 'tabs_are 1 "1:console_2 │ 2:t_order- │ 3:t_order*" && fetched "$APP_A" && addr_is doraemon'
 key g T
 check "gT 回到 seed 的 t_order：地址块是 seed" addr_is seed
 pal '\;'; e2e_type "select current_setting('application_name') as app"; sleep 0.3; e2e_keys Enter; wait_for 5 eval '[[ -n $(title) && $(title) != "… 行"* ]]'
@@ -77,6 +88,8 @@ check "单击 bad：连不上，名字 error 色，toast「bad：…」（数据
 sleep 3.5                                                                         # 等 toast 消失；单击已经把树的光标放在 bad 上
 key R
 check "光标在失败的 bad 上按 R：重试，又是 toast「bad：…」" wait_for 5 eval 'screen_has "bad："'
+sleep 3.5; click_node multi
+check "multi 连不上、驱动的错误有两行：toast 只占一行，换行变成「；」" wait_for 5 eval 'y=$(( $(H) - 1 )); l=$(e2e_text 1 "$(e2e_flag pane_width)" "$y"); [[ $l == *"multi："*"；"* && $(e2e_text 1 "$(e2e_flag pane_width)" $((y - 1))) != *"localhost"* ]] || { echo "  $l"; false; }'
 
 # ---- sqlmux <名字>：启动时只连这一个并展开它
 e2e_start -C "$D/c" "$E2E_BIN seed"; wait_for 8 flag_is alternate_on 1; sleep 2.5

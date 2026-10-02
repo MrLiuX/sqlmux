@@ -114,7 +114,7 @@ check "点击一行就应用这一项" eval '[[ $(where_in) == "status = '"'done
 
 # ---- state.json（§14）：0600、按「连接名/schema.表」、面板的最近使用；重启后收藏和最近使用都在
 check "state.json 在 \$XDG_STATE_HOME/sqlmux/，权限 0600，目录里没有留下临时文件" eval '[[ $(stat -f %Lp "$SJ") == 600 && $(ls "$ST/sqlmux") == state.json ]]'
-check "按 doraemon/public.t_order 存；最近使用记着表 public.t_order" eval 'python3 -c "import json,sys; s=json.load(open(sys.argv[1])); assert \"doraemon/public.t_order\" in s[\"tables\"]; assert {\"kind\": \"table\", \"id\": \"public.t_order\"} in s[\"recent\"]" "$SJ"'
+check "按 doraemon/public.t_order 存；最近使用记着表 doraemon/public.t_order（F5.10 起带连接名）" eval 'python3 -c "import json,sys; s=json.load(open(sys.argv[1])); assert \"doraemon/public.t_order\" in s[\"tables\"]; assert {\"kind\": \"table\", \"id\": \"doraemon/public.t_order\"} in s[\"recent\"], s[\"recent\"]" "$SJ"'
 start -S "$ST"
 pal ""
 check "重启后命令面板的最近使用仍在最前（t_order）" eval '[[ $(list | head -1 | cut -d" " -f1) == t_order ]] || { echo "  $(list | head -3 | tr "\n" ,)"; cat "$SJ"; false; }'
