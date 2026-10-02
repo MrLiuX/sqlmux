@@ -64,7 +64,7 @@ leader = "<Space>"
 "p" = "grid.paste"
 "yi" = "grid.yank.insert"
 # not in normal: a console's : and ; are its vim's (§6.8)
-":" = "palette.command"
+":" = "palette.open"
 ";" = "palette.sql"
 
 [keys.result] # stacked above grid, which the rest goes to (§6.4)
@@ -84,14 +84,14 @@ leader = "<Space>"
 "t" = "tree.open.tab"
 "/" = "tree.filter"
 "R" = "tree.refresh"
-":" = "palette.command"
+":" = "palette.open"
 ";" = "palette.sql"
 
 [keys.landing] # a new tab, or a pane with none (§5)
 "t" = "tab.table"
 "c" = "console.new"
 "x" = "tab.close"
-":" = "palette.command"
+":" = "palette.open"
 ";" = "palette.sql"
 
 [keys.console] # NORMAL / VISUAL; everything else goes to the vim engine

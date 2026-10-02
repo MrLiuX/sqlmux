@@ -272,9 +272,9 @@ func TestCloseTab(t *testing.T) {
 func TestKeysRunActions(t *testing.T) {
 	pressed, direct := sized(160, 45, "nerd"), sized(160, 45, "nerd")
 	feed(t, pressed, ":")
-	direct.run("palette.command", 0)
+	direct.run("palette.open", 0)
 	if !reflect.DeepEqual(pressed.palette, direct.palette) {
-		t.Error(": and palette.command differ")
+		t.Error(": and palette.open differ")
 	}
 
 	pressed, direct = sized(160, 45, "nerd"), sized(160, 45, "nerd")

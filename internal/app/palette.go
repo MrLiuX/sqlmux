@@ -101,9 +101,9 @@ func (it paletteItem) recent() config.Recent {
 // recentRows is how many palette picks state.json keeps.
 const recentRows = 50
 
-// exAliases rank their command first when typed exactly in the command
-// scope, so :q↵ and :qa↵ work as they always have (§12); a console's
-// editor runs its : commands by them (§11).
+// exAliases rank their command first when typed exactly in the all or
+// the command scope, so :q↵ and :qa↵ work as they always have, : opening
+// either (§12); a console's editor runs its : commands by them (§11).
 var exAliases = map[string]string{"q": "tab.close", "qa": "quit", "w": "save", "wq": "tab.save.close"}
 
 func (a *App) openPalette(text string) {
@@ -213,7 +213,7 @@ func (a *App) paletteMatches() (items []paletteItem, ms []ui.Match) {
 	}
 	ms = ui.Filter(query, texts)
 	alias := itemKey{itemCommand, exAliases[strings.TrimSpace(query)]}
-	if i := slices.IndexFunc(items, func(it paletteItem) bool { return it.key() == alias }); i >= 0 && scopes[scope].prefix == ">" {
+	if i := slices.IndexFunc(items, func(it paletteItem) bool { return it.key() == alias }); i >= 0 && (scope == 0 || scopes[scope].prefix == ">") {
 		ms = slices.Insert(slices.DeleteFunc(ms, func(m ui.Match) bool { return m.Index == i }), 0, ui.Match{Index: i})
 	}
 	return items, ms

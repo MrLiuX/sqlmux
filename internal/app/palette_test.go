@@ -11,6 +11,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/exp/golden"
 
+	"sqlmux/internal/config"
 	"sqlmux/internal/db"
 	"sqlmux/internal/ui"
 )
@@ -71,13 +72,15 @@ func TestPaletteFindsByID(t *testing.T) {
 	}
 }
 
-// The palette's own keys are not commands in it (§12).
+// The palette's own keys are not commands in it (§12); the ones opening
+// it are, by the key the focused pane has for them: : for palette.open,
+// none for palette.command (F5.8).
 func TestPaletteListsNoOverlayKeys(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	for _, q := range []string{"关闭", "palette"} {
 		feed(t, a, "<C-p>"+q)
 		for _, r := range rowsOf(a) {
-			if strings.HasPrefix(r, "palette.") && r != "palette.open=C-p" && r != "palette.command=:" && r != "palette.sql=;" {
+			if strings.HasPrefix(r, "palette.") && r != "palette.open=:" && r != "palette.command=" && r != "palette.sql=;" {
 				t.Errorf("%s lists %s", q, r)
 			}
 		}
@@ -114,18 +117,16 @@ func TestPaletteHighlightsMatches(t *testing.T) {
 	t.Fatal("no pane.split.right row")
 }
 
-// : opens the command scope, where an ex alias typed whole comes first (§12).
+// : opens the all scope, where an ex alias typed whole comes first, as in
+// the command scope; recent picks after it (§12, F5.8).
 func TestPaletteExAliases(t *testing.T) {
-	for in, want := range map[string]string{":q": "tab.close", ":qa": "quit", ":w": "save"} {
+	for in, want := range map[string]string{":q": "tab.close", ":qa": "quit", ":w": "save", "<C-p>>q": "tab.close"} {
 		a := sized(160, 45, "nerd")
+		a.state.Recent = []config.Recent{{Kind: "command", ID: "quit"}} // first for q but by the alias
 		feed(t, a, in)
-		if rows := rowsOf(a); len(rows) == 0 || !strings.HasPrefix(rows[0], want+"=") {
-			t.Errorf("%s: first %v, want %s", in, rows, want)
+		if rows := rowsOf(a); a.palette.input.Text != strings.TrimPrefix(strings.TrimPrefix(in, ":"), "<C-p>") || len(rows) == 0 || !strings.HasPrefix(rows[0], want+"=") {
+			t.Errorf("%s: input %q, first %v, want %s", in, a.palette.input.Text, rows, want)
 		}
-	}
-	a := sized(160, 45, "nerd")
-	if feed(t, a, "<C-p>qa"); len(rowsOf(a)) > 0 && strings.HasPrefix(rowsOf(a)[0], "quit=") {
-		t.Error("outside the command scope, qa is just fuzzy text")
 	}
 }
 
