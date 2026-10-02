@@ -217,17 +217,17 @@ func (c *Conn) dropCols() {
 
 // newSession is a session's default workspace (§5) over conns, start the
 // one connected: one window, data, with the sidebar, a pane with no tab
-// and console_1 on start beside it at 5 : 4 (§7.8), which has what its
+// and console_n on start beside it at 5 : 4 (§7.8), which has what its
 // file kept (§11). A file that cannot be read leaves that pane with no tab
 // too: opened empty, the autosave would write over it.
-func newSession(name string, conns []*Conn, start *Conn) *Session {
+func newSession(name string, conns []*Conn, start *Conn, n int) *Session {
 	s := &Session{Name: name, Conns: conns, last: start, open: map[string]bool{}}
 	data := &Pane{ID: 1, Prev: -1}
 	console := &Pane{ID: 2, Prev: -1}
-	if cons, err := openConsole(start, 1); err != nil {
+	if cons, err := openConsole(start, n); err != nil {
 		s.warning = err.Error()
 	} else {
-		console.Tabs = []Tab{{Name: "console_1", Console: cons}}
+		console.Tabs = []Tab{{Name: fmt.Sprintf("console_%d", n), Console: cons}}
 	}
 	w := &Window{
 		Name:     "data",
@@ -253,7 +253,7 @@ func Open(ctx context.Context, specs []config.Connection, start int) (*Session, 
 		return nil, err
 	}
 	conns[start].take(d)
-	return newSession(specs[start].Name, conns, conns[start]), nil
+	return newSession(specs[start].Name, conns, conns[start], 1), nil
 }
 
 // dialed is a connection's Main and Meta as dial connected them.
@@ -374,18 +374,12 @@ func (a *App) newTab() {
 	putTab(p, landing(), false)
 }
 
-// newConsole is console.new (§5, §11): console_n, n the least not open
-// in the session, with what its file keeps, on the connection it last ran
-// on, else the current one, in place of a landing tab or in a new tab of
+// newConsole is console.new (§5, §11): console_n, n the least no session
+// has open, with what its file keeps, on the connection it last ran on,
+// else the current one, in place of a landing tab or in a new tab of
 // openTarget's pane.
-// ponytail: this session's consoles only; every session's when F5.1 makes
-// more than one, two sharing a file overwriting each other's autosaves
 func (a *App) newConsole() tea.Cmd {
-	p := a.openTarget()
-	n := 1
-	for a.consoleOpen(config.ConsolePath(n)) {
-		n++
-	}
+	p, n := a.openTarget(), a.freeConsole()
 	c, err := openConsole(a.conn(), n)
 	if err != nil {
 		return a.showToast(err.Error(), toastTTL)
@@ -446,20 +440,56 @@ func (a *App) keepConsole(t *consoleTab) tea.Cmd {
 	return a.saveState()
 }
 
-// consoleOpen is whether a console of the session is open on path.
+// consoleOpen is whether a console of any session is open on path: two
+// on one file would write over each other's autosaves (§11).
 func (a *App) consoleOpen(path string) bool {
-	return slices.ContainsFunc(a.sess.consoles(), func(c *consoleTab) bool { return c.path == path })
+	return slices.ContainsFunc(a.consoles(), func(c *consoleTab) bool { return c.path == path })
+}
+
+// consoles is every session's consoles: an answer may be for a session not
+// attached (F5.1).
+func (a *App) consoles() []*consoleTab {
+	var out []*consoleTab
+	for _, s := range a.sessions {
+		out = append(out, s.consoles()...)
+	}
+	return out
+}
+
+// freeConsole is the least n no session has console_n open (§11).
+func (a *App) freeConsole() int {
+	n := 1
+	for a.consoleOpen(config.ConsolePath(n)) {
+		n++
+	}
+	return n
+}
+
+// Close closes every session's connections, as the program ends.
+func (a *App) Close() {
+	for _, s := range a.sessions {
+		s.Close()
+	}
+}
+
+// panes is the session's panes but the sidebars, in every window.
+func (s *Session) panes() []*Pane {
+	var ps []*Pane
+	for _, w := range s.Windows {
+		if w.Root != nil {
+			ps = append(ps, w.Root.Leaves()...)
+		}
+	}
+	return ps
 }
 
 // consoles is the session's consoles, in every window.
 func (s *Session) consoles() []*consoleTab {
 	var out []*consoleTab
-	for _, w := range s.Windows {
-		for _, p := range w.Root.Leaves() {
-			for _, t := range p.Tabs {
-				if t.Console != nil {
-					out = append(out, t.Console)
-				}
+	for _, p := range s.panes() {
+		for _, t := range p.Tabs {
+			if t.Console != nil {
+				out = append(out, t.Console)
 			}
 		}
 	}

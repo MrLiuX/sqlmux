@@ -160,6 +160,16 @@ func (a *App) render() *ui.Frame {
 			}
 		}
 	}
+	if a.sessList != nil {
+		if c := a.sessionsView().Draw(f, a.window()); c.X >= 0 {
+			f.Cursor = &c
+		}
+	}
+	if a.form != nil {
+		if c := a.formView().Draw(f, a.window()); c.X >= 0 {
+			f.Cursor = &c
+		}
+	}
 	if c := a.confirm; c != nil {
 		ui.Confirm{
 			Text:   c.text,
@@ -423,11 +433,11 @@ func (a *App) statusLine() ui.StatusLine {
 	var s ui.StatusLine
 
 	sess := uv.Style{Fg: th.Bg, Bg: th.Focus, Attrs: uv.AttrBold}
-	s.Left = []ui.Segment{{Runs: []ui.Run{ // a workspace: no engine's icon (§7.8)
+	s.Left = []ui.Segment{{Runs: []ui.Run{ // a workspace: no engine's icon; a click opens the session list (§7.8)
 		{Text: " ", Style: sess},
 		{Text: a.sess.Name, Style: sess, Shrink: true},
 		{Text: " ▾ ", Style: sess},
-	}}}
+	}, Action: "session.list"}}
 	for i, w := range a.sess.Windows {
 		seg := ui.Segment{Runs: []ui.Run{{Text: fmt.Sprintf(" %d: %s ", i, w.Name), Style: bar(th.Dim)}}, Drop: dropWindow}
 		if i == a.sess.Active {

@@ -84,7 +84,7 @@ func (a *App) focusedConsole() *consoleTab {
 
 // overlaid reports whether an overlay has the keys (§7.8).
 func (a *App) overlaid() bool {
-	return a.palette != nil || a.drop != nil || a.cols != nil || a.confirm != nil || a.keyHelp != nil
+	return a.palette != nil || a.drop != nil || a.cols != nil || a.confirm != nil || a.keyHelp != nil || a.sessList != nil || a.form != nil
 }
 
 // vim is the editor that has the keys, with nothing over it: the focused
@@ -246,7 +246,7 @@ var autosaveDelay = time.Second
 func (a *App) consoleDid(t *consoleTab, eff editor.Effect) tea.Cmd {
 	t.comp = nil
 	cmds := a.vimCmds(eff, func(text string, p editor.ClipPut) tea.Cmd {
-		if !slices.Contains(a.sess.consoles(), t) {
+		if !slices.Contains(a.consoles(), t) {
 			return nil
 		}
 		return a.consoleDid(t, t.ed.PutClip(text, p))

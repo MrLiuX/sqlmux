@@ -45,7 +45,6 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer sess.Close()
 	st, err := config.LoadState()
 	if err != nil { // the broken file is kept aside; start empty (§14)
 		warning = strings.TrimPrefix(warning+"；"+err.Error(), "；")
@@ -53,7 +52,9 @@ func run(args []string) error {
 	// ponytail: problems are only reported by `sqlmux keys --check`; the startup
 	// conflict overlay (§6.7) is M6.
 	keys, _ := keymap.New(cfg)
-	_, err = tea.NewProgram(app.New(cfg, keys, sess, st, warning)).Run()
+	a := app.New(cfg, keys, sess, st, warning)
+	defer a.Close()
+	_, err = tea.NewProgram(a).Run()
 	return err
 }
 

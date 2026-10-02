@@ -52,7 +52,7 @@ func (a *App) connect(c *Conn) tea.Cmd {
 func (a *App) gotConnected(m connected) tea.Cmd {
 	c := m.conn
 	var waiting []*consoleTab
-	for _, t := range a.sess.consoles() {
+	for _, t := range a.consoles() {
 		if t.want == c {
 			t.want, waiting = nil, append(waiting, t)
 		}
@@ -109,7 +109,7 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	if !slices.Contains(c.Schemas, c.Schema) { // the first load, or the schema is gone (§7.8)
 		c.Schema = c.home
 	}
-	for _, t := range a.sess.consoles() { // opened before the tree had a schema, or in one gone: the connection's (§8.6)
+	for _, t := range a.consoles() { // opened before the tree had a schema, or in one gone: the connection's (§8.6)
 		if t.conn == c && !slices.Contains(c.Schemas, t.schema) {
 			t.schema = c.Schema
 		}

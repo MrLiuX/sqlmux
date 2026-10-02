@@ -196,15 +196,31 @@ func init() {
 			return cmd
 		}},
 		// The WHERE input in its vim's NORMAL (F3.39).
-		"where.run":   {Title: "执行", Local: true, Run: when(inWhere, func(a *App) tea.Cmd { return a.runWhere(a.typingTab()) })},
-		"where.leave": {Title: "回到表格", Local: true, Run: when(inWhere, func(a *App) tea.Cmd { a.typingTab().stopTyping(); return nil })},
-		"cols.up":     {Title: "上移", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsMove(-1); return nil })},
-		"cols.down":   {Title: "下移", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsMove(1); return nil })},
-		"cols.toggle": {Title: "显示 / 隐藏这一列", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsToggle(a.cols.sel); return nil })},
-		"cols.all":    {Title: "全部显示", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsSetAll(true); return nil })},
-		"cols.none":   {Title: "全部隐藏", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsSetAll(false); return nil })},
-		"cols.filter": {Title: "过滤列", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.cols.typing = true; return nil })},
-		"cols.close":  {Title: "关闭 COLS", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsEsc(); return nil })},
+		"where.run":    {Title: "执行", Local: true, Run: when(inWhere, func(a *App) tea.Cmd { return a.runWhere(a.typingTab()) })},
+		"where.leave":  {Title: "回到表格", Local: true, Run: when(inWhere, func(a *App) tea.Cmd { a.typingTab().stopTyping(); return nil })},
+		"session.list": {Title: "session 列表", Run: do(func(a *App, _ Args) { a.openSessions() })},
+		"conn.new":     {Title: "新建连接…", Run: do(func(a *App, _ Args) { a.openConnForm() })},
+		"form.next":    {Title: "下一项", Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formMove(1); return nil })},
+		"form.prev":    {Title: "上一项", Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formMove(-1); return nil })},
+		"form.save":    {Title: "保存", Local: true, Run: when(inForm, func(a *App) tea.Cmd { return a.saveConnForm() })},
+		"form.cancel":  {Title: "取消", Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.form = nil; return nil })},
+		// the session list's (§7.8)
+		"sessions.new":      {Title: "新建 session", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { return a.newSession() })},
+		"sessions.down":     {Title: "下移", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsMove(1); return nil })},
+		"sessions.up":       {Title: "上移", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsMove(-1); return nil })},
+		"sessions.expand":   {Title: "展开", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsFold(true); return nil })},
+		"sessions.collapse": {Title: "收起", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsFold(false); return nil })},
+		"sessions.attach":   {Title: "attach", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsAttach(a.sessList.sel); return nil })},
+		"sessions.kill":     {Title: "关闭 session", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { return a.killSession() })},
+		"sessions.rename":   {Title: "重命名 session", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.renameSession(); return nil })},
+		"sessions.close":    {Title: "关闭列表", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessList = nil; return nil })},
+		"cols.up":           {Title: "上移", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsMove(-1); return nil })},
+		"cols.down":         {Title: "下移", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsMove(1); return nil })},
+		"cols.toggle":       {Title: "显示 / 隐藏这一列", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsToggle(a.cols.sel); return nil })},
+		"cols.all":          {Title: "全部显示", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsSetAll(true); return nil })},
+		"cols.none":         {Title: "全部隐藏", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsSetAll(false); return nil })},
+		"cols.filter":       {Title: "过滤列", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.cols.typing = true; return nil })},
+		"cols.close":        {Title: "关闭 COLS", Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsEsc(); return nil })},
 		"pane.error.close": {Title: "关闭错误栏", Run: func(a *App, args Args) tea.Cmd { // "pane.error.close <id>" is its ×
 			p := a.focused()
 			if id, err := strconv.Atoi(args.Arg); err == nil {
@@ -351,7 +367,6 @@ func init() {
 	// default.toml binds, the palette lists them all (§6.8); running them
 	// does nothing yet.
 	for id, title := range map[string]string{
-		"session.list": "session 列表", "session.new": "新建连接",
 		"window.new": "新建 window", "window.rename": "重命名 window", "window.close": "关闭 window",
 		"window.next": "下一个 window", "window.prev": "上一个 window", "window.last": "上次用的 window",
 		"grid.yank.insert": "复制为 INSERT",
@@ -408,6 +423,8 @@ func onCell(f func(*dataTab)) func(*App, Args) tea.Cmd {
 }
 
 func inPalette(a *App) bool  { return a.palette != nil }
+func inSessions(a *App) bool { return a.sessList != nil }
+func inForm(a *App) bool     { return a.form != nil }
 func inConfirm(a *App) bool  { return a.confirm != nil }
 func inDrop(a *App) bool     { return a.drop != nil }
 func inCols(a *App) bool     { return a.cols != nil }

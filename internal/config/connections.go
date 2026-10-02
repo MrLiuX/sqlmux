@@ -18,17 +18,21 @@ type Connection struct {
 	Name        string `toml:"name"`
 	Engine      string `toml:"engine"`
 	DSN         string `toml:"dsn"`
-	PasswordCmd string `toml:"password_cmd"`
-	PasswordEnv string `toml:"password_env"`
-	Password    string `toml:"password"`
+	PasswordCmd string `toml:"password_cmd,omitempty"`
+	PasswordEnv string `toml:"password_env,omitempty"`
+	Password    string `toml:"password,omitempty"`
+	ReadOnly    bool   `toml:"read_only,omitempty"` // §13, from F5.3
 }
+
+// connectionsPath is connections.toml (§14).
+func connectionsPath() string { return filepath.Join(Dir(), "connections.toml") }
 
 // LoadConnections reads every connection in connections.toml, and which
 // of them is connection name, or the first one when name is "" (§5).
 // warning is set when the file holds a plain password that group or others
 // can read (§13).
 func LoadConnections(name string) (conns []Connection, start int, warning string, err error) {
-	path := filepath.Join(Dir(), "connections.toml")
+	path := connectionsPath()
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, 0, "", fmt.Errorf("找不到 %s", path)
@@ -48,11 +52,8 @@ func LoadConnections(name string) (conns []Connection, start int, warning string
 	}
 	var names []string
 	for i, c := range conns {
-		if p := c.problem(); p != "" {
+		if _, p := c.Check(names); p != "" {
 			return nil, 0, "", fmt.Errorf("%s: 第 %d 个连接：%s", path, i+1, p)
-		}
-		if slices.Contains(names, c.Name) { // the tree's roots and state.json's keys go by it (§5)
-			return nil, 0, "", fmt.Errorf("%s: 第 %d 个连接：name = %q 重复了", path, i+1, c.Name)
 		}
 		names = append(names, c.Name)
 	}
@@ -68,21 +69,57 @@ func LoadConnections(name string) (conns []Connection, start int, warning string
 	return conns, start, warning, nil
 }
 
-// problem is what makes c unusable, or "".
-func (c Connection) problem() string {
+// Check is what makes c unusable beside the connections names, and the
+// field at fault: "", "" when nothing does (§14).
+func (c Connection) Check(names []string) (field, problem string) {
 	for _, f := range [][2]string{{"name", c.Name}, {"engine", c.Engine}, {"dsn", c.DSN}} {
 		if f[1] == "" {
-			return "缺少 " + f[0]
+			return f[0], "缺少 " + f[0]
 		}
 	}
 	// the name keys state.json's tables and tree node IDs (§14)
 	if strings.ContainsAny(c.Name, `/\`) || strings.HasPrefix(c.Name, ".") {
-		return fmt.Sprintf(`name = %q：不能含 / 或 \，也不能以 . 开头`, c.Name)
+		return "name", fmt.Sprintf(`name = %q：不能含 / 或 \，也不能以 . 开头`, c.Name)
+	}
+	if slices.Contains(names, c.Name) { // the tree's roots go by it too (§5)
+		return "name", fmt.Sprintf("name = %q 重复了", c.Name)
 	}
 	if c.Engine != "postgres" {
-		return fmt.Sprintf("engine = %q，目前只支持 postgres", c.Engine)
+		return "engine", fmt.Sprintf("engine = %q，目前只支持 postgres", c.Engine)
 	}
-	return ""
+	return "", ""
+}
+
+// AppendConnection adds c at the end of connections.toml, made 0600 if
+// there is none (§14): its text written after what is there, never the
+// file encoded again, so the user's comments stay.
+func AppendConnection(c Connection) error {
+	var b strings.Builder
+	enc := toml.NewEncoder(&b)
+	enc.Indent = ""
+	if err := enc.Encode(struct {
+		Connection []Connection `toml:"connection"`
+	}{[]Connection{c}}); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(Dir(), 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(connectionsPath(), os.O_RDWR|os.O_APPEND|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	text := b.String()
+	if info, err := f.Stat(); err == nil && info.Size() > 0 { // a blank line before it, a newline first if the file lacks one
+		last := make([]byte, 1)
+		if _, err := f.ReadAt(last, info.Size()-1); err == nil && last[0] != '\n' {
+			text = "\n" + text
+		}
+		text = "\n" + text
+	}
+	_, err = f.WriteString(text)
+	return err
 }
 
 // Secret is the password from the first source set: password_cmd,

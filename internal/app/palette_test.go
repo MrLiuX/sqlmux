@@ -143,8 +143,8 @@ func TestPaletteTogglesAndRecent(t *testing.T) {
 		t.Fatalf("after ↵: palette %v rows %v zoom %d", a.palette, rowsOf(a), a.win().Zoom)
 	}
 	feed(t, a, "<Esc><C-p>split<Down><CR><C-p>")
-	// the split also left the zoom: OFF; then the first window
-	if rows := rowsOf(a); !strings.HasPrefix(rows[0], "pane.split.right=") || rows[1] != "pane.zoom=OFF" || rows[2] != "doraemon=" {
+	// the split also left the zoom: OFF; then the session
+	if rows := rowsOf(a); !strings.HasPrefix(rows[0], "pane.split.right=") || rows[1] != "pane.zoom=OFF" || rows[2] != "1 windows=" {
 		t.Errorf("recent first, then by id: %v", rows[:3])
 	}
 }
@@ -239,7 +239,7 @@ func namesOf(a *App) []string {
 func TestPaletteScopesCycle(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	feed(t, a, "<C-p>ord")
-	for _, want := range []string{"%ord", "@ord", ">ord", ";ord", "ord"} {
+	for _, want := range []string{"$ord", "%ord", "@ord", ">ord", ";ord", "ord"} {
 		feed(t, a, "<Tab>")
 		if got := a.palette.input.Text; got != want {
 			t.Fatalf("Tab: %q, want %q", got, want)
@@ -249,7 +249,7 @@ func TestPaletteScopesCycle(t *testing.T) {
 	if in := a.palette.input; in.Text != ";ord" || in.Pos != len(";ord") {
 		t.Fatalf("S-Tab wraps round: %+v", in)
 	}
-	click(a, find(t, a, ui.Target{Kind: ui.KindButton, Action: "palette.scope 2"}).Min)
+	click(a, find(t, a, ui.Target{Kind: ui.KindButton, Action: "palette.scope 3"}).Min)
 	if a.palette.input.Text != "@ord" {
 		t.Errorf("clicking 表: %q", a.palette.input.Text)
 	}
@@ -273,7 +273,7 @@ func TestPaletteScopesFilter(t *testing.T) {
 			t.Errorf("所有 lacks %s", s)
 		}
 	}
-	if want := "窗口:0: data Pane:⓪ schema Pane:① table · t_order Tab:t_order Tab:t_user Pane:② console · console_1 Tab:console_1 窗口:1: report 表:"; !strings.HasPrefix(all, want) {
+	if want := "会话:doraemon 窗口:0: data Pane:⓪ schema Pane:① table · t_order Tab:t_order Tab:t_user Pane:② console · console_1 Tab:console_1 窗口:1: report 表:"; !strings.HasPrefix(all, want) {
 		t.Errorf("as the tree's workspace, when nothing is typed: a window, its panes, each pane's tabs:\n%.200s", all)
 	}
 }
@@ -391,7 +391,7 @@ func TestPaletteLayout(t *testing.T) {
 		a := sized(160, 45, icons)
 		feed(t, a, "<C-p>ab")
 		lines := strings.Split(a.render().String(), "\n")
-		if tabs := lines[8]; !strings.Contains(tabs, " 所有   窗口·Pane %   表 @   命令 > ") {
+		if tabs := lines[8]; !strings.Contains(tabs, " 所有   会话 $   窗口·Pane %   表 @   命令 > ") {
 			t.Errorf("%s: scope tabs row %q", icons, tabs)
 		}
 		if in := lines[9]; !strings.Contains(in, "│ "+search+" ab ") {

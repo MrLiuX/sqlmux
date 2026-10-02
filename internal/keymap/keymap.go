@@ -19,7 +19,7 @@ var defaultTOML string
 // in resolution priority order for the export. which-key is no scope: keys
 // pressed over it resolve as without it (§6.5).
 var tables = []string{
-	"keys.confirm", "keys.palette", "keys.where", "keys.cols", "keys.dropdown", "keys.sessions",
+	"keys.confirm", "keys.palette", "keys.form", "keys.where", "keys.cols", "keys.dropdown", "keys.sessions",
 	"keys.complete", "keys.newrow", "keys.options", "keys.segments", "keys.keyhelp", "keys.cell", "keys.input",
 	"keys.wherenormal", "keys.result", "keys.grid", "keys.tree", "keys.console", "keys.landing", "keys.normal", "keys.global",
 	"map.console.normal", "map.console.visual", "map.grid.normal", "map.grid.visual",
@@ -233,6 +233,7 @@ var when = map[string]string{
 	"keys.cols":        "COLS 列表打开时",
 	"keys.cell":        "编辑单元格时（M2）",
 	"keys.sessions":    "session 列表打开时（M5）",
+	"keys.form":        "新建连接的表单打开时（M5）",
 	"keys.confirm":     "确认框打开时",
 	"keys.newrow":      "编辑还没保存的新行的格时，叠在选项 / 分段浮层之上（F3.33）",
 	"keys.options":     "非时间列的单元格，选项浮层展开、而且有选项时",

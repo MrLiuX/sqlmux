@@ -337,7 +337,7 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 					at = append(at, errorAt(text, r.base+s.Start, stmt, e.Position))
 				}
 			}
-			if slices.Contains(a.sess.consoles(), r.from) { // closed, the log has it alone
+			if slices.Contains(a.consoles(), r.from) { // closed, the log has it alone
 				r.from.bar = newErrorBar("run", e, "", "", at...)
 			}
 		}

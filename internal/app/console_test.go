@@ -203,7 +203,7 @@ func TestConsoleRestore(t *testing.T) {
 // soloSession is a new session over doraemon alone, not connected.
 func soloSession() *Session {
 	c := newConn(config.Connection{Name: "doraemon"})
-	return newSession("doraemon", []*Conn{c}, c)
+	return newSession("doraemon", []*Conn{c}, c, 1)
 }
 
 // A console file that cannot be read is not opened, empty or not: a toast

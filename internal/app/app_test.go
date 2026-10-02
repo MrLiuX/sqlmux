@@ -49,7 +49,7 @@ func (noDB) Close() error                                                { retur
 func testSession() *Session {
 	c := readyConn("doraemon")
 	c.Schema, c.Schemas, c.home, c.DB = "public", []string{"agentable", "public"}, "public", "doraemon"
-	s := newSession("doraemon", []*Conn{c}, c)
+	s := newSession("doraemon", []*Conn{c}, c, 1)
 	consoleOf(s.Windows[0].Root.B.Pane).schema = "public" // as the catalog's coming sets it
 	c.Tables = []db.Table{{Schema: "agentable", Name: "planner", Rows: 3}}
 	for _, t := range []struct {

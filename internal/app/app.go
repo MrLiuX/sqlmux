@@ -23,7 +23,9 @@ type App struct {
 	icons *ui.Icons
 	keys  *keymap.Map
 	res   *keymap.Resolver
-	sess  *Session
+	// sess is the session attached, one of sessions (§5, F5.1).
+	sess     *Session
+	sessions []*Session
 
 	tabWidth     int     // the consoles' (§14)
 	maxRows      int     // a console run keeps of each result (§11)
@@ -32,12 +34,14 @@ type App struct {
 	formatPrg    string
 	autoPairs    bool // a console's INSERT, a WHERE and the quick SQL (§7.9)
 
-	palette  *palette    // non-nil while the command palette is open (COMMAND mode)
-	drop     *dropdown   // non-nil while a one-pick dropdown is open (§8.6, §7.8)
-	cols     *colsMenu   // non-nil while the COLS list is open (Q-04)
-	confirm  *confirmBox // non-nil while it asks before changes go (§10.5)
-	whichKey bool        // the which-key overlay is up (§6.5)
-	keyHelp  *keyHelp    // non-nil while the ? help is open (§6.5)
+	palette  *palette     // non-nil while the command palette is open (COMMAND mode)
+	sessList *sessionList // non-nil while the session list is open (§7.8)
+	form     *connForm    // non-nil while the new connection form is open (§7.8)
+	drop     *dropdown    // non-nil while a one-pick dropdown is open (§8.6, §7.8)
+	cols     *colsMenu    // non-nil while the COLS list is open (Q-04)
+	confirm  *confirmBox  // non-nil while it asks before changes go (§10.5)
+	whichKey bool         // the which-key overlay is up (§6.5)
+	keyHelp  *keyHelp     // non-nil while the ? help is open (§6.5)
 	// paneNumbers is SPC q's overlay: the next key picks a pane by its ⟨n⟩.
 	paneNumbers bool
 
@@ -85,7 +89,7 @@ func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, 
 	return &App{
 		theme: cfg.Theme, icons: cfg.Icons, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, resultHeight: cfg.ResultHeight,
 		keywordCase: cfg.KeywordCase, formatPrg: cfg.FormatPrg, autoPairs: cfg.AutoPairs,
-		keys: keys, res: keymap.NewResolver(keys), sess: sess,
+		keys: keys, res: keymap.NewResolver(keys), sess: sess, sessions: []*Session{sess},
 		mouse: uv.Pos(-1, -1), warning: strings.Trim(warning+"；"+sess.warning, "；"), state: st,
 	}
 }
@@ -126,6 +130,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.w, a.h = msg.Width, msg.Height
 	case connected:
 		return a, a.gotConnected(msg)
+	case sessionDialed:
+		return a, a.gotSessionDialed(msg)
 	case catalogMsg:
 		return a, a.gotCatalog(msg)
 	case pageMsg:
@@ -285,7 +291,7 @@ func (a *App) click(p uv.Position) tea.Cmd {
 	case ui.KindNumber:
 		a.jumpToPane(keymap.Key(strconv.Itoa(t.I)))
 	case ui.KindBackdrop: // outside an overlay: close it; outside a confirm box: no
-		a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.confirm, a.keyHelp = false, false, nil, nil, nil, nil, nil
+		a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.confirm, a.keyHelp, a.sessList = false, false, nil, nil, nil, nil, nil, nil
 		a.res.Reset()
 	case ui.KindRow:
 		switch tab, c := a.typingTab(), a.completing(); {
@@ -299,6 +305,10 @@ func (a *App) click(p uv.Position) tea.Cmd {
 			return cmd
 		case a.palette != nil:
 			return a.paletteRun(t.I, false)
+		case a.sessList != nil: // a row: there, then ↵ (§7.8)
+			a.sessionsAttach(t.I)
+		case a.form != nil:
+			a.formClick(t.I)
 		case tab != nil && tab.hist != nil:
 			return a.histApply(tab, t.I)
 		case a.drop != nil:
@@ -456,6 +466,12 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 				cmds = append(cmds, a.keyHelpKey(k))
 			case a.palette != nil:
 				cmds = append(cmds, a.paletteKey(k))
+			case a.sessList != nil:
+				if a.sessList.rename != nil {
+					cmds = append(cmds, a.renameKey(k))
+				}
+			case a.form != nil:
+				a.formKey(k)
 			case a.drop != nil:
 				a.dropKey(k)
 			case a.cols != nil:
@@ -477,6 +493,8 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 // mode is derived from state, never stored (§3 principle 3).
 func (a *App) mode() keymap.Mode {
 	switch t, ed := a.typingTab(), a.vim(); {
+	case a.form != nil, a.sessList != nil && a.sessList.rename != nil: // overlays with an input that has the keys (§7.8)
+		return keymap.Insert
 	case a.overlaid(), t != nil && t.hist != nil: // an overlay has the keys (§7.8)
 		return keymap.Command
 	case ed != nil: // a console's vim, or a WHERE's (F3.39)
@@ -498,6 +516,12 @@ func (a *App) context() keymap.Context {
 		return keymap.Context{Overlay: "complete", Under: "palette", Focus: []string{"input"}, Mode: keymap.Command}
 	case a.palette != nil:
 		return keymap.Context{Overlay: "palette", Mode: keymap.Command}
+	case a.sessList != nil && a.sessList.rename != nil: // the name typed in place (§7.8)
+		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Insert}
+	case a.sessList != nil:
+		return keymap.Context{Overlay: "sessions", Mode: keymap.Command}
+	case a.form != nil: // its inputs: unbound keys are text
+		return keymap.Context{Overlay: "form", Mode: keymap.Insert}
 	case a.drop != nil:
 		return keymap.Context{Overlay: "dropdown", Mode: keymap.Command}
 	case a.cols != nil && !a.cols.typing:
