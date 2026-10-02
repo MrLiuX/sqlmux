@@ -120,18 +120,21 @@ type Workspace struct {
     Active   int
 }
 
-type Session struct {           // 1 session = 1 连接（host + 用户 + 库）
-    Name      string            // 默认 host/db
-    Spec      ConnSpec          // 来自 connections.toml
-    Main      *db.Worker        // 主连接：console、保存修改；持有事务状态
-    Meta      *db.Worker        // 辅连接：元数据、计数、DDL 预览、快速 SQL
-    ReadOnly  bool
-    Tx        TxMode            // auto | manual
-    Schema    string            // schema 树当前所在的 PG schema；console 各自另选（§8.6）
-    Catalog   *Catalog          // 表、列属性、主键、行数估计的缓存
+type Session struct {           // M5 起：session 是一个工作区，不再绑定一个连接（用户 2026-10-02 定）
+    Name      string            // 默认取启动时的连接名；之后新建的按 tmux 习惯叫 1、2……，可重命名
+    Conns     []*Conn           // connections.toml 里的全部连接，按文件顺序；用到时才连
     Windows   []*Window
     ActiveWin int
     RunSeq    int               // result 标题里的执行序号，如 #42
+}
+
+type Conn struct {              // 一个数据源，同 DataGrip 的 data source；每个 session 各有一份
+    Spec      ConnSpec          // 来自 connections.toml，含 read_only
+    State     ConnState         // 未连接 | 连接中 | 已连接 | 失败（记着错误）
+    Meta      *db.Worker        // 树、列属性、计数、DDL 预览、快速 SQL、表格取数
+    Main      *db.Worker        // 表格的保存，每次保存自己一个事务
+    Schema    string            // 树里这个连接当前所在的 schema；新 console 和快速 SQL 的默认（§8.6）
+    Catalog   *Catalog          // 表、列属性、主键、行数估计的缓存
 }
 
 type Window struct {
@@ -159,8 +162,8 @@ type Pane struct {
 
 Tab 的种类：
 
-- `DataTab`：表引用、`Query{Where, Order, Limit, Page}`、隐藏列集合、`GridState{Row, Col, Scroll, Transpose}`、当前页数据、`Edits map[CellKey]Edit`（修改后的值为文本、NULL 或 DEFAULT）、总行数（-1 表示未知）、请求序号 `seq`。
-- `ConsoleTab`：文件路径、`*editor.Buffer`、所选的 schema（仅 PG，§8.6）、它在结果区里的结果 tab。
+- `DataTab`：所属的 `*Conn`（M5 起）、表引用、`Query{Where, Order, Limit, Page}`、隐藏列集合、`GridState{Row, Col, Scroll, Transpose}`、当前页数据、`Edits map[CellKey]Edit`（修改后的值为文本、NULL 或 DEFAULT）、总行数（-1 表示未知）、请求序号 `seq`。
+- `ConsoleTab`：文件路径、`*editor.Buffer`、所选的连接 `*Conn` 和 schema（仅 PG，§8.6）、**它自己的一条数据库连接** `*db.Worker`（M5 起，第一次执行时才建，关 tab 时断开）、事务模式 `Tx`（auto | manual）、它在结果区里的结果 tab。
 - `ResultTab`：来源 console、执行序号、`*db.Result`、`GridState`、是否固定。
 
 **表格和 console 可以放在同一个 pane 的不同 tab 里**（M3 F3.4 起，用户要求，与 DataGrip 一致）：
@@ -172,6 +175,17 @@ Tab 的种类：
 - 快速 SQL 的 `C-e`（在 console 中打开）在目标 pane 新开一个 console tab。
 - 目录树的工作区里，pane 节点不再标类型，tab 节点按各自的类型显示图标。
 - **引导页**：没有 tab 的 pane、点 `+` 新开的 tab、分割出来的新 pane，都显示同一个引导页，不再是空白。目标 pane 的当前 tab 是引导 tab 时，打开表（`↵`、`t`、`C-t`、中键都一样）和新建 console（`c`、点击、面板都一样）都替换它，不另开 tab：引导 tab 只是「新 tab」的占位。例外（F3.37）：这个 pane 里已经开着这张表时，切到那个 tab 并关掉引导 tab。内容区中间两个按钮：「打开表」打开命令面板的表范围，选中的表开在这里；「新建 console」直接在这里开一个 console。按钮可点击，旁边的键位文字从 keymap 读。它取代 M1 里「`+` 聚焦树的过滤框」的做法：面板的表范围能跨 schema 模糊搜，更适合挑表。
+
+**一个 session 多个连接**（M5，用户 2026-09-29 提出、2026-10-02 定，参考 DataGrip 的多个数据源）：
+
+- **连接列表**：每个 session 都能看到 connections.toml 里的全部连接。目录树的根就是这些连接（引擎图标、名字、只读时加锁的标记），展开或第一次用到时才建 `Meta` / `Main`；连不上时节点标成失败、错误进 toast，可以再展开重试。`sqlmux play` 启动时只连 play 并展开它；不带参数时连第一个（M6 起恢复 `last` 布局）。启动时的连接连不上，照 §14 打印错误退出；其他连接失败不影响启动。
+- **多个 session 保留**，作工作区用，像 tmux 的多个 session：各有自己的 window、布局，以及自己的一套连接对象（互不共享事务、search_path）。
+- **每个 console 独立一条连接**（用户定）：console 自己的 `*db.Worker`，第一次执行时才建，关 tab 时断开。事务、search_path、`C-c` 取消都只作用于这个 console，两个 console 互不影响；表格的取数和保存走所属连接的 `Meta` / `Main`，也不受 console 里开着的事务影响（M3「在 console 里 begin 不提交，表格的保存也会进这个事务」的已知上限随之消失）。
+- **console 标题**：`<连接> · <库>.<schema> ▾`，连接和 schema 各是一个下拉框。换连接会断开这个 console 原来的连接、下次执行时连新的；这个 console 有未提交的事务时不让换（提示先提交或回滚）。console 的文件不再按连接名分目录（§11），记着它最后用的连接和 schema。
+- **事务模式按 console**（F5.3）：标题上 `Tx: 自动 ▾`，手动时旁边是提交 ✓、回滚 ↺，作用于这个 console 自己的连接。有未提交事务的 console，关 tab、退出时确认。表格的保存不跟随 console 的事务模式，总是自己一个事务、成功就提交。
+- **只读按连接**：connections.toml 里写 `read_only = true`。这个连接的 `Meta`、`Main` 和所有 console 连接都设成只读（§13 两层拦截照旧），树和 console 标题上画锁的标记，表格不能进入编辑。
+- **当前连接**：表 tab、console tab 各属于一个连接；快速 SQL、命令面板的表范围、新 console 默认用「当前连接」：焦点 tab 所属的连接，焦点在树上时用树光标所在的连接。状态栏的地址块显示当前连接的 `<用户>@<host>:<port>`。
+- 开发清单由 worker 按这一节起草，§8.2、§8.6、§11、§12、§13、§14 里写着「每个 session 两条连接」「树当前的 schema」的地方，起草时一并列出要改的条目，决策者确认后改文档。
 
 默认 window 的布局：
 
@@ -757,7 +771,7 @@ type Result struct {
 
 ### 8.2 连接模型
 
-每个 session 两条连接。每条连接由一个 `db.Worker` 独占，用互斥锁保证同一时刻只跑一个请求，因为连接对象不能并发使用。`tea.Cmd` 本来就各在自己的 goroutine 里执行，所以 Worker 不再单开 goroutine 和 channel；请求的先后由 tab 的 `seq` 兜底（§8.3）。`Worker.Cancel()` 取消当前请求的 ctx。
+每个 session 两条连接（M5 起改为：每个数据源 `Conn` 两条 `Meta` / `Main`，每个 console 再各自一条，见 §5「一个 session 多个连接」；本节的表照旧描述 `Meta` / `Main` 的分工，console 执行从 `Main` 挪到 console 自己的连接）。每条连接由一个 `db.Worker` 独占，用互斥锁保证同一时刻只跑一个请求，因为连接对象不能并发使用。`tea.Cmd` 本来就各在自己的 goroutine 里执行，所以 Worker 不再单开 goroutine 和 channel；请求的先后由 tab 的 `seq` 兜底（§8.3）。`Worker.Cancel()` 取消当前请求的 ctx。
 
 **启动**：`main` 里同步建连，先 `Main` 后 `Meta`，两条都连上才进入界面，期间不显示提示（每条最多 10s）。任何一步失败都按 §14「启动时找不到连接」处理。
 
