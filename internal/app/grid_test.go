@@ -109,7 +109,7 @@ func TestGoldenTabs160x45(t *testing.T) {
 
 // The pointer on a tab shows × at its mark, or after its name, the bar
 // not moving: here over the previous, an unmarked and the current tab;
-// on the × it is lit (F3.35).
+// on the × it is lit, and the blank after it (F3.35, F5.6).
 func TestGoldenTabClose(t *testing.T) {
 	a := wide(160, 45)
 	loadOrders(t, a, 3)
@@ -122,9 +122,16 @@ func TestGoldenTabClose(t *testing.T) {
 		a.Update(tea.MouseMotionMsg{X: at.X, Y: at.Y})
 		rows = append(rows, bar())
 	}
-	x := find(t, a, ui.Target{Kind: ui.KindButton, Pane: p.ID, Action: fmt.Sprintf("tab.close.at %d 2", p.ID)}).Min
-	if a.Update(tea.MouseMotionMsg{X: x.X, Y: x.Y}); a.render().Buf.CellAt(x.X, x.Y).Style.Bg != a.theme.Select {
-		t.Error("the × under the pointer is not lit")
+	for _, i := range []int{1, 2} { // the pointer on the ×: lit with the blank after it, an unmarked tab's in the next │'s cell (F5.6)
+		at := find(t, a, ui.Target{Kind: ui.KindTab, Pane: p.ID, I: i}).Min
+		a.Update(tea.MouseMotionMsg{X: at.X, Y: at.Y})
+		x := find(t, a, ui.Target{Kind: ui.KindButton, Pane: p.ID, Action: fmt.Sprintf("tab.close.at %d %d", p.ID, i)})
+		a.Update(tea.MouseMotionMsg{X: x.Min.X, Y: x.Min.Y})
+		f := a.render()
+		if x.Dx() != 2 || f.Buf.CellAt(x.Max.X-1, x.Min.Y).Style.Bg != a.theme.Select {
+			t.Errorf("tab %d: the × and its blank, %v, not lit", i+1, x)
+		}
+		rows = append(rows, bar(), bgs(a, f, a.layout()[p.ID].Max.Y-2, 0, a.w))
 	}
 	golden.RequireEqual(t, strings.Join(rows, "\n")+"\n")
 }

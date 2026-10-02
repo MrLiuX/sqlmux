@@ -29,10 +29,12 @@ func (t Tabs) Draw(f *Frame, r uv.Rectangle) {
 	base := uv.Style{Fg: th.Dim, Bg: th.Bg}
 	f.Fill(r, base)
 	x, y := r.Min.X, r.Min.Y
+	took := false // the last tab's × has the cell after it: the │'s
 	for i, n := range t.Names {
-		if i > 0 {
+		if i > 0 && !took {
 			x = f.Text(x, y, r.Max.X, "│", uv.Style{Fg: th.Sep, Bg: th.Bg})
 		}
+		took = false
 		mark, st := "", base
 		switch i {
 		case t.Cur:
@@ -47,6 +49,10 @@ func (t Tabs) Draw(f *Frame, r uv.Rectangle) {
 		}
 		tab := uv.Rect(x, y, max(min(w, r.Max.X-x), 0), 1) // what shows of it: the pane's border is no tab's
 		f.Region(tab, Target{Kind: KindTab, Pane: t.Pane, I: i})
+		hot := tab // where the pointer shows the ×: with no mark, the cell after the tab its blank takes too
+		if mark == "" {
+			hot.Max.X = min(hot.Max.X+1, r.Max.X)
+		}
 		x = f.Text(x, y, r.Max.X, num, st)
 		if ic.Text != "" {
 			x = f.Text(x, y, r.Max.X, ic.Text, ic.On(st))
@@ -54,17 +60,24 @@ func (t Tabs) Draw(f *Frame, r uv.Rectangle) {
 		}
 		x = f.Text(x, y, r.Max.X, n, st)
 		tail := mark + " "
-		if t.Close.Text != "" && i >= t.Keep && f.Mouse.In(tab) { // × in the mark's place, or the blank's after the name
+		if t.Close.Text != "" && i >= t.Keep && f.Mouse.In(hot) {
+			// × in the mark's place, or the blank's after the name, and a
+			// blank after it on its background: a nerd glyph draws past its
+			// cell (§7.7). With no mark that blank is the next │'s cell, so
+			// the bar does not move.
 			cst := st
-			if f.Region(uv.Rect(x, y, max(min(Width(t.Close.Text), r.Max.X-x), 0), 1), Target{Kind: KindButton, Pane: t.Pane, Action: fmt.Sprintf("tab.close.at %d %d", t.Pane, i)}) {
+			cw := Width(t.Close.Text) + 1
+			if f.Region(uv.Rect(x, y, max(min(cw, r.Max.X-x), 0), 1), Target{Kind: KindButton, Pane: t.Pane, Action: fmt.Sprintf("tab.close.at %d %d", t.Pane, i)}) {
 				cst.Bg = th.Select
 			}
-			x, tail = f.Text(x, y, r.Max.X, t.Close.Text, t.Close.On(cst)), tail[1:]
+			x = f.Text(x, y, r.Max.X, t.Close.Text, t.Close.On(cst))
+			x = f.Text(x, y, r.Max.X, " ", cst)
+			took, tail = mark == "", ""
 		}
 		x = f.Text(x, y, r.Max.X, tail, st)
 	}
 	if !t.NoNew {
-		if len(t.Names) > 0 {
+		if len(t.Names) > 0 && !took {
 			x = f.Text(x, y, r.Max.X, "│", uv.Style{Fg: th.Sep, Bg: th.Bg})
 		}
 		plus := base
