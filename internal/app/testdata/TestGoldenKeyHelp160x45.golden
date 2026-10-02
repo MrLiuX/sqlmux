@@ -1,4 +1,4 @@
-┌─ ⓪  doraemon ─────── SPC b ─┐ ┌─ ①  t_order ──────────────────────────────────────────────────────┐ ┌─ ②  console_1 ──────── doraemon.public ▾  ▶ run  ↵ ─┐
+┌─ ⓪  doraemon ─────── SPC b ─┐ ┌─ ①  t_order ──────────────────────────────────────────────────────┐ ┌─ ②  conso…  doraemon · doraemon.public ▾  ▶ run  ↵ ─┐
 │  15 tables                  │ │ WHERE                                                            ▾ │ │   1                                                  │
 │──────────────────────────────│ │  ORDER id    LIMIT 100   PAGE 1/?   COLS 7/7       │          │ │                                                      │
 │ ▾  doraemon                 │ │    │  id │ status │ amount │ paid │ meta        │ note           ││ │                                                      │
@@ -42,4 +42,4 @@
 │ [keys.global]                                                                                                                                                │
 │ C-p → 命令面板              C-s → 保存                  C-c → 取消 / 连按两次退出                                                                            │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-  doraemon ▾  0: data*                                                                                                ·    1,1   pg@localhost:5432  COMMAND 
+ doraemon ▾  0: data*                                                                                       ·    1,1   doraemon · pg@localhost:5432  COMMAND 

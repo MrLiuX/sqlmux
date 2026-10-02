@@ -255,7 +255,7 @@ func withMain(t *testing.T, tag string) (*App, *dataTab, *saveDB) {
 	a := wide(160, 45)
 	tab := loadOrders(t, a, 3)
 	main := &saveDB{tag: tag}
-	a.sess.Main = db.NewWorker(main)
+	a.sess.Conns[0].Main = db.NewWorker(main)
 	return a, tab, main
 }
 
@@ -282,10 +282,10 @@ func TestSave(t *testing.T) {
 	if strings.Join(main.sqls, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("sent:\n%s", strings.Join(main.sqls, "\n"))
 	}
-	busy := a.busy
+	busy := a.sess.Conns[0].busy
 	a.Update(m)
-	if len(tab.edits) != 0 || tab.saving || a.busy != busy || !tab.recount {
-		t.Fatalf("saved: edits %q, busy %d → %d", editsOf(tab), busy, a.busy)
+	if len(tab.edits) != 0 || tab.saving || a.sess.Conns[0].busy != busy || !tab.recount {
+		t.Fatalf("saved: edits %q, busy %d → %d", editsOf(tab), busy, a.sess.Conns[0].busy)
 	}
 	if n := a.queryBar(a.focused(), tab).Note; !strings.HasPrefix(n.Head, "已保存 2 行 · ") || n.Fg != nil {
 		t.Errorf("note %+v", n)
@@ -1001,7 +1001,7 @@ func TestSaveRowsAdded(t *testing.T) {
 	a := wide(160, 45)
 	tab := loadOrders(t, a, 3)
 	d := &tagDB{}
-	a.sess.Main = db.NewWorker(d)
+	a.sess.Conns[0].Main = db.NewWorker(d)
 	feed(t, a, "jjolli5<Esc>ggolli6<Esc>") // under row 3, then under row 1
 	if tab.added[0].after != 0 {
 		t.Errorf("kept in the order added, not as they show: %+v", tab.added)
@@ -1023,7 +1023,7 @@ func TestSaveRows(t *testing.T) {
 	a := wide(160, 45)
 	tab := loadOrders(t, a, 3)
 	d := &tagDB{}
-	a.sess.Main = db.NewWorker(d)
+	a.sess.Conns[0].Main = db.NewWorker(d)
 	feed(t, a, "lix<Esc>jlix<Esc>ddo") // row 1's status, row 2's amount and delete it, a row after it
 	feed(t, a, "lli5<Esc>")            // its amount
 	if tab.changes() != 3 {

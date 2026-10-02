@@ -26,10 +26,10 @@ type palette struct {
 	sel, top int   // selected candidate, first one shown
 	into     *Pane // a landing tab's 打开表: the table picked opens there (§5)
 
-	// The table the selection was on when last looked at, the preview's
-	// timer for it, and what stops the DDL fetches out once the palette
-	// closes (F4.2).
-	preview    tableID
+	// The table item the selection was on when last looked at, the
+	// preview's timer for it, and what stops the DDL fetches out once the
+	// palette closes (F4.2).
+	preview    string
 	previewSeq int
 	fetches    context.Context
 	stop       context.CancelFunc
@@ -146,11 +146,15 @@ func (a *App) paletteItems() []paletteItem {
 			}
 		}
 	}
-	// the tree's schema first, as the tree lists it, then the others (§12)
-	for _, here := range []bool{true, false} {
-		for _, t := range a.sess.Tables {
-			if (t.Schema == a.sess.Schema) == here {
-				items = append(items, paletteItem{itemTable, t.Schema + "." + t.Name, a.icons.Table, t.Name, a.sess.Name + "." + t.Schema})
+	// the current connection's Schema first, as the tree lists it, its other
+	// schemas, then the other connections connected (§12)
+	cur := a.conn()
+	for _, c := range append([]*Conn{cur}, slices.DeleteFunc(slices.Clone(a.sess.Conns), func(c *Conn) bool { return c == cur })...) {
+		for _, here := range []bool{true, false} {
+			for _, t := range c.Tables {
+				if (c == cur && t.Schema == c.Schema) == here {
+					items = append(items, paletteItem{itemTable, c.Spec.Name + "/" + t.Schema + "." + t.Name, a.icons.Table, t.Name, c.Spec.Name + "." + t.Schema})
+				}
 			}
 		}
 	}
@@ -164,7 +168,7 @@ func (a *App) paletteItems() []paletteItem {
 	for _, id := range ids {
 		items = append(items, paletteItem{itemCommand, id, a.icons.Command, actions[id].Title, id})
 	}
-	for _, sql := range a.state.SQL[a.sess.Name] {
+	for _, sql := range a.state.SQL[cur.Spec.Name] {
 		items = append(items, paletteItem{itemSQL, sql, a.icons.Console, sql, ""})
 	}
 	recent := func(it paletteItem) int {
@@ -309,6 +313,7 @@ type (
 	// ddlMsg brings a table's DDL, or why there is none; a table's columns
 	// come with it, cols.Cols nil for a view's.
 	ddlMsg struct {
+		conn  *Conn
 		table db.Table
 		text  string
 		cols  db.Columns
@@ -322,53 +327,60 @@ type (
 	}
 )
 
-// previewed is the table the palette's selection is on, if any: in 所有
-// and 表, the scopes listing tables (F4.2).
-func (a *App) previewed() (db.Table, bool) {
+// previewed is the table the palette's selection is on, if any, with its
+// item's id and its connection: in 所有 and 表, the scopes listing tables
+// (F4.2).
+func (a *App) previewed() (id string, c *Conn, t db.Table, ok bool) {
 	if a.palette == nil {
-		return db.Table{}, false
+		return "", nil, db.Table{}, false
 	}
 	items, ms := a.paletteMatches()
 	if a.palette.sel >= len(ms) || items[ms[a.palette.sel].Index].kind != itemTable {
-		return db.Table{}, false
+		return "", nil, db.Table{}, false
 	}
-	return a.tableByID(items[ms[a.palette.sel].Index].id)
+	id = items[ms[a.palette.sel].Index].id
+	c, t, ok = a.tableByID(id)
+	return id, c, t, ok
 }
 
-// tableByID is the session's table of a palette item's id, schema.name.
-func (a *App) tableByID(id string) (db.Table, bool) {
-	if i := slices.IndexFunc(a.sess.Tables, func(t db.Table) bool { return t.Schema+"."+t.Name == id }); i >= 0 {
-		return a.sess.Tables[i], true
+// tableByID is the table of a palette item's id, connection/schema.name,
+// and its connection.
+func (a *App) tableByID(id string) (*Conn, db.Table, bool) {
+	name, table, _ := strings.Cut(id, "/")
+	for _, c := range a.sess.Conns {
+		if i := slices.IndexFunc(c.Tables, func(t db.Table) bool { return t.Schema+"."+t.Name == table }); c.Spec.Name == name && i >= 0 {
+			return c, c.Tables[i], true
+		}
 	}
-	return db.Table{}, false
+	return nil, db.Table{}, false
 }
 
 // previewedView is the DDL of the view the palette previews, "" for none,
-// and its schema: its names are colored by the tables its query names
-// (§7.3), whose columns wantCols fetches.
-func (a *App) previewedView() (text, schema string) {
-	if t, ok := a.previewed(); ok && t.View() {
-		if d := a.sess.ddl[idOf(t)]; d.got && d.err == "" {
-			return d.text, t.Schema
+// with its connection and schema: its names are colored by the tables its
+// query names (§7.3), whose columns wantCols fetches.
+func (a *App) previewedView() (c *Conn, text, schema string) {
+	if _, c, t, ok := a.previewed(); ok && t.View() {
+		if d := c.ddl[idOf(t)]; d.got && d.err == "" {
+			return c, d.text, t.Schema
 		}
 	}
-	return "", ""
+	return nil, "", ""
 }
 
 // palettePreview is the preview of the table selected, once its DDL is in:
 // in SQL's colors, a table's own columns among them, fetched with it; a
 // view's by the tables its query names, as a console's (F3.27).
 func (a *App) palettePreview() *ui.PalettePreview {
-	t, ok := a.previewed()
-	d := a.sess.ddl[idOf(t)]
-	if !ok || !d.got {
+	_, c, t, ok := a.previewed()
+	if !ok || !c.ddl[idOf(t)].got {
 		return nil
 	}
+	d := c.ddl[idOf(t)]
 	var names ui.SQLNames
-	if cols := a.sess.cols[idOf(t)]; t.View() {
-		names, _ = a.sqlNames(d.text, t.Schema, nil)
+	if cols := c.cols[idOf(t)]; t.View() {
+		names, _ = a.sqlNames(c, d.text, t.Schema, nil)
 	} else {
-		names, _ = a.sqlNames(d.text, "", &cols)
+		names, _ = a.sqlNames(c, d.text, "", &cols)
 	}
 	return &ui.PalettePreview{Text: d.text, Err: d.err, Names: names}
 }
@@ -386,12 +398,15 @@ func (a *App) wantDDL() tea.Cmd {
 	if p == nil {
 		return nil
 	}
-	t, ok := a.previewed()
-	if idOf(t) == p.preview {
+	id, c, t, ok := a.previewed()
+	if id == p.preview {
 		return nil
 	}
-	p.preview = idOf(t)
-	if _, cached := a.sess.ddl[idOf(t)]; !ok || cached {
+	p.preview = id
+	if !ok {
+		return nil
+	}
+	if _, cached := c.ddl[idOf(t)]; cached {
 		return nil
 	}
 	p.previewSeq++
@@ -399,27 +414,27 @@ func (a *App) wantDDL() tea.Cmd {
 	return tea.Tick(previewDelay, func(time.Time) tea.Msg { return due })
 }
 
-// fetchDDL asks Meta for the DDL of the table the selection rested on, a
-// table's columns with it, bounded by countTimeout: a table another
-// session locks holds pg_get_expr up (§8.3, PG 16 on).
+// fetchDDL asks its connection's Meta for the DDL of the table the
+// selection rested on, a table's columns with it, bounded by countTimeout:
+// a table another session locks holds pg_get_expr up (§8.3, PG 16 on).
 func (a *App) fetchDDL(m previewDue) tea.Cmd {
-	t, ok := a.previewed()
+	_, conn, t, ok := a.previewed()
 	if m.p != a.palette || m.seq != m.p.previewSeq || !ok {
 		return nil
 	}
-	if _, cached := a.sess.ddl[idOf(t)]; cached {
+	if _, cached := conn.ddl[idOf(t)]; cached {
 		return nil
 	}
-	a.sess.ddl[idOf(t)] = ddlText{}
+	conn.ddl[idOf(t)] = ddlText{}
 	if a.fetching != m.p {
 		m.p.fetches, m.p.stop = context.WithCancel(context.Background())
 		a.fetching = m.p
 	}
-	meta, ctx := a.sess.Meta, m.p.fetches
+	meta, ctx := conn.Meta, m.p.fetches
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, countTimeout)
 		defer cancel()
-		m := ddlMsg{table: t}
+		m := ddlMsg{conn: conn, table: t}
 		m.err = meta.Run(ctx, func(ctx context.Context, c db.Conn) (err error) {
 			if m.text, err = postgres.DDL(ctx, c, t.Schema, t.Name); err != nil || t.View() {
 				return err
@@ -435,21 +450,21 @@ func (a *App) fetchDDL(m previewDue) tea.Cmd {
 // a table's columns. One out of time, or cancelled, is not kept: the next
 // rest asks again; one the cache dropped meanwhile (R) neither.
 func (a *App) gotDDL(m ddlMsg) {
-	id := idOf(m.table)
-	if _, asked := a.sess.ddl[id]; !asked {
+	c, id := m.conn, idOf(m.table)
+	if _, asked := c.ddl[id]; !asked {
 		return
 	}
 	if errors.Is(m.err, context.DeadlineExceeded) || errors.Is(m.err, context.Canceled) {
-		delete(a.sess.ddl, id)
+		delete(c.ddl, id)
 		return
 	}
 	d := ddlText{text: m.text, got: true}
 	if m.err != nil {
 		d.err = m.err.Error()
 	}
-	a.sess.ddl[id] = d
+	c.ddl[id] = d
 	if m.cols.Cols != nil {
-		a.sess.cols[id] = m.cols
+		c.cols[id] = m.cols
 	}
 }
 
@@ -519,11 +534,11 @@ func (a *App) paletteDo(it paletteItem) tea.Cmd {
 	case itemCommand:
 		return a.run(it.id, 0)
 	case itemTable:
-		if t, ok := a.tableByID(it.id); ok {
+		if c, t, ok := a.tableByID(it.id); ok {
 			if into != nil {
-				return a.openTableIn(into, t)
+				return a.openTableIn(into, c, t)
 			}
-			return a.openTable(t)
+			return a.openTable(c, t)
 		}
 	case itemPane:
 		id, _ := strconv.Atoi(it.id)

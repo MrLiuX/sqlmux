@@ -7,17 +7,28 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 )
 
 // State is what the app keeps between runs (§14), in state.json: the
-// palette's recent picks, each table's WHERE history and favorites, and
-// each connection's quick SQL history.
+// palette's recent picks, each table's WHERE history and favorites, each
+// connection's quick SQL history, and the connection and schema each
+// console file last ran on.
 type State struct {
-	Recent []Recent               `json:"recent,omitempty"`
-	Tables map[string]*TableState `json:"tables,omitempty"` // by "<connection>/<schema>.<table>"
-	SQL    map[string][]string    `json:"sql,omitempty"`    // by connection, newest first (§12)
+	Recent   []Recent                `json:"recent,omitempty"`
+	Tables   map[string]*TableState  `json:"tables,omitempty"`   // by "<connection>/<schema>.<table>"
+	SQL      map[string][]string     `json:"sql,omitempty"`      // by connection, newest first (§12)
+	Consoles map[string]ConsoleState `json:"consoles,omitempty"` // by file name: "console_1" (§11)
+}
+
+// ConsoleState is where a console runs: its connection, by name, and its
+// schema (§8.6).
+type ConsoleState struct {
+	Conn   string `json:"conn"`
+	Schema string `json:"schema,omitempty"`
 }
 
 // Recent is one palette pick (§12): its kind and its id within the kind.
@@ -53,7 +64,8 @@ func statePath() string { return filepath.Join(StateDir(), "state.json") }
 
 // LoadState reads state.json; a missing file is an empty state. One that
 // doesn't read is moved to state.json.broken, so the next save can't
-// overwrite what the user had, and the state starts empty (§14).
+// overwrite what the user had, and the state starts empty (§14). A table
+// picked before its id named the connection (F5.10) is dropped.
 func LoadState() (*State, error) {
 	data, err := os.ReadFile(statePath())
 	if errors.Is(err, fs.ErrNotExist) {
@@ -69,6 +81,7 @@ func LoadState() (*State, error) {
 		}
 		return &State{}, fmt.Errorf("%s: %w", statePath(), err)
 	}
+	s.Recent = slices.DeleteFunc(s.Recent, func(r Recent) bool { return r.Kind == "table" && !strings.Contains(r.ID, "/") })
 	return s, nil
 }
 

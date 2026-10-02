@@ -83,12 +83,11 @@ func TestSmallSizes(t *testing.T) {
 	}
 }
 
-// §7.8: at 160×45 the console title has its name and "▶ run ↵"; the
-// schema dropdown comes in F3.11.
+// §7.8: at 160×45 the console title has "▶ run ↵", the connection and the
+// schema; its name, cut, the rest (no "console" beside its icon, §7.7).
 func TestConsoleTitleAt160(t *testing.T) {
 	top := strings.Split(twoPanes(160, 45, "nerd").render().String(), "\n")[0]
-	// no "console" beside its icon (§7.7), so the tab name fits whole
-	for _, want := range []string{"② " + ui.NerdIcons.Console.Text + " console_1 ─", " ▶ run  ↵ ─┐"} {
+	for _, want := range []string{"② " + ui.NerdIcons.Console.Text + " conso…  doraemon · doraemon.public ▾  ▶ run  ↵ ─┐"} {
 		if !strings.Contains(top, want) {
 			t.Errorf("top row lacks %q: %q", want, top)
 		}
@@ -242,10 +241,11 @@ func TestStatusNarrowing(t *testing.T) {
 		w          int
 		has, lacks []string
 	}{
-		{160, []string{"doraemon ▾", " 0: data* ", " 1: report ", " 1,1 ", "pg@localhost:5432", " NORMAL "}, nil},
+		{160, []string{"doraemon ▾", " 0: data* ", " 1: report ", " 1,1 ", "doraemon · pg@localhost:5432", " NORMAL "}, nil},
 		{78, []string{"doraemon ▾", " 1: report ", " 1,1 ", " NORMAL "}, []string{"pg@localhost"}},
 		{55, []string{"doraemon ▾", " 0: data* ", " 1,1 "}, []string{" 1: report "}},
-		{40, []string{" 0: data* ", "·", " NORMAL "}, []string{" 1,1 ", "doraemon"}},
+		{40, []string{"doraemon ▾", " 0: data* ", "·", " NORMAL "}, []string{" 1,1 "}},
+		{36, []string{" 0: data* ", "·", " NORMAL "}, []string{" 1,1 ", "doraemon"}},
 	} {
 		a := twoPanes(c.w, 24, "nerd")
 		loadOrders(t, a, 3) // row,col shows with a table loaded (§7.8)
@@ -292,10 +292,10 @@ table = { fg = "#a9dc76" }
 	if bg := f.Buf.CellAt(80, a.h-1).Style.Bg; bg != th.Bar || th.Bar == th.Row {
 		t.Errorf("status bar %v, want bar %v whatever row is", bg, th.Bar)
 	}
-	if st := cell(0, " C console"); st.Fg != th.Dim {
+	if st := cell(0, " C conso"); st.Fg != th.Dim {
 		t.Fatal("the title around the icon keeps its color")
 	}
-	if st := cell(0, "C console"); st.Fg != ic.Console.Fg {
+	if st := cell(0, "C conso"); st.Fg != ic.Console.Fg {
 		t.Errorf("console icon %v, want %v", st.Fg, ic.Console.Fg)
 	}
 	if st := cell(7, ui.NerdIcons.Table.Text); st.Fg != ic.Table.Fg { // the first table, under doraemon, public and Tables

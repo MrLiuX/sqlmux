@@ -41,8 +41,6 @@ type App struct {
 	// paneNumbers is SPC q's overlay: the next key picks a pane by its ⟨n⟩.
 	paneNumbers bool
 
-	busy int // table requests out on Meta (§8.3)
-
 	state *config.State // kept between runs (§14)
 
 	rowCopy  *copiedRow           // the row yy took, for p (§10.6)
@@ -103,10 +101,13 @@ func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, 
 func (a *App) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		func() tea.Msg { return tea.ModeReportMsg{Mode: ansi.ModeUnicodeCore, Value: ansi.ModeSet} },
-		a.loadCatalog(),
+		a.loadCatalog(a.sess.last),
 	}
 	if a.warning != "" {
 		cmds = append(cmds, a.showToast(a.warning, toastTTL))
+	}
+	for _, t := range a.sess.consoles() { // console_1, where it last ran (§11)
+		cmds = append(cmds, a.restoreConsole(t))
 	}
 	return tea.Batch(cmds...)
 }
@@ -115,6 +116,7 @@ func (a *App) Init() tea.Cmd {
 // and the DDL the palette's selection may (F4.2).
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	_, cmd := a.update(msg)
+	a.sess.last = a.conn() // where the focus goes next may name none (§5)
 	return a, tea.Batch(cmd, a.wantCols(), a.wantDDL())
 }
 
@@ -122,6 +124,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.w, a.h = msg.Width, msg.Height
+	case connected:
+		return a, a.gotConnected(msg)
 	case catalogMsg:
 		return a, a.gotCatalog(msg)
 	case pageMsg:

@@ -23,48 +23,49 @@ type Connection struct {
 	Password    string `toml:"password"`
 }
 
-// LoadConnection finds connection name in connections.toml, or the first
-// one when name is "". warning is set when the file holds a plain password
-// that group or others can read (§13).
-func LoadConnection(name string) (Connection, string, error) {
-	var none Connection
+// LoadConnections reads every connection in connections.toml, and which
+// of them is connection name, or the first one when name is "" (§5).
+// warning is set when the file holds a plain password that group or others
+// can read (§13).
+func LoadConnections(name string) (conns []Connection, start int, warning string, err error) {
 	path := filepath.Join(Dir(), "connections.toml")
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return none, "", fmt.Errorf("找不到 %s", path)
+		return nil, 0, "", fmt.Errorf("找不到 %s", path)
 	}
 	if err != nil {
-		return none, "", err
+		return nil, 0, "", err
 	}
 	var file struct {
 		Connection []Connection `toml:"connection"`
 	}
 	if _, err := toml.Decode(string(data), &file); err != nil {
-		return none, "", fmt.Errorf("%s: %w", path, err)
+		return nil, 0, "", fmt.Errorf("%s: %w", path, err)
 	}
-	conns := file.Connection
+	conns = file.Connection
 	if len(conns) == 0 {
-		return none, "", fmt.Errorf("%s: 里面没有 [[connection]]", path)
+		return nil, 0, "", fmt.Errorf("%s: 里面没有 [[connection]]", path)
 	}
 	var names []string
 	for i, c := range conns {
 		if p := c.problem(); p != "" {
-			return none, "", fmt.Errorf("%s: 第 %d 个连接：%s", path, i+1, p)
+			return nil, 0, "", fmt.Errorf("%s: 第 %d 个连接：%s", path, i+1, p)
+		}
+		if slices.Contains(names, c.Name) { // the tree's roots and state.json's keys go by it (§5)
+			return nil, 0, "", fmt.Errorf("%s: 第 %d 个连接：name = %q 重复了", path, i+1, c.Name)
 		}
 		names = append(names, c.Name)
 	}
-	i := 0
 	if name != "" {
-		if i = slices.Index(names, name); i < 0 {
-			return none, "", fmt.Errorf("%s: 没有名为 %q 的连接，已有：%s", path, name, strings.Join(names, ", "))
+		if start = slices.Index(names, name); start < 0 {
+			return nil, 0, "", fmt.Errorf("%s: 没有名为 %q 的连接，已有：%s", path, name, strings.Join(names, ", "))
 		}
 	}
-	warning := ""
 	plain := slices.ContainsFunc(conns, func(c Connection) bool { return c.Password != "" })
 	if info, err := os.Stat(path); err == nil && plain && info.Mode().Perm()&0o044 != 0 {
 		warning = "connections.toml 里有明文密码，且其他用户可读，建议 chmod 600"
 	}
-	return conns[i], warning, nil
+	return conns, start, warning, nil
 }
 
 // problem is what makes c unusable, or "".
@@ -74,7 +75,7 @@ func (c Connection) problem() string {
 			return "缺少 " + f[0]
 		}
 	}
-	// the name is the directory of its console files (§11)
+	// the name keys state.json's tables and tree node IDs (§14)
 	if strings.ContainsAny(c.Name, `/\`) || strings.HasPrefix(c.Name, ".") {
 		return fmt.Sprintf(`name = %q：不能含 / 或 \，也不能以 . 开头`, c.Name)
 	}

@@ -266,7 +266,7 @@ func TestWhereHistoryRows(t *testing.T) {
 func TestPaletteRecentInState(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	feed(t, a, "<C-p>@t_user<CR>")
-	if r := a.state.Recent; len(r) != 1 || r[0] != (config.Recent{Kind: "table", ID: "public.t_user"}) {
+	if r := a.state.Recent; len(r) != 1 || r[0] != (config.Recent{Kind: "table", ID: "doraemon/public.t_user"}) {
 		t.Fatalf("recent %+v", r)
 	}
 	a.state.Recent = append(a.state.Recent, config.Recent{Kind: "command", ID: "pane.zoom"})
@@ -288,9 +288,9 @@ func openPaletteOn(t *testing.T, a *App) *App {
 func TestSQLNames(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	tab := loadOrders(t, a, 3)
-	a.sess.Tables = append(a.sess.Tables, db.Table{Schema: "public", Name: "agentable"}, db.Table{Schema: "public", Name: "État"})
+	a.sess.Conns[0].Tables = append(a.sess.Conns[0].Tables, db.Table{Schema: "public", Name: "agentable"}, db.Table{Schema: "public", Name: "État"})
 	text := `select o.status, "status", "Status", AMOUNT from T_ORDER o; select status from t_user; with x as (select 1) select status from x; table agentable.planner; table ÉTAT`
-	names, missing := a.sqlNames(text, "public", nil)
+	names, missing := a.sqlNames(a.sess.Conns[0], text, "public", nil)
 	for _, c := range []struct {
 		word string
 		n    int // the nth of it in text
@@ -318,7 +318,7 @@ func TestSQLNames(t *testing.T) {
 		t.Error("the WHERE's: the table's columns")
 	}
 	consoleOf(a.win().pane(2)).ed = editor.New("select * from t_user") // on screen
-	if _, cmd := a.Update(tea.WindowSizeMsg{Width: 160, Height: 45}); cmd == nil || !a.sess.colsAsked[tableID{"public", "t_user"}] {
+	if _, cmd := a.Update(tea.WindowSizeMsg{Width: 160, Height: 45}); cmd == nil || !a.sess.Conns[0].colsAsked[tableID{"public", "t_user"}] {
 		t.Fatal("the console's t_user: its columns asked for")
 	}
 	if _, cmd := a.Update(tea.WindowSizeMsg{Width: 160, Height: 45}); cmd != nil {

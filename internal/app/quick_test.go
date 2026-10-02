@@ -36,7 +36,7 @@ func quickResult(n int) db.Result {
 
 // answerQuick hands the palette the quick SQL's answer.
 func answerQuick(a *App, r db.Result, err error) tea.Cmd {
-	_, cmd := a.Update(quickMsg{a.palette, r, err})
+	_, cmd := a.Update(quickMsg{a.palette, a.sess.Conns[0], "public", r, err})
 	return cmd
 }
 
@@ -59,18 +59,18 @@ func TestQuickSQL(t *testing.T) {
 	}
 	feed(t, a, "<CR>")
 	q := a.palette.quick
-	if q.running != "select 1" || a.busy != 1 || !slices.Equal(a.state.SQL["doraemon"], []string{"select 1"}) {
-		t.Fatalf("running %q, busy %d, history %v", q.running, a.busy, a.state.SQL)
+	if q.running != "select 1" || a.sess.Conns[0].busy != 1 || !slices.Equal(a.state.SQL["doraemon"], []string{"select 1"}) {
+		t.Fatalf("running %q, busy %d, history %v", q.running, a.sess.Conns[0].busy, a.state.SQL)
 	}
 	if r := a.paletteView().Result; r == nil || r.Title != "… 行 · 只读" {
 		t.Fatalf("running: %+v", r)
 	}
-	if feed(t, a, "<CR>"); a.busy != 1 {
+	if feed(t, a, "<CR>"); a.sess.Conns[0].busy != 1 {
 		t.Error("↵ while one runs ran another")
 	}
 	answerQuick(a, quickResult(3), nil)
-	if r := a.paletteView().Result; a.busy != 0 || q.ran != "select 1" || r.Title != "3 行 · 12ms · 只读" || len(r.Grid.Rows) != 3 || r.Grid.Row != -1 {
-		t.Fatalf("answered: busy %d, %+v", a.busy, r)
+	if r := a.paletteView().Result; a.sess.Conns[0].busy != 0 || q.ran != "select 1" || r.Title != "3 行 · 12ms · 只读" || len(r.Grid.Rows) != 3 || r.Grid.Row != -1 {
+		t.Fatalf("answered: busy %d, %+v", a.sess.Conns[0].busy, r)
 	}
 	if feed(t, a, " "); enterOf(a) != "已修改，↵ 重新执行" {
 		t.Errorf("modified: %q", enterOf(a))
@@ -100,7 +100,7 @@ func TestQuickSQL(t *testing.T) {
 func TestSemicolonOpensQuickSQL(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	loadOrders(t, a, 3)
-	a.busy = 0
+	a.sess.Conns[0].busy = 0
 	feed(t, a, "<Space>%") // an empty pane
 	for _, focus := range []int{1, 0, a.focused().ID} {
 		a.win().focus(focus)
@@ -112,7 +112,7 @@ func TestSemicolonOpensQuickSQL(t *testing.T) {
 		if a.palette.quick == nil || a.palette.quick.running != "select 1 " {
 			t.Errorf("pane %d: %+v", focus, a.palette.quick)
 		}
-		a.palette, a.busy = nil, 0
+		a.palette, a.sess.Conns[0].busy = nil, 0
 	}
 }
 
@@ -138,9 +138,9 @@ func TestQuickSQLCancel(t *testing.T) {
 	if feed(t, a, "<Esc>"); a.palette != nil {
 		t.Fatal("esc while running keeps the palette")
 	}
-	a.Update(quickMsg{p, quickResult(1), nil})
-	if a.busy != 0 || a.palette != nil {
-		t.Errorf("an answer to a closed palette: busy %d", a.busy)
+	a.Update(quickMsg{p, a.sess.Conns[0], "public", quickResult(1), nil})
+	if a.sess.Conns[0].busy != 0 || a.palette != nil {
+		t.Errorf("an answer to a closed palette: busy %d", a.sess.Conns[0].busy)
 	}
 	if feed(t, a, "<C-p>;<C-c>"); a.palette != nil {
 		t.Error("idle C-c keeps the palette")
@@ -153,7 +153,7 @@ func TestQuickSQLHistory(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	for _, sql := range []string{"select 1", "select 2", "select 1"} {
 		feed(t, a, "<C-p>;"+sql+"<CR><Esc>")
-		a.busy = 0
+		a.sess.Conns[0].busy = 0
 	}
 	if h := a.state.SQL["doraemon"]; !slices.Equal(h, []string{"select 1", "select 2"}) {
 		t.Fatalf("history %v: a repeat moves up", h)
@@ -187,9 +187,9 @@ func TestQuickSQLHistory(t *testing.T) {
 func TestQuickSQLCompletion(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	table, cols, _ := ordersTable(0)
-	for i, tb := range a.sess.Tables {
+	for i, tb := range a.sess.Conns[0].Tables {
 		if tb.Name == "t_order" {
-			a.sess.Tables[i] = table
+			a.sess.Conns[0].Tables[i] = table
 		}
 	}
 	feed(t, a, "<C-p>;select * from t_order where st")
@@ -199,7 +199,7 @@ func TestQuickSQLCompletion(t *testing.T) {
 	if a.mode() != keymap.Command || a.context().Overlay != "complete" {
 		t.Errorf("mode %v, overlay %q", a.mode(), a.context().Overlay)
 	}
-	a.Update(colsMsg{table, cols, nil})
+	a.Update(colsMsg{a.sess.Conns[0], table, cols, nil})
 	c := a.palette.comp
 	if c == nil || c.items[0].label != "status" || c.items[0].note != "order_status · t_order" {
 		t.Fatalf("after the columns: %+v", c)
@@ -319,21 +319,21 @@ func TestGoldenQuickSQL160x45(t *testing.T) {
 func TestQuickSQLWrite(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	rec := &recDB{}
-	a.sess.Meta = db.NewWorker(rec)
+	a.sess.Conns[0].Meta = db.NewWorker(rec)
 	for _, sql := range []string{"delete from t_order", "with x as (delete from t_order returning *) select * from x"} {
 		feed(t, a, "<C-p>;"+sql+"<CR>")
 		r := a.paletteView().Result
 		sent := slices.ContainsFunc(rec.sqls, func(s string) bool { return strings.Contains(s, "delete") }) // columns completion asked for aside
-		if a.busy != 0 || sent || r == nil || r.Title != "只读" || r.Err != "写语句不在这里执行 · C-e 在 console 中打开" || !r.Warn {
-			t.Fatalf("%s: busy %d, sent %q, %+v", sql, a.busy, rec.sqls, r)
+		if a.sess.Conns[0].busy != 0 || sent || r == nil || r.Title != "只读" || r.Err != "写语句不在这里执行 · C-e 在 console 中打开" || !r.Warn {
+			t.Fatalf("%s: busy %d, sent %q, %+v", sql, a.sess.Conns[0].busy, rec.sqls, r)
 		}
 		if a.state.SQL["doraemon"][0] != sql || enterOf(a) != "↵ 执行" {
 			t.Errorf("%s: history %v, enter %q", sql, a.state.SQL, enterOf(a))
 		}
 		feed(t, a, "<Esc>")
 	}
-	if feed(t, a, "<C-p>;selec 1<CR>"); a.busy != 1 || a.palette.quick.write { // no keyword first: the database says what is wrong
-		t.Errorf("a typo: busy %d", a.busy)
+	if feed(t, a, "<C-p>;selec 1<CR>"); a.sess.Conns[0].busy != 1 || a.palette.quick.write { // no keyword first: the database says what is wrong
+		t.Errorf("a typo: busy %d", a.sess.Conns[0].busy)
 	}
 }
 
@@ -364,11 +364,11 @@ func TestQuickSQLToResult(t *testing.T) {
 	feed(t, a, "<Esc>")
 	a.win().focus(res.ID)
 	_, cmd := a.Update(teaKey("R"))
-	if cmd == nil || a.busy != 1 || resultOf(res).run.done {
-		t.Fatalf("R: busy %d", a.busy)
+	if cmd == nil || a.sess.Conns[0].busy != 1 || resultOf(res).run.done {
+		t.Fatalf("R: busy %d", a.sess.Conns[0].busy)
 	}
 	a.Update(quickRerun{resultOf(res), quickResult(5), nil})
-	if rt := resultOf(res); a.busy != 0 || len(rt.page.Rows) != 5 || !rt.run.done {
+	if rt := resultOf(res); a.sess.Conns[0].busy != 0 || len(rt.page.Rows) != 5 || !rt.run.done {
 		t.Errorf("rerun: %d rows", len(rt.page.Rows))
 	}
 	rt := resultOf(res)
@@ -387,7 +387,7 @@ func TestQuickSQLToResult(t *testing.T) {
 func TestQuickSQLEdit(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sized(160, 45, "nerd")
-	if err := config.WriteConsole(config.ConsolePath("doraemon", 2), "select 1\n"); err != nil {
+	if err := config.WriteConsole(config.ConsolePath(2), "select 1\n"); err != nil {
 		t.Fatal(err)
 	}
 	feed(t, a, "<C-p>;delete from t_order<CR><C-e>")
@@ -408,7 +408,7 @@ func TestQuickSQLEdit(t *testing.T) {
 	if feed(t, a, "<C-e>"); a.palette != nil || !strings.HasSuffix(text(consoleOf(a.focused())), "select * from t_or") {
 		t.Errorf("C-e over the candidates: palette %v", a.palette)
 	}
-	if err := os.MkdirAll(config.ConsolePath("doraemon", 4), 0o700); err != nil { // console_4's file can't be read
+	if err := os.MkdirAll(config.ConsolePath(4), 0o700); err != nil { // console_4's file can't be read
 		t.Fatal(err)
 	}
 	if feed(t, a, "<C-p>;select 9<C-e>"); a.palette == nil || a.palette.input.Text != ";select 9" || a.toast == "" {

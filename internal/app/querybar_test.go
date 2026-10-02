@@ -49,7 +49,7 @@ func withRecorder(t *testing.T, w, h int) (*App, *dataTab, *recDB) {
 	a := sized(w, h, "nerd")
 	tab := loadOrders(t, a, 100)
 	rec := &recDB{}
-	a.sess.Meta = db.NewWorker(rec)
+	a.sess.Conns[0].Meta = db.NewWorker(rec)
 	return a, tab, rec
 }
 

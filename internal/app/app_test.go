@@ -47,10 +47,11 @@ func (noDB) Close() error                                                { retur
 // testSession is the default workspace over a catalog of 14 tables in
 // public and one in agentable, with no database behind it.
 func testSession() *Session {
-	s := newSession("doraemon", "pg@localhost:5432", db.NewWorker(noDB{}), db.NewWorker(noDB{}))
-	s.Schema, s.Schemas, s.home, s.DB = "public", []string{"agentable", "public"}, "public", "doraemon"
+	c := readyConn("doraemon")
+	c.Schema, c.Schemas, c.home, c.DB = "public", []string{"agentable", "public"}, "public", "doraemon"
+	s := newSession("doraemon", []*Conn{c}, c)
 	consoleOf(s.Windows[0].Root.B.Pane).schema = "public" // as the catalog's coming sets it
-	s.Tables = []db.Table{{Schema: "agentable", Name: "planner", Rows: 3}}
+	c.Tables = []db.Table{{Schema: "agentable", Name: "planner", Rows: 3}}
 	for _, t := range []struct {
 		name string
 		rows float64
@@ -61,9 +62,16 @@ func testSession() *Session {
 		{"t_refund", 12e3}, {"t_sku", 8.1e3}, {"t_user", 38e3},
 		{"t_user_address", 52e3}, {"t_user_profile", 38e3},
 	} {
-		s.Tables = append(s.Tables, db.Table{Schema: "public", Name: t.name, Rows: t.rows})
+		c.Tables = append(c.Tables, db.Table{Schema: "public", Name: t.name, Rows: t.rows})
 	}
 	return s
+}
+
+// readyConn is connection name, connected to no database.
+func readyConn(name string) *Conn {
+	c := newConn(config.Connection{Name: name, Engine: "postgres"})
+	c.State, c.Main, c.Meta, c.Addr = connReady, db.NewWorker(noDB{}), db.NewWorker(noDB{}), "pg@localhost:5432"
+	return c
 }
 
 // m0Layout puts M0's layout into a, for the tests of panes, tabs and windows:
@@ -73,7 +81,7 @@ func m0Layout(a *App) *App {
 	data := a.win().Root.A.Pane
 	data.Cur, data.Prev = 0, 1
 	for _, name := range []string{"t_order", "t_user"} { // not fetched, nor in the catalog: opening public.t_order finds no tab of it
-		data.Tabs = append(data.Tabs, Tab{Name: name, Data: newDataTab(db.Table{Schema: "m0", Name: name})})
+		data.Tabs = append(data.Tabs, Tab{Name: name, Data: newDataTab(a.sess.Conns[0], db.Table{Schema: "m0", Name: name})})
 	}
 	a.sess.Windows = append(a.sess.Windows, &Window{Name: "report"})
 	return a
@@ -434,26 +442,26 @@ func TestOpenExistingTab(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	left := a.focused()
 	feed(t, a, "<C-p>@t_user<CR><C-p>@t_sku<C-t><C-p>@t_user<CR>")
-	if a.win().Focus != left.ID || tabNames(left) != "t_user t_sku" || left.Cur != 0 || left.Prev != 1 || a.busy != 2 {
-		t.Fatalf("one t_user: focus %d tabs %v cur %d prev %d, %d fetches", a.win().Focus, tabNames(left), left.Cur, left.Prev, a.busy)
+	if a.win().Focus != left.ID || tabNames(left) != "t_user t_sku" || left.Cur != 0 || left.Prev != 1 || a.sess.Conns[0].busy != 2 {
+		t.Fatalf("one t_user: focus %d tabs %v cur %d prev %d, %d fetches", a.win().Focus, tabNames(left), left.Cur, left.Prev, a.sess.Conns[0].busy)
 	}
-	if feed(t, a, "<C-p>@t_sku<C-t>"); tabNames(left) != "t_user t_sku" || left.Cur != 1 || a.busy != 2 {
-		t.Fatalf("C-t as ↵: tabs %v cur %d, %d fetches", tabNames(left), left.Cur, a.busy)
+	if feed(t, a, "<C-p>@t_sku<C-t>"); tabNames(left) != "t_user t_sku" || left.Cur != 1 || a.sess.Conns[0].busy != 2 {
+		t.Fatalf("C-t as ↵: tabs %v cur %d, %d fetches", tabNames(left), left.Cur, a.sess.Conns[0].busy)
 	}
 	if feed(t, a, "<C-p>@t_user"); len(a.paletteView().Enter) != 1 { // ↵ 打开 alone
 		t.Errorf("the footer: %v", a.paletteView().Enter)
 	}
 	feed(t, a, "<Esc><C-l><C-p>@t_user<CR>") // ⟨2⟩ is console_1's: it opens there too, its own
 	right := a.focused()
-	if tabNames(right) != "console_1 t_user" || a.busy != 3 {
-		t.Fatalf("another pane's: tabs %v, %d fetches", tabNames(right), a.busy)
+	if tabNames(right) != "console_1 t_user" || a.sess.Conns[0].busy != 3 {
+		t.Fatalf("another pane's: tabs %v, %d fetches", tabNames(right), a.sess.Conns[0].busy)
 	}
 	a.win().focus(0)
 	treeTo(t, a, "t_user")
-	if feed(t, a, "t"); a.win().Focus != right.ID || tabNames(right) != "console_1 t_user" || a.busy != 3 {
-		t.Errorf("the tree's t, in the pane focused last: tabs %v, %d fetches", tabNames(right), a.busy)
+	if feed(t, a, "t"); a.win().Focus != right.ID || tabNames(right) != "console_1 t_user" || a.sess.Conns[0].busy != 3 {
+		t.Errorf("the tree's t, in the pane focused last: tabs %v, %d fetches", tabNames(right), a.sess.Conns[0].busy)
 	}
-	a.sess.Tables = append(a.sess.Tables, db.Table{Schema: "agentable", Name: "t_user"})
+	a.sess.Conns[0].Tables = append(a.sess.Conns[0].Tables, db.Table{Schema: "agentable", Name: "t_user"})
 	feed(t, a, "<C-p>@t_user agentable<CR>") // the same name in another schema is another table
 	if tabNames(right) != "console_1 t_user t_user" || dataOf(right).table.Schema != "agentable" {
 		t.Errorf("agentable.t_user: tabs %v, schema %s", tabNames(right), dataOf(right).table.Schema)
@@ -815,9 +823,9 @@ func TestFoldSidebar(t *testing.T) {
 func TestFoldSidebarReveals(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	loadOrders(t, a, 3)
-	a.sess.open[schemaNode("public")] = false // folded by hand
+	a.sess.open[schemaNode(a.sess.Conns[0], "public")] = false // folded by hand
 	a.win().tree.filter = ui.Input{Text: "planner"}
-	if feed(t, a, "<Space>b<Space>b"); a.sess.open[schemaNode("public")] {
+	if feed(t, a, "<Space>b<Space>b"); a.sess.open[schemaNode(a.sess.Conns[0], "public")] {
 		t.Fatal("filtered out, t_order's schema opens")
 	}
 	a.win().tree.filter = ui.Input{}

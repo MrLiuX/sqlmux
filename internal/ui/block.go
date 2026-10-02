@@ -16,6 +16,7 @@ type Hint struct {
 	Color      color.Color // Label color when not a button; default dim
 	Prio       int         // title hints: lower is placed first when space runs out
 	Attached   bool        // key text of the hint before it: shown only with it (§7.8); needs a higher Prio than that hint
+	Group      int         // title hints sharing one but 0 stay or give way together, as one at the first one's Prio
 }
 
 // titleText is how a hint reads on a border: "Label Key". It must match what
@@ -156,15 +157,31 @@ func (b Block) placeHints(free int) ([]Hint, int) {
 		order[i] = i
 	}
 	slices.SortStableFunc(order, func(i, j int) int { return b.Hints[i].Prio - b.Hints[j].Prio })
-	keep := make([]bool, len(b.Hints))
+	keep, tried := make([]bool, len(b.Hints)), make([]bool, len(b.Hints))
 	used := 0
 	for _, i := range order {
-		if b.Hints[i].Attached && (i == 0 || !keep[i-1]) {
+		if tried[i] || b.Hints[i].Attached && (i == 0 || !keep[i-1]) {
 			continue
 		}
+		group := []int{i}
+		if g := b.Hints[i].Group; g != 0 {
+			group = nil
+			for j, h := range b.Hints {
+				if h.Group == g {
+					group = append(group, j)
+				}
+			}
+		}
+		w := 0
+		for _, j := range group {
+			tried[j], w = true, w+1+Width(b.Hints[j].titleText())
+		}
 		// +1: the space between the title and the first hint.
-		if w := 1 + Width(b.Hints[i].titleText()); 1+used+w <= free {
-			keep[i], used = true, used+w
+		if 1+used+w <= free {
+			for _, j := range group {
+				keep[j] = true
+			}
+			used += w
 		} else if b.StrictHints {
 			break
 		}
@@ -190,7 +207,7 @@ func hintsWidth(hs []Hint) int {
 // and it lights up under the pointer.
 func drawTitleHint(f *Frame, x, y, right int, h Hint, pane int) int {
 	th := f.Theme
-	hover := f.Region(uv.Rect(x, y, min(Width(h.titleText()), right-x), 1), Target{Kind: KindHint, Pane: pane, Action: h.Action})
+	hover := h.Action != "" && f.Region(uv.Rect(x, y, min(Width(h.titleText()), right-x), 1), Target{Kind: KindHint, Pane: pane, Action: h.Action})
 	bg := th.PaneBg
 	if hover {
 		bg = th.Select

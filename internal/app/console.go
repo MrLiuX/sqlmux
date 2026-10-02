@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -21,14 +22,20 @@ import (
 // consoleTab is a console open in a pane (§5, §11): its editor and the
 // file that keeps its text.
 type consoleTab struct {
+	conn *Conn // where it runs, on its Main (§5)
+	// want is the connection it goes to once connected, picked or kept
+	// for its file, with wantSchema, "" for that one's Schema (§7.8
+	// 「console 标题」); nil for none.
+	want       *Conn
+	wantSchema string
 	ed         *editor.Editor
 	path       string
 	ver, saved int       // changes made, and the one the file has
 	failed     int       // the first line of the statement whose last run failed, its ▶ red; -1 for none
 	running    *run      // the run going on, if one is: another ↵ waits for it (§11)
 	bar        *errorBar // the last run's error, under the text (§7.8「错误栏」)
-	// schema is the one it runs in, first on search_path (§8.6): the
-	// tree's as it opens, "" until the catalog is in.
+	// schema is the one it runs in, first on search_path (§8.6): its
+	// connection's Schema as it opens, "" until the catalog is in.
 	schema string
 	// The candidate list in INSERT (§9.7); the tables whose columns were
 	// fetched for it this INSERT, and where it last completed: columns in
@@ -45,15 +52,19 @@ type compWait struct {
 	manual bool
 }
 
-// openConsole is connection conn's console n, with what its file keeps (§11).
-func openConsole(conn string, n int) (*consoleTab, error) {
-	path := config.ConsolePath(conn, n)
+// openConsole is console n on connection c, in its Schema, with what its
+// file keeps (§11).
+func openConsole(c *Conn, n int) (*consoleTab, error) {
+	path := config.ConsolePath(n)
 	text, err := config.ReadConsole(path)
 	if err != nil {
 		return nil, fmt.Errorf("读取失败：%w", err)
 	}
-	return &consoleTab{ed: editor.New(text), path: path, failed: -1}, nil
+	return &consoleTab{conn: c, schema: c.Schema, ed: editor.New(text), path: path, failed: -1}, nil
 }
+
+// key is t's file name, console_1, which the state keeps where it runs by.
+func (t *consoleTab) key() string { return strings.TrimSuffix(filepath.Base(t.path), ".sql") }
 
 func consoleOf(p *Pane) *consoleTab {
 	if p.Cur < len(p.Tabs) {
@@ -178,7 +189,7 @@ func (a *App) consoleComplete(t *consoleTab, manual bool) tea.Cmd {
 	if t.asked == nil {
 		t.asked = map[tableID]bool{}
 	}
-	c, cmds := a.sqlComplete(strings.Join(lines, "\n"), pos, cmp.Or(t.schema, a.sess.Schema), t.asked, manual)
+	c, cmds := a.sqlComplete(t.conn, strings.Join(lines, "\n"), pos, cmp.Or(t.schema, t.conn.Schema), t.asked, manual)
 	if c != nil {
 		c.start -= pos - cur.Col // a column of the cursor's line: it is a word before the cursor
 	}

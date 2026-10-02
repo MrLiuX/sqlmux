@@ -17,9 +17,9 @@ func DataDir() string {
 	return filepath.Join(home, ".local", "share", "sqlmux")
 }
 
-// ConsolePath is the file of connection conn's console n (§11).
-func ConsolePath(conn string, n int) string {
-	return filepath.Join(DataDir(), "consoles", conn, fmt.Sprintf("console_%d.sql", n))
+// ConsolePath is the file of console n (§11), whatever connection it is on.
+func ConsolePath(n int) string {
+	return filepath.Join(DataDir(), "consoles", fmt.Sprintf("console_%d.sql", n))
 }
 
 // ReadConsole is the console file at path; "" when there is none yet.

@@ -8,8 +8,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
 
+	"sqlmux/internal/config"
 	"sqlmux/internal/db"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
@@ -71,7 +73,7 @@ func treeTo(t *testing.T, a *App, s string) {
 // workspace down to its panes.
 func TestTreeNodes(t *testing.T) {
 	a := sized(160, 45, "nerd")
-	a.sess.Tables = append(a.sess.Tables, db.Table{Schema: "public", Name: "v_paid", Kind: "v", Rows: -1}, db.Table{Schema: "public", Name: "mv_sum", Kind: "m", Rows: -1})
+	a.sess.Conns[0].Tables = append(a.sess.Conns[0].Tables, db.Table{Schema: "public", Name: "v_paid", Kind: "v", Rows: -1}, db.Table{Schema: "public", Name: "mv_sum", Kind: "m", Rows: -1})
 	want := []string{
 		"▾ doraemon", "  ▸ agentable", "  ▾ public", "    ▾ Tables (14)",
 		"      ▸ agent", "      ▸ agent_version",
@@ -101,6 +103,107 @@ func TestTreeNodes(t *testing.T) {
 		if n.Text == "v_paid" && n.Note != "" || n.Text == "mv_sum" && n.Note != "?" || n.Text == "v_paid" && n.Icon != ui.NerdIcons.View {
 			t.Errorf("%s: %+v", n.Text, n.TreeNode) // a plain view has no rows to count
 		}
+	}
+}
+
+// withConns is sized with seed, connected, its t_order like doraemon's,
+// and broken, dialing and idle, as far as connecting got, after doraemon
+// (§7.8「连接节点」).
+func withConns() (*App, *Conn) {
+	a := sized(160, 45, "nerd")
+	seed := readyConn("seed")
+	seed.Schema, seed.Schemas, seed.home = "public", []string{"public"}, "public"
+	seed.Tables = []db.Table{{Schema: "public", Name: "t_order", Rows: 7}}
+	broken, dialing := newConn(config.Connection{Name: "broken"}), newConn(config.Connection{Name: "dialing"})
+	broken.State, dialing.State = connFailed, connConnecting
+	a.sess.Conns = append(a.sess.Conns, seed, broken, dialing, newConn(config.Connection{Name: "idle"}))
+	return a, seed
+}
+
+// Each connection is a root: connected, open on its current_schema();
+// connecting, a dim …; failed, in error; not connected, closed (§7.8).
+func TestGoldenConnNodes(t *testing.T) {
+	a, seed := withConns()
+	a.sess.open[connNode(a.sess.Conns[0])] = false
+	ns, _ := a.treeNodes()
+	var rows []string
+	for i, n := range ns {
+		if n.kind != nodeConn && n.conn != seed {
+			continue
+		}
+		if n.Text == "broken" && n.TextFg != a.theme.Error {
+			t.Errorf("broken: %v", n.TextFg)
+		}
+		r := find(t, a, ui.Target{Kind: ui.KindNode, Pane: 0, I: i})
+		rows = append(rows, ansi.Cut(strings.Split(a.render().String(), "\n")[r.Min.Y], r.Min.X, r.Max.X))
+	}
+	golden.RequireEqual(t, strings.Join(rows, "\n")+"\n")
+}
+
+// A connection not connected connects as it opens: l, ↵, or R on it;
+// connecting, they do nothing more; failed, a toast names it, and they
+// try again (§7.8「连接节点」).
+func TestConnectFromTree(t *testing.T) {
+	a, _ := withConns()
+	broken, idle := a.sess.Conns[2], a.sess.Conns[4]
+	a.win().focus(0)
+	treeTo(t, a, "idle")
+	if _, cmd := a.Update(teaKey("l")); cmd == nil || idle.State != connConnecting {
+		t.Fatalf("l: %v", idle.State)
+	}
+	for _, k := range []string{"<CR>", "R", "l"} {
+		if _, cmd := a.Update(teaKey(keymap.Key(k))); idle.State != connConnecting || cmd != nil && cmd() != nil {
+			t.Errorf("%s while connecting: %v", k, idle.State)
+		}
+	}
+	a.Update(connected{conn: idle, err: errors.New("no route")})
+	if idle.State != connFailed || a.toast != "idle：no route" {
+		t.Errorf("failed: %v, toast %q", idle.State, a.toast)
+	}
+	treeTo(t, a, "broken")
+	if _, cmd := a.Update(teaKey("R")); cmd == nil || broken.State != connConnecting {
+		t.Errorf("R on a failed one: %v", broken.State)
+	}
+}
+
+// The current connection (§5): the focused tab's, a result tab's where it
+// ran; on the tree the cursor's once connected, else the last one; a
+// landing tab's the last one too. The same table of two connections is
+// two tabs, each caching its own columns.
+func TestCurrentConn(t *testing.T) {
+	a, seed := withConns()
+	doraemon := a.sess.Conns[0]
+	if a.conn() != doraemon || consoleOf(a.win().Root.B.Pane).conn != doraemon {
+		t.Fatal("at start: the connection it started on, console_1's too")
+	}
+	a.win().focus(0)
+	for _, c := range []struct {
+		node string
+		want *Conn
+	}{{"seed", seed}, {"broken", seed}, {"t_order", doraemon}, {"idle", doraemon}} {
+		treeTo(t, a, c.node)
+		if a.Update(nil); a.conn() != c.want {
+			t.Errorf("tree on %s: %s, want %s", c.node, a.conn().Spec.Name, c.want.Spec.Name)
+		}
+	}
+	data := a.win().Root.A.Pane
+	a.openTableIn(data, seed, seed.Tables[0])
+	order, _, page := ordersTable(3)
+	a.openTableIn(data, doraemon, order)
+	if len(data.Tabs) != 2 || data.Tabs[0].Data.conn != seed || dataOf(data).conn != doraemon || a.conn() != doraemon {
+		t.Fatalf("tabs %v, current %s", tabNames(data), a.conn().Spec.Name)
+	}
+	_, cols, _ := ordersTable(0)
+	a.Update(pageMsg{tab: data.Tabs[0].Data, seq: data.Tabs[0].Data.seq, cols: cols, page: page})
+	if _, ok := doraemon.cols[idOf(order)]; ok || seed.cols[idOf(order)].Cols == nil {
+		t.Error("seed's t_order columns went to doraemon's cache")
+	}
+	feed(t, a, "1gt")
+	if a.conn() != seed {
+		t.Errorf("seed's tab: %s", a.conn().Spec.Name)
+	}
+	if feed(t, a, "<C-p>tab.new<CR>"); !data.tab().landing() || a.conn() != seed {
+		t.Errorf("a landing tab: %s, want the last, seed", a.conn().Spec.Name)
 	}
 }
 
@@ -141,22 +244,22 @@ func TestTreeExpand(t *testing.T) {
 	if cmd == nil || !strings.Contains(treeTexts(a), "▾ planner") {
 		t.Fatal("opening planner fetches its columns")
 	}
-	planner := a.sess.Tables[0]
-	a.Update(colsMsg{planner, db.Columns{PK: []string{"id"}, Cols: []db.Column{{Name: "id", Type: "integer"}, {Name: "name", Type: "text"}}}, nil})
+	planner := a.sess.Conns[0].Tables[0]
+	a.Update(colsMsg{a.sess.Conns[0], planner, db.Columns{PK: []string{"id"}, Cols: []db.Column{{Name: "id", Type: "integer"}, {Name: "name", Type: "text"}}}, nil})
 	ns, _ := a.treeNodes()
 	i := slices.IndexFunc(ns, func(n node) bool { return n.kind == nodeColumn })
 	if i < 0 || ns[i].Text != "id" || ns[i].Icon != ui.NerdIcons.Key || ns[i].Note != "integer" || ns[i+1].Icon != ui.NerdIcons.Column {
 		t.Fatalf("columns:\n%s", treeTexts(a))
 	}
 	a.Update(teaKey("R")) // drops the columns; planner, still open, fetches them again
-	_, cmd = a.Update(catalogMsg{schemas: a.sess.Schemas, current: a.sess.home, tables: a.sess.Tables})
+	_, cmd = a.Update(catalogMsg{conn: a.sess.Conns[0], schemas: a.sess.Conns[0].Schemas, current: a.sess.Conns[0].home, tables: a.sess.Conns[0].Tables})
 	if cmd == nil {
 		t.Fatal("R: the open planner's columns are not fetched again")
 	}
 	if m, ok := cmd().(colsMsg); !ok || m.table != planner {
 		t.Fatalf("R: no fetch of the open planner's columns")
 	}
-	a.Update(colsMsg{planner, db.Columns{PK: []string{"id"}, Cols: []db.Column{{Name: "id", Type: "integer"}, {Name: "name", Type: "text"}}}, nil})
+	a.Update(colsMsg{a.sess.Conns[0], planner, db.Columns{PK: []string{"id"}, Cols: []db.Column{{Name: "id", Type: "integer"}, {Name: "name", Type: "text"}}}, nil})
 	for _, c := range []struct{ keys, want string }{
 		{"l", "id"}, {"l", "id"}, {"h", "planner"}, {"h", "planner"}, {"h", "Tables (1)"}, {"k", "agentable"},
 	} {
@@ -210,11 +313,11 @@ func TestTreeOpens(t *testing.T) {
 	a.win().focus(0)
 	treeTo(t, a, "agentable")
 	feed(t, a, "lllj")
-	if cursorText(a) != "planner" || a.sess.Schema != "agentable" {
-		t.Fatalf("on %s, the tree's schema %q", cursorText(a), a.sess.Schema)
+	if cursorText(a) != "planner" || a.sess.Conns[0].Schema != "agentable" {
+		t.Fatalf("on %s, the tree's schema %q", cursorText(a), a.sess.Conns[0].Schema)
 	}
 	treeTo(t, a, "工作区")
-	if a.sess.Schema != "agentable" {
+	if a.sess.Conns[0].Schema != "agentable" {
 		t.Error("the workspace is under no schema: the last one stays")
 	}
 	treeTo(t, a, "planner")
@@ -228,12 +331,12 @@ func TestTreeOpens(t *testing.T) {
 func TestTreeColumnOpens(t *testing.T) {
 	a := inTree(160, 45)
 	table, cols, page := ordersTable(3)
-	for i, tb := range a.sess.Tables {
+	for i, tb := range a.sess.Conns[0].Tables {
 		if tb.Name == "t_order" {
-			a.sess.Tables[i] = table
+			a.sess.Conns[0].Tables[i] = table
 		}
 	}
-	a.sess.cols[idOf(table)] = cols
+	a.sess.Conns[0].cols[idOf(table)] = cols
 	treeTo(t, a, "t_order")
 	feed(t, a, "l")
 	treeTo(t, a, "amount")
@@ -415,17 +518,17 @@ func TestTreeFilter(t *testing.T) {
 // starts there; a failed load says why in a toast (§7.8).
 func TestCatalogLoad(t *testing.T) {
 	a := sized(160, 45, "nerd")
-	a.sess.Schema = ""
-	a.Update(catalogMsg{schemas: []string{"a", "b"}, current: "b", tables: []db.Table{{Schema: "b", Name: "x"}}})
-	if a.sess.Schema != "b" || a.sess.home != "b" || !strings.Contains(treeTexts(a), "▾ b\n    ▾ Tables (1)") {
-		t.Fatalf("schema %q\n%s", a.sess.Schema, treeTexts(a))
+	a.sess.Conns[0].Schema = ""
+	a.Update(catalogMsg{conn: a.sess.Conns[0], schemas: []string{"a", "b"}, current: "b", tables: []db.Table{{Schema: "b", Name: "x"}}})
+	if a.sess.Conns[0].Schema != "b" || a.sess.Conns[0].home != "b" || !strings.Contains(treeTexts(a), "▾ b\n    ▾ Tables (1)") {
+		t.Fatalf("schema %q\n%s", a.sess.Conns[0].Schema, treeTexts(a))
 	}
-	a.Update(catalogMsg{schemas: []string{"a"}})
-	if a.sess.Schema != "a" {
-		t.Errorf("gone from the catalog: schema %q, want the first", a.sess.Schema)
+	a.Update(catalogMsg{conn: a.sess.Conns[0], schemas: []string{"a"}})
+	if a.sess.Conns[0].Schema != "a" {
+		t.Errorf("gone from the catalog: schema %q, want the first", a.sess.Conns[0].Schema)
 	}
-	a.Update(catalogMsg{err: errors.New("permission denied")})
-	if a.toast != "permission denied" || a.sess.Schema != "a" {
+	a.Update(catalogMsg{conn: a.sess.Conns[0], err: errors.New("permission denied")})
+	if a.toast != "permission denied" || a.sess.Conns[0].Schema != "a" {
 		t.Errorf("a failed load: toast %q", a.toast)
 	}
 }
@@ -452,8 +555,8 @@ func TestPaletteTablesFromCatalog(t *testing.T) {
 func TestGoldenTreeColumns160x45(t *testing.T) {
 	a := inTree(160, 45)
 	table, cols, _ := ordersTable(0)
-	a.sess.Tables[slices.IndexFunc(a.sess.Tables, func(t db.Table) bool { return t.Name == "t_order" })] = table
-	a.sess.cols[idOf(table)] = cols
+	a.sess.Conns[0].Tables[slices.IndexFunc(a.sess.Conns[0].Tables, func(t db.Table) bool { return t.Name == "t_order" })] = table
+	a.sess.Conns[0].cols[idOf(table)] = cols
 	treeTo(t, a, "t_order")
 	feed(t, a, "l")
 	golden.RequireEqual(t, a.render().String())

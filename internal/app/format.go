@@ -71,7 +71,7 @@ func (a *App) consoleFormat(t *consoleTab, f editor.FormatSpan) tea.Cmd {
 // is set: sql on its stdin, what it writes to stdout, the first line of
 // its stderr when it fails (§9.5). Nothing out is a failure too, not the
 // SQL gone; past sqlkit.FormatTimeout it is sqlkit.ErrTimeout.
-// ponytail: PG's SQL only; the session's dialect when MySQL consoles come (M5).
+// ponytail: PG's SQL only; the console's connection's dialect when MySQL consoles come (M5).
 func format(sql, prg string, o sqlkit.Options) (string, error) {
 	out, err := "", error(nil)
 	if prg == "" {
