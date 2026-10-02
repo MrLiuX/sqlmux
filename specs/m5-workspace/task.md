@@ -78,6 +78,14 @@
   - 新 console 的连接和 schema 取当前连接和它的 Schema；
   - 旧的 `consoles/<连接名>/` 下的文件不写迁移代码，通过后由决策者手工帮用户挪过去（同 F5.9 的键位）。
 - [ ] 补全、执行 DDL 之后刷新 catalog，都用这个 console 的连接。结果 tab 记下连接和 schema，重跑用它们，不管 console 之后关了还是换了连接。
+- [ ] 细节（worker 提议，已定）：
+  - 标题两段分开点：连接名 `info` 色、`<库>.<schema> ▾` 照旧 `pk` 色，` · ` 不能点，悬停只亮那一段；连接下拉复用 dropdown 组件，行为、位置同 schema 下拉；
+  - 选到未连接的：下拉关掉、去连，console 先留在原来的连接，连上之后才换过去（schema 取那个连接的 Schema）；连接中又选了别的，以最后一次为准；连不上 toast `<连接名>：<错误>`，console 不动；
+  - 事务状态记在 `Conn` 上：每次 `Main` 的请求结束前在 Worker.Run 里读一次 TxStatus、随应答带回，换连接时看它（Main 在跑长查询时界面也不用等锁），F5.3 也用它；
+  - state 的 `consoles` 以文件名为键；打开文件时没有记录、或记下的连接已不在 connections.toml 里，用当前连接和它的 Schema；记下的连接还没连上（比如上次 console_1 用的是 seed），照上面先挂在当前连接、后台去连、连上再换过去；
+  - n 先在当前 session 里算，F5.1 有了多 session 后改成遍历所有 session；
+  - 重跑显式传入连接和 schema：console 执行传它自己的，结果区重跑传结果 tab 记下的；
+  - config 里 name 的字符限制保留，注释的理由改成 state 的键和树的节点 ID。
 
 **验收**
 - [ ] 单测：有事务时换连接被拦下；文件路径；n 的取法；从 state 恢复连接和 schema。
