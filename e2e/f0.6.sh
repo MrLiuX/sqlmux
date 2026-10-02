@@ -7,7 +7,7 @@ e2e_build || exit 1
 
 CFG=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")
 trap 'e2e_stop; rm -rf "$CFG"' EXIT
-start_with() { printf "$1" >| "$CFG/config.toml"; start -c "$CFG/config.toml"; }
+start_with() { printf "$1" >| "$CFG/keymaps.toml"; start -K "$CFG/keymaps.toml"; }   # keys and maps live in keymaps.toml (F5.9)
 W() { e2e_flag pane_width; }
 # 浮层上边框所在行（一次截屏，计时类断言要快）
 top_row() { e2e_plain | python3 -c 'import sys; print(next((i + 1 for i, l in enumerate(sys.stdin) if l.startswith("┌─ " + sys.argv[1])), ""))' "$1"; }
@@ -102,7 +102,7 @@ e2e_keys C-a; sleep 0.6
 check "leader = <C-a>：浮层标题为 C-a，内容不变" eval 'shown C-a && [[ $(items C-a) == "$SPC_KEYS" ]]'
 
 # ---- which-key 不是作用域（§6.4）：[keys.whichkey] 是未知的表
-printf '[keys.whichkey]\n"a" = "b"\n' >| "$CFG/config.toml"; mkdir -p "$CFG/x/sqlmux"; cp "$CFG/config.toml" "$CFG/x/sqlmux/"
+printf '[keys.whichkey]\n"a" = "b"\n' >| "$CFG/keymaps.toml"; mkdir -p "$CFG/x/sqlmux"; cp "$CFG/keymaps.toml" "$CFG/x/sqlmux/"
 err=$(XDG_CONFIG_HOME="$CFG/x" "$E2E_BIN" keys --check 2>&1); rc=$?
 check "[keys.whichkey]：--check 报「没有这个表」、退出码 1" eval '[[ $rc == 1 && $err == *"[keys.whichkey] a: 没有这个表"* ]] || { echo "  rc=$rc: $err"; false; }'
 

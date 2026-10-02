@@ -108,7 +108,7 @@ key :; typ q; key Enter
 check ":q 关掉 console_1：不确认，② 随最后一个 tab 关掉，文件还在" eval '[[ $(e2e_text 1 160 1) != *console_1* && $(e2e_find ┐ 1) == "32 160" && -f $CF ]] && ! screen_has 丢弃'
 
 # ---- [map.console.normal] / [map.console.visual]（§6.6）：只对 console，覆盖同名的 vim 键
-mkdir -p "$D/map"; printf '[map.console.normal]\nL = "5l"\nJ = "j"\n[map.console.visual]\nL = "3l"\n' >"$D/map/config.toml"
+mkdir -p "$D/map"; printf '[map.console.normal]\nL = "5l"\nJ = "j"\n[map.console.visual]\nL = "3l"\n' >"$D/map/keymaps.toml"
 start -C "$D/map" -D "$DD"; key C-l; key g g; key 0
 key L
 check "[map.console.normal] L = \"5l\"：右移 5 个字符" cur_is 1,6
@@ -133,7 +133,7 @@ check "console_1.sql 是个目录：照常启动，toast「读取失败：…is 
 check "那个目录原样留着" test -d "$D/bad-data/sqlmux/consoles/doraemon/console_1.sql"
 
 # ---- 用户映射展开的按键（§6.6）：展开出来的空格和 x 不能凑成 SPC x 关掉 pane（审查时的真 bug）
-printf '[map.console.normal]\nQ = "iselect x<Esc>"\n' >"$D/map/config.toml"
+printf '[map.console.normal]\nQ = "iselect x<Esc>"\n' >"$D/map/keymaps.toml"
 start -C "$D/map"; key C-l; key Q
 check "映射 Q = \"iselect x<Esc>\"：插入 select x，回到 NORMAL，pane 都在" eval '[[ $(line 1) == "select x" && $(mode) == NORMAL && $(e2e_panes | awk "{ print \$1 }" | tr "\n" " ") == "0 1 2 " ]]'
 

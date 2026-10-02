@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# F0.3 keymap 引擎与配置（specs/m0-skeleton/task.md F0.3；tech-design §6.2–§6.8、§14）
+# F0.3 keymap 引擎与配置（specs/m0-skeleton/task.md F0.3；tech-design §6.2–§6.8、§14）；F5.9 起键位和映射在 keymaps.toml
 # 解析、trie、超时、次数、映射优先级由单测覆盖；这里测 `sqlmux keys` CLI、配置加载和界面上的键位文字。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 
 CFG=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); mkdir -p "$CFG/sqlmux"
 trap 'e2e_stop; rm -rf "$CFG"' EXIT
-conf() { printf "$1" >| "$CFG/sqlmux/config.toml"; }   # printf 格式串：\n 换行
+conf() { printf "$1" >| "$CFG/sqlmux/keymaps.toml"; }   # printf 格式串：\n 换行
 keys() { XDG_CONFIG_HOME=$CFG "$E2E_BIN" keys "$@"; }
 # run ARGS... — 跑 `sqlmux keys ARGS`，结果放进 OUT / ERR / RC
 run() { OUT=$(keys "$@" 2>"$CFG/err"); RC=$?; ERR=$(<"$CFG/err"); }
@@ -30,7 +30,7 @@ run --check; check "--check：默认配置退出码 0" rc_is 0
 # ---- --format toml 能重新加载（§6.7 导出）
 roundtrip() {
   conf "$1"; run; local md1=$OUT; run --format toml; local t1=$OUT
-  printf '%s\n' "$t1" >| "$CFG/sqlmux/config.toml"
+  printf '%s\n' "$t1" >| "$CFG/sqlmux/keymaps.toml"
   run --format toml; [[ $OUT == "$t1" ]] || { echo "  toml 两次输出不同"; diff <(echo "$t1") <(echo "$OUT") | head; return 1; }
   run; [[ $OUT == "$md1" ]] || { echo "  重新加载后键位表变了"; diff <(echo "$md1") <(echo "$OUT") | head; return 1; }
   run --check; rc_is 0
@@ -53,6 +53,9 @@ conf '[keys.normal]\n"g" = "x"\n'; run --check
 check "单键是已有序列的前缀 → 退出码 1，给出警告" eval 'rc_is 1 && err_has "[keys.normal] g: 是 gt 的前缀"'
 conf '[keys.foo]\n"a" = "b"\n'; run --check; check "未知的表 → 退出码 1" eval 'rc_is 1 && err_has "[keys.foo] a: 没有这个表"'
 conf '[keys.normal]\n"<C-foo>" = "b"\n'; run --check; check "写错的键名 → 退出码 1" eval 'rc_is 1 && err_has "[keys.normal] <C-foo>: 键位写法不对"'
+conf 'icons = "ascii"\n'; run --check; check "keymaps.toml 里写了别的顶层键（F5.9）→ 退出码 1，只能写 [keys] 和 [map.*]" eval 'rc_is 1 && err_has "keymaps.toml: icons" && err_has "这里只能写 [keys] 和 [map.*]"'
+conf ''; printf '[keys.normal]\n"<C-b>" = "tree.toggle"\n' >| "$CFG/sqlmux/config.toml"; run --check; rm "$CFG/sqlmux/config.toml"
+check "config.toml 里还写着 [keys]（F5.9）→ --check 退出码 1，提示写进 keymaps.toml" eval 'rc_is 1 && err_has "config.toml: [keys] / [map] 要写在 keymaps.toml 里"'
 
 # ---- 上一轮修过的三处（reviewer 要求回归）
 conf '[keys.normal]\n"<Space>s" = "x.y"\n'; run
@@ -66,16 +69,17 @@ check "映射右侧写 <Leader>：接受、不报错" eval 'out_has "| map.norma
 
 # ---- 配置文件位置（§14）：XDG_CONFIG_HOME，未设置时 ~/.config
 H=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-home.XXXXXX"); mkdir -p "$H/.config/sqlmux"
-printf '[keys]\nleader = "<C-a>"\n' > "$H/.config/sqlmux/config.toml"
-check "未设置 XDG_CONFIG_HOME 时读 ~/.config/sqlmux/config.toml" eval '[[ $(env -u XDG_CONFIG_HOME HOME="$H" "$E2E_BIN" keys --format toml) == *"leader = \"<C-a>\""* ]]'
+printf '[keys]\nleader = "<C-a>"\n' > "$H/.config/sqlmux/keymaps.toml"
+check "未设置 XDG_CONFIG_HOME 时读 ~/.config/sqlmux/keymaps.toml" eval '[[ $(env -u XDG_CONFIG_HOME HOME="$H" "$E2E_BIN" keys --format toml) == *"leader = \"<C-a>\""* ]]'
 check "设置了 XDG_CONFIG_HOME 时不读 ~/.config" eval '[[ $(HOME="$H" XDG_CONFIG_HOME="$CFG/none" "$E2E_BIN" keys --format toml) == *"leader = \"<Space>\""* ]]'
 rm -rf "$H"
 
 # ---- 界面：配置生效、键位文字取自 keymap（§6.7）
-tui() { conf "$1"; e2e_start -c "$CFG/sqlmux/config.toml" "$E2E_BIN"; wait_for 5 flag_is alternate_on 1; sleep 0.3; }
+tui() { conf "$1"; e2e_start -K "$CFG/sqlmux/keymaps.toml" "$E2E_BIN"; wait_for 5 flag_is alternate_on 1; sleep 0.3; }   # keymaps.toml 是 $1
+tuic() { printf "$1" >| "$CFG/config.toml"; e2e_start -c "$CFG/config.toml" "$E2E_BIN"; wait_for 5 flag_is alternate_on 1; sleep 0.3; }   # config.toml 是 $1
 pua() { e2e_plain | python3 -c 'import sys; sys.exit(0 if any(0xE000 <= ord(c) <= 0xF8FF for c in sys.stdin.read()) else 1)'; }
 tui ''; check "默认 nerd：画面有私有区码点（对照）" pua
-tui 'icons = "ascii"\n'; check "icons = \"ascii\"：画面没有私有区码点" eval '! pua'
+tuic 'icons = "ascii"\n'; check "icons = \"ascii\"：画面没有私有区码点" eval '! pua'
 tui '[keys.normal]\n"<Space>b" = ""\n"<C-b>" = "tree.toggle"\n'; check "改绑 tree.toggle 为 C-b：侧栏标题显示 C-b" text_ends 1 32 1 " C-b ─┐"
 tui '[keys]\nleader = "<C-a>"\n'; check "leader = <C-a>：侧栏标题显示 C-a b" text_ends 1 32 1 " C-a b ─┐"
 tui '[keys.normal]\n"<Leader>b" = ""\n'; check "解绑 tree.toggle：侧栏标题不显示提示" eval '[[ $(e2e_text 1 32 1) == *"doraemon ───"*"─┐" && $(e2e_text 1 32 1) != *SPC* ]]'
@@ -90,9 +94,14 @@ conf ''; e2e_start -x 80 "$E2E_BIN"; wait_for 5 flag_is alternate_on 1; sleep 0.
 check "80 宽：两项都放得下（整项省略的规则由 golden 覆盖）" side_hints "│ j/k move · ↵ open    │"
 
 # ---- 配置写错：启动直接报错退出，指出文件
-tui 'icons = "emoji"\n'
+tuic 'icons = "emoji"\n'
 check "icons = \"emoji\"：启动报错、退出码 1" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "config.toml: icons = \"emoji\"" && flag_is alternate_on 0'
-tui 'timeoutlen = 0\n'; check "timeoutlen = 0：启动报错" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "timeoutlen = 0"'
-tui 'not toml\n'; check "TOML 语法错误：启动报错并给出行号" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "line 1"'
+tuic 'timeoutlen = 0\n'; check "timeoutlen = 0：启动报错" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "timeoutlen = 0"'
+tuic 'not toml\n'; check "TOML 语法错误：启动报错并给出行号" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "line 1"'
+tui 'not toml\n'; check "keymaps.toml 的 TOML 语法错误：同样报错，指出 keymaps.toml" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "keymaps.toml" && screen_has "line 1"'
+# F5.9：config.toml 里还写着键位或映射时启动报错，提示挪到 keymaps.toml
+tuic '[keys.normal]\n"<C-b>" = "tree.toggle"\n'; check "config.toml 里有 [keys.normal]：启动报错，提示挪到 keymaps.toml" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "keymaps.toml" && flag_is alternate_on 0'
+tuic '[keys]\nleader = "<C-a>"\n'; check "config.toml 里有 [keys] leader：同样报错" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "keymaps.toml"'
+tuic '[map.normal]\nJ = "5j"\n'; check "config.toml 里有 [map.normal]：同样报错" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "keymaps.toml"'
 
 e2e_done

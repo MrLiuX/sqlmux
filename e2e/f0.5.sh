@@ -72,7 +72,7 @@ ok=1; for w in 160 120 100 90 80 79 78 70 60 58 57 50 48 47 46 44 42 41 40 38; d
 check "160…38 宽：省略顺序正确，session 块 / 0: data* / C-p / 待输入 / 模式块始终都在" test $ok = 1
 
 # ---- 命令面板入口的键位文字取自 keymap（只有 ascii 图标下才显示文字，F0.16）
-printf 'icons = "ascii"\n[keys.global]\n"<C-p>" = ""\n"<C-k>" = "palette.open"\n' >| "$CFG/config.toml"; start -c "$CFG/config.toml"
+printf 'icons = "ascii"\n' >| "$CFG/config.toml"; printf '[keys.global]\n"<C-p>" = ""\n"<C-k>" = "palette.open"\n' >| "$CFG/keymaps.toml"; start -c "$CFG/config.toml" -K "$CFG/keymaps.toml"
 check "ascii 下改绑 palette.open 为 C-k：状态栏显示 ~ C-k" eval 'bar_has " ~ C-k " && bar_lacks "C-p"'
 
 # ---- 待输入块至少 3 列、内容靠左：3 列以内时 C-p 不动（§7.8）

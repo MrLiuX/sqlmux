@@ -9,7 +9,7 @@ e2e_build || exit 1
 # F0.11 起 SPC hjkl / HJKL 不再是默认键：用 config 绑回去来测这些 Action
 CFG=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; rm -rf "$CFG"' EXIT
 printf '[keys.normal]\n"<Leader>h" = "pane.focus.left"\n"<Leader>j" = "pane.focus.down"\n"<Leader>k" = "pane.focus.up"\n"<Leader>l" = "pane.focus.right"\n"<Leader>H" = "pane.resize.left"\n"<Leader>J" = "pane.resize.down"\n"<Leader>K" = "pane.resize.up"\n"<Leader>L" = "pane.resize.right"\n' > "$CFG/keys.toml"
-start_keys() { start -c "$CFG/keys.toml" "$@"; }
+start_keys() { start -K "$CFG/keys.toml" "$@"; }
 L() { e2e_keys Space; e2e_type "$1"; sleep 0.3; }         # SPC <key>
 key() { e2e_keys "$1"; sleep 0.25; }
 nums() { e2e_panes | awk '{ printf "%s ", $1 }'; }        # 按出现顺序（行优先）列出编号

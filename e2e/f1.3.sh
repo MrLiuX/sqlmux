@@ -61,7 +61,7 @@ check "再按 T：切回，光标仍是 55,7" eval 'pos_is 55,7 && [[ $(header) 
 key g g; key 0
 
 # ---- [map.grid.normal]（§6.6）
-printf '[map.grid.normal]\nL = "5l"\n' >"$D/config.toml"; start -c "$D/config.toml"; open_table t_order
+printf '[map.grid.normal]\nL = "5l"\n' >"$D/keymaps.toml"; start -K "$D/keymaps.toml"; open_table t_order
 key L; check '[map.grid.normal] L = "5l"：L 右移 5 列 → 1,6' pos_is 1,6
 
 # ---- 控制字符（§7.6）：换行 → dim 的 ↵，Tab → 空格，ESC 等去掉；替换后再截断（列宽上限 40）

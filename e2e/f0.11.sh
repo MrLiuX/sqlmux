@@ -22,8 +22,8 @@ L n; L p; L l
 check "SPC n / p / l: nothing changes, no toast" eval '[[ $(e2e_panes) == "$before" ]] && flag_is alternate_on 1 && [[ -z $(e2e_text 100 160 44 | tr -d "─┘└ ") ]]'
 
 # ---- a key the user binds again works and shows up in which-key
-printf '[keys.normal]\n"<Leader>h" = "pane.focus.left"\n' >| "$CFG/sqlmux/config.toml"
-start -c "$CFG/sqlmux/config.toml"
+printf '[keys.normal]\n"<Leader>h" = "pane.focus.left"\n' >| "$CFG/sqlmux/keymaps.toml"
+start -K "$CFG/sqlmux/keymaps.toml"
 e2e_keys Space %; sleep 0.3   # F1.1: split off ② to move back from
 L h
 check 'config "<Leader>h" = "pane.focus.left": SPC h moves focus left' eval '[[ $(focused) == 1 ]]'
