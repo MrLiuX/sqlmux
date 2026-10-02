@@ -11,8 +11,8 @@
 - **依赖**：M1–M4 全部 passed。
 - **设计变更**（M2/M3 验收时用户提出，2026-10-02 定，已写进 §5「一个 session 多个连接」）：
   - session 变成工作区，每个 session 能看到 connections.toml 里的全部连接，目录树的根是这些连接，用到时才连；多个 session 照样保留。
-  - **每个 console 独立一条连接**，事务、search_path、取消互不影响；console 标题上可以选连接和 schema，有未提交的事务时不能换连接。
-  - 事务模式按 console：标题上 `Tx: 自动 ▾`，手动时有提交 ✓、回滚 ↺（照 DataGrip，用户给的截图）；表格的保存总是自己一个事务。
+  - console 复用所属连接的 `Main`（用户先选了每个 console 一条连接，随后改为复用：更简单、不容易出错）；console 标题上可以选连接和 schema，所在连接有未提交的事务时不能换连接。
+  - 事务模式按连接：每个 console 标题上 `Tx: 自动 ▾`，手动时有提交 ✓、回滚 ↺（照 DataGrip，用户给的截图）；同一个连接上的 console 和表格保存共用这个事务。
   - 只读按连接：connections.toml 的 `read_only = true`。
 - **完成标准**：
   - F5.1–F5.9 全部 passed；

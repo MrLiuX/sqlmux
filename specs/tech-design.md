@@ -132,7 +132,8 @@ type Conn struct {              // 一个数据源，同 DataGrip 的 data sourc
     Spec      ConnSpec          // 来自 connections.toml，含 read_only
     State     ConnState         // 未连接 | 连接中 | 已连接 | 失败（记着错误）
     Meta      *db.Worker        // 树、列属性、计数、DDL 预览、快速 SQL、表格取数
-    Main      *db.Worker        // 表格的保存，每次保存自己一个事务
+    Main      *db.Worker        // 这个连接上所有 console 的执行、表格的保存；持有事务状态
+    Tx        TxMode            // auto | manual，按连接（F5.3），这个连接上的 console 共用
     Schema    string            // 树里这个连接当前所在的 schema；新 console 和快速 SQL 的默认（§8.6）
     Catalog   *Catalog          // 表、列属性、主键、行数估计的缓存
 }
@@ -163,7 +164,7 @@ type Pane struct {
 Tab 的种类：
 
 - `DataTab`：所属的 `*Conn`（M5 起）、表引用、`Query{Where, Order, Limit, Page}`、隐藏列集合、`GridState{Row, Col, Scroll, Transpose}`、当前页数据、`Edits map[CellKey]Edit`（修改后的值为文本、NULL 或 DEFAULT）、总行数（-1 表示未知）、请求序号 `seq`。
-- `ConsoleTab`：文件路径、`*editor.Buffer`、所选的连接 `*Conn` 和 schema（仅 PG，§8.6）、**它自己的一条数据库连接** `*db.Worker`（M5 起，第一次执行时才建，关 tab 时断开）、事务模式 `Tx`（auto | manual）、它在结果区里的结果 tab。
+- `ConsoleTab`：文件路径、`*editor.Buffer`、所选的连接 `*Conn`（M5 起）和 schema（仅 PG，§8.6）、它在结果区里的结果 tab。执行走所选连接的 `Main`，同一个连接上的 console 共用它（用户 2026-10-02 定：每个 console 一条连接更复杂、更容易出错，这一版先复用）。
 - `ResultTab`：来源 console、执行序号、`*db.Result`、`GridState`、是否固定。
 
 **表格和 console 可以放在同一个 pane 的不同 tab 里**（M3 F3.4 起，用户要求，与 DataGrip 一致）：
@@ -180,10 +181,10 @@ Tab 的种类：
 
 - **连接列表**：每个 session 都能看到 connections.toml 里的全部连接。目录树的根就是这些连接（引擎图标、名字、只读时加锁的标记），展开或第一次用到时才建 `Meta` / `Main`；连不上时节点标成失败、错误进 toast，可以再展开重试。`sqlmux play` 启动时只连 play 并展开它；不带参数时连第一个（M6 起恢复 `last` 布局）。启动时的连接连不上，照 §14 打印错误退出；其他连接失败不影响启动。
 - **多个 session 保留**，作工作区用，像 tmux 的多个 session：各有自己的 window、布局，以及自己的一套连接对象（互不共享事务、search_path）。
-- **每个 console 独立一条连接**（用户定）：console 自己的 `*db.Worker`，第一次执行时才建，关 tab 时断开。事务、search_path、`C-c` 取消都只作用于这个 console，两个 console 互不影响；表格的取数和保存走所属连接的 `Meta` / `Main`，也不受 console 里开着的事务影响（M3「在 console 里 begin 不提交，表格的保存也会进这个事务」的已知上限随之消失）。
-- **console 标题**：`<连接> · <库>.<schema> ▾`，连接和 schema 各是一个下拉框。换连接会断开这个 console 原来的连接、下次执行时连新的；这个 console 有未提交的事务时不让换（提示先提交或回滚）。console 的文件不再按连接名分目录（§11），记着它最后用的连接和 schema。
-- **事务模式按 console**（F5.3）：标题上 `Tx: 自动 ▾`，手动时旁边是提交 ✓、回滚 ↺，作用于这个 console 自己的连接。有未提交事务的 console，关 tab、退出时确认。表格的保存不跟随 console 的事务模式，总是自己一个事务、成功就提交。
-- **只读按连接**：connections.toml 里写 `read_only = true`。这个连接的 `Meta`、`Main` 和所有 console 连接都设成只读（§13 两层拦截照旧），树和 console 标题上画锁的标记，表格不能进入编辑。
+- **console 复用所属连接的 `Main`**（用户 2026-10-02 定，先不做每个 console 一条连接）：同一个连接上的 console 共用 `Main` 的事务；search_path 照 §8.6 在每次执行前按这个 console 选的 schema 设好；两个 console 同时执行时排队（Worker 的锁）。M3「在 console 里 begin 不提交，表格的保存也会进这个事务」的已知上限照旧，由事务模式和状态栏的「事务中」提示兜住。
+- **console 标题**：`<连接> · <库>.<schema> ▾`，连接和 schema 各是一个下拉框。换连接只改这个 console 下次执行用哪个连接；它当前所在的连接有未提交的事务时不让换（提示先提交或回滚）。console 的文件不再按连接名分目录（§11），记着它最后用的连接和 schema。
+- **事务模式按连接**（F5.3）：每个 console 标题上 `Tx: 自动 ▾` 显示的是它所在连接的模式，在任一个 console 里切换，同一个连接上的 console 都跟着变；手动时旁边是提交 ✓、回滚 ↺，作用于这个连接的 `Main`。手动模式下表格的保存也进这个事务、不自动提交，表格取数改走 `Main` 才看得到自己没提交的修改（§8.2、§10.3 原来的写法）。有未提交的事务时，退出、关掉这个连接上的最后一个 console 都要确认。
+- **只读按连接**：connections.toml 里写 `read_only = true`。这个连接的 `Meta`、`Main` 都设成只读（§13 两层拦截照旧），树和 console 标题上画锁的标记，表格不能进入编辑。
 - **当前连接**：表 tab、console tab 各属于一个连接；快速 SQL、命令面板的表范围、新 console 默认用「当前连接」：焦点 tab 所属的连接，焦点在树上时用树光标所在的连接。状态栏的地址块显示当前连接的 `<用户>@<host>:<port>`。
 - 开发清单由 worker 按这一节起草，§8.2、§8.6、§11、§12、§13、§14 里写着「每个 session 两条连接」「树当前的 schema」的地方，起草时一并列出要改的条目，决策者确认后改文档。
 
@@ -771,7 +772,7 @@ type Result struct {
 
 ### 8.2 连接模型
 
-每个 session 两条连接（M5 起改为：每个数据源 `Conn` 两条 `Meta` / `Main`，每个 console 再各自一条，见 §5「一个 session 多个连接」；本节的表照旧描述 `Meta` / `Main` 的分工，console 执行从 `Main` 挪到 console 自己的连接）。每条连接由一个 `db.Worker` 独占，用互斥锁保证同一时刻只跑一个请求，因为连接对象不能并发使用。`tea.Cmd` 本来就各在自己的 goroutine 里执行，所以 Worker 不再单开 goroutine 和 channel；请求的先后由 tab 的 `seq` 兜底（§8.3）。`Worker.Cancel()` 取消当前请求的 ctx。
+每个 session 两条连接（M5 起改为每个数据源 `Conn` 两条 `Meta` / `Main`，这个连接上的 console 共用 `Main`，见 §5「一个 session 多个连接」；本节的分工不变）。每条连接由一个 `db.Worker` 独占，用互斥锁保证同一时刻只跑一个请求，因为连接对象不能并发使用。`tea.Cmd` 本来就各在自己的 goroutine 里执行，所以 Worker 不再单开 goroutine 和 channel；请求的先后由 tab 的 `seq` 兜底（§8.3）。`Worker.Cancel()` 取消当前请求的 ctx。
 
 **启动**：`main` 里同步建连，先 `Main` 后 `Meta`，两条都连上才进入界面，期间不显示提示（每条最多 10s）。任何一步失败都按 §14「启动时找不到连接」处理。
 
