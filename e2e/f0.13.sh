@@ -65,6 +65,13 @@ e2e_type ':qa'; sleep 0.3
 check ":qa ranks 退出 first" eval '[[ $(selected) == "退出  quit"* ]]'
 e2e_keys Enter
 check ":qa↵ quits, terminal restored" eval 'wait_for 3 screen_has "[e2e-exit 0]" && flag_is alternate_on 0 && flag_is cursor_flag 1'
+start; e2e_type ':'; sleep 0.3
+check "引导页上按 :：也是「所有」" eval 'is_open && input_is ""'
+e2e_keys Escape; sleep 0.2; e2e_keys C-h; sleep 0.2; e2e_type ':'; sleep 0.3
+check "树上按 :：也是「所有」" eval 'is_open && input_is ""'
+e2e_type ' q '; sleep 0.3
+check "输入去掉首尾空白后和别名相同（\" q \"）：关闭 tab 排第一" eval '[[ $(selected) == "关闭 tab  tab.close"* ]] || { list | head -3; false; }'
+e2e_keys Escape; sleep 0.2
 K=$(mktemp "${TMPDIR:-/tmp}/sqlmux-e2e-keymaps.XXXXXX"); printf '[keys.grid]\n":" = "palette.command"\n' >| "$K"
 start -K "$K"; rm -f "$K"; two_tabs; e2e_type ':'; sleep 0.3
 check "keymaps.toml binds : to palette.command: the command scope again, > typed" input_is '>'

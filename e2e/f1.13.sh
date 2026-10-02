@@ -21,6 +21,10 @@ check "没有用户配置时：每一条绑定都是注释行（新版本改了�
 mkdir -p "$D/mine/sqlmux"; printf '[keys.grid]\n"x" = ""\n"X" = "tab.close"\n[keys.tree]\n"o" = "tree.open"\n' >"$D/mine/sqlmux/keymaps.toml"
 keys mine >"$D/mine.md"; mkdir -p "$D/rt2/sqlmux"; keys mine --format toml >"$D/rt2/sqlmux/keymaps.toml"
 check "改过的三行（解绑 x、改绑 X、加 o）在导出里是生效的行" eval 'grep -qx "\"x\" = \"\".*" "$D/rt2/sqlmux/keymaps.toml" && grep -qE "^\"X\" = \"tab.close\"" "$D/rt2/sqlmux/keymaps.toml" && grep -qE "^\"o\" = \"tree.open\"" "$D/rt2/sqlmux/keymaps.toml" || { grep -nE "^\"" "$D/rt2/sqlmux/keymaps.toml"; false; }'
+# after_defaults FILE PATTERN：这一行紧跟在默认键的注释行后面，下一行不再是默认键（用户新加的排在作用域的默认之后）
+after_defaults() { local n; n=$(grep -n -- "$2" "$1" | head -1 | cut -d: -f1); [[ -n $n && $(sed -n "$((n - 1))p" "$1") == '# "'[!\"]* && $(sed -n "$((n + 1))p" "$1") != '# "'[!\"]* ]] || { echo "  $2 at line $n"; false; }; }
+check "位置：解绑的 x 就在默认那一行（# \"x\" = \"tab.close\"）的位置，新加的 X、o 排在各自作用域的默认之后，别的行都不变" eval 'n=$(grep -n "^\"x\" = \"\"" "$D/rt2/sqlmux/keymaps.toml" | cut -d: -f1); [[ $(sed -n "${n}p" "$D/export.toml") == "# \"x\" = \"tab.close\""* && $(diff "$D/export.toml" "$D/rt2/sqlmux/keymaps.toml" | grep -c "^[<>]") == 4 ]] && after_defaults "$D/rt2/sqlmux/keymaps.toml" "^\"X\" = " && after_defaults "$D/rt2/sqlmux/keymaps.toml" "^\"o\" = " || { diff "$D/export.toml" "$D/rt2/sqlmux/keymaps.toml"; false; }'
+check "没有写 [map.*] 时导出里没有生效的 [map.*] 表头" eval '! grep -q "^\[map\." "$D/export.toml" "$D/rt2/sqlmux/keymaps.toml"'
 check "改绑、解绑之后导出 → 再放进 keymaps.toml：键位与原配置一致（x 仍是解绑的）" eval 'keys rt2 | cmp -s - "$D/mine.md" && ! grep -q "| grid | \`x\` |" "$D/mine.md" || { keys rt2 | diff "$D/mine.md" - | head; false; }'
 
 # ---- 片段的格式：每个作用域一节，节前一行注释；注释掉的 [map.*] 示例
