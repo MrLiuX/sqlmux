@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # F0.4 Action 注册表与命令行（specs/m0-skeleton/task.md F0.4；tech-design §6.1、§6.8 C-c、§7.8 toast）
 # 「所有键位都经由 Action」由单测 TestKeysRunActions 覆盖。
-# F0.13 起状态栏命令行被命令面板取代：: 打开面板的命令范围，:q↵ / :qa↵ 不变；面板本身见 f0.13.sh。
+# F0.13 起状态栏命令行被命令面板取代：: 打开面板（F5.8 起是「所有」范围），:q↵ / :qa↵ 不变；面板本身见 f0.13.sh。
 . "$(dirname "$0")/lib.sh"
 SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
 e2e_build || exit 1
 
 CFG=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")
 trap 'e2e_stop; rm -rf "$CFG"' EXIT
-start_with() { printf "$1" >| "$CFG/config.toml"; start -c "$CFG/config.toml"; }
+start_with() { printf "$1" >| "$CFG/keymaps.toml"; start -K "$CFG/keymaps.toml"; }   # keys and maps live in keymaps.toml (F5.9)
 cmd() { e2e_type ":$1"; e2e_keys Enter; sleep 0.3; }
 quit_clean() {  # 退出码 0，终端标志位按 F0.1 复原
   wait_for 3 screen_has '[e2e-exit 0]' && flag_is alternate_on 0 && flag_is mouse_all_flag 0 &&

@@ -6,7 +6,7 @@ e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")
 trap 'e2e_stop; rm -rf "$D"' EXIT
-mkdir -p "$D/c"; printf '[map.grid.normal]\nL = "5l"\n[keys.grid]\n"gz" = "grid.top"\n' >"$D/c/config.toml"
+mkdir -p "$D/c"; printf '[map.grid.normal]\nL = "5l"\n[keys.grid]\n"gz" = "grid.top"\n' >"$D/c/keymaps.toml"
 box() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5 }' | tail -1; }       # 帮助浮层的 X Y W H
 help() { local g y; g=($(box)); [[ -n ${g[0]} ]] || return 0
   for ((y = g[1]; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $y | sed 's/^ *//; s/ *$//'; done; }   # 含上边框那一行（显示当前前缀）
@@ -38,13 +38,13 @@ key '?'; g=($(box)); e2e_click $((g[0] + 3)) $((g[1] + 1)); sleep 0.3
 check "点帮助框里的组标题：不关" eval '[[ -n $(box) ]]'
 e2e_click 60 5; sleep 0.3
 check "点框外面：关掉" eval '[[ -z $(box) ]]'
-printf '[keys.normal]\n"?" = ""\n[keys.grid]\n"g?" = "keyhelp.open"\n' >"$D/c2.toml"; mkdir -p "$D/c2"; mv "$D/c2.toml" "$D/c2/config.toml"   # F3.25 起 ? 在 [keys.normal]
+printf '[keys.normal]\n"?" = ""\n[keys.grid]\n"g?" = "keyhelp.open"\n' >"$D/c2.toml"; mkdir -p "$D/c2"; mv "$D/c2.toml" "$D/c2/keymaps.toml"   # F3.25 起 ? 在 [keys.normal]
 SOLO=1 start -C "$D/c2"; open_table t_order; key g; key '?'
 check "keyhelp.open 改绑成 g?：按 g? 打开，根层标题显示 g?" eval '[[ $(help | head -1) == *"─ g? ─"* ]] || { help | head -1; false; }'
 key Escape
 
 # ---- leader 是 Ctrl 键（<C-a>）时：帮助里按 <C-a>? 回到根层；按 <C-a> 弹出的 which-key 画在帮助上面
-mkdir -p "$D/c3"; printf '[keys]\nleader = "<C-a>"\n' >"$D/c3/config.toml"
+mkdir -p "$D/c3"; printf '[keys]\nleader = "<C-a>"\n' >"$D/c3/keymaps.toml"
 SOLO=1 start -C "$D/c3"; open_table t_order; key '?'; key g
 key C-a; sleep 0.8
 check "帮助里按 <C-a>：which-key 画在帮助上面，看得见（上边框 C-a）" eval 'e2e_plain | grep -q "^┌─ C-a "'

@@ -22,9 +22,10 @@ t() { tmux -L "$E2E_SOCK" "$@"; }
 e2e_build() { [[ -n $E2E_NOBUILD ]] && { [[ -x $E2E_BIN ]] || { echo "e2e: E2E_NOBUILD but no $E2E_BIN" >&2; return 1; }; return 0; }
   (cd "$E2E_ROOT" && go build -o "$E2E_BIN" ./cmd/sqlmux); }
 
-# e2e_start [-x W] [-y H] [-k] [-c FILE] CMD — fresh server, session "t" (default 160x45).
+# e2e_start [-x W] [-y H] [-k] [-c FILE] [-K FILE] CMD — fresh server, session "t" (default 160x45).
 # -k: turn on tmux extended-keys before CMD starts, so it can negotiate key enhancements.
 # -c: install FILE as $XDG_CONFIG_HOME/sqlmux/config.toml before CMD starts.
+# -K: install FILE as $XDG_CONFIG_HOME/sqlmux/keymaps.toml (F5.9: [keys] / [map] live there, not in config.toml).
 # -C: copy DIR's contents into $XDG_CONFIG_HOME/sqlmux/ (config.toml, themes/ …).
 # -S: use DIR (the caller's, kept across starts) as $XDG_STATE_HOME instead of a fresh one.
 # -D: the same for $XDG_DATA_HOME (consoles' files, §11).
@@ -41,9 +42,9 @@ e2e_build() { [[ -n $E2E_NOBUILD ]] && { [[ -x $E2E_BIN ]] || { echo "e2e: E2E_N
 # TERM=xterm-256color + COLORTERM: a detached tmux has no client to report RGB,
 # so colorprofile would drop to 256 colors and theme hex values couldn't be checked.
 e2e_start() {
-  local w=160 h=45 keys=off conf= confdir= state= data= path=
-  while [[ $1 == -[xykcCSDP] ]]; do
-    case $1 in -x) w=$2; shift ;; -y) h=$2; shift ;; -c) conf=$2; shift ;; -C) confdir=$2; shift ;; -S) state=$2; shift ;; -D) data=$2; shift ;; -P) path=$2; shift ;; -k) keys=on ;; esac; shift
+  local w=160 h=45 keys=off conf= keymaps= confdir= state= data= path=
+  while [[ $1 == -[xykcKCSDP] ]]; do
+    case $1 in -x) w=$2; shift ;; -y) h=$2; shift ;; -c) conf=$2; shift ;; -K) keymaps=$2; shift ;; -C) confdir=$2; shift ;; -S) state=$2; shift ;; -D) data=$2; shift ;; -P) path=$2; shift ;; -k) keys=on ;; esac; shift
   done
   _e2e_kill
   E2E_TMP=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e.XXXXXX")
@@ -52,6 +53,7 @@ e2e_start() {
   printf '#!/bin/sh\ncat "%s/clipboard" 2>/dev/null\n' "$E2E_TMP" >"$E2E_TMP/bin/pbpaste"; chmod +x "$E2E_TMP"/bin/*
   (umask 077; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$SQLMUX_TEST_PG" >"$E2E_TMP/config/sqlmux/connections.toml")
   [[ -n $conf ]] && cp "$conf" "$E2E_TMP/config/sqlmux/config.toml"
+  [[ -n $keymaps ]] && cp "$keymaps" "$E2E_TMP/config/sqlmux/keymaps.toml"
   [[ -n $confdir ]] && cp -Rp "$confdir"/. "$E2E_TMP/config/sqlmux/"
   t -f /dev/null set -s extended-keys "$keys" \; new-session -d -s t -x "$w" -y "$h" \
     -e XDG_CONFIG_HOME="$E2E_TMP/config" -e XDG_STATE_HOME="${state:-$E2E_TMP/state}" \
