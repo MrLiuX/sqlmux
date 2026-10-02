@@ -653,7 +653,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
   - 带圈数字按 1 列计算，已知上限见 §7.1「宽度」。
   - 右侧提示离右上角 1 列。
   - console 标题的右侧从左到右是：事务控件 `Tx: 自动 ▾`（F5.3，手动时后面跟着提交 ✓、回滚 ↺）、连接和 schema 的下拉框 `play · sqlmux_play.public ▾`（F5.11 起加上连接；原来只有 `doraemon.public ▾`）、`▶ run`（`focus` 底、`bg` 色字、粗体）加上 `↵`（`dim` 色）。
-    - 连接名和 `<库>.<schema>` 各是一个下拉框，点哪一段开哪一个：连接名用 `info` 色（同状态栏的地址块），`<库>.<schema> ▾` 照旧 `pk` 色，中间的 ` · ` 不能点，悬停只亮那一段；两个下拉框是同一个组件，位置、按键同 §8.6；`gs` 照旧打开 schema 下拉，命令「切换连接…」（`console.conn`）打开连接下拉。连接下拉列出全部连接（引擎图标、名字，只读的带 `lock`），当前的用 `pk` 色标出；选了未连接的就关掉下拉去连，连上之后才换过去（schema 取那个连接的 Schema），连接中又选了别的以最后一次为准，连不上 toast `<连接名>：<错误>`、留在原来的连接。所在连接有未提交的事务时不能换（§5）。MySQL 只有连接这一段（§8.6）。
+    - 连接名和 `<库>.<schema>` 各是一个下拉框，点哪一段开哪一个：连接名用 `info` 色（同状态栏的地址块），`<库>.<schema> ▾` 照旧 `pk` 色，中间的 ` · ` 不能点，悬停只亮那一段；两个下拉框是同一个组件，位置、按键同 §8.6；`gs` 照旧打开 schema 下拉，命令「切换连接…」（`console.conn`）打开连接下拉。连接下拉列出全部连接（名字；每项的图标——只读的 `lock`、MySQL 的引擎图标——等 F5.3 / F5.4 给下拉框加上每项一个图标时一起画），当前的用 `pk` 色标出；选了未连接的就关掉下拉去连，连上之后才换过去（schema 取那个连接的 Schema），连接中又选了别的以最后一次为准，连不上 toast `<连接名>：<错误>`、留在原来的连接。所在连接有未提交的事务时不能换（§5）；这个 console 的执行还没回来时也不能换，toast「正在执行，结束后再换连接」（执行里可能有 begin，回来后原连接停在事务里、上面却没有 console 了，reviewer 在 F5.11 复现）。MySQL 只有连接这一段（§8.6）。
     - `Tx: 自动 ▾` / `Tx: 手动 ▾` 点开是自动、手动两项的下拉，显示的是所在连接的模式（§5）。✓ 为 `focus` 色、↺ 为 `info` 色，悬停 `select` 底；所在连接不在事务里时两个都是 `dim` 色、不能点（同 DataGrip，也同查询条的停止按钮）。
   - **空间不够时，提示优先于标题的对象名**，因为提示都是可点击的按钮（§7.4）。按下面的顺序分配空间：
     1. 先给最短的标题 `⟨n⟩ <图标>`（ascii 下是 `⟨n⟩ <图标> 类型`）留出位置。
@@ -726,7 +726,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
   - 错误栏占内容区最下面的几行，表格 / console 的可见高度相应变矮，不盖住内容。一个 tab 同时只有一条，后来的替换先前的；错误栏属于 tab，切走不显示，切回来还在。
   - 关闭：点 `×`，或者在这个 pane 的 NORMAL 下按 `esc`（Action `pane.error.close`）。同一个 tab 下一次同类操作成功时自动消失：取数成功清掉取数的报错，保存成功清掉保存的报错，console 每次开始执行就清掉上一次的；编辑单元格不清。`esc` 绑在 `[keys.normal]`，console 的 VISUAL 下和编辑器有待定键时照旧交给 vim。
   - 用在：表格的取数与 WHERE 报错、保存失败（「id = 42：…，已回滚」这一类，§10.3）、console 的执行报错（日志 tab 照旧记，出错语句的 ▶ 照旧变红；结果区 `R` 重跑出错时显示在来源 console 的 tab 上，来源已关就只记日志）。保存被取消的「已取消，已回滚」不是错误，仍在查询条右侧。
-- **toast**：显示在状态栏上方一行的右侧，默认 3 秒后消失；「再按一次 C-c 退出」这一条显示 2 秒，正好是连按的窗口（§6.8）。样式为 `warn` 色字、#292e42 底、左右各留 1 列。设计稿里没有 toast，这个样式是后定的。加底色是因为那一行正好是 pane 的下边框，不加底色，文字会和边框混在一起。data pane 中保存 / 刷新的结果按 Q-06 的要求显示在查询条的右侧，不通过 toast 显示。
+- **toast**：显示在状态栏上方一行的右侧，默认 3 秒后消失；「再按一次 C-c 退出」这一条显示 2 秒，正好是连按的窗口（§6.8）。样式为 `warn` 色字、#292e42 底、左右各留 1 列。toast 只有一行：文字里的换行换成「；」、Tab 换成空格，在显示 toast 的那一处统一做（驱动的错误常是多行的，比如 localhost 解析出两个地址各报一行；F5.10 审查时发现）。设计稿里没有 toast，这个样式是后定的。加底色是因为那一行正好是 pane 的下边框，不加底色，文字会和边框混在一起。data pane 中保存 / 刷新的结果按 Q-06 的要求显示在查询条的右侧，不通过 toast 显示。
 - **session 列表**（M5 F5.1，S-02、S-03；`SPC s` 或点击状态栏的 session 块）：框和行的样式、位置、宽度照命令面板，标题「session」。每行是 session 名和 `dim` 色的 window 数（如 `3 windows`），当前 session 用 `focus` 色；`l` 展开后下面一级是它的 window（`0: data`），当前 window 同样标出。`$` 把这一行原地变成输入框（INSERT，`↵` 确定、`esc` 放弃）；`x` 关闭 session：有未保存的修改或未提交的事务时先确认（§10.5），关的是最后一个 session 等于退出。单击一行等于移过去再按 `↵`。键位见 §6.8 的浮层表。
 - **新建 session**（`n`）：名字照 tmux 取最小的没用过的数字（`1`、`2`……）；默认布局（§5），带一个新的 console_n；连上当前连接并照「默认展开」展开它，其余连接不连。新 session 有自己的一套连接，按 `n` 后先在后台给它连上当前连接（toast「正在连接 <名字>…」），连上之后才建出 session 并 attach 过去，连不上就 toast `<名字>：<错误>`、不建，所以「当前连接一定是连上的」照样成立。
 - **新建连接表单**（M5 F5.1，命令 `conn.new`「新建连接…」）：居中的框，单线 `focus` 色边框，标题「新建连接」。一个字段一行，左边是 `dim` 色的字段名：name、dsn、password_cmd 是单行输入框（`ui.Input`，同面板，不是 vim）；engine、read_only 是开关，`space` 或单击切换（engine 在 F5.4 之前只有 postgres）。底栏是键位提示（`Tab 下一项 · ↵ 保存 · esc 取消`，从 keymap 读，可以点击）。`↵` 保存：校验同启动时读 connections.toml（必填、名字的字符规则、不能重名），不通过就在底栏上方一行用 `error` 色写原因、焦点移到出错的字段；通过就追加到 connections.toml（§14），所有 session 的树里多出这个连接，状态是未连接，保存时不试连。
@@ -861,7 +861,7 @@ catalog 按连接缓存（每个 session 的每个 `Conn` 一份，M5 起；原�
   - 位置在入口（console 标题的 schema 按钮、查询条的 chip）下方、与入口左对齐，宽度取 max(最长 schema 名 + 边距, 入口所在栏的右边界 − 入口起点 x)，这样右边框和所在栏的右边框对齐；仍放不下时向左移。当前所在的 schema 用 `pk` 色标出（§7.3 里 pk 也用于 schema 值）。键位在 `[keys.dropdown]`，Action 为 `dropdown.up` / `dropdown.down` / `dropdown.select` / `dropdown.close`，ORDER、LIMIT 下拉框共用（F1.2 时叫 `schema.*`，F1.4 改名），只在浮层里用，不带标题。
   - 组件放在 `ui` 里，M1 用于 ORDER、LIMIT，M3 给 console 选 schema。树不再用它：M1 F1.12 起 schema 是树里的节点（§7.8）。
   - 命令面板里也有对应的「Switch schema…」命令。
-- **默认值**：新建的 console 用当前连接和这个连接的 Schema（§5、§7.8）；之后两者互不影响。console 文件记着它最后用的连接和 schema，下次打开时恢复（§11）。
+- **默认值**：新建的 console（`c`、引导页按钮、面板命令、`C-e`）一律用当前连接和这个连接的 Schema（§5、§7.8），不管这个 console_n 文件在 state 里记着什么，并把它写回 state；之后两者互不影响。state 里记下的连接和 schema 只在启动时恢复默认布局里的 console_1 时用（M6 F6.5 恢复布局时也用，§11）。
 - **执行方式**：同一个连接上的 console 共用 `Main`，所以每次执行前比较一下（`Conn` 记下 `Main` 当前的 search_path，初始为建连时读到的值；一次执行里有 SET / RESET / DISCARD 语句时把记下的值作废，下次一定重新 SET。代价是用户在 console 里自己 `set search_path` 只持续到这次执行结束，以下拉框为准）：如果连接当前的 `search_path` 与这个 console 选择的 schema 不一致，先执行 `SET search_path TO <所选 schema>, <建连时的原始 search_path>`。
   - 原始路径在建连时用 `SHOW search_path` 读取，接在后面，这样装在 `public` 等 schema 里的扩展函数仍然能找到。设置时用 `set_config('search_path', $1, false)` 带参数的写法，不把原始值拼进 SQL：服务器上设了 `search_path = ''`，或者 DSN 里写了 `$user,public` 时，拼接会报语法错（快速 SQL 已经这样写）。
   - **只在事务外记住 search_path**（M3 审查时在真 PG 上复现）：
@@ -1231,7 +1231,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 
 **文件**：
 
-- 每个 console tab 对应 `$XDG_DATA_HOME/sqlmux/consoles/console_<n>.sql`（M5 F5.11 起不再按连接名分目录）。新建时 n 取所有 session 里都没被打开的最小值（两个 session 打开同一个文件，自动保存会互相覆盖），文件已经存在就载入，所以默认的 console_1 每次启动都带着上次写的 SQL，文件也不会越积越多。state.json 记着每个文件最后用的连接和 schema（§14），打开时恢复；记下的连接已经不在 connections.toml 里时用当前连接。旧版本 `consoles/<连接名>/` 下的文件不写迁移代码。
+- 每个 console tab 对应 `$XDG_DATA_HOME/sqlmux/consoles/console_<n>.sql`（M5 F5.11 起不再按连接名分目录）。新建时 n 取所有 session 里都没被打开的最小值（两个 session 打开同一个文件，自动保存会互相覆盖），文件已经存在就载入，所以默认的 console_1 每次启动都带着上次写的 SQL，文件也不会越积越多。state.json 记着每个文件最后用的连接和 schema（§14），只在启动时恢复默认布局里的 console_1（以后 M6 恢复布局）时用；新建的 console 一律用当前连接（§8.6「默认值」）；记下的连接已经不在 connections.toml 里时用当前连接。旧版本 `consoles/<连接名>/` 下的文件不写迁移代码。
 - 最后一次修改后 1s 自动保存（去抖），写临时文件再 rename，目录 0700、文件 0600（§13）；`:w`、`C-s`、关闭 tab、退出时立即写；没改过就不写。写入失败用 toast 提示。文件存在但读不出来时（是目录、权限为 000 等），toast「读取失败：<err>」，这个 console tab 不打开（pane 显示引导页），程序照常启动；不能用空内容打开，否则自动保存会把那个读不出的文件覆盖掉。`:q` 关闭 tab 不弹确认，内容已经写盘。`:wq` 是先 `:w` 再 `:q`：console 上等同 `:q`；表 tab 上先保存修改（§10.3），保存成功后才关闭，失败时 tab 留着、查询条显示原因，不弹丢弃确认。console 文件写不进去时，`:q`、关 pane、退出都不执行，toast「保存失败：<err>」。
 
 **执行（C-02）**：
@@ -1373,7 +1373,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - `connections.toml` 支持 `password_cmd`（例如 macOS 的 `security` 命令、`pass`）、`password_env`；PG 还会被 pgconn 自动读取 `~/.pgpass`。
   - 也允许直接写明文 `password`。但如果此时文件对同组或其他用户可读（`mode & 0o044 != 0`），进入界面后用 toast 警告 3 秒（§7.8），例如「connections.toml 里有明文密码，且其他用户可读，建议 chmod 600」。不打到 stderr，因为 alt screen 会把它盖住。DSN 里写的密码（`postgres://u:p@…`）不检查。
   - 密码来源的优先级：`password_cmd` > `password_env` > `password` > DSN 里写的 / `~/.pgpass`（后两者交给 pgconn）。写了多个只取优先级最高的，不报错。
-  - `password_cmd` 用 `sh -c` 执行，去掉末尾的换行；结果在进程内按连接名缓存，`Main`、`Meta` 和别的 session 建同一个连接时都用它（免得钥匙串一再弹窗），建连失败时丢掉缓存，下次重新执行。非 0 退出时报错，错误里带上它的 stderr；`password_env` 指的变量没设置或为空时报错。这些错误对启动时的连接是打印后退出（§14），对其他连接是标成失败、进 toast（§7.8）。
+  - `password_cmd` 用 `sh -c` 执行，去掉末尾的换行；结果在进程内按连接名缓存（一次运行里 connections.toml 只读一次，同名就是同一条；测试里换密码来源时先清缓存），`Main`、`Meta` 和别的 session 建同一个连接时都用它（免得钥匙串一再弹窗），建连失败时丢掉缓存，下次重新执行。非 0 退出时报错，错误里带上它的 stderr；`password_env` 指的变量没设置或为空时报错。这些错误对启动时的连接是打印后退出（§14），对其他连接是标成失败、进 toast（§7.8）。
 - **注入**：值一律参数化，标识符一律按方言加引号。
 - **日志与文件**：
   - 只有带 `--debug` 启动时才写日志，DSN 中的密码会被脱敏。

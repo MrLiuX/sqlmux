@@ -86,6 +86,12 @@
   - n 先在当前 session 里算，F5.1 有了多 session 后改成遍历所有 session；
   - 重跑显式传入连接和 schema：console 执行传它自己的，结果区重跑传结果 tab 记下的；
   - config 里 name 的字符限制保留，注释的理由改成 state 的键和树的节点 ID。
+- [ ] 审查时定（reviewer 提问，2026-10-02）：
+  - 新建的 console（`c`、引导页按钮、面板命令、`C-e`）一律用当前连接和它的 Schema，并写回 state；state 里的记录只在启动时恢复默认布局的 console_1 时用（§8.6、§11）；
+  - console 自己的执行还没回来时也不能换连接，toast「正在执行，结束后再换连接」；
+  - 连接下拉暂时不画每项的图标，F5.3 加 `lock`、F5.4 加 MySQL 图标时给 Dropdown 加每项一个图标；
+  - `password_cmd` 照 §13 按连接名缓存，测试里换密码来源时先清缓存；
+  - toast 里的换行换成「；」、Tab 换成空格，在显示 toast 的那一处统一做（§7.8）。
 
 **验收**
 - [ ] 单测：有事务时换连接被拦下；文件路径；n 的取法；从 state 恢复连接和 schema。
