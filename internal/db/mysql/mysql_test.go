@@ -337,8 +337,8 @@ func TestTxEnds(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	_, errB := b.Query(ctx, "update k set n = 3 where id = 1")
 	victim, err := b, errB
-	if err == nil {
-		victim, err = a, <-errA
+	if errA := <-errA; err == nil { // a done either way, before it is used again
+		victim, err = a, errA
 	}
 	if !errors.As(err, new(db.RolledBack)) || errno(err) != 1213 || victim.TxStatus() != 'I' {
 		t.Errorf("deadlock: %v, %c", err, victim.TxStatus())
