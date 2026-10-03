@@ -1,6 +1,6 @@
 # M5 工作现场与 MySQL · 任务清单
 
-- **状态**：M2–M4 验收通过（2026-10-02）。先做 M4 验收意见 F5.5–F5.9（节点 0，2026-10-02 通过）；之后按 F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，都是 todo（2026-10-02 按 worker 起草的清单定，§5「一个 session 多个连接」牵动的各节已改好）。
+- **状态**：M2–M4 验收通过（2026-10-02）。先做 M4 验收意见 F5.5–F5.9（节点 0，2026-10-02 通过）；节点 1（F5.10、F5.11）2026-10-03 通过；之后按 F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，都是 todo（2026-10-02 按 worker 起草的清单定，§5「一个 session 多个连接」牵动的各节已改好）。
 - **目标**：
   - 一个 session 多个连接：目录树的根是 connections.toml 里的全部连接，用到时才连；
   - 支持多个 session、多个 window；
@@ -29,24 +29,24 @@
 
 ---
 
-## F5.10 连接模型与连接树 · 状态：todo
+## F5.10 连接模型与连接树 · 状态：passed（1155504；e2e e9c906c）
 
 - **依赖**：F5.5–F5.9
 - **涉及**：`internal/app`（Session / Conn、树、状态栏、面板、快速 SQL）、`internal/config`（connections、state）、`internal/ui`（树、状态栏）
 
 **开发**
-- [ ] 拆 `app.Session`（§5）：
+- [x] 拆 `app.Session`（§5）：
   - `Session`（工作区）保留 Name、Windows、Active、RunSeq，加上 `Conns`；
   - 新增 `Conn`，放 Spec、State、Meta、Main、Schema、Schemas、Tables、home，列 / 存在性 / DDL 三个缓存，DB、Addr，以及 search_path 的记账 startedPath、mainPath；
   - 树的展开状态仍记在 Session 上，节点 ID 加上连接名前缀。
-- [ ] `config.LoadConnections` 读出全部连接，名字重复时启动报错。`sqlmux [名字]` 选启动时连哪一个（不带参数时连第一个），照旧同步建连，失败照 §14 退出；其他连接都不连。
-- [ ] 树的根是各个连接（§7.8「连接节点」）：未连接、连接中、失败、已连接四种状态。在未连接或失败的根上展开、`↵` 或单击时，在 Cmd 里建连（`password_cmd` 也在 Cmd 里跑），连上后加载 catalog，照「默认展开」展开它的 `current_schema()` 和 Tables。
-- [ ] 表 tab 属于一个 Conn：tab 的 id 带上连接名，两个连接上的同名表是不同的 tab、各有各的缓存。state.json 的表键本来就是 `<连接>/<schema>.<表>`，不用改；`recent` 里表的 id 加上连接名，旧的不带连接名的条目读到时丢掉（§14）。
-- [ ] 「当前连接」（§5）：焦点 tab 的连接，结果 tab 取它记下的来源连接；焦点在树上时取光标所在的连接；引导页、空 pane 沿用上一次的。用到它的有：快速 SQL（`Meta` 加它的 Schema，历史照旧按连接记）、`C-e`、新 console、`tree.refresh`、`C-c` 和 busy 提示。DDL 预览取表所属连接的 `Meta`。`quick #n` 的结果 tab 记下连接和 schema，`R` 用它们重跑。
-- [ ] 命令面板的表范围列出所有已连上的连接的表，所在位置是 `<连接>.<schema>`；当前连接的 Schema 排最前，然后是当前连接的其余 schema，再是其他连接（§12）。
-- [ ] 状态栏（§7.8）：session 块不再画引擎图标；地址块显示当前连接的 `<连接名> · <用户>@<host>:<port>`。侧栏第一行的表数是已连上的各个连接的合计。
-- [ ] ponytail：连接断了不自动重连（和现在一样）。
-- [ ] 细节（worker 提议，已定）：
+- [x] `config.LoadConnections` 读出全部连接，名字重复时启动报错。`sqlmux [名字]` 选启动时连哪一个（不带参数时连第一个），照旧同步建连，失败照 §14 退出；其他连接都不连。
+- [x] 树的根是各个连接（§7.8「连接节点」）：未连接、连接中、失败、已连接四种状态。在未连接或失败的根上展开、`↵` 或单击时，在 Cmd 里建连（`password_cmd` 也在 Cmd 里跑），连上后加载 catalog，照「默认展开」展开它的 `current_schema()` 和 Tables。
+- [x] 表 tab 属于一个 Conn：tab 的 id 带上连接名，两个连接上的同名表是不同的 tab、各有各的缓存。state.json 的表键本来就是 `<连接>/<schema>.<表>`，不用改；`recent` 里表的 id 加上连接名，旧的不带连接名的条目读到时丢掉（§14）。
+- [x] 「当前连接」（§5）：焦点 tab 的连接，结果 tab 取它记下的来源连接；焦点在树上时取光标所在的连接；引导页、空 pane 沿用上一次的。用到它的有：快速 SQL（`Meta` 加它的 Schema，历史照旧按连接记）、`C-e`、新 console、`tree.refresh`、`C-c` 和 busy 提示。DDL 预览取表所属连接的 `Meta`。`quick #n` 的结果 tab 记下连接和 schema，`R` 用它们重跑。
+- [x] 命令面板的表范围列出所有已连上的连接的表，所在位置是 `<连接>.<schema>`；当前连接的 Schema 排最前，然后是当前连接的其余 schema，再是其他连接（§12）。
+- [x] 状态栏（§7.8）：session 块不再画引擎图标；地址块显示当前连接的 `<连接名> · <用户>@<host>:<port>`。侧栏第一行的表数是已连上的各个连接的合计。
+- [x] ponytail：连接断了不自动重连（和现在一样）。
+- [x] 细节（worker 提议，已定）：
   - 树光标停在还没连上的连接节点上（未连接、连接中、失败）时，当前连接沿用上一次的，所以当前连接一定是连上的，不写「连上之后接着执行」的续接逻辑；
   - 未连接或失败的连接节点上按 `R` 等于展开（去连或重试），已连上的照旧刷新；连接中再展开或 `↵` 不做事；失败的 toast 写 `<连接名>：<驱动的错误>`；
   - `password_cmd` 的进程内缓存（§13）在这里做，建连失败时丢掉；
@@ -54,31 +54,31 @@
   - console 在这里就带上连接：新 console 取当前连接、在它的 `Main` 上执行，默认布局里的 console_1 用启动时的连接；标题、切换连接、文件路径、state 记录留给 F5.11。
 
 **验收**
-- [ ] 单测：当前连接的规则；两个连接上的同名表是两个 tab，缓存分开。
-- [ ] 集成测试：坏 DSN 的连接标成失败，不影响别的连接。
-- [ ] e2e：connections.toml 里写两个连接（同一个库起两个名字就行）。启动时另一个连接是折叠的、没有连上；展开它出现 schema；从它打开表；状态栏的地址块跟着焦点变。
-- [ ] golden：连接节点的四种状态；状态栏的 session 块和地址块。
+- [x] 单测：当前连接的规则；两个连接上的同名表是两个 tab，缓存分开。
+- [x] 集成测试：坏 DSN 的连接标成失败，不影响别的连接。
+- [x] e2e：connections.toml 里写两个连接（同一个库起两个名字就行）。启动时另一个连接是折叠的、没有连上；展开它出现 schema；从它打开表；状态栏的地址块跟着焦点变。
+- [x] golden：连接节点的四种状态；状态栏的 session 块和地址块。
 
-## F5.11 console 的连接与文件 · 状态：todo
+## F5.11 console 的连接与文件 · 状态：passed（1155504；e2e e9c906c）
 
 - **依赖**：F5.10
 - **涉及**：`internal/app`（console、结果区）、`internal/db`（postgres.Conn 暴露 TxStatus）、`internal/config`（state 的 consoles）、`internal/ui`（console 标题、下拉框）
 
 **开发**
-- [ ] console 标题改成 `<连接> · <库>.<schema> ▾`，连接和 schema 各是一个下拉框（§7.8「console 标题」）：
+- [x] console 标题改成 `<连接> · <库>.<schema> ▾`，连接和 schema 各是一个下拉框（§7.8「console 标题」）：
   - 连接下拉列出全部连接。选到未连接的就去连，连上之后才换过去；连不上就 toast 报错，留在原来的连接。命令「切换连接…」（`console.conn`）打开它，不绑默认键；
   - schema 下拉照旧（`gs`），列的是这个 console 所在连接的 schema；
   - 让位顺序：`▶ run` > 连接和 schema 的下拉框（两段算一项）> `↵`。
-- [ ] 执行走所选连接的 `Main`，search_path 的记账（mainPath / startedPath）挪到 Conn 上（§8.6）。
-- [ ] 所在连接的 `Main` 在事务里（TxStatus 不是 `I`）时不让换连接，toast「当前连接有未提交的事务，先提交或回滚」。在 postgres.Conn 上暴露 TxStatus，经 Worker 取，F5.3 也用它。
-- [ ] 文件（§11、§14）：
+- [x] 执行走所选连接的 `Main`，search_path 的记账（mainPath / startedPath）挪到 Conn 上（§8.6）。
+- [x] 所在连接的 `Main` 在事务里（TxStatus 不是 `I`）时不让换连接，toast「当前连接有未提交的事务，先提交或回滚」。在 postgres.Conn 上暴露 TxStatus，经 Worker 取，F5.3 也用它。
+- [x] 文件（§11、§14）：
   - 路径改成 `consoles/console_<n>.sql`；
   - n 取**所有 session** 里都没打开的最小值：文件不再按连接分目录之后，两个 session 同时打开同一个 console_1，自动保存会互相覆盖；
   - state.json 加 `consoles: {"console_1": {"conn", "schema"}}`，换连接或 schema 时写入，打开文件时恢复；记下的连接已经不在 connections.toml 里时，用当前连接；
   - 新 console 的连接和 schema 取当前连接和它的 Schema；
   - 旧的 `consoles/<连接名>/` 下的文件不写迁移代码，通过后由决策者手工帮用户挪过去（同 F5.9 的键位）。
-- [ ] 补全、执行 DDL 之后刷新 catalog，都用这个 console 的连接。结果 tab 记下连接和 schema，重跑用它们，不管 console 之后关了还是换了连接。
-- [ ] 细节（worker 提议，已定）：
+- [x] 补全、执行 DDL 之后刷新 catalog，都用这个 console 的连接。结果 tab 记下连接和 schema，重跑用它们，不管 console 之后关了还是换了连接。
+- [x] 细节（worker 提议，已定）：
   - 标题两段分开点：连接名 `info` 色、`<库>.<schema> ▾` 照旧 `pk` 色，` · ` 不能点，悬停只亮那一段；连接下拉复用 dropdown 组件，行为、位置同 schema 下拉；
   - 选到未连接的：下拉关掉、去连，console 先留在原来的连接，连上之后才换过去（schema 取那个连接的 Schema）；连接中又选了别的，以最后一次为准；连不上 toast `<连接名>：<错误>`，console 不动；
   - 事务状态记在 `Conn` 上：每次 `Main` 的请求结束前在 Worker.Run 里读一次 TxStatus、随应答带回，换连接时看它（Main 在跑长查询时界面也不用等锁），F5.3 也用它；
@@ -86,7 +86,7 @@
   - n 先在当前 session 里算，F5.1 有了多 session 后改成遍历所有 session；
   - 重跑显式传入连接和 schema：console 执行传它自己的，结果区重跑传结果 tab 记下的；
   - config 里 name 的字符限制保留，注释的理由改成 state 的键和树的节点 ID。
-- [ ] 审查时定（reviewer 提问，2026-10-02）：
+- [x] 审查时定（reviewer 提问，2026-10-02）：
   - 新建的 console（`c`、引导页按钮、面板命令、`C-e`）一律用当前连接和它的 Schema，并写回 state；state 里的记录只在启动时恢复默认布局的 console_1 时用（§8.6、§11）；
   - console 自己的执行还没回来时也不能换连接，toast「正在执行，结束后再换连接」；
   - 连接下拉暂时不画每项的图标，F5.3 加 `lock`、F5.4 加 MySQL 图标时给 Dropdown 加每项一个图标；
@@ -94,10 +94,10 @@
   - toast 里的换行换成「；」、Tab 换成空格，在显示 toast 的那一处统一做（§7.8）。
 
 **验收**
-- [ ] 单测：有事务时换连接被拦下；文件路径；n 的取法；从 state 恢复连接和 schema。
-- [ ] 集成测试：同一个连接上的两个 console 共用事务（一个里 begin，另一个也在事务里）。
-- [ ] e2e：用下拉框换连接后，在新连接上执行；重启后连接和 schema 都恢复。
-- [ ] golden：几种宽度下的 console 标题（连接和 schema 的下拉框让位）。
+- [x] 单测：有事务时换连接被拦下；文件路径；n 的取法；从 state 恢复连接和 schema。
+- [x] 集成测试：同一个连接上的两个 console 共用事务（一个里 begin，另一个也在事务里）。
+- [x] e2e：用下拉框换连接后，在新连接上执行；重启后连接和 schema 都恢复。
+- [x] golden：几种宽度下的 console 标题（连接和 schema 的下拉框让位）。
 
 ## F5.1 多 session 与新建连接 · 状态：todo
 
