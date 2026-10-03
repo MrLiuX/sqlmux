@@ -260,6 +260,7 @@
   - 集成测试：mysql 包对照 postgres 包写一套（catalog、page / count、逐类型保存、快速 SQL、KILL QUERY、只读解除表），环境变量 `SQLMUX_TEST_MYSQL`；app 层和引擎无关的（连接、console 共用 Main、手动事务、只读）两个引擎各跑一遍；PG 特有的（search_path、DateStyle、E 状态、format()）不搬；
   - 图标 `mysql`（nf-dev-mysql U+E704，ascii `my`）；表单的 engine 在 postgres / mysql 之间用空格切换。
 
+- [ ] 测试时定（tester 提问，2026-10-03）：面板里输入不为空时，分数相同的按输入为空时的顺序排，不按长度：同名的表当前连接的 Schema 里那张排第一（§12）。MySQL 能看到服务器上所有的库，同名表很常见，原来 `↵` 会打开别的库的表。
 **验收**
 - [ ] M1–M4 的集成测试在 MySQL 上全部通过。
 - [ ] 用 `KILL QUERY` 取消长查询有效。
