@@ -1248,7 +1248,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 - 在 NORMAL 或 VISUAL 下按 `↵`、点击 gutter 的 ▶、点击标题栏的 `▶ run` 都可以执行。有选区时执行选区（块选区执行它覆盖到的那几整行，同 V-LINE），执行后退出 VISUAL、光标不动，同 vim 的操作符；要再跑一次用 `gv` 重新选中，或点结果区的重跑。否则执行光标所在的语句。点 gutter 的 ▶ 执行那一行开始的语句，不移动光标。
 - 每次最多取 `console.max_rows` 行（默认 1000），读语句用自动 LIMIT（§9.4），其余靠 `Exec` 的 `maxRows` 截断；截断时显示 `1000+ 行`。
 - 在所选连接的 `Main` 的一次 `Worker.Run` 里逐条执行，每条是单独的简单协议请求：自动事务模式下各自自动提交；手动模式下（F5.3）每条语句前 `Main` 不在事务里就先 BEGIN（照 psql 在 AUTOCOMMIT off 时的 SendQuery：一次执行里 commit 之后的语句也在新事务里），psql `command_no_begin` 列出的语句不补 BEGIN（事务控制、VACUUM、CREATE / DROP DATABASE、带 CONCURRENTLY 的、ALTER SYSTEM、DISCARD ALL 等，按 psql 源码定），出错后事务停在出错状态，由用户回滚。console 有执行在跑时不能关（关 tab、pane、window），toast「正在执行，结束后再关闭」，同换连接的规则：否则执行回来后连接停在事务里，上面却没有 console 了。遇到错误就停，后面的不执行。不一次发出整段：PG 简单协议里一次发送的多条语句属于同一个隐式事务，一条出错全部回滚，也没法知道错在哪一条、把哪个 ▶ 标红。
-- 首个关键字是 create / alter / drop 的语句成功后，重新加载这个 console 所在连接的 catalog、清空列缓存（同 `tree.refresh`）。
+- 首个关键字是 create / alter / drop / rename（MySQL 的 `RENAME TABLE`，F5.4；PG 的改名是 `ALTER … RENAME`）的语句成功后，重新加载这个 console 所在连接的 catalog、清空列缓存（同 `tree.refresh`）。
 - 用户在自动模式下自己 `begin`：`Main` 进了事务，这个连接上表格的保存也进这个事务、不自动提交（§10.3）；状态栏显示「事务中」（§7.8），提交、回滚同手动模式（M5 F5.3 起，原来是已知上限）。
 
 **结果区（C-04 至 C-07，已确认）**
