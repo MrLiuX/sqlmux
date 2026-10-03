@@ -9,7 +9,7 @@ e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")
 trap 'e2e_stop; rm -rf "$D"' EXIT
-APP=e2e-f51-$$ APP2=e2e-f51x-$$ ERROR=#f7768e
+APP=e2e-f51-$$ APP2=e2e-f51x-$$ APP3=e2e-f51s-$$ ERROR=#f7768e FOCUS=#9ece6a
 # 用户手写的 connections.toml：带注释，最后一行后面没有换行
 mkdir -p "$D/c"; (umask 077; printf '# my connections, keep this comment\n[[connection]]\nname = "doraemon"   # the seed\nengine = "postgres"\ndsn = "%s"\n# the end, no newline after this line' "$SQLMUX_TEST_PG&application_name=$APP" >"$D/c/connections.toml")
 
@@ -27,6 +27,9 @@ sl() { e2e_keys Space; e2e_type s; sleep 0.4; }                             # SP
 new_session() { key n; wait_for 6 eval '[[ $(sname) == "$1" ]]'; sleep 0.5; }   # NAME：列表里按 n，等它 attach
 clr() { local i; for ((i = 0; i < 30; i++)); do e2e_keys BSpace; done; sleep 0.2; }
 title1() { e2e_plain | head -1; }
+nrow() { local y; for y in $(seq 3 30); do [[ $(e2e_text 1 32 "$y") == *" $1 "* ]] && { echo "$y"; return; }; done; }   # 侧栏里 NAME 的行
+toast_row() { e2e_text 1 "$(e2e_flag pane_width)" $(($(H) - 1)); }
+panes() { e2e_panes | awk '$1 != "-" { print $1 }' | tr '\n' ' '; }
 kinds() { list | cut -d'|' -f1 | awk '{ print $NF }' | sort -u | tr '\n' ' '; }
 paste() { t set-buffer -b e2e "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 setsql() { key Escape; key g g; key d G; key i; paste "$1"; key Escape; key g g; }   # 焦点所在 console 的内容换成 SQL
@@ -61,8 +64,12 @@ sl; key k; key Enter; sl; key j; key l
 check "l：展开 1，下面一级是它的两个 window（缩进）" rows_are "doraemon  1 windows|0;1  2 windows|1;  0: data|0;  1: data|0;"
 key j; key h
 check "window 行上 h：回到它的 session 行并收起" rows_are "doraemon  1 windows|0;1  2 windows|1;"
-key l; key j; key Enter
+key l; key k; key l
+check "两个都展开：每个 session 都标出它自己的当前 window（focus 色）：doraemon 的 0、1 的 1" eval 'rows_are "doraemon  1 windows|1;  0: data|0;1  2 windows|0;  0: data|0;  1: data|0;" && g=($(box)) && style_has $((g[0] + 4)) $((g[1] + 2)) fg=$FOCUS && style_has $((g[0] + 4)) $((g[1] + 5)) fg=$FOCUS && ! style_has $((g[0] + 4)) $((g[1] + 4)) fg=$FOCUS >/dev/null'
+key j; key j; key j; key Enter
 check "停在 1 的 window 0 上 ↵：attach 1 并切到 window 0" eval '! slist_open && sname_is 1 && [[ $(wins) == "0: data*  1: data" ]]'
+e2e_keys Space; e2e_type l; sleep 0.4
+check "之后 SPC l 回得去：回到 1 原来的 window 1" eval '[[ $(wins) == "0: data  1: data*" ]]'
 
 # ---- $ 原地重命名
 sl; e2e_type '$'; sleep 0.3
@@ -81,7 +88,7 @@ key h; key Escape
 
 # ---- 面板的会话范围（§12）
 pal '$'
-check "\$ 范围：只列 session，名称是 session 名、所在位置是 window 数、类型标签「会话」" eval '[[ $(kinds) == "会话 " && $(list | cut -d"|" -f1 | tr "\n" ";") == "doraemon  1 windows  会话;work  2 windows  会话;" ]]'
+check "\$ 范围：只列 session，名称是 session 名、所在位置是 window 数、类型标签「会话」；底栏「↵ 切换」" eval '[[ $(kinds) == "会话 " && $(list | cut -d"|" -f1 | tr "\n" ";") == "doraemon  1 windows  会话;work  2 windows  会话;" && $(footer) == *"↵ 切换 " ]] || { echo "  footer: $(footer)"; false; }'
 clear_input; sleep 0.3
 check "「所有」范围也列 session" eval 'list | grep -q "^doraemon  1 windows  会话|" && list | grep -q "^work  2 windows  会话|"'
 e2e_type '$dor'; sleep 0.3; key Enter
@@ -107,7 +114,7 @@ check "x 关掉当前的、排第一的 doraemon：attach 它的下一个 2" eva
 key Escape; open_table t_user; key l; key Enter; e2e_type x; key Enter   # 2 的 ① t_user 改一格
 key C-l; key i; e2e_type "select 42"; key Escape; cf=$(tabbar 2 | sed 's/^1://; s/\*$//')   # 2 的 ② console 写一句
 sl; e2e_type x; sleep 0.4
-check "x 关掉有修改的 2：确认框「有 1 处修改未保存，关闭会丢弃。」y 关闭" eval 'e2e_plain | grep -q "有 1 处修改未保存，关闭会丢弃。" && e2e_plain | grep -q "y 关闭   n 取消"'
+check "x 关掉有修改的 2：确认框「2 里有 1 处修改未保存，关闭会丢弃。」y 关闭" eval 'e2e_plain | grep -q "│ *2 里有 1 处修改未保存，关闭会丢弃。" && e2e_plain | grep -q "y 关闭   n 取消"'
 key n
 check "n：取消，两个 session 都在" eval '! e2e_plain | grep -q 处修改未保存 && rows_are "2  1 windows|1;1  1 windows|0;"'
 e2e_type x; sleep 0.3; key y
@@ -117,7 +124,9 @@ check "x 关掉最后一个 session：等于退出，连接都关了" eval 'wait
 
 # ---- 后台 session 的应答：按应答里的 tab 处理，不动当前 session 的焦点和布局
 e2e_own_db || { echo "e2e: could not create the private database" >&2; exit 1; }
-mkdir -p "$D/own"; (umask 077; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$E2E_DB&application_name=$APP2" >"$D/own/connections.toml")
+# 第二个连接 slow：DSN 不带密码，password_cmd 先睡 2 秒（没缓存过，第一次建连就慢）
+read -r OWN_NOPW OWN_PW < <(python3 -c 'import sys, urllib.parse as u; p = u.urlsplit(sys.argv[1]); print(p._replace(netloc=p.netloc.replace(":" + p.password + "@", "@")).geturl(), p.password)' "$E2E_DB")
+mkdir -p "$D/own"; (umask 077; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n\n[[connection]]\nname = "slow"\nengine = "postgres"\ndsn = "%s"\npassword_cmd = "sleep 2; echo %s"\n' "$E2E_DB&application_name=$APP2" "$OWN_NOPW&application_name=$APP3" "$OWN_PW" >"$D/own/connections.toml")
 start -C "$D/own"; key C-l; setsql "select count(*) from t_order"
 e2e_lock t_order; key Enter; sleep 0.5
 check "（准备）doraemon 的 console 在等锁：状态栏 busy" eval '[[ $(bar) == *busy* ]]'
@@ -138,11 +147,48 @@ key y; wait_for 3 eval '[[ $(conns "$APP2") == 2 ]]'
 check "y：关掉 1、attach doraemon，它的连接断开，事务回滚（没有 idle in transaction 的连接，t_log 还是 3 行）" eval 'sname_is doraemon && [[ $(conns "$APP2") == 2 && $(psql "$E2E_DB" -At -c "select count(*) from t_log") == 3 && $(psql "$E2E_DB" -At -c "select count(*) from pg_stat_activity where datname = current_database() and state = '"'idle in transaction'"'") == 0 ]]'
 key Escape
 
+# ---- 关掉有查询、取数在跑的 session：不另确认，存活的 session 里没有任何提示或变化
+before=$(panes)
+sl; new_session 1; key C-l; setsql "select count(*) from t_order"
+e2e_lock t_order; key Enter; key C-h; pal "@t_order"; key Enter; sleep 0.5               # ② 的查询、① 的取数都在等锁
+check "（准备）1 里 console 和表格都在等锁：busy" eval 'sname_is 1 && [[ $(bar) == *busy* ]]'
+sl; e2e_type x; sleep 0.6
+check "x 关掉 1：不另确认，attach doraemon，列表留着，没有「查询已取消」" eval 'slist_open && rows_are "doraemon  1 windows|1;" && ! e2e_plain | grep -q 关闭会 && [[ $(toast_row) != *取消* ]]'
+key Escape; e2e_unlock; sleep 1.5
+check "锁放开、迟到的应答回来：doraemon 里没有提示、没有 busy，布局不变" eval '[[ $(toast_row) != *取消* && $(toast_row) != *"："* && $(bar) != *busy* && $(panes) == "$before" ]] && sname_is doraemon && [[ $(conns "$APP2") == 2 ]]'
+
+# ---- 关掉有连接正在建连的 session：建好的连接随即关掉，不留在库里
+sl; new_session 1; y=$(nrow slow); e2e_click "$(e2e_find slow "$y" | cut -d' ' -f1)" "$y"; sleep 0.3   # 1 里点 slow：password_cmd 睡 2 秒
+check "（准备）1 里 slow 在建连，库里还没有它的连接" eval '[[ $(e2e_text 1 32 "$(nrow slow)") == *…* && $(conns "$APP3") == 0 ]]'
+sl; e2e_type x; sleep 4
+check "这时关掉 1：slow 迟到的连接随即关掉，库里没有 slow 的连接；doraemon 里没有提示" eval '[[ $(conns "$APP3") == 0 && $(toast_row) != *"slow："* ]] && sname_is doraemon'
+key Escape
+
 # ---- 新 session 连不上：toast，不建
 psql "$SQLMUX_TEST_PG" -qAt -c "alter database sqlmux_e2e_$$ allow_connections false"
 sl; key n; wait_for 6 eval 'e2e_text 1 160 $(($(H) - 1)) | grep -q "doraemon："'
 check "库不让连：toast「doraemon：<驱动的错误>」，不建 session" eval 'e2e_text 1 160 $(($(H) - 1)) | grep -q "doraemon：.*FATAL: database \"sqlmux_e2e_$$\" is not curr" && sname_is doraemon && { sl; rows_are "doraemon  1 windows|1;"; }'
 psql "$SQLMUX_TEST_PG" -qAt -c "alter database sqlmux_e2e_$$ allow_connections true"
+key Escape
+
+# ---- n 建连期间：新加的连接新 session 里也有；建好之后 attach 关掉所有浮层
+# 自建库上的 login 事件触发器让 doraemon（APP2）的每条新连接先睡 3 秒（PG 17），psql 的连接不受影响
+psql "$E2E_DB" -q -c "create table public.e2e_slow (secs float)" \
+  -c "create function public.e2e_slow_login() returns event_trigger language plpgsql as \$\$ begin if current_setting('application_name') = '$APP2' then perform pg_sleep(coalesce((select max(secs) from public.e2e_slow), 0)); end if; end \$\$" \
+  -c "create event trigger e2e_slow_login on login execute function public.e2e_slow_login()" -c "insert into public.e2e_slow values (3)"
+sl; key n; pal ">conn.new"; key Enter; e2e_type late; key Tab; key Tab; e2e_type "$SQLMUX_TEST_PG"; key Enter; key C-p
+check "（准备）建连还没回来：还是 doraemon；建连期间新加了 late；面板开着" eval 'sname_is doraemon && [[ -n $(nrow late) ]] && palette_open'
+wait_for 12 eval '[[ $(sname) == 1 ]]'; sleep 0.5
+check "建连回来 attach 新 session 1：面板关掉（attach 关掉所有浮层）" eval 'sname_is 1 && ! palette_open'
+check "建连期间新加的 late，新 session 1 的树里也有" eval '[[ -n $(nrow late) ]]'
+psql "$E2E_DB" -q -c "delete from public.e2e_slow"
+
+# ---- 后台 session 里表格的自动刷新照常：不在屏幕上就跳过这一轮，不会停掉
+pal '$doraemon'; key Enter; open_table t_order; pal ">自动刷新"; key Enter; e2e_type 2s; sleep 0.3; key Enter
+pal '$1'; key Enter; sleep 2.5; psql "$E2E_DB" -qAt -c "update t_order set amount = 47 where id = 1"; sleep 2.5
+check "（准备）在 session 1 里待了 5 秒，期间库里 id 1 改成 47" eval 'sname_is 1'
+pal '$doraemon'; key Enter
+check "切回 doraemon：自动刷新没停，几秒内 t_order 的 id 1 变成 47.00" wait_for 5 eval 'e2e_plain | grep -E "│ +1 │ +1 │" | grep -q "47.00"'
 
 # ---- 新建连接：表单、校验、写进 connections.toml
 start -C "$D/c"; CT=$E2E_TMP/config/sqlmux/connections.toml
@@ -177,7 +223,6 @@ check "Tab 从 read_only 绕回 name" on_field 0
 key Enter; sleep 0.3
 check "↵ 保存：表单关掉；原来的内容一字不差留在前面（注释、末尾没换行的最后一行补了换行）" eval '! form_open && n=$(wc -c < "$D/c/connections.toml") && cmp -s <(head -c $n "$CT") "$D/c/connections.toml" && [[ $(tail -c +$((n + 1)) "$CT" | head -c 1 | xxd -p) == 0a ]]'
 check "追加的一段：name / engine / dsn / password_cmd / read_only = true；权限还是 0600" eval 'a=$(tail -c +$(( $(wc -c < "$D/c/connections.toml") + 1 )) "$CT"); [[ $a == *"[[connection]]"* && $a == *"name = \"extra\""* && $a == *"engine = \"postgres\""* && $a == *"dsn = \"$DSN2\""* && $a == *password_cmd*"echo "*"$PW"* && $a == *"read_only = true"* && $(stat -f %Lp "$CT") == 600 ]] || { echo "  appended: $a"; false; }'
-nrow() { local y; for y in $(seq 3 30); do [[ $(e2e_text 1 32 "$y") == *" $1 "* ]] && { echo "$y"; return; }; done; }   # 侧栏里 NAME 的行
 exy() { nrow extra; }
 check "1 的树里多出 extra：未连接（▸），保存时没去连" eval 'y=$(exy); [[ -n $y && $(e2e_text 1 32 "$y") == *"▸"* && $(conns "$APP2") == 0 ]]'
 sl; key k; key Enter
@@ -206,5 +251,30 @@ g=($(box)); e2e_click $((g[0] + 16)) "$(field_y 4)"; sleep 0.3
 check "单击 read_only 的值：切成 true，焦点到它上面" eval '[[ $(frows | sed -n 5p | tr -s " ") == "read_only true" ]] && on_field 4'
 x=$(e2e_find "保存" $(( g[1] + g[3] - 2 )) | cut -d' ' -f1); e2e_click "$x" $(( g[1] + g[3] - 2 )); sleep 0.4
 check "单击底栏的「保存」：connections.toml 不存在就新建，权限 0600，里面只有这一条；没填的 password_cmd 不写" eval '! form_open && [[ -f $CT && $(stat -f %Lp "$CT") == 600 && $(grep -c "^\[\[connection\]\]" "$CT") == 1 ]] && grep -q "name = \"fresh\"" "$CT" && ! grep -q password_cmd "$CT"'
+
+# ---- 列表、表单开着时 C-p：面板盖在上面并接管按键；表单里 C-s 保存表单，不保存背后表格的修改（自建库）
+start -C "$D/own"; CT=$E2E_TMP/config/sqlmux/connections.toml
+open_table t_user; key l; key Enter; e2e_type x; key Enter                  # ① t_user 第 1 行的 name 改一格，没保存
+sl; key C-p; e2e_type '>split'; sleep 0.3
+check "session 列表开着时 C-p：面板盖在上面（同一个位置，盖住了列表），输入进了面板" eval 'palette_open && input_is ">split"'
+key Escape
+check "esc 关掉面板，列表还在" eval '! palette_open && slist_open'
+key Escape; pal ">conn.new"; key Enter; key C-p; e2e_type '>x'; sleep 0.3
+check "表单开着时 C-p：面板盖在上面，输入进了面板" eval 'palette_open && input_is ">x"'
+key Escape
+check "esc 关掉面板，表单还在，name 还是空的" eval '! palette_open && form_open && [[ $(frows | sed -n 1p) == name ]]'
+e2e_type cs; key Tab; key Tab; e2e_type "$SQLMUX_TEST_PG"; key C-s; sleep 0.4
+check "表单里 C-s：保存的是表单（cs 写进 connections.toml），背后 t_user 的修改没保存（库里还是 user_1）" eval '! form_open && grep -q "name = \"cs\"" "$CT" && [[ $(psql "$E2E_DB" -At -c "select name from t_user where id = 1") == user_1 ]]'
+printf '\n[[connection]]\nname = "ext"\nengine = "postgres"\ndsn = "%s"\n' "$SQLMUX_TEST_PG" >>"$CT"; sum=$(md5 -q "$CT")
+pal ">conn.new"; key Enter; e2e_type ext; key Tab; key Tab; e2e_type "$SQLMUX_TEST_PG"; key Enter
+check "打开之后有人往 connections.toml 里加了 ext：表单里再用 ext 这个名字，报错、不写入" eval 'form_open && [[ -n $(ferr) && $(md5 -q "$CT") == "$sum" ]] || { echo "  error row: $(ferr)"; false; }'
+key Escape
+
+# ---- connections.toml 用内联数组 connection = [{…}]：追加会写坏它，表单报错、原文件不变
+mkdir -p "$D/inl"; (umask 077; printf 'connection = [{ name = "doraemon", engine = "postgres", dsn = "%s" }]\n' "$SQLMUX_TEST_PG" >"$D/inl/connections.toml")
+start -C "$D/inl"; CT=$E2E_TMP/config/sqlmux/connections.toml; sum=$(md5 -q "$CT")
+check "（准备）内联数组写法照常启动" eval 'running && sname_is doraemon'
+pal ">conn.new"; key Enter; e2e_type inl; key Tab; key Tab; e2e_type "$SQLMUX_TEST_PG"; key Enter
+check "↵：表单报错、不关，connections.toml 一字没变" eval 'form_open && [[ -n $(ferr) && $(md5 -q "$CT") == "$sum" ]] && style_has $(( $(box | cut -d" " -f1) + 2 )) $(( $(box | cut -d" " -f2) + 6 )) fg=$ERROR || { echo "  error row: $(ferr)"; false; }'
 
 e2e_done

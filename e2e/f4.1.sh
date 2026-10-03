@@ -57,8 +57,10 @@ vacuum t_log
 refresh materialized view mv_order_by_status
 checkpoint
 load 'plpgsql'
+analyze t_log
+analyse t_log
 Q
-check "with … delete、大写、前面带注释、括号里的 for update、explain analyze、copy to 文件、reindex、cluster、vacuum、refresh、checkpoint、load：都是写语句提示" eval '[[ -z $bad ]] || { echo "  $bad"; false; }'
+check "with … delete、大写、前面带注释、括号里的 for update、explain analyze、copy to 文件、reindex、cluster、vacuum、refresh、checkpoint、load、analyze / analyse（7d754a6）：都是写语句提示" eval '[[ -z $bad ]] || { echo "  $bad"; false; }'
 check "这些都没发给数据库：本次运行的连接在这之后一句没发，t_log 的行数不变" eval '[[ -z $(sent_since) && $(psql_n "select count(*) from t_log") == "$n0" ]] || { echo "  sent: $(sent_since)"; false; }'
 sql "selec 1"
 check "拼错的首词 selec 照常发给数据库：标题下是它的语法错误" eval '[[ $(line1) == "ERROR: syntax error at or near \"selec\" (SQLSTATE 42601)" && -n $(sent_since) ]] || { echo "  $(line1)"; false; }'

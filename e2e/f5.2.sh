@@ -7,6 +7,9 @@
 e2e_build || exit 1
 . "$(dirname "$0")/palette.sh"
 
+D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")
+trap 'e2e_stop; rm -rf "$D"' EXIT
+
 wins() { bar | sed -E 's/^ [^▾]*▾  //; s/ {3,}.*//'; }                      # 状态栏的 window 列表：0: data*  1: data
 wins_are() { [[ $(wins) == "$1" ]] || { echo "  windows: '$(wins)', want '$1'"; false; }; }
 panes_are() { local got; got=$(e2e_panes | awk '$1 != "-" { print $1 }' | tr '\n' ' '); [[ $got == "$1" ]] || { echo "  panes: '$got', want '$1'"; false; }; }
@@ -66,6 +69,28 @@ check "清空后 ↵：等于放弃" wins_are "0: data  1: data*  2: data"
 cmd window.rename; clr; e2e_type report; key Enter
 check "改成 report ↵：状态栏、面板、树的工作区都跟着变" eval 'wins_are "0: data  1: report*  2: data" && mode_is NORMAL && [[ -n $(trow report) ]]'
 
+# ---- 改名中途切走等于 esc，不会改错对象；点改名框以外的任何地方等于 esc，这次点击不做别的事
+cmd window.rename; e2e_type zz; key C-p; e2e_type "%0: data"; sleep 0.3; key Enter
+check "改名中途从面板切到 window 0：等于 esc，两个 window 的名字都没变" eval 'wins_are "0: data*  1: report  2: data" && mode_is NORMAL'
+leader n
+cmd window.rename; e2e_type zz; e2e_click "$(( $(e2e_find "0: data" "$(H)" | cut -d' ' -f1) + 2 ))" "$(H)"; sleep 0.4
+check "改名时点状态栏上的 0: data：等于 esc，名字没变，也没切过去" eval 'wins_are "0: data  1: report*  2: data" && mode_is NORMAL'
+f0=$(focused); cmd window.rename; e2e_type zz; g=($(geom 1)); e2e_click $((g[0] + 3)) $((g[1] + 2)); sleep 0.4
+check "改名时点 ① 里面：等于 esc，焦点也没动" eval '[[ $f0 != 1 ]] && wins_are "0: data  1: report*  2: data" && mode_is NORMAL && focus_is "$f0"'
+leader s; key n; wait_for 6 eval '[[ $(bar) == " 1 ▾"* ]]'; sleep 0.4
+cmd window.rename; e2e_type zz; key C-p; e2e_type '$doraemon'; sleep 0.3; key Enter
+check "在另一个 session 里改名，中途从面板切回 doraemon：等于 esc，doraemon 的 window 名都没变" eval '[[ $(bar) == " doraemon ▾"* ]] && wins_are "0: data  1: report*  2: data" && mode_is NORMAL'
+pal '$1'; key Enter
+check "session 1 的 window 名也没变" eval '[[ $(bar) == " 1 ▾"* ]] && wins_are "0: data*"'
+leader s; key x; key Escape                                                   # 关掉 session 1，回到 doraemon
+
+# ---- SPC q 显示编号时，点状态栏的 window 段或 session 块只关掉编号
+f0=$(focused); leader q; e2e_click "$(( $(e2e_find "0: data" "$(H)" | cut -d' ' -f1) + 2 ))" "$(H)"; sleep 0.4; key 1
+check "SPC q 后点状态栏的 0: data：编号关掉（再按 1 不跳 pane），也没切 window" eval '[[ $f0 != 1 && $(bar) == " doraemon ▾"* ]] && wins_are "0: data  1: report*  2: data" && focus_is "$f0"'
+key Escape; leader q; e2e_click 3 "$(H)"; sleep 0.4; key 1
+check "SPC q 后点 session 块：编号关掉，也没打开 session 列表" eval '! e2e_plain | grep -q "┌─ session" && focus_is "$f0"'
+key Escape
+
 # ---- 面板：window 项 ↵ 切过去；别的 window 的 tab 项 ↵ 先切 window、再选 tab、聚焦它的 pane
 leader p; key C-h; open_table t_user; key C-l                               # window 0：① t_order、t_user，焦点在 ② console_1
 pal "%report"
@@ -111,12 +136,28 @@ leader c; open_table t_user; key l; key Enter; e2e_type x; key Enter            
 leader p; e2e_type ':'; sleep 0.3; e2e_type qa; key Enter
 check "退出时统计所有 window 的修改：「有 1 处修改未保存，退出会丢弃。」" eval '[[ $(box) == "有 1 处修改未保存，退出会丢弃。" ]] || { echo "  $(box)"; false; }'
 key n; leader n; cmd window.close
-check "关掉有修改的 window：确认「有 1 处修改未保存，关闭会丢弃。」y 关闭" eval '[[ $(box) == "有 1 处修改未保存，关闭会丢弃。" ]] && e2e_plain | grep -q "y 关闭   n 取消" || { echo "  $(box)"; false; }'
+check "关掉有修改的 window：确认「这个 window 里有 1 处修改未保存，关闭会丢弃。」y 关闭" eval '[[ $(box) == "这个 window 里有 1 处修改未保存，关闭会丢弃。" ]] && e2e_plain | grep -q "y 关闭   n 取消" || { echo "  $(box)"; false; }'
 key n
 check "n：取消，window 还在" eval '[[ -z $(box) ]] && wins_are "0: data  1: data*"'
 cmd window.close; key y
 check "再关、y：关掉，切到上一个用过的" wins_are "0: data*"
 cmd window.close
 check "只剩一个 window：window.close 不做事" eval 'wins_are "0: data*" && running'
+
+# ---- 面板「最近使用」里的 window 按 ID 记：关掉前面的 window 之后，排第一的还是原来那个
+# window.close / window.rename 绑到键上，免得用面板执行它们，把命令记进「最近使用」
+printf '[keys.normal]\n"<Leader>X" = "window.close"\n"<Leader>," = "window.rename"\n' >| "$D/k.toml"
+start -K "$D/k.toml"
+leader c; leader ,; clr; e2e_type far; key Enter; leader c
+check "（准备）三个 window：0: data、1: far、2: data（当前）" wins_are "0: data  1: far  2: data*"
+pal "%far"; key Enter; leader p; leader X
+check "（准备）从面板切到 far，再切到 0 把它关掉：回到 far" wins_are "0: far*  1: data"
+pal
+check "面板空输入：排第一的最近使用还是 far（现在是 0: far），不是错到同一个下标上的 1: data" eval '[[ $(list | head -1) == "0: far  doraemon  窗口|"* ]] || { echo "  first: $(list | head -1)"; false; }'
+key Escape
+
+# ---- window 名很长：状态栏左边画到右边那组开始的地方为止，不盖住 C-p 入口和模式块
+leader ,; clr; e2e_type "$(printf 'w%.0s' $(seq 150))"; key Enter
+check "150 个字符的 window 名：状态栏右边的 C-p 入口和 NORMAL 都还在" eval '[[ $(bar) == *" NORMAL " && -n $(search_col) ]]'
 
 e2e_done

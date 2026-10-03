@@ -94,8 +94,10 @@ check ":q：同样确认" eval '[[ $(box) == "t_order 有 1 处修改未保存�
 e2e_click 60 10; sleep 0.3
 check "点框外：等于取消" eval '! box_open && [[ $(saves) == 1 ]]'
 key Space x
+check "window 里只剩这一个 pane：SPC x 不问也不关（fce61c1）" eval '! box_open && [[ $(saves) == 1 ]]'
+key Space %; key C-h; key Space x                                       # 先分一个出来
 check "SPC x 关闭的 pane 里有带修改的 tab：「这个 pane 里有 1 处修改未保存，关闭会丢弃。」" eval '[[ $(box) == "这个 pane 里有 1 处修改未保存，关闭会丢弃。" ]] || { echo "  $(box)"; false; }'
-key n
+key n; key C-l; key Space x; wait_for 3 eval '[[ -z $(e2e_panes | awk "\$1 == 2") ]]'   # 关掉空的 ②，回到 ① 独占
 key :; e2e_type qa; sleep 0.3; key Enter
 check ":qa：「有 1 处修改未保存，退出会丢弃。」y 退出" eval '[[ $(box) == "有 1 处修改未保存，退出会丢弃。" ]] && e2e_plain | grep -q "y 退出   n 取消" || { echo "  $(box)"; false; }'
 key n

@@ -36,7 +36,7 @@ click_tab 1 +; key C-p; e2e_type @t_sku; sleep 0.3; key C-t; wait_for 8 eval '[[
 check "引导 tab 上从面板 C-t 打开没开着的 t_sku：替换它，不另开（cd4729f）" eval 'tabs_are 1 "1:t_order- │ 2:t_sku*"'
 key x
 click_tab 1 +; key c
-check "引导 tab 上按 c：就地换成 console_2，标题 console 图标加 ▶ run ↵" eval 'tabs_are 1 "1:t_order- │ 2:console_2*" && [[ $(title 1) == "┌─ ① $NF_CONSOLE console_2 ─"*"▶ run  ↵ ─┐" ]]'
+check "引导 tab 上按 c：就地换成 console_2，标题 console 图标加 ▶ run ↵（F5.3 起标题放不下 console_2 这个名字）" eval 'tabs_are 1 "1:t_order- │ 2:console_2*" && [[ $(title 1) == "┌─ ① $NF_CONSOLE "*"▶ run  ↵ ─┐" ]]'
 click_tab 1 +; key x
 check "引导 tab 上按 x：直接关掉，不确认，回到 console_2" eval '[[ $(tabbar 1) == "1:t_order"*" │ 2:console_2*" ]] && ! screen_has 关闭会丢弃 || { echo "  $(tabbar 1)"; false; }'
 click_tab 1 +; key C-p; e2e_type '>console.new'; sleep 0.3; key Enter
@@ -49,7 +49,7 @@ check "gT 到 t_order：标题 table 图标，没有 ▶ run" eval '[[ $(title 1
 key /
 check "表 tab 上按 /：编辑 WHERE（grid 的键）" eval '[[ $(mode) == INSERT && $(bar) == *"-- editing WHERE --"* ]]'
 key Escape; key Escape; key gt                                               # F3.39：第一次 esc 到 WHERE 的 NORMAL，第二次回表格
-check "gt 到 console_2：标题 console 图标，有 ▶ run" eval '[[ $(title 1) == "┌─ ① $NF_CONSOLE console_2 ─"*"▶ run  ↵ ─┐" ]]'
+check "gt 到 console_2：标题 console 图标，有 ▶ run" eval '[[ $(title 1) == "┌─ ① $NF_CONSOLE "*"▶ run  ↵ ─┐" && $(tabbar 1) == *"2:console_2*"* ]]'
 key /
 check "console tab 上按 /：编辑器的搜索命令行（COMMAND）" eval '[[ $(mode) == COMMAND && $(bar) != *"editing WHERE"* ]]'
 key Escape

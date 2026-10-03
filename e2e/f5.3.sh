@@ -31,6 +31,9 @@ toast_row() { e2e_text 1 "$(e2e_flag pane_width)" $(($(H) - 1)); }
 qbar() { local g; g=($(geom 1)); e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $((g[1] + 2)); }   # ① 查询条的第二行
 amount() { psql_n "select amount from t_order where id = $1"; }
 idle_tx() { psql_n "select count(*) from pg_stat_activity where datname = current_database() and state like 'idle in transaction%'"; }
+log_n() { local g y; g=($(geom 3)); for ((y = g[1]; y < g[1] + g[3]; y++)); do e2e_text "${g[0]}" $((g[0] + g[2] - 1)) "$y"; done | grep -cF -- "$1"; }   # ③ 里含 TEXT 的行数
+trow() { local y; for y in $(seq 3 43); do [[ $(e2e_text 1 32 "$y") == *" $1 "* ]] && { echo "$y"; return; }; done; }   # 侧栏里 NAME 的行
+row2() { e2e_plain | grep -E "│ +2 │ +2 │"; }                               # ① 表格里 id 2 那一行
 box() { e2e_plain | grep -oE '[^│]*(处修改未保存|有未提交的事务)[^│]*' | head -1 | sed 's/^ *//; s/ *$//'; }   # 确认框里的那句话
 
 # ---- 只读连接：数据库层，Main 也设了 default_transaction_read_only，DISCARD ALL 之后仍是 on
@@ -47,6 +50,11 @@ setsql "set default_transaction_read_only = off"; run
 check "SET default_transaction_read_only = off：拦下，日志又记一行" eval '[[ $(tabbar 3) == "1:日志*"* && $(pane_has 3 "set default_transaction_read_only = off" && echo y) == y ]]'
 setsql "begin read write"; run
 check "BEGIN READ WRITE：拦下" eval '[[ $(tabbar 3) == "1:日志*"* ]] && pane_has 3 "begin read write"'
+setsql "set session session characteristics as transaction read write"; run
+check "SET SESSION SESSION CHARACTERISTICS AS TRANSACTION READ WRITE（作用域词连写）：拦下" eval '[[ $(tabbar 3) == "1:日志*"* ]] && pane_has 3 "set session session characteristics as transaction read write"'
+n0=$(log_n "set default_transaction_read_only = off")
+setsql 'select 1 as ✓$a$; set default_transaction_read_only = off; select 1 as ✓$a$'; key V; key Enter; sleep 0.8
+check "✓\$a\$ 不是 dollar 引号的开头（0x80 以上的字节算标识符）：中间的 SET 认得出来，整次拦下" eval '(( $(log_n "set default_transaction_read_only = off") == n0 + 1 )) && [[ $(tabbar 3) == "1:日志*"* ]]'
 setsql "set statement_timeout = 4321"; run; setsql "show statement_timeout"; run
 check "别的 SET 放行：SET statement_timeout 执行了（show 出来是 4321ms）；拦下的三次不算执行，这是第 4 次（console_1 #4）" eval '[[ $(rval) == 4321ms && $(tabbar 3) == *"console_1 #4*"* ]] || { echo "  got: $(rval), tabs: $(tabbar 3)"; false; }'
 
@@ -58,6 +66,10 @@ wait_for 5 eval '[[ $(toast_row) != *只读连接* ]]'; key o
 check "o 新增行：同样拦下" eval 'toast_is "ro 是只读连接" && ! e2e_plain | grep -qE "│ +\+ │"'
 wait_for 5 eval '[[ $(toast_row) != *只读连接* ]]'; key d d
 check "dd 标记删除：同样拦下" eval 'toast_is "ro 是只读连接" && ! e2e_plain | grep -qE "│ +− │"'
+wait_for 5 eval '[[ $(toast_row) != *只读连接* ]]'; key i
+check "i 编辑：同样拦下" eval 'toast_is "ro 是只读连接" && mode_is NORMAL'
+wait_for 5 eval '[[ $(toast_row) != *只读连接* ]]'; key y y; key p
+check "yy 之后 p 把行粘贴成新行：同样拦下" eval 'toast_is "ro 是只读连接" && ! e2e_plain | grep -qE "│ +\+ │"'
 
 # ---- 事务模式：点 Tx: 自动 ▾ 切成手动，console 执行不提交，✓ 提交、↺ 回滚
 start -x 200 -C "$D/rw"; open_table t_order; key C-l
@@ -75,10 +87,25 @@ check "点 ↺ 回滚：事务块消失，库里还是 1.99，没有 idle in tra
 setsql "update t_order set amount = 1.23 where id = 1"; run; click_title "✓"; wait_for 5 eval '[[ -z $(txstate) ]]'
 check "再 update、点 ✓ 提交：库里变成 1.23，事务块消失" eval '[[ -z $(txstate) && $(amount 1) == 1.23 ]]'
 
+# ---- 手动模式下每条语句前检查 BEGIN（照 psql）；command_no_begin 的语句不补；提交之后 catalog 重新加载
+setsql "$(printf 'update t_order set amount = 3.33 where id = 3;\ncommit;\nupdate t_order set amount = 4.44 where id = 4')"; key V; key G; key Enter; done_run
+check "update; commit; update：commit 之后那条又开了事务（第一条已提交，第二条没有），状态栏「事务中」" eval '[[ $(amount 3) == 3.33 && $(amount 4) == 4.99 ]] && txstate_is 事务中 $WARN'
+click_title "↺"; wait_for 5 eval '[[ -z $(txstate) ]]'
+check "↺：第二条撤销" eval '[[ $(amount 4) == 4.99 && $(amount 3) == 3.33 ]]'
+setsql "vacuum t_log"; run
+check "手动模式下 vacuum t_log：不补 BEGIN，照常执行，没有进事务、没有报错" eval '[[ -z $(txstate) && -z $(errbar 2) ]]'
+setsql "create table e2e_new (id int)"; run; click_title "✓"; wait_for 5 eval '[[ -z $(txstate) ]]'; sleep 0.8
+check "手动模式下 create table、✓ 提交：catalog 重新加载，树里多了 e2e_new（12 tables）" eval '[[ -n $(trow e2e_new) && $(e2e_text 1 32 2) == *"12 tables"* ]]'
+setsql "drop table e2e_new"; run; click_title "✓"; wait_for 5 eval '[[ -z $(txstate) ]]'; sleep 0.8
+check "drop、✓：树里没了（11 tables）" eval '[[ -z $(trow e2e_new) && $(e2e_text 1 32 2) == *"11 tables"* ]]'
+
 # ---- 手动模式下保存：不提交，表格看得到自己的修改；回滚后撤销、表格重取
 key C-h; key g g; key 0; key j; key 3 l; key Enter; e2e_type 8.88; key Enter; key C-s; wait_for 8 eval '[[ $(qbar) == *已保存* ]]'
 check "手动模式下 C-s：查询条「已保存 1 行（未提交）」，库里 id 2 还是 2.99，状态栏「事务中」" eval '[[ $(qbar) == *"已保存 1 行（未提交） · "* && $(amount 2) == 2.99 ]] && txstate_is 事务中 $WARN || { echo "  query bar: $(qbar)"; false; }'
 check "表格取数走 Main：重取之后表格里 id 2 是 8.88（自己没提交的修改）" eval 'e2e_plain | grep -E "│ +2 │ +2 │" | grep -q "8.88"'
+key /; e2e_type "nosuchcol = 1"; key Enter; sleep 1
+check "事务中 WHERE 写错：错误栏报错，事务没有进 E（取数包在 SAVEPOINT 里），仍是「事务中」" eval '[[ $(errbar 1) == *nosuchcol* ]] && txstate_is 事务中 $WARN'
+key /; clear_in; key Enter; wait_for 8 eval '[[ -z $(errbar 1) ]]'
 pal ">tx.rollback"; key Enter; wait_for 5 eval '[[ -z $(txstate) ]]'; sleep 0.5
 check "tx.rollback：修改撤销，库里还是 2.99，表格重取回 2.99" eval '[[ $(amount 2) == 2.99 ]] && e2e_plain | grep -E "│ +2 │ +2 │" | grep -q "2.99"'
 
@@ -94,11 +121,28 @@ check "面板里 tx.mode「手动提交事务」现在是 ON" eval 'list | head 
 key Enter; sleep 0.3
 check "↵：切成自动，面板不关、显示 OFF；标题变回 Tx: 自动 ▾" eval 'is_open && list | head -1 | grep -q "OFF" && { key Escape; [[ $(ctitle) == *"Tx: 自动 ▾ "* ]]; }'
 
+# ---- console 有执行在跑时不能关（关 tab、关 pane、关 window）
+setsql "select count(*) from t_order"; e2e_lock t_order; key Enter; sleep 0.5
+check "（准备）console 在等锁" eval '[[ $(bar) == *busy* ]]'
+e2e_type ':q'; key Enter; sleep 0.3
+check "执行在跑时 :q：不关，toast「正在执行，结束后再关闭」" eval 'toast_is "正在执行，结束后再关闭" && tabs_are 2 "1:console_1*"'
+wait_for 5 eval '[[ $(toast_row) != *正在执行* ]]'; e2e_keys Space; e2e_type x; sleep 0.4
+check "SPC x 关它所在的 pane：同样不关" eval 'toast_is "正在执行，结束后再关闭" && tabs_are 2 "1:console_1*"'
+wait_for 5 eval '[[ $(toast_row) != *正在执行* ]]'; e2e_keys Space; e2e_type c; sleep 0.5; e2e_keys Space; e2e_type p; sleep 0.4
+pal ">window.close"; key Enter
+check "window.close 关它所在的 window：同样不关" eval 'toast_is "正在执行，结束后再关闭" && [[ $(bar) == *" 0: data*  1: data "* ]]'
+e2e_unlock; done_run; e2e_keys Space; e2e_type n; sleep 0.4; pal ">window.close"; key Enter
+check "执行回来之后：关掉多出来的 window 不用确认（不在事务里）" eval '[[ $(bar) == *" 0: data* "* && $(bar) != *"1: data"* ]]'
+key C-l; key C-l
+
 # ---- 自动模式下自己 begin：也算事务中，保存走 SAVEPOINT、不提交
 setsql "begin"; run
 check "自动模式下自己 begin：状态栏也显示「事务中」" txstate_is 事务中 $WARN
 key C-h; key g g; key 0; key j; key 3 l; key Enter; e2e_type 7.77; key Enter; key C-s; wait_for 8 eval '[[ $(qbar) == *已保存* ]]'
 check "这时保存：「已保存 1 行（未提交）」，库里还是 2.99（没有把用户的事务一起提交）" eval '[[ $(qbar) == *"（未提交）"* && $(amount 2) == 2.99 ]] || { echo "  query bar: $(qbar)"; false; }'
+check "格子显示新值 7.77" eval 'row2 | grep -q 7.77'
+key g g; key 0; key j; key 3 l; key Enter; e2e_type 6.66; key Enter; key C-s; wait_for 8 eval 'row2 | grep -q 6.66'; sleep 0.3
+check "再改同一格、保存：也成功（没有错误栏），「（未提交）」，表格 6.66，库里仍 2.99" eval '[[ -z $(errbar 1) && $(qbar) == *"（未提交）"* && $(amount 2) == 2.99 ]] && row2 | grep -q 6.66'
 
 # ---- 关 console：这个连接上还有别的 console 时不问；关掉最后一个时确认，先关再回滚
 pal ">console.new"; key Enter; sleep 0.5                                      # ① 里新开 console_2，也在 rw 上
