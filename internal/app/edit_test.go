@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"sqlmux/internal/db"
-	"sqlmux/internal/db/postgres"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -236,8 +236,8 @@ func TestGoldenEdits160x45(t *testing.T) {
 	golden.RequireEqual(t, a.render().String())
 }
 
-// saveDB is Main as the tests see it: every statement answers tag, and
-// what was sent is kept.
+// saveDB is Main as the tests see it: every statement answers tag, the
+// rows its number says hit, and what was sent is kept.
 type saveDB struct {
 	tag  string
 	sqls []string
@@ -245,7 +245,11 @@ type saveDB struct {
 
 func (s *saveDB) Query(_ context.Context, sql string, args ...db.Val) (db.Result, error) {
 	s.sqls = append(s.sqls, fmt.Sprintf("%s %v", sql, args))
-	return db.Result{Tag: s.tag}, nil
+	n := 0 // UPDATE 1's 1
+	if f := strings.Fields(s.tag); len(f) > 0 {
+		n, _ = strconv.Atoi(f[len(f)-1])
+	}
+	return db.Result{Tag: s.tag, Affected: int64(n)}, nil
 }
 func (s *saveDB) Exec(context.Context, string, int) ([]db.Result, error) { return nil, nil }
 func (s *saveDB) Close() error                                           { return nil }
@@ -331,7 +335,7 @@ func TestSaveFails(t *testing.T) {
 	}
 	// the server's error: its message alone, cut to fit between the row and 已回滚
 	bad := &pgconn.PgError{Severity: "ERROR", Code: "22P02", Message: `invalid input syntax for type numeric: "abc"`, Hint: "a number"}
-	a.Update(saveMsg{tab: tab, rows: []postgres.Row{{Key: []string{"12"}}}, failed: 0, err: bad})
+	a.Update(saveMsg{tab: tab, rows: []db.Row{{Key: []string{"12"}}}, failed: 0, err: bad})
 	if b := tab.bar; b.First != (ui.Note{Head: "[22P02] id = 12：", Mid: bad.Message, Tail: "，已回滚"}) || !slices.Equal(b.More, []string{"HINT: a number"}) {
 		t.Errorf("a server's error: %+v", b)
 	}
@@ -865,8 +869,8 @@ func TestEmptyRowKey(t *testing.T) {
 	}
 }
 
-// tagDB answers each statement with the tag of one row hit, or fails
-// those that fail matches, recording them all.
+// tagDB answers each statement with one row hit, or fails those that
+// fail matches, recording them all.
 type tagDB struct {
 	sqls []string
 	fail string
@@ -878,8 +882,7 @@ func (d *tagDB) Query(_ context.Context, sql string, args ...db.Val) (db.Result,
 	if d.fail != "" && strings.HasPrefix(sql, d.fail) {
 		return db.Result{}, d.err
 	}
-	word, _, _ := strings.Cut(sql, " ")
-	return db.Result{Tag: map[string]string{"delete": "DELETE 1", "update": "UPDATE 1", "insert": "INSERT 0 1"}[word]}, nil
+	return db.Result{Affected: 1}, nil
 }
 func (d *tagDB) Exec(context.Context, string, int) ([]db.Result, error) { return nil, nil }
 func (d *tagDB) Close() error                                           { return nil }

@@ -7,7 +7,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"sqlmux/internal/db"
-	"sqlmux/internal/db/postgres"
 )
 
 // txOpen is why a connection's transaction keeps it as it is: a console on
@@ -45,7 +44,7 @@ func (a *App) endTx(c *Conn, sql string) tea.Cmd {
 		m.err = main.Run(context.Background(), func(ctx context.Context, cn db.Conn) error {
 			defer func() { m.tx = db.TxStatus(cn) }()
 			var err error
-			m.tag, err = postgres.End(ctx, cn, sql)
+			m.tag, err = db.End(ctx, cn, sql)
 			return err
 		})
 		return m

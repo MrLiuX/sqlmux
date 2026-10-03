@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"sqlmux/internal/db"
+	"sqlmux/internal/sqlkit"
 )
 
 type Conn struct {
@@ -70,11 +71,11 @@ func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, e
 	return c, nil
 }
 
-// SetSearchPath puts schema first on c's search_path, then started, the
-// path it connected with, so extensions there are still found (§8.6). By
+// UseSchema puts schema first on c's search_path, then started, the path
+// it connected with, so extensions there are still found (§8.6). By
 // set_config with parameters: started may be "" or $user,public, which
 // SET … TO written out cannot take.
-func SetSearchPath(ctx context.Context, c db.Conn, schema, started string) error {
+func (Engine) UseSchema(ctx context.Context, c db.Conn, schema, started string) error {
 	_, err := c.Query(ctx, "select set_config('search_path', concat_ws(', ', $1::text, nullif($2::text, '')), false)", db.Val{S: pgx.Identifier{schema}.Sanitize()}, db.Val{S: started})
 	return err
 }
@@ -147,6 +148,26 @@ func read(rr *pgconn.ResultReader, maxRows int, start time.Time) (db.Result, err
 		r.Rows = append(r.Rows, row)
 	}
 	tag, err := rr.Close()
-	r.Tag, r.Took = tag.String(), time.Since(start)
+	r.Tag, r.Affected, r.Took = tag.String(), tag.RowsAffected(), time.Since(start)
 	return r, err
 }
+
+// Engine is PG's way with the catalog, SQL and errors (§8.1).
+type Engine struct{}
+
+func (Engine) Connect(ctx context.Context, dsn, password string, readOnly bool) (db.Conn, db.Info, error) {
+	c, err := Connect(ctx, dsn, password, readOnly)
+	if err != nil {
+		return nil, db.Info{}, err
+	}
+	return c, db.Info{Addr: c.Addr, Database: c.Database, Path: c.SearchPath}, nil
+}
+
+func (Engine) Dialect() sqlkit.Dialect      { return sqlkit.PG }
+func (Engine) Quote(names ...string) string { return pgx.Identifier(names).Sanitize() }
+func (Engine) Arg(n int) string             { return fmt.Sprintf("$%d", n) }
+
+// Same is format's text, the type's output function's as what was read
+// is: json and point have no =, and ::text isn't always the output (false
+// for f, inet with its mask, char(n) trimmed).
+func (Engine) Same(col, arg string) string { return "format('%s', " + col + ") = " + arg }

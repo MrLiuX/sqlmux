@@ -17,7 +17,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"sqlmux/internal/db"
-	"sqlmux/internal/db/postgres"
 	"sqlmux/internal/editor"
 	"sqlmux/internal/sqlkit"
 	"sqlmux/internal/ui"
@@ -239,7 +238,7 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 			case tx == 'E':
 				s.mainPath = ""
 			case s.mainPath != schema:
-				if err := postgres.SetSearchPath(ctx, c, schema, s.startedPath); err != nil {
+				if err := s.eng.UseSchema(ctx, c, schema, s.startedPath); err != nil {
 					s.mainPath, m.set = "", "set search_path to "+schema
 					return err
 				}
@@ -383,8 +382,8 @@ func (a *App) log(r *run, stmt, did string, failed bool) {
 
 // logError logs statement stmt of run r failing with err (§11): the
 // server's severity and message, then DETAIL and HINT a line each.
-func (a *App) logError(r *run, stmt string, err error) postgres.ServerError {
-	e := postgres.ServerErrorOf(err)
+func (a *App) logError(r *run, stmt string, err error) db.ServerError {
+	e := r.conn.eng.ErrorOf(err)
 	a.log(r, stmt, e.Severity+": "+e.Message, true)
 	for _, l := range e.More {
 		r.win.log = append(r.win.log, ui.LogLine{Tail: "    " + l, Err: true})

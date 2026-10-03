@@ -21,7 +21,7 @@ const userSchema = `n.nspname !~ '^pg_' and n.nspname <> 'information_schema'`
 
 // Schemas lists the user's schemas by name, and the one unqualified names
 // resolve to first ("" when search_path names none that exists).
-func Schemas(ctx context.Context, c db.Conn) (schemas []string, current string, err error) {
+func (Engine) Schemas(ctx context.Context, c db.Conn) (schemas []string, current string, err error) {
 	r, err := c.Query(ctx, `select n.nspname, coalesce(current_schema(), '') from pg_namespace n where `+userSchema+` order by 1`)
 	if err != nil {
 		return nil, "", err
@@ -35,7 +35,7 @@ func Schemas(ctx context.Context, c db.Conn) (schemas []string, current string, 
 // Tables lists every schema's tables, views, materialized views, foreign
 // tables and partitioned tables, by schema and name. Partitions are left
 // out: their parent stands for them.
-func Tables(ctx context.Context, c db.Conn) ([]db.Table, error) {
+func (Engine) Tables(ctx context.Context, c db.Conn) ([]db.Table, error) {
 	r, err := c.Query(ctx, `
 select n.nspname, c.relname, c.reltuples, c.relkind
 from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -57,7 +57,7 @@ order by 1, 2`)
 
 // TableColumns reads one table's columns, primary key and the unique
 // indexes that can stand in for it (§10.1).
-func TableColumns(ctx context.Context, c db.Conn, schema, table string) (db.Columns, error) {
+func (Engine) TableColumns(ctx context.Context, c db.Conn, schema, table string) (db.Columns, error) {
 	var out db.Columns
 	// json_agg, not array_agg: JSON is a text form the standard library parses.
 	r, err := c.Query(ctx, `
@@ -139,7 +139,7 @@ order by 1, 3`, db.Val{S: schema}, db.Val{S: table})
 // ponytail: no generated column's expression, partitioning, inheritance,
 // comments, owner or grants, and a foreign table reads as a table; add them
 // when the preview is read as a script
-func DDL(ctx context.Context, c db.Conn, schema, name string) (string, error) {
+func (Engine) DDL(ctx context.Context, c db.Conn, schema, name string) (string, error) {
 	rel := db.Val{S: pgx.Identifier{schema, name}.Sanitize()}
 	r, err := c.Query(ctx, `
 select c.relkind, format('%I.%I', n.nspname, c.relname), pg_get_viewdef(c.oid, true)

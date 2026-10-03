@@ -11,7 +11,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"sqlmux/internal/db"
-	"sqlmux/internal/db/postgres"
 	"sqlmux/internal/sqlkit"
 	"sqlmux/internal/ui"
 )
@@ -79,15 +78,15 @@ func (a *App) runQuick(sql string) tea.Cmd {
 	c := p.conn
 	h := slices.Insert(slices.DeleteFunc(a.state.SQL[c.Spec.Name], func(s string) bool { return s == sql }), 0, sql)
 	a.state.SQL[c.Spec.Name] = h[:min(len(h), quickHistory)]
-	if q := p.quick; sqlkit.IsWrite(sql, sqlkit.PG) { // a write is for a console, where running it is the user's own ↵ (F-05)
+	if q := p.quick; sqlkit.IsWrite(sql, c.eng.Dialect()) { // a write is for a console, where running it is the user's own ↵ (F-05)
 		q.ran, q.res, q.err, q.write, q.top, q.left = sql, db.Result{}, "", true, 0, 0
 		return a.saveState()
 	}
 	p.quick.running = sql
 	c.busy++
-	meta, schema := c.Meta, c.Schema
+	meta, eng, schema := c.Meta, c.eng, c.Schema
 	return tea.Batch(a.saveState(), func() tea.Msg {
-		r, err := postgres.Quick(context.Background(), meta, sql, schema, quickRows)
+		r, err := eng.Quick(context.Background(), meta, sql, schema, quickRows)
 		return quickMsg{p, c, schema, r, err}
 	})
 }
@@ -191,9 +190,9 @@ func (a *App) rerunQuick(rt *resultTab) tea.Cmd {
 	}
 	r.done, r.start = false, time.Now()
 	r.conn.busy++
-	meta, sql, schema := r.conn.Meta, r.sql, r.schema
+	meta, eng, sql, schema := r.conn.Meta, r.conn.eng, r.sql, r.schema
 	return tea.Batch(func() tea.Msg {
-		res, err := postgres.Quick(context.Background(), meta, sql, schema, quickRows)
+		res, err := eng.Quick(context.Background(), meta, sql, schema, quickRows)
 		return quickRerun{rt, res, err}
 	}, a.runTick(r))
 }
@@ -280,9 +279,9 @@ func (a *App) completeSQL() tea.Cmd {
 
 // fetchCols reads the columns of c's table t on its Meta for completion.
 func (a *App) fetchCols(c *Conn, t db.Table) tea.Cmd {
-	meta := c.Meta
+	meta, eng := c.Meta, c.eng
 	return func() tea.Msg {
-		cols, err := postgres.TableColumns(context.Background(), meta, t.Schema, t.Name)
+		cols, err := eng.TableColumns(context.Background(), meta, t.Schema, t.Name)
 		return colsMsg{c, t, cols, err}
 	}
 }

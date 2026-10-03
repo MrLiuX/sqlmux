@@ -11,7 +11,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"sqlmux/internal/db"
-	"sqlmux/internal/db/postgres"
 	"sqlmux/internal/editor"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
@@ -85,14 +84,14 @@ type catalogMsg struct {
 // loadCatalog reads c's schemas and every schema's tables on its Meta; a
 // table's columns wait until it is opened (§8.4).
 func (a *App) loadCatalog(c *Conn) tea.Cmd {
-	meta := c.Meta
+	meta, eng := c.Meta, c.eng
 	return func() tea.Msg {
 		ctx := context.Background()
-		schemas, current, err := postgres.Schemas(ctx, meta)
+		schemas, current, err := eng.Schemas(ctx, meta)
 		if err != nil {
 			return catalogMsg{conn: c, err: err}
 		}
-		tables, err := postgres.Tables(ctx, meta)
+		tables, err := eng.Tables(ctx, meta)
 		return catalogMsg{conn: c, schemas: schemas, current: current, tables: tables, err: err}
 	}
 }

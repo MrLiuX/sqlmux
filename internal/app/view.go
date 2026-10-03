@@ -242,8 +242,8 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 			name += " " + a.icons.Lock.Text
 		}
 		b.Hints = append(b.Hints, ui.Hint{Label: name, Action: "console.conn", Color: th.Info, Prio: 1, Group: 1})
-		if c.schema != "" {
-			b.Hints = append(b.Hints, ui.Hint{Label: "·", Prio: 1, Group: 1}, ui.Hint{Label: c.conn.DB + "." + c.schema + " ▾", Action: "console.schema", Color: th.PK, Prio: 1, Group: 1})
+		if c.schema != "" { // a MySQL schema is a database: none before it (§8.6)
+			b.Hints = append(b.Hints, ui.Hint{Label: "·", Prio: 1, Group: 1}, ui.Hint{Label: strings.TrimPrefix(c.conn.DB+"."+c.schema, ".") + " ▾", Action: "console.schema", Color: th.PK, Prio: 1, Group: 1})
 		}
 		b.Hints = append(b.Hints, ui.Hint{Label: "▶ run", Action: "console.run", Button: true})
 		b.Hints = append(b.Hints, bound(ui.Hint{Key: a.keys.Hint("console.run", "console"), Action: "console.run", Prio: 3, Attached: true})...)

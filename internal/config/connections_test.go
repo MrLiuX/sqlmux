@@ -74,7 +74,7 @@ func TestLoadConnectionErrors(t *testing.T) {
 		"":                               "里面没有 [[connection]]",
 		"[[connection]]\nname = \"a\"\n": "第 1 个连接：缺少 engine",
 		"[[connection]]\nengine = \"postgres\"\n":                                       "第 1 个连接：缺少 name",
-		"[[connection]]\nname = \"a\"\nengine = \"mysql\"\ndsn = \"x\"\n":               `第 1 个连接：engine = "mysql"，目前只支持 postgres`,
+		"[[connection]]\nname = \"a\"\nengine = \"sqlite\"\ndsn = \"x\"\n":              `第 1 个连接：engine = "sqlite"：只能是 postgres 或 mysql`,
 		"[[connection]]\nname = \"a/b\"\nengine = \"postgres\"\ndsn = \"x\"\n":          `第 1 个连接：name = "a/b"：不能含 / 或 \，也不能以 . 开头`,
 		"[[connection]]\nname = 'a\\b'\nengine = \"postgres\"\ndsn = \"x\"\n":           `第 1 个连接：name = "a\\b"：不能含 / 或 \，也不能以 . 开头`,
 		"[[connection]]\nname = \"..\"\nengine = \"postgres\"\ndsn = \"x\"\n":           `第 1 个连接：name = ".."：不能含 / 或 \，也不能以 . 开头`,

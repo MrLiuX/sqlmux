@@ -400,7 +400,7 @@ func TestPaletteLayout(t *testing.T) {
 	}
 }
 
-// ddlOrder is t_order's DDL as postgres.DDL puts it together from the
+// ddlOrder is t_order's DDL as PG's Engine.DDL puts it together from the
 // seed: 14 lines, 2 past what a preview shows.
 const ddlOrder = `create table public.t_order (
   id bigint not null default nextval('t_order_id_seq'::regclass),

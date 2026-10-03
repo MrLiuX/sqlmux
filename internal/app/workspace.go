@@ -13,6 +13,7 @@ import (
 
 	"sqlmux/internal/config"
 	"sqlmux/internal/db"
+	"sqlmux/internal/db/mysql"
 	"sqlmux/internal/db/postgres"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
@@ -149,6 +150,7 @@ const (
 // its Main and Meta once connected, its catalog and what is cached of it.
 type Conn struct {
 	Spec       config.Connection
+	eng        db.Engine // Spec.Engine's
 	State      connState
 	Main, Meta *db.Worker // §8.2; nil till connected
 	Addr       string     // shown in the status bar, e.g. ctw@localhost:5432
@@ -170,16 +172,20 @@ type Conn struct {
 	colsAsked map[tableID]bool    // for names' colors (§7.3): asked once, till cols is dropped
 	ddl       map[tableID]ddlText // the palette's previews (F4.2), dropped with cols
 
-	// DB is the database, on console titles; startedPath Main's search_path
-	// as it connected; mainPath the schema a console's run last put first
-	// on it, "" when not known, touched in Main's requests only (§8.6).
+	// DB is the database, on console titles, "" for MySQL, whose schemas
+	// are its databases; startedPath Main's search_path as it connected;
+	// mainPath the schema a console's run last put first on it, "" when
+	// not known, touched in Main's requests only (§8.6).
 	DB                    string
 	startedPath, mainPath string
 }
 
 func newConn(spec config.Connection) *Conn {
-	return &Conn{Spec: spec, cols: map[tableID]db.Columns{}, colsAsked: map[tableID]bool{}, ddl: map[tableID]ddlText{}}
+	return &Conn{Spec: spec, eng: engines[spec.Engine], cols: map[tableID]db.Columns{}, colsAsked: map[tableID]bool{}, ddl: map[tableID]ddlText{}}
 }
+
+// engines are the engines connections.toml names (§8.1).
+var engines = map[string]db.Engine{"postgres": postgres.Engine{}, "mysql": mysql.Engine{}}
 
 func (a *App) win() *Window { return a.sess.Windows[a.sess.Active] }
 
@@ -352,9 +358,11 @@ func Open(ctx context.Context, specs []config.Connection, start int) (*Session, 
 	return newSession(specs[start].Name, conns, conns[start], 1), nil
 }
 
-// dialed is a connection's Main and Meta as dial connected them.
+// dialed is a connection's Main and Meta as dial connected them, and
+// where Main landed.
 type dialed struct {
-	main, meta *postgres.Conn
+	main, meta db.Conn
+	info       db.Info
 }
 
 // secrets caches what a connection's password source gave, by its name
@@ -373,24 +381,25 @@ func dial(ctx context.Context, spec config.Connection) (dialed, error) {
 		pw = s
 		secrets.Store(spec.Name, s)
 	}
-	main, err := postgres.Connect(ctx, spec.DSN, pw.(string), spec.ReadOnly) // a read-only connection's too (§13)
+	eng := engines[spec.Engine]
+	main, info, err := eng.Connect(ctx, spec.DSN, pw.(string), spec.ReadOnly) // a read-only connection's too (§13)
 	if err != nil {
 		secrets.Delete(spec.Name)
 		return dialed{}, err
 	}
-	meta, err := postgres.Connect(ctx, spec.DSN, pw.(string), true)
+	meta, _, err := eng.Connect(ctx, spec.DSN, pw.(string), true)
 	if err != nil {
 		secrets.Delete(spec.Name)
 		main.Close()
 		return dialed{}, err
 	}
-	return dialed{main, meta}, nil
+	return dialed{main, meta, info}, nil
 }
 
 // take makes c connected over d.
 func (c *Conn) take(d dialed) {
 	c.State, c.Main, c.Meta = connReady, db.NewWorker(d.main), db.NewWorker(d.meta)
-	c.Addr, c.DB, c.startedPath = d.main.Addr, d.main.Database, d.main.SearchPath
+	c.Addr, c.DB, c.startedPath = d.info.Addr, d.info.Database, d.info.Path
 }
 
 // Close closes the session's connections.

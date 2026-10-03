@@ -182,11 +182,11 @@ func TestSetSearchPath(t *testing.T) {
 	c := connect(t, false)
 	ctx := context.Background()
 	for _, started := range []string{c.SearchPath, `""`, "$user,public", ""} {
-		if err := SetSearchPath(ctx, c, "agentable", started); err != nil {
+		if err := pg.UseSchema(ctx, c, "agentable", started); err != nil {
 			t.Fatalf("%s: %v", started, err)
 		}
 	}
-	if err := SetSearchPath(ctx, c, "agentable", c.SearchPath); err != nil {
+	if err := pg.UseSchema(ctx, c, "agentable", c.SearchPath); err != nil {
 		t.Fatal(err)
 	}
 	r, err := c.Query(ctx, "select current_schemas(false)::text, (select count(*) from agent) >= 0, (select count(*) from t_order) >= 0")

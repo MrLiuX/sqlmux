@@ -15,7 +15,6 @@ import (
 
 	"sqlmux/internal/config"
 	"sqlmux/internal/db"
-	"sqlmux/internal/db/postgres"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -442,16 +441,16 @@ func (a *App) fetchDDL(m previewDue) tea.Cmd {
 		m.p.fetches, m.p.stop = context.WithCancel(context.Background())
 		a.fetching = m.p
 	}
-	meta, ctx := conn.Meta, m.p.fetches
+	meta, eng, ctx := conn.Meta, conn.eng, m.p.fetches
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, countTimeout)
 		defer cancel()
 		m := ddlMsg{conn: conn, table: t}
 		m.err = meta.Run(ctx, func(ctx context.Context, c db.Conn) (err error) {
-			if m.text, err = postgres.DDL(ctx, c, t.Schema, t.Name); err != nil || t.View() {
+			if m.text, err = eng.DDL(ctx, c, t.Schema, t.Name); err != nil || t.View() {
 				return err
 			}
-			m.cols, err = postgres.TableColumns(ctx, c, t.Schema, t.Name)
+			m.cols, err = eng.TableColumns(ctx, c, t.Schema, t.Name)
 			return err
 		})
 		return m

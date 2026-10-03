@@ -84,8 +84,8 @@ func (c Connection) Check(names []string) (field, problem string) {
 	if slices.Contains(names, c.Name) { // the tree's roots go by it too (§5)
 		return "name", fmt.Sprintf("name = %q 重复了", c.Name)
 	}
-	if c.Engine != "postgres" {
-		return "engine", fmt.Sprintf("engine = %q，目前只支持 postgres", c.Engine)
+	if c.Engine != "postgres" && c.Engine != "mysql" {
+		return "engine", fmt.Sprintf("engine = %q：只能是 postgres 或 mysql", c.Engine)
 	}
 	return "", ""
 }

@@ -35,14 +35,38 @@ func settle(a *App, cmd tea.Cmd) {
 	}
 }
 
+// engineDSNs is each engine's seeded database the tests run against, as
+// SQLMUX_TEST_PG and SQLMUX_TEST_MYSQL name them; the test skips with none.
+func engineDSNs(t *testing.T) map[string]string {
+	dsns := map[string]string{}
+	for eng, env := range map[string]string{"postgres": "SQLMUX_TEST_PG", "mysql": "SQLMUX_TEST_MYSQL"} {
+		if dsn := os.Getenv(env); dsn != "" {
+			dsns[eng] = dsn
+		}
+	}
+	if len(dsns) == 0 {
+		t.Skip("neither SQLMUX_TEST_PG nor SQLMUX_TEST_MYSQL is set")
+	}
+	return dsns
+}
+
 // Only the connection started on connects; another connects once opened
-// in the tree, open on its current_schema(); one that cannot is marked
-// failed, named in a toast, the others as they were (§7.8「连接节点」).
+// in the tree, open on its current_schema(), MySQL's database(); one that
+// cannot is marked failed, named in a toast, the others as they were
+// (§7.8「连接节点」).
 func TestConnectOnOpen(t *testing.T) {
-	dsn := postgres.IntegrationDSN(t)
+	for eng, dsn := range engineDSNs(t) {
+		t.Run(eng, func(t *testing.T) { connectOnOpen(t, eng, dsn) })
+	}
+}
+
+func connectOnOpen(t *testing.T, eng, dsn string) {
+	if eng == "postgres" {
+		dsn = postgres.IntegrationDSN(t) // the user's PG* variables out of the way
+	}
 	sess, err := Open(context.Background(), []config.Connection{
-		{Name: "play", Engine: "postgres", DSN: dsn},
-		{Name: "seed", Engine: "postgres", DSN: dsn},
+		{Name: "play", Engine: eng, DSN: dsn},
+		{Name: "seed", Engine: eng, DSN: dsn},
 		{Name: "broken", Engine: "postgres", DSN: "postgres://nobody@127.0.0.1:1/x?connect_timeout=2"},
 	}, 0)
 	if err != nil {
