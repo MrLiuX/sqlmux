@@ -52,13 +52,14 @@ e2e_keys Escape; sleep 0.2
 check "esc：浮层关闭、待输入回到 ·" eval 'hidden SPC && pending_is "·"'
 
 # ---- 按下一个键：效果与直接按相同
-e2e_keys Space; sleep 0.6; e2e_type s; sleep 0.2
-check "浮层里按 s（完成 SPC s）：浮层关闭、待输入清空" eval 'hidden SPC && pending_is "·"'
-e2e_keys Space; sleep 0.05; e2e_type s; sleep 0.6
-check "SPC 后立即按 s：不出现浮层" eval 'hidden SPC && pending_is "·"'
+# 用 SPC n：只有一个 window 时不做事；SPC s 会打开 session 列表（F5.1），后面的键就进了列表
+e2e_keys Space; sleep 0.6; e2e_type n; sleep 0.2
+check "浮层里按 n（完成 SPC n）：浮层关闭、待输入清空" eval 'hidden SPC && pending_is "·"'
+e2e_keys Space; sleep 0.05; e2e_type n; sleep 0.6
+check "SPC 后立即按 n：不出现浮层" eval 'hidden SPC && pending_is "·"'
 
 # ---- 过期的 Tick 要忽略：第一次 SPC 的 400ms 定时器不能让第二次 SPC 提前弹出
-e2e_keys Space; sleep 0.3; e2e_type s; e2e_keys Space; sleep 0.2
+e2e_keys Space; sleep 0.3; e2e_type n; e2e_keys Space; sleep 0.2
 check "第一次 SPC 的定时器过期后，第二次 SPC 不提前弹出" hidden SPC
 sleep 0.4
 check "第二次 SPC 满 400ms 后弹出" shown SPC
