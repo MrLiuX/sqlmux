@@ -80,7 +80,7 @@ check "改名时点 ① 里面：等于 esc，焦点也没动" eval '[[ $f0 != 1
 leader s; key n; wait_for 6 eval '[[ $(bar) == " 1 ▾"* ]]'; sleep 0.4
 cmd window.rename; e2e_type zz; key C-p; e2e_type '$doraemon'; sleep 0.3; key Enter
 check "在另一个 session 里改名，中途从面板切回 doraemon：等于 esc，doraemon 的 window 名都没变" eval '[[ $(bar) == " doraemon ▾"* ]] && wins_are "0: data  1: report*  2: data" && mode_is NORMAL'
-pal '$1'; key Enter
+pal '$^1'; key Enter
 check "session 1 的 window 名也没变" eval '[[ $(bar) == " 1 ▾"* ]] && wins_are "0: data*"'
 leader s; key x; key Escape                                                   # 关掉 session 1，回到 doraemon
 

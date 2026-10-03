@@ -130,8 +130,9 @@ e2e_click 8 4; sleep 0.3; e2e_click 60 20; sleep 0.3; key c; sleep 0.5          
 check "新建的 console_2：d · <库>.public ▾（state 里记着的 s / agentable 不用），并写回 state" eval 'on1 d public && [[ $(python3 -c "import json,sys; c=json.load(open(sys.argv[1]))[\"consoles\"][\"console_2\"]; print(c[\"conn\"], c[\"schema\"])" "$ST/sqlmux/state.json") == "d public" ]]'
 
 # ---- yy / p 不跨连接（审查时定）
-pal "@t_order"; e2e_keys Down; sleep 0.2
-check "面板里 s 的 t_order 排在当前连接 d 的后面" eval '[[ $(selected) == "t_order  s.public"* ]] || { list; false; }'
+pal "@t_order"
+check "面板里同名的 t_order：当前连接 d 的排第一，s 的排在它后面（68337a7 起同分按空输入时的顺序）" eval 'o=$(list | cut -d"|" -f1 | grep -n "^t_order  [ds]\.public" | cut -d: -f1 | tr "\n" " "); [[ $(list | head -1) == "t_order  d.public"* && $o == "1 "* && $(list | grep -n "^t_order  s.public" | cut -d: -f1) -gt 1 ]] || { list; false; }'
+pickrow "t_order  s.public"
 e2e_keys Enter; wait_for 8 settled; key y y
 pal "@t_order"; pickrow "t_order  d.public"; e2e_keys Enter; wait_for 8 settled
 check "① 里开着 s 和 d 的 t_order" tabs_are 1 "1:console_2 │ 2:t_order- │ 3:t_order*"

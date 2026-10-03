@@ -185,7 +185,7 @@ psql "$E2E_DB" -q -c "delete from public.e2e_slow"
 
 # ---- 后台 session 里表格的自动刷新照常：不在屏幕上就跳过这一轮，不会停掉
 pal '$doraemon'; key Enter; open_table t_order; pal ">自动刷新"; key Enter; e2e_type 2s; sleep 0.3; key Enter
-pal '$1'; key Enter; sleep 2.5; psql "$E2E_DB" -qAt -c "update t_order set amount = 47 where id = 1"; sleep 2.5
+pal '$^1'; key Enter; sleep 2.5; psql "$E2E_DB" -qAt -c "update t_order set amount = 47 where id = 1"; sleep 2.5
 check "（准备）在 session 1 里待了 5 秒，期间库里 id 1 改成 47" eval 'sname_is 1'
 pal '$doraemon'; key Enter
 check "切回 doraemon：自动刷新没停，几秒内 t_order 的 id 1 变成 47.00" wait_for 5 eval 'e2e_plain | grep -E "│ +1 │ +1 │" | grep -q "47.00"'
