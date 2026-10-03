@@ -128,6 +128,12 @@
   - 应答可能属于后台的 session：按应答里带的 conn / tab 指针处理，焦点、布局类的副作用只对当前 session 做；console_n 的 n 改成遍历所有 session；
   - 表单：config 加 `ReadOnly`（F5.1 只写进文件，F5.3 才生效）；`Connection.Check(names)` 返回出错的字段和原因，LoadConnections 也用它；追加时用 BurntSushi 的 encoder 只编码这一条，原文件末尾没有换行先补一个，没填的可选字段不写；键位 `[keys.form]`：`form.next` / `form.prev`（Tab / S-Tab）、`form.save`（↵）、`form.cancel`（esc）。
 
+- [ ] 审查时定（reviewer 提问，2026-10-03）：
+  - 切换 session（包括 `n` 建连回来后自动 attach）时关掉所有浮层，确认框、改名框、表单、面板都关；
+  - 列表和表单打开时按 `C-p`，面板盖在上面并接管按键（同 COLS 列表）；表单里 `C-s` 绑 `form.save`，不去保存背后表格的修改；
+  - 关掉有查询在执行的 session 不另确认，也不弹「查询已取消」；
+  - 列表里每个 session 都标出它自己的当前 window（同 tmux）；
+  - 关 session 的确认框写「<session 名> 里有 N 处修改未保存，关闭会丢弃。」
 **验收**
 - [ ] e2e：
   - 新建连接后，`connections.toml` 中出现这条连接，且不会破坏文件中已有的内容（含注释）；
@@ -156,6 +162,9 @@
   - 状态栏 window 列表的每一段可以点击，执行不带标题的 `window.select <i>`（同 `palette.scope`）；
   - Window 加一个稳定 ID（同 Pane 的做法，session 里递增），树的展开状态和 `SPC l` 的「上一个用过的」都按 ID 记，不按下标：下标在关掉 window 后会前移，展开状态会错到后一个 window 上，`SPC l` 也会指错（决策者定，没有采用 worker 提的「按下标、用 ponytail 标出」）。
 
+- [ ] 审查时定（reviewer 提问，2026-10-03）：
+  - 改名时点改名框以外的任何地方都等于 `esc`；
+  - 关 window 的确认框写「这个 window 里有 N 处修改未保存，关闭会丢弃。」（同关 pane）。
 **验收**
 - [ ] e2e：
   - 新建、切换、重命名、关闭 window 都正确；
@@ -198,6 +207,16 @@
   - 状态栏：T「事务中」`warn`、E「事务出错」`error`，在 busy 左边，不能点、不让位；
   - 确认框合成一个函数：修改一句、事务一句，几个连接用「、」连起来并去重；关 tab / pane / window 时算出关掉之后不再有 console、又在事务中的连接，`y` 之后先关、再在 Cmd 里对它们发 ROLLBACK、再重取表格；退出、关 session 不另发 ROLLBACK，关 session 那句改成带连接名的统一写法；只在手动模式下保存过表格、没开过 console 的连接，关表格不问，退出、关 session 照样问。
 
+- [ ] 审查时定（reviewer 提问，2026-10-03）：
+  - §13 的四类 SET 整类拦下（其中实测不解除只读的也拦），§13 已写明；只读解除的集成测试加一列，把「拦下但无害」的也纳入实测；
+  - 作用域词连写（`SET SESSION SESSION CHARACTERISTICS …`）也要认出；扫描器照 scan.l 把 0x80 以上的字节当标识符字符（§9.1）；`U&"…"` 记成 ponytail 上限；
+  - 手动模式下每条语句前检查 BEGIN，照 psql 的 SendQuery，psql `command_no_begin` 列出的语句不补（先查 psql 源码，§11）；
+  - console 有执行在跑时不能关（tab、pane、window），toast「正在执行，结束后再关闭」；
+  - 表格取数走 `Main` 的条件改成「手动模式或正在事务中」（§8.2）；
+  - 提交、回滚之后也清列缓存、重新加载 catalog（§7.8）；
+  - `C-c` 照旧按连接取消，后果写进 §8.3；手动模式下表格取数等 `Main`、WHERE 能写，写进 §8.2；
+  - 在事务中的表格取数包在 `SAVEPOINT sqlmux_page` 里（worker 在清单外加的，认可，§8.2）；
+  - 计数仍在 `Meta` 上看不到未提交的增删，代码里要有 `ponytail:` 注释。
 **验收**
 - [ ] 集成测试：
   - 只读连接中，写语句被拦截；

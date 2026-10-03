@@ -416,7 +416,7 @@ console 里的 `x` 是 vim 的删除字符，所以 console 的 tab 用 `:q` 关
 | 通用下拉（`dropdown`）：schema、ORDER、LIMIT | `C-n` / `C-p` / `↑` / `↓` · `↵` · `esc` | 移动 · 选中 · 关闭。输入直接进过滤框，所以不用 j/k。Action 为 `dropdown.up/down/select/close` | §8.6 |
 | 补全列表（`complete`） | `Tab` / `C-n` / `↓` · `S-Tab` / `C-p` / `↑` | 下一项 · 上一项，到头绕回；弹出时第一项已选中。`↵`（接受，文字不变时照常执行）和 `esc`（第一次关列表）由输入框处理，不在这个作用域里 | §9.7 |
 | 确认框（`confirm`） | `y` / `↵` · `n` / `esc` | 确认 · 取消；`C-c` 等同 `esc`；两个按钮都能点击 | §10.5 |
-| 新建连接表单（`form`） | `Tab` / `S-Tab` · `↵` · `esc` | 下一个 · 上一个字段（到头绕回）· 保存 · 取消；`C-c` 等同 `esc`。开关字段（engine、read_only）上的 `space` 由表单自己处理、不进作用域，文字字段里照常输入空格 | 新增（M5 F5.1） |
+| 新建连接表单（`form`） | `Tab` / `S-Tab` · `↵` / `C-s` · `esc` | 下一个 · 上一个字段（到头绕回）· 保存 · 取消；`C-c` 等同 `esc`。开关字段（engine、read_only）上的 `space` 由表单自己处理、不进作用域，文字字段里照常输入空格 | 新增（M5 F5.1） |
 
 ## 7. 渲染与鼠标
 
@@ -655,7 +655,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
   - console 标题的右侧从左到右是：事务控件 `Tx: 自动 ▾`（F5.3，手动时后面跟着提交 ✓、回滚 ↺）、连接和 schema 的下拉框 `play · sqlmux_play.public ▾`（F5.11 起加上连接；原来只有 `doraemon.public ▾`）、`▶ run`（`focus` 底、`bg` 色字、粗体）加上 `↵`（`dim` 色）。
     - 连接名和 `<库>.<schema>` 各是一个下拉框，点哪一段开哪一个：连接名用 `info` 色（同状态栏的地址块），`<库>.<schema> ▾` 照旧 `pk` 色，中间的 ` · ` 不能点，悬停只亮那一段；两个下拉框是同一个组件，位置、按键同 §8.6；`gs` 照旧打开 schema 下拉，命令「切换连接…」（`console.conn`）打开连接下拉。连接下拉列出全部连接（名字；每项的图标——只读的 `lock`、MySQL 的引擎图标——等 F5.3 / F5.4 给下拉框加上每项一个图标时一起画），当前的用 `pk` 色标出；选了未连接的就关掉下拉去连，连上之后才换过去（schema 取那个连接的 Schema），连接中又选了别的以最后一次为准，连不上 toast `<连接名>：<错误>`、留在原来的连接。只读连接在标题的连接名后面也画 `lock`，和连接名同一个命中区（`play <lock> · db.public ▾`）。所在连接有未提交的事务时不能换（§5）；这个 console 的执行还没回来时也不能换，toast「正在执行，结束后再换连接」（执行里可能有 begin，回来后原连接停在事务里、上面却没有 console 了，reviewer 在 F5.11 复现）。MySQL 只有连接这一段（§8.6）。
     - `Tx: 自动 ▾` / `Tx: 手动 ▾` 点开是自动、手动两项的下拉，显示的是所在连接的模式（§5）。✓ 为 `focus` 色、↺ 为 `info` 色，悬停 `select` 底；所在连接不在事务里时两个都是 `dim` 色、不能点（同 DataGrip，也同查询条的停止按钮）。`Tx: …` 用 `fg` 色，下拉里当前那项 `pk` 色；✓ ↺ ▾ 不是 Nerd Font 字形，ascii 图标下照样用。
-    - 提交、回滚（✓ ↺、`tx.commit` / `tx.rollback`）在当前连接的 `Main` 上用不可取消、带超时的 ctx 执行（同 §10.3 的 COMMIT），不在事务里时不做事。成功不弹 toast：状态栏的「事务中」消失、✓ ↺ 变暗就是反馈；失败 toast 错误。在出错的事务里提交，PG 实际做的是回滚，toast「事务已出错，提交改为了回滚」，免得以为已经提交了。提交、回滚之后（包括确认框里的回滚）重新取这个连接上打开着的表格，计数也重算：手动模式下表格读的是 `Main`，不重取的话屏幕上还是已经撤掉的值。
+    - 提交、回滚（✓ ↺、`tx.commit` / `tx.rollback`）在当前连接的 `Main` 上用不可取消、带超时的 ctx 执行（同 §10.3 的 COMMIT），不在事务里时不做事。成功不弹 toast：状态栏的「事务中」消失、✓ ↺ 变暗就是反馈；失败 toast 错误。在出错的事务里提交，PG 实际做的是回滚，toast「事务已出错，提交改为了回滚」，免得以为已经提交了。提交、回滚之后（包括确认框里的回滚）重新取这个连接上打开着的表格，计数也重算：手动模式下表格读的是 `Main`，不重取的话屏幕上还是已经撤掉的值；同时清掉列缓存、重新加载这个连接的 catalog：手动模式下 DDL 执行时还没提交，在 `Meta` 上重载看不到它。
   - **空间不够时，提示优先于标题的对象名**，因为提示都是可点击的按钮（§7.4）。按下面的顺序分配空间：
     1. 先给最短的标题 `⟨n⟩ <图标>`（ascii 下是 `⟨n⟩ <图标> 类型`）留出位置。
     2. 按优先级从高到低依次摆放右侧的提示：放得下就保留；放不下就跳过这一个，继续试下一个。每个 pane 的提示按重要性排序，console 的顺序是 `▶ run` > 连接和 schema 的下拉框（两段算一项）> 事务控件（`Tx ▾` 和 ✓ ↺ 算一项）> 键位文字 `↵`。所以宽度较窄时，可能显示 `▶ run ↵`，但没有下拉框。
@@ -728,7 +728,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
   - 关闭：点 `×`，或者在这个 pane 的 NORMAL 下按 `esc`（Action `pane.error.close`）。同一个 tab 下一次同类操作成功时自动消失：取数成功清掉取数的报错，保存成功清掉保存的报错，console 每次开始执行就清掉上一次的；编辑单元格不清。`esc` 绑在 `[keys.normal]`，console 的 VISUAL 下和编辑器有待定键时照旧交给 vim。
   - 用在：表格的取数与 WHERE 报错、保存失败（「id = 42：…，已回滚」这一类，§10.3）、console 的执行报错（日志 tab 照旧记，出错语句的 ▶ 照旧变红；结果区 `R` 重跑出错时显示在来源 console 的 tab 上，来源已关就只记日志）。保存被取消的「已取消，已回滚」不是错误，仍在查询条右侧。
 - **toast**：显示在状态栏上方一行的右侧，默认 3 秒后消失；「再按一次 C-c 退出」这一条显示 2 秒，正好是连按的窗口（§6.8）。样式为 `warn` 色字、#292e42 底、左右各留 1 列。toast 只有一行：文字里的换行换成「；」、Tab 换成空格，在显示 toast 的那一处统一做（驱动的错误常是多行的，比如 localhost 解析出两个地址各报一行；F5.10 审查时发现）。设计稿里没有 toast，这个样式是后定的。加底色是因为那一行正好是 pane 的下边框，不加底色，文字会和边框混在一起。data pane 中保存 / 刷新的结果按 Q-06 的要求显示在查询条的右侧，不通过 toast 显示。
-- **session 列表**（M5 F5.1，S-02、S-03；`SPC s` 或点击状态栏的 session 块）：框和行的样式、位置、宽度照命令面板，标题「session」。每行是 session 名和 `dim` 色的 window 数（如 `3 windows`），当前 session 用 `focus` 色；`l` 展开后下面一级是它的 window（`0: data`），当前 window 同样标出。`$` 把这一行原地变成输入框（INSERT，`↵` 确定、`esc` 放弃）；`x` 关闭 session：有未保存的修改或未提交的事务时先确认（§10.5），关的是最后一个 session 等于退出。单击一行等于移过去再按 `↵`。键位见 §6.8 的浮层表。
+- **session 列表**（M5 F5.1，S-02、S-03；`SPC s` 或点击状态栏的 session 块）：框和行的样式、位置、宽度照命令面板，标题「session」。每行是 session 名和 `dim` 色的 window 数（如 `3 windows`），当前 session 用 `focus` 色；`l` 展开后下面一级是它的 window（`0: data`），当前 window 同样标出。`$` 把这一行原地变成输入框（INSERT，`↵` 确定、`esc` 放弃）；`x` 关闭 session：有未保存的修改或未提交的事务时先确认（§10.5），关的是最后一个 session 等于退出。单击一行等于移过去再按 `↵`。每个 session 下面都标出它自己的当前 window（同 tmux）。键位见 §6.8 的浮层表。列表和新建连接表单打开时按 `C-p`，面板盖在上面并接管按键（同 COLS 列表）；表单里的 `C-s` 是保存表单，不去保存背后表格的修改。切换 session（包括 `n` 建连回来后自动 attach）时关掉所有浮层，确认框也关。关掉有查询在执行的 session 不另确认，查询随连接关掉，也不弹「查询已取消」。
 - **新建 session**（`n`）：名字照 tmux 取最小的没用过的数字（`1`、`2`……）；默认布局（§5），带一个新的 console_n；连上当前连接并照「默认展开」展开它，其余连接不连。新 session 有自己的一套连接，按 `n` 后先在后台给它连上当前连接（toast「正在连接 <名字>…」），连上之后才建出 session 并 attach 过去，连不上就 toast `<名字>：<错误>`、不建，所以「当前连接一定是连上的」照样成立。
 - **新建连接表单**（M5 F5.1，命令 `conn.new`「新建连接…」）：居中的框，单线 `focus` 色边框，标题「新建连接」。一个字段一行，左边是 `dim` 色的字段名：name、dsn、password_cmd 是单行输入框（`ui.Input`，同面板，不是 vim）；engine、read_only 是开关，`space` 或单击切换（engine 在 F5.4 之前只有 postgres）。底栏是键位提示（`Tab 下一项 · ↵ 保存 · esc 取消`，从 keymap 读，可以点击）。`↵` 保存：校验同启动时读 connections.toml（必填、名字的字符规则、不能重名），不通过就在底栏上方一行用 `error` 色写原因、焦点移到出错的字段；通过就追加到 connections.toml（§14），所有 session 的树里多出这个连接，状态是未连接，保存时不试连。
 
@@ -789,16 +789,19 @@ type Result struct {
 
 | 连接 | 用途 |
 |---|---|
-| `Main` | console 执行、保存修改、manual 事务模式下的表格读取；持有事务状态 |
+| `Main` | console 执行、保存修改、manual 事务模式或在事务中时的表格读取；持有事务状态 |
 | `Meta` | schema 树、列属性、DDL 预览、计数、快速 SQL；auto 事务模式下的表格读取 |
 
 - 拆成两条的原因：console 里跑长查询时，树、命令面板和表格浏览不会跟着卡住。
-- manual 事务模式下表格读取改走 `Main`，这样能看到自己还没提交的修改。
+- manual 事务模式下，或者 `Main` 正在事务中时（用户在 console 里自己 begin 了），表格读取改走 `Main`，这样能看到自己还没提交的修改（F5.3）。代价：
+  - 表格取数要排在这个连接 console 的执行后面，「表格浏览不会跟着卡住」在这时不成立；
+  - 在事务中的取数包在 `SAVEPOINT sqlmux_page` 里，WHERE 写错或取消只撤到 savepoint，不让整个事务进入出错状态（F5.3 worker 加、审查认可）；不在事务里时不发 SAVEPOINT；
+  - WHERE 跑在可写的 `Main` 上，调用了写数据的函数（如 `nextval`）就真的写了；只读本来就不是权限边界（§13）。计数仍在 `Meta` 上，看不到没提交的增删（ponytail）。
 - `Meta` 建连后设为只读：PG 设 `default_transaction_read_only = on`（和 DateStyle 一样放在 RuntimeParams 里，效果等同 `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`），MySQL 执行 `SET SESSION TRANSACTION READ ONLY`。`Meta` 上只有读操作，写入只走 `Main`，所以 WHERE 里就算调用了会写数据的函数，也改不了数据。和 §13 一样，这是为了防误操作，不是权限边界。只读连接（`read_only = true`，§13）的 `Main` 也放同样的 RuntimeParams（M5 F5.3），`RESET` / `DISCARD ALL` 之后仍是只读。
 
 ### 8.3 取消、超时、过期响应
 
-- **取消**：当前连接（§5，M5 起；原来是本 session）忙碌时（`Main` 上的 console 执行，或 `Meta` 上的表格取数），状态栏在模式块左边显示 ` busy · C-c 取消 `（`warn` 色，键位文字从 keymap 读），点击执行 Action `cancel`。`C-c` 在当前连接有请求执行中时取消它，空闲时照旧是连按两次退出（§6.8）。取消后 toast 显示「查询已取消」，tab 保留之前的数据，第一次打开就是空表。
+- **取消**：当前连接（§5，M5 起；原来是本 session）忙碌时（`Main` 上的 console 执行，或 `Meta` 上的表格取数），状态栏在模式块左边显示 ` busy · C-c 取消 `（`warn` 色，键位文字从 keymap 读），点击执行 Action `cancel`。`C-c` 在当前连接有请求执行中时取消它，空闲时照旧是连按两次退出（§6.8）。取消后 toast 显示「查询已取消」，tab 保留之前的数据，第一次打开就是空表。取消按连接算，不按 tab：手动模式下表格取数排在 console 的长查询后面时，在表格上按 `C-c` 取消的是 console 的语句，事务因此进入出错状态，只能回滚（同 psql 在事务里按 Ctrl-C；表格自己的取数在 savepoint 里，取消它不影响事务，§8.2）。按 tab 单独取消要给 Worker 的每个请求一个 ctx，暂不做。
   - PG：取消请求的 ctx。pgconn 默认的 `DeadlineContextWatcherHandler` 会在 context 取消时给连接设 deadline，连接随之断开。每个连接只有两条长连接，所以改用 `CancelRequestContextWatcherHandler`，由它发 CancelRequest，取消之后连接还能继续用。`DeadlineDelay` 取 5s：取消发出 5 秒后服务端还没停，就断开连接；断开的连接不自动重连，M1 不做，代码里用 `ponytail:` 注释标出。
   - MySQL（M5）：`Query` 自己监听 ctx，取消时另开一条临时连接执行 `KILL QUERY <connection_id>`，id 在建连时记录。只取消 context 的话，驱动会关掉连接，但服务端上的查询会继续跑。
 - **超时**：建连 10s。计数查询 3s，用 ctx 超时实现：取消由 `CancelRequestContextWatcherHandler` 发出，返回 `context.DeadlineExceeded` 后显示 `?`（用户按 `C-c` 取消返回的是 `context.Canceled`）。不用 `SET LOCAL statement_timeout`：那要 begin / set / count / rollback 四次往返，且必须在 Worker 同一把锁里执行，否则别的请求会插进事务，等于要给 Worker 加 Tx；ctx 的做法引擎无关，MySQL 也能用。计数用 `tea.Sequence` 排在取数之后，3s 从页面数据回来后才开始算；计数不算 busy，不显示忙碌提示。
@@ -880,7 +883,7 @@ MySQL 的 schema 就是 database（M5 F5.4 定，同 DataGrip）：树里 MySQL 
 
 扫描一遍即完成，不构建 AST，按方言处理：
 
-- **PG**：`'…'`（`''` 转义）、`E'…'`、`$tag$…$tag$`、`"标识符"`、`--` 注释、可嵌套的 `/* */`。
+- **PG**：`'…'`（`''` 转义）、`E'…'`、`$tag$…$tag$`、`"标识符"`、`--` 注释、可嵌套的 `/* */`。0x80 以上的字节算标识符字符，同 scan.l 的 `ident_start` / `ident_cont`（M5 F5.3 审查时定：否则 `✓$a$` 这类写法分句和 PG 不一致，只读判定会被绕过）。
 - **MySQL**：`'…'` 和 `"…"`（反斜杠转义）、`` `标识符` ``、`#` 注释、`-- `（后面必须带空格）、不可嵌套的 `/* */`。
 - **输出**：token 的类型（关键字、标识符、字符串、数字、运算符、标点、注释、空白）、字节偏移、行号。
 
@@ -888,7 +891,7 @@ MySQL 的 schema 就是 database（M5 F5.4 定，同 DataGrip）：树里 MySQL 
 
 - 只做词法分析，代码量小，已知的边界情况都用表驱动测试覆盖。
 - 执行前，console 会高亮即将执行的语句范围（§9.2），用户能看到实际要跑的是哪一段。
-- 读写判定只用于显示提示，真正的保护在数据库层（§13）。
+- 读写判定用于提示和应用层拦截，兜底的保护在数据库层（§13）。
 
 ### 9.2 分句、可执行标记与执行前高亮（C-01、C-02）
 
@@ -1140,7 +1143,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 
 ### 10.5 未保存修改的确认框
 
-通用的确认浮层 `ui.Confirm`：在整个窗口里居中的小框，不压暗背景，点框外等于取消；一句话加两个按钮，按钮的键位文字从 keymap 读（`confirm.yes` / `confirm.no`）。文字按场合写，N 是修改的格数：退出「有 N 处修改未保存，退出会丢弃。」`y 退出`；关 tab「t_order 有 N 处修改未保存，关闭会丢弃。」`y 关闭`；关 pane「这个 pane 里有 N 处修改未保存，关闭会丢弃。」`y 关闭`；R「有 N 处修改未保存，刷新会丢弃。」`y 刷新`；都配 `n 取消`。M5 F5.3 起，有未提交的事务时同样确认：「<连接> 有未提交的事务，<动作>会回滚。」，有几个连接时用「、」连起来并去重；同时有未保存的修改时，一个框里两句都写。按 `y` 之后：关 tab / pane / window 先关，再在 Cmd 里对因此不再有 console 的连接发 ROLLBACK，之后同 §7.8 重取表格；退出、关 session 直接关连接，由服务端回滚（同 F5.1）。只在手动模式下保存过表格、没开过 console 的连接，关表格时不问，退出、关 session 照样问。统计范围：关 tab 只算这个 tab，关 pane 算它的所有 tab，退出算所有 window 的所有 tab。作用域 `confirm`，`y` / `↵` 确认，`n` / `esc` 取消，`C-c` 在浮层里等同 `esc`；按钮可以点击。
+通用的确认浮层 `ui.Confirm`：在整个窗口里居中的小框，不压暗背景，点框外等于取消；一句话加两个按钮，按钮的键位文字从 keymap 读（`confirm.yes` / `confirm.no`）。文字按场合写，N 是修改的格数：退出「有 N 处修改未保存，退出会丢弃。」`y 退出`；关 tab「t_order 有 N 处修改未保存，关闭会丢弃。」`y 关闭`；关 pane「这个 pane 里有 N 处修改未保存，关闭会丢弃。」`y 关闭`；R「有 N 处修改未保存，刷新会丢弃。」`y 刷新`；都配 `n 取消`。M5 F5.3 起，有未提交的事务时同样确认：「<连接> 有未提交的事务，<动作>会回滚。」，有几个连接时用「、」连起来并去重；同时有未保存的修改时，一个框里两句都写。关 session、关 window 时修改那一句带上主语：「<session 名> 里有 N 处修改未保存，关闭会丢弃。」「这个 window 里有 N 处修改未保存，关闭会丢弃。」（同关 pane 的「这个 pane 里」）。按 `y` 之后：关 tab / pane / window 先关，再在 Cmd 里对因此不再有 console 的连接发 ROLLBACK，之后同 §7.8 重取表格；退出、关 session 直接关连接，由服务端回滚（同 F5.1）。只在手动模式下保存过表格、没开过 console 的连接，关表格时不问，退出、关 session 照样问。统计范围：关 tab 只算这个 tab，关 pane 算它的所有 tab，退出算所有 window 的所有 tab。作用域 `confirm`，`y` / `↵` 确认，`n` / `esc` 取消，`C-c` 在浮层里等同 `esc`；按钮可以点击。
 
 触发的地方：
 
@@ -1239,7 +1242,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 
 - 在 NORMAL 或 VISUAL 下按 `↵`、点击 gutter 的 ▶、点击标题栏的 `▶ run` 都可以执行。有选区时执行选区（块选区执行它覆盖到的那几整行，同 V-LINE），执行后退出 VISUAL、光标不动，同 vim 的操作符；要再跑一次用 `gv` 重新选中，或点结果区的重跑。否则执行光标所在的语句。点 gutter 的 ▶ 执行那一行开始的语句，不移动光标。
 - 每次最多取 `console.max_rows` 行（默认 1000），读语句用自动 LIMIT（§9.4），其余靠 `Exec` 的 `maxRows` 截断；截断时显示 `1000+ 行`。
-- 在所选连接的 `Main` 的一次 `Worker.Run` 里逐条执行，每条是单独的简单协议请求：自动事务模式下各自自动提交；手动模式下（F5.3）`Main` 不在事务里时，先在同一次 Run 里 BEGIN，出错后事务停在出错状态，由用户回滚。遇到错误就停，后面的不执行。不一次发出整段：PG 简单协议里一次发送的多条语句属于同一个隐式事务，一条出错全部回滚，也没法知道错在哪一条、把哪个 ▶ 标红。
+- 在所选连接的 `Main` 的一次 `Worker.Run` 里逐条执行，每条是单独的简单协议请求：自动事务模式下各自自动提交；手动模式下（F5.3）每条语句前 `Main` 不在事务里就先 BEGIN（照 psql 在 AUTOCOMMIT off 时的 SendQuery：一次执行里 commit 之后的语句也在新事务里），psql `command_no_begin` 列出的语句不补 BEGIN（事务控制、VACUUM、CREATE / DROP DATABASE、带 CONCURRENTLY 的、ALTER SYSTEM、DISCARD ALL 等，按 psql 源码定），出错后事务停在出错状态，由用户回滚。console 有执行在跑时不能关（关 tab、pane、window），toast「正在执行，结束后再关闭」，同换连接的规则：否则执行回来后连接停在事务里，上面却没有 console 了。遇到错误就停，后面的不执行。不一次发出整段：PG 简单协议里一次发送的多条语句属于同一个隐式事务，一条出错全部回滚，也没法知道错在哪一条、把哪个 ▶ 标红。
 - 首个关键字是 create / alter / drop 的语句成功后，重新加载这个 console 所在连接的 catalog、清空列缓存（同 `tree.refresh`）。
 - 用户在自动模式下自己 `begin`：`Main` 进了事务，这个连接上表格的保存也进这个事务、不自动提交（§10.3）；状态栏显示「事务中」（§7.8），提交、回滚同手动模式（M5 F5.3 起，原来是已知上限）。
 
@@ -1365,10 +1368,10 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 - **只读连接（S-04；M5 起按连接，connections.toml 的 `read_only = true`）**：
   - **应用层**：
     - console 执行前检查这一次的全部语句：判为写的、会解除只读的，有一条就整次都不发，日志记原因并切到日志 tab；表格的编辑、新增、删除、粘贴都拦下（§10.1）。
-    - SET 语句中，会解除只读的一律拦截：`SET TRANSACTION`、`SET SESSION CHARACTERISTICS`、`default_transaction_read_only`、`transaction_read_only`；还有带 `READ WRITE` 的 `BEGIN` / `START TRANSACTION`（PG 里它盖过 `default_transaction_read_only`）。最终清单以在 PG 上逐条实测的集成测试为准（F5.3）。MySQL 的写法：`SET [GLOBAL | SESSION | PERSIST …] TRANSACTION`、`@@[scope.]transaction_read_only`、`START TRANSACTION … READ WRITE`，同样在 MySQL 上逐条实测（F5.4）。
+    - SET 语句中，下面四类整类拦截（简单；里面有些写法实测并不解除只读，如 `SET TRANSACTION READ ONLY`、`SET TRANSACTION ISOLATION LEVEL …`，要设隔离级别用 `BEGIN ISOLATION LEVEL …` 或 `SET default_transaction_isolation`；作用域词连写几个也照样认出）：`SET TRANSACTION`、`SET SESSION CHARACTERISTICS`、`default_transaction_read_only`、`transaction_read_only`；还有带 `READ WRITE` 的 `BEGIN` / `START TRANSACTION`（PG 里它盖过 `default_transaction_read_only`）。最终清单以在 PG 上逐条实测的集成测试为准（F5.3）。MySQL 的写法：`SET [GLOBAL | SESSION | PERSIST …] TRANSACTION`、`@@[scope.]transaction_read_only`、`START TRANSACTION … READ WRITE`，同样在 MySQL 上逐条实测（F5.4）。
     - 其他不影响只读的 SET（如 `search_path`、`statement_timeout`）放行；事务控制（begin / start / commit / end / rollback / abort / savepoint / release）和 reset / discard 也放行（F5.3 在 PG 上实测：`RESET`、`RESET ALL`、`DISCARD ALL`、`SET … TO DEFAULT` 之后仍是只读，`SET SESSION AUTHORIZATION DEFAULT` 解除不了）。其余首词是关键字的照 §9.3 第 7 条算写、拦下（vacuum、call、do、copy、prepare、declare、notify 等）；首词不是关键字的照旧发给数据库，由它报错。
     - 拦下时整次都不执行，不算一次执行（不加执行序号、不出占位），日志记一行 `<连接> 是只读连接，整次都没有执行`（`error` 色）并切到日志 tab，不弹 toast、▶ 不变红、不出错误栏；结果区的重跑也检查。
-  - **数据库层**：`Meta`、`Main` 两条都设只读：PG 在 RuntimeParams 里设 `default_transaction_read_only = on`（同 §8.2 的 `Meta`，`RESET` / `DISCARD ALL` 之后仍是 on），MySQL 执行 `SET SESSION TRANSACTION READ ONLY`，兜住判定漏掉的情况（例如会写数据的函数）。已知上限：`select set_config('default_transaction_read_only', 'off', false)` 判为读，两层都挡不住，代码里用 `ponytail:` 标出。
+  - **数据库层**：`Meta`、`Main` 两条都设只读：PG 在 RuntimeParams 里设 `default_transaction_read_only = on`（同 §8.2 的 `Meta`，`RESET` / `DISCARD ALL` 之后仍是 on），MySQL 执行 `SET SESSION TRANSACTION READ ONLY`，兜住判定漏掉的情况（例如会写数据的函数）。已知上限：`select set_config('default_transaction_read_only', 'off', false)` 判为读，两层都挡不住，代码里用 `ponytail:` 标出；`set U&"default_transaction_read_only" = off` 这类 Unicode 转义的标识符，判定也认不出，同样是已知上限。
   - 只读是为了防止误操作，不是权限边界。真正需要限制权限时，应使用只读的数据库账号。这一点要写进用户文档。
 - **快速 SQL**：只读由数据库事务保证，即使一条会写数据的 select 被判为读，也写不进去。但只读事务挡不住 `copy … to` 文件 / program、`reindex`、`cluster`、`load`、`checkpoint` 这类语句（M4 审查时实测），所以这些首词在应用层判为写、拦下（§12「写语句」）。
 - **凭据**：
