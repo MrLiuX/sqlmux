@@ -589,7 +589,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
 - 写了 `fg` 的图标在任何位置都用这个颜色；没写时跟随所在位置的颜色，比如标题聚焦时是 `focus` 色。
 - **图标后面留 1 个空格再接文字**（M1 用户反馈）：树、面板的搜索行与候选、pane 标题、侧栏标题、状态栏、查询条都一样。Nerd Font 图标按 1 列计算（§7.1），但不少终端和字体把它画得比 1 列宽，溢出到后一格，紧挨着文字时看起来贴在一起，悬停底色也只盖住半个。留一格空白正好接住溢出的部分。
 - 默认颜色：`save`、`refresh`、`transpose` 用 `info` 色，`sort_asc` / `sort_desc` 和 WHERE 历史下拉里的 `star` 用 `warn` 色（收藏和历史只靠图标区分，黄星一眼能认出）；都可以在 `[icon]` 里用 `fg` 覆盖。
-- 可以覆盖的图标：`schema`、`table`、`data`、`console`、`filter`、`search`、`keys`、`conn`、`key`、`postgres`，以及命令面板用的 `command`（nf-fa-bolt，U+F0E7，ascii 为 `:`）和 `window`（nf-fa-window_restore，U+F2D2，ascii 为 `[]`）；查询条的 `save`（U+F0C7，ascii `[S]`）、`refresh`（U+F021，ascii `[R]`）、`transpose`（U+F0EC，ascii `[T]`）、`sort_asc`（nf-fa-sort_amount_asc，U+F160，ascii `↑`）、`sort_desc`（nf-fa-sort_amount_desc，U+F161，ascii `↓`）；树的 `view`（nf-fa-eye，U+F06E，ascii `v`）、`column`（nf-cod-symbol_field，U+EB5F，ascii `-`）、只读连接的 `lock`（nf-fa-lock，U+F023，ascii `RO`，M5 F5.3）；查询条新增的 `row_add`（nf-fa-plus，U+F067，ascii `+`）、`row_delete`（nf-fa-minus，U+F068，ascii `-`）、`auto_refresh`（nf-fa-clock_o，U+F017，ascii `@`）、`stop`（nf-fa-stop，U+F04D，ascii `#`）；结果区的 `result`（nf-fa-list_alt，U+F022，ascii `=`）、`pin`（nf-oct-pin，U+F435，ascii `*`）、`export`（nf-fa-download，U+F019，ascii `>`）、`close`（nf-fa-times，U+F00D，ascii `x`）、日志 tab 的 `log`（nf-fa-file_text_o，U+F0F6，ascii `L`）；WHERE 历史下拉的 `star`（nf-fa-star，U+F005，ascii `*`）、`history`（nf-fa-history，U+F1DA，ascii `h`）。M3 起去掉 `data`：表 tab 在 pane 标题、tab 栏、树的工作区、面板的 pane 行里一律用 `table` 图标，console tab 用 `console`，引导 tab 不画图标。以后新增的图标（如 `mysql`、视图）也按名字加入。名字写错时启动报错。
+- 可以覆盖的图标：`schema`、`table`、`data`、`console`、`filter`、`search`、`keys`、`conn`、`key`、`postgres`，以及命令面板用的 `command`（nf-fa-bolt，U+F0E7，ascii 为 `:`）和 `window`（nf-fa-window_restore，U+F2D2，ascii 为 `[]`）；查询条的 `save`（U+F0C7，ascii `[S]`）、`refresh`（U+F021，ascii `[R]`）、`transpose`（U+F0EC，ascii `[T]`）、`sort_asc`（nf-fa-sort_amount_asc，U+F160，ascii `↑`）、`sort_desc`（nf-fa-sort_amount_desc，U+F161，ascii `↓`）；树的 `view`（nf-fa-eye，U+F06E，ascii `v`）、`column`（nf-cod-symbol_field，U+EB5F，ascii `-`）、只读连接的 `lock`（nf-fa-lock，U+F023，ascii `RO`，M5 F5.3）；查询条新增的 `row_add`（nf-fa-plus，U+F067，ascii `+`）、`row_delete`（nf-fa-minus，U+F068，ascii `-`）、`auto_refresh`（nf-fa-clock_o，U+F017，ascii `@`）、`stop`（nf-fa-stop，U+F04D，ascii `#`）；结果区的 `result`（nf-fa-list_alt，U+F022，ascii `=`）、`pin`（nf-oct-pin，U+F435，ascii `*`）、`export`（nf-fa-download，U+F019，ascii `>`）、`close`（nf-fa-times，U+F00D，ascii `x`）、日志 tab 的 `log`（nf-fa-file_text_o，U+F0F6，ascii `L`）；WHERE 历史下拉的 `star`（nf-fa-star，U+F005，ascii `*`）、`history`（nf-fa-history，U+F1DA，ascii `h`）。M3 起去掉 `data`：表 tab 在 pane 标题、tab 栏、树的工作区、面板的 pane 行里一律用 `table` 图标，console tab 用 `console`，引导 tab 不画图标。`mysql`（nf-dev-mysql，U+E704，ascii `my`，M5 F5.4）。以后新增的图标也按名字加入。名字写错时启动报错。
 
 ### 7.8 默认尺寸与样式（取自设计稿）
 
@@ -872,7 +872,7 @@ catalog 按连接缓存（每个 session 的每个 `Conn` 一份，M5 起；原�
   - 已知上限：用 `select set_config('search_path', …)` 改 search_path 不会让记下的值作废（首词是 select），代码里用 `ponytail:` 标出。
 - **影响范围**：console 的补全以它自己选择的 schema 为准。表格查询始终带 schema 前缀，不受影响。
 
-MySQL 的 schema 就是 database。PRD 原来写切换 database 会新建 session；M5 起 session 不再绑定连接，改为：MySQL 的 console 标题只有连接那一段，database 由连接的 DSN 决定（§18）。要不要像 PG 一样能选 database，F5.4 开工时再定。
+MySQL 的 schema 就是 database（M5 F5.4 定，同 DataGrip）：树里 MySQL 连接下面一层列 database，相当于 PG 的 schema 层，不列 `information_schema`、`mysql`、`performance_schema`、`sys`；console 标题是 `<连接> · <database> ▾`，执行前和连接当前的 database 不同就先 `USE`。`USE` 是会话级的、不受事务影响，用不着上面「只在事务外记住」那一套；一次执行里有 `USE` 语句时把记下的值作废，下次重新 `USE`。PRD 原来写切换 database 会新建 session，M5 起不再这样（§18）。
 
 ## 9. SQL 处理（`internal/sqlkit`）
 
@@ -1343,7 +1343,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 - **快速 SQL**（`;` 前缀或「SQL」标签）：NORMAL 下按 `;` 直接打开面板的 SQL 范围，输入框预填 `;`，与 `palette.command` 预填 `>` 同理（M1 用户反馈）。核心部分在 M1 F1.7 实现，用户体验 M0 时要求提前；依赖 console 的部分随 M3 补上。
   - **结果区**：执行后，结果显示在面板的下半部分，用和 table pane 相同的表格组件和网格样式（§7.6）；结果区的标题行显示行数、耗时和「只读」。SQL 范围下面板向下扩展，结果区至少 8 行。
   - **补全**：M1 用 catalog 里的表名、列名和 SQL 关键字做模糊补全，复用 F1.5 的补全列表；能看懂别名、CTE、子查询的补全要等 M3 F3.7。关键字取 lazysql `builtinKeywords` 里常用的约 40 个（小写）；表名取当前连接的 Schema 的；列名按 §9.7「第一次用到时才获取」：输入里出现和某张表同名的标识符时，取那张表的列并缓存（与打开表共用列缓存），不预拉全库的列。顺序为列 → 表 → 关键字，组内按 fzf 分数；右侧注释是列的类型和所属表、「表」、「关键字」。补全状态从 data tab 挪出来，面板和 WHERE 共用。
-  - **执行**：在当前连接（§5）的 `Meta` 上执行，PG 用 `BEGIN READ ONLY`，MySQL 用 `START TRANSACTION READ ONLY`，执行完一律 ROLLBACK。同一事务里先 `SET LOCAL search_path TO <当前连接的 Schema>, <建连时的原始 search_path>`（§8.6 的写法），这样树停在 `agentable` 时 `;select * from agent` 也能找到表，ROLLBACK 后自动恢复。最多显示 100 行，更多时显示 `100+`。
+  - **执行**：在当前连接（§5）的 `Meta` 上执行，PG 用 `BEGIN READ ONLY`，MySQL 用 `START TRANSACTION READ ONLY`，执行完一律 ROLLBACK。MySQL（F5.4）没有下面游标的做法：判为读的加 §9.4 的自动 LIMIT（101 行），已经带 LIMIT 或包在括号里的照样算完（ponytail）；database 用 `USE` 设，代替 search_path。同一事务里先 `SET LOCAL search_path TO <当前连接的 Schema>, <建连时的原始 search_path>`（§8.6 的写法），这样树停在 `agentable` 时 `;select * from agent` 也能找到表，ROLLBACK 后自动恢复。最多显示 100 行，更多时显示 `100+`。
     - **不让服务端算完整个结果集**（M1 F1.7 定，参考 PG16 psql 的 `FETCH_COUNT`：common.c 的 `is_select_command` 跳过空白、注释和左括号后只认 `select` / `values`；PG17 起 psql 改用 chunked rows mode，删掉了这个函数）：跳过开头的空白、注释和左括号后，第一个词是 `select` / `values` / `table` / `with` 的（`table` 和 `with` 是这里另加的，大表上的 WITH … SELECT 很常见，限行更要紧），用 `DECLARE <游标> NO SCROLL CURSOR FOR <语句>` + `FETCH FORWARD 101`，服务端只算到第 101 行；其余语句（SHOW、EXPLAIN、写语句等）直接执行，写语句由只读事务拒绝，显示数据库原文。两条路径都走扩展协议，所以一次只能执行一条语句。
     - 否掉的做法：lazysql 读到上限后停，但关 rows 时 pgx 会把剩下的读完，服务端照样算完；usql 不限制；扩展协议 Execute 带行数上限（pgjdbc 的做法）最通用，但 pgconn 没有暴露，要绕过 pgconn 自己收发协议消息、自己处理取消，与 §8.1「取消走 ctx」冲突。
     - 已知上限：`explain analyze` 这类非 SELECT 语句仍会算完；`with … delete` 这类 WITH 后面接写语句的，走 DECLARE 报的是 `syntax error at or near "delete"`，而不是只读事务的错误，M3 由读写判定（§9.3）解决；首词判断是临时的，代码里用 `ponytail:` 标出。M4 起改为：先用 §9.3 的读写判定，判为写的不执行（见下面「写语句」）；判为读、且首词是 select / with / table / values 的仍走游标 + `FETCH FORWARD 101`，不改用 §9.4 的自动 LIMIT：游标让服务端只算到第 101 行，而自动 LIMIT 对已经带 LIMIT、或者包在括号里的查询不起作用，碰到这些照样算完（M4 起草时定）。
@@ -1365,7 +1365,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 - **只读连接（S-04；M5 起按连接，connections.toml 的 `read_only = true`）**：
   - **应用层**：
     - console 执行前检查这一次的全部语句：判为写的、会解除只读的，有一条就整次都不发，日志记原因并切到日志 tab；表格的编辑、新增、删除、粘贴都拦下（§10.1）。
-    - SET 语句中，会解除只读的一律拦截：`SET TRANSACTION`、`SET SESSION CHARACTERISTICS`、`default_transaction_read_only`、`transaction_read_only`；还有带 `READ WRITE` 的 `BEGIN` / `START TRANSACTION`（PG 里它盖过 `default_transaction_read_only`）。最终清单以在 PG 上逐条实测的集成测试为准（F5.3）。
+    - SET 语句中，会解除只读的一律拦截：`SET TRANSACTION`、`SET SESSION CHARACTERISTICS`、`default_transaction_read_only`、`transaction_read_only`；还有带 `READ WRITE` 的 `BEGIN` / `START TRANSACTION`（PG 里它盖过 `default_transaction_read_only`）。最终清单以在 PG 上逐条实测的集成测试为准（F5.3）。MySQL 的写法：`SET [GLOBAL | SESSION | PERSIST …] TRANSACTION`、`@@[scope.]transaction_read_only`、`START TRANSACTION … READ WRITE`，同样在 MySQL 上逐条实测（F5.4）。
     - 其他不影响只读的 SET（如 `search_path`、`statement_timeout`）放行；事务控制（begin / start / commit / end / rollback / abort / savepoint / release）和 reset / discard 也放行（F5.3 在 PG 上实测：`RESET`、`RESET ALL`、`DISCARD ALL`、`SET … TO DEFAULT` 之后仍是只读，`SET SESSION AUTHORIZATION DEFAULT` 解除不了）。其余首词是关键字的照 §9.3 第 7 条算写、拦下（vacuum、call、do、copy、prepare、declare、notify 等）；首词不是关键字的照旧发给数据库，由它报错。
     - 拦下时整次都不执行，不算一次执行（不加执行序号、不出占位），日志记一行 `<连接> 是只读连接，整次都没有执行`（`error` 色）并切到日志 tab，不弹 toast、▶ 不变红、不出错误栏；结果区的重跑也检查。
   - **数据库层**：`Meta`、`Main` 两条都设只读：PG 在 RuntimeParams 里设 `default_transaction_read_only = on`（同 §8.2 的 `Meta`，`RESET` / `DISCARD ALL` 之后仍是 on），MySQL 执行 `SET SESSION TRANSACTION READ ONLY`，兜住判定漏掉的情况（例如会写数据的函数）。已知上限：`select set_config('default_transaction_read_only', 'off', false)` 判为读，两层都挡不住，代码里用 `ponytail:` 标出。
@@ -1567,6 +1567,6 @@ PRD 10.2 中影响实现的几条：
 | 27 | session 改为工作区，不再绑定一个连接：每个 session 都能看到 connections.toml 里的全部连接，目录树的根是这些连接，用到时才连；状态栏的 session 块不画引擎图标，地址块加上连接名 | 第 3 章 Session 行、S-01~S-04、D-01、B-01 |
 | 28 | session 列表的 `n` 改为新建 session；新建连接改为命令面板里的「新建连接…」表单 | S-03 |
 | 29 | console 标题加上连接下拉和事务控件 `Tx: 自动 ▾`、提交 ✓、回滚 ↺（照 DataGrip）；只读和事务模式都按连接 | 5.7、S-04 |
-| 30 | MySQL 切换 database 不再新建 session：console 只有连接下拉，database 由连接决定 | 第 9 章 |
+| 30 | MySQL 切换 database 不再新建 session：database 同 PG 的 schema，树里列出，console 标题上选（执行前 `USE`） | 第 9 章 |
 
 设计稿里写死的键位文字（如 `C-a b`、`run ⌥↵`、`C-↵ 送到 result pane`）会按新的默认键位显示；实现中这些文字都从 keymap 读取，不写死。

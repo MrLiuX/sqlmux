@@ -226,9 +226,20 @@
   - 布尔值写入 1 / 0。
 - [ ] **种子数据**：`testdata/seed/mysql.sql`，覆盖的情况与 PG 的种子数据相同。
 - [ ] **扫描器**：MySQL 会执行的注释 `/*! … */`（如 `SELECT 5 /*! +1 */` 返回 6，dump 开头的 `/*!40101 SET NAMES utf8 */;`）M3 的扫描器当作注释，分句和读写判定会错；M5 接 MySQL 时处理（M3 审查时发现）。
-- [ ] **console 标题**只有连接下拉，没有 schema 下拉，database 由连接的 DSN 决定（§8.6）；要不要像 PG 一样能选 database，开工时提给决策者。
+- [ ] **database 能选**（开工前定，同 PG 的 schema，§8.6）：树里 MySQL 连接下面一层列 database（不列系统库），console 标题是 `<连接> · <database> ▾`，执行前不同就先 `USE`，一次执行里有 `USE` 时作废记下的值。
 - [ ] **事务状态**：MySQL 拿不到 TxStatus，按执行过的 begin / start transaction / commit / rollback 来记（ponytail：DDL 的隐式提交这类情况记不准）。
 - [ ] 新建连接表单的 engine 可以选 mysql；树和面板里的 MySQL 连接用 `mysql` 图标（§7.7）。
+- [ ] 细节（worker 提议，已定）：
+  - 按层分 4 个 commit，各自全绿，审查节点仍是 F5.4 一个：① 驱动和浏览（compose 挂载 seed、mysql.sql、引擎抽象、mysql.Conn、catalog、Page / Count、树和表格）② 编辑和保存 ③ console（扫描器 `/*! */`、执行、只读判定、快速 SQL、DDL 预览、格式化、补全）④ 表单的 engine 和图标；
+  - `db.Engine` 接口（两个实现），Conn 上存一个；app 里直接调 `postgres.X` 的地方都改成走它；共用的类型从 postgres 挪到 db；
+  - 驱动 go-sql-driver/mysql：`sql.DB` + `SetMaxOpenConns(1)` + `db.Conn(ctx)` 固定一条，由 Worker 独占；DSN 加 `interpolateParams=true`、`clientFoundRows=true`（否则改成同样的值时影响 0 行，被误报成「行数据已变化」），不开 multiStatements；值读成文本；connections.toml 的 dsn 写 `mysql://user:pass@host:port/db?…`，用 net/url 转成驱动的 Config，不加 dburl，不是 `mysql://` 开头的按驱动原生格式解析；
+  - 事务状态按执行过的语句记：begin / start transaction → T，commit / rollback（不含 rollback to）→ I；MySQL 出错不中止事务，没有 E；ponytail：DDL 的隐式提交等记不准；
+  - 只读：`Meta` 和只读连接的 `Main` 建连后 `SET SESSION TRANSACTION READ ONLY`；BreaksReadOnly 补上 MySQL 的写法，在 MySQL 上逐条实测（§13）；
+  - 列和编辑：列信息照 §8.4；tinyint(1) 当布尔，选项写 1 / 0；时间分段认 date / datetime / timestamp / time；§10.7 的前置校验只对 PG 做（ponytail）。保存时的旧值比较先逐类型实测（float / double、decimal、datetime、json、bit、binary、enum / set、char 尾空格），`<=>` 带文本参数会按类型转换，很可能改成 `CAST(列 AS CHAR) = ?`、旧值是 NULL 时 `IS NULL`；结论写进提交说明，并告诉决策者改 §10.3；
+  - 取消照 §8.3：另起 goroutine 盯着 ctx，取消时用同一份配置开临时连接 `KILL QUERY <id>`（id 建连时 `select connection_id()`），错误 1317 换成 ctx 的错误；
+  - 快速 SQL：判为读的加自动 LIMIT，在只读的 `Meta` 上执行（§12）；
+  - 集成测试：mysql 包对照 postgres 包写一套（catalog、page / count、逐类型保存、快速 SQL、KILL QUERY、只读解除表），环境变量 `SQLMUX_TEST_MYSQL`；app 层和引擎无关的（连接、console 共用 Main、手动事务、只读）两个引擎各跑一遍；PG 特有的（search_path、DateStyle、E 状态、format()）不搬；
+  - 图标 `mysql`（nf-dev-mysql U+E704，ascii `my`）；表单的 engine 在 postgres / mysql 之间用空格切换。
 
 **验收**
 - [ ] M1–M4 的集成测试在 MySQL 上全部通过。
