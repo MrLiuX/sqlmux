@@ -59,7 +59,7 @@ func (a *App) complete(t *dataTab) {
 			for _, e := range c.Enum {
 				vals = append(vals, candidate{label: e, insert: "'" + strings.ReplaceAll(e, "'", "''") + "'", note: "值"})
 			}
-			if c.Type == "boolean" {
+			if c.Type == "boolean" || c.Type == "tinyint(1)" { // MySQL's takes true and false too
 				vals = append(vals, candidate{label: "true", insert: "true", note: "值"}, candidate{label: "false", insert: "false", note: "值"})
 			}
 		}

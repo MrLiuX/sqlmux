@@ -795,12 +795,13 @@ func baseType(t string) string {
 	return t
 }
 
-// timeKind is the parts a column of catalog type t steps (§10.2); interval
-// has none.
+// timeKind is the parts a column of catalog type t steps (§10.2), PG's
+// and MySQL's; interval has none.
 func timeKind(t string) ui.TimeKind {
 	return map[string]ui.TimeKind{
 		"date": ui.Date, "time without time zone": ui.Time, "time with time zone": ui.TimeTZ,
 		"timestamp without time zone": ui.Timestamp, "timestamp with time zone": ui.TimestampTZ,
+		"time": ui.Time, "datetime": ui.Timestamp, "timestamp": ui.Timestamp,
 	}[baseType(t)]
 }
 

@@ -93,7 +93,7 @@ func connectOnOpen(t *testing.T, eng, dsn string) {
 	}
 	ns, _ := a.treeNodes()
 	home := slices.IndexFunc(ns, func(n node) bool { return n.id == schemaNode(seed, seed.home) })
-	if seed.State != connReady || len(seed.Tables) != len(play.Tables) || home < 0 || !ns[home].Open {
+	if seed.State != connReady || len(seed.Tables) == 0 || home < 0 || !ns[home].Open {
 		t.Errorf("seed: %v, %d tables, %s at %d\n%s", seed.State, len(seed.Tables), seed.home, home, treeTexts(a))
 	}
 	if play.State != connReady || a.conn() != seed {

@@ -180,7 +180,7 @@ func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (
 		}
 		row := make([]db.Val, len(raw))
 		for i, v := range raw {
-			row[i] = db.Val{S: text(v), Null: v == nil}
+			row[i] = db.Val{S: shown(v), Null: v == nil}
 		}
 		r.Rows = append(r.Rows, row)
 	}
@@ -191,8 +191,8 @@ func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (
 	return r, rows.Err()
 }
 
-// text is a value as shown: a blob that is no UTF-8 by its size (§8.1).
-func text(v []byte) string {
+// shown is a value as the grid shows it: a blob that is no UTF-8 by its size (§8.1).
+func shown(v []byte) string {
 	if !utf8.Valid(v) {
 		return fmt.Sprintf("<binary %d bytes>", len(v))
 	}

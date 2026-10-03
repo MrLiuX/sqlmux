@@ -18,6 +18,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"sqlmux/internal/db"
+	"sqlmux/internal/sqlkit"
 	"sqlmux/internal/ui"
 )
 
@@ -221,8 +222,11 @@ func (t *dataTab) options() []option {
 	c := t.cell
 	col := t.column(c.key.col)
 	labels, vals := col.Enum, col.Enum
-	if col.Type == "boolean" { // PG's own text for them, so one back to what was loaded is no change
+	switch col.Type { // the engine's own text for them, so one back to what was loaded is no change
+	case "boolean":
 		labels, vals = []string{"true", "false"}, []string{"t", "f"}
+	case "tinyint(1)": // MySQL's boolean
+		labels, vals = []string{"true", "false"}, []string{"1", "0"}
 	}
 	pattern := c.in.Text
 	if c.in.All {
@@ -421,8 +425,9 @@ func (a *App) drawCellMenu(f *ui.Frame, p *Pane, t *dataTab) {
 // cellHint is what is wrong with the text of the cell being edited, if
 // anything (§10.7). Text as the edit started is let be: no change, and
 // maybe PG's own output, which cellCheck may not take (1900's +08:05:43).
+// ponytail: PG's types alone; MySQL's text goes to the database as typed
 func (t *dataTab) cellHint() string {
-	if c := t.cell; c.in.Text != c.start {
+	if c := t.cell; c.in.Text != c.start && t.conn.eng.Dialect() == sqlkit.PG {
 		return cellCheck(t.typeOf(c.key.col), c.in.Text)
 	}
 	return ""

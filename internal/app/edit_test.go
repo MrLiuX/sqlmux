@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"sqlmux/internal/db"
+	"sqlmux/internal/db/mysql"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -496,6 +497,14 @@ func TestCellOptions(t *testing.T) {
 	tab.cols.Cols[0].Default, tab.edits = "", nil
 	if feed(t, a, "i"); a.grid(a.focused(), tab).EditMenu || tab.options() != nil || a.context().Overlay != "" {
 		t.Errorf("no options: %s", optionLabels(tab))
+	}
+	feed(t, a, "<Esc>")
+	tab.cols.Cols[3].Type, tab.page.Rows[0][3].S = "tinyint(1)", "1" // MySQL's boolean (F5.4)
+	if feed(t, a, "lllif"); optionLabels(tab) != "false ∅ NULL" {
+		t.Errorf("tinyint(1): %s", optionLabels(tab))
+	}
+	if feed(t, a, "<C-n><CR>"); editsOf(tab) != "1/paid=0" {
+		t.Errorf("false on a tinyint(1): %q", editsOf(tab))
 	}
 }
 
@@ -1075,4 +1084,17 @@ func TestGoldenRowsAddedDeleted160x45(t *testing.T) {
 	loadOrders(t, a, 5)
 	feed(t, a, "jolidone<Esc>jjdd")
 	golden.RequireEqual(t, a.render().String())
+}
+
+// §10.7's checks are PG's: a MySQL table's text goes to the database as
+// typed (F5.4).
+func TestCellHintPGOnly(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	tab := loadOrders(t, a, 3)
+	if feed(t, a, "0ix"); tab.cellHint() == "" {
+		t.Fatal("x in a bigint on PG")
+	}
+	if tab.conn.eng = (mysql.Engine{}); tab.cellHint() != "" {
+		t.Errorf("on MySQL: %q", tab.cellHint())
+	}
 }
