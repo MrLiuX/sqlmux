@@ -1,6 +1,6 @@
 # M5 工作现场与 MySQL · 任务清单
 
-- **状态**：M2–M4 验收通过（2026-10-02）。先做 M4 验收意见 F5.5–F5.9（节点 0，2026-10-02 通过）；节点 1（F5.10、F5.11）2026-10-03 通过；之后按 F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，都是 todo（2026-10-02 按 worker 起草的清单定，§5「一个 session 多个连接」牵动的各节已改好）。
+- **状态**：M2–M4 验收通过（2026-10-02）。先做 M4 验收意见 F5.5–F5.9（节点 0，2026-10-02 通过）；节点 1（F5.10、F5.11）2026-10-03 通过；节点 2（F5.1–F5.3）2026-10-03 通过；之后按 F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，都是 todo（2026-10-02 按 worker 起草的清单定，§5「一个 session 多个连接」牵动的各节已改好）。
 - **目标**：
   - 一个 session 多个连接：目录树的根是 connections.toml 里的全部连接，用到时才连；
   - 支持多个 session、多个 window；
@@ -99,27 +99,27 @@
 - [x] e2e：用下拉框换连接后，在新连接上执行；重启后连接和 schema 都恢复。
 - [x] golden：几种宽度下的 console 标题（连接和 schema 的下拉框让位）。
 
-## F5.1 多 session 与新建连接 · 状态：todo
+## F5.1 多 session 与新建连接 · 状态：passed（fce61c1；e2e 95c3338）
 
 - **依赖**：F5.11
 - **涉及**：`internal/app`（多个 session、session 列表、面板的会话范围、表单）、`internal/ui`（session 列表、表单）、`internal/config`（追加连接）、`internal/keymap/default.toml`（`[keys.sessions]`、`[keys.form]`）
 
 **开发**
-- [ ] App 改成持有多个 session，`a.sess` 指当前那个；切换 session 时关掉浮层。
-- [ ] session 列表浮层（§7.8「session 列表」，键位在 `[keys.sessions]`，§6.8）：
+- [x] App 改成持有多个 session，`a.sess` 指当前那个；切换 session 时关掉浮层。
+- [x] session 列表浮层（§7.8「session 列表」，键位在 `[keys.sessions]`，§6.8）：
   - `j` / `k` 移动；`l` / `h` 展开、收起（session 下面是它的 window）；`↵` attach，停在 window 上时还切到这个 window；
   - `n` 新建 session（PRD S-03 原为新建连接，§18）；
   - `x` 关闭：有未保存的修改或未提交的事务时先确认（§10.5）；关的是最后一个 session 时等于退出；
   - `$` 原地重命名；`esc` 关闭列表；
   - 框和行的样式照命令面板，每行是名字和 window 数，当前 session 用 `focus` 色标出；单击一行等于移过去再按 `↵`。
-- [ ] 新建 session（§7.8）：名字按 tmux 的习惯取最小的没用过的数字（`1`、`2`……）；默认布局，带一个新的 console_n；连上当前连接并展开它，其余连接不连。
-- [ ] 点击状态栏的 session 块打开列表（`SPC s` 已经有了）。面板的 `$` 范围列出 session，`↵` attach；「所有」范围也列 session（§12）。
-- [ ] 新建连接：命令 `conn.new`「新建连接…」，不绑默认键，打开表单（§7.8「新建连接表单」，作用域 `[keys.form]`）：
+- [x] 新建 session（§7.8）：名字按 tmux 的习惯取最小的没用过的数字（`1`、`2`……）；默认布局，带一个新的 console_n；连上当前连接并展开它，其余连接不连。
+- [x] 点击状态栏的 session 块打开列表（`SPC s` 已经有了）。面板的 `$` 范围列出 session，`↵` attach；「所有」范围也列 session（§12）。
+- [x] 新建连接：命令 `conn.new`「新建连接…」，不绑默认键，打开表单（§7.8「新建连接表单」，作用域 `[keys.form]`）：
   - 字段：name、engine（F5.4 之前只有 postgres）、dsn、password_cmd、read_only；
   - 校验同 LoadConnections（必填、名字规则、不能重名）；
   - 写入：在 connections.toml 末尾追加一段 `[[connection]]` 文本，不重新编码，保留用户的注释；文件不存在就新建，权限 0600；
   - 写入后所有 session 的树里都多出这个连接，状态是未连接；保存时不试连，展开时才连。
-- [ ] 细节（worker 提议，已定）：
+- [x] 细节（worker 提议，已定）：
   - 新建 session：先在后台给新 session 的那份当前连接建连，toast「正在连接 <名字>…」，连上之后才建出 session 并 attach；连不上 toast `<名字>：<错误>`，不建 session（保住 F5.10「当前连接一定是连上的」）；
   - session 列表没有过滤框，`j` / `k` 是移动键；行不画图标，session 行是名字加 `dim` 色的 `N windows`，window 行缩进一级写 `0: data`；打开时光标在当前 session 上；`n` 建好后直接 attach、关掉列表；
   - `x` 关的是当前 session 时，attach 到它的上一个（它是第一个就下一个），列表不关，光标留在原来的行号；关之前先把它的 console 文件写盘，再在 Cmd 里关它的连接，断开时服务端自动回滚未提交的事务，确认之后不另发 ROLLBACK；确认框把这个 session 里所有表格的未保存修改数加起来，它的连接里有一个在事务中就加上「有未提交的事务，关闭会回滚」；
@@ -128,33 +128,33 @@
   - 应答可能属于后台的 session：按应答里带的 conn / tab 指针处理，焦点、布局类的副作用只对当前 session 做；console_n 的 n 改成遍历所有 session；
   - 表单：config 加 `ReadOnly`（F5.1 只写进文件，F5.3 才生效）；`Connection.Check(names)` 返回出错的字段和原因，LoadConnections 也用它；追加时用 BurntSushi 的 encoder 只编码这一条，原文件末尾没有换行先补一个，没填的可选字段不写；键位 `[keys.form]`：`form.next` / `form.prev`（Tab / S-Tab）、`form.save`（↵）、`form.cancel`（esc）。
 
-- [ ] 审查时定（reviewer 提问，2026-10-03）：
+- [x] 审查时定（reviewer 提问，2026-10-03）：
   - 切换 session（包括 `n` 建连回来后自动 attach）时关掉所有浮层，确认框、改名框、表单、面板都关；
   - 列表和表单打开时按 `C-p`，面板盖在上面并接管按键（同 COLS 列表）；表单里 `C-s` 绑 `form.save`，不去保存背后表格的修改；
   - 关掉有查询在执行的 session 不另确认，也不弹「查询已取消」；
   - 列表里每个 session 都标出它自己的当前 window（同 tmux）；
   - 关 session 的确认框写「<session 名> 里有 N 处修改未保存，关闭会丢弃。」
 **验收**
-- [ ] e2e：
+- [x] e2e：
   - 新建连接后，`connections.toml` 中出现这条连接，且不会破坏文件中已有的内容（含注释）；
   - 在两个 session 之间切换后，各自的界面状态保持不变；
   - 新建 session 的名字与布局；
   - 关掉最后一个 session 等于退出。
-- [ ] golden：session 列表（含展开的 window）；新建连接表单（含校验报错）。
+- [x] golden：session 列表（含展开的 window）；新建连接表单（含校验报错）。
 
-## F5.2 多 window · 状态：todo
+## F5.2 多 window · 状态：passed（fce61c1；e2e 95c3338）
 
 - **依赖**：F5.1
 - **涉及**：`internal/app`（window、面板、树的工作区）、`internal/ui`（状态栏）
 
 **开发**
-- [ ] **按键**：`SPC n` / `SPC p` / `SPC l` 切到下一个 / 上一个 / 上次用的 window，`SPC c` 新建；重命名、关闭默认不绑键，在命令面板里执行（§6.8）。不提供按编号切换 window。
-- [ ] **鼠标**：点击状态栏上的 window 列表可切换。
-- [ ] **独立性**：每个 window 有自己的布局和结果区。
-- [ ] 面板里 window 项 `↵` 切过去；别的 window 的 tab 项 `↵` 先切 window、再选 tab、聚焦它的 pane（F4.3 留下的那一半）；树的工作区里 window 节点 `↵` / 单击也切过去（§7.8、§12）。
-- [ ] 重命名：状态栏上这个 window 的位置原地变成输入框（INSERT，`↵` 确定、`esc` 放弃）。
-- [ ] 关闭：有未保存的修改时先确认（§10.5）；关的是最后一个 window 时不做事，同「最后一个普通 pane 关不掉」（§5）。
-- [ ] 细节（worker 提议，已定）：
+- [x] **按键**：`SPC n` / `SPC p` / `SPC l` 切到下一个 / 上一个 / 上次用的 window，`SPC c` 新建；重命名、关闭默认不绑键，在命令面板里执行（§6.8）。不提供按编号切换 window。
+- [x] **鼠标**：点击状态栏上的 window 列表可切换。
+- [x] **独立性**：每个 window 有自己的布局和结果区。
+- [x] 面板里 window 项 `↵` 切过去；别的 window 的 tab 项 `↵` 先切 window、再选 tab、聚焦它的 pane（F4.3 留下的那一半）；树的工作区里 window 节点 `↵` / 单击也切过去（§7.8、§12）。
+- [x] 重命名：状态栏上这个 window 的位置原地变成输入框（INSERT，`↵` 确定、`esc` 放弃）。
+- [x] 关闭：有未保存的修改时先确认（§10.5）；关的是最后一个 window 时不做事，同「最后一个普通 pane 关不掉」（§5）。
+- [x] 细节（worker 提议，已定）：
   - `SPC c` 新建的 window：照 §5 默认布局，侧栏、一个空 pane，旁边放一个新的 console_n，比例同新 session；名字 `data`，重名不拦（同 tmux）；放在最后并切过去；
   - `SPC n` / `SPC p` 到头绕回（同 tmux）；`SPC l` 回到上一个用过的 window，那个 window 已关掉就不做事；
   - 关闭：先把这个 window 的 console 写盘，有未保存的修改先确认；关的是当前 window 时切到上一个用过的，没有就切到它前面那个（它是第一个就后面那个）。未提交事务的确认在 F5.3 加（让某个连接上不再有 console 时）；
@@ -162,37 +162,37 @@
   - 状态栏 window 列表的每一段可以点击，执行不带标题的 `window.select <i>`（同 `palette.scope`）；
   - Window 加一个稳定 ID（同 Pane 的做法，session 里递增），树的展开状态和 `SPC l` 的「上一个用过的」都按 ID 记，不按下标：下标在关掉 window 后会前移，展开状态会错到后一个 window 上，`SPC l` 也会指错（决策者定，没有采用 worker 提的「按下标、用 ponytail 标出」）。
 
-- [ ] 审查时定（reviewer 提问，2026-10-03）：
+- [x] 审查时定（reviewer 提问，2026-10-03）：
   - 改名时点改名框以外的任何地方都等于 `esc`；
   - 关 window 的确认框写「这个 window 里有 N 处修改未保存，关闭会丢弃。」（同关 pane）。
 **验收**
-- [ ] e2e：
+- [x] e2e：
   - 新建、切换、重命名、关闭 window 都正确；
   - 各 window 的布局互不影响。
-- [ ] 补回 M0 里因 F1.1 去掉第二个 window 而删掉的 3 项 e2e（tester 在 F1.1 结论里列出，2026-09-24）：f0.5 其余 window 为 dim 字、无底色；窄宽度下省略非当前 window（含省略顺序单调性检查里的这一环）；f0.14 window 范围 `↵`（`%report`）。
+- [x] 补回 M0 里因 F1.1 去掉第二个 window 而删掉的 3 项 e2e（tester 在 F1.1 结论里列出，2026-09-24）：f0.5 其余 window 为 dim 字、无底色；窄宽度下省略非当前 window（含省略顺序单调性检查里的这一环）；f0.14 window 范围 `↵`（`%report`）。
 
-## F5.3 只读连接与事务模式 · 状态：todo
+## F5.3 只读连接与事务模式 · 状态：passed（fce61c1；e2e 95c3338）
 
 - **依赖**：F5.2
 - **涉及**：`internal/db`（RuntimeParams、TxStatus）、`internal/sqlkit`（解除只读的语句）、`internal/app`（console 执行、保存、确认、状态栏）、`internal/ui`（console 标题、图标）
 
 **开发**
-- [ ] **只读，数据库层**（§8.2、§13）：`read_only` 打开时，`Main` 也在 RuntimeParams 里设 `default_transaction_read_only = on`（现在只有 `Meta` 设），`RESET` / `DISCARD ALL` 之后仍是 on。
-- [ ] **只读，应用层**（§13）：console 执行前检查这一次的全部语句，判为写的、以及会解除只读的语句，有一条就整次都不发，日志记原因并切到日志 tab。
+- [x] **只读，数据库层**（§8.2、§13）：`read_only` 打开时，`Main` 也在 RuntimeParams 里设 `default_transaction_read_only = on`（现在只有 `Meta` 设），`RESET` / `DISCARD ALL` 之后仍是 on。
+- [x] **只读，应用层**（§13）：console 执行前检查这一次的全部语句，判为写的、以及会解除只读的语句，有一条就整次都不发，日志记原因并切到日志 tab。
   - 会解除只读的：§13 那四种 SET，加上 `BEGIN READ WRITE` / `START TRANSACTION READ WRITE`（PG 里它会盖过 `default_transaction_read_only`）；
   - 照 AGENTS.md 先写集成测试，在 PG 上逐条实测再定清单；其他 SET 放行；
   - ponytail：`select set_config('default_transaction_read_only', 'off', false)` 判为读，两层都挡不住（§13：只读是防误操作，不是权限边界）。
-- [ ] **只读，界面**：表格的编辑、新增行、删除行、粘贴都拦下，toast「<连接> 是只读连接」（§10.1）。树的连接节点、console 标题的连接下拉里画 `lock` 图标（nf-fa-lock U+F023，ascii `RO`，§7.7）。
-- [ ] **事务模式**记在 `Conn.Tx`：
+- [x] **只读，界面**：表格的编辑、新增行、删除行、粘贴都拦下，toast「<连接> 是只读连接」（§10.1）。树的连接节点、console 标题的连接下拉里画 `lock` 图标（nf-fa-lock U+F023，ascii `RO`，§7.7）。
+- [x] **事务模式**记在 `Conn.Tx`：
   - console 标题上 `Tx: 自动 ▾`（自动 / 手动），手动时旁边是 ✓ ↺，不在事务里时 `dim`、不能点（§7.8「console 标题」）；让位顺序 `▶ run` > 连接和 schema 的下拉框 > 事务控件（`Tx ▾` 和 ✓ ↺ 算一项）> `↵`；
   - 命令 `tx.mode`「手动提交事务」（开关类，手动时为 ON）、`tx.commit`「提交」、`tx.rollback`「回滚」，都作用于当前连接，都不绑默认键；
   - 手动模式下 console 执行：`Main` 的 TxStatus 是 `I` 时，先在同一个 Worker.Run 里 BEGIN。出错后事务停在 `E` 状态，由用户回滚；
   - 手动模式下保存（§10.3）：不在事务里就先 BEGIN；整次保存包在 `SAVEPOINT sqlmux_save … RELEASE` 里，失败时 `ROLLBACK TO SAVEPOINT`，否则一次保存失败会把用户在这个事务里之前做的修改全部作废；不 COMMIT，提示「已保存 N 行（未提交）」；
   - 手动模式下表格取数走 `Main`。ponytail：计数仍在 `Meta` 上，看不到未提交的增删；
   - 有未提交的事务时从手动切回自动被拦下，toast 提示先提交或回滚，同换连接的规则。
-- [ ] **状态栏**（§7.8）：当前连接的 `Main` 在事务里时显示 `warn` 色的「事务中」，自动模式下用户自己 begin 的也算；处在出错的事务里（`E`）显示 `error` 色的「事务出错」。查询条不显示事务模式（原清单的「查询条显示事务模式」去掉）。
-- [ ] **确认**（§10.5）：有未提交的事务时，退出、关闭 session、让这个连接上不再有 console 的关闭（关 tab、关 pane、关 window）都弹确认框「<连接> 有未提交的事务，<动作>会回滚。」，按 `y` 之后回滚（关 tab / pane / window 时先关再发 ROLLBACK，退出、关 session 时靠断开连接，§10.5）。
-- [ ] 细节（worker 提议，已定）：
+- [x] **状态栏**（§7.8）：当前连接的 `Main` 在事务里时显示 `warn` 色的「事务中」，自动模式下用户自己 begin 的也算；处在出错的事务里（`E`）显示 `error` 色的「事务出错」。查询条不显示事务模式（原清单的「查询条显示事务模式」去掉）。
+- [x] **确认**（§10.5）：有未提交的事务时，退出、关闭 session、让这个连接上不再有 console 的关闭（关 tab、关 pane、关 window）都弹确认框「<连接> 有未提交的事务，<动作>会回滚。」，按 `y` 之后回滚（关 tab / pane / window 时先关再发 ROLLBACK，退出、关 session 时靠断开连接，§10.5）。
+- [x] 细节（worker 提议，已定）：
   - 只读判定 `sqlkit.BreaksReadOnly`：IsWrite 判为写的拦下，事务控制和会话设置放行（begin / start / commit / end / rollback / abort / savepoint / release / set / reset / discard），再拦会解除只读的 SET（含加引号的参数名）和带 `read write` 的 begin / start；集成测试按 PG 实测的那张表写，每条后面跟一句 `create temp table`，断言实际结果和判定一致（§13）；
   - 拦下时不算一次执行，日志记一行 `error` 色的原因、切到日志 tab，不弹 toast、▶ 不变红、不出错误栏；重跑也检查；
   - 表格：编辑、粘贴、`o` / `+`、`dd` / `−`、`p` 都 toast「<连接> 是只读连接」，和「没有主键」走同一个入口、先判只读；设 NULL / DEFAULT 的键静默不做事；查询条按钮照常画；
@@ -207,7 +207,7 @@
   - 状态栏：T「事务中」`warn`、E「事务出错」`error`，在 busy 左边，不能点、不让位；
   - 确认框合成一个函数：修改一句、事务一句，几个连接用「、」连起来并去重；关 tab / pane / window 时算出关掉之后不再有 console、又在事务中的连接，`y` 之后先关、再在 Cmd 里对它们发 ROLLBACK、再重取表格；退出、关 session 不另发 ROLLBACK，关 session 那句改成带连接名的统一写法；只在手动模式下保存过表格、没开过 console 的连接，关表格不问，退出、关 session 照样问。
 
-- [ ] 审查时定（reviewer 提问，2026-10-03）：
+- [x] 审查时定（reviewer 提问，2026-10-03）：
   - §13 的四类 SET 整类拦下（其中实测不解除只读的也拦），§13 已写明；只读解除的集成测试加一列，把「拦下但无害」的也纳入实测；
   - 作用域词连写（`SET SESSION SESSION CHARACTERISTICS …`）也要认出；扫描器照 scan.l 把 0x80 以上的字节当标识符字符（§9.1）；`U&"…"` 记成 ponytail 上限；
   - 手动模式下每条语句前检查 BEGIN，照 psql 的 SendQuery，psql `command_no_begin` 列出的语句不补（先查 psql 源码，§11）；
@@ -218,12 +218,12 @@
   - 在事务中的表格取数包在 `SAVEPOINT sqlmux_page` 里（worker 在清单外加的，认可，§8.2）；
   - 计数仍在 `Meta` 上看不到未提交的增删，代码里要有 `ponytail:` 注释。
 **验收**
-- [ ] 集成测试：
+- [x] 集成测试：
   - 只读连接中，写语句被拦截；
   - 解除只读的 SET、`BEGIN READ WRITE` 被拦截，`SET search_path` 等可以执行；
   - 手动模式下保存失败后，之前的修改还在。
-- [ ] e2e：manual 模式下保存后不提交；执行 Rollback 后修改被撤销。
-- [ ] golden：console 标题的事务控件（自动、手动、在事务里）；状态栏的「事务中」「事务出错」；只读连接的锁。
+- [x] e2e：manual 模式下保存后不提交；执行 Rollback 后修改被撤销。
+- [x] golden：console 标题的事务控件（自动、手动、在事务里）；状态栏的「事务中」「事务出错」；只读连接的锁。
 
 ## F5.4 MySQL · 状态：todo
 
