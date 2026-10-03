@@ -280,7 +280,7 @@
 - [x] `[keys]`（含 leader）、`[keys.*]`、`[map.*]` 从 config.toml 挪到 `~/.config/sqlmux/keymaps.toml`（§14）；config.toml 里还写着它们时启动报错，提示挪到 keymaps.toml。
 - [x] `sqlmux keys --format toml` 输出一份完整的 keymaps.toml（§6.7）：各作用域都有，和默认相同的绑定写成注释行、值是默认键，后面注释标题；没有默认键的写 `# "" = …`；`leader` 和各层 `[map.*]` 的示例也注释着放进去。用户去掉 `#` 才生效，新版本改了默认键不会被旧文件盖住。用户改过的（改键、解绑、leader、映射）照旧写成生效的行（tester 提问后定，保留 F1.13「导出的是当前生效的键位」的往返）。`--check` 读 keymaps.toml。
 - [x] 细节（worker 提议，已定）：config.toml 里有顶层 `keys` / `map` 时报 `<路径>/config.toml: [keys] / [map] 要写在 keymaps.toml 里（sqlmux keys --format toml 生成一份完整的参考）`，走现有的启动报错、退出码 1，`keys --check` 同样报；keymaps.toml 里写了别的顶层键时报 `<路径>/keymaps.toml: <键>：这里只能写 [keys] 和 [map.*]`，文件不存在就当没有改动；config 包加 `ParseKeys`，`default.toml` 也走它，不加新类型。导出：`[keys]` 和各作用域的表头不注释，leader 是默认值时写 `# leader = …`；每个作用域按 default.toml 的顺序，相同的写注释行、改了的和解绑的在原位置写生效的行，然后是用户新加的绑定，最后是没绑定的 `# "" = …`；`[map.*]` 只出用户写了的表，末尾照旧附注释掉的示例；空作用域不出，文件头不加说明。
-- [ ] 通过后决策者把用户的 config.toml 里的键位挪出去：生成 keymaps.toml，用户的 `Y` 映射保留为生效的行，config.toml 里只留主题等常规选项（各留备份）。
+- [x] 通过后决策者把用户的 config.toml 里的键位挪出去：生成 keymaps.toml，用户的 `Y` 映射保留为生效的行，config.toml 里只留主题等常规选项（各留备份）。2026-10-03 做完：用户选了精简写法，keymaps.toml 只有两行 `Y`（同 lazygit / yazi，只写改过的），备份 `config.toml.bak-2026-10-03`。
 
 **验收**
 - [x] 单测：没有用户改动时，导出的全是注释，原样加载后和默认完全一样；有改动时导出再加载，生效的键位不变（往返）；去掉一行的 `#` 改了键后生效；config.toml 里写 `[keys]` 时报错。
