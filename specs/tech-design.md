@@ -1115,10 +1115,11 @@ MySQL 的 schema 就是 database（M5 F5.4 定，同 DataGrip）：树里 MySQL 
 ```sql
 UPDATE t SET c1 = $1, c2 = DEFAULT
 WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
--- pk 为行标识列（§10.1），有多列时逐列比较；旧值是 NULL 的列写 IS NULL，其余用 format('%s', 列) = 旧值；MySQL 用 <=>；DEFAULT 直接写成关键字，不作为参数
+-- pk 为行标识列（§10.1），有多列时逐列比较；旧值是 NULL 的列写 IS NULL，其余用 format('%s', 列) = 旧值；MySQL 用 cast(列 as binary) = 旧值；DEFAULT 直接写成关键字，不作为参数
 ```
 
 - **旧值按输出函数的文本比较**：旧值不是 NULL 时写 `format('%s', 列) = $n`，是 NULL 时写 `列 IS NULL`（生成语句时旧值是已知的）。我们读到的是服务端输出函数给出的文本，`format('%s', …)` 走的也是输出函数，`Main` 和 `Meta` 的会话参数相同（DateStyle、TimeZone 等来自同样的建连参数），所以两边一致。行标识列照旧写 `pk = $n`：主键和唯一索引的类型一定有 btree 相等运算，也用得上索引。只校验被修改的列。
+  - **MySQL**（F5.4 逐类型实测）：旧值不是 NULL 时写 `cast(列 as binary) = ?`，是 NULL 时写 `列 IS NULL`。MySQL 走文本协议，每个值都以文本发回，CAST AS BINARY 对所有类型都还原出这段文本，逐字节比较。否掉 `<=>` 和 `=`：它们先把文本转成列的类型再比，json 列和字符串永远不相等，float 差在精度上；又按排序规则比，`Abc` 被别人改成 `abc` 查不出来。实测覆盖 float、double、decimal、datetime(3)、timestamp(6)、date、time、year、bit、binary、varbinary、enum、set、char(n)、json、boolean、bigint unsigned、text 和 NULL。
   - 否掉 `列 IS NOT DISTINCT FROM $n`：json、point 等类型没有相等运算符，直接报错（M2 核对时在 PG 17 上实测），seed 里就有 json 列。
   - 否掉 `列::text IS NOT DISTINCT FROM $n`（F2.2 起初的写法）：不少类型到 text 的 cast 不走输出函数，结果和读到的不一样。boolean 输出 `f`、`::text` 却是 `false`，布尔列的修改因此永远保存不了（tester 在 M2 节点 2 实测）；inet 的 `::text` 带掩码；char(n) 的 `::text` 去掉尾部空格。
   - 集成测试要逐个类型实测往返：boolean、inet、char(n)、json、jsonb、numeric、real / double、timestamptz、interval、bytea、数组、枚举。在自建库里建一张临时表测，不改 seed。
