@@ -182,7 +182,21 @@
   - 手动模式下表格取数走 `Main`。ponytail：计数仍在 `Meta` 上，看不到未提交的增删；
   - 有未提交的事务时从手动切回自动被拦下，toast 提示先提交或回滚，同换连接的规则。
 - [ ] **状态栏**（§7.8）：当前连接的 `Main` 在事务里时显示 `warn` 色的「事务中」，自动模式下用户自己 begin 的也算；处在出错的事务里（`E`）显示 `error` 色的「事务出错」。查询条不显示事务模式（原清单的「查询条显示事务模式」去掉）。
-- [ ] **确认**（§10.5）：有未提交的事务时，退出、关闭 session、让这个连接上不再有 console 的关闭（关 tab、关 pane、关 window）都弹确认框「<连接> 有未提交的事务，<动作>会回滚。」，按 `y` 先 ROLLBACK 再执行。
+- [ ] **确认**（§10.5）：有未提交的事务时，退出、关闭 session、让这个连接上不再有 console 的关闭（关 tab、关 pane、关 window）都弹确认框「<连接> 有未提交的事务，<动作>会回滚。」，按 `y` 之后回滚（关 tab / pane / window 时先关再发 ROLLBACK，退出、关 session 时靠断开连接，§10.5）。
+- [ ] 细节（worker 提议，已定）：
+  - 只读判定 `sqlkit.BreaksReadOnly`：IsWrite 判为写的拦下，事务控制和会话设置放行（begin / start / commit / end / rollback / abort / savepoint / release / set / reset / discard），再拦会解除只读的 SET（含加引号的参数名）和带 `read write` 的 begin / start；集成测试按 PG 实测的那张表写，每条后面跟一句 `create temp table`，断言实际结果和判定一致（§13）；
+  - 拦下时不算一次执行，日志记一行 `error` 色的原因、切到日志 tab，不弹 toast、▶ 不变红、不出错误栏；重跑也检查；
+  - 表格：编辑、粘贴、`o` / `+`、`dd` / `−`、`p` 都 toast「<连接> 是只读连接」，和「没有主键」走同一个入口、先判只读；设 NULL / DEFAULT 的键静默不做事；查询条按钮照常画；
+  - lock：树的连接节点在名字后面画 `dim` 色的 `lock`（和「连接中」的 `…` 都有时是 `seed <lock> …`）；连接下拉放在已有的右侧注释列；console 标题的连接名后面也画，和连接名同一个命中区（§5「树和 console 标题上画锁」）；
+  - `Conn.Manual bool`，新连上的都是自动，不记进 state；
+  - 标题上 `Tx: 自动 ▾` 用 `fg` 色，点开的下拉里当前那项 `pk` 色；点击走不带标题的 `console.tx`，面板里用 `tx.mode`；✓ ↺ 各是一个提示，不在事务里时 `dim`、不注册命中区，三者算同一组；
+  - 提交、回滚用不可取消、带超时的 ctx，应答带回 TxStatus；不在事务里时不做事；成功不弹 toast，失败 toast 错误；出错的事务里提交 toast「事务已出错，提交改为了回滚」；
+  - 提交、回滚之后（包括确认框里的回滚）重取这个连接上打开着的表格、重算计数；
+  - 手动模式下执行：先按 §8.6 设 search_path（在 I 状态下设、会记住），再 BEGIN，再执行；BEGIN 不写进日志；
+  - 保存：手动模式，或者 auto 模式下 Run 里读到的 TxStatus 不是 I（用户自己 begin 了），都走 SAVEPOINT、不 COMMIT，提示「（未提交）」；gotSave 用读到的真实 TxStatus（§10.3）；
+  - 手动模式下 Page 走 `Main`，列信息和计数仍走 `Meta`；有事务时从手动切回自动被拦下，toast 同换连接那句；
+  - 状态栏：T「事务中」`warn`、E「事务出错」`error`，在 busy 左边，不能点、不让位；
+  - 确认框合成一个函数：修改一句、事务一句，几个连接用「、」连起来并去重；关 tab / pane / window 时算出关掉之后不再有 console、又在事务中的连接，`y` 之后先关、再在 Cmd 里对它们发 ROLLBACK、再重取表格；退出、关 session 不另发 ROLLBACK，关 session 那句改成带连接名的统一写法；只在手动模式下保存过表格、没开过 console 的连接，关表格不问，退出、关 session 照样问。
 
 **验收**
 - [ ] 集成测试：

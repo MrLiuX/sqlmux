@@ -133,7 +133,7 @@ type Conn struct {              // 一个数据源，同 DataGrip 的 data sourc
     State     ConnState         // 未连接 | 连接中 | 已连接 | 失败（记着错误）
     Meta      *db.Worker        // 树、列属性、计数、DDL 预览、快速 SQL、表格取数
     Main      *db.Worker        // 这个连接上所有 console 的执行、表格的保存；持有事务状态
-    Tx        TxMode            // auto | manual，按连接（F5.3），这个连接上的 console 共用
+    Manual    bool              // 事务模式：false 自动、true 手动，按连接（F5.3），这个连接上的 console 共用；新连上的都是自动，不记进 state
     Schema    string            // 树里这个连接当前所在的 schema；新 console 和快速 SQL 的默认（§8.6）
     Catalog   *Catalog          // 表、列属性、主键、行数估计的缓存
 }
@@ -653,8 +653,9 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
   - 带圈数字按 1 列计算，已知上限见 §7.1「宽度」。
   - 右侧提示离右上角 1 列。
   - console 标题的右侧从左到右是：事务控件 `Tx: 自动 ▾`（F5.3，手动时后面跟着提交 ✓、回滚 ↺）、连接和 schema 的下拉框 `play · sqlmux_play.public ▾`（F5.11 起加上连接；原来只有 `doraemon.public ▾`）、`▶ run`（`focus` 底、`bg` 色字、粗体）加上 `↵`（`dim` 色）。
-    - 连接名和 `<库>.<schema>` 各是一个下拉框，点哪一段开哪一个：连接名用 `info` 色（同状态栏的地址块），`<库>.<schema> ▾` 照旧 `pk` 色，中间的 ` · ` 不能点，悬停只亮那一段；两个下拉框是同一个组件，位置、按键同 §8.6；`gs` 照旧打开 schema 下拉，命令「切换连接…」（`console.conn`）打开连接下拉。连接下拉列出全部连接（名字；每项的图标——只读的 `lock`、MySQL 的引擎图标——等 F5.3 / F5.4 给下拉框加上每项一个图标时一起画），当前的用 `pk` 色标出；选了未连接的就关掉下拉去连，连上之后才换过去（schema 取那个连接的 Schema），连接中又选了别的以最后一次为准，连不上 toast `<连接名>：<错误>`、留在原来的连接。所在连接有未提交的事务时不能换（§5）；这个 console 的执行还没回来时也不能换，toast「正在执行，结束后再换连接」（执行里可能有 begin，回来后原连接停在事务里、上面却没有 console 了，reviewer 在 F5.11 复现）。MySQL 只有连接这一段（§8.6）。
-    - `Tx: 自动 ▾` / `Tx: 手动 ▾` 点开是自动、手动两项的下拉，显示的是所在连接的模式（§5）。✓ 为 `focus` 色、↺ 为 `info` 色，悬停 `select` 底；所在连接不在事务里时两个都是 `dim` 色、不能点（同 DataGrip，也同查询条的停止按钮）。
+    - 连接名和 `<库>.<schema>` 各是一个下拉框，点哪一段开哪一个：连接名用 `info` 色（同状态栏的地址块），`<库>.<schema> ▾` 照旧 `pk` 色，中间的 ` · ` 不能点，悬停只亮那一段；两个下拉框是同一个组件，位置、按键同 §8.6；`gs` 照旧打开 schema 下拉，命令「切换连接…」（`console.conn`）打开连接下拉。连接下拉列出全部连接（名字；每项的图标——只读的 `lock`、MySQL 的引擎图标——等 F5.3 / F5.4 给下拉框加上每项一个图标时一起画），当前的用 `pk` 色标出；选了未连接的就关掉下拉去连，连上之后才换过去（schema 取那个连接的 Schema），连接中又选了别的以最后一次为准，连不上 toast `<连接名>：<错误>`、留在原来的连接。只读连接在标题的连接名后面也画 `lock`，和连接名同一个命中区（`play <lock> · db.public ▾`）。所在连接有未提交的事务时不能换（§5）；这个 console 的执行还没回来时也不能换，toast「正在执行，结束后再换连接」（执行里可能有 begin，回来后原连接停在事务里、上面却没有 console 了，reviewer 在 F5.11 复现）。MySQL 只有连接这一段（§8.6）。
+    - `Tx: 自动 ▾` / `Tx: 手动 ▾` 点开是自动、手动两项的下拉，显示的是所在连接的模式（§5）。✓ 为 `focus` 色、↺ 为 `info` 色，悬停 `select` 底；所在连接不在事务里时两个都是 `dim` 色、不能点（同 DataGrip，也同查询条的停止按钮）。`Tx: …` 用 `fg` 色，下拉里当前那项 `pk` 色；✓ ↺ ▾ 不是 Nerd Font 字形，ascii 图标下照样用。
+    - 提交、回滚（✓ ↺、`tx.commit` / `tx.rollback`）在当前连接的 `Main` 上用不可取消、带超时的 ctx 执行（同 §10.3 的 COMMIT），不在事务里时不做事。成功不弹 toast：状态栏的「事务中」消失、✓ ↺ 变暗就是反馈；失败 toast 错误。在出错的事务里提交，PG 实际做的是回滚，toast「事务已出错，提交改为了回滚」，免得以为已经提交了。提交、回滚之后（包括确认框里的回滚）重新取这个连接上打开着的表格，计数也重算：手动模式下表格读的是 `Main`，不重取的话屏幕上还是已经撤掉的值。
   - **空间不够时，提示优先于标题的对象名**，因为提示都是可点击的按钮（§7.4）。按下面的顺序分配空间：
     1. 先给最短的标题 `⟨n⟩ <图标>`（ascii 下是 `⟨n⟩ <图标> 类型`）留出位置。
     2. 按优先级从高到低依次摆放右侧的提示：放得下就保留；放不下就跳过这一个，继续试下一个。每个 pane 的提示按重要性排序，console 的顺序是 `▶ run` > 连接和 schema 的下拉框（两段算一项）> 事务控件（`Tx ▾` 和 ✓ ↺ 算一项）> 键位文字 `↵`。所以宽度较窄时，可能显示 `▶ run ↵`，但没有下拉框。
@@ -1130,7 +1131,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - 失败：整体回滚，修改标记保留，原因显示在 pane 底部的错误栏里（§7.8「错误栏」，M2/M3 验收时从查询条挪过去，查询条右侧只留成功的提示），并用行标识值指明是哪一行（它可能不在当前页；多列时用逗号连起来，如 `order_id = 3, line_no = 1`，值照读到的文本写、不加引号）：影响行数不是 1 时为「id = 42 的行数据已变化或行不存在，已回滚」；数据库报错时为「id = 42：<数据库的错误>，已回滚」。数据库的错误只取 PG 错误的 Message，去掉 `ERROR:` 前缀和 `(SQLSTATE …)` 后缀；放不下时截短中间的错误原文并加 `…`，开头的「id = 42：」和末尾的「，已回滚」始终完整显示（tester 在 F2.2 发现：原来放不下就整条不显示，PG 的报错大多超过 60 列）。那一行在当前页上时，行号画成 `error` 色。
 
 - **auto 事务模式**：所有 UPDATE 放在同一个事务里，每条都必须恰好影响 1 行。否则整体回滚，保留修改标记，并在出问题的行上提示「数据已变化或行不存在」，以免悄悄覆盖别人的修改。
-- **manual 事务模式**（M5 F5.3）：不在事务里就先 BEGIN；整次保存包在 `SAVEPOINT sqlmux_save` … `RELEASE SAVEPOINT sqlmux_save` 里，任何一步出错就 `ROLLBACK TO SAVEPOINT sqlmux_save`，只撤掉这一次保存，用户在这个事务里之前做的修改都还在；不 COMMIT，成功时查询条显示「已保存 N 行（未提交）· 12ms」；失败的提示同 auto 模式，其中的「已回滚」指撤掉了这次保存。提交、回滚用 console 标题上的 ✓ ↺ 或 `tx.commit` / `tx.rollback`。
+- **manual 事务模式**（M5 F5.3），以及 auto 模式下 `Main` 已经在事务里时（用户在 console 里自己 begin 了；在保存的同一次 Run 里读 TxStatus 判断，原来的 BEGIN…COMMIT 会把用户的事务一起提交，M3 的已知上限就此去掉）：不在事务里就先 BEGIN；整次保存包在 `SAVEPOINT sqlmux_save` … `RELEASE SAVEPOINT sqlmux_save` 里，任何一步出错就 `ROLLBACK TO SAVEPOINT sqlmux_save`，只撤掉这一次保存，用户在这个事务里之前做的修改都还在；不 COMMIT，成功时查询条显示「已保存 N 行（未提交）· 12ms」；失败的提示同 auto 模式，其中的「已回滚」指撤掉了这次保存。提交、回滚用 console 标题上的 ✓ ↺ 或 `tx.commit` / `tx.rollback`。
 - **保存成功后**：重新加载当前页，拿到数据库规整过的值，例如数值格式、触发器写入的字段。
 
 ### 10.4 刷新（R）
@@ -1139,7 +1140,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 
 ### 10.5 未保存修改的确认框
 
-通用的确认浮层 `ui.Confirm`：在整个窗口里居中的小框，不压暗背景，点框外等于取消；一句话加两个按钮，按钮的键位文字从 keymap 读（`confirm.yes` / `confirm.no`）。文字按场合写，N 是修改的格数：退出「有 N 处修改未保存，退出会丢弃。」`y 退出`；关 tab「t_order 有 N 处修改未保存，关闭会丢弃。」`y 关闭`；关 pane「这个 pane 里有 N 处修改未保存，关闭会丢弃。」`y 关闭`；R「有 N 处修改未保存，刷新会丢弃。」`y 刷新`；都配 `n 取消`。M5 F5.3 起，有未提交的事务时同样确认：「<连接> 有未提交的事务，<动作>会回滚。」，按 `y` 先 ROLLBACK 再执行；同时有未保存的修改时，一个框里两句都写。统计范围：关 tab 只算这个 tab，关 pane 算它的所有 tab，退出算所有 window 的所有 tab。作用域 `confirm`，`y` / `↵` 确认，`n` / `esc` 取消，`C-c` 在浮层里等同 `esc`；按钮可以点击。
+通用的确认浮层 `ui.Confirm`：在整个窗口里居中的小框，不压暗背景，点框外等于取消；一句话加两个按钮，按钮的键位文字从 keymap 读（`confirm.yes` / `confirm.no`）。文字按场合写，N 是修改的格数：退出「有 N 处修改未保存，退出会丢弃。」`y 退出`；关 tab「t_order 有 N 处修改未保存，关闭会丢弃。」`y 关闭`；关 pane「这个 pane 里有 N 处修改未保存，关闭会丢弃。」`y 关闭`；R「有 N 处修改未保存，刷新会丢弃。」`y 刷新`；都配 `n 取消`。M5 F5.3 起，有未提交的事务时同样确认：「<连接> 有未提交的事务，<动作>会回滚。」，有几个连接时用「、」连起来并去重；同时有未保存的修改时，一个框里两句都写。按 `y` 之后：关 tab / pane / window 先关，再在 Cmd 里对因此不再有 console 的连接发 ROLLBACK，之后同 §7.8 重取表格；退出、关 session 直接关连接，由服务端回滚（同 F5.1）。只在手动模式下保存过表格、没开过 console 的连接，关表格时不问，退出、关 session 照样问。统计范围：关 tab 只算这个 tab，关 pane 算它的所有 tab，退出算所有 window 的所有 tab。作用域 `confirm`，`y` / `↵` 确认，`n` / `esc` 取消，`C-c` 在浮层里等同 `esc`；按钮可以点击。
 
 触发的地方：
 
@@ -1240,7 +1241,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 - 每次最多取 `console.max_rows` 行（默认 1000），读语句用自动 LIMIT（§9.4），其余靠 `Exec` 的 `maxRows` 截断；截断时显示 `1000+ 行`。
 - 在所选连接的 `Main` 的一次 `Worker.Run` 里逐条执行，每条是单独的简单协议请求：自动事务模式下各自自动提交；手动模式下（F5.3）`Main` 不在事务里时，先在同一次 Run 里 BEGIN，出错后事务停在出错状态，由用户回滚。遇到错误就停，后面的不执行。不一次发出整段：PG 简单协议里一次发送的多条语句属于同一个隐式事务，一条出错全部回滚，也没法知道错在哪一条、把哪个 ▶ 标红。
 - 首个关键字是 create / alter / drop 的语句成功后，重新加载这个 console 所在连接的 catalog、清空列缓存（同 `tree.refresh`）。
-- 用户在自动模式下自己 `begin`：`Main` 进了事务，这个连接上表格的保存也会进这个事务；状态栏显示「事务中」（§7.8），提交、回滚同手动模式（M5 F5.3 起，原来是已知上限）。
+- 用户在自动模式下自己 `begin`：`Main` 进了事务，这个连接上表格的保存也进这个事务、不自动提交（§10.3）；状态栏显示「事务中」（§7.8），提交、回滚同手动模式（M5 F5.3 起，原来是已知上限）。
 
 **结果区（C-04 至 C-07，已确认）**
 
@@ -1365,7 +1366,8 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - **应用层**：
     - console 执行前检查这一次的全部语句：判为写的、会解除只读的，有一条就整次都不发，日志记原因并切到日志 tab；表格的编辑、新增、删除、粘贴都拦下（§10.1）。
     - SET 语句中，会解除只读的一律拦截：`SET TRANSACTION`、`SET SESSION CHARACTERISTICS`、`default_transaction_read_only`、`transaction_read_only`；还有带 `READ WRITE` 的 `BEGIN` / `START TRANSACTION`（PG 里它盖过 `default_transaction_read_only`）。最终清单以在 PG 上逐条实测的集成测试为准（F5.3）。
-    - 其他不影响只读的 SET（如 `search_path`、`statement_timeout`）放行。
+    - 其他不影响只读的 SET（如 `search_path`、`statement_timeout`）放行；事务控制（begin / start / commit / end / rollback / abort / savepoint / release）和 reset / discard 也放行（F5.3 在 PG 上实测：`RESET`、`RESET ALL`、`DISCARD ALL`、`SET … TO DEFAULT` 之后仍是只读，`SET SESSION AUTHORIZATION DEFAULT` 解除不了）。其余首词是关键字的照 §9.3 第 7 条算写、拦下（vacuum、call、do、copy、prepare、declare、notify 等）；首词不是关键字的照旧发给数据库，由它报错。
+    - 拦下时整次都不执行，不算一次执行（不加执行序号、不出占位），日志记一行 `<连接> 是只读连接，整次都没有执行`（`error` 色）并切到日志 tab，不弹 toast、▶ 不变红、不出错误栏；结果区的重跑也检查。
   - **数据库层**：`Meta`、`Main` 两条都设只读：PG 在 RuntimeParams 里设 `default_transaction_read_only = on`（同 §8.2 的 `Meta`，`RESET` / `DISCARD ALL` 之后仍是 on），MySQL 执行 `SET SESSION TRANSACTION READ ONLY`，兜住判定漏掉的情况（例如会写数据的函数）。已知上限：`select set_config('default_transaction_read_only', 'off', false)` 判为读，两层都挡不住，代码里用 `ponytail:` 标出。
   - 只读是为了防止误操作，不是权限边界。真正需要限制权限时，应使用只读的数据库账号。这一点要写进用户文档。
 - **快速 SQL**：只读由数据库事务保证，即使一条会写数据的 select 被判为读，也写不进去。但只读事务挡不住 `copy … to` 文件 / program、`reindex`、`cluster`、`load`、`checkpoint` 这类语句（M4 审查时实测），所以这些首词在应用层判为写、拦下（§12「写语句」）。
