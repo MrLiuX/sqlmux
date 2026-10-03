@@ -74,7 +74,7 @@ func TestLoadConnectionErrors(t *testing.T) {
 		"":                               "里面没有 [[connection]]",
 		"[[connection]]\nname = \"a\"\n": "第 1 个连接：缺少 engine",
 		"[[connection]]\nengine = \"postgres\"\n":                                       "第 1 个连接：缺少 name",
-		"[[connection]]\nname = \"a\"\nengine = \"mysql\"\ndsn = \"x\"\n":               `第 1 个连接：engine = "mysql"，目前只支持 postgres`,
+		"[[connection]]\nname = \"a\"\nengine = \"sqlite\"\ndsn = \"x\"\n":              `第 1 个连接：engine = "sqlite"：只能是 postgres 或 mysql`,
 		"[[connection]]\nname = \"a/b\"\nengine = \"postgres\"\ndsn = \"x\"\n":          `第 1 个连接：name = "a/b"：不能含 / 或 \，也不能以 . 开头`,
 		"[[connection]]\nname = 'a\\b'\nengine = \"postgres\"\ndsn = \"x\"\n":           `第 1 个连接：name = "a\\b"：不能含 / 或 \，也不能以 . 开头`,
 		"[[connection]]\nname = \"..\"\nengine = \"postgres\"\ndsn = \"x\"\n":           `第 1 个连接：name = ".."：不能含 / 或 \，也不能以 . 开头`,
@@ -133,5 +133,15 @@ func TestAppendConnection(t *testing.T) {
 	}
 	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
 		t.Errorf("made: %v %v", info, err)
+	}
+	// connections in an inline array: a [[connection]] after it would break
+	// the file, the next start exiting; it stays as it is
+	inline := "connection = [{ name = \"a\", engine = \"postgres\", dsn = \"x\" }]\n"
+	path = connectionsFile(t, inline, 0o600)
+	if err := AppendConnection(Connection{Name: "b", Engine: "postgres", DSN: "y"}); err == nil {
+		t.Error("appended to an inline array")
+	}
+	if data, _ := os.ReadFile(path); string(data) != inline {
+		t.Errorf("written: %s", data)
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -43,9 +42,10 @@ func (a *App) sessionRows() []sessionRow {
 }
 
 // openSessions is SPC s, a click on the status bar's session block: the
-// list, its selection on the session attached.
+// list, its selection on the session attached, in sight.
 func (a *App) openSessions() {
 	a.sessList = &sessionList{open: map[*Session]bool{}, sel: slices.Index(a.sessions, a.sess)}
+	a.sessionsMove(0)
 }
 
 func (a *App) sessionsMove(d int) {
@@ -75,62 +75,63 @@ func (a *App) sessionsAttach(i int) {
 	if rows := a.sessionRows(); i < len(rows) {
 		a.attach(rows[i].s)
 		if rows[i].win >= 0 {
-			a.sess.Active = rows[i].win
+			a.selectWindow(rows[i].win)
 		}
 	}
 	a.sessList = nil
 }
 
-// attach makes s the session shown; the overlays go.
+// attach makes s the session shown; every overlay goes, a question or a
+// name being typed in the one left among them (F5.1).
 func (a *App) attach(s *Session) {
 	a.sess = s
 	a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.keyHelp = false, false, nil, nil, nil, nil
+	a.confirm, a.form, a.winRename, a.sessList = nil, nil, nil, nil
 	a.res.Reset()
 }
 
-// sessionDialed answers newSession's dial: the new session's connection to
-// the current one's spec, among specs, connected, or why not.
+// sessionDialed answers dialSession's dial: the new session's connection to
+// the current one's spec, connected, or why not.
 type sessionDialed struct {
-	specs []config.Connection
-	start int
-	d     dialed
-	err   error
+	spec config.Connection
+	d    dialed
+	err  error
 }
 
-// newSession is n (§7.8「新建 session」): a session of its own connections,
+// dialSession is n (§7.8「新建 session」): a session of its own connections,
 // once the one current here is connected for it, attached then; the list
 // closes. One not connecting makes none, the session staying the one it
 // is (F5.1).
-func (a *App) newSession() tea.Cmd {
+func (a *App) dialSession() tea.Cmd {
 	a.sessList = nil
-	var specs []config.Connection
-	for _, c := range a.sess.Conns {
-		specs = append(specs, c.Spec)
-	}
-	start := slices.Index(a.sess.Conns, a.conn())
-	return tea.Batch(a.showToast("正在连接 "+specs[start].Name+"…", toastTTL), func() tea.Msg {
-		d, err := dial(context.Background(), specs[start])
-		return sessionDialed{specs, start, d, err}
+	spec := a.conn().Spec
+	return tea.Batch(a.showToast("正在连接 "+spec.Name+"…", toastTTL), func() tea.Msg {
+		d, err := dial(context.Background(), spec)
+		return sessionDialed{spec, d, err}
 	})
 }
 
+// gotSessionDialed makes the session: every connection there is now, one
+// the form added meanwhile too (§7.8).
 func (a *App) gotSessionDialed(m sessionDialed) tea.Cmd {
 	if m.err != nil {
-		return a.showToast(m.specs[m.start].Name+"："+m.err.Error(), toastTTL)
+		return a.showToast(m.spec.Name+"："+m.err.Error(), toastTTL)
 	}
-	conns := make([]*Conn, len(m.specs))
-	for i, spec := range m.specs {
-		conns[i] = newConn(spec)
+	conns, start := make([]*Conn, len(a.sess.Conns)), 0
+	for i, c := range a.sess.Conns {
+		if conns[i] = newConn(c.Spec); c.Spec.Name == m.spec.Name {
+			start = i
+		}
 	}
-	conns[m.start].take(m.d)
+	conns[start].take(m.d)
 	n := 1 // tmux's: the least number no session is named
 	for slices.ContainsFunc(a.sessions, func(s *Session) bool { return s.Name == strconv.Itoa(n) }) {
 		n++
 	}
-	s := newSession(strconv.Itoa(n), conns, conns[m.start], a.freeConsole())
+	s := newSession(strconv.Itoa(n), conns, conns[start], a.freeConsole())
 	a.sessions = append(a.sessions, s)
 	a.attach(s)
-	cmds := []tea.Cmd{a.loadCatalog(conns[m.start])}
+	cmds := []tea.Cmd{a.loadCatalog(conns[start])}
 	if s.warning != "" {
 		cmds = append(cmds, a.showToast(s.warning, toastTTL))
 	}
@@ -153,19 +154,26 @@ func (a *App) killSession() tea.Cmd {
 		return a.quit()
 	}
 	s, ps := r.s, r.s.panes()
-	return a.unlessLost(unsaved(ps...), "", txConns(s), "关闭", func() tea.Cmd {
+	return a.unlessLost(unsaved(ps...), s.Name+" 里", txConns(s), "关闭", func() tea.Cmd {
 		if cmd, ok := a.flushAll(ps...); !ok { // the consoles' text is not lost (§11)
 			return cmd
 		}
 		i := slices.Index(a.sessions, s)
 		a.sessions = slices.Delete(a.sessions, i, i+1)
-		if a.sess == s {
+		if l := a.sessList; a.sess == s {
 			a.attach(a.sessions[max(i-1, 0)])
+			a.sessList = l // the list it was closed in stays (F5.1)
 		}
 		if l := a.sessList; l != nil {
 			l.sel = min(l.sel, len(a.sessionRows())-1)
 		}
-		return func() tea.Msg { s.Close(); return nil }
+		ws := s.workers() // here: a connection being made may come in, the loop writing it, as the Cmd reads
+		return func() tea.Msg {
+			for _, w := range ws {
+				w.Close()
+			}
+			return nil
+		}
 	})
 }
 
@@ -180,21 +188,17 @@ func (a *App) renameSession() {
 // session's name; esc drops it.
 func (a *App) renameKey(k keymap.Key) tea.Cmd {
 	l := a.sessList
-	switch k {
-	case keymap.Esc:
-		l.rename = nil
-	case "<CR>":
-		name, s := strings.TrimSpace(l.rename.Text), a.sessionRows()[l.sel].s
-		l.rename = nil
-		switch {
-		case name == "" || name == s.Name:
-		case slices.ContainsFunc(a.sessions, func(o *Session) bool { return o.Name == name }):
-			return a.showToast("已有同名 session", toastTTL)
-		default:
-			s.Name = name
-		}
+	name, done := typeName(l.rename, k)
+	if !done {
+		return nil
+	}
+	l.rename = nil
+	switch s := a.sessionRows()[l.sel].s; {
+	case name == "" || name == s.Name:
+	case slices.ContainsFunc(a.sessions, func(o *Session) bool { return o.Name == name }):
+		return a.showToast("已有同名 session", toastTTL)
 	default:
-		editInput(l.rename, k)
+		s.Name = name
 	}
 	return nil
 }
@@ -205,7 +209,7 @@ func (a *App) sessionsView() ui.SessionList {
 	for i, r := range a.sessionRows() {
 		row := ui.SessionRow{Name: r.s.Name, Note: fmt.Sprintf("%d windows", len(r.s.Windows)), Current: r.s == a.sess}
 		if r.win >= 0 {
-			row = ui.SessionRow{Window: true, Name: fmt.Sprintf("%d: %s", r.win, r.s.Windows[r.win].Name), Current: r.s == a.sess && r.win == r.s.Active}
+			row = ui.SessionRow{Window: true, Name: fmt.Sprintf("%d: %s", r.win, r.s.Windows[r.win].Name), Current: r.win == r.s.Active} // each session's own, as tmux's
 		}
 		if i == l.sel && l.rename != nil {
 			row.Edit = l.rename

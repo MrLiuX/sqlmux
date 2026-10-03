@@ -114,9 +114,9 @@ func withConns() (*App, *Conn) {
 	seed := readyConn("seed")
 	seed.Schema, seed.Schemas, seed.home = "public", []string{"public"}, "public"
 	seed.Tables = []db.Table{{Schema: "public", Name: "t_order", Rows: 7}}
-	broken, dialing := newConn(config.Connection{Name: "broken"}), newConn(config.Connection{Name: "dialing", ReadOnly: true})
+	broken, dialing := newConn(config.Connection{Name: "broken", Engine: "postgres"}), newConn(config.Connection{Name: "dialing", Engine: "postgres", ReadOnly: true})
 	broken.State, dialing.State = connFailed, connConnecting
-	a.sess.Conns = append(a.sess.Conns, seed, broken, dialing, newConn(config.Connection{Name: "idle", ReadOnly: true}))
+	a.sess.Conns = append(a.sess.Conns, seed, broken, dialing, newConn(config.Connection{Name: "idle", Engine: "postgres", ReadOnly: true}))
 	return a, seed
 }
 

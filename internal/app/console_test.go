@@ -139,7 +139,7 @@ func TestConsoleConn(t *testing.T) {
 	a, c := inConsole(t, "", "")
 	seed := readyConn("seed")
 	seed.Schema, seed.Schemas, seed.DB = "s1", []string{"s1", "s2"}, "seeddb"
-	idle := newConn(config.Connection{Name: "idle"})
+	idle := newConn(config.Connection{Name: "idle", Engine: "postgres"})
 	a.sess.Conns = append(a.sess.Conns, seed, idle)
 	r := find(t, a, ui.Target{Kind: ui.KindHint, Pane: a.focused().ID, Action: "console.conn"})
 	a.Update(tea.MouseMotionMsg{X: r.Min.X, Y: r.Min.Y})
@@ -187,7 +187,7 @@ func TestConsoleConn(t *testing.T) {
 // current connection, in its Schema, kept for its file (§11, F5.11).
 func TestConsoleRestore(t *testing.T) {
 	a, c1 := inConsole(t, "", "")
-	seed, idle := readyConn("seed"), newConn(config.Connection{Name: "idle"})
+	seed, idle := readyConn("seed"), newConn(config.Connection{Name: "idle", Engine: "postgres"})
 	seed.Schema = "s1"
 	a.sess.Conns = append(a.sess.Conns, seed, idle)
 	a.state.Consoles = map[string]config.ConsoleState{"console_1": {Conn: "seed", Schema: "dropped"}, "console_2": {Conn: "idle", Schema: "x"}}
@@ -207,7 +207,7 @@ func TestConsoleRestore(t *testing.T) {
 
 // soloSession is a new session over doraemon alone, not connected.
 func soloSession() *Session {
-	c := newConn(config.Connection{Name: "doraemon"})
+	c := newConn(config.Connection{Name: "doraemon", Engine: "postgres"})
 	return newSession("doraemon", []*Conn{c}, c, 1)
 }
 

@@ -78,14 +78,14 @@ func Scan(s string, d Dialect) []Token {
 			} else {
 				i = len(s)
 			}
-		case unicode.IsDigit(r), r == '.' && i+1 < len(s) && s[i+1] >= '0' && s[i+1] <= '9':
-			kind, i = Number, number(s, i)
-		case r == '_' || unicode.IsLetter(r):
-			i = advance(s, i, func(r rune) bool { return r == '_' || r == '$' || unicode.IsLetter(r) || unicode.IsDigit(r) })
+		case identStart(r): // before digits and blanks: past ASCII, those are a name's too
+			i = advance(s, i, func(r rune) bool { return identStart(r) || r == '$' || r >= '0' && r <= '9' })
 			kind = Ident
 			if keywords[strings.ToLower(s[start:i])] {
 				kind = Keyword
 			}
+		case r >= '0' && r <= '9', r == '.' && i+1 < len(s) && s[i+1] >= '0' && s[i+1] <= '9':
+			kind, i = Number, number(s, i)
 		case strings.ContainsRune("()[],;.", r):
 			kind, i = Punct, i+n
 		case unicode.IsSpace(r):
@@ -191,8 +191,16 @@ func number(s string, i int) int {
 	return i
 }
 
+// identStart is whether r starts a name, as PG's scan.l has it: a letter,
+// _, or any byte past ASCII, a full-width space or ✓ too, so PG reads
+// ✓$a$ as a name, not $a$ opening a string (§9.1). MySQL takes those in
+// a name as well.
+func identStart(r rune) bool {
+	return r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= utf8.RuneSelf
+}
+
 // advance is past the runes from i that are in: whole runes, so a
-// full-width space or digit moves it too.
+// rune past ASCII moves it as one.
 func advance(s string, i int, in func(rune) bool) int {
 	for i < len(s) {
 		r, n := utf8.DecodeRuneInString(s[i:])

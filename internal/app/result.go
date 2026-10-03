@@ -17,7 +17,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"sqlmux/internal/db"
-	"sqlmux/internal/db/postgres"
 	"sqlmux/internal/editor"
 	"sqlmux/internal/sqlkit"
 	"sqlmux/internal/ui"
@@ -123,7 +122,7 @@ type (
 		r   *run
 		rs  []db.Result
 		err error
-		set string // what went before the statements when it is what failed: the SET of search_path, the manual mode's begin
+		set string // the SET of search_path when it is what failed
 		tx  byte   // where Main's transaction was as the run ended (F5.11)
 	}
 	runTick struct{ r *run }
@@ -187,11 +186,12 @@ func consoleSpan(t *consoleTab, arg string) (text string, from, to int) {
 // runSQL runs sql of console t, named name, which is at base in its text
 // at version ver: in conn's Main, schema first on search_path, a statement
 // at a time, each committing on its own, stopping at the first that fails
-// (§11); in the manual mode in a transaction, begun first if need be
-// (F5.3). Reads get a LIMIT a row past max_rows, to tell there are more.
-// The result area shows a placeholder meanwhile; the console's red ▶ goes
-// until this run fails. On a read-only connection a statement it keeps
-// back keeps the whole run back, the log saying so (§13).
+// (§11); in the manual mode in a transaction, begun before a statement
+// when there is none, as psql's AUTOCOMMIT off (F5.3). Reads get a LIMIT
+// a row past max_rows, to tell there are more. The result area shows a
+// placeholder meanwhile; the console's red ▶ goes until this run fails.
+// On a read-only connection a statement it keeps back keeps the whole run
+// back, the log saying so (§13).
 func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, ver int) tea.Cmd {
 	stmts := sqlkit.Statements(sql, sqlkit.PG)
 	if len(stmts) == 0 || t.running != nil {
@@ -224,7 +224,7 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 			resets = true
 		}
 	}
-	s, schema, maxRows, manual := r.conn, r.schema, a.maxRows, r.conn.Manual
+	s, schema, maxRows, manual, d := r.conn, r.schema, a.maxRows, r.conn.Manual, r.conn.eng.Dialect()
 	return tea.Batch(func() tea.Msg {
 		m := runDone{r: r}
 		m.err = s.Main.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
@@ -239,7 +239,7 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 			case tx == 'E':
 				s.mainPath = ""
 			case s.mainPath != schema:
-				if err := postgres.SetSearchPath(ctx, c, schema, s.startedPath); err != nil {
+				if err := s.eng.UseSchema(ctx, c, schema, s.startedPath); err != nil {
 					s.mainPath, m.set = "", "set search_path to "+schema
 					return err
 				}
@@ -248,14 +248,12 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 					s.mainPath = schema
 				}
 			}
-			if manual && db.TxStatus(c) == 'I' { // after the SET, which is kept so
-				if _, err := c.Exec(ctx, "begin", 0); err != nil {
-					m.set = "begin"
-					return err
-				}
+			var begin func(string) bool // after the SET, which is kept so
+			if manual {
+				begin = func(stmt string) bool { return !sqlkit.NoBegin(stmt, d) }
 			}
 			var err error
-			m.rs, err = db.ExecEach(ctx, c, texts, maxRows)
+			m.rs, err = db.ExecEach(ctx, c, texts, maxRows, begin)
 			if resets || db.TxStatus(c) != 'I' {
 				s.mainPath = ""
 			}
@@ -307,6 +305,9 @@ func (a *App) placeRun(r *run, tabs []Tab) (at int, old []Tab) {
 // again.
 func (a *App) gotRun(m runDone) tea.Cmd {
 	r := m.r
+	if a.sessionOf(r.conn) == nil { // its session closed, its connection with it: nothing to say (F5.1)
+		return nil
+	}
 	r.conn.busy--
 	if m.tx != 0 { // 0: it never got Main
 		r.conn.tx = m.tx
@@ -383,8 +384,8 @@ func (a *App) log(r *run, stmt, did string, failed bool) {
 
 // logError logs statement stmt of run r failing with err (§11): the
 // server's severity and message, then DETAIL and HINT a line each.
-func (a *App) logError(r *run, stmt string, err error) postgres.ServerError {
-	e := postgres.ServerErrorOf(err)
+func (a *App) logError(r *run, stmt string, err error) db.ServerError {
+	e := r.conn.eng.ErrorOf(err)
 	a.log(r, stmt, e.Severity+": "+e.Message, true)
 	for _, l := range e.More {
 		r.win.log = append(r.win.log, ui.LogLine{Tail: "    " + l, Err: true})

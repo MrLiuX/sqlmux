@@ -1,14 +1,10 @@
-package postgres
+package db
 
 import (
 	"context"
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/jackc/pgx/v5"
-
-	"sqlmux/internal/db"
 )
 
 // Query is what a data tab asks of its table (§8.5, §9.6).
@@ -24,8 +20,8 @@ type Query struct {
 // from is "FROM t" and the WHERE: the input as typed, in parentheses so its
 // OR binds inside them, and on lines of its own so a trailing -- comment
 // can't swallow what follows (§9.6).
-func (q Query) from() string {
-	s := " from " + pgx.Identifier{q.Schema, q.Table}.Sanitize()
+func (q Query) from(e Engine) string {
+	s := " from " + e.Quote(q.Schema, q.Table)
 	if strings.TrimSpace(q.Where) != "" {
 		s += " where (\n" + q.Where + "\n)"
 	}
@@ -35,23 +31,24 @@ func (q Query) from() string {
 // Page reads one page of a table (§8.5): every column, sorted by Order and
 // then the row identity so pages are stable (unordered with neither). It
 // asks for one row more than Limit to tell whether a next page exists, even
-// before the count is in. One statement only: the extended protocol refuses
-// more, whatever Where holds.
-func Page(ctx context.Context, c db.Conn, q Query) (r db.Result, next bool, err error) {
+// before the count is in. One statement only: PG's extended protocol and a
+// MySQL connection without multiStatements refuse more, whatever Where
+// holds.
+func Page(ctx context.Context, c Conn, e Engine, q Query) (r Result, next bool, err error) {
 	var order []string
 	if q.Order != "" {
 		dir := " asc"
 		if q.Desc {
 			dir = " desc"
 		}
-		order = append(order, pgx.Identifier{q.Order}.Sanitize()+dir)
+		order = append(order, e.Quote(q.Order)+dir)
 	}
 	for _, k := range q.Key {
 		if k != q.Order {
-			order = append(order, pgx.Identifier{k}.Sanitize())
+			order = append(order, e.Quote(k))
 		}
 	}
-	sql := "select *" + q.from()
+	sql := "select *" + q.from(e)
 	if len(order) > 0 {
 		sql += " order by " + strings.Join(order, ", ")
 	}
@@ -64,8 +61,8 @@ func Page(ctx context.Context, c db.Conn, q Query) (r db.Result, next bool, err 
 
 // Count counts the rows q's condition keeps (§8.5); the caller bounds it
 // with its ctx.
-func Count(ctx context.Context, c db.Conn, q Query) (int64, error) {
-	r, err := c.Query(ctx, "select count(*)"+q.from())
+func Count(ctx context.Context, c Conn, e Engine, q Query) (int64, error) {
+	r, err := c.Query(ctx, "select count(*)"+q.from(e))
 	if err != nil {
 		return 0, err
 	}

@@ -29,8 +29,9 @@ func TestMain(m *testing.M) {
 	whichKeyDelay, quitWindow, toastTTL, autosaveDelay, runTickEvery, yankFlashFor, previewDelay = time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond
 	clipTools = nil // OSC 52: the user's clipboard stays theirs
 	dir, _ := os.MkdirTemp("", "sqlmux-app-test")
-	os.Setenv("XDG_STATE_HOME", dir) // saves the state from the Cmds tests run go here, not the user's
-	os.Setenv("XDG_DATA_HOME", dir)  // and the consoles
+	os.Setenv("XDG_STATE_HOME", dir)  // saves the state from the Cmds tests run go here, not the user's
+	os.Setenv("XDG_DATA_HOME", dir)   // and the consoles
+	os.Setenv("XDG_CONFIG_HOME", dir) // and a form's connection
 	code := m.Run()
 	os.RemoveAll(dir)
 	os.Exit(code)

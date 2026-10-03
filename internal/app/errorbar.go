@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"sqlmux/internal/db/postgres"
+	"sqlmux/internal/db"
 	"sqlmux/internal/ui"
 )
 
@@ -19,7 +19,7 @@ type errorBar struct {
 // newErrorBar says e on a bar: [SQLSTATE] when a server sent one, head,
 // the message, cut in the middle to fit, and tail; then DETAIL, HINT and
 // more a line each.
-func newErrorBar(kind string, e postgres.ServerError, head, tail string, more ...string) *errorBar {
+func newErrorBar(kind string, e db.ServerError, head, tail string, more ...string) *errorBar {
 	if e.Code != "" {
 		head = "[" + e.Code + "] " + head
 	}

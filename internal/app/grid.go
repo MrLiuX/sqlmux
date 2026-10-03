@@ -13,7 +13,6 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"sqlmux/internal/db"
-	"sqlmux/internal/db/postgres"
 	"sqlmux/internal/editor"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/sqlkit"
@@ -135,16 +134,17 @@ type countMsg struct {
 }
 
 // query is what t asks of its table.
-func (t *dataTab) query() postgres.Query {
-	return postgres.Query{
+func (t *dataTab) query() db.Query {
+	return db.Query{
 		Schema: t.table.Schema, Table: t.table.Name, Where: t.applied,
 		Order: t.order, Desc: t.desc, Limit: t.limit, Offset: t.pageNo * t.limit,
 	}
 }
 
 // fetch reads the page t.request asks for on Meta, or in the manual mode
-// on Main, to see what was saved and not committed (§8.2), in a savepoint
-// in a transaction: a WHERE that fails fails it alone. The table's columns
+// or a transaction on Main, to see what was saved and not committed
+// (§8.2), in a savepoint in a transaction: a WHERE that fails fails it
+// alone. The table's columns
 // come first, from Meta, when the catalog hasn't got them yet: they give
 // the row identity it orders by (§8.4, §10.1). recount counts the rows
 // again once a page is in (§8.3): owed by the tab, so a newer request
@@ -154,7 +154,7 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 	// what is on its way is older than this now, whether this goes or not
 	t.seq++
 	// a ; would end the statement and start another: 1=1; drop table t (§9.6)
-	if sqlkit.HasSemicolon(t.applied, sqlkit.PG) {
+	if sqlkit.HasSemicolon(t.applied, t.conn.eng.Dialect()) {
 		t.bar = &errorBar{ui.ErrorBar{First: ui.Note{Head: "WHERE 里不能有 ;"}}, "fetch"}
 		t.backToShown()
 		return nil
@@ -162,9 +162,9 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 	t.recount = t.recount || recount
 	t.conn.busy++
 	t.out++
-	seq, table, meta, q := t.seq, t.table, t.conn.Meta, t.query()
+	seq, table, meta, eng, q := t.seq, t.table, t.conn.Meta, t.conn.eng, t.query()
 	w := meta
-	if t.conn.Manual {
+	if t.conn.Manual || t.conn.inTx() { // Main's own writes not committed show (§8.2)
 		w = t.conn.Main
 	}
 	cols, cached := t.conn.cols[idOf(table)]
@@ -172,7 +172,7 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 		ctx := context.Background()
 		if !cached {
 			var err error
-			if cols, err = postgres.TableColumns(ctx, meta, table.Schema, table.Name); err != nil {
+			if cols, err = eng.TableColumns(ctx, meta, table.Schema, table.Name); err != nil {
 				return pageMsg{tab: t, seq: seq, err: err}
 			}
 		}
@@ -181,7 +181,7 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 		var r db.Result
 		var next bool
 		err := w.Run(ctx, func(ctx context.Context, c db.Conn) error {
-			return postgres.Guarded(ctx, c, "sqlmux_page", func() (err error) { r, next, err = postgres.Page(ctx, c, q); return err })
+			return db.Guarded(ctx, c, "sqlmux_page", func() (err error) { r, next, err = db.Page(ctx, c, eng, q); return err })
 		})
 		return pageMsg{tab: t, seq: seq, cols: cols, page: r, next: next, err: err}
 	}
@@ -193,6 +193,9 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 // dropped; a cancelled one goes back to what is shown, rows and all, with
 // its count as it was (§7.6, §8.3).
 func (a *App) gotPage(m pageMsg) tea.Cmd {
+	if a.sessionOf(m.tab.conn) == nil { // its session closed, its connection with it: nothing to say (F5.1)
+		return nil
+	}
 	m.tab.conn.busy--
 	m.tab.out--
 	if m.cols.Cols != nil {
@@ -211,7 +214,7 @@ func (a *App) gotPage(m pageMsg) tea.Cmd {
 	case m.err != nil: // under the rows shown, which stay; its WHERE is there to be fixed (backToShown), the count owed
 		// ponytail: no 位置 line, the SQL being ours, not the WHERE typed;
 		// map Position into the WHERE if it is ever wanted
-		t.bar = newErrorBar("fetch", postgres.ServerErrorOf(m.err), "", "")
+		t.bar = newErrorBar("fetch", t.conn.eng.ErrorOf(m.err), "", "")
 		t.backToShown()
 		return nil
 	}
@@ -252,6 +255,10 @@ func (t *dataTab) applyWantCol() {
 
 // count counts the rows t's WHERE keeps, bounded by countTimeout (§8.3),
 // unless an estimate stands for them: no WHERE on a big table (§8.5).
+// ponytail: on Meta even in the manual mode or a transaction, so rows
+// added or deleted there and not committed are not counted, the pages
+// going by next all the same; count on Main, in Guarded, while in one if
+// that misleads
 func (a *App) count(t *dataTab) tea.Cmd {
 	if strings.TrimSpace(t.applied) == "" && t.table.Rows > bigTable {
 		t.count, t.counted = int64(t.table.Rows), estimated
@@ -260,11 +267,11 @@ func (a *App) count(t *dataTab) tea.Cmd {
 	t.countSeq++
 	t.counted = counting
 	t.out++
-	seq, meta, q := t.countSeq, t.conn.Meta, t.query()
+	seq, meta, eng, q := t.countSeq, t.conn.Meta, t.conn.eng, t.query()
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), countTimeout)
 		defer cancel()
-		n, err := postgres.Count(ctx, meta, q)
+		n, err := db.Count(ctx, meta, eng, q)
 		return countMsg{tab: t, seq: seq, n: n, err: err}
 	}
 }
@@ -585,10 +592,11 @@ func (a *App) gotAuto(m autoMsg) tea.Cmd {
 	return tea.Batch(cmd, autoTick(t))
 }
 
-// tabOpen reports whether t is a tab in some pane of the session.
+// tabOpen reports whether t is a tab in some pane of any session: one in
+// the background skips its turns, not stops (§7.8「自动刷新」).
 func (a *App) tabOpen(t *dataTab) bool {
-	for _, w := range a.sess.Windows {
-		for _, p := range w.Root.Leaves() {
+	for _, s := range a.sessions {
+		for _, p := range s.panes() {
 			if slices.ContainsFunc(p.Tabs, func(tb Tab) bool { return tb.Data == t }) {
 				return true
 			}
@@ -796,36 +804,44 @@ func baseType(t string) string {
 	return t
 }
 
-// timeKind is the parts a column of catalog type t steps (§10.2); interval
-// has none.
+// timeKind is the parts a column of catalog type t steps (§10.2), PG's
+// and MySQL's; interval has none.
 func timeKind(t string) ui.TimeKind {
 	return map[string]ui.TimeKind{
 		"date": ui.Date, "time without time zone": ui.Time, "time with time zone": ui.TimeTZ,
 		"timestamp without time zone": ui.Timestamp, "timestamp with time zone": ui.TimestampTZ,
+		"time": ui.Time, "datetime": ui.Timestamp, "timestamp": ui.Timestamp,
 	}[baseType(t)]
 }
 
 // colType is the grid's class for a column of the catalog's type (§7.6).
 func colType(t string) ui.ColType {
-	if strings.HasSuffix(t, "[]") {
+	switch {
+	case strings.HasSuffix(t, "[]"):
 		return ui.ColOther
+	case t == "tinyint(1)": // MySQL's boolean
+		return ui.ColBool
 	}
-	t = baseType(t)
-	// after format_type's names, pgx's for a result's OIDs (quick SQL, §12)
+	t = strings.TrimSuffix(strings.TrimSuffix(baseType(t), " zerofill"), " unsigned")
+	// after format_type's names, pgx's for a result's OIDs (quick SQL, §12),
+	// then MySQL's COLUMN_TYPE and the driver's
 	switch t {
 	case "smallint", "integer", "bigint", "numeric", "real", "double precision", "oid",
-		"int2", "int4", "int8", "float4", "float8":
+		"int2", "int4", "int8", "float4", "float8",
+		"tinyint", "mediumint", "int", "decimal", "float", "double":
 		return ui.ColNumber
 	case "date", "time without time zone", "time with time zone",
 		"timestamp without time zone", "timestamp with time zone",
-		"time", "timetz", "timestamp", "timestamptz":
+		"time", "timetz", "timestamp", "timestamptz",
+		"datetime", "year":
 		return ui.ColTime
 	case "boolean", "bool":
 		return ui.ColBool
 	case "json", "jsonb":
 		return ui.ColJSON
 	case "text", "character varying", "character", `"char"`, "name", "citext",
-		"varchar", "bpchar", "char":
+		"varchar", "bpchar", "char",
+		"tinytext", "mediumtext", "longtext", "enum", "set":
 		return ui.ColString
 	}
 	if t == "interval" || strings.HasPrefix(t, "interval ") { // "interval day to second"

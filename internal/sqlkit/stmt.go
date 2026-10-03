@@ -149,10 +149,11 @@ func IsWrite(s string, d Dialect) bool {
 
 // sessionWords start what IsWrite takes but a read-only connection still
 // runs (§13): transaction control and session settings, which leave the
-// database's read only standing but for those BreaksReadOnly looks for.
+// database's read only standing; set, begin and start BreaksReadOnly
+// looks into.
 var sessionWords = map[string]bool{
-	"begin": true, "start": true, "commit": true, "end": true, "rollback": true, "abort": true,
-	"savepoint": true, "release": true, "set": true, "reset": true, "discard": true,
+	"commit": true, "end": true, "rollback": true, "abort": true,
+	"savepoint": true, "release": true, "reset": true, "discard": true,
 }
 
 // BreaksReadOnly is whether a read-only connection keeps statement s from
@@ -162,8 +163,9 @@ var sessionWords = map[string]bool{
 // default_transaction_read_only or transaction_read_only, BEGIN or START
 // TRANSACTION … READ WRITE.
 // ponytail: select set_config('default_transaction_read_only', 'off',
-// false) reads, and turns it off; read only guards against slips, not
-// users (§13)
+// false) reads, and turns it off, and SET U&"…" names the setting in
+// escapes this does not read; read only guards against slips, not users
+// (§13)
 func BreaksReadOnly(s string, d Dialect) bool {
 	ts, depth := words(s, d)
 	i := first(s, ts)
@@ -172,7 +174,7 @@ func BreaksReadOnly(s string, d Dialect) bool {
 	}
 	switch w := lower(s, ts, i); w {
 	case "set":
-		if k := lower(s, ts, i+1); k == "session" || k == "local" {
+		for k := lower(s, ts, i+1); k == "session" || k == "local"; k = lower(s, ts, i+1) { // PG takes SET SESSION SESSION …
 			i++
 		}
 		if i+1 >= len(ts) {
@@ -304,4 +306,44 @@ func AutoLimit(s string, d Dialect, n int) string {
 		}
 	}
 	return out + "\nLIMIT " + strconv.Itoa(n)
+}
+
+// NoBegin is whether statement s goes without the BEGIN the manual
+// transaction mode puts before one out of a transaction, as psql's
+// command_no_begin (src/bin/psql/common.c, PG 17) has it: transaction
+// control but savepoints, and what PG runs in no transaction block,
+// VACUUM, CLUSTER alone, CREATE / DROP DATABASE and TABLESPACE, the
+// CONCURRENTLY ones, ALTER SYSTEM, DISCARD ALL.
+func NoBegin(s string, d Dialect) bool {
+	ts, _ := words(s, d)
+	w := func(i int) string { return lower(s, ts, i) }
+	switch w(0) {
+	case "abort", "begin", "start", "commit", "end", "rollback", "vacuum":
+		return true
+	case "prepare":
+		return w(1) == "transaction"
+	case "cluster": // with no arguments
+		return w(1) == "" || w(1) == ";"
+	case "create":
+		i := 1
+		switch w(1) {
+		case "database", "tablespace":
+			return true
+		case "unique":
+			i++
+		}
+		return w(i) == "index" && w(i+1) == "concurrently"
+	case "alter":
+		return w(1) == "system"
+	case "drop", "reindex":
+		switch w(1) {
+		case "database", "system", "tablespace":
+			return true
+		case "index", "table":
+			return w(2) == "concurrently"
+		}
+	case "discard":
+		return w(1) == "all"
+	}
+	return false
 }

@@ -176,6 +176,7 @@ leader = "<Space>"
 "<Tab>" = "form.next"
 "<S-Tab>" = "form.prev"
 "<CR>" = "form.save"
+"<C-s>" = "form.save"
 "<Esc>" = "form.cancel"
 
 [keys.confirm] # §10.5: before changes are thrown away

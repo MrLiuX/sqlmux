@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"sqlmux/internal/db"
-	"sqlmux/internal/db/postgres"
+	"sqlmux/internal/db/mysql"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -236,8 +237,8 @@ func TestGoldenEdits160x45(t *testing.T) {
 	golden.RequireEqual(t, a.render().String())
 }
 
-// saveDB is Main as the tests see it: every statement answers tag, and
-// what was sent is kept.
+// saveDB is Main as the tests see it: every statement answers tag, the
+// rows its number says hit, and what was sent is kept.
 type saveDB struct {
 	tag  string
 	sqls []string
@@ -245,7 +246,11 @@ type saveDB struct {
 
 func (s *saveDB) Query(_ context.Context, sql string, args ...db.Val) (db.Result, error) {
 	s.sqls = append(s.sqls, fmt.Sprintf("%s %v", sql, args))
-	return db.Result{Tag: s.tag}, nil
+	n := 0 // UPDATE 1's 1
+	if f := strings.Fields(s.tag); len(f) > 0 {
+		n, _ = strconv.Atoi(f[len(f)-1])
+	}
+	return db.Result{Tag: s.tag, Affected: int64(n)}, nil
 }
 func (s *saveDB) Exec(context.Context, string, int) ([]db.Result, error) { return nil, nil }
 func (s *saveDB) Close() error                                           { return nil }
@@ -331,7 +336,7 @@ func TestSaveFails(t *testing.T) {
 	}
 	// the server's error: its message alone, cut to fit between the row and 已回滚
 	bad := &pgconn.PgError{Severity: "ERROR", Code: "22P02", Message: `invalid input syntax for type numeric: "abc"`, Hint: "a number"}
-	a.Update(saveMsg{tab: tab, rows: []postgres.Row{{Key: []string{"12"}}}, failed: 0, err: bad})
+	a.Update(saveMsg{tab: tab, rows: []db.Row{{Key: []string{"12"}}}, failed: 0, err: bad})
 	if b := tab.bar; b.First != (ui.Note{Head: "[22P02] id = 12：", Mid: bad.Message, Tail: "，已回滚"}) || !slices.Equal(b.More, []string{"HINT: a number"}) {
 		t.Errorf("a server's error: %+v", b)
 	}
@@ -362,7 +367,8 @@ func TestSaveKeepsNewer(t *testing.T) {
 }
 
 // Before changes are thrown away, a box asks (§10.5): R, x, SPC x, :qa and
-// the second C-c; y goes on, n, esc or a click outside keep them.
+// the second C-c; y goes on, n, esc or a click outside keep them. SPC x on
+// the only pane, which stays, asks nothing.
 func TestConfirm(t *testing.T) {
 	a, tab, _ := withMain(t, "UPDATE 1")
 	feed(t, a, "lix<Esc>R")
@@ -380,7 +386,6 @@ func TestConfirm(t *testing.T) {
 	}
 	for keys, text := range map[string]string{
 		"x":          "t_order 有 1 处修改未保存，关闭会丢弃。",
-		"<Space>x":   "这个 pane 里有 1 处修改未保存，关闭会丢弃。",
 		":qa<CR>":    "有 1 处修改未保存，退出会丢弃。",
 		"<C-c><C-c>": "有 1 处修改未保存，退出会丢弃。",
 	} {
@@ -394,6 +399,18 @@ func TestConfirm(t *testing.T) {
 		}
 		tab.edits = nil
 	}
+	answer(a, tab)
+	if feed(t, a, "0lix<Esc><Space>x"); a.confirm != nil || len(a.win().Root.Leaves()) != 1 {
+		t.Fatalf("the only pane: %+v", a.confirm)
+	}
+	data := p(a).ID
+	a.splitPane(Horiz)
+	a.win().focus(data)
+	if feed(t, a, "<Space>x"); a.confirm == nil || a.confirm.text != "这个 pane 里有 1 处修改未保存，关闭会丢弃。" {
+		t.Fatalf("beside another: %+v", a.confirm)
+	}
+	feed(t, a, "<Esc>")
+	tab.edits = nil
 	feed(t, a, "0lix<Esc>:qa<CR>")
 	click(a, uv.Pos(1, 1))
 	if a.confirm != nil {
@@ -492,6 +509,14 @@ func TestCellOptions(t *testing.T) {
 	tab.cols.Cols[0].Default, tab.edits = "", nil
 	if feed(t, a, "i"); a.grid(a.focused(), tab).EditMenu || tab.options() != nil || a.context().Overlay != "" {
 		t.Errorf("no options: %s", optionLabels(tab))
+	}
+	feed(t, a, "<Esc>")
+	tab.cols.Cols[3].Type, tab.page.Rows[0][3].S = "tinyint(1)", "1" // MySQL's boolean (F5.4)
+	if feed(t, a, "lllif"); optionLabels(tab) != "false ∅ NULL" {
+		t.Errorf("tinyint(1): %s", optionLabels(tab))
+	}
+	if feed(t, a, "<C-n><CR>"); editsOf(tab) != "1/paid=0" {
+		t.Errorf("false on a tinyint(1): %q", editsOf(tab))
 	}
 }
 
@@ -865,8 +890,8 @@ func TestEmptyRowKey(t *testing.T) {
 	}
 }
 
-// tagDB answers each statement with the tag of one row hit, or fails
-// those that fail matches, recording them all.
+// tagDB answers each statement with one row hit, or fails those that
+// fail matches, recording them all.
 type tagDB struct {
 	sqls []string
 	fail string
@@ -878,8 +903,7 @@ func (d *tagDB) Query(_ context.Context, sql string, args ...db.Val) (db.Result,
 	if d.fail != "" && strings.HasPrefix(sql, d.fail) {
 		return db.Result{}, d.err
 	}
-	word, _, _ := strings.Cut(sql, " ")
-	return db.Result{Tag: map[string]string{"delete": "DELETE 1", "update": "UPDATE 1", "insert": "INSERT 0 1"}[word]}, nil
+	return db.Result{Affected: 1}, nil
 }
 func (d *tagDB) Exec(context.Context, string, int) ([]db.Result, error) { return nil, nil }
 func (d *tagDB) Close() error                                           { return nil }
@@ -1072,4 +1096,17 @@ func TestGoldenRowsAddedDeleted160x45(t *testing.T) {
 	loadOrders(t, a, 5)
 	feed(t, a, "jolidone<Esc>jjdd")
 	golden.RequireEqual(t, a.render().String())
+}
+
+// §10.7's checks are PG's: a MySQL table's text goes to the database as
+// typed (F5.4).
+func TestCellHintPGOnly(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	tab := loadOrders(t, a, 3)
+	if feed(t, a, "0ix"); tab.cellHint() == "" {
+		t.Fatal("x in a bigint on PG")
+	}
+	if tab.conn.eng = (mysql.Engine{}); tab.cellHint() != "" {
+		t.Errorf("on MySQL: %q", tab.cellHint())
+	}
 }

@@ -128,6 +128,12 @@
   - 应答可能属于后台的 session：按应答里带的 conn / tab 指针处理，焦点、布局类的副作用只对当前 session 做；console_n 的 n 改成遍历所有 session；
   - 表单：config 加 `ReadOnly`（F5.1 只写进文件，F5.3 才生效）；`Connection.Check(names)` 返回出错的字段和原因，LoadConnections 也用它；追加时用 BurntSushi 的 encoder 只编码这一条，原文件末尾没有换行先补一个，没填的可选字段不写；键位 `[keys.form]`：`form.next` / `form.prev`（Tab / S-Tab）、`form.save`（↵）、`form.cancel`（esc）。
 
+- [ ] 审查时定（reviewer 提问，2026-10-03）：
+  - 切换 session（包括 `n` 建连回来后自动 attach）时关掉所有浮层，确认框、改名框、表单、面板都关；
+  - 列表和表单打开时按 `C-p`，面板盖在上面并接管按键（同 COLS 列表）；表单里 `C-s` 绑 `form.save`，不去保存背后表格的修改；
+  - 关掉有查询在执行的 session 不另确认，也不弹「查询已取消」；
+  - 列表里每个 session 都标出它自己的当前 window（同 tmux）；
+  - 关 session 的确认框写「<session 名> 里有 N 处修改未保存，关闭会丢弃。」
 **验收**
 - [ ] e2e：
   - 新建连接后，`connections.toml` 中出现这条连接，且不会破坏文件中已有的内容（含注释）；
@@ -156,6 +162,9 @@
   - 状态栏 window 列表的每一段可以点击，执行不带标题的 `window.select <i>`（同 `palette.scope`）；
   - Window 加一个稳定 ID（同 Pane 的做法，session 里递增），树的展开状态和 `SPC l` 的「上一个用过的」都按 ID 记，不按下标：下标在关掉 window 后会前移，展开状态会错到后一个 window 上，`SPC l` 也会指错（决策者定，没有采用 worker 提的「按下标、用 ponytail 标出」）。
 
+- [ ] 审查时定（reviewer 提问，2026-10-03）：
+  - 改名时点改名框以外的任何地方都等于 `esc`；
+  - 关 window 的确认框写「这个 window 里有 N 处修改未保存，关闭会丢弃。」（同关 pane）。
 **验收**
 - [ ] e2e：
   - 新建、切换、重命名、关闭 window 都正确；
@@ -198,6 +207,16 @@
   - 状态栏：T「事务中」`warn`、E「事务出错」`error`，在 busy 左边，不能点、不让位；
   - 确认框合成一个函数：修改一句、事务一句，几个连接用「、」连起来并去重；关 tab / pane / window 时算出关掉之后不再有 console、又在事务中的连接，`y` 之后先关、再在 Cmd 里对它们发 ROLLBACK、再重取表格；退出、关 session 不另发 ROLLBACK，关 session 那句改成带连接名的统一写法；只在手动模式下保存过表格、没开过 console 的连接，关表格不问，退出、关 session 照样问。
 
+- [ ] 审查时定（reviewer 提问，2026-10-03）：
+  - §13 的四类 SET 整类拦下（其中实测不解除只读的也拦），§13 已写明；只读解除的集成测试加一列，把「拦下但无害」的也纳入实测；
+  - 作用域词连写（`SET SESSION SESSION CHARACTERISTICS …`）也要认出；扫描器照 scan.l 把 0x80 以上的字节当标识符字符（§9.1）；`U&"…"` 记成 ponytail 上限；
+  - 手动模式下每条语句前检查 BEGIN，照 psql 的 SendQuery，psql `command_no_begin` 列出的语句不补（先查 psql 源码，§11）；
+  - console 有执行在跑时不能关（tab、pane、window），toast「正在执行，结束后再关闭」；
+  - 表格取数走 `Main` 的条件改成「手动模式或正在事务中」（§8.2）；
+  - 提交、回滚之后也清列缓存、重新加载 catalog（§7.8）；
+  - `C-c` 照旧按连接取消，后果写进 §8.3；手动模式下表格取数等 `Main`、WHERE 能写，写进 §8.2；
+  - 在事务中的表格取数包在 `SAVEPOINT sqlmux_page` 里（worker 在清单外加的，认可，§8.2）；
+  - 计数仍在 `Meta` 上看不到未提交的增删，代码里要有 `ponytail:` 注释。
 **验收**
 - [ ] 集成测试：
   - 只读连接中，写语句被拦截；
@@ -222,13 +241,24 @@
   - DDL 用 `SHOW CREATE TABLE` 获取。
 - [ ] **方言**：
   - 标识符用反引号；
-  - 空值安全比较用 `<=>`；
+  - 保存时的旧值比较用 `cast(列 as binary) = ?`，旧值是 NULL 时 `IS NULL`（177d054 逐类型实测，原定的 `<=>` 否掉，§10.3）；
   - 布尔值写入 1 / 0。
 - [ ] **种子数据**：`testdata/seed/mysql.sql`，覆盖的情况与 PG 的种子数据相同。
 - [ ] **扫描器**：MySQL 会执行的注释 `/*! … */`（如 `SELECT 5 /*! +1 */` 返回 6，dump 开头的 `/*!40101 SET NAMES utf8 */;`）M3 的扫描器当作注释，分句和读写判定会错；M5 接 MySQL 时处理（M3 审查时发现）。
-- [ ] **console 标题**只有连接下拉，没有 schema 下拉，database 由连接的 DSN 决定（§8.6）；要不要像 PG 一样能选 database，开工时提给决策者。
+- [ ] **database 能选**（开工前定，同 PG 的 schema，§8.6）：树里 MySQL 连接下面一层列 database（不列系统库），console 标题是 `<连接> · <database> ▾`，执行前不同就先 `USE`，一次执行里有 `USE` 时作废记下的值。
 - [ ] **事务状态**：MySQL 拿不到 TxStatus，按执行过的 begin / start transaction / commit / rollback 来记（ponytail：DDL 的隐式提交这类情况记不准）。
 - [ ] 新建连接表单的 engine 可以选 mysql；树和面板里的 MySQL 连接用 `mysql` 图标（§7.7）。
+- [ ] 细节（worker 提议，已定）：
+  - 按层分 4 个 commit，各自全绿，审查节点仍是 F5.4 一个：① 驱动和浏览（compose 挂载 seed、mysql.sql、引擎抽象、mysql.Conn、catalog、Page / Count、树和表格）② 编辑和保存 ③ console（扫描器 `/*! */`、执行、只读判定、快速 SQL、DDL 预览、格式化、补全）④ 表单的 engine 和图标；
+  - `db.Engine` 接口（两个实现），Conn 上存一个；app 里直接调 `postgres.X` 的地方都改成走它；共用的类型从 postgres 挪到 db；
+  - 驱动 go-sql-driver/mysql：`sql.DB` + `SetMaxOpenConns(1)` + `db.Conn(ctx)` 固定一条，由 Worker 独占；DSN 加 `interpolateParams=true`、`clientFoundRows=true`（否则改成同样的值时影响 0 行，被误报成「行数据已变化」），不开 multiStatements；值读成文本；connections.toml 的 dsn 写 `mysql://user:pass@host:port/db?…`，用 net/url 转成驱动的 Config，不加 dburl，不是 `mysql://` 开头的按驱动原生格式解析；
+  - 事务状态按执行过的语句记：begin / start transaction → T，commit / rollback（不含 rollback to）→ I；MySQL 出错不中止事务，没有 E；ponytail：DDL 的隐式提交等记不准；
+  - 只读：`Meta` 和只读连接的 `Main` 建连后 `SET SESSION TRANSACTION READ ONLY`；BreaksReadOnly 补上 MySQL 的写法，在 MySQL 上逐条实测（§13）；
+  - 列和编辑：列信息照 §8.4；tinyint(1) 当布尔，选项写 1 / 0；时间分段认 date / datetime / timestamp / time；§10.7 的前置校验只对 PG 做（ponytail）。保存时的旧值比较先逐类型实测（float / double、decimal、datetime、json、bit、binary、enum / set、char 尾空格），`<=>` 带文本参数会按类型转换，很可能改成 `CAST(列 AS CHAR) = ?`、旧值是 NULL 时 `IS NULL`；结论写进提交说明，并告诉决策者改 §10.3；
+  - 取消照 §8.3：另起 goroutine 盯着 ctx，取消时用同一份配置开临时连接 `KILL QUERY <id>`（id 建连时 `select connection_id()`），错误 1317 换成 ctx 的错误；
+  - 快速 SQL：判为读的加自动 LIMIT，在只读的 `Meta` 上执行（§12）；
+  - 集成测试：mysql 包对照 postgres 包写一套（catalog、page / count、逐类型保存、快速 SQL、KILL QUERY、只读解除表），环境变量 `SQLMUX_TEST_MYSQL`；app 层和引擎无关的（连接、console 共用 Main、手动事务、只读）两个引擎各跑一遍；PG 特有的（search_path、DateStyle、E 状态、format()）不搬；
+  - 图标 `mysql`（nf-dev-mysql U+E704，ascii `my`）；表单的 engine 在 postgres / mysql 之间用空格切换。
 
 **验收**
 - [ ] M1–M4 的集成测试在 MySQL 上全部通过。

@@ -19,7 +19,7 @@ import (
 // most maxRows rows come back, Truncated when there were more.
 // ponytail: what is no query runs whole, as §12's known limit has it:
 // explain analyze of a big join works it all out
-func Quick(ctx context.Context, w *db.Worker, sql, schema string, maxRows int) (r db.Result, err error) {
+func (Engine) Quick(ctx context.Context, w *db.Worker, sql, schema string, maxRows int) (r db.Result, err error) {
 	err = w.Run(ctx, func(ctx context.Context, c db.Conn) error {
 		if _, err := c.Query(ctx, "begin read only"); err != nil {
 			return err

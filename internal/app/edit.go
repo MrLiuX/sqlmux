@@ -18,7 +18,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"sqlmux/internal/db"
-	"sqlmux/internal/db/postgres"
+	"sqlmux/internal/sqlkit"
 	"sqlmux/internal/ui"
 )
 
@@ -222,8 +222,11 @@ func (t *dataTab) options() []option {
 	c := t.cell
 	col := t.column(c.key.col)
 	labels, vals := col.Enum, col.Enum
-	if col.Type == "boolean" { // PG's own text for them, so one back to what was loaded is no change
+	switch col.Type { // the engine's own text for them, so one back to what was loaded is no change
+	case "boolean":
 		labels, vals = []string{"true", "false"}, []string{"t", "f"}
+	case "tinyint(1)": // MySQL's boolean
+		labels, vals = []string{"true", "false"}, []string{"1", "0"}
 	}
 	pattern := c.in.Text
 	if c.in.All {
@@ -422,8 +425,9 @@ func (a *App) drawCellMenu(f *ui.Frame, p *Pane, t *dataTab) {
 // cellHint is what is wrong with the text of the cell being edited, if
 // anything (§10.7). Text as the edit started is let be: no change, and
 // maybe PG's own output, which cellCheck may not take (1900's +08:05:43).
+// ponytail: PG's types alone; MySQL's text goes to the database as typed
 func (t *dataTab) cellHint() string {
-	if c := t.cell; c.in.Text != c.start {
+	if c := t.cell; c.in.Text != c.start && t.conn.eng.Dialect() == sqlkit.PG {
 		return cellCheck(t.typeOf(c.key.col), c.in.Text)
 	}
 	return ""
@@ -577,10 +581,10 @@ func (a *App) endEdit() bool {
 type saveMsg struct {
 	tab    *dataTab
 	sent   map[editKey]edit
-	dels   []string       // the rows deleted, by row key
-	rows   []postgres.Row // updated
-	adds   []*newRow      // inserted, in the order they show
-	failed int            // into dels, rows, adds in turn; -1 for none
+	dels   []string  // the rows deleted, by row key
+	rows   []db.Row  // updated
+	adds   []*newRow // inserted, in the order they show
+	failed int       // into dels, rows, adds in turn; -1 for none
 	err    error
 	took   time.Duration
 	tx     byte // where Main's transaction is as the save ends (F5.3)
@@ -608,7 +612,7 @@ func (a *App) save() tea.Cmd {
 	for k := range m.sent {
 		byRow[k.row] = !t.deleted[k.row]
 	}
-	var ch postgres.Changes
+	var ch db.Changes
 	for _, key := range m.dels {
 		ch.Deletes = append(ch.Deletes, strings.Split(key, "\x00"))
 	}
@@ -616,31 +620,34 @@ func (a *App) save() tea.Cmd {
 		if !byRow[key] {
 			continue
 		}
-		r := postgres.Row{Key: strings.Split(key, "\x00")}
+		r := db.Row{Key: strings.Split(key, "\x00")}
 		for _, c := range t.cols.Cols { // in table order
 			if e, ok := m.sent[editKey{key, c.Name}]; ok {
-				r.Cols = append(r.Cols, postgres.Change{Name: c.Name, Val: e.val, Default: e.def, Old: e.orig})
+				r.Cols = append(r.Cols, db.Change{Name: c.Name, Val: e.val, Default: e.def, Old: e.orig})
 			}
 		}
 		m.rows = append(m.rows, r)
 	}
 	ch.Updates = m.rows
 	for _, r := range m.adds {
-		var cols []postgres.Change
+		var cols []db.Change
 		for _, c := range t.cols.Cols {
 			if e, ok := r.cells[c.Name]; ok {
-				cols = append(cols, postgres.Change{Name: c.Name, Val: e.val, Default: e.def})
+				cols = append(cols, db.Change{Name: c.Name, Val: e.val, Default: e.def})
 			}
+		}
+		if len(cols) == 0 { // nothing set: one DEFAULT, as both engines take it (PG's DEFAULT VALUES is no MySQL)
+			cols = []db.Change{{Name: t.cols.Cols[0].Name, Default: true}}
 		}
 		ch.Inserts = append(ch.Inserts, cols)
 	}
 	t.saving = true
 	t.conn.busy++
 	t.out++
-	main, table, key, manual := t.conn.Main, t.table, t.cols.Key(), t.conn.Manual
+	main, eng, table, key, manual := t.conn.Main, t.conn.eng, t.table, t.cols.Key(), t.conn.Manual
 	return func() tea.Msg {
 		start := time.Now()
-		m.failed, m.tx, m.err = postgres.Save(context.Background(), main, table.Schema, table.Name, key, ch, manual)
+		m.failed, m.tx, m.err = db.Save(context.Background(), main, eng, table.Schema, table.Name, key, ch, manual)
 		m.took = time.Since(start)
 		return m
 	}
@@ -674,7 +681,7 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 			for i, v := range strings.Split(key, "\x00") {
 				named = append(named, t.cols.Key()[i]+" = "+v)
 			}
-			if t.failed = &key; errors.Is(m.err, postgres.ErrStale) || errors.Is(m.err, postgres.ErrGone) {
+			if t.failed = &key; errors.Is(m.err, db.ErrStale) || errors.Is(m.err, db.ErrGone) {
 				return strings.Join(named, ", ") + " 的"
 			}
 			return strings.Join(named, ", ") + "："
@@ -687,11 +694,11 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 			head = named(strings.Join(m.rows[i-len(m.dels)].Key, "\x00"))
 		default:
 			head = fmt.Sprintf("新增的第 %d 行", i-len(m.dels)-len(m.rows)+1)
-			if !errors.Is(m.err, postgres.ErrNotInserted) { // ours reads on: 新增的第 2 行没有插入
+			if !errors.Is(m.err, db.ErrNotInserted) { // ours reads on: 新增的第 2 行没有插入
 				head += "："
 			}
 		}
-		t.bar = newErrorBar("save", postgres.ServerErrorOf(m.err), head, "，已回滚")
+		t.bar = newErrorBar("save", t.conn.eng.ErrorOf(m.err), head, "，已回滚")
 	default:
 		clearBar(&t.bar, "save")
 		for k, e := range m.sent {

@@ -17,7 +17,7 @@ import (
 func saver(t *testing.T) (*db.Worker, func(sql string) string, string) {
 	t.Helper()
 	ctx := context.Background()
-	dsn := ownDB(t)
+	dsn := OwnDB(t)
 	main, err := Connect(ctx, dsn, "", false)
 	if err != nil {
 		t.Fatal(err)
@@ -58,27 +58,27 @@ func TestSave(t *testing.T) {
 	rows := []struct {
 		table string
 		key   []string
-		row   Row
+		row   db.Row
 		after string
 	}{
-		{"t_user", []string{"id"}, Row{Key: []string{"1"}, Cols: []Change{
+		{"t_user", []string{"id"}, db.Row{Key: []string{"1"}, Cols: []db.Change{
 			{Name: "name", Val: text("renamed"), Old: text("user_1")},
 			{Name: "email", Val: db.Val{Null: true}, Old: text("user_1@example.com")},
 			{Name: "active", Default: true, Old: text("f")},
 		}}, "select name, email, active from t_user where id = 1"},
-		{"t_order_item", []string{"order_id", "line_no"}, Row{Key: []string{"3", "2"}, Cols: []Change{
+		{"t_order_item", []string{"order_id", "line_no"}, db.Row{Key: []string{"3", "2"}, Cols: []db.Change{
 			{Name: "qty", Val: text("9"), Old: text("1")},
 		}}, "select qty from t_order_item where order_id = 3 and line_no = 2"},
-		{"t_sku", []string{"code"}, Row{Key: []string{"sku_1"}, Cols: []Change{
+		{"t_sku", []string{"code"}, db.Row{Key: []string{"sku_1"}, Cols: []db.Change{
 			{Name: "title", Val: text("SKU one"), Old: text("SKU 1")},
 		}}, "select title from t_sku where code = 'sku_1'"},
-		{"t_order", []string{"id"}, Row{Key: []string{"4"}, Cols: []Change{
+		{"t_order", []string{"id"}, db.Row{Key: []string{"4"}, Cols: []db.Change{
 			{Name: "raw", Val: text(`{"n": 40}`), Old: text(`{"n" : 4}`)},
 		}}, "select raw from t_order where id = 4"},
 	}
 	want := []string{`renamed|<null>|t`, `9`, `SKU one`, `{"n": 40}`}
 	for i, c := range rows {
-		if failed, _, err := Save(ctx, w, "public", c.table, c.key, Changes{Updates: []Row{c.row}}, false); err != nil {
+		if failed, _, err := db.Save(ctx, w, pg, "public", c.table, c.key, db.Changes{Updates: []db.Row{c.row}}, false); err != nil {
 			t.Fatalf("%s: row %d: %v", c.table, failed, err)
 		}
 		if got := q(c.after); got != want[i] {
@@ -92,18 +92,18 @@ func TestSave(t *testing.T) {
 func TestSaveRollsBack(t *testing.T) {
 	ctx := context.Background()
 	w, q, _ := saver(t)
-	ok := Row{Key: []string{"1"}, Cols: []Change{{Name: "note", Val: text("saved"), Old: db.Val{Null: true}}}}
-	stale := Row{Key: []string{"2"}, Cols: []Change{{Name: "note", Val: text("mine"), Old: db.Val{Null: true}}}}
+	ok := db.Row{Key: []string{"1"}, Cols: []db.Change{{Name: "note", Val: text("saved"), Old: db.Val{Null: true}}}}
+	stale := db.Row{Key: []string{"2"}, Cols: []db.Change{{Name: "note", Val: text("mine"), Old: db.Val{Null: true}}}}
 	q("update t_order set note = 'theirs' where id = 2 returning 1")
-	if failed, _, err := Save(ctx, w, "public", "t_order", []string{"id"}, Changes{Updates: []Row{ok, stale}}, false); !errors.Is(err, ErrStale) || failed != 1 {
+	if failed, _, err := db.Save(ctx, w, pg, "public", "t_order", []string{"id"}, db.Changes{Updates: []db.Row{ok, stale}}, false); !errors.Is(err, db.ErrStale) || failed != 1 {
 		t.Fatalf("changed behind: row %d, %v", failed, err)
 	}
-	gone := Row{Key: []string{"999999"}, Cols: ok.Cols}
-	if failed, _, err := Save(ctx, w, "public", "t_order", []string{"id"}, Changes{Updates: []Row{ok, gone}}, false); !errors.Is(err, ErrStale) || failed != 1 {
+	gone := db.Row{Key: []string{"999999"}, Cols: ok.Cols}
+	if failed, _, err := db.Save(ctx, w, pg, "public", "t_order", []string{"id"}, db.Changes{Updates: []db.Row{ok, gone}}, false); !errors.Is(err, db.ErrStale) || failed != 1 {
 		t.Fatalf("gone: row %d, %v", failed, err)
 	}
-	bad := Row{Key: []string{"3"}, Cols: []Change{{Name: "amount", Val: text("abc"), Old: text("3.99")}}}
-	if failed, _, err := Save(ctx, w, "public", "t_order", []string{"id"}, Changes{Updates: []Row{ok, bad}}, false); sqlState(err) != "22P02" || failed != 1 {
+	bad := db.Row{Key: []string{"3"}, Cols: []db.Change{{Name: "amount", Val: text("abc"), Old: text("3.99")}}}
+	if failed, _, err := db.Save(ctx, w, pg, "public", "t_order", []string{"id"}, db.Changes{Updates: []db.Row{ok, bad}}, false); sqlState(err) != "22P02" || failed != 1 {
 		t.Fatalf("bad input: row %d, %v", failed, err)
 	}
 	if got := q("select coalesce(note, '<null>') from t_order where id = 1"); got != "<null>" {
@@ -126,8 +126,8 @@ func TestSaveCancel(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		row := Row{Key: []string{"5"}, Cols: []Change{{Name: "note", Val: text("x"), Old: db.Val{Null: true}}}}
-		_, _, err := Save(ctx, w, "public", "t_order", []string{"id"}, Changes{Updates: []Row{row}}, false)
+		row := db.Row{Key: []string{"5"}, Cols: []db.Change{{Name: "note", Val: text("x"), Old: db.Val{Null: true}}}}
+		_, _, err := db.Save(ctx, w, pg, "public", "t_order", []string{"id"}, db.Changes{Updates: []db.Row{row}}, false)
 		done <- err
 	}()
 	for q("select count(*) from pg_stat_activity where wait_event_type = 'Lock' and datname = current_database()") != "1" {
@@ -164,43 +164,43 @@ func TestSaveChecksEveryType(t *testing.T) {
 	}
 	for i, c := range r.Cols[1:] {
 		old := r.Rows[0][i+1]
-		row := Row{Key: []string{"1"}, Cols: []Change{{Name: c.Name, Val: db.Val{S: "{}"}, Old: old}}}
+		row := db.Row{Key: []string{"1"}, Cols: []db.Change{{Name: c.Name, Val: db.Val{S: "{}"}, Old: old}}}
 		if !old.Null {
 			row.Cols[0].Val = old // written back as it was: only the check is under test
 		}
-		if _, _, err := Save(ctx, w, "public", "types", []string{"id"}, Changes{Updates: []Row{row}}, false); err != nil {
+		if _, _, err := db.Save(ctx, w, pg, "public", "types", []string{"id"}, db.Changes{Updates: []db.Row{row}}, false); err != nil {
 			t.Errorf("%s loaded as %+v: %v", c.Name, old, err)
 		}
 	}
 }
 
 // Deletes, updates and inserts in one save, in that order (§10.6): an
-// INSERT writes the columns set, DEFAULT for the rest, DEFAULT VALUES with
-// none; a composite key finds the row a DELETE takes.
+// INSERT writes the columns set, DEFAULT for the rest, and with none set
+// one of them DEFAULT; a composite key finds the row a DELETE takes.
 func TestSaveInsertsAndDeletes(t *testing.T) {
 	ctx := context.Background()
 	w, q, _ := saver(t)
 	if _, err := w.Exec(ctx, "create table all_default (id bigserial primary key, n int default 7)", 0); err != nil {
 		t.Fatal(err)
 	}
-	ch := Changes{
+	ch := db.Changes{
 		Deletes: [][]string{{"3", "1"}},
-		Updates: []Row{{Key: []string{"3", "2"}, Cols: []Change{{Name: "qty", Val: text("9"), Old: text("1")}}}},
-		Inserts: [][]Change{{{Name: "order_id", Val: text("3")}, {Name: "line_no", Val: text("99")}, {Name: "sku_code", Val: text("sku_1")}, {Name: "qty", Default: true}}},
+		Updates: []db.Row{{Key: []string{"3", "2"}, Cols: []db.Change{{Name: "qty", Val: text("9"), Old: text("1")}}}},
+		Inserts: [][]db.Change{{{Name: "order_id", Val: text("3")}, {Name: "line_no", Val: text("99")}, {Name: "sku_code", Val: text("sku_1")}, {Name: "qty", Default: true}}},
 	}
-	if failed, _, err := Save(ctx, w, "public", "t_order_item", []string{"order_id", "line_no"}, ch, false); err != nil {
+	if failed, _, err := db.Save(ctx, w, pg, "public", "t_order_item", []string{"order_id", "line_no"}, ch, false); err != nil {
 		t.Fatalf("statement %d: %v", failed, err)
 	}
 	if got := q("select (select count(*) from t_order_item where order_id = 3 and line_no = 1), (select qty from t_order_item where order_id = 3 and line_no = 2), (select qty from t_order_item where order_id = 3 and line_no = 99)"); got != "0|9|1" {
 		t.Errorf("deleted, updated, inserted with qty's default: %s", got)
 	}
-	if _, _, err := Save(ctx, w, "public", "t_user", []string{"id"}, Changes{Inserts: [][]Change{{{Name: "name", Val: text("new one")}}}}, false); err != nil {
+	if _, _, err := db.Save(ctx, w, pg, "public", "t_user", []string{"id"}, db.Changes{Inserts: [][]db.Change{{{Name: "name", Val: text("new one")}}}}, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := q("select active, created_at is not null from t_user where name = 'new one'"); got != "t|t" {
 		t.Errorf("the other columns' defaults: %s", got)
 	}
-	if _, _, err := Save(ctx, w, "public", "all_default", []string{"id"}, Changes{Inserts: [][]Change{nil}}, false); err != nil {
+	if _, _, err := db.Save(ctx, w, pg, "public", "all_default", []string{"id"}, db.Changes{Inserts: [][]db.Change{{{Name: "id", Default: true}}}}, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := q("select n from all_default"); got != "7" {
@@ -215,16 +215,16 @@ func TestSaveInsertsAndDeletesRollBack(t *testing.T) {
 	ctx := context.Background()
 	w, q, _ := saver(t)
 	key := []string{"order_id", "line_no"}
-	gone := Changes{Deletes: [][]string{{"3", "1"}, {"999999", "1"}}}
-	if failed, _, err := Save(ctx, w, "public", "t_order_item", key, gone, false); !errors.Is(err, ErrGone) || failed != 1 {
+	gone := db.Changes{Deletes: [][]string{{"3", "1"}, {"999999", "1"}}}
+	if failed, _, err := db.Save(ctx, w, pg, "public", "t_order_item", key, gone, false); !errors.Is(err, db.ErrGone) || failed != 1 {
 		t.Fatalf("gone: statement %d, %v", failed, err)
 	}
-	bad := Changes{
+	bad := db.Changes{
 		Deletes: [][]string{{"3", "1"}},
-		Updates: []Row{{Key: []string{"3", "2"}, Cols: []Change{{Name: "qty", Val: text("9"), Old: text("1")}}}},
-		Inserts: [][]Change{{{Name: "order_id", Val: text("3")}, {Name: "line_no", Val: text("98")}, {Name: "sku_code", Val: text("sku_1")}}, {{Name: "qty", Val: text("x")}}},
+		Updates: []db.Row{{Key: []string{"3", "2"}, Cols: []db.Change{{Name: "qty", Val: text("9"), Old: text("1")}}}},
+		Inserts: [][]db.Change{{{Name: "order_id", Val: text("3")}, {Name: "line_no", Val: text("98")}, {Name: "sku_code", Val: text("sku_1")}}, {{Name: "qty", Val: text("x")}}},
 	}
-	if failed, _, err := Save(ctx, w, "public", "t_order_item", key, bad, false); sqlState(err) == "" || failed != 3 {
+	if failed, _, err := db.Save(ctx, w, pg, "public", "t_order_item", key, bad, false); sqlState(err) == "" || failed != 3 {
 		t.Fatalf("the second insert: statement %d, %v", failed, err)
 	}
 	if got := q("select (select count(*) from t_order_item where order_id = 3 and line_no in (1, 98)), (select qty from t_order_item where order_id = 3 and line_no = 2)"); got != "1|1" {
@@ -242,8 +242,8 @@ func TestSaveInsertsAndDeletesRollBack(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	none := Changes{Inserts: [][]Change{{{Name: "id", Val: text("1")}}}}
-	if failed, _, err := Save(ctx, w, "public", "swallowed", []string{"id"}, none, false); !errors.Is(err, ErrNotInserted) || failed != 0 {
+	none := db.Changes{Inserts: [][]db.Change{{{Name: "id", Val: text("1")}}}}
+	if failed, _, err := db.Save(ctx, w, pg, "public", "swallowed", []string{"id"}, none, false); !errors.Is(err, db.ErrNotInserted) || failed != 0 {
 		t.Errorf("not inserted: statement %d, %v", failed, err)
 	}
 }
@@ -255,23 +255,23 @@ func TestSaveInsertsAndDeletesRollBack(t *testing.T) {
 func TestSaveManual(t *testing.T) {
 	ctx := context.Background()
 	w, q, _ := saver(t)
-	note := func(id, v string) Changes {
-		return Changes{Updates: []Row{{Key: []string{id}, Cols: []Change{{Name: "note", Val: text(v), Old: db.Val{Null: true}}}}}}
+	note := func(id, v string) db.Changes {
+		return db.Changes{Updates: []db.Row{{Key: []string{id}, Cols: []db.Change{{Name: "note", Val: text(v), Old: db.Val{Null: true}}}}}}
 	}
 	end := func(sql string) {
 		t.Helper()
-		if err := w.Run(ctx, func(ctx context.Context, c db.Conn) error { _, err := End(ctx, c, sql); return err }); err != nil {
+		if err := w.Run(ctx, func(ctx context.Context, c db.Conn) error { _, err := db.End(ctx, c, sql); return err }); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, tx, err := Save(ctx, w, "public", "t_order", []string{"id"}, note("1", "first"), true); err != nil || tx != 'T' {
+	if _, tx, err := db.Save(ctx, w, pg, "public", "t_order", []string{"id"}, note("1", "first"), true); err != nil || tx != 'T' {
 		t.Fatalf("first: %c %v", tx, err)
 	}
 	if got := q("select coalesce(note, '<null>') from t_order where id = 1"); got != "<null>" {
 		t.Errorf("committed: %s", got)
 	}
-	bad := Changes{Updates: []Row{{Key: []string{"2"}, Cols: []Change{{Name: "amount", Val: text("abc"), Old: text("3.99")}}}}}
-	if _, tx, err := Save(ctx, w, "public", "t_order", []string{"id"}, bad, true); sqlState(err) != "22P02" || tx != 'T' {
+	bad := db.Changes{Updates: []db.Row{{Key: []string{"2"}, Cols: []db.Change{{Name: "amount", Val: text("abc"), Old: text("3.99")}}}}}
+	if _, tx, err := db.Save(ctx, w, pg, "public", "t_order", []string{"id"}, bad, true); sqlState(err) != "22P02" || tx != 'T' {
 		t.Fatalf("bad: %c %v", tx, err)
 	}
 	end("commit")
@@ -280,7 +280,7 @@ func TestSaveManual(t *testing.T) {
 	}
 
 	end("begin") // the user's own, in the auto mode
-	if _, tx, err := Save(ctx, w, "public", "t_order", []string{"id"}, note("3", "mine"), false); err != nil || tx != 'T' {
+	if _, tx, err := db.Save(ctx, w, pg, "public", "t_order", []string{"id"}, note("3", "mine"), false); err != nil || tx != 'T' {
 		t.Fatalf("in the user's: %c %v", tx, err)
 	}
 	end("rollback")

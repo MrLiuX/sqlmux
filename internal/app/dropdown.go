@@ -150,7 +150,11 @@ func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 	w := 16
 	items, _ := a.dropItems()
 	for i, s := range items {
-		w = max(w, ui.Width(strings.TrimSpace(s+" "+a.dropNote(i)))+4) // border and padding on both sides
+		n := ui.Width(s)
+		if note := a.dropNote(i); note != "" {
+			n += 1 + ui.Width(note)
+		}
+		w = max(w, n+4) // border and padding on both sides
 	}
 	var entry uv.Rectangle
 	switch d.kind {
