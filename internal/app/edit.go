@@ -146,15 +146,22 @@ func (t *dataTab) put(add *newRow, k editKey, e edit) {
 	add.cells[k.col] = e
 }
 
-// readOnly is the toast for a table with no row identity: it can't be
-// saved to, so it isn't changed (§10.1).
-func (a *App) readOnly(t *dataTab) tea.Cmd {
-	return a.showToast(t.table.Name+" 没有主键，也没有全部列都非空的唯一索引，只读", toastTTL)
+// whyNoEdit is why t's table takes no change, as its toast says it; ""
+// when it does (§10.1): a read-only connection's table, or one with no
+// row identity, which can't be saved to.
+func (t *dataTab) whyNoEdit() string {
+	switch {
+	case t.conn.Spec.ReadOnly:
+		return t.conn.Spec.Name + " 是只读连接"
+	case t.cols.Key() == nil:
+		return t.table.Name + " 没有主键，也没有全部列都非空的唯一索引，只读"
+	}
+	return ""
 }
 
 // editCell starts editing the focused grid's current cell (§10.1), its
-// text all selected, or with text pasted in its place. A table without a
-// row identity can't be saved to, so it isn't edited.
+// text all selected, or with text pasted in its place; not on a table
+// whyNoEdit names.
 func (a *App) editCell(pasted *string) tea.Cmd {
 	_, t, ok := a.focusedGrid()
 	if !ok {
@@ -164,8 +171,8 @@ func (a *App) editCell(pasted *string) tea.Cmd {
 	if !ok || !t.editable(sr, key) {
 		return nil
 	}
-	if t.cols.Key() == nil {
-		return a.readOnly(t)
+	if why := t.whyNoEdit(); why != "" {
+		return a.showToast(why, toastTTL)
 	}
 	field := t.fieldAt(t.col)
 	c := &cellEdit{key: editKey{key, t.page.Cols[field].Name}, add: sr.add, orig: db.Val{Null: true}} // a row added's: DEFAULT, till set
@@ -284,10 +291,10 @@ func (t *dataTab) applyOption(o option) {
 
 // setSpecial makes the grid's current cell NULL, or DEFAULT (cell.null,
 // cell.default, §10.2); an edit of it under way ends so. Not for a column
-// that can't hold it, nor a table with no row identity.
+// that can't hold it, nor a table whyNoEdit names.
 func (a *App) setSpecial(def bool) {
 	_, t, ok := a.focusedGrid()
-	if !ok || t.cols.Key() == nil {
+	if !ok || t.whyNoEdit() != "" {
 		return
 	}
 	sr, key, ok := t.cursor()
@@ -469,8 +476,8 @@ func (a *App) addRow() tea.Cmd {
 	if !ok {
 		return nil
 	}
-	if t.cols.Key() == nil {
-		return a.readOnly(t)
+	if why := t.whyNoEdit(); why != "" {
+		return a.showToast(why, toastTTL)
 	}
 	// added keeps the order they show in, (page, after), a save's too:
 	// right after the cursor's, or before those added under its row before
@@ -505,8 +512,8 @@ func (a *App) deleteRow() tea.Cmd {
 	if !ok {
 		return nil
 	}
-	if t.cols.Key() == nil {
-		return a.readOnly(t)
+	if why := t.whyNoEdit(); why != "" {
+		return a.showToast(why, toastTTL)
 	}
 	sr, key, ok := t.cursor()
 	if !ok {
@@ -576,10 +583,12 @@ type saveMsg struct {
 	failed int            // into dels, rows, adds in turn; -1 for none
 	err    error
 	took   time.Duration
+	tx     byte // where Main's transaction is as the save ends (F5.3)
 }
 
 // save writes the focused tab's changes to its table in one transaction
-// on Main (§10.3, §10.6): the rows marked deleted, an UPDATE a row with
+// on Main (§10.3, §10.6), the one going on there in the manual mode or
+// when the user began one: the rows marked deleted, an UPDATE a row with
 // changes in row identity order, those rows' changes dropped, and the
 // rows added, in the order they show.
 func (a *App) save() tea.Cmd {
@@ -628,10 +637,10 @@ func (a *App) save() tea.Cmd {
 	t.saving = true
 	t.conn.busy++
 	t.out++
-	main, table, key := t.conn.Main, t.table, t.cols.Key()
+	main, table, key, manual := t.conn.Main, t.table, t.cols.Key(), t.conn.Manual
 	return func() tea.Msg {
 		start := time.Now()
-		m.failed, m.err = postgres.Save(context.Background(), main, table.Schema, table.Name, key, ch)
+		m.failed, m.tx, m.err = postgres.Save(context.Background(), main, table.Schema, table.Name, key, ch, manual)
 		m.took = time.Since(start)
 		return m
 	}
@@ -642,11 +651,14 @@ func (a *App) save() tea.Cmd {
 // changes sent go, those made since stay, and the page loads again;
 // failed, all is rolled back and the changes stay, the row at fault named
 // by its row identity (it may be on another page) and marked, a row added
-// by its place among them (§10.3, §10.6).
+// by its place among them (§10.3, §10.6). In a transaction, saved is not
+// committed.
 func (a *App) gotSave(m saveMsg) tea.Cmd {
 	t := m.tab
 	t.conn.busy--
-	t.conn.tx = 'I' // a save ends in commit or rollback, a transaction begun in a console with it (§11)
+	if m.tx != 0 { // 0: it never got Main
+		t.conn.tx = m.tx
+	}
 	t.saving = false
 	t.out--
 	closing := t.closing
@@ -700,7 +712,11 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 			return nil
 		}
 		cmd := a.fetch(t, true) // the rows may leave the WHERE now
-		t.note = ui.Note{Head: fmt.Sprintf("已保存 %d 行 · %s", len(m.dels)+len(m.rows)+len(m.adds), m.took.Round(time.Millisecond))}
+		uncommitted := ""
+		if m.tx == 'T' {
+			uncommitted = "（未提交）"
+		}
+		t.note = ui.Note{Head: fmt.Sprintf("已保存 %d 行%s · %s", len(m.dels)+len(m.rows)+len(m.adds), uncommitted, m.took.Round(time.Millisecond))}
 		return cmd
 	}
 	return nil
@@ -725,24 +741,51 @@ func unsaved(panes ...*Pane) int {
 	return n
 }
 
-// unlessUnsaved runs then, or with n changed cells to lose asks first:
-// "<what> 有 N 处修改未保存，<verb>会丢弃。" (§10.5).
-func (a *App) unlessUnsaved(n int, what, verb string, then func() tea.Cmd) tea.Cmd {
-	if n == 0 {
+// unlessLost runs then, or asks first (§10.5): with n changes, of what,
+// to lose, "<what>有 N 处修改未保存，<verb>会丢弃。"; with the
+// transactions of conns to roll back, "<names> 有未提交的事务，<verb>会回滚。".
+func (a *App) unlessLost(n int, what string, conns []*Conn, verb string, then func() tea.Cmd) tea.Cmd {
+	var text string
+	if n > 0 {
+		text = fmt.Sprintf("%s有 %d 处修改未保存，%s会丢弃。", what, n, verb)
+	}
+	var names []string
+	for _, c := range conns {
+		if !slices.Contains(names, c.Spec.Name) { // sessions' connections of one name
+			names = append(names, c.Spec.Name)
+		}
+	}
+	if len(names) > 0 {
+		text += strings.Join(names, "、") + " 有未提交的事务，" + verb + "会回滚。"
+	}
+	if text == "" {
 		return then()
 	}
-	a.confirm = &confirmBox{fmt.Sprintf("%s有 %d 处修改未保存，%s会丢弃。", what, n, verb), verb, then}
+	a.confirm = &confirmBox{text, verb, then}
 	return nil
 }
 
-// quit ends the program, asking first when changes of any session would
-// go (§10.5).
+// txConns is the connections of sessions in a transaction.
+func txConns(sessions ...*Session) []*Conn {
+	var out []*Conn
+	for _, s := range sessions {
+		for _, c := range s.Conns {
+			if c.inTx() {
+				out = append(out, c)
+			}
+		}
+	}
+	return out
+}
+
+// quit ends the program, asking first when changes or transactions of any
+// session would go (§10.5): closing the connections rolls those back.
 func (a *App) quit() tea.Cmd {
 	var ps []*Pane
 	for _, s := range a.sessions {
 		ps = append(ps, s.panes()...)
 	}
-	return a.unlessUnsaved(unsaved(ps...), "", "退出", func() tea.Cmd {
+	return a.unlessLost(unsaved(ps...), "", txConns(a.sessions...), "退出", func() tea.Cmd {
 		if cmd, ok := a.flushAll(ps...); !ok { // the consoles' text is not lost (§11)
 			return cmd
 		}

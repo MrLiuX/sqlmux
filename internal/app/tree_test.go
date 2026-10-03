@@ -114,14 +114,15 @@ func withConns() (*App, *Conn) {
 	seed := readyConn("seed")
 	seed.Schema, seed.Schemas, seed.home = "public", []string{"public"}, "public"
 	seed.Tables = []db.Table{{Schema: "public", Name: "t_order", Rows: 7}}
-	broken, dialing := newConn(config.Connection{Name: "broken"}), newConn(config.Connection{Name: "dialing"})
+	broken, dialing := newConn(config.Connection{Name: "broken"}), newConn(config.Connection{Name: "dialing", ReadOnly: true})
 	broken.State, dialing.State = connFailed, connConnecting
-	a.sess.Conns = append(a.sess.Conns, seed, broken, dialing, newConn(config.Connection{Name: "idle"}))
+	a.sess.Conns = append(a.sess.Conns, seed, broken, dialing, newConn(config.Connection{Name: "idle", ReadOnly: true}))
 	return a, seed
 }
 
 // Each connection is a root: connected, open on its current_schema();
-// connecting, a dim …; failed, in error; not connected, closed (§7.8).
+// connecting, a dim …; failed, in error; not connected, closed; a
+// read-only one with a dim lock (§7.8).
 func TestGoldenConnNodes(t *testing.T) {
 	a, seed := withConns()
 	a.sess.open[connNode(a.sess.Conns[0])] = false

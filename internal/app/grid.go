@@ -142,11 +142,13 @@ func (t *dataTab) query() postgres.Query {
 	}
 }
 
-// fetch reads the page t.request asks for on Meta, after the table's
-// columns when the catalog hasn't got them yet: they give the row identity
-// it orders by (§8.4, §10.1). recount counts the rows again once a page
-// is in (§8.3): owed by the tab, so a newer request taking this one's
-// place still pays it.
+// fetch reads the page t.request asks for on Meta, or in the manual mode
+// on Main, to see what was saved and not committed (§8.2), in a savepoint
+// in a transaction: a WHERE that fails fails it alone. The table's columns
+// come first, from Meta, when the catalog hasn't got them yet: they give
+// the row identity it orders by (§8.4, §10.1). recount counts the rows
+// again once a page is in (§8.3): owed by the tab, so a newer request
+// taking this one's place still pays it.
 func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 	t.note, t.failed = ui.Note{}, nil // until the next fetch the user asks for (§10.3)
 	// what is on its way is older than this now, whether this goes or not
@@ -161,6 +163,10 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 	t.conn.busy++
 	t.out++
 	seq, table, meta, q := t.seq, t.table, t.conn.Meta, t.query()
+	w := meta
+	if t.conn.Manual {
+		w = t.conn.Main
+	}
 	cols, cached := t.conn.cols[idOf(table)]
 	page := func() tea.Msg {
 		ctx := context.Background()
@@ -172,7 +178,11 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 		}
 		q := q
 		q.Key = cols.Key()
-		r, next, err := postgres.Page(ctx, meta, q)
+		var r db.Result
+		var next bool
+		err := w.Run(ctx, func(ctx context.Context, c db.Conn) error {
+			return postgres.Guarded(ctx, c, "sqlmux_page", func() (err error) { r, next, err = postgres.Page(ctx, c, q); return err })
+		})
 		return pageMsg{tab: t, seq: seq, cols: cols, page: r, next: next, err: err}
 	}
 	return page

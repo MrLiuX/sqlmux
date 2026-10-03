@@ -222,14 +222,31 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 		)
 	case consoleOf(p) != nil:
 		// Drawn left to right; Prio says what goes first when space runs out
-		// (§7.8): ▶ run, the connection and the schema as one, ↵.
+		// (§7.8): ▶ run, the connection and the schema as one, the
+		// transaction's as one, ↵.
 		c := consoleOf(p)
-		b.Hints = append(b.Hints, ui.Hint{Label: c.conn.Spec.Name, Action: "console.conn", Color: th.Info, Prio: 1, Group: 1})
+		mode := "Tx: 自动 ▾"
+		if c.conn.Manual {
+			mode = "Tx: 手动 ▾"
+		}
+		b.Hints = append(b.Hints, ui.Hint{Label: mode, Action: "console.tx", Color: th.Fg, Prio: 2, Group: 2})
+		if c.conn.Manual { // dim, and no button, out of a transaction
+			commit, rollback := ui.Hint{Label: "✓", Prio: 2, Group: 2}, ui.Hint{Label: "↺", Prio: 2, Group: 2}
+			if c.conn.inTx() {
+				commit.Action, commit.Color, rollback.Action, rollback.Color = "tx.commit", th.Focus, "tx.rollback", th.Info
+			}
+			b.Hints = append(b.Hints, commit, rollback)
+		}
+		name := c.conn.Spec.Name
+		if c.conn.Spec.ReadOnly {
+			name += " " + a.icons.Lock.Text
+		}
+		b.Hints = append(b.Hints, ui.Hint{Label: name, Action: "console.conn", Color: th.Info, Prio: 1, Group: 1})
 		if c.schema != "" {
 			b.Hints = append(b.Hints, ui.Hint{Label: "·", Prio: 1, Group: 1}, ui.Hint{Label: c.conn.DB + "." + c.schema + " ▾", Action: "console.schema", Color: th.PK, Prio: 1, Group: 1})
 		}
 		b.Hints = append(b.Hints, ui.Hint{Label: "▶ run", Action: "console.run", Button: true})
-		b.Hints = append(b.Hints, bound(ui.Hint{Key: a.keys.Hint("console.run", "console"), Action: "console.run", Prio: 2, Attached: true})...)
+		b.Hints = append(b.Hints, bound(ui.Hint{Key: a.keys.Hint("console.run", "console"), Action: "console.run", Prio: 3, Attached: true})...)
 		tabHints = bound(ui.Hint{Key: a.hints("normal", "/", "tab.next", "tab.prev")})
 	case dataOf(p) != nil:
 		tabHints = bound(
@@ -489,6 +506,12 @@ func (a *App) statusLine() ui.StatusLine {
 	}
 	c := a.conn() // its name too: two often differ by the database alone (§7.8)
 	s.Right = append(s.Right, ui.Segment{Runs: iconRuns(ic.Conn, conn, " "+c.Spec.Name+" · "+c.Addr+" "), Drop: dropConn})
+	switch c.tx { // Main's transaction, one a console began in the auto mode too (§7.8)
+	case 'T':
+		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: " 事务中 ", Style: bar(th.Warn)}}})
+	case 'E':
+		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: " 事务出错 ", Style: bar(th.Error)}}})
+	}
 	if c.busy > 0 { // a click cancels it, as C-c does (§8.3)
 		busy := " busy "
 		if k := a.keys.Hint("cancel", "global"); k != "" {

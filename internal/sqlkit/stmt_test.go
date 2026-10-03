@@ -169,6 +169,26 @@ var pgCommands = strings.Fields(`abort alter analyse analyze begin call checkpoi
 	insert listen load lock merge move notify prepare reassign refresh reindex release reset revoke
 	rollback savepoint security select set show start table truncate unlisten update vacuum values with`)
 
+// A read-only connection keeps back writes and what turns read only off,
+// whatever the case and quoting; transaction control and other settings
+// go (§13).
+func TestBreaksReadOnly(t *testing.T) {
+	for s, want := range map[string]bool{
+		"delete from t": true, "vacuum": true, "call p()": true, "explain analyze delete from t": true,
+		"set transaction read only": true, "SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE": true,
+		"set default_transaction_read_only to default": true, `set local "Transaction_Read_Only" = off`: true,
+		"begin read write": true, "start transaction isolation level serializable, read write": true,
+		"select 1": false, "selec 1": false, "": false, "begin": false, "begin read only": false, "commit": false,
+		"end": false, "abort": false, "rollback to savepoint s": false, "release s": false, "savepoint s": false,
+		"set search_path to public": false, "set session authorization default": false, "set": false,
+		"reset default_transaction_read_only": false, "reset all": false, "discard all": false,
+	} {
+		if got := BreaksReadOnly(s, PG); got != want {
+			t.Errorf("BreaksReadOnly(%q) = %v", s, got)
+		}
+	}
+}
+
 // IsWrite takes what IsRead doesn't but for a first word no keyword: a
 // typo goes to the database. Every PG statement's first word is one: what
 // IsRead doesn't take of them is a write.

@@ -123,7 +123,7 @@ type (
 		r   *run
 		rs  []db.Result
 		err error
-		set string // the SET of search_path when it is what failed
+		set string // what went before the statements when it is what failed: the SET of search_path, the manual mode's begin
 		tx  byte   // where Main's transaction was as the run ended (F5.11)
 	}
 	runTick struct{ r *run }
@@ -187,13 +187,23 @@ func consoleSpan(t *consoleTab, arg string) (text string, from, to int) {
 // runSQL runs sql of console t, named name, which is at base in its text
 // at version ver: in conn's Main, schema first on search_path, a statement
 // at a time, each committing on its own, stopping at the first that fails
-// (§11). Reads get a LIMIT a row past max_rows, to tell there are more.
+// (§11); in the manual mode in a transaction, begun first if need be
+// (F5.3). Reads get a LIMIT a row past max_rows, to tell there are more.
 // The result area shows a placeholder meanwhile; the console's red ▶ goes
-// until this run fails.
+// until this run fails. On a read-only connection a statement it keeps
+// back keeps the whole run back, the log saying so (§13).
 func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, ver int) tea.Cmd {
 	stmts := sqlkit.Statements(sql, sqlkit.PG)
 	if len(stmts) == 0 || t.running != nil {
 		return nil
+	}
+	if conn.Spec.ReadOnly {
+		if i := slices.IndexFunc(stmts, func(s sqlkit.Stmt) bool { return sqlkit.BreaksReadOnly(sql[s.Start:s.End], sqlkit.PG) }); i >= 0 {
+			p := a.showResult(a.win())
+			a.log(&run{name: name, win: a.win()}, sql[stmts[i].Start:stmts[i].End], conn.Spec.Name+" 是只读连接，整次都没有执行", true)
+			selectTab(p, 0)
+			return nil
+		}
 	}
 	a.sess.RunSeq++
 	r := &run{from: t, conn: conn, schema: schema, name: name, sql: sql, base: base, ver: ver, seq: a.sess.RunSeq, start: time.Now(), win: a.win(), stmts: stmts}
@@ -214,7 +224,7 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 			resets = true
 		}
 	}
-	s, schema, maxRows := r.conn, r.schema, a.maxRows
+	s, schema, maxRows, manual := r.conn, r.schema, a.maxRows, r.conn.Manual
 	return tea.Batch(func() tea.Msg {
 		m := runDone{r: r}
 		m.err = s.Main.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
@@ -223,8 +233,8 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 			// kept out of transactions only: in a failed one a SET fails too
 			// and the user's rollback would never run; in one going on, a
 			// rollback may take the SET back.
-			defer func() { m.tx = txStatus(c) }()
-			switch tx := txStatus(c); {
+			defer func() { m.tx = db.TxStatus(c) }()
+			switch tx := db.TxStatus(c); {
 			case schema == "":
 			case tx == 'E':
 				s.mainPath = ""
@@ -238,24 +248,21 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 					s.mainPath = schema
 				}
 			}
+			if manual && db.TxStatus(c) == 'I' { // after the SET, which is kept so
+				if _, err := c.Exec(ctx, "begin", 0); err != nil {
+					m.set = "begin"
+					return err
+				}
+			}
 			var err error
 			m.rs, err = db.ExecEach(ctx, c, texts, maxRows)
-			if resets || txStatus(c) != 'I' {
+			if resets || db.TxStatus(c) != 'I' {
 				s.mainPath = ""
 			}
 			return err
 		})
 		return m
 	}, a.runTick(r))
-}
-
-// txStatus is where c's transaction is: PG's connection tells ('I' out of
-// one, 'T' in one, 'E' in one that failed); taken as out of one else.
-func txStatus(c db.Conn) byte {
-	if c, ok := c.(interface{ TxStatus() byte }); ok {
-		return c.TxStatus()
-	}
-	return 'I'
 }
 
 // runTickEvery is how often a placeholder's time is redrawn while its run

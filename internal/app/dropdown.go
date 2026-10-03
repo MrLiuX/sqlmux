@@ -13,7 +13,8 @@ import (
 )
 
 // dropKind is what an open dropdown picks: a table's ORDER or LIMIT (§7.8
-// 「查询条」), a console's schema (§8.6) or connection (§7.8「console 标题」).
+// 「查询条」), a console's schema (§8.6), connection or transaction mode
+// (§7.8「console 标题」).
 type dropKind int
 
 const (
@@ -21,6 +22,7 @@ const (
 	dropLimit
 	dropSchema
 	dropConsoleConn
+	dropTx
 	dropAuto // auto refresh's interval (§7.8「自动刷新」)
 )
 
@@ -64,10 +66,11 @@ func (a *App) openDrop(k dropKind) {
 }
 
 // openConsoleDrop opens the focused console's dropdown of kind k, schema
-// (gs, §8.6) or connection, its selection on the one it has.
+// (gs, §8.6), connection or transaction mode, its selection on the one it
+// has.
 func (a *App) openConsoleDrop(k dropKind) {
 	p := a.focused()
-	if c := consoleOf(p); c != nil && (k == dropConsoleConn || len(c.conn.Schemas) > 0) {
+	if c := consoleOf(p); c != nil && (k != dropSchema || len(c.conn.Schemas) > 0) {
 		a.drop = &dropdown{kind: k, console: c, pane: p}
 		_, a.drop.sel = a.dropItems()
 		a.dropMove(0)
@@ -85,6 +88,12 @@ func (a *App) dropItems() (items []string, current int) {
 			items = append(items, c.Spec.Name)
 		}
 		return items, slices.Index(a.sess.Conns, d.console.conn)
+	case dropTx:
+		current = 0
+		if d.console.conn.Manual {
+			current = 1
+		}
+		return []string{"自动", "手动"}, current
 	case dropOrder: // first the row identity, "默认"; then the columns
 		items = []string{"默认"}
 		current = 0
@@ -131,8 +140,8 @@ func (a *App) dropMatches() []ui.Match {
 }
 
 // dropBox is where v, the dropdown as drawn, opens (§8.6, §7.8): under its
-// chip, left aligned with it, as wide as its longest item. A schema or a
-// connection one opens under its part of the console title, as hits, the
+// chip, left aligned with it, as wide as its longest item and its note. A
+// console's opens under its part of the console title, as hits, the
 // frame's, have it, its right edge on the pane's right border; with the
 // part left out, at that border. Auto refresh's under its button, or given
 // way, at the query bar's right end as a schema one.
@@ -140,18 +149,15 @@ func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 	d := a.drop
 	w := 16
 	items, _ := a.dropItems()
-	for _, s := range items {
-		w = max(w, ui.Width(s)+4) // border and padding on both sides
+	for i, s := range items {
+		w = max(w, ui.Width(strings.TrimSpace(s+" "+a.dropNote(i)))+4) // border and padding on both sides
 	}
 	var entry uv.Rectangle
 	switch d.kind {
-	case dropSchema, dropConsoleConn:
+	case dropSchema, dropConsoleConn, dropTx:
 		r := a.layout()[d.pane.ID]
 		entry = uv.Rect(r.Max.X-w, r.Min.Y, w, 1)
-		action := "console.schema"
-		if d.kind == dropConsoleConn {
-			action = "console.conn"
-		}
+		action := map[dropKind]string{dropSchema: "console.schema", dropConsoleConn: "console.conn", dropTx: "console.tx"}[d.kind]
 		for _, h := range hits {
 			if h.Target == (ui.Target{Kind: ui.KindHint, Pane: d.pane.ID, Action: action}) {
 				entry, w = h.Rect, max(w, r.Max.X-h.Rect.Min.X)
@@ -194,6 +200,8 @@ func (a *App) dropPick(i int) tea.Cmd {
 		return a.keepConsole(d.console)
 	case dropConsoleConn:
 		return a.pickConn(d.console, a.sess.Conns[at])
+	case dropTx:
+		return a.setTxMode(d.console.conn, at == 1)
 	case dropAuto: // the ticking so far stops; this interval's starts
 		if t.auto, t.autoGen = autoIntervals[at], t.autoGen+1; t.auto == 0 {
 			return nil
@@ -238,6 +246,15 @@ func (a *App) dropKey(k keymap.Key) {
 	}
 }
 
+// dropNote is what the dropdown notes on item i: a read-only connection's
+// lock (§7.8「console 标题」).
+func (a *App) dropNote(i int) string {
+	if a.drop.kind == dropConsoleConn && a.sess.Conns[i].Spec.ReadOnly {
+		return a.icons.Lock.Text
+	}
+	return ""
+}
+
 func (a *App) dropView() ui.Dropdown {
 	v := ui.Dropdown{Search: a.icons.Search, Input: a.drop.input, Typing: true, Mark: -1, Sel: a.drop.sel, Top: a.drop.top}
 	items, current := a.dropItems()
@@ -246,6 +263,9 @@ func (a *App) dropView() ui.Dropdown {
 			v.Mark = i
 		}
 		v.Items, v.Pos = append(v.Items, items[m.Index]), append(v.Pos, m.Pos)
+		if a.drop.kind == dropConsoleConn {
+			v.Notes = append(v.Notes, a.dropNote(m.Index))
+		}
 	}
 	return v
 }

@@ -147,6 +147,54 @@ func IsWrite(s string, d Dialect) bool {
 	return i < len(ts) && ts[i].Kind == Keyword && !isRead(s, ts, depth)
 }
 
+// sessionWords start what IsWrite takes but a read-only connection still
+// runs (§13): transaction control and session settings, which leave the
+// database's read only standing but for those BreaksReadOnly looks for.
+var sessionWords = map[string]bool{
+	"begin": true, "start": true, "commit": true, "end": true, "rollback": true, "abort": true,
+	"savepoint": true, "release": true, "set": true, "reset": true, "discard": true,
+}
+
+// BreaksReadOnly is whether a read-only connection keeps statement s from
+// the database (§13): a write, transaction control and session settings
+// aside, or one that turns read only off, as PG 17 does it (postgres'
+// TestReadOnlyUnlocks): SET TRANSACTION, SET SESSION CHARACTERISTICS, SET
+// default_transaction_read_only or transaction_read_only, BEGIN or START
+// TRANSACTION … READ WRITE.
+// ponytail: select set_config('default_transaction_read_only', 'off',
+// false) reads, and turns it off; read only guards against slips, not
+// users (§13)
+func BreaksReadOnly(s string, d Dialect) bool {
+	ts, depth := words(s, d)
+	i := first(s, ts)
+	if i >= len(ts) || ts[i].Kind != Keyword || isRead(s, ts, depth) {
+		return false
+	}
+	switch w := lower(s, ts, i); w {
+	case "set":
+		if k := lower(s, ts, i+1); k == "session" || k == "local" {
+			i++
+		}
+		if i+1 >= len(ts) {
+			return false
+		}
+		switch strings.ToLower(unquote(s[ts[i+1].Start:ts[i+1].End])) { // GUC names go by any case
+		case "transaction", "characteristics", "default_transaction_read_only", "transaction_read_only":
+			return true
+		}
+		return false
+	case "begin", "start":
+		for j := i + 1; j < len(ts); j++ {
+			if lower(s, ts, j) == "read" && lower(s, ts, j+1) == "write" {
+				return true
+			}
+		}
+		return false
+	default:
+		return !sessionWords[w]
+	}
+}
+
 func isRead(s string, ts []Token, depth []int) bool {
 	i := first(s, ts)
 	switch lower(s, ts, i) {

@@ -128,6 +128,12 @@ func init() {
 		"console.run":    {Title: "执行", Run: func(a *App, args Args) tea.Cmd { return a.consoleRun(args.Arg) }},
 		"console.schema": {Title: "切换 schema", Run: do(func(a *App, _ Args) { a.openConsoleDrop(dropSchema) })},
 		"console.conn":   {Title: "切换连接…", Run: do(func(a *App, _ Args) { a.openConsoleDrop(dropConsoleConn) })},
+		"console.tx":     {Run: do(func(a *App, _ Args) { a.openConsoleDrop(dropTx) })}, // a click on Tx: 自动 ▾; the palette has tx.mode (§7.8)
+		// The current connection's transaction (§5, F5.3).
+		"tx.mode": {Title: "手动提交事务", Run: func(a *App, _ Args) tea.Cmd { return a.setTxMode(a.conn(), !a.conn().Manual) },
+			On: func(a *App) bool { return a.conn().Manual }},
+		"tx.commit":   {Title: "提交", Run: func(a *App, _ Args) tea.Cmd { return a.endTx(a.conn(), "commit") }},
+		"tx.rollback": {Title: "回滚", Run: func(a *App, _ Args) tea.Cmd { return a.endTx(a.conn(), "rollback") }},
 		// The result area's (§11).
 		"result.rerun":  {Title: "重跑", Run: func(a *App, _ Args) tea.Cmd { return a.rerun() }},
 		"result.export": {Title: "导出 CSV", Run: func(a *App, _ Args) tea.Cmd { return a.exportResult() }},
@@ -148,7 +154,7 @@ func init() {
 			if cmd, ok := a.flushAll(a.focused()); !ok {
 				return cmd
 			}
-			return a.unlessUnsaved(unsaved(a.focused()), "这个 pane 里", "关闭", func() tea.Cmd { a.closePane(); return nil })
+			return a.closeAsking(unsaved(a.focused()), "这个 pane 里", consolesIn(a.focused()), func() tea.Cmd { a.closePane(); return nil })
 		}},
 		"pane.zoom": {Title: "缩放 / 还原", Run: do(func(a *App, _ Args) { a.toggleZoom() }),
 			On: func(a *App) bool { return a.win().Zoom != 0 }},
@@ -364,7 +370,7 @@ func init() {
 			if t == nil {
 				return nil
 			}
-			return a.unlessUnsaved(t.changes(), "", "刷新", func() tea.Cmd { // R drops the changes (§10.4)
+			return a.unlessLost(t.changes(), "", nil, "刷新", func() tea.Cmd { // R drops the changes (§10.4)
 				t.edits, t.added, t.deleted = nil, nil, nil
 				return a.fetch(t, true)
 			})

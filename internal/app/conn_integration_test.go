@@ -18,8 +18,8 @@ import (
 	"sqlmux/internal/keymap"
 )
 
-// settle delivers what connecting and the catalog bring back, and what
-// those bring in turn; the rest is dropped.
+// settle delivers what connecting, the catalog, a run and a commit or a
+// rollback bring back, and what those bring in turn; the rest is dropped.
 func settle(a *App, cmd tea.Cmd) {
 	if cmd == nil {
 		return
@@ -29,7 +29,7 @@ func settle(a *App, cmd tea.Cmd) {
 		for _, c := range m {
 			settle(a, c)
 		}
-	case connected, catalogMsg, sessionDialed:
+	case connected, catalogMsg, sessionDialed, runDone, txDone:
 		_, next := a.Update(m)
 		settle(a, next)
 	}
@@ -184,5 +184,78 @@ func TestNewSession(t *testing.T) {
 	}
 	if c := consoleOf(s.Windows[0].Root.B.Pane); c == nil || c.key() != "console_2" || c.conn != s.Conns[0] {
 		t.Errorf("its console: %+v", c)
+	}
+}
+
+// opened is an App over a session of specs, the first connected and its
+// catalog in, on 160 × 45.
+func opened(t *testing.T, specs ...config.Connection) *App {
+	t.Helper()
+	sess, err := Open(context.Background(), specs, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Default()
+	keys, _ := keymap.New(cfg)
+	a := New(cfg, keys, sess, &config.State{}, "")
+	t.Cleanup(a.Close)
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
+	settle(a, a.loadCatalog(sess.Conns[0]))
+	return a
+}
+
+// lastLog is the last line of the window's log, its text after the time.
+func lastLog(a *App) string {
+	l := a.win().log[len(a.win().log)-1]
+	return l.Head[10:] + l.Tail
+}
+
+// In the manual mode a run begins a transaction, which stays till a
+// rollback takes it back; one failed stays so till then, a commit of it
+// rolling back (F5.3). Temp tables: the shared database is not written.
+func TestManualTx(t *testing.T) {
+	a := opened(t, config.Connection{Name: "play", Engine: "postgres", DSN: postgres.IntegrationDSN(t)})
+	play, c := a.sess.Conns[0], consoleOf(a.win().Root.B.Pane)
+	a.win().focus(a.win().Root.B.Pane.ID)
+	run := func(sql string) {
+		t.Helper()
+		c.ed.Load(sql)
+		settle(a, a.consoleRun(""))
+	}
+	play.Manual = true
+	if run("create temp table probe (a int)"); play.tx != 'T' {
+		t.Fatalf("a run: %c", play.tx)
+	}
+	if settle(a, a.endTx(play, "rollback")); play.tx != 'I' {
+		t.Fatalf("rolled back: %c", play.tx)
+	}
+	if run("select * from probe"); !strings.Contains(lastLog(a), "does not exist") {
+		t.Errorf("the table is there: %s", lastLog(a))
+	}
+	if run("select 1/0"); play.tx != 'E' {
+		t.Fatalf("failed: %c", play.tx)
+	}
+	if settle(a, a.endTx(play, "commit")); play.tx != 'I' || a.toast != "事务已出错，提交改为了回滚" {
+		t.Errorf("committed a failed one: %c, toast %q", play.tx, a.toast)
+	}
+}
+
+// A read-only connection's Main is read only too: a write the console
+// takes for a read fails in the database; what BreaksReadOnly takes does
+// not reach it (§13).
+func TestReadOnlyMain(t *testing.T) {
+	a := opened(t, config.Connection{Name: "play", Engine: "postgres", DSN: postgres.IntegrationDSN(t), ReadOnly: true})
+	c := consoleOf(a.win().Root.B.Pane)
+	a.win().focus(a.win().Root.B.Pane.ID)
+	run := func(sql string) {
+		t.Helper()
+		c.ed.Load(sql)
+		settle(a, a.consoleRun(""))
+	}
+	if run("select nextval('t_order_id_seq')"); !strings.Contains(lastLog(a), "read-only transaction") {
+		t.Errorf("nextval: %s", lastLog(a))
+	}
+	if run("begin read write"); lastLog(a) != "console_1  begin read write  play 是只读连接，整次都没有执行" || c.conn.tx != 'I' {
+		t.Errorf("begin read write: %s, %c", lastLog(a), c.conn.tx)
 	}
 }

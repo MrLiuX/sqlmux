@@ -37,3 +37,12 @@ type Conn interface {
 	Query(ctx context.Context, sql string, args ...Val) (Result, error)
 	Close() error
 }
+
+// TxStatus is where c's transaction is: PG's connection tells ('I' out of
+// one, 'T' in one, 'E' in one that failed); taken as out of one else.
+func TxStatus(c Conn) byte {
+	if c, ok := c.(interface{ TxStatus() byte }); ok {
+		return c.TxStatus()
+	}
+	return 'I'
+}

@@ -40,6 +40,7 @@ type Icons struct {
 	AutoRefresh, Stop        Icon // and its query group
 	SortAsc, SortDesc        Icon
 	View, Column             Icon // the tree's (F1.12)
+	Lock                     Icon // a read-only connection's (§13)
 	Result, Pin, Export, Log Icon // the result area's (§11)
 	Close                    Icon
 	Star, History            Icon // a WHERE's favorites and history (§9.7)
@@ -72,6 +73,7 @@ var NerdIcons = &Icons{
 	SortDesc:    Icon{Text: "\uf161"}, // nf-fa-sort_amount_desc
 	View:        Icon{Text: "\uf06e"}, // nf-fa-eye
 	Column:      Icon{Text: "\ueb5f"}, // nf-cod-symbol_field
+	Lock:        Icon{Text: "\uf023"}, // nf-fa-lock
 	Result:      Icon{Text: "\uf022"}, // nf-fa-list_alt
 	Pin:         Icon{Text: "\uf435"}, // nf-oct-pin
 	Export:      Icon{Text: "\uf019"}, // nf-fa-download
@@ -102,6 +104,7 @@ var ASCIIIcons = &Icons{
 	SortDesc:    Icon{Text: "↓"},
 	View:        Icon{Text: "v"},
 	Column:      Icon{Text: "-"},
+	Lock:        Icon{Text: "RO"},
 	Result:      Icon{Text: "="},
 	Pin:         Icon{Text: "*"},
 	Export:      Icon{Text: ">"},
@@ -140,7 +143,7 @@ func (ic *Icons) byName() map[string]*Icon {
 		"key": &ic.Key, "postgres": &ic.Postgres, "command": &ic.Command, "window": &ic.Window,
 		"save": &ic.Save, "refresh": &ic.Refresh, "transpose": &ic.Transpose,
 		"row_add": &ic.RowAdd, "row_delete": &ic.RowDelete, "auto_refresh": &ic.AutoRefresh, "stop": &ic.Stop,
-		"sort_asc": &ic.SortAsc, "sort_desc": &ic.SortDesc, "view": &ic.View, "column": &ic.Column,
+		"sort_asc": &ic.SortAsc, "sort_desc": &ic.SortDesc, "view": &ic.View, "column": &ic.Column, "lock": &ic.Lock,
 		"result": &ic.Result, "pin": &ic.Pin, "export": &ic.Export, "close": &ic.Close,
 		"log": &ic.Log, "star": &ic.Star, "history": &ic.History,
 	}

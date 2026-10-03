@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"sqlmux/internal/db"
+	"sqlmux/internal/sqlkit"
 )
 
 func connect(t *testing.T, readOnly bool) *Conn {
@@ -245,5 +246,48 @@ func TestTxStatusDropped(t *testing.T) {
 	c.Query(ctx, "select 1") // finds it gone
 	if got := c.TxStatus(); got != 'I' {
 		t.Errorf("dropped: %c", got)
+	}
+}
+
+// What turns a read-only connection's read only off, by trying a write
+// after it, and what doesn't, is what sqlkit.BreaksReadOnly keeps back and
+// lets go (§13). A transaction's settings need one begun.
+func TestReadOnlyUnlocks(t *testing.T) {
+	ctx := context.Background()
+	for _, c := range []struct {
+		begin   bool
+		stmt    string
+		unlocks bool
+	}{
+		{true, "set transaction read write", true},
+		{true, "set transaction_read_only = off", true},
+		{true, "set local transaction_read_only to off", true},
+		{false, `set "default_transaction_read_only" to off`, true},
+		{false, "SET SESSION default_transaction_read_only = off", true},
+		{false, "set session characteristics as transaction read write", true},
+		{false, "begin read write", true},
+		{false, "start transaction isolation level serializable, read write", true},
+		{false, "set search_path to public", false},
+		{false, "set statement_timeout = 0", false},
+		{false, "set session authorization default", false},
+		{false, "reset default_transaction_read_only", false},
+		{false, "reset all", false},
+		{false, "discard all", false},
+		{false, "begin", false},
+	} {
+		conn := connect(t, true)
+		if c.begin {
+			conn.Exec(ctx, "begin", 0)
+		}
+		if _, err := conn.Exec(ctx, c.stmt, 0); err != nil {
+			t.Fatalf("%s: %v", c.stmt, err)
+		}
+		_, err := conn.Exec(ctx, "create temp table probe (a int)", 0)
+		if unlocked := err == nil; unlocked != c.unlocks {
+			t.Errorf("%s: unlocked %v: %v", c.stmt, unlocked, err)
+		}
+		if sqlkit.BreaksReadOnly(c.stmt, sqlkit.PG) != c.unlocks {
+			t.Errorf("%s: BreaksReadOnly %v", c.stmt, !c.unlocks)
+		}
 	}
 }

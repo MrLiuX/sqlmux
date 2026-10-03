@@ -157,6 +157,10 @@ type Conn struct {
 	// out of one, 'T' in one, 'E' in one that failed; 0 before any. The
 	// replies bring it: Main may be busy, its lock not to wait on (F5.11).
 	tx byte
+	// Manual is the transaction mode, its consoles' and its saves': a run
+	// or a save begins one, which stays till committed or rolled back
+	// (F5.3). Each connects in the auto mode.
+	Manual bool
 
 	Schema    string   // its Schema: the tree cursor's under it, or the last it was under (§7.8)
 	Schemas   []string // the catalog's (§8.4)
@@ -319,7 +323,7 @@ func (a *App) closeWindow() tea.Cmd {
 	if w.Root != nil {
 		ps = w.Root.Leaves()
 	}
-	return a.unlessUnsaved(unsaved(ps...), "", "关闭", func() tea.Cmd {
+	return a.closeAsking(unsaved(ps...), "", consolesIn(ps...), func() tea.Cmd {
 		if cmd, ok := a.flushAll(ps...); !ok {
 			return cmd
 		}
@@ -369,7 +373,7 @@ func dial(ctx context.Context, spec config.Connection) (dialed, error) {
 		pw = s
 		secrets.Store(spec.Name, s)
 	}
-	main, err := postgres.Connect(ctx, spec.DSN, pw.(string), false)
+	main, err := postgres.Connect(ctx, spec.DSN, pw.(string), spec.ReadOnly) // a read-only connection's too (§13)
 	if err != nil {
 		secrets.Delete(spec.Name)
 		return dialed{}, err
@@ -527,7 +531,7 @@ func (a *App) stayReason(t *consoleTab) string {
 	case t.running != nil:
 		return "正在执行，结束后再换连接"
 	case t.conn.inTx():
-		return "当前连接有未提交的事务，先提交或回滚"
+		return txOpen
 	}
 	return ""
 }
@@ -593,9 +597,12 @@ func (s *Session) panes() []*Pane {
 }
 
 // consoles is the session's consoles, in every window.
-func (s *Session) consoles() []*consoleTab {
+func (s *Session) consoles() []*consoleTab { return consolesIn(s.panes()...) }
+
+// consolesIn is the consoles of panes.
+func consolesIn(panes ...*Pane) []*consoleTab {
 	var out []*consoleTab
-	for _, p := range s.panes() {
+	for _, p := range panes {
 		for _, t := range p.Tabs {
 			if t.Console != nil {
 				out = append(out, t.Console)
@@ -648,23 +655,26 @@ func (a *App) closeTab(p *Pane, i int) {
 }
 
 // closeTabAsking is x on pane p's tab i (F3.35): a console's is written
-// first, not asked about (§11); a table's with changes asks first.
+// first, asked about only when its connection's transaction would go with
+// it (§10.5, §11); a table's with changes asks first.
 func (a *App) closeTabAsking(p *Pane, i int) tea.Cmd {
 	if i < 0 || i >= len(p.Tabs) { // tab.close.at's i may come from a user's map
 		return nil
 	}
 	if t := p.Tabs[i].Console; t != nil {
-		if err := t.flush(); err != nil {
-			return a.saveFailed(err)
-		}
-		a.closeTab(p, i)
-		return nil
+		return a.closeAsking(0, "", []*consoleTab{t}, func() tea.Cmd {
+			if err := t.flush(); err != nil {
+				return a.saveFailed(err)
+			}
+			a.closeTab(p, i)
+			return nil
+		})
 	}
 	n, name := 0, ""
 	if t := p.Tabs[i].Data; t != nil {
 		n, name = t.changes(), t.table.Name+" "
 	}
-	return a.unlessUnsaved(n, name, "关闭", func() tea.Cmd { a.closeTab(p, i); return nil })
+	return a.unlessLost(n, name, nil, "关闭", func() tea.Cmd { a.closeTab(p, i); return nil })
 }
 
 // removePane takes pane id out of the tree: its sibling gets the space and

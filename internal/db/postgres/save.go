@@ -75,18 +75,50 @@ func ServerErrorOf(err error) ServerError {
 // COMMIT the server has done would come back as an error (§10.3).
 const endTimeout = 10 * time.Second
 
-// Save writes ch to schema.table in one transaction on w (§10.3, §10.6):
-// first the DELETEs, then the UPDATEs, then the INSERTs, each hitting
-// exactly one row. A row is found by keyCols with =; an UPDATE's also by
-// each changed column still holding what was loaded. On any failure it
-// rolls back; failed is the index of the statement at fault in that
-// order, deletes, updates, inserts, -1 for none. Cancelling ctx stops the
-// statements only.
+// End runs sql, a COMMIT, a ROLLBACK or the like, on c out of ctx's cancel,
+// bounded by endTimeout. It returns the command tag: a COMMIT of a failed
+// transaction's is ROLLBACK.
+func End(ctx context.Context, c db.Conn, sql string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), endTimeout)
+	defer cancel()
+	r, err := c.Query(ctx, sql)
+	return r.Tag, err
+}
+
+// Guarded runs f on c, in savepoint name, a plain word, when c is in a
+// transaction: f failing takes back what f did alone, where an error would
+// leave the whole transaction failed, all the user did in it lost (§10.3).
+func Guarded(ctx context.Context, c db.Conn, name string, f func() error) error {
+	if db.TxStatus(c) == 'I' {
+		return f()
+	}
+	if _, err := c.Query(ctx, "savepoint "+name); err != nil {
+		return err
+	}
+	if err := f(); err != nil {
+		End(ctx, c, "rollback to savepoint "+name)
+		End(ctx, c, "release savepoint "+name)
+		return err
+	}
+	_, err := End(ctx, c, "release savepoint "+name)
+	return err
+}
+
+// Save writes ch to schema.table on w (§10.3, §10.6): first the DELETEs,
+// then the UPDATEs, then the INSERTs, each hitting exactly one row. A row
+// is found by keyCols with =; an UPDATE's also by each changed column
+// still holding what was loaded. In its own transaction it commits, or on
+// any failure rolls back. In the manual transaction mode (one begun first
+// if need be), or in a transaction the user began, it goes in that one,
+// not committed, a failure taking back this save alone. failed is the
+// index of the statement at fault in that order, deletes, updates,
+// inserts, -1 for none; tx is where the transaction is as it ends.
+// Cancelling ctx stops the statements only.
 // Reference: lazysql drivers/utils.go queriesInTransaction and its
 // ExecutePendingChanges, which run the changes as listed and check
 // neither the rows hit nor the loaded values; its INSERT leaves a DEFAULT
 // column out, where ours writes DEFAULT.
-func Save(ctx context.Context, w *db.Worker, schema, table string, keyCols []string, ch Changes) (failed int, err error) {
+func Save(ctx context.Context, w *db.Worker, schema, table string, keyCols []string, ch Changes, manual bool) (failed int, tx byte, err error) {
 	type stmt struct {
 		sql  string
 		args []db.Val
@@ -108,30 +140,38 @@ func Save(ctx context.Context, w *db.Worker, schema, table string, keyCols []str
 	}
 	failed = -1
 	err = w.Run(ctx, func(ctx context.Context, c db.Conn) error {
-		end := func(sql string) error {
-			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), endTimeout)
-			defer cancel()
-			_, err := c.Query(ctx, sql)
-			return err
-		}
-		if _, err := c.Query(ctx, "begin"); err != nil {
-			end("rollback") // a cancel may land once the server has begun
-			return err
-		}
-		for i, s := range stmts {
-			res, err := c.Query(ctx, s.sql, s.args...)
-			if err == nil && res.Tag != s.tag {
-				err = s.miss
+		defer func() { tx = db.TxStatus(c) }()
+		write := func() error {
+			for i, s := range stmts {
+				res, err := c.Query(ctx, s.sql, s.args...)
+				if err == nil && res.Tag != s.tag {
+					err = s.miss
+				}
+				if err != nil {
+					failed = i
+					return err
+				}
 			}
-			if err != nil {
-				failed = i
-				end("rollback")
+			return nil
+		}
+		nested := manual || db.TxStatus(c) != 'I'
+		if db.TxStatus(c) == 'I' {
+			if _, err := c.Query(ctx, "begin"); err != nil {
+				End(ctx, c, "rollback") // a cancel may land once the server has begun
 				return err
 			}
 		}
-		return end("commit")
+		if nested {
+			return Guarded(ctx, c, "sqlmux_save", write)
+		}
+		if err := write(); err != nil {
+			End(ctx, c, "rollback")
+			return err
+		}
+		_, err := End(ctx, c, "commit")
+		return err
 	})
-	return failed, err
+	return failed, tx, err
 }
 
 // keyWhere is what finds a row by its row identity's values, arg taking

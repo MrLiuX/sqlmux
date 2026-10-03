@@ -91,7 +91,7 @@ func TestSessionKill(t *testing.T) {
 		t.Fatal("x on a window's row")
 	}
 	feed(t, a, "kx")
-	if a.confirm == nil || a.confirm.text != "有未提交的事务，关闭会回滚。" {
+	if a.confirm == nil || a.confirm.text != "doraemon 有未提交的事务，关闭会回滚。" {
 		t.Fatalf("confirm %+v", a.confirm)
 	}
 	if feed(t, a, "y"); len(a.sessions) != 1 || a.sess != doraemon || a.sessList == nil || a.sessList.sel != 0 {

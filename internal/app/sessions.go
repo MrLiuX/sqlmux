@@ -153,14 +153,7 @@ func (a *App) killSession() tea.Cmd {
 		return a.quit()
 	}
 	s, ps := r.s, r.s.panes()
-	var text []string
-	if n := unsaved(ps...); n > 0 {
-		text = append(text, fmt.Sprintf("有 %d 处修改未保存，关闭会丢弃。", n))
-	}
-	if slices.ContainsFunc(s.Conns, func(c *Conn) bool { return c.inTx() }) {
-		text = append(text, "有未提交的事务，关闭会回滚。")
-	}
-	kill := func() tea.Cmd {
+	return a.unlessLost(unsaved(ps...), "", txConns(s), "关闭", func() tea.Cmd {
 		if cmd, ok := a.flushAll(ps...); !ok { // the consoles' text is not lost (§11)
 			return cmd
 		}
@@ -173,12 +166,7 @@ func (a *App) killSession() tea.Cmd {
 			l.sel = min(l.sel, len(a.sessionRows())-1)
 		}
 		return func() tea.Msg { s.Close(); return nil }
-	}
-	if len(text) == 0 {
-		return kill()
-	}
-	a.confirm = &confirmBox{strings.Join(text, ""), "关闭", kill}
-	return nil
+	})
 }
 
 // renameSession is $ on a session's row: its name typed in its place.
