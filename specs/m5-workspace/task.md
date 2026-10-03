@@ -247,7 +247,7 @@
 - [ ] **扫描器**：MySQL 会执行的注释 `/*! … */`（如 `SELECT 5 /*! +1 */` 返回 6，dump 开头的 `/*!40101 SET NAMES utf8 */;`）M3 的扫描器当作注释，分句和读写判定会错；M5 接 MySQL 时处理（M3 审查时发现）。
 - [ ] **database 能选**（开工前定，同 PG 的 schema，§8.6）：树里 MySQL 连接下面一层列 database（不列系统库），console 标题是 `<连接> · <database> ▾`，执行前不同就先 `USE`，一次执行里有 `USE` 时作废记下的值。
 - [ ] **事务状态**：MySQL 拿不到 TxStatus，按执行过的 begin / start transaction / commit / rollback 来记（ponytail：DDL 的隐式提交这类情况记不准）。
-- [ ] 新建连接表单的 engine 可以选 mysql；树和面板里的 MySQL 连接用 `mysql` 图标（§7.7）。
+- [ ] 新建连接表单的 engine 可以选 mysql；树的连接节点和 console 的连接下拉里，MySQL 连接画 `mysql` 图标、PG 连接画 `postgres` 图标（§7.7）。
 - [ ] 细节（worker 提议，已定）：
   - 按层分 4 个 commit，各自全绿，审查节点仍是 F5.4 一个：① 驱动和浏览（compose 挂载 seed、mysql.sql、引擎抽象、mysql.Conn、catalog、Page / Count、树和表格）② 编辑和保存 ③ console（扫描器 `/*! */`、执行、只读判定、快速 SQL、DDL 预览、格式化、补全）④ 表单的 engine 和图标；
   - `db.Engine` 接口（两个实现），Conn 上存一个；app 里直接调 `postgres.X` 的地方都改成走它；共用的类型从 postgres 挪到 db；
@@ -261,6 +261,14 @@
   - 图标 `mysql`（nf-dev-mysql U+E704，ascii `my`）；表单的 engine 在 postgres / mysql 之间用空格切换。
 
 - [ ] 测试时定（tester 提问，2026-10-03）：面板里输入不为空时，分数相同的按输入为空时的顺序排，不按长度：同名的表当前连接的 Schema 里那张排第一（§12）。MySQL 能看到服务器上所有的库，同名表很常见，原来 `↵` 会打开别的库的表。
+- [ ] 审查时定（reviewer 提问，2026-10-03，MySQL 8.4 上都已复现）：
+  - 事务状态照手册「Statements That Cause an Implicit Commit」记：这些语句执行后、以及死锁（1213）后记为不在事务中，死锁时 toast「死锁，整个事务已回滚」；MySQL 下这些语句和不带作用域的 `SET TRANSACTION` 都不补 BEGIN；其余记不准的写成 ponytail（§8.2）；
+  - 只读：MySQL 下 `reset` 算写；SET 里带 GLOBAL / PERSIST / PERSIST_ONLY 的项和 `@@global.x` 都拦；MySQL 8.4 的语句首词补进关键字表；`NO_BACKSLASH_ESCAPES` 记成 §13 的已知上限；
+  - go-sql-driver 钉在 v1.7.1，加 `ponytail:` 注释写明原因和升级条件（§8.1）；
+  - 旧值比较改成 `cast(convert(列 using utf8mb4) as binary) = ?`（§10.3）；
+  - 行标识列含 binary / varbinary / blob / bit 的表、非事务引擎的表只读（§10.1）；
+  - BIT 列按数字显示、不能编辑（§8.1）；
+  - 复合语句体被切开、不支持 `DELIMITER`、`KILL QUERY` 没有兜底、`wait_timeout` 断开后不重连，都写成已知上限，代码里用 `ponytail:` 标出（§9.2、§8.3、§8.2）。
 **验收**
 - [ ] M1–M4 的集成测试在 MySQL 上全部通过。
 - [ ] 用 `KILL QUERY` 取消长查询有效。

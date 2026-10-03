@@ -653,7 +653,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
   - 带圈数字按 1 列计算，已知上限见 §7.1「宽度」。
   - 右侧提示离右上角 1 列。
   - console 标题的右侧从左到右是：事务控件 `Tx: 自动 ▾`（F5.3，手动时后面跟着提交 ✓、回滚 ↺）、连接和 schema 的下拉框 `play · sqlmux_play.public ▾`（F5.11 起加上连接；原来只有 `doraemon.public ▾`）、`▶ run`（`focus` 底、`bg` 色字、粗体）加上 `↵`（`dim` 色）。
-    - 连接名和 `<库>.<schema>` 各是一个下拉框，点哪一段开哪一个：连接名用 `info` 色（同状态栏的地址块），`<库>.<schema> ▾` 照旧 `pk` 色，中间的 ` · ` 不能点，悬停只亮那一段；两个下拉框是同一个组件，位置、按键同 §8.6；`gs` 照旧打开 schema 下拉，命令「切换连接…」（`console.conn`）打开连接下拉。连接下拉列出全部连接（名字；每项的图标——只读的 `lock`、MySQL 的引擎图标——等 F5.3 / F5.4 给下拉框加上每项一个图标时一起画），当前的用 `pk` 色标出；选了未连接的就关掉下拉去连，连上之后才换过去（schema 取那个连接的 Schema），连接中又选了别的以最后一次为准，连不上 toast `<连接名>：<错误>`、留在原来的连接。只读连接在标题的连接名后面也画 `lock`，和连接名同一个命中区（`play <lock> · db.public ▾`）。所在连接有未提交的事务时不能换（§5）；这个 console 的执行还没回来时也不能换，toast「正在执行，结束后再换连接」（执行里可能有 begin，回来后原连接停在事务里、上面却没有 console 了，reviewer 在 F5.11 复现）。MySQL 只有连接这一段（§8.6）。
+    - 连接名和 `<库>.<schema>` 各是一个下拉框，点哪一段开哪一个：连接名用 `info` 色（同状态栏的地址块），`<库>.<schema> ▾` 照旧 `pk` 色，中间的 ` · ` 不能点，悬停只亮那一段；两个下拉框是同一个组件，位置、按键同 §8.6；`gs` 照旧打开 schema 下拉，命令「切换连接…」（`console.conn`）打开连接下拉。连接下拉列出全部连接（名字；每项的图标——只读的 `lock`、MySQL 的引擎图标——等 F5.3 / F5.4 给下拉框加上每项一个图标时一起画），当前的用 `pk` 色标出；选了未连接的就关掉下拉去连，连上之后才换过去（schema 取那个连接的 Schema），连接中又选了别的以最后一次为准，连不上 toast `<连接名>：<错误>`、留在原来的连接。只读连接在标题的连接名后面也画 `lock`，和连接名同一个命中区（`play <lock> · db.public ▾`）。所在连接有未提交的事务时不能换（§5）；这个 console 的执行还没回来时也不能换，toast「正在执行，结束后再换连接」（执行里可能有 begin，回来后原连接停在事务里、上面却没有 console 了，reviewer 在 F5.11 复现）。MySQL 的第二段是 `<database> ▾`（§8.6）。
     - `Tx: 自动 ▾` / `Tx: 手动 ▾` 点开是自动、手动两项的下拉，显示的是所在连接的模式（§5）。✓ 为 `focus` 色、↺ 为 `info` 色，悬停 `select` 底；所在连接不在事务里时两个都是 `dim` 色、不能点（同 DataGrip，也同查询条的停止按钮）。`Tx: …` 用 `fg` 色，下拉里当前那项 `pk` 色；✓ ↺ ▾ 不是 Nerd Font 字形，ascii 图标下照样用。
     - 提交、回滚（✓ ↺、`tx.commit` / `tx.rollback`）在当前连接的 `Main` 上用不可取消、带超时的 ctx 执行（同 §10.3 的 COMMIT），不在事务里时不做事。成功不弹 toast：状态栏的「事务中」消失、✓ ↺ 变暗就是反馈；失败 toast 错误。在出错的事务里提交，PG 实际做的是回滚，toast「事务已出错，提交改为了回滚」，免得以为已经提交了。提交、回滚之后（包括确认框里的回滚）重新取这个连接上打开着的表格，计数也重算：手动模式下表格读的是 `Main`，不重取的话屏幕上还是已经撤掉的值；同时清掉列缓存、重新加载这个连接的 catalog：手动模式下 DDL 执行时还没提交，在 `Meta` 上重载看不到它。
   - **空间不够时，提示优先于标题的对象名**，因为提示都是可点击的按钮（§7.4）。按下面的顺序分配空间：
@@ -761,6 +761,7 @@ type Result struct {
     Cols      []Col             // Name, Type（数据库类型名）, Numeric
     Rows      [][]Val
     Tag       string            // 例如 "UPDATE 3"
+    Affected  int64             // 影响行数；保存、新增、删除按它检查（PG 上和按 Tag 判断的结果一致）
     Truncated bool
     Took      time.Duration
 }
@@ -778,8 +779,8 @@ type Result struct {
   - 列类型取自 FieldDescription 里的 OID。
   - 建连时通过 RuntimeParams（startup 消息）设置 `DateStyle = ISO, YMD`，保证时间文本的格式可以解析（§10.2）。每条连接都会带上，不会漏设，也不需要额外的往返。
   - 连接参数交给 `pgconn.ParseConfig(dsn)` 解析，环境变量（`PGHOST` 等）和 `~/.pgpass` 都由它处理，不自己实现。没写 `application_name` 时补成 `sqlmux`，没写连接超时时补成 10s。
-- **MySQL**：DSN 加上 `interpolateParams=true`，全程走文本协议；列类型从 `ColumnTypes()` 获取。
-- **已知上限**：MySQL 中非 UTF-8 的 blob 显示为 `<binary n bytes>`；PG 的 bytea 按服务端返回的 `\x…` 文本显示。
+- **MySQL**：DSN 加上 `interpolateParams=true`，全程走文本协议；列类型从 `ColumnTypes()` 获取。go-sql-driver 钉在 v1.7.1（M5 F5.4 审查时定）：v1.8 起文本协议下也把整数、浮点数解析成 Go 数值，database/sql 再转回字符串，和服务端原文不一样（double 1500000 变成 `1.5e+06`，float(10,2) 的 1.50 变成 `1.5`，zerofill 的 007 变成 `7`），显示不对、保存永远报「行数据已变化」，v1.10 也没有关掉的开关。驱动加了开关或者改用原始字节读时再升级，go.mod 旁用 `ponytail:` 注释写明。
+- **已知上限**：MySQL 中非 UTF-8 的 blob 显示为 `<binary n bytes>`；PG 的 bytea 按服务端返回的 `\x…` 文本显示。MySQL 的 BIT 列文本协议返回原始字节（bit(1) 的 0 / 1 是 `\x00` / `\x01`），按大端字节解码成数字显示，不能编辑（F5.4）。
 
 ### 8.2 连接模型
 
@@ -797,13 +798,15 @@ type Result struct {
   - 表格取数要排在这个连接 console 的执行后面，「表格浏览不会跟着卡住」在这时不成立；
   - 在事务中的取数包在 `SAVEPOINT sqlmux_page` 里，WHERE 写错或取消只撤到 savepoint，不让整个事务进入出错状态（F5.3 worker 加、审查认可）；不在事务里时不发 SAVEPOINT；
   - WHERE 跑在可写的 `Main` 上，调用了写数据的函数（如 `nextval`）就真的写了；只读本来就不是权限边界（§13）。计数仍在 `Meta` 上，看不到没提交的增删（ponytail）。
+- **MySQL 的事务状态**（F5.4 审查时定，MySQL 8.4 上实测）：MySQL 拿不到 TxStatus，按执行过的语句记。begin / start transaction 记为在事务中；commit、rollback（不含 rollback to），以及手册「Statements That Cause an Implicit Commit」列出的语句（TEMPORARY 以外的 DDL、账号管理、LOCK / UNLOCK TABLES、ANALYZE / OPTIMIZE / REPAIR / FLUSH、RESET、再一次 BEGIN / START 等）执行后记为不在事务中；死锁（1213）时 MySQL 回滚整个事务，也记为不在事务中，并 toast「死锁，整个事务已回滚」。否则状态记错之后，手动模式不再补 BEGIN、取数和保存的 savepoint 报不存在，已经提交的写入还被报成「已回滚」。其余记不准的情况（如在存储过程里提交）是已知上限，代码里用 `ponytail:` 标出。不另用 `SET autocommit = 0`：隐式提交之后状态照样要自己记。
+- **MySQL 的空闲断开**：服务端默认 `wait_timeout` 8 小时，空闲的连接会被断开，而断开的连接不自动重连（§8.3），开一夜之后这个连接就不能用了，要重启 sqlmux。已知上限，以后做断线重连时一起解决。
 - `Meta` 建连后设为只读：PG 设 `default_transaction_read_only = on`（和 DateStyle 一样放在 RuntimeParams 里，效果等同 `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`），MySQL 执行 `SET SESSION TRANSACTION READ ONLY`。`Meta` 上只有读操作，写入只走 `Main`，所以 WHERE 里就算调用了会写数据的函数，也改不了数据。和 §13 一样，这是为了防误操作，不是权限边界。只读连接（`read_only = true`，§13）的 `Main` 也放同样的 RuntimeParams（M5 F5.3），`RESET` / `DISCARD ALL` 之后仍是只读。
 
 ### 8.3 取消、超时、过期响应
 
 - **取消**：当前连接（§5，M5 起；原来是本 session）忙碌时（`Main` 上的 console 执行，或 `Meta` 上的表格取数），状态栏在模式块左边显示 ` busy · C-c 取消 `（`warn` 色，键位文字从 keymap 读），点击执行 Action `cancel`。`C-c` 在当前连接有请求执行中时取消它，空闲时照旧是连按两次退出（§6.8）。取消后 toast 显示「查询已取消」，tab 保留之前的数据，第一次打开就是空表。取消按连接算，不按 tab：手动模式下表格取数排在 console 的长查询后面时，在表格上按 `C-c` 取消的是 console 的语句，事务因此进入出错状态，只能回滚（同 psql 在事务里按 Ctrl-C；表格自己的取数在 savepoint 里，取消它不影响事务，§8.2）。按 tab 单独取消要给 Worker 的每个请求一个 ctx，暂不做。
   - PG：取消请求的 ctx。pgconn 默认的 `DeadlineContextWatcherHandler` 会在 context 取消时给连接设 deadline，连接随之断开。每个连接只有两条长连接，所以改用 `CancelRequestContextWatcherHandler`，由它发 CancelRequest，取消之后连接还能继续用。`DeadlineDelay` 取 5s：取消发出 5 秒后服务端还没停，就断开连接；断开的连接不自动重连，M1 不做，代码里用 `ponytail:` 注释标出。
-  - MySQL（M5）：`Query` 自己监听 ctx，取消时另开一条临时连接执行 `KILL QUERY <connection_id>`，id 在建连时记录。只取消 context 的话，驱动会关掉连接，但服务端上的查询会继续跑。
+  - MySQL（M5）：`Query` 自己监听 ctx，取消时另开一条临时连接执行 `KILL QUERY <connection_id>`，id 在建连时记录。只取消 context 的话，驱动会关掉连接，但服务端上的查询会继续跑。已知上限（F5.4）：临时连接连不上时（库被删、连接数满、网络断）没有兜底，Worker 一直锁到那条语句自己结束；PG 那边 5 秒后断开连接，以后和它对齐，代码里用 `ponytail:` 标出。
 - **超时**：建连 10s。计数查询 3s，用 ctx 超时实现：取消由 `CancelRequestContextWatcherHandler` 发出，返回 `context.DeadlineExceeded` 后显示 `?`（用户按 `C-c` 取消返回的是 `context.Canceled`）。不用 `SET LOCAL statement_timeout`：那要 begin / set / count / rollback 四次往返，且必须在 Worker 同一把锁里执行，否则别的请求会插进事务，等于要给 Worker 加 Tx；ctx 的做法引擎无关，MySQL 也能用。计数用 `tea.Sequence` 排在取数之后，3s 从页面数据回来后才开始算；计数不算 busy，不显示忙碌提示。
 - **过期响应**：每个 tab 维护一个递增的 `seq`，请求时带上。结果回来时 `seq` 已经不是最新的就丢弃，避免快速翻页时旧结果覆盖新结果。
 
@@ -895,7 +898,7 @@ MySQL 的 schema 就是 database（M5 F5.4 定，同 DataGrip）：树里 MySQL 
 
 ### 9.2 分句、可执行标记与执行前高亮（C-01、C-02）
 
-- **分句**：在括号深度为 0 的 `;` 处切分，得到每条语句的范围。
+- **分句**：在括号深度为 0 的 `;` 处切分，得到每条语句的范围。已知上限（F5.4）：MySQL 存储过程、触发器、事件的复合语句体会在体内的 `;` 处被切开，`DELIMITER`（mysql 命令行和 DataGrip 都支持的客户端命令）也不认，原样发给服务端报错，所以这些在 console 里建不出来；`DELIMITER` 留作以后的 feature。
 - **光标所在语句**（按行算，M3 审查时定）：
   - 光标所在的行上有某条语句的起点时，取这一条，不管光标是不是在行首的缩进里；
   - 紧贴在语句上方、中间没有空行的注释行，算作下面那条语句的一部分，因为这种注释通常是在说明下一条；
@@ -1024,6 +1027,7 @@ MySQL 的 schema 就是 database（M5 F5.4 定，同 DataGrip）：树里 MySQL 
   1. 主键；
   2. 没有主键时，取一个所有列都不可空的唯一索引，效果与主键相同；
   3. 两者都没有，这张表只读，在 toast 中说明原因。
+  - MySQL 另有两种表只读（F5.4 审查时定）：行标识列里有 binary / varbinary / blob / bit 列的（如 binary(16) 存的 UUID，读到的是 `<binary 16 bytes>`，存不回去）；引擎不支持事务的（MyISAM 等，catalog 读 `tables.engine`），因为保存做不到原子，第 2 行出错时第 1 行已经写进去了。
 - **进入编辑**：表有行标识列、且所属连接不是只读（M5 F5.3）时才能进入编辑，否则用 toast 说明原因。只读连接上编辑、新增行、删除行、粘贴都拦下，toast「<连接> 是只读连接」。result pane 里的表格只读，因为无法可靠地确定来源表和主键。
 - **没有行标识列时**：`↵` / `i` / 双击 / 粘贴都不进入编辑，toast 说明原因，如「t_log 没有主键，也没有全部列都非空的唯一索引，只读」。视图、物化视图、外部表没有主键，也走这条。只读连接的拦截（S-04）见上。
 - **粘贴**：在表格 NORMAL 下粘贴（bracketed paste），会以粘贴的内容开始编辑当前单元格。
@@ -1115,16 +1119,16 @@ MySQL 的 schema 就是 database（M5 F5.4 定，同 DataGrip）：树里 MySQL 
 ```sql
 UPDATE t SET c1 = $1, c2 = DEFAULT
 WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
--- pk 为行标识列（§10.1），有多列时逐列比较；旧值是 NULL 的列写 IS NULL，其余用 format('%s', 列) = 旧值；MySQL 用 cast(列 as binary) = 旧值；DEFAULT 直接写成关键字，不作为参数
+-- pk 为行标识列（§10.1），有多列时逐列比较；旧值是 NULL 的列写 IS NULL，其余用 format('%s', 列) = 旧值；MySQL 用 cast(convert(列 using utf8mb4) as binary) = 旧值；DEFAULT 直接写成关键字，不作为参数
 ```
 
 - **旧值按输出函数的文本比较**：旧值不是 NULL 时写 `format('%s', 列) = $n`，是 NULL 时写 `列 IS NULL`（生成语句时旧值是已知的）。我们读到的是服务端输出函数给出的文本，`format('%s', …)` 走的也是输出函数，`Main` 和 `Meta` 的会话参数相同（DateStyle、TimeZone 等来自同样的建连参数），所以两边一致。行标识列照旧写 `pk = $n`：主键和唯一索引的类型一定有 btree 相等运算，也用得上索引。只校验被修改的列。
-  - **MySQL**（F5.4 逐类型实测）：旧值不是 NULL 时写 `cast(列 as binary) = ?`，是 NULL 时写 `列 IS NULL`。MySQL 走文本协议，每个值都以文本发回，CAST AS BINARY 对所有类型都还原出这段文本，逐字节比较。否掉 `<=>` 和 `=`：它们先把文本转成列的类型再比，json 列和字符串永远不相等，float 差在精度上；又按排序规则比，`Abc` 被别人改成 `abc` 查不出来。实测覆盖 float、double、decimal、datetime(3)、timestamp(6)、date、time、year、bit、binary、varbinary、enum、set、char(n)、json、boolean、bigint unsigned、text 和 NULL。
+  - **MySQL**（F5.4 逐类型实测）：旧值不是 NULL 时写 `cast(convert(列 using utf8mb4) as binary) = ?`，是 NULL 时写 `列 IS NULL`。先 convert 到 utf8mb4 是为了 latin1 / gbk / big5 等字符集的列（审查时发现：`cast(列 as binary)` 拿到的是列自身字符集的字节，和我们传的 UTF-8 文本永远不等）；假定连接字符集是 utf8mb4（驱动默认），用 `ponytail:` 标出。MySQL 走文本协议，每个值都以文本发回，CAST AS BINARY 对所有类型都还原出这段文本，逐字节比较。否掉 `<=>` 和 `=`：它们先把文本转成列的类型再比，json 列和字符串永远不相等，float 差在精度上；又按排序规则比，`Abc` 被别人改成 `abc` 查不出来。实测覆盖 float、double、decimal、datetime(3)、timestamp(6)、date、time、year、bit、binary、varbinary、enum、set、char(n)、json、boolean、bigint unsigned、text 和 NULL。
   - 否掉 `列 IS NOT DISTINCT FROM $n`：json、point 等类型没有相等运算符，直接报错（M2 核对时在 PG 17 上实测），seed 里就有 json 列。
   - 否掉 `列::text IS NOT DISTINCT FROM $n`（F2.2 起初的写法）：不少类型到 text 的 cast 不走输出函数，结果和读到的不一样。boolean 输出 `f`、`::text` 却是 `false`，布尔列的修改因此永远保存不了（tester 在 M2 节点 2 实测）；inet 的 `::text` 带掩码；char(n) 的 `::text` 去掉尾部空格。
   - 集成测试要逐个类型实测往返：boolean、inet、char(n)、json、jsonb、numeric、real / double、timestamptz、interval、bytea、数组、枚举。在自建库里建一张临时表测，不改 seed。
 - 标识符用 `pgx.Identifier{schema, table}.Sanitize()`；参数按文本传，OID 为 0，由服务端从列推出类型。
-- **执行**：在 `Main` 的 Worker 同一把锁里 begin → 每行一条 UPDATE、按 Tag 检查恰好 1 行 → commit，任何一步出错就 rollback。参照 lazysql 的 `queriesInTransaction`，但它不检查影响行数、也不带旧值校验，这两点按本节做。
+- **执行**：在 `Main` 的 Worker 同一把锁里 begin → 每行一条 UPDATE、按影响行数（`Result.Affected`）检查恰好 1 行 → commit，任何一步出错就 rollback。参照 lazysql 的 `queriesInTransaction`，但它不检查影响行数、也不带旧值校验，这两点按本节做。
 - **顺序**：按行标识值排序后逐行执行，每次顺序一样（也减少和别的会话互相等锁）；一行里的 SET 按列在表里的顺序。
 - **触发**：`C-s`、`:w`、点击保存按钮，都只保存焦点所在 data pane 的当前 tab；焦点在别处时不做事（console 的 `C-s` 在 M3）。没有修改时不做事、不提示；保存进行中再按忽略。
 - **取消**：保存进行中照常算 busy，`C-c` 取消它（`cancel` 同时取消 `Meta` 和 `Main` 上的请求）：回滚，修改保留，查询条右侧显示「已取消，已回滚」。COMMIT 和 ROLLBACK 本身用不可取消的 ctx（带超时）执行：COMMIT 发出之后再取消，客户端可能收到错误、而服务端其实已经提交，界面就会报「已回滚」而数据已经改了。
@@ -1166,7 +1170,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - DELETE：`DELETE FROM t WHERE <行标识列> = $n`，同 UPDATE 用行标识值定位；不校验其他列。
   - INSERT：只写改过的列，其余用 DEFAULT；一格都没改的新行写 `INSERT INTO t DEFAULT VALUES`。
   - 已经标了删除的行上的修改，保存时丢掉；取消删除后恢复。
-  - 失败时的文字：INSERT 没有行标识，写成「新增的第 2 行：<错误>，已回滚」（按新行的显示顺序数），Tag 不是 `INSERT 0 1`（如 BEFORE 触发器返回 NULL）时写成「新增的第 2 行没有插入，已回滚」；DELETE 影响行数不是 1 时写成「id = 42 的行不存在，已回滚」，数据库报错同 UPDATE。
+  - 失败时的文字：INSERT 没有行标识，写成「新增的第 2 行：<错误>，已回滚」（按新行的显示顺序数），影响行数不是 1（如 BEFORE 触发器返回 NULL）时写成「新增的第 2 行没有插入，已回滚」；DELETE 影响行数不是 1 时写成「id = 42 的行不存在，已回滚」，数据库报错同 UPDATE。
 - 保存按钮和确认框里的「N 处修改」，把新增的行、删除的行各算一处，加上修改的格数。
 - 没有行标识列的表照旧只读，新增和删除都不行。
 - 参考 lazysql 的 `ExecutePendingChanges`（DELETE / INSERT / UPDATE 的顺序与事务）。
@@ -1369,7 +1373,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 - **只读连接（S-04；M5 起按连接，connections.toml 的 `read_only = true`）**：
   - **应用层**：
     - console 执行前检查这一次的全部语句：判为写的、会解除只读的，有一条就整次都不发，日志记原因并切到日志 tab；表格的编辑、新增、删除、粘贴都拦下（§10.1）。
-    - SET 语句中，下面四类整类拦截（简单；里面有些写法实测并不解除只读，如 `SET TRANSACTION READ ONLY`、`SET TRANSACTION ISOLATION LEVEL …`，要设隔离级别用 `BEGIN ISOLATION LEVEL …` 或 `SET default_transaction_isolation`；作用域词连写几个也照样认出）：`SET TRANSACTION`、`SET SESSION CHARACTERISTICS`、`default_transaction_read_only`、`transaction_read_only`；还有带 `READ WRITE` 的 `BEGIN` / `START TRANSACTION`（PG 里它盖过 `default_transaction_read_only`）。最终清单以在 PG 上逐条实测的集成测试为准（F5.3）。MySQL 的写法：`SET [GLOBAL | SESSION | PERSIST …] TRANSACTION`、`@@[scope.]transaction_read_only`、`START TRANSACTION … READ WRITE`，同样在 MySQL 上逐条实测（F5.4）。
+    - SET 语句中，下面四类整类拦截（简单；里面有些写法实测并不解除只读，如 `SET TRANSACTION READ ONLY`、`SET TRANSACTION ISOLATION LEVEL …`，要设隔离级别用 `BEGIN ISOLATION LEVEL …` 或 `SET default_transaction_isolation`；作用域词连写几个也照样认出）：`SET TRANSACTION`、`SET SESSION CHARACTERISTICS`、`default_transaction_read_only`、`transaction_read_only`；还有带 `READ WRITE` 的 `BEGIN` / `START TRANSACTION`（PG 里它盖过 `default_transaction_read_only`）。最终清单以在 PG 上逐条实测的集成测试为准（F5.3）。MySQL 的写法：`SET [GLOBAL | SESSION | PERSIST …] TRANSACTION`、`@@[scope.]transaction_read_only`、`START TRANSACTION … READ WRITE`，同样在 MySQL 上逐条实测（F5.4）。MySQL 上另外：`reset` 是管理命令，算写；SET 里带 `GLOBAL` / `PERSIST` / `PERSIST_ONLY` 作用域的项和 `@@global.x` 都拦（改的是整个服务端，同 PG 的 ALTER SYSTEM）；MySQL 8.4 的语句首词（kill、flush、purge、install / uninstall、shutdown、restart、clone、xa、handler、stop、optimize、repair 等）补进关键字表，照 §9.3 第 7 条算写。已知上限：`SET sql_mode = 'NO_BACKSLASH_ESCAPES'` 之后服务端的词法和我们的扫描器不一致，精心构造的 SET 能解开只读，同 PG 的 `U&`。
     - 其他不影响只读的 SET（如 `search_path`、`statement_timeout`）放行；事务控制（begin / start / commit / end / rollback / abort / savepoint / release）和 reset / discard 也放行（F5.3 在 PG 上实测：`RESET`、`RESET ALL`、`DISCARD ALL`、`SET … TO DEFAULT` 之后仍是只读，`SET SESSION AUTHORIZATION DEFAULT` 解除不了）。其余首词是关键字的照 §9.3 第 7 条算写、拦下（vacuum、call、do、copy、prepare、declare、notify 等）；首词不是关键字的照旧发给数据库，由它报错。
     - 拦下时整次都不执行，不算一次执行（不加执行序号、不出占位），日志记一行 `<连接> 是只读连接，整次都没有执行`（`error` 色）并切到日志 tab，不弹 toast、▶ 不变红、不出错误栏；结果区的重跑也检查。
   - **数据库层**：`Meta`、`Main` 两条都设只读：PG 在 RuntimeParams 里设 `default_transaction_read_only = on`（同 §8.2 的 `Meta`，`RESET` / `DISCARD ALL` 之后仍是 on），MySQL 执行 `SET SESSION TRANSACTION READ ONLY`，兜住判定漏掉的情况（例如会写数据的函数）。已知上限：`select set_config('default_transaction_read_only', 'off', false)` 判为读，两层都挡不住，代码里用 `ponytail:` 标出；`set U&"default_transaction_read_only" = off` 这类 Unicode 转义的标识符，判定也认不出，同样是已知上限。
