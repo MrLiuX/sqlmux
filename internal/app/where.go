@@ -44,7 +44,7 @@ var whereKeywords = []string{"and", "or", "not", "is null", "is not null", "in",
 func (a *App) complete(t *dataTab) {
 	t.comp = nil
 	in := t.where
-	w := sqlkit.WhereContext(in.Text, in.Pos)
+	w := sqlkit.WhereContext(in.Text, in.Pos, t.conn.eng.Dialect())
 	if !w.OK {
 		return
 	}
@@ -63,7 +63,7 @@ func (a *App) complete(t *dataTab) {
 				vals = append(vals, candidate{label: "true", insert: "true", note: "值"}, candidate{label: "false", insert: "false", note: "值"})
 			}
 		}
-		groups, pattern = [][]candidate{vals}, strings.TrimPrefix(w.Prefix, "'")
+		groups, pattern = [][]candidate{vals}, strings.TrimLeft(w.Prefix, `'"`) // MySQL's "…" too
 	} else {
 		if w.Prefix == "" { // nothing typed yet: no list
 			return
@@ -73,7 +73,9 @@ func (a *App) complete(t *dataTab) {
 			cols = append(cols, candidate{label: c.Name, insert: c.Name, note: c.Type})
 		}
 		for _, k := range whereKeywords {
-			kws = append(kws, candidate{label: k, insert: k, note: "关键字"})
+			if k != "ilike" || t.conn.eng.Dialect() == sqlkit.PG { // PG's alone
+				kws = append(kws, candidate{label: k, insert: k, note: "关键字"})
+			}
 		}
 		groups = [][]candidate{cols, kws}
 	}
@@ -160,9 +162,17 @@ func (c *Conn) table(schema, name string) (db.Table, bool) {
 // ponytail: by the tokens alone: a CTE or an alias named as a table is
 // colored as one, as is a column; a table's name wins over a column's
 func (a *App) sqlNames(c *Conn, text, schema string, cols *db.Columns) (names ui.SQLNames, missing []db.Table) {
+	// PG folds a name's ASCII letters unless it is "quoted"
+	// (downcase_identifier), its catalog's as they are; MySQL's go by any
+	// case on both sides, `quoted` too
+	// ponytail: but its tables on Linux, which go by case
+	fold := func(s string) string { return s }
+	if c.eng.Dialect() == sqlkit.MySQL {
+		fold = strings.ToLower
+	}
 	tables := map[string]bool{}
 	for _, t := range c.Tables {
-		tables[t.Name] = true
+		tables[fold(t.Name)] = true
 	}
 	type span struct {
 		end  int
@@ -174,7 +184,7 @@ func (a *App) sqlNames(c *Conn, text, schema string, cols *db.Columns) (names ui
 			spans = append(spans, span{end, map[string]bool{}})
 		}
 		for _, c := range cs.Cols {
-			spans[len(spans)-1].cols[c.Name] = true
+			spans[len(spans)-1].cols[fold(c.Name)] = true
 		}
 	}
 	var stmts []sqlkit.Stmt
@@ -200,12 +210,9 @@ func (a *App) sqlNames(c *Conn, text, schema string, cols *db.Columns) (names ui
 	}
 	schemas := map[string]bool{}
 	for _, s := range c.Schemas {
-		schemas[s] = true
+		schemas[fold(s)] = true
 	}
 	return func(at int, word string) ui.SQLName {
-		// PG folds a name's ASCII letters unless it is "quoted"
-		// (downcase_identifier); MySQL's go by any case, `quoted` too
-		// ponytail: but its tables on Linux, which go by case
 		name, q := word, word[:1]
 		if q == `"` || q == "`" {
 			name = strings.ReplaceAll(strings.TrimSuffix(word[1:], q), q+q, q)
@@ -218,6 +225,7 @@ func (a *App) sqlNames(c *Conn, text, schema string, cols *db.Columns) (names ui
 				return r
 			}, name)
 		}
+		name = fold(name)
 		i := sort.Search(len(spans), func(i int) bool { return spans[i].end > at })
 		switch {
 		case schemas[name] && strings.HasPrefix(text[min(at+len(word), len(text)):], "."): // s of s.t: a schema's, whatever table shares its name

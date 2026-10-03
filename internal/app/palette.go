@@ -212,7 +212,8 @@ func (a *App) paneItem(n int, p *Pane, place string) paletteItem {
 }
 
 // paletteMatches ranks the candidates in scope for what is typed: fzf over
-// "name where", every kind mixed by score (§12).
+// "name where", every kind mixed by score, ties as the empty input has
+// them (§12).
 func (a *App) paletteMatches() (items []paletteItem, ms []ui.Match) {
 	scope, query := a.paletteScope()
 	if scope != sqlScope || strings.TrimSpace(query) == "" { // SQL typed: nothing to list
@@ -227,6 +228,9 @@ func (a *App) paletteMatches() (items []paletteItem, ms []ui.Match) {
 		texts[i] = it.name + " " + it.where
 	}
 	ms = ui.Filter(query, texts)
+	slices.SortStableFunc(ms, func(x, y ui.Match) int { // not the shorter first: a table of the current schema before its namesakes
+		return cmp.Or(y.Score-x.Score, x.Index-y.Index)
+	})
 	alias := itemKey{itemCommand, exAliases[strings.TrimSpace(query)]}
 	if i := slices.IndexFunc(items, func(it paletteItem) bool { return it.key() == alias }); i >= 0 && (scope == 0 || scopes[scope].prefix == ">") {
 		ms = slices.Insert(slices.DeleteFunc(ms, func(m ui.Match) bool { return m.Index == i }), 0, ui.Match{Index: i})

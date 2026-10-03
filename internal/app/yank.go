@@ -127,9 +127,9 @@ func tsv(vals []string) string {
 
 // pasteRow is p (§10.6, F3.32): the row yy took, a row added under the
 // cursor's with its values, but for the row identity's columns that have
-// a default (serial, identity) and the generated always identity columns,
-// which take none (PG's 428C9): theirs. A row of another table, or none
-// taken, pastes nothing.
+// a default (serial, identity), the generated always identity columns,
+// which take none (PG's 428C9), and MySQL's BIT, shown as no value it
+// takes: theirs. A row of another table, or none taken, pastes nothing.
 // ponytail: a generated (stored) column is copied too, and the save fails
 // on it; leave those out when the catalog tells them apart
 func (a *App) pasteRow() tea.Cmd {
@@ -144,8 +144,8 @@ func (a *App) pasteRow() tea.Cmd {
 	}
 	sr.add.cells = map[string]edit{}
 	for name, v := range a.rowCopy.vals {
-		def := t.column(name).Default
-		if def != "generated always as identity" && (!slices.Contains(t.cols.Key(), name) || def == "") {
+		col := t.column(name)
+		if def := col.Default; !col.Fixed && def != "generated always as identity" && (!slices.Contains(t.cols.Key(), name) || def == "") {
 			sr.add.cells[name] = edit{val: v}
 		}
 	}

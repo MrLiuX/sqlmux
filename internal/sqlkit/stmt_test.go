@@ -18,6 +18,7 @@ func TestStatements(t *testing.T) {
 		{MySQL, "select '\\';' # ;\n; select `a;`", []string{`select '\';'`, "select `a;`"}},
 		// the /*! and */ around its words go with a statement
 		{MySQL, "/*!40101 SET NAMES utf8 */;\nSELECT 5 /*! +1 */ ; /*! select 2 */ /* c */", []string{"/*!40101 SET NAMES utf8 */", "SELECT 5 /*! +1 */", "/*! select 2 */"}},
+		{MySQL, "/*! SELECT 1 /* c */ */; /*! /* c */ SELECT 2 */; /* c */ select 3 -- c", []string{"/*! SELECT 1 /* c */ */", "/*! /* c */ SELECT 2 */", "select 3"}},
 	} {
 		var got []string
 		for _, st := range Statements(c.in, c.d) {
@@ -204,7 +205,10 @@ func TestBreaksReadOnly(t *testing.T) {
 		"set @a = (select 1, 2), names utf8mb4, @@global.transaction_read_only = off": true, "set": false,
 		"set @transaction_read_only = 0": false, "set @@session.sql_mode = ''": false, "set names utf8mb4": false,
 		"set autocommit = 0, @x = 1": false, "use sqlmux": false, "start transaction read only": false,
-		"set session sql_mode = 'transaction_read_only'": false,
+		"set session sql_mode = 'transaction_read_only'": false, "check table t": false,
+		// the server's: RESET, a SET of the whole server's, the first words of MySQL's writes
+		"reset persist x": true, "set global max_connections = 10": true, "set @a = 1, persist_only x = 2": true,
+		"set @@persist.x = 1": true, "kill 5": true, "flush tables": true, "xa start 'x'": true, "shutdown": true,
 	} {
 		if got := BreaksReadOnly(s, MySQL); got != want {
 			t.Errorf("BreaksReadOnly(%q, MySQL) = %v", s, got)
@@ -251,6 +255,45 @@ func TestNoBegin(t *testing.T) {
 	} {
 		if got := NoBegin(s, PG); got != want {
 			t.Errorf("NoBegin(%q) = %v", s, got)
+		}
+	}
+}
+
+// MySQL's transaction goes by the statements run (§8.2): BEGIN, START
+// TRANSACTION and … AND CHAIN begin one; COMMIT, ROLLBACK but to a
+// savepoint, and what commits implicitly end it; the rest leave it be.
+func TestMySQLTx(t *testing.T) {
+	for _, c := range []struct {
+		s      string
+		tx, to byte
+	}{
+		{"begin", 'I', 'T'}, {"BEGIN WORK", 'I', 'T'}, {"start transaction read only", 'I', 'T'},
+		{"/*!40101 START TRANSACTION */", 'I', 'T'}, {"begin", 'T', 'T'},
+		{"commit", 'T', 'I'}, {"rollback", 'T', 'I'}, {"commit work and chain", 'T', 'T'},
+		{"rollback and no chain", 'T', 'I'}, {"ROLLBACK AND CHAIN", 'T', 'T'},
+		{"rollback to s", 'T', 'T'}, {"rollback work to savepoint s", 'T', 'T'},
+		{"/* c */ rollback to s", 'T', 'T'}, {"rollback/**/to s", 'T', 'T'},
+		{"create table t (a int)", 'T', 'I'}, {"create temporary table t (a int)", 'T', 'T'},
+		{"drop temporary table t", 'T', 'T'}, {"drop table t", 'T', 'I'}, {"alter table t add b int", 'T', 'I'},
+		{"truncate t", 'T', 'I'}, {"rename table a to b", 'T', 'I'}, {"grant select on *.* to u", 'T', 'I'},
+		{"lock tables t write", 'T', 'I'}, {"unlock tables", 'T', 'I'}, {"analyze table t", 'T', 'I'},
+		{"flush privileges", 'T', 'I'}, {"reset persist", 'T', 'T'}, {"reset binary logs and gtids", 'T', 'I'},
+		{"set password = 'x'", 'T', 'I'}, {"set autocommit = 1", 'T', 'I'}, {"set @@session.autocommit=ON", 'T', 'I'},
+		{"set autocommit = 0", 'T', 'T'}, {"load index into cache t", 'T', 'I'}, {"load data infile 'f' into table t", 'T', 'T'},
+		{"insert into t values (1)", 'T', 'T'}, {"select 1", 'I', 'I'}, {"savepoint s", 'T', 'T'}, {"release savepoint s", 'T', 'T'},
+	} {
+		if got := MySQLTx(c.s, c.tx); got != c.to {
+			t.Errorf("MySQLTx(%q, %c) = %c, want %c", c.s, c.tx, got, c.to)
+		}
+	}
+	for s, want := range map[string]bool{
+		"begin": true, "start transaction": true, "commit": true, "rollback to s": true, "set transaction read write": true,
+		"create table t (a int)": true, "drop database x": true, "lock tables t read": true, "set autocommit = 1": true,
+		"set session transaction isolation level read committed": false, "create temporary table t (a int)": false,
+		"insert into t values (1)": false, "set names utf8mb4": false, "use sqlmux": false, "select 1": false,
+	} {
+		if got := NoBegin(s, MySQL); got != want {
+			t.Errorf("NoBegin(%q, MySQL) = %v", s, got)
 		}
 	}
 }

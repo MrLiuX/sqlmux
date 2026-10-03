@@ -165,18 +165,19 @@ func TestSaveCancel(t *testing.T) {
 
 // What a row was loaded as, the text the server sent for each type, is
 // what CAST AS BINARY finds in it: floats, decimals, times with their
-// fractions, bits and binaries, enums and sets, char without its padding,
-// json, booleans, unsigned, and NULL (§10.3).
+// fractions, binaries, enums and sets, char without its padding, json,
+// booleans, unsigned, latin1 text past ASCII, and NULL (§10.3). A BIT,
+// shown as a number, is not edited (§8.1).
 func TestSaveChecksEveryType(t *testing.T) {
 	ctx := context.Background()
 	w, _, dsn := saver(t)
 	for _, s := range []string{
 		`create table types (id int primary key, f float, d double, n decimal(10, 2), dt datetime(3), ts timestamp(6) null,
 			da date, tm time, y year, b bit(8), bn binary(4), vb varbinary(8), e enum('a', 'b'), st set('x', 'y'),
-			c char(5), j json, bo boolean, bu bigint unsigned, tx text, nul varchar(8))`,
+			c char(5), j json, bo boolean, bu bigint unsigned, tx text, nul varchar(8), la varchar(8) character set latin1)`,
 		`insert into types values (1, 3.99, 0.1, 1.50, '2026-09-28 10:00:00.5', '2026-09-28 10:00:00.000001',
 			'2026-09-28', '12:34:56', 2026, b'101', 'ab', 'xy', 'b', 'x,y', 'ab  ', '{"b": 1, "a": [1, 2]}', true,
-			18446744073709551615, 'Abc', null)`,
+			18446744073709551615, 'Abc', null, 'café')`,
 	} {
 		if _, err := w.Exec(ctx, s, 0); err != nil {
 			t.Fatal(err)
@@ -188,6 +189,12 @@ func TestSaveChecksEveryType(t *testing.T) {
 	}
 	for i, c := range r.Cols[1:] {
 		old := r.Rows[0][i+1]
+		if c.Type == "bit" {
+			if old.S != "5" {
+				t.Errorf("b'101' shown as %q", old.S)
+			}
+			continue
+		}
 		row := db.Row{Key: []string{"1"}, Cols: []db.Change{{Name: c.Name, Val: db.Val{Null: true}, Old: old}}}
 		if !old.Null {
 			row.Cols[0].Val = old // written back as it was: only the check is under test
@@ -218,7 +225,7 @@ func TestSaveInsertsAndDeletes(t *testing.T) {
 	if got := q("select (select count(*) from t_order_item where order_id = 3 and line_no = 1), (select qty from t_order_item where order_id = 3 and line_no = 2), (select qty from t_order_item where order_id = 3 and line_no = 99)"); got != "0|9|1" {
 		t.Errorf("deleted, updated, inserted with qty's default: %s", got)
 	}
-	if _, _, err := db.Save(ctx, w, my, name, "all_default", []string{"id"}, db.Changes{Inserts: [][]db.Change{{{Name: "id", Default: true}}}}, false); err != nil {
+	if _, _, err := db.Save(ctx, w, my, name, "all_default", []string{"id"}, db.Changes{Inserts: [][]db.Change{nil}}, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := q("select n from all_default"); got != "7" {

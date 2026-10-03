@@ -58,7 +58,10 @@ order by 1, 2`)
 // TableColumns reads one table's columns, primary key and the unique
 // indexes that can stand in for it (§10.1): all their columns not null,
 // none an expression. An auto_increment column's default is
-// auto_increment; an empty literal one is a pair of quotes, so it shows.
+// auto_increment; an empty literal one is a pair of quotes, so it shows;
+// a BIT is Fixed. The table is ReadOnly with a row identity whose text is
+// no value to find a row by, a binary, a blob or a BIT, or on an engine
+// with no transactions, a save no longer all or nothing (§10.1).
 func (Engine) TableColumns(ctx context.Context, c db.Conn, schema, table string) (db.Columns, error) {
 	var out db.Columns
 	r, err := c.Query(ctx, `
@@ -70,7 +73,7 @@ order by ordinal_position`, db.Val{S: schema}, db.Val{S: table})
 		return out, err
 	}
 	for _, row := range r.Rows {
-		col := db.Column{Name: row[0].S, Type: row[1].S, NotNull: row[2].S == "1", Default: row[3].S, Enum: enumOf(row[1].S)}
+		col := db.Column{Name: row[0].S, Type: row[1].S, NotNull: row[2].S == "1", Default: row[3].S, Enum: enumOf(row[1].S), Fixed: strings.HasPrefix(row[1].S, "bit")}
 		switch {
 		case strings.Contains(row[4].S, "auto_increment"):
 			col.Default = "auto_increment"
@@ -103,11 +106,29 @@ order by s.index_name <> 'PRIMARY', s.index_name, s.seq_in_index`, db.Val{S: sch
 			out.Unique = append(out.Unique, cols)
 		}
 	}
+	for _, k := range out.Key() {
+		for _, col := range out.Cols {
+			if t := col.Type; col.Name == k && (strings.Contains(t, "binary") || strings.Contains(t, "blob") || col.Fixed) {
+				out.ReadOnly = "行标识列 " + k + " 是 " + t
+			}
+		}
+	}
+	r, err = c.Query(ctx, `
+select t.engine, coalesce(e.transactions, 'YES')
+from information_schema.tables t
+left join information_schema.engines e on e.engine = t.engine
+where t.table_schema = ? and t.table_name = ?`, db.Val{S: schema}, db.Val{S: table})
+	if err != nil {
+		return out, err
+	}
+	if len(r.Rows) > 0 && r.Rows[0][1].S != "YES" {
+		out.ReadOnly = "引擎 " + r.Rows[0][0].S + " 不支持事务"
+	}
 	return out, nil
 }
 
 // enumOf is an enum's labels from its COLUMN_TYPE, enum('a','b'), a quote
-// in one doubled; nil for any other type.
+// in one doubled, a backslash too; nil for any other type.
 func enumOf(typ string) []string {
 	rest, ok := strings.CutPrefix(typ, "enum(")
 	if !ok {
@@ -118,13 +139,15 @@ func enumOf(typ string) []string {
 		var b strings.Builder
 		i := 1
 		for ; i < len(rest); i++ {
-			if rest[i] == '\'' {
-				if i+1 < len(rest) && rest[i+1] == '\'' {
-					b.WriteByte('\'')
+			if rest[i] == '\'' || rest[i] == '\\' {
+				if i+1 < len(rest) && rest[i+1] == rest[i] {
+					b.WriteByte(rest[i])
 					i++
 					continue
 				}
-				break
+				if rest[i] == '\'' {
+					break
+				}
 			}
 			b.WriteByte(rest[i])
 		}

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"sqlmux/internal/sqlkit"
 )
 
 // Row is one row's changes to save (§10.3): its row identity's values as
@@ -168,10 +170,17 @@ func remove(e Engine, schema, table string, keyCols, key []string) (string, []Va
 	return "delete from " + e.Quote(schema, table) + " where " + strings.Join(keyWhere(e, keyCols, key, arg), " and "), *args
 }
 
-// insert is the INSERT of a row with cols set, at least one (the app sets
-// one to DEFAULT when none is: PG's DEFAULT VALUES is no MySQL), and its
-// arguments.
+// insert is the INSERT of a row with cols set, and its arguments; with
+// none set, every column's DEFAULT, as PG's DEFAULT VALUES and MySQL's
+// () VALUES () write it (§10.6).
 func insert(e Engine, schema, table string, cols []Change) (string, []Val) {
+	switch {
+	case len(cols) > 0:
+	case e.Dialect() == sqlkit.MySQL:
+		return "insert into " + e.Quote(schema, table) + " () values ()", nil
+	default:
+		return "insert into " + e.Quote(schema, table) + " default values", nil
+	}
 	args, arg := argsOf(e)
 	var names, vals []string
 	for _, c := range cols {

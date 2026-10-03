@@ -5,7 +5,8 @@ import "strings"
 // keywords are the words Scan takes as Keyword, in PG and MySQL alike:
 // lazysql's sqlKeywords (components/sql_lexer.go) and the common words of
 // the two besides, and the first word of every statement in PG 17's docs,
-// Reference, SQL Commands, which IsWrite goes by (§12「写语句」). Not all
+// Reference, SQL Commands, and of MySQL 8.4's that write, which IsWrite
+// goes by (§12「写语句」, §13). Not all
 // either one reserves: PG's unreserved keywords (name, type, user) are
 // column names as often.
 var keywords = map[string]bool{}
@@ -24,7 +25,9 @@ func init() {
 		some table temp temporary then ties to top trailing transaction trigger true truncate
 		unbounded union unique update use using values view when where while window with within
 		abort analyse checkpoint close cluster comment copy deallocate discard import listen load move notify
-		prepare reassign refresh reindex reset security start unlisten vacuum`) {
+		prepare reassign refresh reindex reset security start unlisten vacuum
+		binlog change clone flush handler install kill optimize purge repair restart shutdown stop uninstall
+		unlock xa`) {
 		keywords[w] = true
 	}
 }

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"slices"
 
 	tea "charm.land/bubbletea/v2"
@@ -61,17 +62,7 @@ func (a *App) gotTx(m txDone) tea.Cmd {
 		return nil
 	}
 	m.conn.tx = m.tx
-	m.conn.dropCols() // as tree.refresh
-	cmds := []tea.Cmd{a.loadCatalog(m.conn)}
-	for _, s := range a.sessions {
-		for _, p := range s.panes() {
-			for _, tab := range p.Tabs {
-				if t := tab.Data; t != nil && t.conn == m.conn {
-					cmds = append(cmds, a.fetch(t, true))
-				}
-			}
-		}
-	}
+	cmds := a.txEnded(m.conn)
 	switch {
 	case m.err != nil:
 		cmds = append(cmds, a.showToast(m.err.Error(), toastTTL))
@@ -79,6 +70,35 @@ func (a *App) gotTx(m txDone) tea.Cmd {
 		cmds = append(cmds, a.showToast("事务已出错，提交改为了回滚", toastTTL))
 	}
 	return tea.Batch(cmds...)
+}
+
+// txEnded is what follows c's transaction ending (§7.8「console 标题」):
+// the catalog anew, its columns dropped, as tree.refresh, a DDL in it no
+// longer unseen; each table on c fetched again, as the manual mode reads
+// them on Main.
+func (a *App) txEnded(c *Conn) []tea.Cmd {
+	c.dropCols()
+	cmds := []tea.Cmd{a.loadCatalog(c)}
+	for _, s := range a.sessions {
+		for _, p := range s.panes() {
+			for _, tab := range p.Tabs {
+				if t := tab.Data; t != nil && t.conn == c {
+					cmds = append(cmds, a.fetch(t, true))
+				}
+			}
+		}
+	}
+	return cmds
+}
+
+// deadlocked is what follows err on c when the server took the whole
+// transaction back with it, MySQL's deadlock: said so, and txEnded (§8.2);
+// nil for any other err.
+func (a *App) deadlocked(c *Conn, err error) tea.Cmd {
+	if !errors.As(err, new(db.RolledBack)) {
+		return nil
+	}
+	return tea.Batch(append(a.txEnded(c), a.showToast("死锁，整个事务已回滚", toastTTL))...)
 }
 
 // orphaned is the session's connections in a transaction that closing the

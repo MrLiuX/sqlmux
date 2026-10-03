@@ -19,6 +19,7 @@ type Column struct {
 	NotNull bool
 	Default string   // the default's expression, an identity column's how it is generated; "" when there is none
 	Enum    []string // the labels in their sort order, when the type is an enum
+	Fixed   bool     // not to edit: MySQL's BIT, shown as a number it does not take back (§8.1)
 }
 
 // Columns is what the catalog knows of one table's columns.
@@ -26,6 +27,10 @@ type Columns struct {
 	Cols   []Column
 	PK     []string   // the primary key, in key order
 	Unique [][]string // unique indexes over not-null columns, in key order (§10.1)
+	// ReadOnly is why a table with a row identity is not to edit, "" when
+	// it is: MySQL's with a binary one or an engine with no transactions
+	// (§10.1).
+	ReadOnly string
 }
 
 // Key is the columns that identify a row (§10.1): the primary key, else the

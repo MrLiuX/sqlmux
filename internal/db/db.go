@@ -33,22 +33,32 @@ type Result struct {
 // runs one request on it at a time; cancelling a request's ctx cancels it on
 // the server.
 type Conn interface {
-	// Exec runs sql, which may hold several statements, over the simple
-	// protocol; each result keeps at most maxRows rows (0: all).
+	// Exec runs sql, PG's simple protocol taking several statements, a
+	// MySQL connection one; each result keeps at most maxRows rows (0:
+	// all).
 	Exec(ctx context.Context, sql string, maxRows int) ([]Result, error)
-	// Query runs one statement over the extended protocol, args as text.
+	// Query runs one statement, args as text: PG's extended protocol,
+	// MySQL's text one with the args in it.
 	Query(ctx context.Context, sql string, args ...Val) (Result, error)
 	Close() error
 }
 
-// TxStatus is where c's transaction is: PG's connection tells ('I' out of
-// one, 'T' in one, 'E' in one that failed); taken as out of one else.
+// TxStatus is where c's transaction is: 'I' out of one, 'T' in one, 'E'
+// in one that failed (PG's alone), as c tells; taken as out of one when
+// it can't.
 func TxStatus(c Conn) byte {
 	if c, ok := c.(interface{ TxStatus() byte }); ok {
 		return c.TxStatus()
 	}
 	return 'I'
 }
+
+// RolledBack is an error after which the server took the whole
+// transaction back, MySQL's deadlock: no longer in one (§8.2).
+type RolledBack struct{ Err error }
+
+func (e RolledBack) Error() string { return e.Err.Error() }
+func (e RolledBack) Unwrap() error { return e.Err }
 
 // Engine is what PG and MySQL each do their own way above a Conn (§8.1):
 // connecting, writing names and arguments into SQL, the catalog (§8.4),

@@ -46,11 +46,13 @@ type Token struct {
 //   - MySQL: \ and doubled quotes in '…' and "…", `…` identifiers, #, --
 //     with a blank after it, /* */ that do not nest; /*! … */ is code, its
 //     /*! with the version after it and its */ comments, as the server's
-//     lexer reads it (sql_lex.cc).
+//     lexer reads it (sql_lex.cc): a /*! in one is another, the first */
+//     ending both.
 //
 // What is left open runs to the end.
 // ponytail: /*!90000 … */ for a server older than that is code here, a
-// comment to it
+// comment to it; after SET sql_mode = 'NO_BACKSLASH_ESCAPES' a \ escapes
+// nothing to the server, still something here (§13)
 func Scan(s string, d Dialect) []Token {
 	var out []Token
 	line := 0
@@ -65,7 +67,7 @@ func Scan(s string, d Dialect) []Token {
 		switch {
 		case exec && strings.HasPrefix(s[i:], "*/"):
 			kind, i, exec = Comment, i+2, false
-		case d == MySQL && !exec && strings.HasPrefix(s[i:], "/*!"): // a /*! in one is a plain /*
+		case d == MySQL && strings.HasPrefix(s[i:], "/*!"):
 			kind, i, exec = Comment, i+3+version(s[i+3:]), true
 		case strings.HasPrefix(s[i:], "--") && (d == PG || i+2 >= len(s) || s[i+2] <= ' '),
 			d == MySQL && r == '#':

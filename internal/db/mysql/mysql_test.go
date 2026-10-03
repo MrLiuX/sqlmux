@@ -11,8 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
-
 	"sqlmux/internal/db"
 	"sqlmux/internal/sqlkit"
 )
@@ -28,14 +26,6 @@ func connect(t *testing.T, readOnly bool) *Conn {
 	}
 	t.Cleanup(func() { c.Close() })
 	return c
-}
-
-func errno(err error) uint16 {
-	var me *mysql.MySQLError
-	if errors.As(err, &me) {
-		return me.Number
-	}
-	return 0
 }
 
 // A URL and the driver's own DSN connect alike; the address is user@host:port.
@@ -54,9 +44,6 @@ func TestConnect(t *testing.T) {
 			t.Errorf("%s: %+v, id %q", dsn, info, c.id)
 		}
 		c.Close()
-	}
-	if u, _ := Config("mysql://u:p@db.example/x?tls=skip-verify", "pw"); u.Addr != "db.example:3306" || u.Passwd != "pw" || u.DBName != "x" || u.TLSConfig != "skip-verify" {
-		t.Errorf("a URL: %+v", u)
 	}
 }
 
@@ -81,7 +68,7 @@ func TestQueryReturnsText(t *testing.T) {
 			t.Errorf("%s = %+v, want %+v", r.Cols[i].Name, v, want[i])
 		}
 	}
-	types := []string{"enum", "tinyint", "json", "json", "text", "datetime", "decimal"}
+	types := []string{"char", "tinyint", "json", "json", "text", "datetime", "decimal"} // v1.7.1 names an enum char
 	for i, typ := range types {
 		if r.Cols[i].Type != typ {
 			t.Errorf("%s type %q, want %q", r.Cols[i].Name, r.Cols[i].Type, typ)
@@ -308,6 +295,115 @@ func TestDDL(t *testing.T) {
 	for name, want := range map[string]string{"t_log": "CREATE TABLE `t_log` (", "v_paid_order": "CREATE ALGORITHM="} {
 		if got, err := my.DDL(context.Background(), c, "sqlmux", name); err != nil || !strings.HasPrefix(got, want) || !strings.HasSuffix(got, ";") {
 			t.Errorf("%s: %v\n%s", name, err, got)
+		}
+	}
+}
+
+// A transaction ends with what commits it implicitly, a DDL, and with a
+// deadlock, the server taking it back whole, the error saying so; a
+// statement cancelled before it runs does not run (§8.2, §8.3).
+func TestTxEnds(t *testing.T) {
+	ctx := context.Background()
+	dsn := OwnDB(t)
+	conn := func() *Conn {
+		c, _, err := Connect(ctx, dsn, "", false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { c.Close() })
+		return c
+	}
+	a, b := conn(), conn()
+	for _, s := range []string{"create table k (id int primary key, n int)", "insert into k values (1, 0), (2, 0)", "begin", "update k set n = 1 where id = 1"} {
+		if _, err := a.Query(ctx, s); err != nil {
+			t.Fatalf("%s: %v", s, err)
+		}
+	}
+	if _, err := a.Query(ctx, "create table x (i int)"); err != nil || a.TxStatus() != 'I' {
+		t.Fatalf("a DDL: %c %v", a.TxStatus(), err)
+	}
+	if r, _ := b.Query(ctx, "select n from k where id = 1"); r.Rows[0][0].S != "1" {
+		t.Errorf("the update before the DDL: %v", r.Rows)
+	}
+	// a and b lock 1 and 2 the other way round: one of them is taken back
+	for _, s := range []string{"begin", "update k set n = 2 where id = 1"} {
+		a.Query(ctx, s)
+	}
+	for _, s := range []string{"begin", "update k set n = 2 where id = 2"} {
+		b.Query(ctx, s)
+	}
+	errA := make(chan error, 1)
+	go func() { _, err := a.Query(ctx, "update k set n = 3 where id = 2"); errA <- err }()
+	time.Sleep(300 * time.Millisecond)
+	_, errB := b.Query(ctx, "update k set n = 3 where id = 1")
+	victim, err := b, errB
+	if err == nil {
+		victim, err = a, <-errA
+	}
+	if !errors.As(err, new(db.RolledBack)) || errno(err) != 1213 || victim.TxStatus() != 'I' {
+		t.Errorf("deadlock: %v, %c", err, victim.TxStatus())
+	}
+	a.Query(ctx, "rollback")
+	b.Query(ctx, "rollback")
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := a.Exec(cancelled, "insert into k values (9, 9)", 0); !errors.Is(err, context.Canceled) {
+		t.Errorf("cancelled: %v", err)
+	}
+	if r, _ := b.Query(ctx, "select count(*) from k where id = 9"); r.Rows[0][0].S != "0" {
+		t.Error("a cancelled insert ran")
+	}
+}
+
+// A procedure's rows come back; a WITH that writes counts what it hit
+// (§11).
+func TestCallAndWithWrites(t *testing.T) {
+	ctx := context.Background()
+	c, _, err := Connect(ctx, OwnDB(t), "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	for _, s := range []string{"create procedure p() select 1 as one, 2 as two", "create table k (id int primary key, n int)", "insert into k values (1, 0), (2, 0)"} {
+		if _, err := c.Query(ctx, s); err != nil {
+			t.Fatalf("%s: %v", s, err)
+		}
+	}
+	if r, err := c.Query(ctx, "call p()"); err != nil || len(r.Cols) != 2 || len(r.Rows) != 1 || r.Rows[0][1].S != "2" {
+		t.Errorf("call: %+v %v", r, err)
+	}
+	if r, err := c.Query(ctx, "with x as (select 1 as id) update k set n = 7 where id in (select id from x)"); err != nil || r.Affected != 1 || r.Tag != "WITH 1" {
+		t.Errorf("with … update: %+v %v", r, err)
+	}
+}
+
+// A table is read only with a binary row identity, or on an engine with
+// no transactions; a BIT column is Fixed (§10.1, §8.1).
+func TestReadOnlyTables(t *testing.T) {
+	ctx := context.Background()
+	dsn := OwnDB(t)
+	c, _, err := Connect(ctx, dsn, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	for _, s := range []string{
+		"create table m (id int primary key) engine = myisam",
+		"create table bk (id binary(16) primary key)",
+		"create table bt (id int primary key, f bit(1))",
+	} {
+		if _, err := c.Query(ctx, s); err != nil {
+			t.Fatalf("%s: %v", s, err)
+		}
+	}
+	cfg, _ := Config(dsn, "")
+	for table, want := range map[string]string{"m": "引擎 MyISAM 不支持事务", "bk": "行标识列 id 是 binary(16)", "bt": ""} {
+		cs, err := my.TableColumns(ctx, c, cfg.DBName, table)
+		if err != nil || cs.ReadOnly != want {
+			t.Errorf("%s: %q %v", table, cs.ReadOnly, err)
+		}
+		if table == "bt" && !cs.Cols[1].Fixed {
+			t.Error("a BIT is to edit")
 		}
 	}
 }

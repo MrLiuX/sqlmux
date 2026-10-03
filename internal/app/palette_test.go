@@ -258,7 +258,7 @@ func TestPaletteScopesCycle(t *testing.T) {
 func TestPaletteScopesFilter(t *testing.T) {
 	for in, want := range map[string]string{
 		"@ord": "表:t_order 表:t_order_item",
-		"%con": "Tab:console_1 Pane:② console · console_1 Pane:⓪ schema", // ⓪'s doraemon too
+		"%con": "Pane:② console · console_1 Tab:console_1 Pane:⓪ schema", // ⓪'s doraemon too; a tie as the empty input has it (§12)
 	} {
 		a := twoPanes(160, 45, "nerd")
 		if feed(t, a, "<C-p>"+in); strings.Join(namesOf(a), " ") != want {
@@ -554,5 +554,18 @@ func TestPaletteTabs(t *testing.T) {
 	feed(t, a, "<C-u>%t_sku<CR>")
 	if a.sess.Active != 1 || a.win().Focus != 1 || a.win().Root.Pane.Cur != 0 || a.sess.Windows[0].pane(1).Cur != one {
 		t.Errorf("↵ on another window's tab: window %d, focus %d, cur %d, data's ① %d", a.sess.Active, a.win().Focus, a.win().Root.Pane.Cur, a.sess.Windows[0].pane(1).Cur)
+	}
+}
+
+// Tables of one name in several schemas tie: the current schema's goes
+// first, as with nothing typed, though its place is the longer (§12).
+func TestPaletteTiesKeepOrder(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	c := a.sess.Conns[0]
+	c.Schemas = append(c.Schemas, "a")
+	c.Tables = append(c.Tables, db.Table{Schema: "a", Name: "t_user"})
+	feed(t, a, "<C-p>@t_user")
+	if rows := a.paletteView().Rows; len(rows) != 4 || rows[0].Name != "t_user" || rows[0].Where != "doraemon.public" || rows[3].Where != "doraemon.a" {
+		t.Errorf("rows %+v", rows)
 	}
 }

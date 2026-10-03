@@ -1,6 +1,8 @@
 package app
 
 import (
+	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -170,5 +172,17 @@ func TestCloseRunning(t *testing.T) {
 		if a.run(act, 0); a.toast != "正在执行，结束后再关闭" || len(a.sess.consoles()) != 2 || len(a.sess.Windows) != 2 {
 			t.Errorf("%s: toast %q, %d consoles, %d windows", act, a.toast, len(a.sess.consoles()), len(a.sess.Windows))
 		}
+	}
+}
+
+// A deadlock, MySQL taking the whole transaction back, says so; another
+// error does not (§8.2).
+func TestDeadlocked(t *testing.T) {
+	a, c := inConsole(t, "", "")
+	if a.deadlocked(c.conn, errors.New("Lock wait timeout exceeded")) != nil {
+		t.Error("a lock wait timeout")
+	}
+	if a.deadlocked(c.conn, fmt.Errorf("save: %w", db.RolledBack{Err: errors.New("Deadlock found")})) == nil || a.toast != "死锁，整个事务已回滚" {
+		t.Errorf("a deadlock: toast %q", a.toast)
 	}
 }

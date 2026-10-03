@@ -9,13 +9,16 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.8
 	github.com/charmbracelet/x/exp/golden v0.0.0-20250806222409-83e3a29d542f
 	github.com/dop251/goja v0.0.0-20260926152631-39ec2650adc9
-	github.com/go-sql-driver/mysql v1.10.1
+	// ponytail: pinned; from v1.8 the text protocol's numbers come back
+	// parsed, 1.5e+06 for 1500000, 1.5 for 1.50, 7 for a zerofill 007, no
+	// longer the server's text (§8.1): upgrade once it can be turned off,
+	// or reads raw bytes
+	github.com/go-sql-driver/mysql v1.7.1
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/junegunn/fzf v0.74.4
 )
 
 require (
-	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/aymanbagabas/go-udiff v0.4.1 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
