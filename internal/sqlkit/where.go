@@ -14,15 +14,14 @@ type Where struct {
 	OK     bool
 }
 
-// WhereContext reads s up to its byte offset pos.
-// ponytail: as PG; M5 passes the session's dialect with MySQL.
-func WhereContext(s string, pos int) Where {
-	ts := Scan(s[:pos], PG)
-	w := Where{Start: pos, OK: true}
+// WhereContext reads s, in d, up to its byte offset pos.
+func WhereContext(s string, pos int, d Dialect) Where {
+	ts := Scan(s[:pos], d)
+	w, str := Where{Start: pos, OK: true}, false
 	if n := len(ts); n > 0 && ts[n-1].End == pos {
 		switch last := ts[n-1]; last.Kind {
 		case Ident, Keyword, String, Number:
-			w.Prefix, w.Start, ts = s[last.Start:pos], last.Start, ts[:n-1]
+			w.Prefix, w.Start, ts, str = s[last.Start:pos], last.Start, ts[:n-1], last.Kind == String
 		case Comment, Quoted:
 			return Where{}
 		}
@@ -53,7 +52,7 @@ func WhereContext(s string, pos int) Where {
 			w.Column = s[back[i+2].Start:back[i+2].End]
 		}
 	}
-	if w.Column == "" && strings.HasPrefix(w.Prefix, "'") { // a string that is no value of a column
+	if w.Column == "" && str { // a string that is no value of a column
 		return Where{}
 	}
 	return w

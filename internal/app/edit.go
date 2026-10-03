@@ -31,7 +31,7 @@ type edit struct {
 }
 
 // editKey is a changed cell: its row by the row identity's values as
-// loaded, NUL between them (no PG text holds one), and its column.
+// loaded, joinKey's, and its column.
 type editKey struct{ row, col string }
 
 // cellEdit is the cell being typed into (§10.1).
@@ -62,7 +62,19 @@ func (t *dataTab) rowKey(rec int) string {
 		i := slices.IndexFunc(t.page.Cols, func(c db.Col) bool { return c.Name == k }) // select * has them all
 		vals = append(vals, t.page.Rows[rec][i].S)
 	}
-	return strings.Join(vals, "\x00")
+	return joinKey(vals)
+}
+
+// joinKey is a row identity's values as one string, splitKey's way back:
+// JSON, as a value may hold any character, MySQL's a NUL.
+func joinKey(vals []string) string {
+	b, _ := json.Marshal(vals)
+	return string(b)
+}
+
+func splitKey(key string) (vals []string) {
+	json.Unmarshal([]byte(key), &vals)
+	return vals
 }
 
 // newRow is a row added in the grid, not saved yet (§10.6): on page page,
@@ -155,8 +167,16 @@ func (t *dataTab) whyNoEdit() string {
 		return t.conn.Spec.Name + " 是只读连接"
 	case t.cols.Key() == nil:
 		return t.table.Name + " 没有主键，也没有全部列都非空的唯一索引，只读"
+	case t.cols.ReadOnly != "":
+		return t.table.Name + " 的" + t.cols.ReadOnly + "，只读"
 	}
 	return ""
+}
+
+// hasDefault is whether column col offers DEFAULT in a row, added or not:
+// MySQL's auto_increment in a row added alone, an UPDATE to it writing 0.
+func hasDefault(col db.Column, added bool) bool {
+	return col.Default != "" && (added || col.Default != "auto_increment")
 }
 
 // editCell starts editing the focused grid's current cell (§10.1), its
@@ -175,6 +195,9 @@ func (a *App) editCell(pasted *string) tea.Cmd {
 		return a.showToast(why, toastTTL)
 	}
 	field := t.fieldAt(t.col)
+	if col := t.column(t.page.Cols[field].Name); col.Fixed {
+		return a.showToast(col.Name+" 是 "+col.Type+"，只读", toastTTL)
+	}
 	c := &cellEdit{key: editKey{key, t.page.Cols[field].Name}, add: sr.add, orig: db.Val{Null: true}} // a row added's: DEFAULT, till set
 	if sr.add == nil {
 		c.orig = t.page.Rows[sr.rec][field]
@@ -242,7 +265,7 @@ func (t *dataTab) options() []option {
 	if !col.NotNull {
 		out = append(out, option{label: "∅ NULL", set: edit{val: db.Val{Null: true}, orig: c.orig}})
 	}
-	if col.Default != "" {
+	if hasDefault(col, c.add != nil) {
 		out = append(out, option{label: "DEFAULT", set: edit{val: db.Val{Null: true}, def: true, orig: c.orig}})
 	}
 	if _, ok := t.edits[c.key]; ok && c.add == nil { // a row added's r takes the whole row back
@@ -303,7 +326,7 @@ func (a *App) setSpecial(def bool) {
 	sr, key, ok := t.cursor()
 	field := t.fieldAt(t.col)
 	name := t.page.Cols[field].Name
-	if col := t.column(name); !ok || !t.editable(sr, key) || def && col.Default == "" || !def && col.NotNull {
+	if col := t.column(name); !ok || !t.editable(sr, key) || col.Fixed || def && !hasDefault(col, sr.add != nil) || !def && col.NotNull {
 		return
 	}
 	if t.cell != nil {
@@ -614,13 +637,13 @@ func (a *App) save() tea.Cmd {
 	}
 	var ch db.Changes
 	for _, key := range m.dels {
-		ch.Deletes = append(ch.Deletes, strings.Split(key, "\x00"))
+		ch.Deletes = append(ch.Deletes, splitKey(key))
 	}
 	for _, key := range slices.Sorted(maps.Keys(byRow)) {
 		if !byRow[key] {
 			continue
 		}
-		r := db.Row{Key: strings.Split(key, "\x00")}
+		r := db.Row{Key: splitKey(key)}
 		for _, c := range t.cols.Cols { // in table order
 			if e, ok := m.sent[editKey{key, c.Name}]; ok {
 				r.Cols = append(r.Cols, db.Change{Name: c.Name, Val: e.val, Default: e.def, Old: e.orig})
@@ -635,9 +658,6 @@ func (a *App) save() tea.Cmd {
 			if e, ok := r.cells[c.Name]; ok {
 				cols = append(cols, db.Change{Name: c.Name, Val: e.val, Default: e.def})
 			}
-		}
-		if len(cols) == 0 { // nothing set: one DEFAULT, as both engines take it (PG's DEFAULT VALUES is no MySQL)
-			cols = []db.Change{{Name: t.cols.Cols[0].Name, Default: true}}
 		}
 		ch.Inserts = append(ch.Inserts, cols)
 	}
@@ -678,7 +698,7 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 		head := ""
 		named := func(key string) string {
 			var named []string
-			for i, v := range strings.Split(key, "\x00") {
+			for i, v := range splitKey(key) {
 				named = append(named, t.cols.Key()[i]+" = "+v)
 			}
 			if t.failed = &key; errors.Is(m.err, db.ErrStale) || errors.Is(m.err, db.ErrGone) {
@@ -691,7 +711,7 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 		case i < len(m.dels):
 			head = named(m.dels[i])
 		case i < len(m.dels)+len(m.rows):
-			head = named(strings.Join(m.rows[i-len(m.dels)].Key, "\x00"))
+			head = named(joinKey(m.rows[i-len(m.dels)].Key))
 		default:
 			head = fmt.Sprintf("新增的第 %d 行", i-len(m.dels)-len(m.rows)+1)
 			if !errors.Is(m.err, db.ErrNotInserted) { // ours reads on: 新增的第 2 行没有插入
@@ -699,6 +719,7 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 			}
 		}
 		t.bar = newErrorBar("save", t.conn.eng.ErrorOf(m.err), head, "，已回滚")
+		return a.deadlocked(t.conn, m.err)
 	default:
 		clearBar(&t.bar, "save")
 		for k, e := range m.sent {

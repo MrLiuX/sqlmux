@@ -112,7 +112,12 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	}
 	c := m.conn
 	c.Schemas, c.Tables = m.schemas, m.tables
-	if c.home = m.current; c.home == "" && len(c.Schemas) > 0 {
+	// home stays once set, while there: what Meta's current one is moves
+	// with MySQL's USE in a quick SQL, and the tree keeps what is open (§7.8)
+	if !slices.Contains(c.Schemas, c.home) {
+		c.home = m.current
+	}
+	if c.home == "" && len(c.Schemas) > 0 {
 		c.home = c.Schemas[0]
 	}
 	if !slices.Contains(c.Schemas, c.Schema) { // the first load, or the schema is gone (§7.8)

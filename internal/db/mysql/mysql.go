@@ -9,7 +9,10 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -20,35 +23,42 @@ import (
 	"sqlmux/internal/sqlkit"
 )
 
+// The driver logs what goes wrong on a connection, one the server dropped,
+// to stderr, over the screen; the caller gets the error anyway.
+func init() { mysql.SetLogger(log.New(io.Discard, "", 0)) }
+
 type Conn struct {
 	pool *sql.DB
 	c    *sql.Conn
-	dial driver.Connector // a second connection's, for KILL QUERY (§8.3)
+	kill driver.Connector // a second connection's, for KILL QUERY (§8.3)
 	id   string           // connection_id()
-	tx   byte             // 'I' or 'T', as the statements run tell (F5.4)
+	tx   byte             // 'I' or 'T', as the statements run tell (sqlkit.MySQLTx)
 }
 
 // Config is dsn as the driver takes it: mysql://user:pass@host:port/db?…,
 // or the driver's own user:pass@tcp(host:port)/db?…; password, when not "",
 // wins. The text protocol all the way, interpolateParams; an UPDATE's rows
 // are those it found, clientFoundRows, not those it changed, or one
-// setting what a column holds would count none (§10.3).
+// setting what a column holds would count none (§10.3). Whatever the dsn
+// says, values stay the server's text, not parseTime's; columns their
+// names, not columnsWithAlias's table.name; a statement one, no
+// multiStatements (§8.1).
 func Config(dsn, password string) (*mysql.Config, error) {
 	var cfg *mysql.Config
 	var err error
 	if strings.HasPrefix(dsn, "mysql://") {
 		u, err := url.Parse(dsn)
-		if err != nil {
-			return nil, err
+		if ue := (*url.Error)(nil); errors.As(err, &ue) {
+			return nil, fmt.Errorf("dsn: %w", ue.Err) // not the URL: it holds the password
 		}
 		host := u.Host
 		if u.Port() == "" {
 			host += ":3306"
 		}
-		if cfg, err = mysql.ParseDSN("tcp(" + host + ")/" + strings.TrimPrefix(u.Path, "/") + "?" + u.RawQuery); err != nil {
+		if cfg, err = mysql.ParseDSN("tcp(" + host + ")/?" + u.RawQuery); err != nil {
 			return nil, err
 		}
-		cfg.User = u.User.Username()
+		cfg.User, cfg.DBName = u.User.Username(), strings.TrimPrefix(u.Path, "/")
 		cfg.Passwd, _ = u.User.Password()
 	} else if cfg, err = mysql.ParseDSN(dsn); err != nil {
 		return nil, err
@@ -57,6 +67,7 @@ func Config(dsn, password string) (*mysql.Config, error) {
 		cfg.Passwd = password
 	}
 	cfg.InterpolateParams, cfg.ClientFoundRows = true, true
+	cfg.ParseTime, cfg.ColumnsWithAlias, cfg.MultiStatements = false, false, false
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 10 * time.Second
 	}
@@ -65,12 +76,20 @@ func Config(dsn, password string) (*mysql.Config, error) {
 
 // Connect opens one connection. readOnly makes every transaction read
 // only, as the Meta connection is (§8.2).
+// ponytail: one the server drops, idle past wait_timeout (8 hours by
+// default), is not dialed again; sqlmux starts anew (§8.2)
 func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, db.Info, error) {
 	cfg, err := Config(dsn, password)
 	if err != nil {
 		return nil, db.Info{}, err
 	}
 	dial, err := mysql.NewConnector(cfg)
+	if err != nil {
+		return nil, db.Info{}, err
+	}
+	kcfg := cfg.Clone()
+	kcfg.DBName = "" // KILL needs none, and one dropped since would stop it
+	kill, err := mysql.NewConnector(kcfg)
 	if err != nil {
 		return nil, db.Info{}, err
 	}
@@ -81,7 +100,7 @@ func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, d
 		pool.Close()
 		return nil, db.Info{}, err
 	}
-	c := &Conn{pool: pool, c: conn, dial: dial, tx: 'I'}
+	c := &Conn{pool: pool, c: conn, kill: kill, tx: 'I'}
 	// MySQL's schemas are its databases: no database before them on
 	// console titles (§8.6)
 	info := db.Info{Addr: cfg.User + "@" + cfg.Addr}
@@ -127,30 +146,44 @@ func (c *Conn) Query(ctx context.Context, sql string, args ...db.Val) (db.Result
 	return c.run(ctx, sql, vals, 0)
 }
 
-// rowWords start the statements that answer with rows; the rest are run
-// for what they hit: database/sql tells the one or the other.
+// rowWords start the statements that answer with rows, a WITH one when it
+// reads; the rest are run for what they hit: database/sql tells the one or
+// the other. A procedure's CALL may answer with rows: its first set is
+// read.
 var rowWords = map[string]bool{
 	"select": true, "with": true, "table": true, "values": true, "show": true, "explain": true,
 	"describe": true, "desc": true, "help": true, "analyze": true, "check": true, "checksum": true,
-	"optimize": true, "repair": true,
+	"optimize": true, "repair": true, "call": true, "execute": true, "handler": true,
 }
 
 // run runs query, keeping at most maxRows rows (0: all), the rest read and
-// dropped. A cancel of ctx kills the statement, not the connection (§8.3).
+// dropped. A cancel of ctx kills the statement, not the connection (§8.3);
+// cancelled before, it does not run. A deadlock, the transaction rolled
+// back whole, comes as db.RolledBack (§8.2).
 func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (r db.Result, err error) {
+	if err := ctx.Err(); err != nil { // a KILL QUERY finds nothing running yet
+		return r, err
+	}
 	defer c.watch(ctx)()
+	defer func() {
+		switch {
+		case err == nil:
+			c.tx = sqlkit.MySQLTx(query, c.tx)
+		case errno(err) == 1213:
+			c.tx, err = 'I', db.RolledBack{Err: err}
+		}
+	}()
 	run, start := context.WithoutCancel(ctx), time.Now()
 	word := sqlkit.FirstWord(query, sqlkit.MySQL)
-	if !rowWords[word] {
+	if !rowWords[word] || word == "with" && !sqlkit.IsRead(query, sqlkit.MySQL) {
 		res, err := c.c.ExecContext(run, query, args...)
 		if err != nil {
 			return r, err
 		}
-		c.track(word, query)
 		r.Affected, _ = res.RowsAffected()
 		r.Tag = strings.ToUpper(word)
 		switch word {
-		case "insert", "update", "delete", "replace":
+		case "insert", "update", "delete", "replace", "with":
 			r.Tag += fmt.Sprintf(" %d", r.Affected)
 		}
 		r.Took = time.Since(start)
@@ -181,6 +214,9 @@ func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (
 		row := make([]db.Val, len(raw))
 		for i, v := range raw {
 			row[i] = db.Val{S: shown(v), Null: v == nil}
+			if r.Cols[i].Type == "bit" && v != nil {
+				row[i].S = bits(v)
+			}
 		}
 		r.Rows = append(r.Rows, row)
 	}
@@ -199,24 +235,32 @@ func shown(v []byte) string {
 	return string(v)
 }
 
-// track keeps TxStatus up with statement query, its first word word.
-func (c *Conn) track(word, query string) {
-	next := ""
-	if f := strings.Fields(strings.ToLower(query)); len(f) > 1 {
-		next = f[1]
+// bits is a BIT's value, the bytes the text protocol sends, big end
+// first, as a number (§8.1).
+func bits(v []byte) string {
+	var n uint64
+	for _, b := range v {
+		n = n<<8 | uint64(b)
 	}
-	switch {
-	case word == "begin", word == "start" && next == "transaction":
-		c.tx = 'T'
-	case word == "commit", word == "rollback" && next != "to":
-		c.tx = 'I'
+	return strconv.FormatUint(n, 10)
+}
+
+// errno is err's MySQL error number, 0 for none of the server's.
+func errno(err error) uint16 {
+	var me *mysql.MySQLError
+	if errors.As(err, &me) {
+		return me.Number
 	}
+	return 0
 }
 
 // watch kills what runs on c once ctx is cancelled, over a connection of
 // its own (§8.3): cancelling the driver's ctx would close c, the statement
 // running on in the server. The stop it returns waits for a kill under
 // way, so none lands on the next statement.
+// ponytail: a KILL that cannot connect (too many connections, the network
+// gone) kills nothing, Main held till the statement ends; PG's drops its
+// connection 5s on (§8.3)
 func (c *Conn) watch(ctx context.Context) (stop func()) {
 	if ctx.Done() == nil {
 		return func() {}
@@ -228,7 +272,7 @@ func (c *Conn) watch(ctx context.Context) (stop func()) {
 		case <-ctx.Done():
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			pool := sql.OpenDB(c.dial)
+			pool := sql.OpenDB(c.kill)
 			defer pool.Close()
 			pool.ExecContext(ctx, "kill query "+c.id)
 		case <-done:
@@ -252,17 +296,23 @@ func (Engine) Dialect() sqlkit.Dialect { return sqlkit.MySQL }
 func (Engine) Arg(int) string          { return "?" }
 
 func (Engine) Quote(names ...string) string {
+	quoted := make([]string, len(names))
 	for i, n := range names {
-		names[i] = "`" + strings.ReplaceAll(n, "`", "``") + "`"
+		quoted[i] = "`" + strings.ReplaceAll(n, "`", "``") + "`"
 	}
-	return strings.Join(names, ".")
+	return strings.Join(quoted, ".")
 }
 
 // Same compares bytes: what was read is the text the server sent, which
 // CAST AS BINARY gives back for every type; = or <=> on the column would
 // convert the text to its type, a json never equal to a string, a float
-// off by its precision, and compare by the collation, case aside.
-func (Engine) Same(col, arg string) string { return "cast(" + col + " as binary) = " + arg }
+// off by its precision, and compare by the collation, case aside. CONVERT
+// first makes a latin1 or gbk column's text UTF-8, as it was sent (§10.3).
+// ponytail: the connection's character set is taken to be utf8mb4, the
+// driver's
+func (Engine) Same(col, arg string) string {
+	return "cast(convert(" + col + " using utf8mb4) as binary) = " + arg
+}
 
 // UseSchema makes schema, a database, the current one; USE is the
 // session's, whatever a transaction does (§8.6).

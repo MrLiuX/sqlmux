@@ -14,7 +14,9 @@ type Stmt struct{ Start, End, Lead int }
 // Statements splits s at each ; outside parentheses (§9.2), the way usql's
 // stmt and psql's lexer do; empty statements are dropped.
 // ponytail: PG 14's BEGIN ATOMIC … END is cut at the ; in its body, as
-// psql tracks and this does not; split such a function by hand.
+// psql tracks and this does not; split such a function by hand. So is a
+// MySQL procedure's, trigger's or event's BEGIN … END, and DELIMITER, the
+// mysql client's, goes to the server as it is (§9.2).
 func Statements(s string, d Dialect) []Stmt {
 	all := Scan(s, d)
 	ts, depth := meaningful(s, all)
@@ -67,22 +69,22 @@ func Statements(s string, d Dialect) []Stmt {
 	return out
 }
 
-// execMarks widens stmts over the /*! right before them and the */ right
-// after them, comments to Scan: cut off, the other one of the pair left
-// in would open or close a comment, and the server keeps a version in
-// /*!.
+// execMarks widens stmts over the /*! before them and the */ after them,
+// comments to Scan, blanks and other comments between: cut off, the other
+// one of the pair left in would open or close a comment, and the server
+// keeps a version in /*!.
 func execMarks(s string, all []Token, stmts []Stmt) {
 	for i := range stmts {
 		st := &stmts[i]
 		j := sort.Search(len(all), func(j int) bool { return all[j].Start >= st.Start })
-		for j--; j >= 0 && (all[j].Kind == Space || all[j].Kind == Comment && strings.HasPrefix(s[all[j].Start:all[j].End], "/*!")); j-- {
-			if all[j].Kind != Space {
+		for j--; j >= 0 && (all[j].Kind == Space || all[j].Kind == Comment); j-- {
+			if strings.HasPrefix(s[all[j].Start:all[j].End], "/*!") {
 				st.Start = all[j].Start
 			}
 		}
 		j = sort.Search(len(all), func(j int) bool { return all[j].Start >= st.End })
-		for ; j < len(all) && (all[j].Kind == Space || all[j].Kind == Comment && s[all[j].Start:all[j].End] == "*/"); j++ {
-			if all[j].Kind != Space {
+		for ; j < len(all) && (all[j].Kind == Space || all[j].Kind == Comment); j++ {
+			if s[all[j].Start:all[j].End] == "*/" {
 				st.End = all[j].End
 			}
 		}
@@ -175,7 +177,7 @@ func IsWrite(s string, d Dialect) bool {
 // sessionWords start what IsWrite takes but a read-only connection still
 // runs (§13): transaction control and session settings, which leave the
 // database's read only standing, and MySQL's USE; set, begin and start
-// BreaksReadOnly looks into.
+// BreaksReadOnly looks into. MySQL's RESET is the server's, a write.
 var sessionWords = map[string]bool{
 	"commit": true, "end": true, "rollback": true, "abort": true,
 	"savepoint": true, "release": true, "reset": true, "discard": true, "use": true,
@@ -192,11 +194,13 @@ var scopes = map[string]bool{"session": true, "local": true, "global": true, "pe
 // SET SESSION CHARACTERISTICS, SET [scope]
 // default_transaction_read_only or transaction_read_only, MySQL's
 // @@[scope.]transaction_read_only among those a SET of its sets, BEGIN or
-// START TRANSACTION … READ WRITE.
+// START TRANSACTION … READ WRITE. On MySQL so is whatever a SET sets for
+// the whole server, GLOBAL, PERSIST, PERSIST_ONLY or @@global., as PG's
+// ALTER SYSTEM.
 // ponytail: select set_config('default_transaction_read_only', 'off',
-// false) reads, and turns it off, and SET U&"…" names the setting in
-// escapes this does not read; read only guards against slips, not users
-// (§13)
+// false) reads, and turns it off, SET U&"…" names the setting in escapes
+// this does not read, and after NO_BACKSLASH_ESCAPES MySQL's strings end
+// where Scan's do not; read only guards against slips, not users (§13)
 func BreaksReadOnly(s string, d Dialect) bool {
 	ts, depth := words(s, d)
 	i := first(s, ts)
@@ -206,13 +210,17 @@ func BreaksReadOnly(s string, d Dialect) bool {
 	switch w := lower(s, ts, i); w {
 	case "set":
 		for j := i + 1; j < len(ts); j++ { // MySQL's SET sets a list, by commas
+			scope := ""
 			for scopes[lower(s, ts, j)] { // PG takes SET SESSION SESSION …
-				j++
+				scope, j = lower(s, ts, j), j+1
 			}
 			if lower(s, ts, j) == "@@" {
 				if j++; scopes[lower(s, ts, j)] && lower(s, ts, j+1) == "." {
-					j += 2
+					scope, j = lower(s, ts, j), j+2
 				}
+			}
+			if d == MySQL && scope != "" && scope != "session" && scope != "local" {
+				return true
 			}
 			switch unquote(lower(s, ts, j)) { // the names go by any case
 			case "transaction", "characteristics", "default_transaction_read_only", "transaction_read_only":
@@ -234,14 +242,14 @@ func BreaksReadOnly(s string, d Dialect) bool {
 		}
 		return false
 	default:
-		return !sessionWords[w]
+		return !sessionWords[w] || d == MySQL && w == "reset"
 	}
 }
 
 func isRead(s string, ts []Token, depth []int) bool {
 	i := first(s, ts)
 	switch lower(s, ts, i) {
-	case "show", "desc", "describe", "table", "values":
+	case "show", "desc", "describe", "table", "values", "check": // MySQL's CHECK TABLE
 		return true
 	case "explain":
 		return explainRead(s, ts[i+1:], depth[i+1:])
@@ -354,10 +362,19 @@ func AutoLimit(s string, d Dialect, n int) string {
 // command_no_begin (src/bin/psql/common.c, PG 17) has it: transaction
 // control but savepoints, and what PG runs in no transaction block,
 // VACUUM, CLUSTER alone, CREATE / DROP DATABASE and TABLESPACE, the
-// CONCURRENTLY ones, ALTER SYSTEM, DISCARD ALL.
+// CONCURRENTLY ones, ALTER SYSTEM, DISCARD ALL. MySQL's (§8.2):
+// transaction control, what commits the transaction (commitsMySQL), and
+// SET TRANSACTION with no scope, which a transaction refuses (1568).
 func NoBegin(s string, d Dialect) bool {
 	ts, _ := words(s, d)
 	w := func(i int) string { return lower(s, ts, i) }
+	if d == MySQL {
+		switch w(0) {
+		case "begin", "start", "commit", "rollback":
+			return true
+		}
+		return w(0) == "set" && w(1) == "transaction" || commitsMySQL(s, ts)
+	}
 	switch w(0) {
 	case "abort", "begin", "start", "commit", "end", "rollback", "vacuum":
 		return true
@@ -385,6 +402,79 @@ func NoBegin(s string, d Dialect) bool {
 		}
 	case "discard":
 		return w(1) == "all"
+	}
+	return false
+}
+
+// MySQLTx is where a MySQL session's transaction is after statement s ran
+// in it, tx before, the server telling no client (§8.2): 'T' after BEGIN,
+// START TRANSACTION, and COMMIT or ROLLBACK … AND CHAIN; 'I' after COMMIT,
+// ROLLBACK but to a savepoint, and what commits it (commitsMySQL); tx
+// else.
+// ponytail: a COMMIT in a procedure CALL runs, SET autocommit = 0 and XA
+// go by unseen
+func MySQLTx(s string, tx byte) byte {
+	ts, _ := words(s, MySQL)
+	w := func(i int) string { return lower(s, ts, i) }
+	i := 1
+	if w(i) == "work" {
+		i++
+	}
+	switch w(0) {
+	case "begin":
+		return 'T'
+	case "start":
+		if w(1) == "transaction" {
+			return 'T'
+		}
+	case "commit", "rollback":
+		switch {
+		case w(i) == "to": // rollback [work] to [savepoint] s
+			return tx
+		case w(i) == "and" && w(i+1) == "chain":
+			return 'T'
+		}
+		return 'I'
+	}
+	if commitsMySQL(s, ts) {
+		return 'I'
+	}
+	return tx
+}
+
+// commitsMySQL is whether statement ts of s commits the transaction it
+// runs in, as MySQL 8.4's manual lists them (Statements That Cause an
+// Implicit Commit): DDL but CREATE / DROP TEMPORARY, those on accounts,
+// BEGIN, START, LOCK / UNLOCK TABLES, SET PASSWORD, SET autocommit = 1,
+// the administrative ANALYZE, CACHE INDEX, CHECK, FLUSH, LOAD INDEX,
+// OPTIMIZE, REPAIR, RESET but RESET PERSIST, replication control.
+// ponytail: ALTER / CREATE / DROP of whatever object counts; UNLOCK
+// TABLES commits after LOCK TABLES alone, LOAD DATA for NDB only
+func commitsMySQL(s string, ts []Token) bool {
+	w := func(i int) string { return lower(s, ts, i) }
+	switch w(0) {
+	case "create", "drop":
+		return w(1) != "temporary"
+	case "alter", "rename", "truncate", "grant", "revoke", "install", "uninstall", "begin", "start",
+		"analyze", "cache", "check", "flush", "optimize", "repair", "change", "stop":
+		return true
+	case "lock", "unlock":
+		return w(1) == "tables" || w(1) == "table"
+	case "load":
+		return w(1) == "index"
+	case "reset":
+		return w(1) != "persist"
+	case "set":
+		if w(1) == "password" {
+			return true
+		}
+		for j := range ts { // autocommit = 1 among what it sets
+			if w(j) == "autocommit" && (w(j+1) == "=" || w(j+1) == ":=") {
+				if v := w(j + 2); v == "1" || v == "on" || v == "true" {
+					return true
+				}
+			}
+		}
 	}
 	return false
 }

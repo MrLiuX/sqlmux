@@ -48,7 +48,7 @@ func TestScan(t *testing.T) {
 		{MySQL, "/*!40101 SET NAMES utf8 */;", "c_k_i_i_cp", []string{"/*!40101", "SET", "NAMES", "utf8", "*/", ";"}},
 		{MySQL, "/*!5+1*/ /*!080400 1*/", "cnonc_c_nc", []string{"/*!", "5", "+", "1", "*/", "/*!080400", "1", "*/"}},
 		{MySQL, "/*!0804001*/", "cnc", []string{"/*!08040", "01", "*/"}},
-		{MySQL, "/*! a /*! b */ 2**/", "c_i_c_noc", nil}, // one in it is a comment
+		{MySQL, "/*! a /*! b */ 2**/", "c_i_c_i_c_no", nil}, // one in it is code too, the first */ ending both
 		{PG, "/*! a */", "c", nil},
 	} {
 		if got := kinds(c.in, c.d); got != c.kinds {

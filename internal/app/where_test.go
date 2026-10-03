@@ -316,10 +316,10 @@ func TestSQLNames(t *testing.T) {
 	if len(missing) != 1 || missing[0].Name != "t_user" {
 		t.Errorf("missing %v", missing)
 	}
-	a.sess.Conns[0].eng = mysql.Engine{} // `quoted` by any case
-	text = "select `Status` from `T_ORDER`"
+	a.sess.Conns[0].eng = mysql.Engine{} // by any case, `quoted` and the catalog's too
+	text = "select `Status`, ÉTAT from `T_ORDER`"
 	names, _ = a.sqlNames(a.sess.Conns[0], text, "public", nil)
-	if names(7, "`Status`") != ui.ColumnName || names(strings.Index(text, "`T"), "`T_ORDER`") != ui.TableName {
+	if names(7, "`Status`") != ui.ColumnName || names(strings.Index(text, "`T"), "`T_ORDER`") != ui.TableName || names(0, "état") != ui.TableName {
 		t.Error("MySQL's names")
 	}
 	a.sess.Conns[0].eng = postgres.Engine{}

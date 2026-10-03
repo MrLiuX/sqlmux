@@ -200,7 +200,7 @@ func TestSaveInsertsAndDeletes(t *testing.T) {
 	if got := q("select active, created_at is not null from t_user where name = 'new one'"); got != "t|t" {
 		t.Errorf("the other columns' defaults: %s", got)
 	}
-	if _, _, err := db.Save(ctx, w, pg, "public", "all_default", []string{"id"}, db.Changes{Inserts: [][]db.Change{{{Name: "id", Default: true}}}}, false); err != nil {
+	if _, _, err := db.Save(ctx, w, pg, "public", "all_default", []string{"id"}, db.Changes{Inserts: [][]db.Change{nil}}, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := q("select n from all_default"); got != "7" {

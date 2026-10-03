@@ -328,7 +328,7 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 			tabs = append(tabs, Tab{Name: r.label(len(tabs) + 1), Result: &resultTab{gridState: gridState{page: res}, run: r, part: len(tabs) + 1}})
 		}
 		switch sqlkit.FirstWord(stmt, r.conn.eng.Dialect()) {
-		case "create", "alter", "drop":
+		case "create", "alter", "drop", "rename": // MySQL's RENAME TABLE
 			ddl = true
 		}
 	}
@@ -353,6 +353,7 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 			if slices.Contains(a.consoles(), r.from) { // closed, the log has it alone
 				r.from.bar = newErrorBar("run", e, "", "", at...)
 			}
+			cmds = append(cmds, a.deadlocked(r.conn, m.err))
 		}
 	}
 	shown := tabs

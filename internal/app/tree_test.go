@@ -605,3 +605,19 @@ func TestGoldenTreeFilter160x45(t *testing.T) {
 	feed(t, a, "/an")
 	golden.RequireEqual(t, a.render().String())
 }
+
+// The schema the tree opens a connection on stays across catalog loads
+// while it is there, whatever Meta's current one is now (a quick SQL's
+// USE moves MySQL's); gone, the current one takes its place (§7.8).
+func TestCatalogKeepsHome(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	c := a.sess.Conns[0]
+	a.Update(catalogMsg{conn: c, schemas: []string{"agentable", "public"}, current: "agentable", tables: c.Tables})
+	if c.home != "public" {
+		t.Errorf("moved to %s", c.home)
+	}
+	a.Update(catalogMsg{conn: c, schemas: []string{"agentable"}, current: "agentable", tables: c.Tables})
+	if c.home != "agentable" {
+		t.Errorf("public gone: %s", c.home)
+	}
+}

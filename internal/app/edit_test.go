@@ -30,7 +30,7 @@ func editsOf(tab *dataTab) string {
 		case e.val.Null:
 			v = "<null>"
 		}
-		out = append(out, k.row+"/"+k.col+"="+v)
+		out = append(out, strings.Join(splitKey(k.row), ",")+"/"+k.col+"="+v)
 	}
 	return strings.Join(out, " ")
 }
@@ -117,7 +117,7 @@ func TestEditNeedsRowIdentity(t *testing.T) {
 		t.Fatalf("no key: cell %+v, toast %q", tab.cell, a.toast)
 	}
 	tab.cols.Unique = [][]string{{"note", "id"}}
-	if feed(t, a, "i"); tab.cell == nil || tab.cell.key.row != "note 1\x001" {
+	if feed(t, a, "i"); tab.cell == nil || tab.cell.key.row != `["note 1","1"]` {
 		t.Errorf("a unique index: %+v", tab.cell)
 	}
 }
@@ -230,9 +230,9 @@ func TestGoldenEdits160x45(t *testing.T) {
 	a := wide(160, 45)
 	tab := loadOrders(t, a, 60)
 	tab.edits = map[editKey]edit{
-		{"1", "status"}: {val: db.Val{S: "done"}},
-		{"2", "note"}:   {val: db.Val{Null: true}, orig: db.Val{S: "line one"}},
-		{"3", "amount"}: {def: true, orig: db.Val{S: "3.99"}},
+		{joinKey([]string{"1"}), "status"}: {val: db.Val{S: "done"}},
+		{joinKey([]string{"2"}), "note"}:   {val: db.Val{Null: true}, orig: db.Val{S: "line one"}},
+		{joinKey([]string{"3"}), "amount"}: {def: true, orig: db.Val{S: "3.99"}},
 	}
 	golden.RequireEqual(t, a.render().String())
 }
@@ -361,7 +361,7 @@ func TestSaveKeepsNewer(t *testing.T) {
 	if got := editsOf(tab); !strings.Contains(got, "1/amount=2") || !strings.Contains(got, "2/amount=3") || strings.Contains(got, "status") {
 		t.Errorf("left: %q", got)
 	}
-	if e := tab.edits[editKey{"1", "amount"}]; e.orig.S != "1" {
+	if e := tab.edits[editKey{joinKey([]string{"1"}), "amount"}]; e.orig.S != "1" {
 		t.Errorf("changed again, the row holds what was sent: orig %+v", e.orig)
 	}
 }
@@ -437,7 +437,7 @@ func TestOpenKeepsChanges(t *testing.T) {
 func TestGoldenConfirm160x45(t *testing.T) {
 	a := wide(160, 45)
 	tab := loadOrders(t, a, 60)
-	tab.edits = map[editKey]edit{{"1", "status"}: {val: db.Val{S: "done"}, orig: db.Val{S: "running"}}}
+	tab.edits = map[editKey]edit{{joinKey([]string{"1"}), "status"}: {val: db.Val{S: "done"}, orig: db.Val{S: "running"}}}
 	feed(t, a, "x")
 	golden.RequireEqual(t, a.render().String())
 }
@@ -885,7 +885,8 @@ func TestEmptyRowKey(t *testing.T) {
 	if feed(t, a, "dd"); !a.grid(a.focused(), tab).Deleted[0] {
 		t.Error("not marked deleted")
 	}
-	if tab.failed = new(string); !a.grid(a.focused(), tab).Failed[0] {
+	key := joinKey([]string{""})
+	if tab.failed = &key; !a.grid(a.focused(), tab).Failed[0] {
 		t.Error("not marked failed")
 	}
 }
@@ -942,7 +943,7 @@ func TestRowAddDelete(t *testing.T) {
 		t.Fatal("r on a row added takes it out")
 	}
 	feed(t, a, "gg")
-	if feed(t, a, "dd"); !tab.deleted["1"] || !a.grid(a.focused(), tab).Deleted[0] || tab.changes() != 1 {
+	if feed(t, a, "dd"); !tab.deleted[joinKey([]string{"1"})] || !a.grid(a.focused(), tab).Deleted[0] || tab.changes() != 1 {
 		t.Fatalf("dd: %v", tab.deleted)
 	}
 	if feed(t, a, "li"); tab.cell != nil {
@@ -1083,7 +1084,7 @@ func TestSaveRows(t *testing.T) {
 	feed(t, a, "ggdd")
 	_, cmd = a.Update(teaKey("<C-s>"))
 	a.Update(cmd())
-	if b := tab.bar; b == nil || b.First.Head != "id = 1 的" || b.First.Mid != "行不存在" || *tab.failed != "1" {
+	if b := tab.bar; b == nil || b.First.Head != "id = 1 的" || b.First.Mid != "行不存在" || *tab.failed != joinKey([]string{"1"}) {
 		t.Errorf("a delete gone: %+v", b)
 	}
 }
@@ -1108,5 +1109,32 @@ func TestCellHintPGOnly(t *testing.T) {
 	}
 	if tab.conn.eng = (mysql.Engine{}); tab.cellHint() != "" {
 		t.Errorf("on MySQL: %q", tab.cellHint())
+	}
+}
+
+// MySQL's catalog limits editing: a table it marks read only says why; a
+// BIT column takes no change; an auto_increment column offers DEFAULT in
+// a row added alone, an UPDATE writing 0 (§10.1, §8.1, §10.2).
+func TestEditMySQLLimits(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	tab := loadOrders(t, a, 3)
+	tab.cols.ReadOnly = "引擎 MyISAM 不支持事务"
+	if feed(t, a, "li"); tab.cell != nil || a.toast != "t_order 的引擎 MyISAM 不支持事务，只读" {
+		t.Fatalf("read only: %+v, toast %q", tab.cell, a.toast)
+	}
+	tab.cols.ReadOnly = ""
+	tab.cols.Cols[1].Fixed, tab.cols.Cols[1].Type = true, "bit(1)"
+	if feed(t, a, "i"); tab.cell != nil || a.toast != "status 是 bit(1)，只读" {
+		t.Fatalf("a BIT: %+v, toast %q", tab.cell, a.toast)
+	}
+	if a.run("cell.null", 0); len(tab.edits) != 0 {
+		t.Fatalf("a BIT set NULL: %q", editsOf(tab))
+	}
+	tab.cols.Cols[0].Default = "auto_increment"
+	if feed(t, a, "0i"); strings.Contains(optionLabels(tab), "DEFAULT") {
+		t.Errorf("auto_increment in a row loaded: %s", optionLabels(tab))
+	}
+	if feed(t, a, "<Esc>o<Esc>0i"); tab.cell == nil || tab.cell.add == nil || !strings.Contains(optionLabels(tab), "DEFAULT") {
+		t.Errorf("auto_increment in a row added: %+v", tab.cell)
 	}
 }
