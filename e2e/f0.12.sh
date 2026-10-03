@@ -51,7 +51,7 @@ check "nerd: console icon is U+F489" text_is $ICON $ICON 1 "$NF_CONSOLE"
 conf 'icons = "ascii"\n'; SOLO= start -C "$D"
 check "ascii: console icon is >" text_is $ICON_ASCII $ICON_ASCII 1 ">"
 conf 'theme = "x"\n' '[icon]\nconsole = { text = "C", fg = "#ff0000" }\n'; SOLO= start -C "$D"
-check "[icon] console text+fg: red C, rest of the title unchanged" eval 'text_is $ICON $ICON 1 C && style_has $ICON 1 fg=#ff0000 && style_has $((ICON + 2)) 1 fg=#565f89 && style_has 108 1 fg=#565f89   # console_1, ②'
+check "[icon] console text+fg: red C, rest of the title unchanged" eval 'text_is $ICON $ICON 1 C && style_has $ICON 1 fg=#ff0000 && style_has 108 1 fg=#565f89   # ② (F5.3: at 160 the Tx control leaves no room for console_1)'
 conf 'theme = "x"\n' '[icon]\nconsole = { fg = "#00ff00" }\n'; SOLO= start -C "$D"
 check "[icon] fg only: same glyph, new color" eval 'text_is $ICON $ICON 1 "$NF_CONSOLE" && style_has $ICON 1 fg=#00ff00'
 conf 'theme = "x"\nicons = "ascii"\n' '[icon]\nconsole = { text = "C", fg = "#ff0000" }\n'; SOLO= start -C "$D"

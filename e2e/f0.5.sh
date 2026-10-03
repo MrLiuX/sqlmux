@@ -26,7 +26,6 @@ check "160 宽状态栏（F0.16：命令面板入口只有图标；F5.10：sessi
 check "状态栏底色 #292e42" eval 'style_has 40 45 bg=$BAR && style_has 100 45 bg=$BAR'
 check "session 块：focus 底、bg 字、粗体" eval 'at doraemon bg=$FOCUS && at doraemon fg=$BG && at doraemon bold && style_has 1 45 bg=$FOCUS'
 check "当前 window：#3b4261 底、fg 字" eval 'at "0: data*" bg=#3b4261 && at "0: data*" fg=$FG && at "0: data*" bg=#3b4261 -1'
-# 其余 window 的样式与省略：F1.1 起只有一个 window，M5 能新建 window 时补回
 check "命令面板入口（搜索图标）：info 色" eval 'style_has $(search_col) 45 fg=$INFO'
 check "待输入序列空闲时为 dim 色的 ·" eval 'pending_is "·" && at "·" fg=$DIM'
 check "光标位置 1,1：fg_muted" at "1,1" fg=$MUTED
@@ -36,7 +35,7 @@ check "模式块 NORMAL：focus 底、bg 字、粗体，贴右边" eval 'at NORM
 # ---- 待输入序列（B-03）
 e2e_keys Space; sleep 0.2
 check "按 SPC：显示 SPC，warn 色粗体" eval 'pending_is SPC && at SPC fg=$WARN && at SPC bold'
-e2e_type s; sleep 0.2;  check "SPC s 完成后回到 ·" pending_is "·"
+e2e_type n; sleep 0.2;  check "SPC n 完成后回到 ·（只有一个 window 时不做事；SPC s 会打开 session 列表，F5.1）" pending_is "·"
 e2e_type g; sleep 0.2;  check "按 g：显示 g" pending_is g
 e2e_type t; sleep 0.2;  check "gt 完成后回到 ·" pending_is "·"
 e2e_type 5; sleep 0.2;  check "按 5：显示 5，warn 色粗体" eval 'pending_is 5 && at " 5 " fg=$WARN 1 && at " 5 " bold 1'
@@ -55,21 +54,29 @@ e2e_type ':'; sleep 0.3
 check "80 宽：面板打开时模式块 COMMAND 仍然可见" eval '[[ $(bar) == *" COMMAND " ]]'
 e2e_keys Escape; sleep 0.2
 
-# ---- NORMAL 逐步变窄：连接地址 →（非当前 window，M5）→ 光标位置 → 截短 session 名
+# ---- NORMAL 逐步变窄：连接地址 →（非当前 window，见下一节）→ 光标位置 → 截短 session 名
 start_t -x 82; check "82 宽：全部显示" bar_has "0: data*  @  @ ·    1,1  @ doraemon · sqlmux@localhost:55432  NORMAL "
 start_t -x 81; check "81 宽：先省略连接地址（连同连接名）" eval 'bar_lacks sqlmux@ && bar_lacks "· sqlmux" && bar_has "1,1"'
 start_t -x 45; check "45 宽：光标位置还在" bar_has "1,1  NORMAL "
 start_t -x 44; check "44 宽：去掉光标位置，session 名完整" eval 'bar_lacks "1,1" && bar_has " doraemon ▾"'
 start_t -x 39; check "39 宽：截短 session 名" bar_has " doraem… ▾"
-monotonic() {  # 省略顺序：有连接地址 ⇒ 有 1,1 ⇒ session 名完整；且必留的块都在
+
+# ---- 其余 window（F5.2 起又能新建 window，补回 M0 的这几项）：dim 字、无底色；变窄时排在连接地址之后、光标位置之前省略
+start_t; e2e_keys Space; e2e_type c; sleep 0.5; e2e_keys Space; e2e_type p; sleep 0.3   # 新建 window 1，回到 0
+check "其余 window：dim 字、无底色" eval 'bar_has " doraemon ▾  0: data*  1: data " && at "1: data" fg=$DIM && at "1: data" bg=$BAR'
+e2e_resize 91 45; sleep 0.3; check "两个 window、91 宽：全部显示" bar_has "0: data*  1: data  @  @ ·    1,1  @ doraemon · sqlmux@localhost:55432  NORMAL "
+e2e_resize 90 45; sleep 0.3; check "90 宽：先省略连接地址，其余 window 还在" eval 'bar_lacks sqlmux@ && bar_has "0: data*  1: data " && bar_has "1,1"'
+e2e_resize 54 45; sleep 0.3; check "54 宽：其余 window 还在" eval 'bar_has "0: data*  1: data " && bar_has "1,1"'
+e2e_resize 53 45; sleep 0.3; check "53 宽：去掉其余 window，光标位置还在" eval 'bar_lacks "1: data" && bar_has "0: data*" && bar_has "1,1"'
+monotonic() {  # 省略顺序：有连接地址 ⇒ 有其余 window ⇒ 有 1,1 ⇒ session 名完整；且必留的块都在
   local b; b=$(bar)
-  local c=0 p=0 s=0
-  [[ $b == *sqlmux@localhost* ]] && c=1; [[ $b == *"1,1"* ]] && p=1; [[ $b == *" doraemon ▾"* ]] && s=1
-  ((c <= p && p <= s)) || { echo "  width $(W): order broken: '$b'"; return 1; }
+  local c=0 r=0 p=0 s=0
+  [[ $b == *sqlmux@localhost* ]] && c=1; [[ $b == *"1: data"* ]] && r=1; [[ $b == *"1,1"* ]] && p=1; [[ $b == *" doraemon ▾"* ]] && s=1
+  ((c <= r && r <= p && p <= s)) || { echo "  width $(W): order broken: '$b'"; return 1; }
   [[ $b == *"▾  0: data*"*" @  @ ·   "*" NORMAL " ]] || { echo "  width $(W): a kept block is missing: '$b'"; return 1; }
 }
-ok=1; for w in 160 120 100 90 80 79 78 70 60 58 57 50 48 47 46 44 42 41 40 38; do start_t -x $w -y 12; monotonic || ok=0; done
-check "160…38 宽：省略顺序正确，session 块 / 0: data* / C-p / 待输入 / 模式块始终都在" test $ok = 1
+ok=1; for w in 160 120 100 92 91 90 80 70 60 55 54 53 50 47 46 45 44 42 40 39 38; do e2e_resize $w 12; sleep 0.3; monotonic || ok=0; done
+check "两个 window，160…38 宽：省略顺序正确（连接地址 → 其余 window → 光标位置 → 截短 session 名），session 块 / 0: data* / C-p / 待输入 / 模式块始终都在" test $ok = 1
 
 # ---- 命令面板入口的键位文字取自 keymap（只有 ascii 图标下才显示文字，F0.16）
 printf 'icons = "ascii"\n' >| "$CFG/config.toml"; printf '[keys.global]\n"<C-p>" = ""\n"<C-k>" = "palette.open"\n' >| "$CFG/keymaps.toml"; start -c "$CFG/config.toml" -K "$CFG/keymaps.toml"

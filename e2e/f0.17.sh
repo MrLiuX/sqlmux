@@ -27,7 +27,7 @@ check "80×24: width 76, from column 3, top at row 4" eval '[[ $(left) == 3 && $
 
 # ---- rows top to bottom: border · scope tabs · input · ─ · list · ─ · footer
 start; pal
-check "scope tabs sit right under the border, with prefixes" eval '[[ $(e2e_text $(($(left) + 2)) $(($(left) + 40)) $(tabs_y) | tr -s " ") == " 所有 窗口·Pane % 表 @ 命令 >"* ]]'
+check "scope tabs sit right under the border, with prefixes (F5.1 adds 会话 \$)" eval '[[ $(e2e_text $(($(left) + 2)) $(( $(right) - 1 )) $(tabs_y) | tr -s " ") == " 所有 会话 $ 窗口·Pane % 表 @ 命令 > SQL ;"* ]]'
 check "the input row starts with the search icon (info color), the cursor right after it" eval 'y=$(input_y); [[ $(e2e_text $(($(left) + 2)) $(($(left) + 2)) $y) == "$SEARCH_ICON" ]] && style_has $(($(left) + 2)) $y fg=#7dcfff && [[ $(e2e_flag cursor_y) == $((y - 1)) && $(e2e_flag cursor_x) == $(( $(left) + 3 )) ]]'
 check "then a separator, the list, a separator and the footer" eval 'read s1 s2 <<<"$(seps)"; [[ $s1 == $(( $(input_y) + 1 )) && $(e2e_text $(($(left) + 1)) $(($(left) + 12)) $(foot_y)) == " ↑/↓ 移动 · "* ]]'
 
@@ -40,6 +40,6 @@ e2e_keys Escape; sleep 0.2
 # ---- ascii: ~ in the input row, the icon column is 2 wide for []
 printf 'icons = "ascii"\n' > "$D/config.toml"; start -C "$D"; pal
 check "ascii: the input row starts with ~" eval '[[ $(e2e_text $(($(left) + 2)) $(($(left) + 2)) $(input_y)) == "~" ]]'
-check "ascii: window rows show [] and names still line up (an empty pane's row has no icon, F3.7)" eval '[[ $(e2e_text $(($(left) + 2)) $(($(left) + 3)) $(row_y 1)) == "[]" ]] && c=$(e2e_rows $(($(left) + 2)) $(( $(right) - 1 )) $(row_y 1) $(row_y 6) $(($(left) + 2)) | python3 -c "import re,sys; print(len({re.search(r\"\\S\", r[3:]).start() for r in sys.stdin}))"); [[ $c == 1 ]] || { echo "  name columns differ: $c"; false; }'
+check "ascii: the session row shows @ (conn, F5.1), window rows [], and names still line up (an empty pane's row has no icon, F3.7)" eval '[[ $(e2e_text $(($(left) + 2)) $(($(left) + 3)) $(row_y 1)) == "@ " && $(e2e_text $(($(left) + 2)) $(($(left) + 3)) $(row_y 2)) == "[]" ]] && c=$(e2e_rows $(($(left) + 2)) $(( $(right) - 1 )) $(row_y 1) $(row_y 6) $(($(left) + 2)) | python3 -c "import re,sys; print(len({re.search(r\"\\S\", r[3:]).start() for r in sys.stdin}))"); [[ $c == 1 ]] || { echo "  name columns differ: $c"; false; }'
 
 e2e_done

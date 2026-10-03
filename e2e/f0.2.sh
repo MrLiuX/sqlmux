@@ -72,9 +72,9 @@ check "resize 60x15 → 5x5 → 160x45 后画面完整" eval 'running && widths_
 # ---- M3 默认布局 ⓪ | ① | ② console_1（§5、§7.8；F3.6 补回 F1.1 删掉的 console 用例）
 SOLO= start
 check "上边框角：侧栏 [1,32]、① [34,103]、② [105,160]；①:② = 70:56 = 5:4" eval 'cols_are ┌ 1 "1 34 105" && cols_are ┐ 1 "32 103 160"'
-check "② console 未聚焦：边框 border、标题 dim" eval 'style_has 105 1 fg=$BORDER && style_has 160 44 fg=$BORDER && at "②" 1 fg=$DIM && at "console" 1 fg=$DIM'
-check "160 宽 ② 标题：② <图标> console…（对象名先截短），右边 doraemon · sqlmux.public ▾ 和 ▶ run ↵（F3.11、F5.11）" eval '[[ $(e2e_text 105 160 1) =~ ^┌─\ ②\ $NF_CONSOLE\ console…\ +doraemon\ ·\ sqlmux\.public\ ▾\ \ ▶\ run\ \ ↵\ ─┐$ ]] || { echo "  $(e2e_text 105 160 1)"; false; }'
-check "▶ run：focus 底、bg 字、粗体；↵ dim" eval 'at "▶ run" 1 "fg=$BG" && at "▶ run" 1 "bg=$FOCUS" && at "▶ run" 1 bold && at "▶ run" 1 bold 3 && at "↵ ─┐" 1 fg=$DIM'
+check "② console 未聚焦：边框 border、标题 dim" eval 'style_has 105 1 fg=$BORDER && style_has 160 44 fg=$BORDER && at "②" 1 fg=$DIM'
+check "160 宽 ② 标题：② <图标>，右边 Tx: 自动 ▾、doraemon · sqlmux.public ▾ 和 ▶ run（F3.11、F5.11；F5.3 加了事务控件，对象名和 ↵ 让掉）" eval '[[ $(e2e_text 105 160 1) =~ ^┌─\ ②\ $NF_CONSOLE\ +Tx:\ 自动\ ▾\ doraemon\ ·\ sqlmux\.public\ ▾\ \ ▶\ run\ +─┐$ ]] || { echo "  $(e2e_text 105 160 1)"; false; }'
+check "▶ run：focus 底、bg 字、粗体" eval 'at "▶ run" 1 "fg=$BG" && at "▶ run" 1 "bg=$FOCUS" && at "▶ run" 1 bold && at "▶ run" 1 bold 3'
 # 标题栏退让（§7.8 pane 标题）：先截对象名（截完就不显示），再按 ▶ run > 下拉框 > ↵ 从低往高丢，最后只留 ⟨n⟩
 console_title() { local c; c=$(e2e_find ┌ 1); c=${c##* }; e2e_text "$c" "$(e2e_flag pane_width)" 1; }
 title_ends() { local got; got=$(console_title); [[ $got == *"$1" ]] || { echo "  console title '$got', want suffix '$1'"; false; }; }
@@ -91,7 +91,7 @@ free = len(m[1]) + len(m[2])
 run = "▶ run" in m[3]
 if "↵" in m[3] and not run:
     sys.exit(f"  {t!r}: ↵ shown without ▶ run")
-want = {"▶ run": 8, "doraemon · sqlmux.public ▾": 27, **({"↵": 2} if run else {})}
+want = {"▶ run": 8, "doraemon · sqlmux.public ▾": 27, "Tx: 自动 ▾": 12, **({"↵": 2} if run else {})}
 extra = 0 if m[3].strip() else 1   # with no hint at all the title ends "─┐"; the first hint also brings the space in " ─┐"
 skipped = [h for h, w in want.items() if h not in m[3] and free >= w + extra]
 if skipped:
@@ -99,10 +99,10 @@ if skipped:
 PY
 }
 SOLO= start -x 200
-check "200 宽：对象名完整，doraemon · sqlmux.public ▾ 在 ▶ run ↵ 左边，①:② 仍约为 5:4" eval 't=$(console_title); [[ $t == "┌─ ② $NF_CONSOLE console_1 ─"*"─ doraemon · sqlmux.public ▾  ▶ run  ↵ ─┐" ]] && set -- $(e2e_find ┌ 1) $(e2e_find ┐ 1) && dw=$(($5 - $2 + 1)) cw=$(($6 - $3 + 1)) && ((dw * 4 - cw * 5 <= 9 && cw * 5 - dw * 4 <= 9)) || { echo "  $t"; false; }'
+check "200 宽：对象名完整，Tx: 自动 ▾、doraemon · sqlmux.public ▾ 依次在 ▶ run ↵ 左边，↵ dim，①:② 仍约为 5:4" eval 't=$(console_title); [[ $t == "┌─ ② $NF_CONSOLE console_1 ─"*"─ Tx: 自动 ▾ doraemon · sqlmux.public ▾  ▶ run  ↵ ─┐" ]] && at "↵ ─┐" 1 fg=$DIM && set -- $(e2e_find ┌ 1) $(e2e_find ┐ 1) && dw=$(($5 - $2 + 1)) cw=$(($6 - $3 + 1)) && ((dw * 4 - cw * 5 <= 9 && cw * 5 - dw * 4 <= 9)) || { echo "  $t"; false; }'
 SOLO= start -x 140; check "140 宽：提示都在，对象名先让掉" title_ends "② $NF_CONSOLE  doraemon · sqlmux.public ▾  ▶ run  ↵ ─┐"
-SOLO= start -x 110; check "110 宽：连接和 schema 的下拉框（算一项）放不下被跳过，▶ run ↵ 在，对象名回来" title_ends "② $NF_CONSOLE console_1 ────  ▶ run  ↵ ─┐"
-SOLO= start -x 100; check "100 宽：下拉框放不下被跳过，▶ run ↵ 在" title_ends "② $NF_CONSOLE console…   ▶ run  ↵ ─┐"
+SOLO= start -x 110; check "110 宽：连接和 schema 的下拉框（算一项）放不下被跳过，放得下的事务控件和 ▶ run ↵ 在，对象名回来一点" title_ends "② $NF_CONSOLE c…  Tx: 自动 ▾  ▶ run  ↵ ─┐"
+SOLO= start -x 100; check "100 宽：下拉框放不下被跳过，事务控件和 ▶ run 在，↵ 让掉" title_ends "② $NF_CONSOLE  Tx: 自动 ▾  ▶ run  ─┐"
 SOLO= start -x 70;  check "70 宽：对象名放不下就不显示，▶ run ↵ 仍在" title_ends "② $NF_CONSOLE   ▶ run  ↵ ─┐"
 SOLO= start -x 60;  check "60 宽：提示都放不下，只剩 ② <图标> 和截短的对象名" title_ends "─ ② $NF_CONSOLE cons… ─┐"
 ok=1; for w in 65 70 75 80 85; do

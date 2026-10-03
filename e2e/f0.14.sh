@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F0.14 Command palette: table, pane and window scopes (specs/m0-skeleton/task.md F0.14; tech-design §12, §5 zoom)
 # F1.1 starts with one empty data pane: two_tabs / two_panes build what M0's default layout had;
-# the second window (%report) comes back in M5.
+# the second window (%report) comes back in M5 (F5.2).
 . "$(dirname "$0")/lib.sh"
 SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
 e2e_build || exit 1
@@ -14,17 +14,18 @@ kinds() { list | cut -d'|' -f1 | awk '{ print $NF }' | sort -u | tr '\n' ' '; } 
 # which scope tab is highlighted (focus background) on the tab row
 current_scope() {
   local y x; y=$(tabs_y)
-  for tab in 所有 窗口·Pane 表 命令 SQL; do x=$(e2e_find "$tab" $y | cut -d' ' -f1); [[ -n $x ]] && style_has $x $y bg=#9ece6a >/dev/null && { echo "$tab"; return; }; done
+  for tab in 所有 会话 窗口·Pane 表 命令 SQL; do x=$(e2e_find "$tab" $y | cut -d' ' -f1); [[ -n $x ]] && style_has $x $y bg=#9ece6a >/dev/null && { echo "$tab"; return; }; done
 }
 icon_of() { local y; y=$(row_y "$1"); e2e_text $(($(left) + 2)) $(($(left) + 2)) $y; }
 NF_WINDOW=$(printf '\xef\x8b\x92') NF_COMMAND=$(printf '\xef\x83\xa7')   # U+F2D2 U+F0E7
 
 # ---- scopes: Tab / S-Tab cycle by rewriting the prefix only
 start; two_tabs; two_panes; pal   # ① t_user / t_order, ② empty
-check "the tab row (above the input, F0.17) reads 所有 · 窗口·Pane % · 表 @ · 命令 >, 所有 highlighted" eval '[[ $(e2e_text $(($(left) + 2)) $(($(left) + 40)) $(tabs_y) | tr -s " ") == " 所有 窗口·Pane % 表 @ 命令 >"* && $(current_scope) == 所有 ]]'
+check "the tab row (above the input, F0.17) reads 所有 · 会话 \$ (F5.1) · 窗口·Pane % · 表 @ · 命令 > · SQL ;, 所有 highlighted" eval '[[ $(e2e_text $(($(left) + 2)) $(( $(right) - 1 )) $(tabs_y) | tr -s " ") == " 所有 会话 $ 窗口·Pane % 表 @ 命令 > SQL ;"* && $(current_scope) == 所有 ]]'
 e2e_type "abc"; e2e_keys Left; sleep 0.2; cx=$(e2e_flag cursor_x)
 e2e_keys Tab; sleep 0.3
-check "Tab → 窗口·Pane: prefix %, the rest kept, cursor keeps its place in the text" eval 'input_is "%abc" && [[ $(current_scope) == 窗口·Pane && $(e2e_flag cursor_x) == $((cx + 1)) ]]'
+check "Tab → 会话 (F5.1): prefix \$, the rest kept, cursor keeps its place in the text" eval 'input_is "\$abc" && [[ $(current_scope) == 会话 && $(e2e_flag cursor_x) == $((cx + 1)) ]]'
+e2e_keys Tab; sleep 0.3; check "Tab → 窗口·Pane: prefix %" eval 'input_is "%abc" && [[ $(current_scope) == 窗口·Pane ]]'
 e2e_keys Tab; sleep 0.3; check "Tab → 表: prefix @" eval 'input_is "@abc" && [[ $(current_scope) == 表 ]]'
 e2e_keys Tab; sleep 0.3; check "Tab → 命令: prefix >" eval 'input_is ">abc" && [[ $(current_scope) == 命令 ]]'
 e2e_keys Tab; sleep 0.3; check "Tab → SQL (F1.7): prefix ;" eval 'input_is ";abc" && [[ $(current_scope) == SQL ]]'
@@ -48,9 +49,9 @@ check "window row: 0: data, located in doraemon, labelled 窗口, window icon" e
 check "pane row: ⟨1⟩ table · t_order (F3.7: the type of its tab), located in doraemon › 0: data (F4.3), labelled Pane" eval 'list | grep -q "table · t_order  doraemon › 0: data  Pane|"'
 check "table row: located in doraemon.public, labelled 表" eval 'list | grep -q "^mv_order_by_status  doraemon.public .*表|"'
 check "the location is dim; the type label is dim and right-aligned (ends one column before │)" eval 'y=$(row_y $(wrow)); c=$(e2e_find doraemon $y); style_has $c $y fg=#565f89 && text_is $(( $(right) - 5 )) $(right) $y "窗口 │" && style_has $(( $(right) - 5 )) $y fg=#565f89'
-check "所有, empty input: recent first (t_order, t_user), then window → pane → its tabs (F4.3: ① t_user, t_order; ② none) → table → command" eval 'clear_input; o=$(list | cut -d"|" -f1 | awk "{print \$NF}" | uniq | tr "\n" " "); [[ $o == "表 窗口 Pane Tab Pane 表 "* && $(list | head -2 | cut -d" " -f1 | tr "\n" " ") == "t_order t_user " ]] || { echo "  order: $o"; false; }'
+check "所有, empty input: recent first (t_order, t_user), then session (F5.1) → window → pane → its tabs (F4.3: ① t_user, t_order; ② none) → table → command" eval 'clear_input; o=$(list | cut -d"|" -f1 | awk "{print \$NF}" | uniq | tr "\n" " "); [[ $o == "表 会话 窗口 Pane Tab Pane 表 "* && $(list | head -2 | cut -d" " -f1 | tr "\n" " ") == "t_order t_user " ]] || { echo "  order: $o"; false; }'
 seen=""; clear_input; for i in $(seq 24); do seen+=" $(kinds)"; e2e_keys Down; sleep 0.05; done
-check "所有 has all four kinds (scrolling through the list)" eval '[[ $seen == *窗口* && $seen == *Pane* && $seen == *表* && $seen == *命令* ]] || { echo "  kinds: $(tr " " "\n" <<<"$seen" | sort -u | tr "\n" " ")"; false; }'
+check "所有 has all five kinds (scrolling through the list)" eval '[[ $seen == *会话* && $seen == *窗口* && $seen == *Pane* && $seen == *表* && $seen == *命令* ]] || { echo "  kinds: $(tr " " "\n" <<<"$seen" | sort -u | tr "\n" " ")"; false; }'
 clear_input; e2e_type '>'; sleep 0.3
 check "command rows carry the command icon U+F0E7 and label 命令" eval '[[ $(icon_of 1) == "$NF_COMMAND" ]] && list | head -1 | grep -q "命令|"'
 e2e_keys Escape; sleep 0.2
@@ -73,6 +74,12 @@ start; two_panes; e2e_keys C-l; sleep 0.2; pal "@goal"; e2e_keys Enter; sleep 0.
 pal "%goal"; e2e_keys Enter; sleep 0.3
 check "pane scope: ↵ on ② (table · goal) focuses it" eval 'closed && [[ $(focused) == 2 ]]'
 
+# ---- windows (F5.2: ↵ switches; M0's second window %report comes back, made with SPC c and window.rename)
+start; e2e_keys Space; e2e_type c; sleep 0.5; pal ">window.rename"; e2e_keys Enter; sleep 0.3; clear_input; e2e_type report; e2e_keys Enter; sleep 0.2
+e2e_keys Space; e2e_type p; sleep 0.3
+pal "%report"; e2e_keys Enter; sleep 0.3
+check "window scope: ↵ on 1: report switches to it (F5.2)" eval 'closed && [[ $(e2e_text 1 40 45) == *"0: data  1: report*"* ]]'
+
 # ---- zoom (§5): a jump to another pane ends the zoom; the zoomed pane itself keeps it
 start; two_tabs; two_panes
 e2e_keys C-l; sleep 0.2; e2e_keys Space; e2e_type z; sleep 0.3
@@ -91,10 +98,10 @@ check "opening into an empty data pane: one tab, no - mark" eval 'g=($(e2e_panes
 
 # ---- icons: ascii and [icon] overrides
 printf 'icons = "ascii"\n' > "$D/config.toml"; start -C "$D"; pal
-check "ascii: window icon [] and command icon :" eval '[[ $(e2e_text $(($(left) + 2)) $(($(left) + 3)) $(row_y 1)) == "[]" ]] && { clear_input; e2e_type ">"; sleep 0.3; [[ $(icon_of 1) == ":" ]]; }'
+check "ascii: window icon [] (row 2, under the session row) and command icon :" eval '[[ $(e2e_text $(($(left) + 2)) $(($(left) + 3)) $(row_y 2)) == "[]" ]] && { clear_input; e2e_type ">"; sleep 0.3; [[ $(icon_of 1) == ":" ]]; }'
 rm -rf "$D"/*; mkdir -p "$D/themes"; printf 'theme = "x"\n' > "$D/config.toml"
 printf '[icon]\nwindow = { text = "W", fg = "#ff0000" }\ncommand = { text = "K" }\n' > "$D/themes/x.toml"
 start -C "$D"; pal
-check "[icon] window / command overrides show in the palette" eval '[[ $(icon_of 1) == W ]] && style_has $(($(left) + 2)) $(row_y 1) fg=#ff0000 && { clear_input; e2e_type ">"; sleep 0.3; [[ $(icon_of 1) == K ]]; }'
+check "[icon] window / command overrides show in the palette" eval '[[ $(icon_of $(wrow)) == W ]] && style_has $(($(left) + 2)) $(row_y $(wrow)) fg=#ff0000 && { clear_input; e2e_type ">"; sleep 0.3; [[ $(icon_of 1) == K ]]; }'
 
 e2e_done
