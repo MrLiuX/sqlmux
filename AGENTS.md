@@ -94,13 +94,13 @@ sqlmux/
 
 本项目由四个常驻角色协作开发，另有一个由用户按需启动的 pruner。里程碑的索引和推进规则见 [`specs/plan.md`](specs/plan.md)；每个里程碑的任务清单在对应的目录下，例如 [`specs/m1-browse/task.md`](specs/m1-browse/task.md)。
 
-| 角色 | 会话名 | 职责 |
-|---|---|---|
-| 决策者 | `sqlmux-lead-2` | 维护并自己提交 `specs/` 和 `AGENTS.md`；回答 spec 问题；在各 task.md 里定审查节点；收到批次结论后填写状态；里程碑结束时整理体验路径，交给用户验收 |
-| worker | `sqlmux-worker-4` | 按 task.md 的开发清单逐项实现，每个 feature 一个 commit；到审查节点把这一段 commit 交给 reviewer |
-| reviewer | `sqlmux-reviewer-3` | 在审查节点整批审查，通过后整批提测 |
-| tester | `sqlmux-tester-3` | 按验收项整批测试 |
-| pruner（修剪者） | `sqlmux-pruner` | 不是必经步骤，由用户按需启动，对整个仓库做一次不改变行为的精简 |
+| 角色 | 会话名 | 启动命令 | 职责 |
+|---|---|---|---|
+| 决策者 | `sqlmux-orchestrator` | `claude -n sqlmux-orchestrator --agent orchestrator` | 维护并自己提交 `specs/` 和 `AGENTS.md`；回答 spec 问题；在各 task.md 里定审查节点；收到批次结论后填写状态；里程碑结束时整理体验路径，交给用户验收 |
+| worker | `sqlmux-fullstack-dev` | `claude -n sqlmux-fullstack-dev --agent fullstack-dev` | 按 task.md 的开发清单逐项实现，每个 feature 一个 commit；到审查节点把这一段 commit 交给 reviewer |
+| reviewer | `sqlmux-code-reviewer` | `claude -n sqlmux-code-reviewer --agent code-reviewer` | 在审查节点整批审查，通过后整批提测 |
+| tester | `sqlmux-test-engineer` | `claude -n sqlmux-test-engineer --agent test-engineer`（在 `/Users/ctw/proj/sqlmux-e2e` 里起） | 按验收项整批测试 |
+| pruner（修剪者） | `sqlmux-pruner` | `claude -n sqlmux-pruner` | 不是必经步骤，由用户按需启动，对整个仓库做一次不改变行为的精简 |
 
 **固定的工作流（按批）**（2026-09-24 用户决定，取代 M0 的逐个 feature 审查）：
 
@@ -137,7 +137,8 @@ sqlmux/
 
 **会话与交接**：
 
-- 会话名固定为上表所列，不再换。
+- 会话名固定为上表所列，不再换（2026-10-04 M5 结束时，从 `sqlmux-lead-2` / `-worker-4` / `-reviewer-3` / `-tester-3` 换成现在的名字）。除 tester 外都在主工作区起。
+- 四个常驻角色各用一个 agent 起会话：`orchestrator`、`fullstack-dev`、`code-reviewer`、`test-engineer`，放在 `~/.claude/agents/`，改编自 [agency-agents](https://github.com/msitarzewski/agency-agents)。它们是通用角色，可以在别的项目复用：agent 里只写这个角色做事的方法，流程以本文件为准，本项目特有的东西写在本文件里，不写进 agent。模型和 effort 写在 agent 的 frontmatter 里（2026-10-01 用户定）：决策者 Opus 5.5 high，worker Sonnet 5.5 high，reviewer Opus 5.5 xhigh，tester Sonnet 5.5 high，都用 1M 上下文。
 - 上下文用到 700–800k token 时（用户定），用 `/handoff` 写交接，再 `/clear`，在原会话里接着做，名字不变，不需要通知任何人。M0 的长会话用到了 1M 上下文的 73–88%，每一轮都要读 450–550k token，是最大的开销。
 
 **通用规则**：
