@@ -15,6 +15,7 @@ type Dropdown struct {
 	Items    []string // what passes the filter
 	Pos      [][]int  // each item's match positions
 	Notes    []string // dim, after each item (COLS: the type and the key); nil for none
+	Icons    []Icon   // info, before each item (connections: the engine's); nil for none
 	Checks   []bool   // COLS: each item's box; nil for none
 	Mark     int      // the item drawn in pk color (the current one); -1 for none
 	Count    string   // right of the input (COLS: how many match)
@@ -84,6 +85,9 @@ func (d Dropdown) Draw(f *Frame, box uv.Rectangle, rows int) uv.Position {
 				box = "[x] "
 			}
 			x = f.Text(x, line.Min.Y, x1, box, st)
+		}
+		if d.Icons != nil { // a blank after it (§7.7)
+			x = f.Text(x, line.Min.Y, x1, d.Icons[i].Text, d.Icons[i].On(uv.Style{Fg: th.Info, Bg: st.Bg})) + 1
 		}
 		note := ""
 		if d.Notes != nil {

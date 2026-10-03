@@ -257,7 +257,7 @@ func (a *App) treeNodes() (ns []node, matches int) {
 
 	for _, c := range s.Conns {
 		cid := connNode(c)
-		cn := node{id: cid, kind: nodeConn, conn: c, TreeNode: ui.TreeNode{Branch: true, Open: c.State == connReady && open(cid, true), Icon: ic.Postgres, IconFg: th.Info, Text: c.Spec.Name}}
+		cn := node{id: cid, kind: nodeConn, conn: c, TreeNode: ui.TreeNode{Branch: true, Open: c.State == connReady && open(cid, true), Icon: ic.Engine(c.Spec.Engine), IconFg: th.Info, Text: c.Spec.Name}}
 		if c.Spec.ReadOnly { // dim after the name, as … (§7.8)
 			cn.Aside = ic.Lock.Text
 		}

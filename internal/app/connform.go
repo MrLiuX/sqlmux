@@ -36,7 +36,7 @@ func (a *App) openConnForm() {
 	for i, name := range connFields {
 		fs[i].Label = name
 	}
-	fs[fieldEngine].Choices = []string{"postgres"} // MySQL's comes with F5.4
+	fs[fieldEngine].Choices = []string{"postgres", "mysql"}
 	fs[fieldReadOnly].Choices = []string{"false", "true"}
 	a.form = &connForm{fields: fs}
 }

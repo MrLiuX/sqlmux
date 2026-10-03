@@ -17,8 +17,8 @@
 │       ▸  t_refund       12k │ │                                                                    │ │                                                      │
 │       ▸  t_sku         8.1k │ │      ┌─ 新建连接 ───────────────────────────────────────────────────────────────────┐                                       │
 │       ▸  t_user         38k │ │      │ name          doraemon                                                       │                                       │
-│       ▸  t_user_address 52k │ │      │ engine        postgres                                                       │                                       │
-│       ▸  t_user_profile 38k │ │      │ dsn           postgres://localhost/x                                         │                                       │
+│       ▸  t_user_address 52k │ │      │ engine        mysql                                                          │                                       │
+│       ▸  t_user_profile 38k │ │      │ dsn           mysql://localhost/x                                            │                                       │
 │        Views (0)            │ │      │ password_cmd  printf pw                                                      │                                       │
 │ ▾  工作区                   │ │      │ read_only     true                                                           │                                       │
 │   ▾  data                   │ │      │ name = "doraemon" 重复了                                                     │                                       │

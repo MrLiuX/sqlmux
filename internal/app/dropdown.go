@@ -140,11 +140,11 @@ func (a *App) dropMatches() []ui.Match {
 }
 
 // dropBox is where v, the dropdown as drawn, opens (§8.6, §7.8): under its
-// chip, left aligned with it, as wide as its longest item and its note. A
-// console's opens under its part of the console title, as hits, the
-// frame's, have it, its right edge on the pane's right border; with the
-// part left out, at that border. Auto refresh's under its button, or given
-// way, at the query bar's right end as a schema one.
+// chip, left aligned with it, as wide as its longest item with its icon
+// and note. A console's opens under its part of the console title, as
+// hits, the frame's, have it, its right edge on the pane's right border;
+// with the part left out, at that border. Auto refresh's under its button,
+// or given way, at the query bar's right end as a schema one.
 func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 	d := a.drop
 	w := 16
@@ -153,6 +153,9 @@ func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 		n := ui.Width(s)
 		if note := a.dropNote(i); note != "" {
 			n += 1 + ui.Width(note)
+		}
+		if d.kind == dropConsoleConn {
+			n += ui.Width(a.connIcon(i).Text) + 1
 		}
 		w = max(w, n+4) // border and padding on both sides
 	}
@@ -259,6 +262,10 @@ func (a *App) dropNote(i int) string {
 	return ""
 }
 
+// connIcon is the connection dropdown's icon for item i, connection i's
+// engine's (§7.8「console 标题」).
+func (a *App) connIcon(i int) ui.Icon { return a.icons.Engine(a.sess.Conns[i].Spec.Engine) }
+
 func (a *App) dropView() ui.Dropdown {
 	v := ui.Dropdown{Search: a.icons.Search, Input: a.drop.input, Typing: true, Mark: -1, Sel: a.drop.sel, Top: a.drop.top}
 	items, current := a.dropItems()
@@ -268,7 +275,7 @@ func (a *App) dropView() ui.Dropdown {
 		}
 		v.Items, v.Pos = append(v.Items, items[m.Index]), append(v.Pos, m.Pos)
 		if a.drop.kind == dropConsoleConn {
-			v.Notes = append(v.Notes, a.dropNote(m.Index))
+			v.Notes, v.Icons = append(v.Notes, a.dropNote(m.Index)), append(v.Icons, a.connIcon(m.Index))
 		}
 	}
 	return v

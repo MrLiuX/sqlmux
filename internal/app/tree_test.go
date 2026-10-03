@@ -107,8 +107,8 @@ func TestTreeNodes(t *testing.T) {
 }
 
 // withConns is sized with seed, connected, its t_order like doraemon's,
-// and broken, dialing and idle, as far as connecting got, after doraemon
-// (§7.8「连接节点」).
+// and broken, dialing and idle, a MySQL one, as far as connecting got,
+// after doraemon (§7.8「连接节点」).
 func withConns() (*App, *Conn) {
 	a := sized(160, 45, "nerd")
 	seed := readyConn("seed")
@@ -116,13 +116,13 @@ func withConns() (*App, *Conn) {
 	seed.Tables = []db.Table{{Schema: "public", Name: "t_order", Rows: 7}}
 	broken, dialing := newConn(config.Connection{Name: "broken", Engine: "postgres"}), newConn(config.Connection{Name: "dialing", Engine: "postgres", ReadOnly: true})
 	broken.State, dialing.State = connFailed, connConnecting
-	a.sess.Conns = append(a.sess.Conns, seed, broken, dialing, newConn(config.Connection{Name: "idle", Engine: "postgres", ReadOnly: true}))
+	a.sess.Conns = append(a.sess.Conns, seed, broken, dialing, newConn(config.Connection{Name: "idle", Engine: "mysql", ReadOnly: true}))
 	return a, seed
 }
 
 // Each connection is a root: connected, open on its current_schema();
 // connecting, a dim …; failed, in error; not connected, closed; a
-// read-only one with a dim lock (§7.8).
+// read-only one with a dim lock; its engine's icon (§7.7, §7.8).
 func TestGoldenConnNodes(t *testing.T) {
 	a, seed := withConns()
 	a.sess.open[connNode(a.sess.Conns[0])] = false

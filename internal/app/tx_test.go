@@ -85,7 +85,8 @@ func TestTxMode(t *testing.T) {
 
 // On a read-only connection a run with a statement BreaksReadOnly takes is
 // no run: the log says so, shown; others run (§13). The grid takes no
-// change (§10.1); the connection dropdown marks it with the lock.
+// change (§10.1); the connection dropdown marks it with the lock, after
+// its engine's icon.
 func TestReadOnly(t *testing.T) {
 	a, c := inConsole(t, "", "")
 	c.conn.Spec.ReadOnly = true
@@ -101,9 +102,14 @@ func TestReadOnly(t *testing.T) {
 	if a.run("console.run", 0); c.running == nil {
 		t.Error("set search_path is kept back")
 	}
+	c.conn.Spec.Engine = "mysql"
 	a.openConsoleDrop(dropConsoleConn)
-	if v := a.dropView(); len(v.Notes) != 1 || v.Notes[0] != a.icons.Lock.Text {
-		t.Errorf("the dropdown's notes: %q", v.Notes)
+	if v := a.dropView(); len(v.Notes) != 1 || v.Notes[0] != a.icons.Lock.Text || v.Icons[0] != a.icons.MySQL {
+		t.Errorf("the dropdown's notes %q, icons %v", v.Notes, v.Icons)
+	}
+	r := find(t, a, ui.Target{Kind: ui.KindRow})
+	if row := ansi.Cut(strings.Split(a.render().String(), "\n")[r.Min.Y], r.Min.X, r.Max.X); !strings.HasPrefix(row, " "+a.icons.MySQL.Text+" doraemon ") {
+		t.Errorf("the dropdown's row: %q", row)
 	}
 
 	a = sized(160, 45, "nerd")

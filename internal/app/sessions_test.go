@@ -130,7 +130,7 @@ func TestNewSessionFails(t *testing.T) {
 func TestConnForm(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	a, report := withSessions()
-	feed(t, a, "<C-p>conn.new<CR><Tab><Space><Tab>postgres://localhost/x<Tab>printf pw<Tab> <CR>")
+	feed(t, a, "<C-p>conn.new<CR><Tab><Space><Tab>mysql://localhost/x<Tab>printf pw<Tab> <CR>")
 	if a.form == nil || a.form.sel != 0 || a.form.err != "缺少 name" || a.form.fields[4].On != 1 {
 		t.Fatalf("no name: %+v", a.form)
 	}
@@ -141,7 +141,7 @@ func TestConnForm(t *testing.T) {
 		t.Fatalf("saved: form %+v, conns %d %d", a.form, len(a.sess.Conns), len(report.Conns))
 	}
 	data, _ := os.ReadFile(filepath.Join(config.Dir(), "connections.toml"))
-	if string(data) != "[[connection]]\nname = \"play\"\nengine = \"postgres\"\ndsn = \"postgres://localhost/x\"\npassword_cmd = \"printf pw\"\nread_only = true\n" {
+	if string(data) != "[[connection]]\nname = \"play\"\nengine = \"mysql\"\ndsn = \"mysql://localhost/x\"\npassword_cmd = \"printf pw\"\nread_only = true\n" {
 		t.Errorf("file:\n%s", data)
 	}
 }

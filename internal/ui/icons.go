@@ -28,6 +28,7 @@ type Icons struct {
 	Console       Icon
 	Filter        Icon
 	Postgres      Icon
+	MySQL         Icon
 	Search, Keys  Icon // status bar: palette entry, pending keys
 	Conn          Icon
 	Key           Icon // primary key columns
@@ -56,6 +57,7 @@ var NerdIcons = &Icons{
 	Console:     Icon{Text: "\uf489"}, // nf-oct-terminal
 	Filter:      Icon{Text: "\uf0b0"}, // nf-fa-filter
 	Postgres:    Icon{Text: "\ue76e"}, // nf-dev-postgresql
+	MySQL:       Icon{Text: "\ue704"}, // nf-dev-mysql
 	Search:      Icon{Text: "\uf002"}, // nf-fa-search
 	Keys:        Icon{Text: "\uf11c"}, // nf-fa-keyboard_o
 	Conn:        Icon{Text: "\uf1e6"}, // nf-fa-plug
@@ -87,6 +89,7 @@ var ASCIIIcons = &Icons{
 	Schema: Icon{Text: "#"}, Table: Icon{Text: "+"}, Console: Icon{Text: ">"},
 	Filter:      Icon{Text: "?"},
 	Postgres:    Icon{Text: "pg"},
+	MySQL:       Icon{Text: "my"},
 	Search:      Icon{Text: "~"},
 	Keys:        Icon{Text: "kb"},
 	Conn:        Icon{Text: "@"},
@@ -123,6 +126,15 @@ func IconSet(name string) *Icons {
 	return NerdIcons
 }
 
+// Engine is the icon of a connection to engine, as connections.toml
+// names it (§7.7).
+func (ic *Icons) Engine(engine string) Icon {
+	if engine == "mysql" {
+		return ic.MySQL
+	}
+	return ic.Postgres
+}
+
 // Number writes pane n's ⟨n⟩ (§7.8): beside Nerd icons ⓪ ① … ⑳, one
 // column each; with ascii icons, or past 20, ⟨n⟩.
 func (ic *Icons) Number(n int) string {
@@ -140,7 +152,7 @@ func (ic *Icons) byName() map[string]*Icon {
 	return map[string]*Icon{
 		"schema": &ic.Schema, "table": &ic.Table, "console": &ic.Console,
 		"filter": &ic.Filter, "search": &ic.Search, "keys": &ic.Keys, "conn": &ic.Conn,
-		"key": &ic.Key, "postgres": &ic.Postgres, "command": &ic.Command, "window": &ic.Window,
+		"key": &ic.Key, "postgres": &ic.Postgres, "mysql": &ic.MySQL, "command": &ic.Command, "window": &ic.Window,
 		"save": &ic.Save, "refresh": &ic.Refresh, "transpose": &ic.Transpose,
 		"row_add": &ic.RowAdd, "row_delete": &ic.RowDelete, "auto_refresh": &ic.AutoRefresh, "stop": &ic.Stop,
 		"sort_asc": &ic.SortAsc, "sort_desc": &ic.SortDesc, "view": &ic.View, "column": &ic.Column, "lock": &ic.Lock,
