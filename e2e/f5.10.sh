@@ -39,7 +39,7 @@ EOF
 conns() { psql "$SQLMUX_TEST_PG" -At -c "select count(*) from pg_stat_activity where application_name = '$1'"; }
 nth_row() { local y n=0; for y in $(seq 4 42); do [[ $(e2e_text 1 32 "$y") == *" $1 "* ]] && ((++n == $2)) && { echo "$y"; return; }; done; }   # NAME N：侧栏里第 N 个 NAME 的行
 node_x() { e2e_find "$1" "$2" | tr ' ' '\n' | awk '$1 < 32 { print; exit }'; }       # NAME Y：侧栏里它的列
-node_is() { [[ $(e2e_text 1 32 "$(nth_row "$1" 1)" | noicon) == *"$2 "*" $1 "* ]] || { echo "  $1: '$(e2e_text 1 32 "$(nth_row "$1" 1)" | noicon)', want $2"; false; }; }   # NAME ▾|▸（中间是引擎图标）
+node_is() { [[ $(e2e_text 1 32 "$(nth_row "$1" 1)" | noicon) == *"$2 $1 "* ]] || { echo "  $1: '$(e2e_text 1 32 "$(nth_row "$1" 1)" | noicon)', want $2"; false; }; }   # NAME ▾|▸（中间的引擎图标 noicon 去掉了）
 click_node() { local y; y=$(nth_row "$1" "${2:-1}"); e2e_click "$(node_x "$1" "$y")" "$y"; sleep 0.4; }
 addr() { bar | grep -oE '[^ ]+ · [^ ]+@[^ ]+' | tail -1; }                              # 状态栏的地址块 <连接> · <用户>@<host>:<port>
 addr_is() { [[ $(addr) == "$1 · "* ]] || { echo "  address block: '$(addr)', want $1 · …"; false; }; }

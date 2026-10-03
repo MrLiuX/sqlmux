@@ -64,7 +64,7 @@ check "t 还在连时又选了 bad：以最后一次为准，bad 连不上、toa
 check "t 连上之后也不换过去，还在 d" eval 'sleep 3.5; (( $(psql_n "select count(*) from pg_stat_activity where application_name = '"'e2e-f511t-$$'"'") >= 1 )) && on d public'
 sleep 2
 conn_dd d
-check "点标题上的连接名：下拉框列出全部连接 d、s、t、bad，当前的 d 用 pk 色标出" eval '[[ $(dd_rows | tr "\n" " ") == "d s t bad " ]] && g=($(dd)) && style_has $((g[0] + 2)) $((g[1] + 3)) fg=$PK || { dd_rows; false; }'
+check "点标题上的连接名：下拉框列出全部连接 d、s、t、bad（F5.4 起每项前面是引擎图标），当前的 d 用 pk 色标出" eval '[[ $(dd_rows | noicon | tr "\n" " ") == "d s t bad " ]] && g=($(dd)) && style_has $((g[0] + 4)) $((g[1] + 3)) fg=$PK || { dd_rows; false; }'
 e2e_type s; sleep 0.3; key Enter
 check "选还没连上的 s：下拉框关掉，先留在 d（s 在连）" eval '[[ -z $(dd) ]] && on d public'
 check "连上之后才换过去：s · <库>.public ▾" eval 'wait_for 5 eval "on s public >/dev/null" || on s public'
@@ -113,7 +113,7 @@ check "之后 s 的 Main 已关，不算在事务里：能换到 d" eval 'wait_f
 
 # ---- 换回 s、选 agentable，重启后恢复（state.json 记 console_1 的连接和 schema）
 pal ">切换连接"; e2e_keys Enter; sleep 0.4
-check "命令「切换连接…」：打开 ② 的连接下拉" eval '[[ $(dd_rows | tr "\n" " ") == "d s t bad " ]]'
+check "命令「切换连接…」：打开 ② 的连接下拉" eval '[[ $(dd_rows | noicon | tr "\n" " ") == "d s t bad " ]]'
 e2e_type s; sleep 0.3; key Enter; wait_for 3 eval "on s public >/dev/null"; key g s; e2e_type agen; sleep 0.3; key Enter; sleep 1.5
 check "console_1 换回 s、agentable" on s agentable
 check "console 文件在 consoles/console_1.sql（不再按连接分目录）" eval '[[ -f $D/data/sqlmux/consoles/console_1.sql && ! -d $D/data/sqlmux/consoles/d ]]'
