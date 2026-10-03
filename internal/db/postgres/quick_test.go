@@ -64,7 +64,7 @@ func TestQuick(t *testing.T) {
 // write, F-05). It runs on a database of its own (AGENTS.md「集成测试环境」).
 func TestQuickRefusesWrites(t *testing.T) {
 	ctx := context.Background()
-	dsn := ownDB(t)
+	dsn := OwnDB(t)
 	own, err := Connect(ctx, dsn, "", false)
 	if err != nil {
 		t.Fatal(err)

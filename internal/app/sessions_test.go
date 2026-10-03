@@ -5,9 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/exp/golden"
 
 	"sqlmux/internal/config"
@@ -86,18 +89,20 @@ func TestSessionKill(t *testing.T) {
 	doraemon := a.sess
 	a.attach(report)
 	report.Conns[0].tx = 'T'
+	tab := loadOrders(t, a, 3)
+	tab.edits = map[editKey]edit{{"1", "note"}: {val: db.Val{S: "x"}}}
 	feed(t, a, "<Space>sjlj")
 	if feed(t, a, "x"); len(a.sessions) != 2 || a.confirm != nil {
 		t.Fatal("x on a window's row")
 	}
 	feed(t, a, "kx")
-	if a.confirm == nil || a.confirm.text != "doraemon 有未提交的事务，关闭会回滚。" {
+	if a.confirm == nil || a.confirm.text != "report 里有 1 处修改未保存，关闭会丢弃。doraemon 有未提交的事务，关闭会回滚。" {
 		t.Fatalf("confirm %+v", a.confirm)
 	}
 	if feed(t, a, "y"); len(a.sessions) != 1 || a.sess != doraemon || a.sessList == nil || a.sessList.sel != 0 {
 		t.Fatalf("killed: %d left, on %s, list %+v", len(a.sessions), a.sess.Name, a.sessList)
 	}
-	tab := loadOrders(t, a, 3)
+	tab = loadOrders(t, a, 3)
 	tab.edits = map[editKey]edit{{"1", "note"}: {val: db.Val{S: "x"}}}
 	feed(t, a, "<Space>sx")
 	if a.confirm == nil || !strings.Contains(a.confirm.text, "退出会丢弃") {
@@ -114,7 +119,7 @@ func TestNewSessionFails(t *testing.T) {
 	if cmd == nil || a.sessList != nil || a.toast != "正在连接 doraemon…" {
 		t.Fatalf("n: list %v, toast %q", a.sessList, a.toast)
 	}
-	if a.Update(sessionDialed{specs: []config.Connection{a.sess.Conns[0].Spec}, err: errors.New("refused")}); len(a.sessions) != 1 || a.toast != "doraemon：refused" {
+	if a.Update(sessionDialed{spec: a.sess.Conns[0].Spec, err: errors.New("refused")}); len(a.sessions) != 1 || a.toast != "doraemon：refused" {
 		t.Errorf("failed: %d sessions, toast %q", len(a.sessions), a.toast)
 	}
 }
@@ -188,7 +193,7 @@ func TestWindowCloseRename(t *testing.T) {
 	}
 	tab := loadOrders(t, a, 3)
 	tab.edits = map[editKey]edit{{"1", "note"}: {val: db.Val{S: "x"}}}
-	if a.run("window.close", 0); a.confirm == nil || len(a.sess.Windows) != 2 {
+	if a.run("window.close", 0); a.confirm == nil || a.confirm.text != "这个 window 里有 1 处修改未保存，关闭会丢弃。" || len(a.sess.Windows) != 2 {
 		t.Fatalf("with changes: %+v", a.confirm)
 	}
 	if feed(t, a, "y"); len(a.sess.Windows) != 1 || a.sess.Active != 0 {
@@ -210,5 +215,104 @@ func TestWindowCloseRename(t *testing.T) {
 	a.run("window.rename", 0)
 	if feed(t, a, "x<Esc>"); a.win().Name != "main" || !strings.Contains(statusRow(a), " 0: main* ") {
 		t.Errorf("blank, then esc: %q", a.win().Name)
+	}
+}
+
+// Attaching a session closes every overlay, a question or a name typed in
+// the one left among them; a session in the background still refreshes
+// its tables in turn, and a catalog of its own opens its own tree's tables
+// again (F5.1).
+func TestAttachAcrossSessions(t *testing.T) {
+	a, report := withSessions()
+	tab := loadOrders(t, a, 3)
+	tab.auto, tab.autoGen, tab.out = 2*time.Second, 1, 0
+	a.confirm, a.winRename, a.form = &confirmBox{}, &ui.Input{}, &connForm{}
+	a.openPalette("")
+	if a.attach(report); a.confirm != nil || a.winRename != nil || a.form != nil || a.palette != nil {
+		t.Errorf("overlays stay: %v %v %v %v", a.confirm, a.winRename, a.form, a.palette)
+	}
+	if a.gotAuto(autoMsg{tab, 1}) == nil {
+		t.Error("a background table's auto refresh stopped")
+	}
+	c, only := report.Conns[0], db.Table{Schema: "public", Name: "only_in_report"}
+	report.open[tableNode(c, only)] = true
+	a.attach(a.sessions[0])
+	if !asksCols(a.gotCatalog(catalogMsg{conn: c, schemas: []string{"public"}, current: "public", tables: []db.Table{only}})) {
+		t.Error("report's open table: no columns asked")
+	}
+}
+
+// asksCols reports whether cmd asks for a table's columns.
+func asksCols(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	switch m := cmd().(type) {
+	case tea.BatchMsg:
+		return slices.ContainsFunc(m, asksCols)
+	case colsMsg:
+		return true
+	}
+	return false
+}
+
+// The list's ↵ on a window, as a palette's window, by its ID, a recent one
+// too, keeps SPC l's way back; a name being typed in the status bar goes
+// with a switch, or a click off it, which does nothing more (F5.2).
+func TestWindowSwitches(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	feed(t, a, "<Space>c<Space>c<Space>l") // on 1, 2 before
+	feed(t, a, "<Space>s")
+	a.sessionsFold(true)
+	a.sessionsAttach(1) // 0: data
+	if feed(t, a, "<Space>l"); a.sess.Active != 1 {
+		t.Errorf("SPC l after the list's 0: %d", a.sess.Active)
+	}
+	a.run("window.rename", 0)
+	if click(a, find(t, a, ui.Target{Kind: ui.KindButton, Action: "window.select 2"}).Min); a.winRename != nil || a.sess.Active != 1 {
+		t.Errorf("a click off the name: renaming %v, on %d", a.winRename != nil, a.sess.Active)
+	}
+	a.run("window.rename", 0)
+	if a.selectWindow(0); a.winRename != nil {
+		t.Error("the name typed went with the switch")
+	}
+	a.openPalette("%")
+	items, ms := a.paletteMatches()
+	at := slices.IndexFunc(ms, func(m ui.Match) bool { return items[m.Index].kind == itemWindow && items[m.Index].name == "2: data" })
+	if a.paletteRun(at, false); a.sess.Active != 2 || a.state.Recent[0] != (config.Recent{Kind: "window", ID: strconv.Itoa(a.win().ID)}) {
+		t.Errorf("the palette's 2: data: on %d, recent %+v", a.sess.Active, a.state.Recent)
+	}
+}
+
+// Each session's own window shows as its current one in the list, as
+// tmux's (F5.1).
+func TestSessionListWindows(t *testing.T) {
+	a, report := withSessions()
+	report.Active = 1
+	feed(t, a, "<Space>s")
+	a.sessList.open[a.sess], a.sessList.open[report] = true, true
+	var cur []string
+	for _, r := range a.sessionsView().Rows {
+		if r.Window && r.Current {
+			cur = append(cur, r.Name)
+		}
+	}
+	if strings.Join(cur, "|") != "0: data|1: logs" {
+		t.Errorf("current windows: %q", cur)
+	}
+}
+
+// C-p over the session list or the form: the palette on top, the keys its;
+// C-s in the form is its own save, not the table's behind it (F5.1).
+func TestPaletteOverLists(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	feed(t, a, "<Space>s<C-p>j")
+	if a.palette == nil || a.palette.input.Text != "j" || a.sessList.sel != 0 || strings.Contains(a.render().String(), " session ") {
+		t.Errorf("over the list: %+v, list title shows %v", a.palette, strings.Contains(a.render().String(), " session "))
+	}
+	b := sized(160, 45, "nerd")
+	b.run("conn.new", 0)
+	if feed(t, b, "<C-s>"); b.form == nil || b.form.err != "缺少 name" {
+		t.Errorf("C-s in the form: %+v", b.form)
 	}
 }

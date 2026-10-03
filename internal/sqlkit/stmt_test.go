@@ -163,7 +163,8 @@ func TestIsQuery(t *testing.T) {
 }
 
 // pgCommands are the first words of PG 17's SQL Commands (the docs'
-// Reference, I. SQL Commands), each statement's.
+// Reference, I. SQL Commands), each statement's, and analyse, ANALYZE
+// spelled as PG takes it too.
 var pgCommands = strings.Fields(`abort alter analyse analyze begin call checkpoint close cluster comment commit
 	copy create deallocate declare delete discard do drop end execute explain fetch grant import
 	insert listen load lock merge move notify prepare reassign refresh reindex release reset revoke
@@ -177,6 +178,7 @@ func TestBreaksReadOnly(t *testing.T) {
 		"delete from t": true, "vacuum": true, "call p()": true, "explain analyze delete from t": true,
 		"set transaction read only": true, "SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE": true,
 		"set default_transaction_read_only to default": true, `set local "Transaction_Read_Only" = off`: true,
+		"SET SESSION SESSION CHARACTERISTICS AS TRANSACTION READ WRITE": true,
 		"begin read write": true, "start transaction isolation level serializable, read write": true,
 		"select 1": false, "selec 1": false, "": false, "begin": false, "begin read only": false, "commit": false,
 		"end": false, "abort": false, "rollback to savepoint s": false, "release s": false, "savepoint s": false,
@@ -209,6 +211,25 @@ func TestIsWrite(t *testing.T) {
 	} {
 		if got := IsWrite(s, PG); got != want {
 			t.Errorf("IsWrite(%q) = %v", s, got)
+		}
+	}
+}
+
+// What psql's AUTOCOMMIT off sends with no BEGIN before it: transaction
+// control but savepoints, and what runs in no transaction block.
+func TestNoBegin(t *testing.T) {
+	for s, want := range map[string]bool{
+		"commit": true, "END": true, "abort": true, "start transaction": true, "begin": true, "rollback": true,
+		"rollback to savepoint s": true, "prepare transaction 'x'": true, "vacuum t": true, "cluster": true, "cluster;": true,
+		"create database x": true, "create unique index concurrently i on t (a)": true, "create index concurrently i on t (a)": true,
+		"alter system set x = 1": true, "drop database x": true, "drop index concurrently i": true, "reindex table concurrently t": true,
+		"discard all": true,
+		"savepoint s": false, "release s": false, "prepare p as select 1": false, "cluster t": false, "create index i on t (a)": false,
+		"create table t (a int)": false, "drop index i": false, "alter table t add b int": false, "discard plans": false,
+		"update t set a = 1": false, "select 1": false, "": false,
+	} {
+		if got := NoBegin(s, PG); got != want {
+			t.Errorf("NoBegin(%q) = %v", s, got)
 		}
 	}
 }

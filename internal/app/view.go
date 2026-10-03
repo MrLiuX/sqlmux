@@ -102,18 +102,18 @@ func (a *App) render() *ui.Frame {
 			f.Region(uv.Rect(a.sidebarRect().Max.X, 0, 1, a.window().Dy()), ui.Target{Kind: ui.KindTreeEdge})
 		}
 	}
-	if a.paneNumbers {
-		a.drawPaneNumbers(f, rects)
-	}
-
 	y := a.h - 1
 	a.statusLine().Draw(f, uv.Rect(0, y, a.w, 1))
+	if a.paneNumbers { // over the status bar's buttons too: a click there only closes them (§5)
+		a.drawPaneNumbers(f, rects)
+	}
 	if in := a.winRename; in != nil { // over the window's segment, past its number (§5)
 		for _, h := range f.Hits {
 			if h.Target.Action == fmt.Sprintf("window.select %d", a.sess.Active) {
 				x := h.Rect.Min.X + ui.Width(fmt.Sprintf(" %d: ", a.sess.Active))
 				c := in.Draw(f, uv.Rect(x, y, max(h.Rect.Max.X-1-x, 1), 1), uv.Style{Fg: th.Fg, Bg: th.Border})
 				f.Cursor = &c
+				break
 			}
 		}
 	}
@@ -158,17 +158,6 @@ func (a *App) render() *ui.Frame {
 			f.Cursor = &c
 		}
 	}
-	if a.palette != nil {
-		if c := a.paletteView().Draw(f, a.window()); c.X >= 0 {
-			f.Cursor = &c
-			if comp := a.palette.comp; comp != nil { // under what it completes, which ends at the cursor
-				in, at := a.palette.input, c
-				at.X -= ui.Width(in.Text[comp.start:in.Pos])
-				v, box, rows := a.completeView(comp, at)
-				v.Draw(f, box, rows)
-			}
-		}
-	}
 	if a.sessList != nil {
 		if c := a.sessionsView().Draw(f, a.window()); c.X >= 0 {
 			f.Cursor = &c
@@ -177,6 +166,17 @@ func (a *App) render() *ui.Frame {
 	if a.form != nil {
 		if c := a.formView().Draw(f, a.window()); c.X >= 0 {
 			f.Cursor = &c
+		}
+	}
+	if a.palette != nil { // over the list and the form, whose keys it takes (context)
+		if c := a.paletteView().Draw(f, a.window()); c.X >= 0 {
+			f.Cursor = &c
+			if comp := a.palette.comp; comp != nil { // under what it completes, which ends at the cursor
+				in, at := a.palette.input, c
+				at.X -= ui.Width(in.Text[comp.start:in.Pos])
+				v, box, rows := a.completeView(comp, at)
+				v.Draw(f, box, rows)
+			}
 		}
 	}
 	if c := a.confirm; c != nil {

@@ -2,7 +2,6 @@ package app
 
 import (
 	"slices"
-	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -19,8 +18,17 @@ type connForm struct {
 	err    string
 }
 
+// The form's fields, in order.
+const (
+	fieldName = iota
+	fieldEngine
+	fieldDSN
+	fieldPasswordCmd
+	fieldReadOnly
+)
+
 // connFields are the form's fields by the toml keys they write (§14).
-var connFields = []string{"name", "engine", "dsn", "password_cmd", "read_only"}
+var connFields = []string{fieldName: "name", fieldEngine: "engine", fieldDSN: "dsn", fieldPasswordCmd: "password_cmd", fieldReadOnly: "read_only"}
 
 // openConnForm is conn.new: the form, empty, on name.
 func (a *App) openConnForm() {
@@ -28,8 +36,8 @@ func (a *App) openConnForm() {
 	for i, name := range connFields {
 		fs[i].Label = name
 	}
-	fs[1].Choices = []string{"postgres"} // MySQL's comes with F5.4
-	fs[4].Choices = []string{"false", "true"}
+	fs[fieldEngine].Choices = []string{"postgres"} // MySQL's comes with F5.4
+	fs[fieldReadOnly].Choices = []string{"false", "true"}
 	a.form = &connForm{fields: fs}
 }
 
@@ -66,8 +74,10 @@ func (a *App) formClick(i int) {
 // that doesn't check says why, its field getting the keys (§7.8).
 func (a *App) saveConnForm() tea.Cmd {
 	fs := a.form.fields
-	ro, _ := strconv.ParseBool(fs[4].Choices[fs[4].On])
-	c := config.Connection{Name: fs[0].Input.Text, Engine: fs[1].Choices[fs[1].On], DSN: fs[2].Input.Text, PasswordCmd: fs[3].Input.Text, ReadOnly: ro}
+	c := config.Connection{
+		Name: fs[fieldName].Input.Text, Engine: fs[fieldEngine].Choices[fs[fieldEngine].On], DSN: fs[fieldDSN].Input.Text,
+		PasswordCmd: fs[fieldPasswordCmd].Input.Text, ReadOnly: fs[fieldReadOnly].On == 1,
+	}
 	var names []string
 	for _, conn := range a.sess.Conns {
 		names = append(names, conn.Spec.Name)

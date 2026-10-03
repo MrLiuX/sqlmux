@@ -47,9 +47,16 @@ func (a *App) connect(c *Conn) tea.Cmd {
 }
 
 // gotConnected takes c's connections in, or marks it failed; the consoles
-// waiting on it go over, or stay (§7.8「console 标题」).
+// waiting on it go over, or stay (§7.8「console 标题」). One of a session
+// closed meanwhile closes them again: nothing would.
 func (a *App) gotConnected(m connected) tea.Cmd {
 	c := m.conn
+	if a.sessionOf(c) == nil {
+		if m.err != nil {
+			return nil
+		}
+		return func() tea.Msg { m.d.main.Close(); m.d.meta.Close(); return nil }
+	}
 	var waiting []*consoleTab
 	for _, t := range a.consoles() {
 		if t.want == c {
@@ -63,7 +70,7 @@ func (a *App) gotConnected(m connected) tea.Cmd {
 	c.take(m.d)
 	cmds := []tea.Cmd{a.loadCatalog(c)}
 	for _, t := range waiting {
-		if why := a.stayReason(t); why != "" { // begun, or running, meanwhile
+		if why := t.stayReason(); why != "" { // begun, or running, meanwhile
 			cmds = append(cmds, a.showToast(why, toastTTL))
 			continue
 		}
@@ -97,6 +104,9 @@ func (a *App) loadCatalog(c *Conn) tea.Cmd {
 }
 
 func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
+	if a.sessionOf(m.conn) == nil { // its session closed meanwhile
+		return nil
+	}
 	if m.err != nil {
 		return a.showToast(m.conn.Spec.Name+"："+m.err.Error(), toastTTL)
 	}
@@ -117,7 +127,7 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	}
 	a.clampTree()
 	for _, t := range c.Tables { // R dropped the columns; an open table keeps showing them (§7.8)
-		if _, ok := c.cols[idOf(t)]; !ok && a.opened(tableNode(c, t), false) {
+		if _, ok := c.cols[idOf(t)]; !ok && a.sessionOf(c).opened(tableNode(c, t), false) {
 			cmds = append(cmds, a.fetchCols(c, t))
 		}
 	}
@@ -201,10 +211,10 @@ type node struct {
 	tab    int
 }
 
-// opened is whether node id shows its children: as the user left it, else
-// def, §7.8's default.
-func (a *App) opened(id string, def bool) bool {
-	if v, ok := a.sess.open[id]; ok {
+// opened is whether node id of s's tree shows its children: as the user
+// left it, else def, §7.8's default.
+func (s *Session) opened(id string, def bool) bool {
+	if v, ok := s.open[id]; ok {
 		return v
 	}
 	return def
@@ -234,7 +244,7 @@ func (a *App) treeNodes() (ns []node, matches int) {
 			pos[tableNode(c, c.Tables[m.Index])] = m.Pos
 		}
 	}
-	open := func(id string, def bool) bool { return filtering || a.opened(id, def) }
+	open := func(id string, def bool) bool { return filtering || a.sess.opened(id, def) }
 	current := "" // the node of the table ↵ lands on, and its tab (§7.8)
 	target := a.openTarget()
 	if t := dataOf(target); t != nil {
@@ -305,7 +315,7 @@ func (a *App) treeNodes() (ns []node, matches int) {
 						rows = ""
 					}
 					tn := node{id: tid, kind: nodeTable, conn: c, schema: sc, table: t, TreeNode: ui.TreeNode{
-						Depth: 3, Branch: true, Open: !filtering && a.opened(tid, false), Icon: icon, IconFg: th.Func, Text: t.Name, Pos: pos[tid],
+						Depth: 3, Branch: true, Open: !filtering && a.sess.opened(tid, false), Icon: icon, IconFg: th.Func, Text: t.Name, Pos: pos[tid],
 						Note: rows, NoteFg: th.Border, Current: tid == current,
 					}}
 					if !add(tn) {
@@ -328,7 +338,7 @@ func (a *App) treeNodes() (ns []node, matches int) {
 	if filtering { // the workspace isn't what a filter looks for (§7.8)
 		return ns, len(pos)
 	}
-	if !add(node{id: "workspace", kind: nodeWorkspace, TreeNode: ui.TreeNode{Branch: true, Open: a.opened("workspace", true), Icon: ic.Window, IconFg: th.Info, Text: "工作区"}}) {
+	if !add(node{id: "workspace", kind: nodeWorkspace, TreeNode: ui.TreeNode{Branch: true, Open: a.sess.opened("workspace", true), Icon: ic.Window, IconFg: th.Info, Text: "工作区"}}) {
 		return ns, len(pos)
 	}
 	for wi, w := range s.Windows {
@@ -337,12 +347,12 @@ func (a *App) treeNodes() (ns []node, matches int) {
 			leaves = w.Root.Leaves()
 		}
 		wid := windowNode(w)
-		if !add(node{id: wid, kind: nodeWindow, win: wi, TreeNode: ui.TreeNode{Depth: 1, Branch: len(leaves) > 0, Open: a.opened(wid, true), Icon: ic.Window, IconFg: th.Info, Text: w.Name}}) {
+		if !add(node{id: wid, kind: nodeWindow, win: wi, TreeNode: ui.TreeNode{Depth: 1, Branch: len(leaves) > 0, Open: a.sess.opened(wid, true), Icon: ic.Window, IconFg: th.Info, Text: w.Name}}) {
 			continue
 		}
 		for n, p := range leaves { // pane-<n> by ⟨n⟩: the sidebar is 0; no icon, the tabs have theirs (§7.8)
 			pid := paneNode(w, p)
-			if !add(node{id: pid, kind: nodePane, win: wi, pane: p, TreeNode: ui.TreeNode{Depth: 2, Branch: len(p.Tabs) > 0, Open: a.opened(pid, true), Icon: ui.Icon{Text: " "}, Text: fmt.Sprintf("pane-%d", n+1)}}) {
+			if !add(node{id: pid, kind: nodePane, win: wi, pane: p, TreeNode: ui.TreeNode{Depth: 2, Branch: len(p.Tabs) > 0, Open: a.sess.opened(pid, true), Icon: ui.Icon{Text: " "}, Text: fmt.Sprintf("pane-%d", n+1)}}) {
 				continue
 			}
 			for i, tb := range p.Tabs {

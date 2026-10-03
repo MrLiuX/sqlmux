@@ -152,3 +152,17 @@ func TestGoldenConsoleTx(t *testing.T) {
 	}
 	golden.RequireEqual(t, strings.Join(rows, "\n")+"\n")
 }
+
+// A console running is not closed, its tab, its pane or its window: a begin
+// in its run would come in after (F5.3).
+func TestCloseRunning(t *testing.T) {
+	a, c := inConsole(t, "", "")
+	feed(t, a, "<Space>c<Space>p")
+	c.running = &run{}
+	for _, act := range []string{"tab.close", "pane.close", "window.close"} {
+		a.toast = ""
+		if a.run(act, 0); a.toast != "正在执行，结束后再关闭" || len(a.sess.consoles()) != 2 || len(a.sess.Windows) != 2 {
+			t.Errorf("%s: toast %q, %d consoles, %d windows", act, a.toast, len(a.sess.consoles()), len(a.sess.Windows))
+		}
+	}
+}

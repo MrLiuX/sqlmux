@@ -14,7 +14,7 @@ import (
 const txOpen = "当前连接有未提交的事务，先提交或回滚"
 
 // setTxMode puts c in the manual transaction mode, or back in the auto one
-// but with a transaction going on, which nothing would end then (§5).
+// except with a transaction going on, which nothing would end then (§5).
 func (a *App) setTxMode(c *Conn, manual bool) tea.Cmd {
 	if !manual && c.inTx() {
 		return a.showToast(txOpen, toastTTL)
@@ -51,13 +51,18 @@ func (a *App) endTx(c *Conn, sql string) tea.Cmd {
 	}
 }
 
-// gotTx takes where the transaction is now, and c's tables load again: in
-// the manual mode they showed what is rolled back now, and their counts,
-// from Meta, see what is committed (§7.8). It ending fine says nothing,
-// the status bar does; a commit of a failed one was a rollback.
+// gotTx takes where the transaction is now, and c's tables and catalog
+// load again: in the manual mode they showed what is rolled back now, the
+// tables a DDL in it made or dropped come or go, and the counts, from
+// Meta, see what is committed (§7.8). It ending fine says nothing, the
+// status bar does; a commit of a failed one was a rollback.
 func (a *App) gotTx(m txDone) tea.Cmd {
+	if a.sessionOf(m.conn) == nil { // its session closed meanwhile
+		return nil
+	}
 	m.conn.tx = m.tx
-	var cmds []tea.Cmd
+	m.conn.dropCols() // as tree.refresh
+	cmds := []tea.Cmd{a.loadCatalog(m.conn)}
 	for _, s := range a.sessions {
 		for _, p := range s.panes() {
 			for _, tab := range p.Tabs {
@@ -91,14 +96,18 @@ func (a *App) orphaned(cs []*consoleTab) []*Conn {
 	return out
 }
 
-// closeAsking runs close, which closes the consoles cs and tabs holding n
+// closeAsking runs shut, which closes the consoles cs and tabs holding n
 // changes, of what (§10.5): asked first when they or the transactions
-// orphaned would be lost, those rolled back once their consoles are
-// gone indeed.
-func (a *App) closeAsking(n int, what string, cs []*consoleTab, close func() tea.Cmd) tea.Cmd {
+// orphaned would be lost, those rolled back once their consoles are gone
+// indeed. A console running keeps it all open: a begin in its run would
+// come in after, a connection left in a transaction with no console.
+func (a *App) closeAsking(n int, what string, cs []*consoleTab, shut func() tea.Cmd) tea.Cmd {
+	if slices.ContainsFunc(cs, func(t *consoleTab) bool { return t.running != nil }) {
+		return a.showToast("正在执行，结束后再关闭", toastTTL)
+	}
 	lost := a.orphaned(cs)
 	return a.unlessLost(n, what, lost, "关闭", func() tea.Cmd {
-		cmds := []tea.Cmd{close()}
+		cmds := []tea.Cmd{shut()}
 		for _, c := range lost {
 			if !slices.ContainsFunc(a.sess.consoles(), func(t *consoleTab) bool { return t.conn == c }) {
 				cmds = append(cmds, a.endTx(c, "rollback"))

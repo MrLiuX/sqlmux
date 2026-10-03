@@ -4,22 +4,27 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"sqlmux/internal/config"
+	"sqlmux/internal/db"
 	"sqlmux/internal/db/postgres"
 	"sqlmux/internal/keymap"
 )
 
-// settle delivers what connecting, the catalog, a run and a commit or a
-// rollback bring back, and what those bring in turn; the rest is dropped.
+// settle delivers what connecting, the catalog, a run, a page, a save and a
+// commit or a rollback bring back, and what those bring in turn; the rest
+// is dropped.
 func settle(a *App, cmd tea.Cmd) {
 	if cmd == nil {
 		return
@@ -29,7 +34,7 @@ func settle(a *App, cmd tea.Cmd) {
 		for _, c := range m {
 			settle(a, c)
 		}
-	case connected, catalogMsg, sessionDialed, runDone, txDone:
+	case connected, catalogMsg, sessionDialed, runDone, txDone, pageMsg, saveMsg:
 		_, next := a.Update(m)
 		settle(a, next)
 	}
@@ -234,27 +239,43 @@ func lastLog(a *App) string {
 	return l.Head[10:] + l.Tail
 }
 
-// In the manual mode a run begins a transaction, which stays till a
-// rollback takes it back; one failed stays so till then, a commit of it
-// rolling back (F5.3). Temp tables: the shared database is not written.
+// In the manual mode a statement out of a transaction begins one, which
+// stays till a rollback takes it back, as psql's AUTOCOMMIT off: after a
+// commit in a run the next statement begins anew, VACUUM begins none; a
+// commit or a rollback loads the catalog again, a DDL's table there; a
+// failed transaction stays so, a commit of it rolling back (F5.3).
 func TestManualTx(t *testing.T) {
-	a := opened(t, config.Connection{Name: "play", Engine: "postgres", DSN: postgres.IntegrationDSN(t)})
+	a := opened(t, config.Connection{Name: "play", Engine: "postgres", DSN: postgres.OwnDB(t)})
 	play, c := a.sess.Conns[0], consoleOf(a.win().Root.B.Pane)
 	a.win().focus(a.win().Root.B.Pane.ID)
-	run := func(sql string) {
+	run := func(sql string) { // the whole text
 		t.Helper()
 		c.ed.Load(sql)
-		settle(a, a.consoleRun(""))
+		settle(a, a.runSQL(c, c.conn, c.schema, "console_1", sql, 0, c.ver))
+	}
+	count := func(sql string) string {
+		t.Helper()
+		r, err := play.Meta.Query(context.Background(), sql) // another session
+		if err != nil {
+			return err.Error()
+		}
+		return r.Rows[0][0].S
 	}
 	play.Manual = true
-	if run("create temp table probe (a int)"); play.tx != 'T' {
+	if run("create table probe (a int)"); play.tx != 'T' || count("select count(*) from pg_class where relname = 'probe'") != "0" {
 		t.Fatalf("a run: %c", play.tx)
 	}
 	if settle(a, a.endTx(play, "rollback")); play.tx != 'I' {
 		t.Fatalf("rolled back: %c", play.tx)
 	}
-	if run("select * from probe"); !strings.Contains(lastLog(a), "does not exist") {
-		t.Errorf("the table is there: %s", lastLog(a))
+	if run("create table probe (a int);\ncommit;\ninsert into probe values (1)"); play.tx != 'T' || count("select count(*) from probe") != "0" {
+		t.Fatalf("after a commit in the run: %c, %s", play.tx, count("select count(*) from probe"))
+	}
+	if settle(a, a.endTx(play, "commit")); !slices.ContainsFunc(play.Tables, func(tb db.Table) bool { return tb.Name == "probe" }) {
+		t.Errorf("committed: probe not in the tree")
+	}
+	if run("vacuum probe"); play.tx != 'I' || strings.Contains(lastLog(a), "ERROR") {
+		t.Errorf("vacuum: %c, %s", play.tx, lastLog(a))
 	}
 	if run("select 1/0"); play.tx != 'E' {
 		t.Fatalf("failed: %c", play.tx)
@@ -281,5 +302,113 @@ func TestReadOnlyMain(t *testing.T) {
 	}
 	if run("begin read write"); lastLog(a) != "console_1  begin read write  play 是只读连接，整次都没有执行" || c.conn.tx != 'I' {
 		t.Errorf("begin read write: %s, %c", lastLog(a), c.conn.tx)
+	}
+}
+
+// In the manual mode a table reads on Main, in a savepoint while in a
+// transaction: a change saved and not committed shows, 「（未提交）」 says
+// so, a WHERE that fails leaves the transaction going; a rollback takes
+// the change back on screen too. So does one the user began in the auto
+// mode (§8.2, §10.3, F5.3).
+func TestManualTxTable(t *testing.T) {
+	a := opened(t, config.Connection{Name: "play", Engine: "postgres", DSN: postgres.OwnDB(t)})
+	play := a.sess.Conns[0]
+	play.Manual = true
+	i := slices.IndexFunc(play.Tables, func(tb db.Table) bool { return tb.Schema == "public" && tb.Name == "t_order" })
+	settle(a, a.openTable(play, play.Tables[i]))
+	tab := dataOf(a.focused())
+	note := slices.IndexFunc(tab.page.Cols, func(c db.Col) bool { return c.Name == "note" })
+	if tab == nil || note < 0 || !tab.page.Rows[0][note].Null {
+		t.Fatalf("t_order: %+v", tab)
+	}
+	tab.edits = map[editKey]edit{{tab.rowKey(0), "note"}: {val: db.Val{S: "mine"}, orig: tab.page.Rows[0][note]}}
+	settle(a, a.save())
+	if play.tx != 'T' || !strings.Contains(tab.note.Head, "（未提交）") || tab.page.Rows[0][note].S != "mine" {
+		t.Fatalf("saved: %c, %q, read back %+v", play.tx, tab.note.Head, tab.page.Rows[0][note])
+	}
+	tab.applied = "no_such = 1"
+	settle(a, a.fetch(tab, false))
+	var tx byte
+	play.Main.Run(context.Background(), func(_ context.Context, c db.Conn) error { tx = db.TxStatus(c); return nil })
+	if tab.bar == nil || tx != 'T' {
+		t.Fatalf("a WHERE failing: bar %v, %c", tab.bar, tx)
+	}
+	tab.applied = ""
+	if settle(a, a.endTx(play, "rollback")); play.tx != 'I' || !tab.page.Rows[0][note].Null {
+		t.Errorf("rolled back: %c, %+v", play.tx, tab.page.Rows[0][note])
+	}
+	// the auto mode, a transaction the user began: read on Main as well
+	play.Manual = false
+	c, data := a.sess.consoles()[0], a.paneShowing(tab)
+	settle(a, a.runSQL(c, play, c.schema, "console_1", "begin", 0, c.ver))
+	a.win().focus(data.ID)
+	tab.edits = map[editKey]edit{{tab.rowKey(0), "note"}: {val: db.Val{S: "again"}, orig: tab.page.Rows[0][note]}}
+	if settle(a, a.save()); play.tx != 'T' || tab.page.Rows[0][note].S != "again" {
+		t.Errorf("saved in the user's: %c, read back %+v", play.tx, tab.page.Rows[0][note])
+	}
+	settle(a, a.endTx(play, "rollback"))
+}
+
+// backends is how many connections named app the server has.
+func backends(t *testing.T, app string) int {
+	t.Helper()
+	c, err := postgres.Connect(context.Background(), postgres.IntegrationDSN(t), "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	r, err := c.Query(context.Background(), "select count(*) from pg_stat_activity where application_name = $1", db.Val{S: app})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, _ := strconv.Atoi(r.Rows[0][0].S)
+	return n
+}
+
+// A session closed while one of its connections connects: the late answer
+// closes them again, none left behind; a run going on in it says nothing
+// in the session left, nor asks first (F5.1).
+func TestKillSessionUnderWay(t *testing.T) {
+	dsn := postgres.IntegrationDSN(t)
+	app := fmt.Sprintf("sqlmux_kill_%d", os.Getpid())
+	a := opened(t, config.Connection{Name: "play", Engine: "postgres", DSN: dsn},
+		config.Connection{Name: "seed", Engine: "postgres", DSN: dsn + "&application_name=" + app})
+	feed(t, a, "<Space>s")
+	_, cmd := a.Update(teaKey("n"))
+	settle(a, cmd)
+	seed := a.sess.Conns[1]
+	dial := a.connect(seed) // seed opened in session 1's tree
+	con := a.sess.consoles()[0]
+	run := a.runSQL(con, con.conn, con.schema, "console_2", "select pg_sleep(3)", 0, con.ver)
+	ran := make(chan tea.Msg, 1)
+	go func() { ran <- run().(tea.BatchMsg)[0]() }()
+	time.Sleep(300 * time.Millisecond)
+	feed(t, a, "<Space>s")
+	_, kill := a.Update(teaKey("x"))
+	if len(a.sessions) != 1 || a.confirm != nil {
+		t.Fatalf("closed: %d sessions, asked %v", len(a.sessions), a.confirm)
+	}
+	settle(a, kill)
+	if a.Update(<-ran); a.toast == "查询已取消" {
+		t.Error("the closed session's run cancelled, said in the one left")
+	}
+	settle(a, dial)
+	a.Close()
+	if n := backends(t, app); n != 0 {
+		t.Errorf("%d connections of the closed session left", n)
+	}
+}
+
+// A connection the form adds while n connects is the new session's too
+// (§7.8).
+func TestNewSessionTakesNewConn(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	a := opened(t, config.Connection{Name: "play", Engine: "postgres", DSN: postgres.IntegrationDSN(t)})
+	feed(t, a, "<Space>s")
+	_, cmd := a.Update(teaKey("n"))
+	a.run("conn.new", 0)
+	feed(t, a, "extra<Tab><Tab>postgres://localhost/x<CR>")
+	if settle(a, cmd); a.sess.Name != "1" || len(a.sess.Conns) != 2 || a.sess.Conns[1].Spec.Name != "extra" {
+		t.Errorf("session %s: %d connections", a.sess.Name, len(a.sess.Conns))
 	}
 }

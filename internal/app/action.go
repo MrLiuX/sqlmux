@@ -151,6 +151,9 @@ func init() {
 		"pane.split.right": {Title: "左右分割", Run: do(func(a *App, _ Args) { a.splitPane(Horiz) })},
 		"pane.split.below": {Title: "上下分割", Run: do(func(a *App, _ Args) { a.splitPane(Vert) })},
 		"pane.close": {Title: "关闭 pane", Run: func(a *App, _ Args) tea.Cmd {
+			if p := a.focused(); p == a.win().Tree || a.win().onlyPane(p.ID) { // stays: nothing to ask about
+				return nil
+			}
 			if cmd, ok := a.flushAll(a.focused()); !ok {
 				return cmd
 			}
@@ -225,7 +228,7 @@ func init() {
 		"form.save":   {Title: "保存", Local: true, Run: when(inForm, func(a *App) tea.Cmd { return a.saveConnForm() })},
 		"form.cancel": {Title: "取消", Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.form = nil; return nil })},
 		// the session list's (§7.8)
-		"sessions.new":      {Title: "新建 session", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { return a.newSession() })},
+		"sessions.new":      {Title: "新建 session", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { return a.dialSession() })},
 		"sessions.down":     {Title: "下移", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsMove(1); return nil })},
 		"sessions.up":       {Title: "上移", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsMove(-1); return nil })},
 		"sessions.expand":   {Title: "展开", Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsFold(true); return nil })},

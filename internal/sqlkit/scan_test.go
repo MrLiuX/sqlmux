@@ -37,10 +37,12 @@ func TestScan(t *testing.T) {
 		{MySQL, "a--b -- c\n--", "iooi_c_c", []string{"a", "-", "-", "b", "-- c", "--"}}, // a - -b; a -- at the end is one
 		{MySQL, "/* a /* b */ c */", "c_i_o", nil},                                       // no nesting: c */ is left
 		{MySQL, `"a\'`, "s", nil},
-		{PG, "a\u3000b", "i_i", nil}, // whole runes: none of these may spin
-		{PG, "id = \uff11", "i_o_n", nil},
-		{PG, "a\u00a0b", "i_i", nil},
-		{PG, "x = \u0663", "i_o_n", nil},
+		{PG, "a\u3000b", "i", nil}, // past ASCII, a name's, as scan.l's ident_cont: none may spin
+		{PG, "id = \uff11", "i_o_i", nil},
+		{PG, "a\u00a0b", "i", nil},
+		{PG, "x = \u0663", "i_o_i", nil},
+		{PG, "select 1 as ✓$a$; set x = 1; select ✓$a$", "k_n_k_ip_k_i_o_np_k_i", nil}, // no $a$ string swallowing the SET
+		{MySQL, "a\u3000b", "i", nil},
 	} {
 		if got := kinds(c.in, c.d); got != c.kinds {
 			t.Errorf("%q: %s, want %s", c.in, got, c.kinds)

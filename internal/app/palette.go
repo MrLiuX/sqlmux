@@ -62,10 +62,12 @@ var itemTags = [...]string{itemSession: "会话", itemWindow: "窗口", itemPane
 
 // scopes are the palette's tabs (K-02). The prefix typed in the input is the
 // only scope state: Tab rewrites it, and palette.command is `>` typed (§12).
-var scopes = []struct {
+type scopeTab struct {
 	label, prefix string
 	kinds         []itemKind
-}{
+}
+
+var scopes = []scopeTab{
 	{"所有", "", []itemKind{itemSession, itemWindow, itemPane, itemTab, itemTable, itemCommand}}, // not the SQL history (§12)
 	{"会话", "$", []itemKind{itemSession}},
 	{"窗口·Pane", "%", []itemKind{itemWindow, itemPane, itemTab}},
@@ -74,8 +76,8 @@ var scopes = []struct {
 	{"SQL", ";", []itemKind{itemSQL}}, // what follows the ; is SQL, the history while there is none
 }
 
-// sqlScope is where the input is quick SQL (§12).
-const sqlScope = 5
+// sqlScope is where the input is quick SQL (§12): the ; one.
+var sqlScope = slices.IndexFunc(scopes, func(s scopeTab) bool { return s.prefix == ";" })
 
 // paletteItem is one candidate. id tells it apart within its kind: the
 // action, the table (schema.name), the pane's ID, the window's number, or
@@ -137,7 +139,8 @@ func (a *App) paletteItems() []paletteItem {
 	}
 	for wi, w := range a.sess.Windows {
 		name := fmt.Sprintf("%d: %s", wi, w.Name)
-		items = append(items, paletteItem{itemWindow, strconv.Itoa(wi), a.icons.Window, name, a.sess.Name})
+		// by ID: the recent ones outlive a close (F5.2)
+		items = append(items, paletteItem{itemWindow, strconv.Itoa(w.ID), a.icons.Window, name, a.sess.Name})
 		place := a.sess.Name + " › " + name // where its panes are
 		if wi == a.sess.Active {
 			items = append(items, a.paneItem(0, w.Tree, place))
@@ -265,7 +268,7 @@ func (a *App) paletteView() ui.Palette {
 		p.Enter = bound(ui.Hint{Key: run, Label: label, Action: "palette.run"})
 	case a.palette.sel < len(ms):
 		it := items[ms[a.palette.sel].Index]
-		enter := [...]string{itemWindow: "切换", itemPane: "聚焦", itemTab: "切换", itemTable: "打开", itemCommand: "执行", itemSQL: "执行"}[it.kind]
+		enter := [...]string{itemSession: "切换", itemWindow: "切换", itemPane: "聚焦", itemTab: "切换", itemTable: "打开", itemCommand: "执行", itemSQL: "执行"}[it.kind]
 		if it.kind == itemCommand && actions[it.id].On != nil {
 			enter = "切换"
 		}
@@ -558,8 +561,8 @@ func (a *App) paletteDo(it paletteItem) tea.Cmd {
 		id, _ := strconv.Atoi(it.id)
 		a.showPane(id)
 	case itemWindow:
-		i, _ := strconv.Atoi(it.id)
-		a.selectWindow(i)
+		id, _ := strconv.Atoi(it.id)
+		a.selectWindow(a.sess.windowByID(id))
 	case itemTab: // another window's: that window first (F5.2)
 		var wi, id, i int
 		fmt.Sscan(it.id, &wi, &id, &i)

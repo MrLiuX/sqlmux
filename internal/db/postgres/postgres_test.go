@@ -6,8 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -26,40 +24,6 @@ func connect(t *testing.T, readOnly bool) *Conn {
 	}
 	t.Cleanup(func() { c.Close() })
 	return c
-}
-
-// ownDB is a database of the test's own on the test instance, seeded as
-// the shared one is and dropped when the test ends: for tests that write
-// (AGENTS.md「集成测试环境」). It returns its DSN.
-func ownDB(t *testing.T) string {
-	t.Helper()
-	ctx := context.Background()
-	admin := connect(t, false)
-	name := fmt.Sprintf("sqlmux_worker_%d_%s", os.Getpid(), strings.ToLower(t.Name()))
-	drop := func() { admin.Query(ctx, "drop database if exists "+name+" with (force)") }
-	drop()
-	if _, err := admin.Query(ctx, "create database "+name); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(drop)
-	u, err := url.Parse(IntegrationDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	u.Path = "/" + name
-	seed, err := os.ReadFile("../../../testdata/seed/pg.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	c, err := Connect(ctx, u.String(), "", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.Close()
-	if _, err := c.Exec(ctx, string(seed), 0); err != nil {
-		t.Fatal(err)
-	}
-	return u.String()
 }
 
 func sqlState(err error) string {
@@ -168,7 +132,7 @@ func TestReadOnlyRefusesWrites(t *testing.T) {
 // execEach is a console's run on w, as one request.
 func execEach(ctx context.Context, w *db.Worker, stmts ...string) (rs []db.Result, err error) {
 	err = w.Run(ctx, func(ctx context.Context, c db.Conn) error {
-		rs, err = db.ExecEach(ctx, c, stmts, 0)
+		rs, err = db.ExecEach(ctx, c, stmts, 0, nil)
 		return err
 	})
 	return rs, err
@@ -201,7 +165,7 @@ func TestSetSearchPath(t *testing.T) {
 // A console's run (§11「执行」): each statement commits on its own, and the
 // first to fail stops the rest; a cancelled run leaves Main usable.
 func TestExecEach(t *testing.T) {
-	c, err := Connect(context.Background(), ownDB(t), "", false)
+	c, err := Connect(context.Background(), OwnDB(t), "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,30 +214,38 @@ func TestTxStatusDropped(t *testing.T) {
 }
 
 // What turns a read-only connection's read only off, by trying a write
-// after it, and what doesn't, is what sqlkit.BreaksReadOnly keeps back and
-// lets go (§13). A transaction's settings need one begun.
+// after it, and what doesn't, against what sqlkit.BreaksReadOnly keeps
+// back (§13): all that does, and the SETs of §13's kinds that don't, kept
+// back as a kind. A transaction's settings need one begun.
 func TestReadOnlyUnlocks(t *testing.T) {
 	ctx := context.Background()
 	for _, c := range []struct {
-		begin   bool
-		stmt    string
-		unlocks bool
+		begin         bool
+		stmt          string
+		unlocks, kept bool
 	}{
-		{true, "set transaction read write", true},
-		{true, "set transaction_read_only = off", true},
-		{true, "set local transaction_read_only to off", true},
-		{false, `set "default_transaction_read_only" to off`, true},
-		{false, "SET SESSION default_transaction_read_only = off", true},
-		{false, "set session characteristics as transaction read write", true},
-		{false, "begin read write", true},
-		{false, "start transaction isolation level serializable, read write", true},
-		{false, "set search_path to public", false},
-		{false, "set statement_timeout = 0", false},
-		{false, "set session authorization default", false},
-		{false, "reset default_transaction_read_only", false},
-		{false, "reset all", false},
-		{false, "discard all", false},
-		{false, "begin", false},
+		{true, "set transaction read write", true, true},
+		{true, "set transaction_read_only = off", true, true},
+		{true, "set local transaction_read_only to off", true, true},
+		{false, `set "default_transaction_read_only" to off`, true, true},
+		{false, "SET SESSION default_transaction_read_only = off", true, true},
+		{false, "set session characteristics as transaction read write", true, true},
+		{false, "SET SESSION SESSION CHARACTERISTICS AS TRANSACTION READ WRITE", true, true},
+		{false, "begin read write", true, true},
+		{false, "start transaction isolation level serializable, read write", true, true},
+		// kept back as their kind, harmless
+		{true, "set transaction read only", false, true},
+		{false, "set transaction_read_only = off", false, true}, // autocommit: its own transaction alone
+		{false, "set default_transaction_read_only to default", false, true},
+		{false, "set default_transaction_read_only = on", false, true},
+		// let go
+		{false, "set search_path to public", false, false},
+		{false, "set statement_timeout = 0", false, false},
+		{false, "set session authorization default", false, false},
+		{false, "reset default_transaction_read_only", false, false},
+		{false, "reset all", false, false},
+		{false, "discard all", false, false},
+		{false, "begin", false, false},
 	} {
 		conn := connect(t, true)
 		if c.begin {
@@ -286,8 +258,8 @@ func TestReadOnlyUnlocks(t *testing.T) {
 		if unlocked := err == nil; unlocked != c.unlocks {
 			t.Errorf("%s: unlocked %v: %v", c.stmt, unlocked, err)
 		}
-		if sqlkit.BreaksReadOnly(c.stmt, sqlkit.PG) != c.unlocks {
-			t.Errorf("%s: BreaksReadOnly %v", c.stmt, !c.unlocks)
+		if kept := sqlkit.BreaksReadOnly(c.stmt, sqlkit.PG); kept != c.kept {
+			t.Errorf("%s: BreaksReadOnly %v", c.stmt, kept)
 		}
 	}
 }

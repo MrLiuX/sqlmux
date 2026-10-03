@@ -278,6 +278,12 @@ func (a *App) feed(k keymap.Key, maps bool) tea.Cmd {
 // same actions keys run.
 func (a *App) click(p uv.Position) tea.Cmd {
 	t, ok := ui.HitAt(a.hits, p)
+	if a.winRename != nil { // a click off its input is esc, and no more (§5)
+		if t.Action != fmt.Sprintf("window.select %d", a.sess.Active) {
+			a.winRename = nil
+		}
+		return nil
+	}
 	if !ok || t != (ui.Target{}) && t.Kind != ui.KindRow && !strings.HasPrefix(t.Action, "cell.") { // not the cell's edit (a blank target), its options or ▾: that ends first (§10.1)
 		if !a.endEdit() { // or stays, a click going nowhere (§10.7)
 			return nil

@@ -90,7 +90,7 @@ func TestExecEach(t *testing.T) {
 	}
 	run := func(stmts ...string) (rs []db.Result, err error) {
 		err = w.Run(ctx, func(ctx context.Context, c db.Conn) error {
-			rs, err = db.ExecEach(ctx, c, stmts, 0)
+			rs, err = db.ExecEach(ctx, c, stmts, 0, nil)
 			return err
 		})
 		return rs, err

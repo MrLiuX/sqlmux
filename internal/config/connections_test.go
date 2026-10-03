@@ -134,4 +134,14 @@ func TestAppendConnection(t *testing.T) {
 	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
 		t.Errorf("made: %v %v", info, err)
 	}
+	// connections in an inline array: a [[connection]] after it would break
+	// the file, the next start exiting; it stays as it is
+	inline := "connection = [{ name = \"a\", engine = \"postgres\", dsn = \"x\" }]\n"
+	path = connectionsFile(t, inline, 0o600)
+	if err := AppendConnection(Connection{Name: "b", Engine: "postgres", DSN: "y"}); err == nil {
+		t.Error("appended to an inline array")
+	}
+	if data, _ := os.ReadFile(path); string(data) != inline {
+		t.Errorf("written: %s", data)
+	}
 }

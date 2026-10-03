@@ -36,10 +36,17 @@ func (w *Worker) Run(ctx context.Context, f func(context.Context, Conn) error) e
 
 // ExecEach runs stmts on c one after the other, each an Exec of its own
 // and so, autocommit, a transaction of its own; it stops at the first that
-// fails (§11「执行」). rs has one result for each statement that ran, the
-// one that failed not among them. It goes in a Worker.Run, as one request.
-func ExecEach(ctx context.Context, c Conn, stmts []string, maxRows int) (rs []Result, err error) {
+// fails (§11「执行」). begin, when not nil, says which go in a transaction
+// begun first if c is in none, as psql's AUTOCOMMIT off does (the manual
+// mode, F5.3). rs has one result for each statement that ran, the one that
+// failed not among them. It goes in a Worker.Run, as one request.
+func ExecEach(ctx context.Context, c Conn, stmts []string, maxRows int, begin func(stmt string) bool) (rs []Result, err error) {
 	for _, s := range stmts {
+		if begin != nil && TxStatus(c) == 'I' && begin(s) {
+			if _, err := c.Exec(ctx, "begin", 0); err != nil {
+				return rs, err
+			}
+		}
 		r, err := c.Exec(ctx, s, maxRows)
 		if err != nil {
 			return rs, err

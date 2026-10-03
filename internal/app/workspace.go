@@ -274,6 +274,7 @@ func (a *App) selectWindow(i int) {
 		return
 	}
 	s.prevWin, s.Active = s.Windows[s.Active].ID, i
+	a.winRename = nil // the name typed is the window's left
 }
 
 // windowByID is the index of the session's window id; -1 for none.
@@ -303,17 +304,25 @@ func (a *App) cycleWindow(d int) {
 // renameWindowKey edits the name typed in the status bar: ↵ takes it but a
 // blank one, esc drops it (§5).
 func (a *App) renameWindowKey(k keymap.Key) {
-	switch k {
-	case keymap.Esc:
-	case "<CR>":
-		if name := strings.TrimSpace(a.winRename.Text); name != "" {
+	if name, done := typeName(a.winRename, k); done {
+		if name != "" {
 			a.win().Name = name
 		}
-	default:
-		editInput(a.winRename, k)
-		return
+		a.winRename = nil
 	}
-	a.winRename = nil
+}
+
+// typeName is key k on in, a name typed in its place: ↵ ends it with the
+// name trimmed, esc with none, ""; done is whether it ended.
+func typeName(in *ui.Input, k keymap.Key) (name string, done bool) {
+	switch k {
+	case keymap.Esc:
+		return "", true
+	case "<CR>":
+		return strings.TrimSpace(in.Text), true
+	}
+	editInput(in, k)
+	return "", false
 }
 
 // closeWindow is window.close (§5): the window's consoles written, asked
@@ -329,7 +338,7 @@ func (a *App) closeWindow() tea.Cmd {
 	if w.Root != nil {
 		ps = w.Root.Leaves()
 	}
-	return a.closeAsking(unsaved(ps...), "", consolesIn(ps...), func() tea.Cmd {
+	return a.closeAsking(unsaved(ps...), "这个 window 里", consolesIn(ps...), func() tea.Cmd {
 		if cmd, ok := a.flushAll(ps...); !ok {
 			return cmd
 		}
@@ -404,12 +413,20 @@ func (c *Conn) take(d dialed) {
 
 // Close closes the session's connections.
 func (s *Session) Close() {
+	for _, w := range s.workers() {
+		w.Close()
+	}
+}
+
+// workers is the session's connections connected, Main and Meta.
+func (s *Session) workers() []*db.Worker {
+	var ws []*db.Worker
 	for _, c := range s.Conns {
 		if c.State == connReady {
-			c.Main.Close()
-			c.Meta.Close()
+			ws = append(ws, c.Main, c.Meta)
 		}
 	}
+	return ws
 }
 
 // openTable shows c's table t in openTarget's pane and focuses it (§7.8
@@ -518,11 +535,12 @@ func (a *App) restoreConsole(t *consoleTab) tea.Cmd {
 // is.
 func (a *App) pickConn(t *consoleTab, c *Conn) tea.Cmd {
 	t.want = nil
+	why := t.stayReason()
 	switch {
 	case c == t.conn:
 		return nil
-	case !a.mayLeave(t):
-		return a.showToast(a.stayReason(t), toastTTL)
+	case why != "":
+		return a.showToast(why, toastTTL)
 	case c.State == connReady:
 		return a.switchConn(t, c, c.Schema)
 	}
@@ -530,12 +548,9 @@ func (a *App) pickConn(t *consoleTab, c *Conn) tea.Cmd {
 	return a.connect(c)
 }
 
-// mayLeave reports whether console t may go to another connection: not
-// while its own is in a transaction, nor while it runs (§7.8).
-func (a *App) mayLeave(t *consoleTab) bool { return a.stayReason(t) == "" }
-
-// stayReason is why console t stays on its connection, "" for none.
-func (a *App) stayReason(t *consoleTab) string {
+// stayReason is why console t stays on its connection, "" for none: its
+// own in a transaction, or t running, a run that may begin one (§7.8).
+func (t *consoleTab) stayReason() string {
 	switch {
 	case t.running != nil:
 		return "正在执行，结束后再换连接"
@@ -566,6 +581,17 @@ func (a *App) keepConsole(t *consoleTab) tea.Cmd {
 // on one file would write over each other's autosaves (§11).
 func (a *App) consoleOpen(path string) bool {
 	return slices.ContainsFunc(a.consoles(), func(c *consoleTab) bool { return c.path == path })
+}
+
+// sessionOf is the session c is a connection of: an answer may be for one
+// not attached, or one closed, nil then (F5.1).
+func (a *App) sessionOf(c *Conn) *Session {
+	for _, s := range a.sessions {
+		if slices.Contains(s.Conns, c) {
+			return s
+		}
+	}
+	return nil
 }
 
 // consoles is every session's consoles: an answer may be for a session not
@@ -692,7 +718,7 @@ func (a *App) closeTabAsking(p *Pane, i int) tea.Cmd {
 // height kept for the next time (§11).
 func (a *App) removePane(id int) {
 	win := a.win()
-	if res := win.Result; res != nil && id != res.ID && len(win.Root.Leaves()) == 2 && !win.resultHidden {
+	if win.onlyPane(id) {
 		return
 	}
 	if res := win.Result; res != nil && id == res.ID {
@@ -707,6 +733,19 @@ func (a *App) removePane(id int) {
 		win.Root, win.Zoom = root, 0
 		win.focus(heir.ID)
 	}
+}
+
+// onlyPane reports whether pane id is the window's one pane besides the
+// result area, which stays (§5).
+func (w *Window) onlyPane(id int) bool {
+	n := len(w.Root.Leaves())
+	if w.Result != nil && !w.resultHidden {
+		if id == w.Result.ID {
+			return false
+		}
+		n--
+	}
+	return n == 1
 }
 
 // panesByNumber is ⟨n⟩ order: the sidebar is 0, then the tree's leaves.

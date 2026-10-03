@@ -367,7 +367,8 @@ func TestSaveKeepsNewer(t *testing.T) {
 }
 
 // Before changes are thrown away, a box asks (§10.5): R, x, SPC x, :qa and
-// the second C-c; y goes on, n, esc or a click outside keep them.
+// the second C-c; y goes on, n, esc or a click outside keep them. SPC x on
+// the only pane, which stays, asks nothing.
 func TestConfirm(t *testing.T) {
 	a, tab, _ := withMain(t, "UPDATE 1")
 	feed(t, a, "lix<Esc>R")
@@ -385,7 +386,6 @@ func TestConfirm(t *testing.T) {
 	}
 	for keys, text := range map[string]string{
 		"x":          "t_order 有 1 处修改未保存，关闭会丢弃。",
-		"<Space>x":   "这个 pane 里有 1 处修改未保存，关闭会丢弃。",
 		":qa<CR>":    "有 1 处修改未保存，退出会丢弃。",
 		"<C-c><C-c>": "有 1 处修改未保存，退出会丢弃。",
 	} {
@@ -399,6 +399,18 @@ func TestConfirm(t *testing.T) {
 		}
 		tab.edits = nil
 	}
+	answer(a, tab)
+	if feed(t, a, "0lix<Esc><Space>x"); a.confirm != nil || len(a.win().Root.Leaves()) != 1 {
+		t.Fatalf("the only pane: %+v", a.confirm)
+	}
+	data := p(a).ID
+	a.splitPane(Horiz)
+	a.win().focus(data)
+	if feed(t, a, "<Space>x"); a.confirm == nil || a.confirm.text != "这个 pane 里有 1 处修改未保存，关闭会丢弃。" {
+		t.Fatalf("beside another: %+v", a.confirm)
+	}
+	feed(t, a, "<Esc>")
+	tab.edits = nil
 	feed(t, a, "0lix<Esc>:qa<CR>")
 	click(a, uv.Pos(1, 1))
 	if a.confirm != nil {

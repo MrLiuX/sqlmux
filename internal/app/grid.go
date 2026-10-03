@@ -142,8 +142,9 @@ func (t *dataTab) query() db.Query {
 }
 
 // fetch reads the page t.request asks for on Meta, or in the manual mode
-// on Main, to see what was saved and not committed (§8.2), in a savepoint
-// in a transaction: a WHERE that fails fails it alone. The table's columns
+// or a transaction on Main, to see what was saved and not committed
+// (§8.2), in a savepoint in a transaction: a WHERE that fails fails it
+// alone. The table's columns
 // come first, from Meta, when the catalog hasn't got them yet: they give
 // the row identity it orders by (§8.4, §10.1). recount counts the rows
 // again once a page is in (§8.3): owed by the tab, so a newer request
@@ -163,7 +164,7 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 	t.out++
 	seq, table, meta, eng, q := t.seq, t.table, t.conn.Meta, t.conn.eng, t.query()
 	w := meta
-	if t.conn.Manual {
+	if t.conn.Manual || t.conn.inTx() { // Main's own writes not committed show (§8.2)
 		w = t.conn.Main
 	}
 	cols, cached := t.conn.cols[idOf(table)]
@@ -192,6 +193,9 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 // dropped; a cancelled one goes back to what is shown, rows and all, with
 // its count as it was (§7.6, §8.3).
 func (a *App) gotPage(m pageMsg) tea.Cmd {
+	if a.sessionOf(m.tab.conn) == nil { // its session closed, its connection with it: nothing to say (F5.1)
+		return nil
+	}
 	m.tab.conn.busy--
 	m.tab.out--
 	if m.cols.Cols != nil {
@@ -251,6 +255,10 @@ func (t *dataTab) applyWantCol() {
 
 // count counts the rows t's WHERE keeps, bounded by countTimeout (§8.3),
 // unless an estimate stands for them: no WHERE on a big table (§8.5).
+// ponytail: on Meta even in the manual mode or a transaction, so rows
+// added or deleted there and not committed are not counted, the pages
+// going by next all the same; count on Main, in Guarded, while in one if
+// that misleads
 func (a *App) count(t *dataTab) tea.Cmd {
 	if strings.TrimSpace(t.applied) == "" && t.table.Rows > bigTable {
 		t.count, t.counted = int64(t.table.Rows), estimated
@@ -584,10 +592,11 @@ func (a *App) gotAuto(m autoMsg) tea.Cmd {
 	return tea.Batch(cmd, autoTick(t))
 }
 
-// tabOpen reports whether t is a tab in some pane of the session.
+// tabOpen reports whether t is a tab in some pane of any session: one in
+// the background skips its turns, not stops (§7.8「自动刷新」).
 func (a *App) tabOpen(t *dataTab) bool {
-	for _, w := range a.sess.Windows {
-		for _, p := range w.Root.Leaves() {
+	for _, s := range a.sessions {
+		for _, p := range s.panes() {
 			if slices.ContainsFunc(p.Tabs, func(tb Tab) bool { return tb.Data == t }) {
 				return true
 			}

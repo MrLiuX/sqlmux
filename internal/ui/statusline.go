@@ -50,11 +50,12 @@ func (s StatusLine) Draw(f *Frame, r uv.Rectangle) {
 	if over := segsWidth(left) + segsWidth(right) - r.Dx(); over > 0 {
 		shrink(left, over)
 	}
-	x := r.Min.X
+	// the left group ends where the right one starts: a window's long name
+	// is cut, never over the mode
+	x, rx := r.Min.X, r.Max.X-segsWidth(right)
 	for _, seg := range left {
-		x = drawSegment(f, x, r.Min.Y, r.Max.X, seg)
+		x = drawSegment(f, x, r.Min.Y, rx, seg)
 	}
-	rx := r.Max.X - segsWidth(right)
 	// Info is the first to go: once any segment had to be dropped, it's gone too.
 	whole := len(left)+len(right) == len(s.Left)+len(s.Right)
 	if spare := rx - x; s.Info != "" && whole && spare >= minInfo {

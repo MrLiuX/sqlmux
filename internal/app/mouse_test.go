@@ -183,11 +183,17 @@ func TestClickUnderPaneNumbers(t *testing.T) {
 		{"console", func(a *App) uv.Position { r := a.layout()[2]; return uv.Pos(r.Min.X+5, r.Min.Y+5) }, 2},
 		{"sidebar", func(a *App) uv.Position { return uv.Pos(5, 10) }, 0},
 		{"status bar", func(*App) uv.Position { return statusBar }, 1},
+		{"a window on the status bar", func(a *App) uv.Position {
+			return find(t, a, ui.Target{Kind: ui.KindButton, Action: "window.select 1"}).Min
+		}, 1},
+		{"the session block", func(a *App) uv.Position {
+			return find(t, a, ui.Target{Kind: ui.KindButton, Action: "session.list"}).Min
+		}, 1},
 	} {
 		a := twoPanes(160, 45, "nerd")
 		feed(t, a, "<Space>q")
 		click(a, c.at(a))
-		if a.paneNumbers || a.win().Focus != c.focus {
+		if a.paneNumbers || a.win().Focus != c.focus || a.sess.Active != 0 || a.sessList != nil {
 			t.Errorf("%s: numbers %v, focus %d, want %d", c.name, a.paneNumbers, a.win().Focus, c.focus)
 		}
 		if feed(t, a, "<C-p>"); a.palette == nil {

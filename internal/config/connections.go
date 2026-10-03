@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -40,21 +41,11 @@ func LoadConnections(name string) (conns []Connection, start int, warning string
 	if err != nil {
 		return nil, 0, "", err
 	}
-	var file struct {
-		Connection []Connection `toml:"connection"`
-	}
-	if _, err := toml.Decode(string(data), &file); err != nil {
-		return nil, 0, "", fmt.Errorf("%s: %w", path, err)
-	}
-	conns = file.Connection
-	if len(conns) == 0 {
-		return nil, 0, "", fmt.Errorf("%s: 里面没有 [[connection]]", path)
+	if conns, err = parseConnections(path, string(data)); err != nil {
+		return nil, 0, "", err
 	}
 	var names []string
-	for i, c := range conns {
-		if _, p := c.Check(names); p != "" {
-			return nil, 0, "", fmt.Errorf("%s: 第 %d 个连接：%s", path, i+1, p)
-		}
+	for _, c := range conns {
 		names = append(names, c.Name)
 	}
 	if name != "" {
@@ -67,6 +58,28 @@ func LoadConnections(name string) (conns []Connection, start int, warning string
 		warning = "connections.toml 里有明文密码，且其他用户可读，建议 chmod 600"
 	}
 	return conns, start, warning, nil
+}
+
+// parseConnections is the connections text, the file at path, holds, each
+// checked.
+func parseConnections(path, text string) ([]Connection, error) {
+	var file struct {
+		Connection []Connection `toml:"connection"`
+	}
+	if _, err := toml.Decode(text, &file); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if len(file.Connection) == 0 {
+		return nil, fmt.Errorf("%s: 里面没有 [[connection]]", path)
+	}
+	var names []string
+	for i, c := range file.Connection {
+		if _, p := c.Check(names); p != "" {
+			return nil, fmt.Errorf("%s: 第 %d 个连接：%s", path, i+1, p)
+		}
+		names = append(names, c.Name)
+	}
+	return file.Connection, nil
 }
 
 // Check is what makes c unusable beside the connections names, and the
@@ -92,7 +105,11 @@ func (c Connection) Check(names []string) (field, problem string) {
 
 // AppendConnection adds c at the end of connections.toml, made 0600 if
 // there is none (§14): its text written after what is there, never the
-// file encoded again, so the user's comments stay.
+// file encoded again, so the user's comments stay. What the file would be
+// is read first: one it would break (its connections an inline array, a
+// name taken since it was read) is left as it is, the error said.
+// ponytail: called in Update, the file read and written as the UI waits; a
+// Cmd if a slow disk ever shows it
 func AppendConnection(c Connection) error {
 	var b strings.Builder
 	enc := toml.NewEncoder(&b)
@@ -110,13 +127,19 @@ func AppendConnection(c Connection) error {
 		return err
 	}
 	defer f.Close()
+	old, err := io.ReadAll(f)
+	if err != nil {
+		return err
+	}
 	text := b.String()
-	if info, err := f.Stat(); err == nil && info.Size() > 0 { // a blank line before it, a newline first if the file lacks one
-		last := make([]byte, 1)
-		if _, err := f.ReadAt(last, info.Size()-1); err == nil && last[0] != '\n' {
+	if len(old) > 0 { // a blank line before it, a newline first if the file lacks one
+		if old[len(old)-1] != '\n' {
 			text = "\n" + text
 		}
 		text = "\n" + text
+	}
+	if _, err := parseConnections(connectionsPath(), string(old)+text); err != nil {
+		return err
 	}
 	_, err = f.WriteString(text)
 	return err

@@ -37,7 +37,7 @@ func ownDB(t *testing.T) string {
 	t.Helper()
 	ctx := context.Background()
 	admin := connect(t, false)
-	name := fmt.Sprintf("sqlmux_worker_%d_%s", os.Getpid(), strings.ToLower(t.Name()))
+	name := fmt.Sprintf("sqlmux_worker_%d_%s", os.Getpid(), strings.ToLower(strings.ReplaceAll(t.Name(), "/", "_")))
 	drop := func() { admin.Query(ctx, "drop database if exists "+name) }
 	drop()
 	if _, err := admin.Query(ctx, "create database "+name); err != nil {
