@@ -1,6 +1,6 @@
 # M5 工作现场与 MySQL · 任务清单
 
-- **状态**：M2–M4 验收通过（2026-10-02）。先做 M4 验收意见 F5.5–F5.9（节点 0，2026-10-02 通过）；节点 1（F5.10、F5.11）2026-10-03 通过；节点 2（F5.1–F5.3）2026-10-03 通过；之后按 F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，都是 todo（2026-10-02 按 worker 起草的清单定，§5「一个 session 多个连接」牵动的各节已改好）。
+- **状态**：**开发完成，等用户验收**（2026-10-03），验收通过后打 tag `m5`。F5.1–F5.11 全部 passed，完整回归在 91fc2c1 上全过（70 个脚本 1874 项，e2e a5539b2；集成测试在 PG 和 MySQL 上都过）。按 F5.5–F5.9 → F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，四个审查节点 2026-10-02 / 10-03 依次通过。
 - **目标**：
   - 一个 session 多个连接：目录树的根是 connections.toml 里的全部连接，用到时才连；
   - 支持多个 session、多个 window；
@@ -225,30 +225,30 @@
 - [x] e2e：manual 模式下保存后不提交；执行 Rollback 后修改被撤销。
 - [x] golden：console 标题的事务控件（自动、手动、在事务里）；状态栏的「事务中」「事务出错」；只读连接的锁。
 
-## F5.4 MySQL · 状态：todo
+## F5.4 MySQL · 状态：passed（d99727f；e2e a5539b2）
 
 - **依赖**：F5.3
 - **涉及**：`internal/db/mysql`、`internal/sqlkit`、`testdata/seed/mysql.sql`
 
 **开发**
-- [ ] 开工前在主工作区起 MySQL 容器：`docker compose up -d mysql`（AGENTS.md「集成测试环境」）。
-- [ ] **驱动**：对应 §8.1–§8.3 中 MySQL 的部分：
+- [x] 开工前在主工作区起 MySQL 容器：`docker compose up -d mysql`（AGENTS.md「集成测试环境」）。
+- [x] **驱动**：对应 §8.1–§8.3 中 MySQL 的部分：
   - 走文本协议，开启 `interpolateParams`；
   - 取消执行用 `KILL QUERY`。
-- [ ] **catalog**：取 §8.4 表格中 MySQL 那一列的数据：
+- [x] **catalog**：取 §8.4 表格中 MySQL 那一列的数据：
   - `TABLE_ROWS`、`STATISTICS`；
   - 从 `COLUMN_TYPE` 解析出 enum 的可选值；
   - DDL 用 `SHOW CREATE TABLE` 获取。
-- [ ] **方言**：
+- [x] **方言**：
   - 标识符用反引号；
   - 保存时的旧值比较用 `cast(列 as binary) = ?`，旧值是 NULL 时 `IS NULL`（177d054 逐类型实测，原定的 `<=>` 否掉，§10.3）；
   - 布尔值写入 1 / 0。
-- [ ] **种子数据**：`testdata/seed/mysql.sql`，覆盖的情况与 PG 的种子数据相同。
-- [ ] **扫描器**：MySQL 会执行的注释 `/*! … */`（如 `SELECT 5 /*! +1 */` 返回 6，dump 开头的 `/*!40101 SET NAMES utf8 */;`）M3 的扫描器当作注释，分句和读写判定会错；M5 接 MySQL 时处理（M3 审查时发现）。
-- [ ] **database 能选**（开工前定，同 PG 的 schema，§8.6）：树里 MySQL 连接下面一层列 database（不列系统库），console 标题是 `<连接> · <database> ▾`，执行前不同就先 `USE`，一次执行里有 `USE` 时作废记下的值。
-- [ ] **事务状态**：MySQL 拿不到 TxStatus，按执行过的 begin / start transaction / commit / rollback 来记（ponytail：DDL 的隐式提交这类情况记不准）。
-- [ ] 新建连接表单的 engine 可以选 mysql；树的连接节点和 console 的连接下拉里，MySQL 连接画 `mysql` 图标、PG 连接画 `postgres` 图标（§7.7）。
-- [ ] 细节（worker 提议，已定）：
+- [x] **种子数据**：`testdata/seed/mysql.sql`，覆盖的情况与 PG 的种子数据相同。
+- [x] **扫描器**：MySQL 会执行的注释 `/*! … */`（如 `SELECT 5 /*! +1 */` 返回 6，dump 开头的 `/*!40101 SET NAMES utf8 */;`）M3 的扫描器当作注释，分句和读写判定会错；M5 接 MySQL 时处理（M3 审查时发现）。
+- [x] **database 能选**（开工前定，同 PG 的 schema，§8.6）：树里 MySQL 连接下面一层列 database（不列系统库），console 标题是 `<连接> · <database> ▾`，执行前不同就先 `USE`，一次执行里有 `USE` 时作废记下的值。
+- [x] **事务状态**：MySQL 拿不到 TxStatus，按执行过的 begin / start transaction / commit / rollback 来记（ponytail：DDL 的隐式提交这类情况记不准）。
+- [x] 新建连接表单的 engine 可以选 mysql；树的连接节点和 console 的连接下拉里，MySQL 连接画 `mysql` 图标、PG 连接画 `postgres` 图标（§7.7）。
+- [x] 细节（worker 提议，已定）：
   - 按层分 4 个 commit，各自全绿，审查节点仍是 F5.4 一个：① 驱动和浏览（compose 挂载 seed、mysql.sql、引擎抽象、mysql.Conn、catalog、Page / Count、树和表格）② 编辑和保存 ③ console（扫描器 `/*! */`、执行、只读判定、快速 SQL、DDL 预览、格式化、补全）④ 表单的 engine 和图标；
   - `db.Engine` 接口（两个实现），Conn 上存一个；app 里直接调 `postgres.X` 的地方都改成走它；共用的类型从 postgres 挪到 db；
   - 驱动 go-sql-driver/mysql：`sql.DB` + `SetMaxOpenConns(1)` + `db.Conn(ctx)` 固定一条，由 Worker 独占；DSN 加 `interpolateParams=true`、`clientFoundRows=true`（否则改成同样的值时影响 0 行，被误报成「行数据已变化」），不开 multiStatements；值读成文本；connections.toml 的 dsn 写 `mysql://user:pass@host:port/db?…`，用 net/url 转成驱动的 Config，不加 dburl，不是 `mysql://` 开头的按驱动原生格式解析；
@@ -260,8 +260,8 @@
   - 集成测试：mysql 包对照 postgres 包写一套（catalog、page / count、逐类型保存、快速 SQL、KILL QUERY、只读解除表），环境变量 `SQLMUX_TEST_MYSQL`；app 层和引擎无关的（连接、console 共用 Main、手动事务、只读）两个引擎各跑一遍；PG 特有的（search_path、DateStyle、E 状态、format()）不搬；
   - 图标 `mysql`（nf-dev-mysql U+E704，ascii `my`）；表单的 engine 在 postgres / mysql 之间用空格切换。
 
-- [ ] 测试时定（tester 提问，2026-10-03）：面板里输入不为空时，分数相同的按输入为空时的顺序排，不按长度：同名的表当前连接的 Schema 里那张排第一（§12）。MySQL 能看到服务器上所有的库，同名表很常见，原来 `↵` 会打开别的库的表。
-- [ ] 审查时定（reviewer 提问，2026-10-03，MySQL 8.4 上都已复现）：
+- [x] 测试时定（tester 提问，2026-10-03）：面板里输入不为空时，分数相同的按输入为空时的顺序排，不按长度：同名的表当前连接的 Schema 里那张排第一（§12）。MySQL 能看到服务器上所有的库，同名表很常见，原来 `↵` 会打开别的库的表。
+- [x] 审查时定（reviewer 提问，2026-10-03，MySQL 8.4 上都已复现）：
   - 事务状态照手册「Statements That Cause an Implicit Commit」记：这些语句执行后、以及死锁（1213）后记为不在事务中，死锁时 toast「死锁，整个事务已回滚」；MySQL 下这些语句和不带作用域的 `SET TRANSACTION` 都不补 BEGIN；其余记不准的写成 ponytail（§8.2）；
   - 只读：MySQL 下 `reset` 算写；SET 里带 GLOBAL / PERSIST / PERSIST_ONLY 的项和 `@@global.x` 都拦；MySQL 8.4 的语句首词补进关键字表；`NO_BACKSLASH_ESCAPES` 记成 §13 的已知上限；
   - go-sql-driver 钉在 v1.7.1，加 `ponytail:` 注释写明原因和升级条件（§8.1）；
@@ -270,8 +270,8 @@
   - BIT 列按数字显示、不能编辑（§8.1）；
   - 复合语句体被切开、不支持 `DELIMITER`、`KILL QUERY` 没有兜底、`wait_timeout` 断开后不重连，都写成已知上限，代码里用 `ponytail:` 标出（§9.2、§8.3、§8.2）。
 **验收**
-- [ ] M1–M4 的集成测试在 MySQL 上全部通过。
-- [ ] 用 `KILL QUERY` 取消长查询有效。
+- [x] M1–M4 的集成测试在 MySQL 上全部通过。
+- [x] 用 `KILL QUERY` 取消长查询有效。
 
 ---
 

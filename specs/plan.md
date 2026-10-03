@@ -9,7 +9,7 @@
 | M2 编辑 | [m2-edit/task.md](m2-edit/task.md) | 编辑单元格、选项浮层、保存与刷新 | 完成（用户 2026-10-02 与 M3、M4 一起验收，tag `m2`） |
 | M3 console | [m3-console/task.md](m3-console/task.md) | vim 编辑器、执行、底部结果区、格式化、补全、schema 下拉；表格与 console 混放 tab | 完成（用户 2026-10-02 验收，tag `m3`） |
 | M4 命令面板 | [m4-palette/task.md](m4-palette/task.md) | 快速 SQL 接上 M3、DDL 预览、面板里 tab 的层级 | 完成（用户 2026-10-02 验收，tag `m4`）；验收意见排进 M5 的 F5.5–F5.9 |
-| M5 工作现场 | [m5-workspace/task.md](m5-workspace/task.md) | 一个 session 多个连接、多 session / window、只读与事务模式、MySQL；先做 M4 验收意见 F5.5–F5.9 | 节点 0–2（F5.5–F5.11、F5.1–F5.3）passed；F5.4 MySQL 在做（节点 3） |
+| M5 工作现场 | [m5-workspace/task.md](m5-workspace/task.md) | 一个 session 多个连接、多 session / window、只读与事务模式、MySQL；先做 M4 验收意见 F5.5–F5.9 | F5.1–F5.11 全部 passed，完整回归在 91fc2c1 上全过（2026-10-03）；等用户验收，通过后打 tag `m5` |
 | M6 配置 | [m6-config/task.md](m6-config/task.md) | 键位配置收尾、主题、持久化、界面中英文切换、布局文件（保存与恢复工作现场）、可以关掉 vim 模式 | draft |
 
 ## 任务文件的格式
