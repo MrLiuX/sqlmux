@@ -70,6 +70,7 @@ _e2e_kill() {
 e2e_stop() {
   _e2e_kill
   [[ -n $E2E_DB ]] && PGOPTIONS="-c client_min_messages=warning" psql "$SQLMUX_TEST_PG" -qAt -c "drop database if exists sqlmux_e2e_$$ with (force)"; E2E_DB=
+  [[ -n $E2E_MYDB ]] && echo "drop database if exists sqlmux_e2e_$$" | e2e_mysql; E2E_MYDB=
 }
 
 # e2e_own_db: a private copy of the seed, sqlmux_e2e_<pid>, for tests that lock tables or write
@@ -78,6 +79,20 @@ e2e_own_db() {
   E2E_DB=$(python3 -c 'import sys, urllib.parse as u; print(u.urlsplit(sys.argv[1])._replace(path="/" + sys.argv[2]).geturl())' "$SQLMUX_TEST_PG" "sqlmux_e2e_$$")
   PGOPTIONS="-c client_min_messages=warning" psql "$SQLMUX_TEST_PG" -qAt -c "drop database if exists sqlmux_e2e_$$ with (force)" -c "create database sqlmux_e2e_$$" &&
     psql "$E2E_DB" -q -v ON_ERROR_STOP=1 -f "$E2E_ROOT/testdata/seed/pg.sql" >/dev/null
+}
+
+# MySQL (F5.4): SQLMUX_TEST_MYSQL is the driver's DSN, user:pass@tcp(host:port)/db. e2e_mysql [DB] runs the mysql client on
+# that server (no ~/.my.cnf, the password from the environment), the stdin's SQL in DB (default the shared one, read-only like
+# sqlmux on PG); e2e_own_mydb makes sqlmux_e2e_<pid> from mysql.sql without its second database and grants (root's, done once)
+# and sets E2E_MYDB, its connections.toml dsn (mysql://…); e2e_stop drops it.
+e2e_mysql() {
+  [[ $SQLMUX_TEST_MYSQL =~ ^([^:]*):([^@]*)@tcp\(([^:]*):([0-9]+)\)/(.*)$ ]] || { echo "e2e: SQLMUX_TEST_MYSQL is not set" >&2; return 1; }
+  MYSQL_PWD=${BASH_REMATCH[2]} mysql --no-defaults --protocol=TCP -h "${BASH_REMATCH[3]}" -P "${BASH_REMATCH[4]}" -u "${BASH_REMATCH[1]}" -N -B "${1:-${BASH_REMATCH[5]}}"; }
+e2e_own_mydb() {
+  [[ $SQLMUX_TEST_MYSQL =~ ^([^:]*):([^@]*)@tcp\(([^:]*):([0-9]+)\)/ ]] || { echo "e2e: SQLMUX_TEST_MYSQL is not set" >&2; return 1; }
+  E2E_MYDB=mysql://${BASH_REMATCH[1]}:${BASH_REMATCH[2]}@${BASH_REMATCH[3]}:${BASH_REMATCH[4]}/sqlmux_e2e_$$
+  echo "drop database if exists sqlmux_e2e_$$; create database sqlmux_e2e_$$" | e2e_mysql &&
+    python3 -c 'import sys; print(";\n".join(s for s in open(sys.argv[1]).read().split(";\n") if s.strip() and "agentable" not in s and "grant " not in s))' "$E2E_ROOT/testdata/seed/mysql.sql" | e2e_mysql "sqlmux_e2e_$$"
 }
 
 e2e_keys() { t send-keys -t t "$@"; }          # tmux key names: C-c Escape Enter Space ...
@@ -176,8 +191,9 @@ e2e_waiting() { psql "$E2E_DB" -At -c "select query from pg_stat_activity where 
 grid_y() { e2e_plain | awk '/┼/ { print NR; exit }'; }
 # open_table NAME: open a table from the palette into the focused data pane (↵) and wait for its grid.
 open_table() { e2e_keys C-p; sleep 0.3; e2e_type "@$1"; sleep 0.3; e2e_keys Enter; wait_for 5 eval '[[ -n $(grid_y) && $(e2e_plain | head -1) == *" $1 ─"* ]]'; }
-# noicon: drop the nerd-font icons (U+Fxxx) and the space after each: " 1:<table> t_order* " → " 1:t_order* " (F3.7 tab bars).
-noicon() { LC_ALL=C sed $'s/\xef[\x80-\xbf][\x80-\xbf] //g'; }
+# noicon: drop the nerd-font icons (U+Exxx / U+Fxxx) and the space after each: " 1:<table> t_order* " → " 1:t_order* " (F3.7 tab bars;
+# F5.4's engine icons, postgres U+E76E / mysql U+E704, sit in U+Exxx).
+noicon() { LC_ALL=C sed $'s/[\xee\xef][\x80-\xbf][\x80-\xbf] //g'; }
 focused() { e2e_panes | awk '$6 == 1 && $1 != "-" { print $1 }'; }   # the focused pane's number (a folded strip or the palette box has none)
 # Panes and their tab bars (any layout). geom N: pane N's "X Y W H"; the tab bar is its content's last row.
 geom() { e2e_panes | awk -v n="$1" '$1 == n { print $2, $3, $4, $5 }'; }

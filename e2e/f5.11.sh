@@ -64,7 +64,7 @@ check "t 还在连时又选了 bad：以最后一次为准，bad 连不上、toa
 check "t 连上之后也不换过去，还在 d" eval 'sleep 3.5; (( $(psql_n "select count(*) from pg_stat_activity where application_name = '"'e2e-f511t-$$'"'") >= 1 )) && on d public'
 sleep 2
 conn_dd d
-check "点标题上的连接名：下拉框列出全部连接 d、s、t、bad，当前的 d 用 pk 色标出" eval '[[ $(dd_rows | tr "\n" " ") == "d s t bad " ]] && g=($(dd)) && style_has $((g[0] + 2)) $((g[1] + 3)) fg=$PK || { dd_rows; false; }'
+check "点标题上的连接名：下拉框列出全部连接 d、s、t、bad（F5.4 起每项前面是引擎图标），当前的 d 用 pk 色标出" eval '[[ $(dd_rows | noicon | tr "\n" " ") == "d s t bad " ]] && g=($(dd)) && style_has $((g[0] + 4)) $((g[1] + 3)) fg=$PK || { dd_rows; false; }'
 e2e_type s; sleep 0.3; key Enter
 check "选还没连上的 s：下拉框关掉，先留在 d（s 在连）" eval '[[ -z $(dd) ]] && on d public'
 check "连上之后才换过去：s · <库>.public ▾" eval 'wait_for 5 eval "on s public >/dev/null" || on s public'
@@ -113,7 +113,7 @@ check "之后 s 的 Main 已关，不算在事务里：能换到 d" eval 'wait_f
 
 # ---- 换回 s、选 agentable，重启后恢复（state.json 记 console_1 的连接和 schema）
 pal ">切换连接"; e2e_keys Enter; sleep 0.4
-check "命令「切换连接…」：打开 ② 的连接下拉" eval '[[ $(dd_rows | tr "\n" " ") == "d s t bad " ]]'
+check "命令「切换连接…」：打开 ② 的连接下拉" eval '[[ $(dd_rows | noicon | tr "\n" " ") == "d s t bad " ]]'
 e2e_type s; sleep 0.3; key Enter; wait_for 3 eval "on s public >/dev/null"; key g s; e2e_type agen; sleep 0.3; key Enter; sleep 1.5
 check "console_1 换回 s、agentable" on s agentable
 check "console 文件在 consoles/console_1.sql（不再按连接分目录）" eval '[[ -f $D/data/sqlmux/consoles/console_1.sql && ! -d $D/data/sqlmux/consoles/d ]]'
@@ -130,8 +130,9 @@ e2e_click 8 4; sleep 0.3; e2e_click 60 20; sleep 0.3; key c; sleep 0.5          
 check "新建的 console_2：d · <库>.public ▾（state 里记着的 s / agentable 不用），并写回 state" eval 'on1 d public && [[ $(python3 -c "import json,sys; c=json.load(open(sys.argv[1]))[\"consoles\"][\"console_2\"]; print(c[\"conn\"], c[\"schema\"])" "$ST/sqlmux/state.json") == "d public" ]]'
 
 # ---- yy / p 不跨连接（审查时定）
-pal "@t_order"; e2e_keys Down; sleep 0.2
-check "面板里 s 的 t_order 排在当前连接 d 的后面" eval '[[ $(selected) == "t_order  s.public"* ]] || { list; false; }'
+pal "@t_order"
+check "面板里同名的 t_order：当前连接 d 的排第一，s 的排在它后面（68337a7 起同分按空输入时的顺序）" eval 'o=$(list | cut -d"|" -f1 | grep -n "^t_order  [ds]\.public" | cut -d: -f1 | tr "\n" " "); [[ $(list | head -1) == "t_order  d.public"* && $o == "1 "* && $(list | grep -n "^t_order  s.public" | cut -d: -f1) -gt 1 ]] || { list; false; }'
+pickrow "t_order  s.public"
 e2e_keys Enter; wait_for 8 settled; key y y
 pal "@t_order"; pickrow "t_order  d.public"; e2e_keys Enter; wait_for 8 settled
 check "① 里开着 s 和 d 的 t_order" tabs_are 1 "1:console_2 │ 2:t_order- │ 3:t_order*"
