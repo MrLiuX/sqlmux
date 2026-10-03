@@ -181,11 +181,11 @@ func (a *App) sqlNames(c *Conn, text, schema string, cols *db.Columns) (names ui
 	if cols != nil {
 		add(math.MaxInt, *cols)
 	} else {
-		stmts = sqlkit.Statements(text, sqlkit.PG)
+		stmts = sqlkit.Statements(text, c.eng.Dialect())
 	}
 	for _, st := range stmts {
 		add(st.End, db.Columns{})
-		cc := sqlkit.CompletionContext(text[st.Start:st.End], 0, sqlkit.PG)
+		cc := sqlkit.CompletionContext(text[st.Start:st.End], 0, c.eng.Dialect())
 		for _, r := range cc.Tables {
 			if r.Schema == "" && slices.ContainsFunc(cc.CTEs, func(n string) bool { return strings.EqualFold(n, r.Name) }) {
 				continue
@@ -203,15 +203,20 @@ func (a *App) sqlNames(c *Conn, text, schema string, cols *db.Columns) (names ui
 		schemas[s] = true
 	}
 	return func(at int, word string) ui.SQLName {
-		// PG folds a name's ASCII letters unless it is quoted (downcase_identifier)
-		name := strings.Map(func(r rune) rune {
-			if 'A' <= r && r <= 'Z' {
-				r += 'a' - 'A'
-			}
-			return r
-		}, word)
-		if strings.HasPrefix(word, `"`) {
-			name = strings.ReplaceAll(strings.TrimSuffix(word[1:], `"`), `""`, `"`)
+		// PG folds a name's ASCII letters unless it is "quoted"
+		// (downcase_identifier); MySQL's go by any case, `quoted` too
+		// ponytail: but its tables on Linux, which go by case
+		name, q := word, word[:1]
+		if q == `"` || q == "`" {
+			name = strings.ReplaceAll(strings.TrimSuffix(word[1:], q), q+q, q)
+		}
+		if q != `"` {
+			name = strings.Map(func(r rune) rune {
+				if 'A' <= r && r <= 'Z' {
+					r += 'a' - 'A'
+				}
+				return r
+			}, name)
 		}
 		i := sort.Search(len(spans), func(i int) bool { return spans[i].end > at })
 		switch {
@@ -265,7 +270,7 @@ func (a *App) wantCols() tea.Cmd {
 // ponytail: names go in bare, as the catalog has them; one that wants
 // quotes (upper case, a space) needs them typed.
 func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked map[tableID]bool, manual bool) (*completion, []tea.Cmd) {
-	c := sqlkit.CompletionContext(sql, pos, sqlkit.PG)
+	c := sqlkit.CompletionContext(sql, pos, conn.eng.Dialect())
 	if !c.OK {
 		return nil, nil
 	}

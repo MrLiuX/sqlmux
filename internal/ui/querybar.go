@@ -6,6 +6,8 @@ import (
 	"slices"
 
 	uv "github.com/charmbracelet/ultraviolet"
+
+	"sqlmux/internal/sqlkit"
 )
 
 // Chip is one of the query bar's second row (Q-03): " LABEL value ". With
@@ -73,6 +75,7 @@ type QueryBar struct {
 	Note    Note          // how a save went, in Right's place while it stands (Q-06)
 	Pane    int
 	Names   SQLNames // the WHERE's tables and columns, for its colors (§7.3)
+	Dialect sqlkit.Dialect
 }
 
 // QueryBarRows is how tall a query bar is.
@@ -156,7 +159,7 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 		vst.Bg = th.Select
 	}
 	f.Text(vx, r.Min.Y, r.Max.X, "▾", vst)
-	if c := q.Where.DrawSQL(f, q.InputRect(r), bg, q.Names); q.Typing {
+	if c := q.Where.DrawSQL(f, q.InputRect(r), bg, q.Dialect, q.Names); q.Typing {
 		cursor = c
 	}
 	if r.Dy() < 2 {

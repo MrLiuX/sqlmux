@@ -16,6 +16,8 @@ func TestStatements(t *testing.T) {
 		{PG, "select ';', \"a;b\", $$;$$ /* ; */ -- ;\n; ;; select (1;2)", []string{`select ';', "a;b", $$;$$`, "select (1;2)"}},
 		{PG, "  \n-- only a comment\n", nil},
 		{MySQL, "select '\\';' # ;\n; select `a;`", []string{`select '\';'`, "select `a;`"}},
+		// the /*! and */ around its words go with a statement
+		{MySQL, "/*!40101 SET NAMES utf8 */;\nSELECT 5 /*! +1 */ ; /*! select 2 */ /* c */", []string{"/*!40101 SET NAMES utf8 */", "SELECT 5 /*! +1 */", "/*! select 2 */"}},
 	} {
 		var got []string
 		for _, st := range Statements(c.in, c.d) {
@@ -118,6 +120,9 @@ func TestAutoLimit(t *testing.T) {
 			t.Errorf("%q: %q, want %q", c.in, got, c.want)
 		}
 	}
+	if got := AutoLimit("/*! select 5 */ /*! limit 1 */", MySQL, 101); got != "/*! select 5 */ /*! limit 1 */" {
+		t.Errorf("a LIMIT in /*! */: %q", got)
+	}
 }
 
 func TestHasSemicolon(t *testing.T) {
@@ -144,6 +149,9 @@ func TestFirstWord(t *testing.T) {
 		if got := FirstWord(s, PG); got != want {
 			t.Errorf("%q: %q, want %q", s, got, want)
 		}
+	}
+	if got := FirstWord("/*!40101 SET NAMES utf8 */", MySQL); got != "set" {
+		t.Errorf("/*!40101 SET: %q", got)
 	}
 }
 
@@ -187,6 +195,19 @@ func TestBreaksReadOnly(t *testing.T) {
 	} {
 		if got := BreaksReadOnly(s, PG); got != want {
 			t.Errorf("BreaksReadOnly(%q) = %v", s, got)
+		}
+	}
+	for s, want := range map[string]bool{
+		"SET GLOBAL TRANSACTION READ WRITE": true, "set persist_only transaction_read_only = 0": true,
+		"set @@transaction_read_only = 0": true, "SET @@Session.transaction_read_only = 0": true,
+		"start transaction read write": true, "/*!40101 SET SESSION transaction_read_only = 0 */": true,
+		"set @a = (select 1, 2), names utf8mb4, @@global.transaction_read_only = off": true, "set": false,
+		"set @transaction_read_only = 0": false, "set @@session.sql_mode = ''": false, "set names utf8mb4": false,
+		"set autocommit = 0, @x = 1": false, "use sqlmux": false, "start transaction read only": false,
+		"set session sql_mode = 'transaction_read_only'": false,
+	} {
+		if got := BreaksReadOnly(s, MySQL); got != want {
+			t.Errorf("BreaksReadOnly(%q, MySQL) = %v", s, got)
 		}
 	}
 }

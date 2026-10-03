@@ -125,7 +125,7 @@ func (a *App) consoleView(p *Pane, t *consoleTab) (ui.Console, uv.Rectangle) {
 	c := ui.Console{
 		Lines: ed.Lines(), TabWidth: ed.TabWidth, Top: ed.Top(), Left: ed.Left(),
 		Cursor: ui.TextPos(ed.Cursor()), CursorCol: ed.CursorCol(), Normal: ed.Mode() == editor.Normal,
-		Failed: t.failed, Pane: p.ID,
+		Failed: t.failed, Pane: p.ID, Dialect: t.conn.eng.Dialect(),
 	}
 	if f := a.flash; f != nil && f.pane == p.ID {
 		c.Yank = f.text

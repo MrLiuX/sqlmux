@@ -396,7 +396,7 @@ func (a *App) palettePreview() *ui.PalettePreview {
 	} else {
 		names, _ = a.sqlNames(c, d.text, "", &cols)
 	}
-	return &ui.PalettePreview{Text: d.text, Err: d.err, Names: names}
+	return &ui.PalettePreview{Text: d.text, Err: d.err, Names: names, Dialect: c.eng.Dialect()}
 }
 
 // wantDDL times the preview: the selection moved to a table whose DDL is

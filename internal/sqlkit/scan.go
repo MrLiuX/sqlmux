@@ -44,12 +44,17 @@ type Token struct {
 //   - PG: a doubled quote in '…', \ in E'…', $tag$…$tag$, "…"
 //     identifiers, -- and /* */ that nest;
 //   - MySQL: \ and doubled quotes in '…' and "…", `…` identifiers, #, --
-//     with a blank after it, /* */ that do not nest.
+//     with a blank after it, /* */ that do not nest; /*! … */ is code, its
+//     /*! with the version after it and its */ comments, as the server's
+//     lexer reads it (sql_lex.cc).
 //
 // What is left open runs to the end.
+// ponytail: /*!90000 … */ for a server older than that is code here, a
+// comment to it
 func Scan(s string, d Dialect) []Token {
 	var out []Token
 	line := 0
+	exec := false // in MySQL's /*! … */
 	for i := 0; i < len(s); {
 		start := i
 		r, n := utf8.DecodeRuneInString(s[i:])
@@ -58,6 +63,10 @@ func Scan(s string, d Dialect) []Token {
 			tag = dollarTag(s[i:])
 		}
 		switch {
+		case exec && strings.HasPrefix(s[i:], "*/"):
+			kind, i, exec = Comment, i+2, false
+		case d == MySQL && !exec && strings.HasPrefix(s[i:], "/*!"): // a /*! in one is a plain /*
+			kind, i, exec = Comment, i+3+version(s[i+3:]), true
 		case strings.HasPrefix(s[i:], "--") && (d == PG || i+2 >= len(s) || s[i+2] <= ' '),
 			d == MySQL && r == '#':
 			kind, i = Comment, strings.IndexByte(s[i:]+"\n", '\n')+i
@@ -93,7 +102,8 @@ func Scan(s string, d Dialect) []Token {
 		default:
 			kind = Op
 			for i < len(s) && strings.IndexByte("=<>!~+-*/%|&^#@:?", s[i]) >= 0 &&
-				!strings.HasPrefix(s[i:], "--") && !strings.HasPrefix(s[i:], "/*") && (d == PG || s[i] != '#') {
+				!strings.HasPrefix(s[i:], "--") && !strings.HasPrefix(s[i:], "/*") && (d == PG || s[i] != '#') &&
+				!(exec && strings.HasPrefix(s[i:], "*/")) {
 				i++
 			}
 			if i == start {
@@ -122,6 +132,22 @@ func blockComment(s string, i int, nest bool) int {
 		}
 	}
 	return len(s)
+}
+
+// version is the length of the version s, what follows a /*!, starts
+// with: 5 digits, 6 when a blank follows them; 0 for none.
+func version(s string) int {
+	n := 0
+	for n < min(len(s), 6) && s[n] >= '0' && s[n] <= '9' {
+		n++
+	}
+	switch {
+	case n == 6 && len(s) > 6 && unicode.IsSpace(rune(s[6])):
+		return 6
+	case n >= 5:
+		return 5
+	}
+	return 0
 }
 
 // quoted is the end of the literal quoted at i: a doubled quote stands for

@@ -33,7 +33,8 @@ func (a *App) consoleFormat(t *consoleTab, f editor.FormatSpan) tea.Cmd {
 	lines := t.ed.Lines()
 	text := strings.Join(lines, "\n")
 	from, to := offsetOf(lines, f.From), offsetOf(lines, f.To)
-	stmts := sqlkit.Statements(text, sqlkit.PG)
+	d := t.conn.eng.Dialect()
+	stmts := sqlkit.Statements(text, d)
 	switch {
 	case f.Selected:
 		to -= len(text[from:to]) - len(strings.TrimSuffix(text[from:to], "\n"))
@@ -62,20 +63,19 @@ func (a *App) consoleFormat(t *consoleTab, f editor.FormatSpan) tea.Cmd {
 	prg, opts := a.formatPrg, sqlkit.Options{KeywordCase: a.keywordCase, TabWidth: a.tabWidth}
 	start, end := posOf(lines, from), posOf(lines, to)
 	return func() tea.Msg {
-		out, err := format(sql, prg, opts)
+		out, err := format(sql, d, prg, opts)
 		return formatDone{t, ver, start, end, out, err}
 	}
 }
 
-// format is sql laid out by sql-formatter, or by the command prg when it
-// is set: sql on its stdin, what it writes to stdout, the first line of
-// its stderr when it fails (§9.5). Nothing out is a failure too, not the
-// SQL gone; past sqlkit.FormatTimeout it is sqlkit.ErrTimeout.
-// ponytail: PG's SQL only; the console's connection's dialect when MySQL consoles come (M5).
-func format(sql, prg string, o sqlkit.Options) (string, error) {
+// format is sql laid out by sql-formatter as d's, or by the command prg
+// when it is set: sql on its stdin, what it writes to stdout, the first
+// line of its stderr when it fails (§9.5). Nothing out is a failure too,
+// not the SQL gone; past sqlkit.FormatTimeout it is sqlkit.ErrTimeout.
+func format(sql string, d sqlkit.Dialect, prg string, o sqlkit.Options) (string, error) {
 	out, err := "", error(nil)
 	if prg == "" {
-		out, err = sqlkit.Format(sql, sqlkit.PG, o)
+		out, err = sqlkit.Format(sql, d, o)
 	} else {
 		out, err = runPrg(sql, prg)
 	}

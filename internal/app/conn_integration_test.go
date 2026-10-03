@@ -18,6 +18,7 @@ import (
 
 	"sqlmux/internal/config"
 	"sqlmux/internal/db"
+	"sqlmux/internal/db/mysql"
 	"sqlmux/internal/db/postgres"
 	"sqlmux/internal/keymap"
 )
@@ -44,10 +45,11 @@ func settle(a *App, cmd tea.Cmd) {
 // SQLMUX_TEST_PG and SQLMUX_TEST_MYSQL name them; the test skips with none.
 func engineDSNs(t *testing.T) map[string]string {
 	dsns := map[string]string{}
-	for eng, env := range map[string]string{"postgres": "SQLMUX_TEST_PG", "mysql": "SQLMUX_TEST_MYSQL"} {
-		if dsn := os.Getenv(env); dsn != "" {
-			dsns[eng] = dsn
-		}
+	if os.Getenv("SQLMUX_TEST_PG") != "" {
+		dsns["postgres"] = postgres.IntegrationDSN(t) // the user's PG* variables out of the way
+	}
+	if os.Getenv("SQLMUX_TEST_MYSQL") != "" {
+		dsns["mysql"] = mysql.IntegrationDSN(t)
 	}
 	if len(dsns) == 0 {
 		t.Skip("neither SQLMUX_TEST_PG nor SQLMUX_TEST_MYSQL is set")
@@ -55,20 +57,29 @@ func engineDSNs(t *testing.T) map[string]string {
 	return dsns
 }
 
+// eachEngine runs test on each engine's seeded database (engineDSNs).
+func eachEngine(t *testing.T, test func(t *testing.T, eng, dsn string)) {
+	for eng, dsn := range engineDSNs(t) {
+		t.Run(eng, func(t *testing.T) { test(t, eng, dsn) })
+	}
+}
+
+// ownDB is a database of the test's own on eng's server, for tests that
+// write (AGENTS.md「集成测试环境」).
+func ownDB(t *testing.T, eng string) string {
+	if eng == "mysql" {
+		return mysql.OwnDB(t)
+	}
+	return postgres.OwnDB(t)
+}
+
 // Only the connection started on connects; another connects once opened
 // in the tree, open on its current_schema(), MySQL's database(); one that
 // cannot is marked failed, named in a toast, the others as they were
 // (§7.8「连接节点」).
-func TestConnectOnOpen(t *testing.T) {
-	for eng, dsn := range engineDSNs(t) {
-		t.Run(eng, func(t *testing.T) { connectOnOpen(t, eng, dsn) })
-	}
-}
+func TestConnectOnOpen(t *testing.T) { eachEngine(t, connectOnOpen) }
 
 func connectOnOpen(t *testing.T, eng, dsn string) {
-	if eng == "postgres" {
-		dsn = postgres.IntegrationDSN(t) // the user's PG* variables out of the way
-	}
 	sess, err := Open(context.Background(), []config.Connection{
 		{Name: "play", Engine: eng, DSN: dsn},
 		{Name: "seed", Engine: eng, DSN: dsn},
@@ -146,11 +157,12 @@ func TestSecretCached(t *testing.T) {
 // Two consoles on one connection share its Main, its transaction too: one
 // begins, the other is in it and stays on the connection till it ends;
 // then it goes to another once that connects (§5, F5.11).
-func TestConsolesShareMain(t *testing.T) {
-	dsn := postgres.IntegrationDSN(t)
+func TestConsolesShareMain(t *testing.T) { eachEngine(t, consolesShareMain) }
+
+func consolesShareMain(t *testing.T, eng, dsn string) {
 	sess, err := Open(context.Background(), []config.Connection{
-		{Name: "play", Engine: "postgres", DSN: dsn},
-		{Name: "seed", Engine: "postgres", DSN: dsn},
+		{Name: "play", Engine: eng, DSN: dsn},
+		{Name: "seed", Engine: eng, DSN: dsn},
 	}, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -188,11 +200,12 @@ func TestConsolesShareMain(t *testing.T) {
 // n makes a session of its own connections, the current one connected for
 // it first, then attached: named 1, console_n the next free, the other
 // connections not connected (§7.8「新建 session」).
-func TestNewSession(t *testing.T) {
-	dsn := postgres.IntegrationDSN(t)
+func TestNewSession(t *testing.T) { eachEngine(t, newSessionOn) }
+
+func newSessionOn(t *testing.T, eng, dsn string) {
 	sess, err := Open(context.Background(), []config.Connection{
-		{Name: "play", Engine: "postgres", DSN: dsn},
-		{Name: "seed", Engine: "postgres", DSN: dsn},
+		{Name: "play", Engine: eng, DSN: dsn},
+		{Name: "seed", Engine: eng, DSN: dsn},
 	}, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -241,11 +254,14 @@ func lastLog(a *App) string {
 
 // In the manual mode a statement out of a transaction begins one, which
 // stays till a rollback takes it back, as psql's AUTOCOMMIT off: after a
-// commit in a run the next statement begins anew, VACUUM begins none; a
-// commit or a rollback loads the catalog again, a DDL's table there; a
-// failed transaction stays so, a commit of it rolling back (F5.3).
-func TestManualTx(t *testing.T) {
-	a := opened(t, config.Connection{Name: "play", Engine: "postgres", DSN: postgres.OwnDB(t)})
+// commit in a run the next statement begins anew. On PG a commit loads the
+// catalog again, a DDL's table there, VACUUM begins none, and a failed
+// transaction stays so, a commit of it rolling back (F5.3); MySQL's DDL
+// commits on its own (F5.4).
+func TestManualTx(t *testing.T) { eachEngine(t, manualTx) }
+
+func manualTx(t *testing.T, eng, _ string) {
+	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: ownDB(t, eng)})
 	play, c := a.sess.Conns[0], consoleOf(a.win().Root.B.Pane)
 	a.win().focus(a.win().Root.B.Pane.ID)
 	run := func(sql string) { // the whole text
@@ -261,18 +277,28 @@ func TestManualTx(t *testing.T) {
 		}
 		return r.Rows[0][0].S
 	}
+	run("create table probe (a int)")
 	play.Manual = true
-	if run("create table probe (a int)"); play.tx != 'T' || count("select count(*) from pg_class where relname = 'probe'") != "0" {
+	if run("insert into probe values (1)"); play.tx != 'T' || count("select count(*) from probe") != "0" {
 		t.Fatalf("a run: %c", play.tx)
 	}
 	if settle(a, a.endTx(play, "rollback")); play.tx != 'I' {
 		t.Fatalf("rolled back: %c", play.tx)
 	}
-	if run("create table probe (a int);\ncommit;\ninsert into probe values (1)"); play.tx != 'T' || count("select count(*) from probe") != "0" {
+	if run("insert into probe values (1);\ncommit;\ninsert into probe values (2)"); play.tx != 'T' || count("select count(*) from probe") != "1" {
 		t.Fatalf("after a commit in the run: %c, %s", play.tx, count("select count(*) from probe"))
 	}
-	if settle(a, a.endTx(play, "commit")); !slices.ContainsFunc(play.Tables, func(tb db.Table) bool { return tb.Name == "probe" }) {
-		t.Errorf("committed: probe not in the tree")
+	if settle(a, a.endTx(play, "commit")); play.tx != 'I' || count("select count(*) from probe") != "2" {
+		t.Fatalf("committed: %c, %s", play.tx, count("select count(*) from probe"))
+	}
+	if eng != "postgres" {
+		return
+	}
+	if run("create table probe2 (a int)"); play.tx != 'T' || count("select count(*) from pg_class where relname = 'probe2'") != "0" {
+		t.Fatalf("a DDL: %c", play.tx)
+	}
+	if settle(a, a.endTx(play, "commit")); !slices.ContainsFunc(play.Tables, func(tb db.Table) bool { return tb.Name == "probe2" }) {
+		t.Errorf("committed: probe2 not in the tree")
 	}
 	if run("vacuum probe"); play.tx != 'I' || strings.Contains(lastLog(a), "ERROR") {
 		t.Errorf("vacuum: %c, %s", play.tx, lastLog(a))
@@ -285,23 +311,55 @@ func TestManualTx(t *testing.T) {
 	}
 }
 
-// A read-only connection's Main is read only too: a write the console
-// takes for a read fails in the database; what BreaksReadOnly takes does
-// not reach it (§13).
-func TestReadOnlyMain(t *testing.T) {
-	a := opened(t, config.Connection{Name: "play", Engine: "postgres", DSN: postgres.IntegrationDSN(t), ReadOnly: true})
+// A read-only connection's Main is read only too: a write that reaches it
+// fails in the database; what BreaksReadOnly takes does not reach it (§13).
+func TestReadOnlyMain(t *testing.T) { eachEngine(t, readOnlyMain) }
+
+func readOnlyMain(t *testing.T, eng, dsn string) {
+	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: dsn, ReadOnly: true})
+	c := consoleOf(a.win().Root.B.Pane)
+	a.win().focus(a.win().Root.B.Pane.ID)
+	err := c.conn.Main.Run(context.Background(), func(ctx context.Context, conn db.Conn) error {
+		_, err := conn.Query(ctx, "update t_user set name = name where id = 1")
+		return err
+	})
+	if e := c.conn.eng.ErrorOf(err); e.Code != "25006" { // read_only_sql_transaction, MySQL's 1792 too
+		t.Errorf("a write on Main: %+v", e)
+	}
+	c.ed.Load("start transaction read write")
+	if settle(a, a.consoleRun("")); lastLog(a) != "console_1  start transaction read write  play 是只读连接，整次都没有执行" || c.conn.tx == 'T' {
+		t.Errorf("start transaction read write: %s, %c", lastLog(a), c.conn.tx)
+	}
+}
+
+// A run that sets where unqualified names go, PG's SET or MySQL's USE,
+// leaves the console's schema to be set again before the next (§8.6);
+// MySQL's /*! … */ runs as code, its statements split around it (F5.4).
+func TestRunSetsSchemaAgain(t *testing.T) { eachEngine(t, runSetsSchemaAgain) }
+
+func runSetsSchemaAgain(t *testing.T, eng, dsn string) {
+	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: dsn})
 	c := consoleOf(a.win().Root.B.Pane)
 	a.win().focus(a.win().Root.B.Pane.ID)
 	run := func(sql string) {
 		t.Helper()
 		c.ed.Load(sql)
-		settle(a, a.consoleRun(""))
+		settle(a, a.runSQL(c, c.conn, c.schema, "console_1", sql, 0, c.ver))
 	}
-	if run("select nextval('t_order_id_seq')"); !strings.Contains(lastLog(a), "read-only transaction") {
-		t.Errorf("nextval: %s", lastLog(a))
+	away := map[string]string{"postgres": "set search_path to agentable", "mysql": "use agentable"}[eng]
+	if run(away + ";\nselect count(*) from agent"); strings.Contains(lastLog(a), "ERROR") {
+		t.Fatalf("agentable's agent: %s", lastLog(a))
 	}
-	if run("begin read write"); lastLog(a) != "console_1  begin read write  play 是只读连接，整次都没有执行" || c.conn.tx != 'I' {
-		t.Errorf("begin read write: %s, %c", lastLog(a), c.conn.tx)
+	if run("select count(*) from t_user"); strings.Contains(lastLog(a), "ERROR") {
+		t.Errorf("back on %s: %s", c.schema, lastLog(a))
+	}
+	if eng != "mysql" {
+		return
+	}
+	run("/*!40101 SET NAMES utf8mb4 */;\nSELECT 5 /*! +1 */")
+	log := a.win().log
+	if rt := a.win().Result.Tabs[1].Result; rt == nil || rt.page.Rows[0][0].S != "6" || !strings.Contains(log[len(log)-2].Head, "  /*!40101 SET NAMES utf8mb4 */") {
+		t.Errorf("/*! … */: %+v, log %v", rt, log)
 	}
 }
 
@@ -310,11 +368,13 @@ func TestReadOnlyMain(t *testing.T) {
 // so, a WHERE that fails leaves the transaction going; a rollback takes
 // the change back on screen too. So does one the user began in the auto
 // mode (§8.2, §10.3, F5.3).
-func TestManualTxTable(t *testing.T) {
-	a := opened(t, config.Connection{Name: "play", Engine: "postgres", DSN: postgres.OwnDB(t)})
+func TestManualTxTable(t *testing.T) { eachEngine(t, manualTxTable) }
+
+func manualTxTable(t *testing.T, eng, _ string) {
+	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: ownDB(t, eng)})
 	play := a.sess.Conns[0]
 	play.Manual = true
-	i := slices.IndexFunc(play.Tables, func(tb db.Table) bool { return tb.Schema == "public" && tb.Name == "t_order" })
+	i := slices.IndexFunc(play.Tables, func(tb db.Table) bool { return tb.Schema == play.Schema && tb.Name == "t_order" })
 	settle(a, a.openTable(play, play.Tables[i]))
 	tab := dataOf(a.focused())
 	note := slices.IndexFunc(tab.page.Cols, func(c db.Col) bool { return c.Name == "note" })

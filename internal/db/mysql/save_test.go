@@ -17,7 +17,7 @@ import (
 func saver(t *testing.T) (*db.Worker, func(sql string) string, string) {
 	t.Helper()
 	ctx := context.Background()
-	dsn := ownDB(t)
+	dsn := OwnDB(t)
 	main, _, err := Connect(ctx, dsn, "", false)
 	if err != nil {
 		t.Fatal(err)

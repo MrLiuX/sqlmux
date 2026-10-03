@@ -510,7 +510,7 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 		}
 	}
 	return ui.QueryBar{
-		Where: where, Typing: t.typing == "where", Pane: p.ID, Right: right, Note: t.note, Names: names,
+		Where: where, Typing: t.typing == "where", Pane: p.ID, Right: right, Note: t.note, Names: names, Dialect: t.conn.eng.Dialect(),
 		Chips: []ui.Chip{
 			order,
 			{Label: "LIMIT", Value: strconv.Itoa(t.shown.limit), Action: "grid.limit"},

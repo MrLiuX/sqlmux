@@ -34,8 +34,9 @@ type Console struct {
 	Pos          int
 	Failed       int // the first line of the statement whose last run failed: its ▶ in error; -1 for none
 	Pane         int
-	Names        SQLNames // the tables and columns among the text's names, for their colors; nil for none
-	Yank         Sel      // what a yank took, flashing (F3.32)
+	Names        SQLNames       // the tables and columns among the text's names, for their colors; nil for none
+	Dialect      sqlkit.Dialect // its connection's SQL
+	Yank         Sel            // what a yank took, flashing (F3.32)
 }
 
 // TextPos is a line and a byte offset into it, both from 0.
@@ -80,8 +81,7 @@ func (c Console) Draw(f *Frame, r uv.Rectangle) uv.Position {
 		starts[i] = starts[i-1] + len(c.Lines[i-1]) + 1
 	}
 	lineOf := func(off int) int { return sort.SearchInts(starts, off+1) - 1 }
-	// ponytail: PG's SQL only; the session's dialect when MySQL consoles come (M5)
-	stmts := sqlkit.Statements(text, sqlkit.PG)
+	stmts := sqlkit.Statements(text, c.Dialect)
 	first := map[int]bool{}
 	for _, s := range stmts {
 		first[lineOf(s.Start)] = true
@@ -91,7 +91,7 @@ func (c Console) Draw(f *Frame, r uv.Rectangle) uv.Position {
 	if i := sqlkit.StmtAt(text, stmts, starts[cur.Line]+cur.Col); i >= 0 && c.Normal {
 		from, to = lineOf(stmts[i].Lead), lineOf(stmts[i].End) // with the comment lines above it (§9.2)
 	}
-	colors := SQLColors(th, text, c.Names)
+	colors := SQLColors(th, text, c.Dialect, c.Names)
 	ta, width := c.TextArea(r), c.gutter()-2
 	for y := range r.Dy() {
 		n, row := c.Top+y, r.Min.Y+y
@@ -200,12 +200,12 @@ const (
 type SQLNames func(at int, word string) SQLName
 
 // SQLColors are SQL text's colors by byte (§7.3), a console's and a WHERE
-// input's: keywords, numbers, strings, comments, operators, a name right
-// before ( as a function, the tables and columns names says it is, the
-// rest fg.
-func SQLColors(th *Theme, text string, names SQLNames) []color.Color {
+// input's, read as d: keywords, numbers, strings, comments, operators, a
+// name right before ( as a function, the tables and columns names says it
+// is, the rest fg.
+func SQLColors(th *Theme, text string, d sqlkit.Dialect, names SQLNames) []color.Color {
 	out := make([]color.Color, len(text))
-	ts := sqlkit.Scan(text, sqlkit.PG)
+	ts := sqlkit.Scan(text, d)
 	for i, t := range ts {
 		col := th.Fg
 		switch t.Kind {

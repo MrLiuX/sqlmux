@@ -78,7 +78,7 @@ func TestPageWhere(t *testing.T) {
 // A console's run: each statement on its own, the first to fail stopping
 // the rest; a cancelled run leaves Main usable.
 func TestExecEach(t *testing.T) {
-	c, _, err := Connect(context.Background(), ownDB(t), "", false)
+	c, _, err := Connect(context.Background(), OwnDB(t), "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

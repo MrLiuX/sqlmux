@@ -10,6 +10,8 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/exp/golden"
+
+	"sqlmux/internal/sqlkit"
 )
 
 // consoleTheme gives every token the console draws a color of its own, so
@@ -123,10 +125,17 @@ func TestSQLColorsNames(t *testing.T) {
 	names := func(_ int, w string) SQLName {
 		return map[string]SQLName{"t_user": TableName, "id": ColumnName}[w]
 	}
-	cs := SQLColors(th, text, names)
+	cs := SQLColors(th, text, sqlkit.PG, names)
 	for w, want := range map[string]any{"t_user": th.SQLTable, "count": th.Func, "id": th.SQLColumn} {
 		if got := cs[strings.Index(text, w)]; got != want {
 			t.Errorf("%s: %v", w, got)
+		}
+	}
+	text = "select `id` # x\n/*!40101 1 */" // MySQL's
+	cs = SQLColors(th, text, sqlkit.MySQL, func(_ int, w string) SQLName { return map[string]SQLName{"`id`": ColumnName}[w] })
+	for w, want := range map[string]any{"`id`": th.SQLColumn, "# x": th.Comment, "/*!40101": th.Comment, "1 */": th.Number} {
+		if got := cs[strings.Index(text, w)]; got != want {
+			t.Errorf("MySQL's %s: %v", w, got)
 		}
 	}
 }

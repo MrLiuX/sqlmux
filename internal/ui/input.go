@@ -6,6 +6,8 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
+
+	"sqlmux/internal/sqlkit"
 )
 
 // Input is a single-line text field (the palette's, a WHERE, a cell being
@@ -73,10 +75,10 @@ func (in Input) Draw(f *Frame, r uv.Rectangle, st uv.Style) uv.Position {
 	return in.draw(f, r, st, nil)
 }
 
-// DrawSQL is Draw with the text in SQL's colors, names telling its tables
-// and columns apart (§7.3): a WHERE's.
-func (in Input) DrawSQL(f *Frame, r uv.Rectangle, st uv.Style, names SQLNames) uv.Position {
-	return in.draw(f, r, st, SQLColors(f.Theme, in.Text, names))
+// DrawSQL is Draw with the text in d's SQL colors, names telling its
+// tables and columns apart (§7.3): a WHERE's.
+func (in Input) DrawSQL(f *Frame, r uv.Rectangle, st uv.Style, d sqlkit.Dialect, names SQLNames) uv.Position {
+	return in.draw(f, r, st, SQLColors(f.Theme, in.Text, d, names))
 }
 
 // draw is Draw, the text's bytes in colors, when there are any.

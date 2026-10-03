@@ -122,7 +122,7 @@ type (
 		r   *run
 		rs  []db.Result
 		err error
-		set string // the SET of search_path when it is what failed
+		set string // the SET of search_path, MySQL's USE, when it is what failed
 		tx  byte   // where Main's transaction was as the run ended (F5.11)
 	}
 	runTick struct{ r *run }
@@ -153,7 +153,7 @@ func consoleSpan(t *consoleTab, arg string) (text string, from, to int) {
 	lines := ed.Lines()
 	text = strings.Join(lines, "\n")
 	at := func(pos editor.Pos) int { return offsetOf(lines, pos) }
-	stmts := sqlkit.Statements(text, sqlkit.PG)
+	stmts := sqlkit.Statements(text, t.conn.eng.Dialect())
 	from, to = -1, -1
 	switch s, e, visual := ed.Selection(); {
 	case arg != "":
@@ -193,12 +193,13 @@ func consoleSpan(t *consoleTab, arg string) (text string, from, to int) {
 // On a read-only connection a statement it keeps back keeps the whole run
 // back, the log saying so (§13).
 func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, ver int) tea.Cmd {
-	stmts := sqlkit.Statements(sql, sqlkit.PG)
+	d := conn.eng.Dialect()
+	stmts := sqlkit.Statements(sql, d)
 	if len(stmts) == 0 || t.running != nil {
 		return nil
 	}
 	if conn.Spec.ReadOnly {
-		if i := slices.IndexFunc(stmts, func(s sqlkit.Stmt) bool { return sqlkit.BreaksReadOnly(sql[s.Start:s.End], sqlkit.PG) }); i >= 0 {
+		if i := slices.IndexFunc(stmts, func(s sqlkit.Stmt) bool { return sqlkit.BreaksReadOnly(sql[s.Start:s.End], d) }); i >= 0 {
 			p := a.showResult(a.win())
 			a.log(&run{name: name, win: a.win()}, sql[stmts[i].Start:stmts[i].End], conn.Spec.Name+" 是只读连接，整次都没有执行", true)
 			selectTab(p, 0)
@@ -216,15 +217,19 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 	texts := make([]string, len(stmts))
 	// ponytail: select set_config('search_path', …) goes by unseen (its first
 	// word is select): the next run then trusts mainPath still
-	resets := false // what search_path is past this run is not known (§8.6)
+	resets := false // what search_path, or MySQL's database, is past this run is not known (§8.6)
 	for i, s := range stmts {
-		texts[i] = sqlkit.AutoLimit(sql[s.Start:s.End], sqlkit.PG, a.maxRows+1)
-		switch sqlkit.FirstWord(texts[i], sqlkit.PG) {
-		case "set", "reset", "discard":
+		texts[i] = sqlkit.AutoLimit(sql[s.Start:s.End], d, a.maxRows+1)
+		switch sqlkit.FirstWord(texts[i], d) {
+		case "set", "reset", "discard", "use":
 			resets = true
 		}
 	}
-	s, schema, maxRows, manual, d := r.conn, r.schema, a.maxRows, r.conn.Manual, r.conn.eng.Dialect()
+	s, schema, maxRows, manual := r.conn, r.schema, a.maxRows, r.conn.Manual
+	set := "set search_path to " // as the log names it when it fails (§8.6)
+	if d == sqlkit.MySQL {
+		set = "use "
+	}
 	return tea.Batch(func() tea.Msg {
 		m := runDone{r: r}
 		m.err = s.Main.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
@@ -240,7 +245,7 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 				s.mainPath = ""
 			case s.mainPath != schema:
 				if err := s.eng.UseSchema(ctx, c, schema, s.startedPath); err != nil {
-					s.mainPath, m.set = "", "set search_path to "+schema
+					s.mainPath, m.set = "", set+schema
 					return err
 				}
 				s.mainPath = ""
@@ -322,7 +327,7 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 		if res.Cols != nil {
 			tabs = append(tabs, Tab{Name: r.label(len(tabs) + 1), Result: &resultTab{gridState: gridState{page: res}, run: r, part: len(tabs) + 1}})
 		}
-		switch sqlkit.FirstWord(stmt, sqlkit.PG) {
+		switch sqlkit.FirstWord(stmt, r.conn.eng.Dialect()) {
 		case "create", "alter", "drop":
 			ddl = true
 		}

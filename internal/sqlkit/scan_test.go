@@ -43,6 +43,13 @@ func TestScan(t *testing.T) {
 		{PG, "x = \u0663", "i_o_i", nil},
 		{PG, "select 1 as ✓$a$; set x = 1; select ✓$a$", "k_n_k_ip_k_i_o_np_k_i", nil}, // no $a$ string swallowing the SET
 		{MySQL, "a\u3000b", "i", nil},
+		// /*! … */ is code but for its marks; a version is 5 digits, 6 with a blank after
+		{MySQL, "SELECT 5 /*! +1 */", "k_n_c_on_c", nil},
+		{MySQL, "/*!40101 SET NAMES utf8 */;", "c_k_i_i_cp", []string{"/*!40101", "SET", "NAMES", "utf8", "*/", ";"}},
+		{MySQL, "/*!5+1*/ /*!080400 1*/", "cnonc_c_nc", []string{"/*!", "5", "+", "1", "*/", "/*!080400", "1", "*/"}},
+		{MySQL, "/*!0804001*/", "cnc", []string{"/*!08040", "01", "*/"}},
+		{MySQL, "/*! a /*! b */ 2**/", "c_i_c_noc", nil}, // one in it is a comment
+		{PG, "/*! a */", "c", nil},
 	} {
 		if got := kinds(c.in, c.d); got != c.kinds {
 			t.Errorf("%q: %s, want %s", c.in, got, c.kinds)

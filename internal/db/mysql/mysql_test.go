@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -15,6 +14,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 
 	"sqlmux/internal/db"
+	"sqlmux/internal/sqlkit"
 )
 
 // my is the engine the tests go through.
@@ -28,45 +28,6 @@ func connect(t *testing.T, readOnly bool) *Conn {
 	}
 	t.Cleanup(func() { c.Close() })
 	return c
-}
-
-// ownDB is a database of the test's own on the test server, seeded as the
-// shared one is but for agentable, and dropped when the test ends: for
-// tests that write (AGENTS.md「集成测试环境」). It returns its DSN.
-func ownDB(t *testing.T) string {
-	t.Helper()
-	ctx := context.Background()
-	admin := connect(t, false)
-	name := fmt.Sprintf("sqlmux_worker_%d_%s", os.Getpid(), strings.ToLower(strings.ReplaceAll(t.Name(), "/", "_")))
-	drop := func() { admin.Query(ctx, "drop database if exists "+name) }
-	drop()
-	if _, err := admin.Query(ctx, "create database "+name); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(drop)
-	cfg, err := Config(IntegrationDSN(t), "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg.DBName = name
-	seed, err := os.ReadFile("../../../testdata/seed/mysql.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	c, _, err := Connect(ctx, cfg.FormatDSN(), "", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.Close()
-	for _, s := range strings.Split(string(seed), ";\n") {
-		if strings.TrimSpace(s) == "" || strings.Contains(s, "agentable") || strings.Contains(s, "grant ") {
-			continue
-		}
-		if _, err := c.Exec(ctx, s, 0); err != nil {
-			t.Fatalf("%v\n%s", err, s)
-		}
-	}
-	return cfg.FormatDSN()
 }
 
 func errno(err error) uint16 {
@@ -130,7 +91,7 @@ func TestQueryReturnsText(t *testing.T) {
 		t.Errorf("a NULL argument: %v", err)
 	}
 
-	own, _, err := Connect(context.Background(), ownDB(t), "", false)
+	own, _, err := Connect(context.Background(), OwnDB(t), "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,6 +151,65 @@ func TestReadOnlyAndTx(t *testing.T) {
 		if _, err := c.Query(ctx, s.sql); err != nil || c.TxStatus() != s.tx {
 			t.Errorf("%s: %c %v", s.sql, c.TxStatus(), err)
 		}
+	}
+}
+
+// What turns MySQL 8.4's read only off is what BreaksReadOnly keeps
+// back, statement by statement, a write after each (§13); SET GLOBAL and
+// PERSIST are left out, the server being shared.
+func TestReadOnlyUnlocks(t *testing.T) {
+	ctx := context.Background()
+	dsn := OwnDB(t)
+	admin, _, err := Connect(ctx, dsn, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer admin.Close()
+	if _, err := admin.Query(ctx, "create table probe (a int)"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := Config(dsn, "")
+	probe := my.Quote(cfg.DBName, "probe") // USE goes elsewhere
+	for _, c := range []struct {
+		stmt          string
+		unlocks, kept bool
+	}{
+		{"set session transaction read write", true, true},
+		{"SET LOCAL TRANSACTION READ WRITE", true, true},
+		{"set transaction read write", true, true}, // the next transaction's: the write's
+		{"set transaction_read_only = off", true, true},
+		{"SET @@SESSION.transaction_read_only = 0", true, true},
+		{"set @@transaction_read_only = 0", true, true},
+		{"set local `transaction_read_only` = 0", true, true},
+		{"set @a = 1, transaction_read_only = 0", true, true},
+		{"/*!40101 SET SESSION transaction_read_only = 0 */", true, true},
+		{"start transaction read write", true, true},
+		// kept back as their kind, harmless
+		{"set session transaction isolation level read committed", false, true},
+		{"set transaction read only", false, true},
+		// let go
+		{"set @transaction_read_only = 0", false, false},
+		{"set names utf8mb4, @@session.sql_mode = default", false, false},
+		{"set autocommit = 0", false, false},
+		{"use sqlmux", false, false},
+		{"begin", false, false},
+		{"start transaction read only", false, false},
+	} {
+		conn, _, err := Connect(ctx, dsn, "", true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := conn.Exec(ctx, c.stmt, 0); err != nil {
+			t.Fatalf("%s: %v", c.stmt, err)
+		}
+		_, err = conn.Exec(ctx, "insert into "+probe+" values (1)", 0)
+		if unlocked := err == nil; unlocked != c.unlocks {
+			t.Errorf("%s: unlocked %v: %v", c.stmt, unlocked, err)
+		}
+		if kept := sqlkit.BreaksReadOnly(c.stmt, sqlkit.MySQL); kept != c.kept {
+			t.Errorf("%s: BreaksReadOnly %v", c.stmt, kept)
+		}
+		conn.Close()
 	}
 }
 

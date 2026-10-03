@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	uv "github.com/charmbracelet/ultraviolet"
+
+	"sqlmux/internal/sqlkit"
 )
 
 // PaletteRow is one candidate (K-03): icon, name, where it lives in dim, its
@@ -37,6 +39,7 @@ type Palette struct {
 type PalettePreview struct {
 	Text, Err string
 	Names     SQLNames
+	Dialect   sqlkit.Dialect
 }
 
 // Lines is how many rows p takes whole.
@@ -194,7 +197,7 @@ func (p Palette) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 	}
 	if pv := p.Preview; pv != nil && grid.Dy() > 0 {
 		rule(y)
-		lines, colors := strings.Split(pv.Text, "\n"), SQLColors(th, pv.Text, pv.Names)
+		lines, colors := strings.Split(pv.Text, "\n"), SQLColors(th, pv.Text, pv.Dialect, pv.Names)
 		if pv.Err != "" {
 			lines, colors = []string{pv.Err}, nil
 		}

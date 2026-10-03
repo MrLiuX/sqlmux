@@ -35,6 +35,9 @@ func Statements(s string, d Dialect) []Stmt {
 	if start >= 0 {
 		out = append(out, Stmt{Start: start, End: ts[len(ts)-1].End})
 	}
+	if d == MySQL {
+		execMarks(s, all, out)
+	}
 	// the lines code is on, and those comments are on
 	lines := []int{0}
 	for i := range len(s) {
@@ -62,6 +65,28 @@ func Statements(s string, d Dialect) []Stmt {
 		}
 	}
 	return out
+}
+
+// execMarks widens stmts over the /*! right before them and the */ right
+// after them, comments to Scan: cut off, the other one of the pair left
+// in would open or close a comment, and the server keeps a version in
+// /*!.
+func execMarks(s string, all []Token, stmts []Stmt) {
+	for i := range stmts {
+		st := &stmts[i]
+		j := sort.Search(len(all), func(j int) bool { return all[j].Start >= st.Start })
+		for j--; j >= 0 && (all[j].Kind == Space || all[j].Kind == Comment && strings.HasPrefix(s[all[j].Start:all[j].End], "/*!")); j-- {
+			if all[j].Kind != Space {
+				st.Start = all[j].Start
+			}
+		}
+		j = sort.Search(len(all), func(j int) bool { return all[j].Start >= st.End })
+		for ; j < len(all) && (all[j].Kind == Space || all[j].Kind == Comment && s[all[j].Start:all[j].End] == "*/"); j++ {
+			if all[j].Kind != Space {
+				st.End = all[j].End
+			}
+		}
+	}
 }
 
 // StmtAt is the index of the statement the cursor at pos in s is in (§9.2):
@@ -149,19 +174,25 @@ func IsWrite(s string, d Dialect) bool {
 
 // sessionWords start what IsWrite takes but a read-only connection still
 // runs (§13): transaction control and session settings, which leave the
-// database's read only standing; set, begin and start BreaksReadOnly
-// looks into.
+// database's read only standing, and MySQL's USE; set, begin and start
+// BreaksReadOnly looks into.
 var sessionWords = map[string]bool{
 	"commit": true, "end": true, "rollback": true, "abort": true,
-	"savepoint": true, "release": true, "reset": true, "discard": true,
+	"savepoint": true, "release": true, "reset": true, "discard": true, "use": true,
 }
+
+// scopes are the words before what a SET sets, PG's and MySQL's, and in
+// MySQL's @@scope.name.
+var scopes = map[string]bool{"session": true, "local": true, "global": true, "persist": true, "persist_only": true}
 
 // BreaksReadOnly is whether a read-only connection keeps statement s from
 // the database (§13): a write, transaction control and session settings
-// aside, or one that turns read only off, as PG 17 does it (postgres'
-// TestReadOnlyUnlocks): SET TRANSACTION, SET SESSION CHARACTERISTICS, SET
-// default_transaction_read_only or transaction_read_only, BEGIN or START
-// TRANSACTION … READ WRITE.
+// aside, or one that turns read only off, as PG 17 and MySQL 8.4 do it
+// (TestReadOnlyUnlocks of postgres and mysql): SET [scope] TRANSACTION,
+// SET SESSION CHARACTERISTICS, SET [scope]
+// default_transaction_read_only or transaction_read_only, MySQL's
+// @@[scope.]transaction_read_only among those a SET of its sets, BEGIN or
+// START TRANSACTION … READ WRITE.
 // ponytail: select set_config('default_transaction_read_only', 'off',
 // false) reads, and turns it off, and SET U&"…" names the setting in
 // escapes this does not read; read only guards against slips, not users
@@ -174,15 +205,25 @@ func BreaksReadOnly(s string, d Dialect) bool {
 	}
 	switch w := lower(s, ts, i); w {
 	case "set":
-		for k := lower(s, ts, i+1); k == "session" || k == "local"; k = lower(s, ts, i+1) { // PG takes SET SESSION SESSION …
-			i++
-		}
-		if i+1 >= len(ts) {
-			return false
-		}
-		switch strings.ToLower(unquote(s[ts[i+1].Start:ts[i+1].End])) { // GUC names go by any case
-		case "transaction", "characteristics", "default_transaction_read_only", "transaction_read_only":
-			return true
+		for j := i + 1; j < len(ts); j++ { // MySQL's SET sets a list, by commas
+			for scopes[lower(s, ts, j)] { // PG takes SET SESSION SESSION …
+				j++
+			}
+			if lower(s, ts, j) == "@@" {
+				if j++; scopes[lower(s, ts, j)] && lower(s, ts, j+1) == "." {
+					j += 2
+				}
+			}
+			switch unquote(lower(s, ts, j)) { // the names go by any case
+			case "transaction", "characteristics", "default_transaction_read_only", "transaction_read_only":
+				return true
+			}
+			if d != MySQL {
+				return false
+			}
+			for j < len(ts) && !(lower(s, ts, j) == "," && depth[j] == depth[i]) {
+				j++
+			}
 		}
 		return false
 	case "begin", "start":
