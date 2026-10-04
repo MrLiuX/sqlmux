@@ -402,6 +402,9 @@
 
 **开发**
 - [ ] `pane.focus.next`、`console.format`、`tab.quit`、`tab.reopen`、`session.new` 五个命令，规则见 §6.8「M5 验收后加的命令」；都不带默认键，都有标题，命令面板里能搜到。
+  - 细节（worker 提议，已定）：`pane.focus.next` 从 12 点方向起顺时针算角度，角度相同取近的，只有一个 pane 时不动。`console.format` 格式化第一条语句开头到最后一条结尾之间（外面的注释、空行不动），按语句序号把光标放回原语句开头，格式化后语句数变了就停在 gq 放的位置；只在 NORMAL 下生效，失败、超时同 gq 弹 toast。
+  - `tab.quit`：关 tab 走 `tab.close` 的确认；pane 空了且是 window 里唯一的 pane，就走 `window.close` 的确认关掉 window，session 里最后一个 window 不关；按下时 pane 本来就空：有别的 pane 就关这个 pane，否则关 window；焦点在树上不做事，在结果 tab 上同 `tab.close`。
+  - `tab.reopen`：只记逐个关掉的 tab（`tab.close`、`tab.quit`、`:q`、`:wq`、`×`），整个 pane / window 关掉时里面的 tab 不记；记在 Session 上、最多 20 个，每按一次取最新的一个。表记连接、表、WHERE、ORDER 和方向、LIMIT（不记页码和隐藏的列），console 记文件、连接、schema；console 的文件已经在别处开着时切过去、丢掉这一条；原来的 window 和 pane 都还在才开回去，否则开在当前 pane，引导页照 openTableIn 被替换；列表空了什么都不做、不弹 toast。`session.new` 和 session 列表的 `n` 走同一段代码，用当前连接。
 
 **验收**
 - [ ] 单测：`pane.focus.next` 的顺时针顺序（左右分割、上下分割、树和结果区都在、树收起、结果区隐藏）；`console.format` 格式化全部语句、一次 `u` 撤回、光标在原语句开头；`tab.quit` 的三种情况（pane 里还有 tab、pane 空了关 pane、window 空了关 window）和最后一个 window 不关；`tab.reopen` 恢复 WHERE / ORDER / LIMIT，原 pane 没了时开在当前 pane，连按往前翻。
