@@ -121,7 +121,9 @@ func CompletionContext(text string, pos int, d Dialect) Completion {
 // list is none.
 func (c *Completion) readInsert(text string, ts []Token, depth []int, before int) {
 	w := func(i int) string { return lower(text, ts, i) }
-	name := func(i int) bool { return i < len(ts) && (ts[i].Kind == Ident || ts[i].Kind == Quoted) }
+	name := func(i int) bool {
+		return i < len(ts) && (ts[i].Kind == Ident || ts[i].Kind == Quoted || ts[i].Kind == Keyword)
+	} // comment, key: names too
 	for i := 1; i < before; i++ {
 		if w(i) != "into" || w(i-1) != "insert" && w(i-1) != "replace" && w(i-1) != "ignore" || !name(i+1) {
 			continue

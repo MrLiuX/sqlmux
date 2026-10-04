@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -375,19 +376,39 @@ func TestConsoleExternal(t *testing.T) {
 	}
 }
 
-// A keyword taken in a console gets a space, and a DML start is offered
-// (§9.7); one undo takes it back with the INSERT.
+// A keyword taken in a console gets a space, and the DML starts are
+// offered first (§9.7); a word typed out is the first, a table's name not
+// taking its place, a keyword of two words not put in twice; one undo takes
+// it back with the INSERT.
 func TestConsoleKeywordSpace(t *testing.T) {
 	a, c := inConsole(t, "", "")
-	for _, w := range []string{"ins", "upd", "del"} {
-		feed(t, a, "<Esc>ggdGi"+w)
-		if c.comp == nil || len(c.comp.items) == 0 {
-			t.Fatalf("%s: no candidates", w)
+	for in, first := range map[string]string{"ins": "insert into", "upd": "update", "del": "delete from"} {
+		feed(t, a, "<Esc>ggdGi"+in)
+		if c.comp == nil || c.comp.items[0].label != first {
+			t.Fatalf("%s: %+v", in, c.comp)
 		}
 	}
-	feed(t, a, "<Esc>ggdGiselec<CR>")
-	if text(c) != "select " || c.ed.Cursor().Col != 7 {
-		t.Fatalf("selec ↵: %q at %v", text(c), c.ed.Cursor())
+	for in, want := range map[string]string{
+		"selec":                     "select ",
+		"SELECT":                    "SELECT ",
+		"update t_order set":        "update t_order set ",
+		"alter table t rename to":   "alter table t rename to ",
+		"insert into":               "insert into ",
+		"select 1 from t union all": "select 1 from t union all ",
+	} {
+		feed(t, a, "<Esc>ggdGi"+in+"<CR>")
+		if text(c) != want || c.ed.Cursor().Col != len(want) {
+			t.Errorf("%s ↵: %q at %v", in, text(c), c.ed.Cursor())
+		}
+	}
+	feed(t, a, "<Esc>ggdGiinsert in")
+	i := slices.IndexFunc(c.comp.items, func(cd candidate) bool { return cd.label == "insert into" })
+	if i < 0 {
+		t.Fatalf("insert in: %+v", c.comp.items)
+	}
+	c.comp.sel = i
+	if feed(t, a, "<CR>"); text(c) != "insert into " {
+		t.Errorf("insert in, insert into taken: %q", text(c))
 	}
 	feed(t, a, "<Esc>u")
 	if text(c) != "" {
@@ -420,6 +441,20 @@ func TestConsoleInsertColumns(t *testing.T) {
 	feed(t, a, ", ")
 	if c.comp == nil || len(c.comp.items) != 6 || c.comp.items[0].label == "id" || c.comp.items[1].label != "status" {
 		t.Fatalf("after a comma: %+v", c.comp)
+	}
+	feed(t, a, "s")
+	if c.comp == nil || c.comp.items[0].label != "status" || strings.HasPrefix(c.comp.items[0].note, "全部") {
+		t.Fatalf("a word typed: no all-columns item: %+v", c.comp)
+	}
+	feed(t, a, "<Esc>ggdGiinsert into t_order(id, status, paid, meta, note, ")
+	if c.comp == nil || len(c.comp.items) != 1 || c.comp.items[0].label != "created_at" {
+		t.Fatalf("one column left: %+v", c.comp)
+	}
+	cols.Cols = append(cols.Cols, db.Column{Name: "x"})
+	a.sess.Conns[0].cols[idOf(table)] = cols
+	feed(t, a, "<Esc>ggdGiinsert into t_order(")
+	if all := c.comp.items[0]; c.comp == nil || all.note != "全部 7 列" || all.label != "id, status, paid, meta, note, created_a…" || all.insert != "id, status, paid, meta, note, created_at, x" {
+		t.Fatalf("41+ characters: %q, inserts %q", all.label, all.insert)
 	}
 }
 

@@ -66,8 +66,11 @@ func TestCommonKeywords(t *testing.T) {
 			t.Errorf("%s missing", k)
 		}
 	}
-	if !has(PG, "returning") || has(MySQL, "returning") || !has(MySQL, "replace into") || has(PG, "replace into") {
-		t.Error("dialect keywords")
+	for k, d := range map[string]Dialect{"returning": PG, "full join": PG, "replace into": MySQL, "ifnull": MySQL} {
+		other := PG + MySQL - d
+		if !has(d, k) || has(other, k) {
+			t.Errorf("%s: only in dialect %v", k, d)
+		}
 	}
 	if SpaceAfter("null") || SpaceAfter("count") || !SpaceAfter("and") {
 		t.Error("space after")
@@ -94,6 +97,11 @@ func TestInsertColumnsContext(t *testing.T) {
 		{"insert into t (a) select (|", "", PG, false, TableRef{}, nil},
 		{"insert into t (a) values (1);\nselect (|", "", PG, false, TableRef{}, nil},
 		{"select * from t (|", "", PG, false, TableRef{}, nil},
+		{"insert into comment (|", "", PG, true, TableRef{Name: "comment"}, nil}, // a table named as a keyword is
+		{"insert into public.comment (a, |", "", PG, true, TableRef{Schema: "public", Name: "comment"}, []string{"a"}},
+		{"insert into `key` (|", "", MySQL, true, TableRef{Name: "key"}, nil},
+		{"insert into key (|", "", MySQL, true, TableRef{Name: "key"}, nil},
+		{"load data local infile 'f' ignore into table t (|", "", MySQL, false, TableRef{}, nil},
 	} {
 		pos := strings.Index(c.sql, "|")
 		got := CompletionContext(c.sql[:pos]+c.sql[pos+1:], pos, c.d)

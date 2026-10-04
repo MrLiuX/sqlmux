@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,9 +22,8 @@ type formatDone struct {
 	from, to editor.Pos
 	text     string
 	err      error
-	// whole is console.format's: the cursor goes to the start of the
-	// statement it was in, the at-th of n
-	whole bool
+	// console.format's: the cursor goes to the start of the statement it
+	// was in, the at-th of n; at is -1 for gq's
 	at, n int
 }
 
@@ -63,13 +63,16 @@ func (a *App) consoleFormat(t *consoleTab, f editor.FormatSpan, whole bool) tea.
 	if from >= to {
 		return nil
 	}
-	at := sqlkit.StmtAt(text, stmts, offsetOf(lines, t.ed.Cursor()))
+	at := -1
+	if whole {
+		at = sqlkit.StmtAt(text, stmts, offsetOf(lines, t.ed.Cursor()))
+	}
 	sql, ver := text[from:to], t.ver
 	prg, opts := a.formatPrg, sqlkit.Options{KeywordCase: a.keywordCase, TabWidth: a.tabWidth}
 	start, end := posOf(lines, from), posOf(lines, to)
 	return func() tea.Msg {
 		out, err := format(sql, d, prg, opts)
-		return formatDone{t, ver, start, end, out, err, whole, at, len(stmts)}
+		return formatDone{t, ver, start, end, out, err, at, len(stmts)}
 	}
 }
 
@@ -111,6 +114,8 @@ func runPrg(sql, prg string) (string, error) {
 
 func (a *App) gotFormat(m formatDone) tea.Cmd {
 	switch {
+	case !slices.Contains(a.consoles(), m.t): // closed meanwhile, or closed and opened again on its file
+		return nil
 	case m.t.ver != m.ver, m.t.ed.Mode() != editor.Normal: // the text changed meanwhile, or is being typed
 		return nil
 	case errors.Is(m.err, sqlkit.ErrTimeout):
@@ -119,12 +124,11 @@ func (a *App) gotFormat(m formatDone) tea.Cmd {
 		return a.showToast("格式化失败："+m.err.Error(), toastTTL)
 	}
 	eff := m.t.ed.Replace(m.from, m.to, m.text)
-	if m.whole && m.at >= 0 {
+	if m.at >= 0 {
 		lines := m.t.ed.Lines()
 		// the statements are as many as before, but for what the formatter did to them
 		if stmts := sqlkit.Statements(strings.Join(lines, "\n"), m.t.conn.eng.Dialect()); len(stmts) == m.n {
-			pos := posOf(lines, stmts[m.at].Start)
-			m.t.ed.Click(pos.Line, pos.Col)
+			m.t.ed.Goto(posOf(lines, stmts[m.at].Start))
 		}
 	}
 	return a.consoleDid(m.t, eff)
