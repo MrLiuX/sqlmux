@@ -266,7 +266,7 @@ func (a *App) consoleDid(t *consoleTab, eff editor.Effect) tea.Cmd {
 		cmds = append(cmds, a.ex(eff.Ex))
 	}
 	if eff.Format != nil {
-		cmds = append(cmds, a.consoleFormat(t, *eff.Format))
+		cmds = append(cmds, a.consoleFormat(t, *eff.Format, false))
 	}
 	return tea.Batch(cmds...)
 }

@@ -4,6 +4,8 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -130,10 +132,11 @@ type Session struct {
 	open    map[string]bool // tree nodes opened or closed by hand, by node ID; the rest as §7.8 says
 	Windows []*Window
 	Active  int
-	winID   int    // the highest window ID handed out
-	prevWin int    // the ID of the window used before the one shown, SPC l's; 0 for none
-	RunSeq  int    // the last run's number, #42 on its result tabs (§11)
-	warning string // console_1's file could not be read: a toast on start (§11)
+	winID   int         // the highest window ID handed out
+	prevWin int         // the ID of the window used before the one shown, SPC l's; 0 for none
+	RunSeq  int         // the last run's number, #42 on its result tabs (§11)
+	warning string      // console_1's file could not be read: a toast on start (§11)
+	closed  []closedTab // the tabs closed last, the newest last: tab.reopen's (F5.16)
 }
 
 // connState is how far a Conn got with connecting (§7.8「连接节点」).
@@ -436,7 +439,11 @@ func (a *App) openTable(c *Conn, t db.Table) tea.Cmd { return a.openTableIn(a.op
 // openTableIn shows c's table t in pane p and focuses it: p's tab of it, a
 // pane having one at most (F3.37), else a new one. A landing tab current
 // gives way to it, replaced, or closed for the tab there (§5「引导页」).
-func (a *App) openTableIn(p *Pane, c *Conn, t db.Table) tea.Cmd {
+func (a *App) openTableIn(p *Pane, c *Conn, t db.Table) tea.Cmd { return a.openTableAs(p, c, t, nil) }
+
+// openTableAs is openTableIn asking for r, when a new tab is made, in place
+// of the first page as the table opens.
+func (a *App) openTableAs(p *Pane, c *Conn, t db.Table, r *request) tea.Cmd {
 	a.showPane(p.ID)
 	landing := p.tab().landing()
 	if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Data != nil && tb.Data.conn == c && idOf(tb.Data.table) == idOf(t) }); i >= 0 {
@@ -452,6 +459,9 @@ func (a *App) openTableIn(p *Pane, c *Conn, t db.Table) tea.Cmd {
 	// the same, the status bar telling the focused one's (§7.8). Add the
 	// connection, t_order [seed], if that confuses.
 	tab := Tab{Name: t.Name, Data: newDataTab(c, t)}
+	if r != nil {
+		tab.Data.request, tab.Data.shown, tab.Data.where.Text = *r, *r, r.applied
+	}
 	putTab(p, tab, landing)
 	return a.fetch(tab.Data, true)
 }
@@ -666,6 +676,7 @@ func (a *App) closeTab(p *Pane, i int) {
 	if p == a.win().Tree || i < 0 || i >= len(p.Tabs) || p.Tabs[i].Result != nil && p.Tabs[i].Result.run == nil {
 		return
 	}
+	a.sess.recordClosed(a.win().ID, p.ID, p.Tabs[i])
 	p.Tabs = slices.Delete(p.Tabs, i, i+1)
 	switch {
 	case i != p.Cur:
@@ -692,7 +703,16 @@ func (a *App) closeTab(p *Pane, i int) {
 // closeTabAsking is x on pane p's tab i (F3.35): a console's is written
 // first, asked about only when its connection's transaction would go with
 // it (§10.5, §11); a table's with changes asks first.
-func (a *App) closeTabAsking(p *Pane, i int) tea.Cmd {
+func (a *App) closeTabAsking(p *Pane, i int) tea.Cmd { return a.closeTabThen(p, i, nil) }
+
+// closeTabThen is closeTabAsking, then runs after once the tab is closed.
+func (a *App) closeTabThen(p *Pane, i int, after func() tea.Cmd) tea.Cmd {
+	then := func() tea.Cmd {
+		if after != nil {
+			return after()
+		}
+		return nil
+	}
 	if i < 0 || i >= len(p.Tabs) { // tab.close.at's i may come from a user's map
 		return nil
 	}
@@ -702,14 +722,14 @@ func (a *App) closeTabAsking(p *Pane, i int) tea.Cmd {
 				return a.saveFailed(err)
 			}
 			a.closeTab(p, i)
-			return nil
+			return then()
 		})
 	}
 	n, name := 0, ""
 	if t := p.Tabs[i].Data; t != nil {
 		n, name = t.changes(), t.table.Name+" "
 	}
-	return a.unlessLost(n, name, nil, "关闭", func() tea.Cmd { a.closeTab(p, i); return nil })
+	return a.unlessLost(n, name, nil, "关闭", func() tea.Cmd { a.closeTab(p, i); return then() })
 }
 
 // removePane takes pane id out of the tree: its sibling gets the space and
@@ -763,6 +783,37 @@ func (a *App) focusSide(side string) {
 	}
 	if id, ok := neighbor(rects, win.Focus, side, a.recent); ok {
 		win.focus(id)
+	}
+}
+
+// focusNext is pane.focus.next: the pane after the focused one going
+// clockwise round the middle of the screen, as each one's middle lies from
+// 12 o'clock, the nearer first on a tie; the last gives way to the first
+// (F5.16). A cell is about twice as tall as wide.
+func (a *App) focusNext() {
+	win := a.win()
+	rects := a.layout()
+	if !win.TreeOpen {
+		delete(rects, win.Tree.ID)
+	}
+	w := a.window()
+	cx, cy := float64(w.Min.X+w.Max.X)/2, float64(w.Min.Y+w.Max.Y)/2
+	at := func(id int) (angle, dist float64) {
+		r := rects[id]
+		dx, dy := float64(r.Min.X+r.Max.X)/2-cx, 2*(float64(r.Min.Y+r.Max.Y)/2-cy)
+		if angle = math.Atan2(dx, -dy); angle < 0 {
+			angle += 2 * math.Pi
+		}
+		return angle, math.Hypot(dx, dy)
+	}
+	ids := slices.Collect(maps.Keys(rects))
+	slices.SortFunc(ids, func(x, y int) int {
+		ax, dx := at(x)
+		ay, dy := at(y)
+		return cmp.Or(cmp.Compare(ax, ay), cmp.Compare(dx, dy), cmp.Compare(x, y))
+	})
+	if i := slices.Index(ids, win.Focus); i >= 0 {
+		win.focus(ids[(i+1)%len(ids)])
 	}
 }
 
@@ -884,4 +935,101 @@ func (a *App) scrollPane(id, down, right int) {
 	case p != nil:
 		a.scrollGrid(p, down*wheelStep, right)
 	}
+}
+
+// closedTab is a table or a console tab that was closed, as it was (F5.16).
+type closedTab struct {
+	win, pane int // the window and pane it was in, by ID
+	conn      *Conn
+	table     db.Table // a table's, with the request it had
+	req       request
+	console   int // console_n, 0 for a table
+	schema    string
+}
+
+// closedKept is how many closed tabs tab.reopen goes back through.
+const closedKept = 20
+
+// recordClosed notes tab, closed in pane of window, for tab.reopen: a table
+// or a console, no landing tab or result.
+func (s *Session) recordClosed(win, pane int, tab Tab) {
+	var c closedTab
+	switch {
+	case tab.Data != nil:
+		d := tab.Data
+		c = closedTab{conn: d.conn, table: d.table, req: request{applied: d.applied, order: d.order, desc: d.desc, limit: d.limit}}
+	case tab.Console != nil:
+		c = closedTab{conn: tab.Console.conn, console: tab.Console.n, schema: tab.Console.schema}
+	default:
+		return
+	}
+	c.win, c.pane = win, pane
+	s.closed = append(s.closed, c)
+	if len(s.closed) > closedKept {
+		s.closed = s.closed[1:]
+	}
+}
+
+// reopenTab is tab.reopen: the tab closed last, in its pane when it is
+// still there, else in the current one, a table with the WHERE, ORDER and
+// LIMIT it had, a console on its file, connection and schema. One that is
+// open already is only shown (F3.37, §11); no tab to reopen is no change.
+func (a *App) reopenTab() tea.Cmd {
+	s := a.sess
+	if len(s.closed) == 0 {
+		return nil
+	}
+	c := s.closed[len(s.closed)-1]
+	s.closed = s.closed[:len(s.closed)-1]
+	if c.console > 0 {
+		for wi, w := range s.Windows {
+			for _, p := range w.Root.Leaves() {
+				if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Console != nil && tb.Console.n == c.console }); i >= 0 {
+					a.selectWindow(wi)
+					a.showTab(p, i)
+					return nil
+				}
+			}
+		}
+	}
+	p := a.openTarget()
+	if wi := s.windowByID(c.win); wi >= 0 && s.Windows[wi].pane(c.pane) != nil {
+		a.selectWindow(wi)
+		p = s.Windows[wi].pane(c.pane)
+	}
+	if c.console == 0 {
+		return a.openTableAs(p, c.conn, c.table, &c.req)
+	}
+	t, err := openConsole(c.conn, c.console)
+	if err != nil {
+		return a.showToast(err.Error(), toastTTL)
+	}
+	t.schema = c.schema
+	a.showPane(p.ID)
+	putTab(p, Tab{Name: fmt.Sprintf("console_%d", c.console), Console: t}, p.tab().landing())
+	return a.keepConsole(t)
+}
+
+// quitTab is tab.quit: the current tab closed as tab.close does, and when
+// that leaves the window's only pane without a tab, the window too; an
+// empty pane is closed as it is (F5.16). The session's last window stays.
+func (a *App) quitTab() tea.Cmd {
+	p, win := a.focused(), a.win()
+	if p == win.Tree {
+		return nil
+	}
+	sweep := func() tea.Cmd {
+		if win != a.win() || win.pane(p.ID) != p || len(p.Tabs) > 0 {
+			return nil
+		}
+		if win.onlyPane(p.ID) {
+			return a.closeWindow()
+		}
+		a.removePane(p.ID)
+		return nil
+	}
+	if len(p.Tabs) == 0 {
+		return sweep()
+	}
+	return a.closeTabThen(p, p.Cur, sweep)
 }

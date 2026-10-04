@@ -112,9 +112,11 @@ func init() {
 			}
 			return a.run("tab.close", 0)
 		}},
-		"tab.next": {Title: "下一个 tab", Run: do(func(a *App, args Args) { a.cycleTab(1, args.Count) })},
-		"tab.prev": {Title: "上一个 tab", Run: do(func(a *App, args Args) { a.cycleTab(-1, args.Count) })},
-		"tab.new":  {Title: "新建 tab", Run: do(func(a *App, _ Args) { a.newTab() })},
+		"tab.quit":   {Title: "关闭 tab，空了连 pane / window 一起关", Run: func(a *App, _ Args) tea.Cmd { return a.quitTab() }},
+		"tab.reopen": {Title: "重开关掉的 tab", Run: func(a *App, _ Args) tea.Cmd { return a.reopenTab() }},
+		"tab.next":   {Title: "下一个 tab", Run: do(func(a *App, args Args) { a.cycleTab(1, args.Count) })},
+		"tab.prev":   {Title: "上一个 tab", Run: do(func(a *App, args Args) { a.cycleTab(-1, args.Count) })},
+		"tab.new":    {Title: "新建 tab", Run: do(func(a *App, _ Args) { a.newTab() })},
 		// a landing page's two buttons (§5「引导页」)
 		"tab.table": {Title: "打开表", Run: do(func(a *App, _ Args) {
 			p := a.focused()
@@ -205,8 +207,15 @@ func init() {
 			return cmd
 		}},
 		// The WHERE input in its vim's NORMAL (F3.39).
-		"where.run":    {Title: "执行", Local: true, Run: when(inWhere, func(a *App) tea.Cmd { return a.runWhere(a.typingTab()) })},
-		"where.leave":  {Title: "回到表格", Local: true, Run: when(inWhere, func(a *App) tea.Cmd { a.typingTab().stopTyping(); return nil })},
+		"where.run":   {Title: "执行", Local: true, Run: when(inWhere, func(a *App) tea.Cmd { return a.runWhere(a.typingTab()) })},
+		"where.leave": {Title: "回到表格", Local: true, Run: when(inWhere, func(a *App) tea.Cmd { a.typingTab().stopTyping(); return nil })},
+		"session.new": {Title: "新建 session", Run: func(a *App, _ Args) tea.Cmd { return a.dialSession() }},
+		"console.format": {Title: "格式化整个 console", Run: func(a *App, _ Args) tea.Cmd {
+			if t := a.focusedConsole(); t != nil {
+				return a.formatAll(t)
+			}
+			return nil
+		}},
 		"session.list": {Title: "session 列表", Run: do(func(a *App, _ Args) { a.openSessions() })},
 		"conn.new":     {Title: "新建连接…", Run: do(func(a *App, _ Args) { a.openConnForm() })},
 		"window.new":   {Title: "新建 window", Run: func(a *App, _ Args) tea.Cmd { return a.addWindow() }},
@@ -282,6 +291,7 @@ func init() {
 				a.focusPane(id)
 			}
 		})},
+		"pane.focus.next":  {Title: "下一个 pane", Run: do(func(a *App, _ Args) { a.focusNext() })},
 		"pane.focus.left":  {Title: "焦点移到左边", Run: do(func(a *App, _ Args) { a.focusSide("left") })},
 		"pane.focus.down":  {Title: "焦点移到下边", Run: do(func(a *App, _ Args) { a.focusSide("down") })},
 		"pane.focus.up":    {Title: "焦点移到上边", Run: do(func(a *App, _ Args) { a.focusSide("up") })},

@@ -21,6 +21,10 @@ type formatDone struct {
 	from, to editor.Pos
 	text     string
 	err      error
+	// whole is console.format's: the cursor goes to the start of the
+	// statement it was in, the at-th of n
+	whole bool
+	at, n int
 }
 
 // consoleFormat lays out what gq covered in console t (§9.5): a selection
@@ -29,7 +33,7 @@ type formatDone struct {
 // start to the last's end. It is formatted in a Cmd by sql-formatter or
 // formatprg; what comes back after the text changed, or with the editor
 // no longer in NORMAL, is dropped.
-func (a *App) consoleFormat(t *consoleTab, f editor.FormatSpan) tea.Cmd {
+func (a *App) consoleFormat(t *consoleTab, f editor.FormatSpan, whole bool) tea.Cmd {
 	lines := t.ed.Lines()
 	text := strings.Join(lines, "\n")
 	from, to := offsetOf(lines, f.From), offsetOf(lines, f.To)
@@ -59,12 +63,13 @@ func (a *App) consoleFormat(t *consoleTab, f editor.FormatSpan) tea.Cmd {
 	if from >= to {
 		return nil
 	}
+	at := sqlkit.StmtAt(text, stmts, offsetOf(lines, t.ed.Cursor()))
 	sql, ver := text[from:to], t.ver
 	prg, opts := a.formatPrg, sqlkit.Options{KeywordCase: a.keywordCase, TabWidth: a.tabWidth}
 	start, end := posOf(lines, from), posOf(lines, to)
 	return func() tea.Msg {
 		out, err := format(sql, d, prg, opts)
-		return formatDone{t, ver, start, end, out, err}
+		return formatDone{t, ver, start, end, out, err, whole, at, len(stmts)}
 	}
 }
 
@@ -113,7 +118,26 @@ func (a *App) gotFormat(m formatDone) tea.Cmd {
 	case m.err != nil:
 		return a.showToast("格式化失败："+m.err.Error(), toastTTL)
 	}
-	return a.consoleDid(m.t, m.t.ed.Replace(m.from, m.to, m.text))
+	eff := m.t.ed.Replace(m.from, m.to, m.text)
+	if m.whole && m.at >= 0 {
+		lines := m.t.ed.Lines()
+		// the statements are as many as before, but for what the formatter did to them
+		if stmts := sqlkit.Statements(strings.Join(lines, "\n"), m.t.conn.eng.Dialect()); len(stmts) == m.n {
+			pos := posOf(lines, stmts[m.at].Start)
+			m.t.ed.Click(pos.Line, pos.Col)
+		}
+	}
+	return a.consoleDid(m.t, eff)
+}
+
+// formatAll is console.format: all the statements of console t laid out as
+// gq does (§9.5, F5.16).
+func (a *App) formatAll(t *consoleTab) tea.Cmd {
+	if t.ed.Mode() != editor.Normal {
+		return nil
+	}
+	lines := t.ed.Lines()
+	return a.consoleFormat(t, editor.FormatSpan{To: editor.Pos{Line: len(lines) - 1, Col: len(lines[len(lines)-1])}}, true)
 }
 
 // offsetOf is where pos is in lines joined by line breaks; posOf the
