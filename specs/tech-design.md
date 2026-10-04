@@ -250,7 +250,9 @@ type Action struct {                // 注册表是 map[id]Action，id 如 "pane
   - F1–F12：经常被操作系统占用，在 Mac 笔记本上还要同时按住 fn。
 - **kitty 键盘协议只顺带开启**：终端支持时会打开（Bubble Tea v2 里只是一个字段），用户可以在配置里自己绑定 C-↵ 这类键。终端不支持时，这类绑定不生效，对应的提示也不显示。
   - 默认键位不依赖这个协议。有一条单测保证 `default.toml` 里不出现只能在这个协议下使用的键。
-- **终端翻译过来的键**（M5 F5.17，用户要用 Cmd、Ctrl+Shift 组合）：这类键用传统编码送不进来，用户可以让终端把它翻成 CSI u 编码的键（如 `<C-S-w>`）再送进来，做法同用户 kitty + tmux 里给 nvim 的那套：kitty 把键翻成 tmux 前缀加一个键，tmux 看 pane 里跑的是什么再决定发什么。这类键绑在 `[keys.global]` 里，在任何模式下都生效，不会当成文字输进去；终端或 tmux 没有协商 kitty 协议时也要能解析。具体送法由 F5.17 实测后补在这里。默认键位照旧不用它们。
+- **终端翻译过来的键**（M5 F5.17，用户要用 Cmd、Ctrl+Shift 组合）：这类键用传统编码送不进来，用户可以让终端把它翻成 CSI u 编码的键（如 `<C-S-w>`）再送进来，做法同用户 kitty + tmux 里给 nvim 的那套：kitty 把键翻成 tmux 前缀加一个键，tmux 看 pane 里跑的是什么再决定发什么。这类键绑在 `[keys.global]` 里，在任何模式下都生效，不会当成文字输进去；终端或 tmux 没有协商 kitty 协议时也要能解析。默认键位照旧不用它们。
+  - **送法**（F5.17 在 tmux 3.7b 上实测）：tmux 的分支用 `send-keys -H` 写原始字节，格式 `ESC [ <码点十进制> ; <1+修饰> u`（shift 1、alt 2、ctrl 4、super 8），如 `<C-S-w>` 是 `send-keys -H 1b 5b 31 31 39 3b 36 75`。Bubble Tea 不管协商过没有都按 CSI u 解析；在 console 的 NORMAL / INSERT、表格、WHERE 的 NORMAL / INSERT、面板打开时都执行了绑定的命令，没有字符漏进输入框。tmux 自己的 `send-keys C-S-w` 不行：不论 extended-keys 怎么设，只有请求了 modifyOtherKeys 的 pane 才收到带 shift 的编码，Bubble Tea 只请求 kitty 协议，收到的是普通的 C-w。
+  - **Super（Cmd）键**：带 Super、不带 Ctrl / Alt 的键记作 `<D-x>`（vim 的记法），能绑在 `[keys.global]` 里，没绑时也不会当成字符输入（F5.17 实测时发现：kitty 开着协议、Cmd+x 没被 kitty 截住时，原来会当成 `x` 删掉一个字符）。
 - **兜底**：键盘不方便的操作，都能用鼠标（§7.4）或命令面板完成。
 
 ### 6.3 键位记法

@@ -418,6 +418,7 @@
 **开发**
 - [ ] 先实测，再决定改不改代码（§6.2「终端翻译过来的键」）：在 tmux 3.7b 里，用 `send-keys` 把 CSI u 编码的键（如 `<C-S-w>`、`<C-S-[>`、`<C-S-t>`）送进跑着 sqlmux 的 pane，试原始字节（`send-keys -H`）和 tmux 自己的 extended-keys 两种送法；看 `[keys.global]` 里绑的命令在表格、树、console 的 NORMAL 和 INSERT、WHERE 的 INSERT 下是否都生效、是否有字符漏进输入框。不通的地方改解析或记法，通的就只加 e2e。
 - [ ] 结果和推荐的送法（tmux 那一侧的命令）发给决策者，决策者写进 §6.2，并据此配用户的 kitty / tmux。
+  - 实测结果（worker，已写进 §6.2）：`send-keys -H` 原始字节可行、不用改解析；tmux 自己的 `send-keys C-S-w` 不行。另外加一项：带 Super 的键记作 `<D-x>`、`Parse` 认它，不再当成普通字符输入（决策者同意）。
 
 **验收**
 - [ ] e2e：用推荐的送法送一个绑在 `[keys.global]` 的键，在表格和 console 的 INSERT 下都执行了对应命令，输入框里没有多出字符。
