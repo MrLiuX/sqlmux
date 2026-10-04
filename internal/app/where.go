@@ -33,6 +33,7 @@ type completion struct {
 type candidate struct {
 	label, insert, note string
 	pos                 []int
+	space               bool // a keyword that takes a space after it (§9.7)
 }
 
 // whereKeywords are what a condition is made of besides columns (§9.7).
@@ -74,7 +75,7 @@ func (a *App) complete(t *dataTab) {
 		}
 		for _, k := range whereKeywords {
 			if k != "ilike" || t.conn.eng.Dialect() == sqlkit.PG { // PG's alone
-				kws = append(kws, candidate{label: k, insert: k, note: "关键字"})
+				kws = append(kws, candidate{label: k, insert: k, note: "关键字", space: sqlkit.SpaceAfter(k)})
 			}
 		}
 		groups = [][]candidate{cols, kws}
@@ -358,9 +359,9 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 				far = append(far, columns(t)...)
 			}
 		}
-		kws := make([]candidate, len(sqlkit.Common))
-		for i, k := range sqlkit.Common {
-			kws[i] = candidate{label: k, insert: k, note: "关键字"}
+		var kws []candidate
+		for _, k := range sqlkit.Common(conn.eng.Dialect()) {
+			kws = append(kws, candidate{label: k, insert: k, note: "关键字", space: sqlkit.SpaceAfter(k)})
 		}
 		groups = [][]candidate{near, far, append(ctes, tables(schema, named)...), kws}
 	}
@@ -401,35 +402,55 @@ func (a *App) acceptCompletion() (changed bool, cmd tea.Cmd) {
 	return a.whereAccept(a.typingTab()), nil
 }
 
-// whereAccept is accept in the WHERE's vim, as typing it would (F3.39):
-// the closing quote after the cursor goes when the insert has its own.
+// whereAccept is accept in the WHERE's vim, as typing it would (F3.39).
 func (a *App) whereAccept(t *dataTab) bool {
 	c, in := t.comp, t.where
 	t.comp = nil
-	if !c.accept(&in) {
+	ins, drop, changed := c.plan(in.Text, in.Pos)
+	if !changed {
 		return false
 	}
-	t.ed.Complete(c.start, c.items[c.sel].insert)
-	if t.ed.Lines()[0] != in.Text {
+	t.ed.Complete(c.start, ins)
+	for range drop {
 		t.ed.Feed("<Del>")
 	}
 	t.syncWhere()
 	return true
 }
 
-// accept leaves in as it is when the candidate differs from the word only
-// in case, as SQL's keywords and bare names do: NULL stays NULL.
-func (c *completion) accept(in *ui.Input) bool {
+// plan is what taking the selected candidate does to text with the cursor at
+// pos: ins goes in place of what is from c.start to the cursor, and drop
+// bytes after the cursor go, the closing quote autopairs put there or one
+// typed, as the insert has its own (§7.9), or the whitespace a keyword
+// moves the cursor past instead of adding a space (§9.7). changed is false
+// when neither the text nor the cursor moves, the case aside: ↵ runs as
+// usual then.
+func (c *completion) plan(text string, pos int) (ins string, drop int, changed bool) {
 	cd := c.items[c.sel]
-	after := in.Text[in.Pos:]
-	if n := len(cd.insert); n > 0 && strings.ContainsRune("'\"`", rune(cd.insert[n-1])) && strings.HasPrefix(after, cd.insert[n-1:]) {
-		after = after[1:] // the closing quote autopairs put there, or one typed: the insert has its own (§7.9)
+	ins, after := cd.insert, text[pos:]
+	if n := len(ins); n > 0 && strings.ContainsRune("'\"`", rune(ins[n-1])) && strings.HasPrefix(after, ins[n-1:]) {
+		drop = 1
 	}
-	text := in.Text[:c.start] + cd.insert + after
-	if strings.EqualFold(text, in.Text) {
+	if cd.space {
+		if after != "" && (after[0] == ' ' || after[0] == '\t') {
+			ins, drop = ins+after[:1], 1
+		} else {
+			ins += " "
+		}
+	}
+	changed = c.start+len(ins) != pos || !strings.EqualFold(text[c.start:pos+drop], ins)
+	return ins, drop, changed
+}
+
+// accept takes the selected candidate into in, and reports whether that
+// changed it. A candidate that differs from the word only in case changes
+// nothing, as SQL's keywords and bare names ignore it: NULL stays NULL.
+func (c *completion) accept(in *ui.Input) bool {
+	ins, drop, changed := c.plan(in.Text, in.Pos)
+	if !changed {
 		return false
 	}
-	in.Text, in.Pos = text, c.start+len(cd.insert)
+	in.Text, in.Pos = in.Text[:c.start]+ins+in.Text[in.Pos+drop:], c.start+len(ins)
 	return true
 }
 

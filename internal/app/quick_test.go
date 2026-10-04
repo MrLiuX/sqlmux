@@ -261,7 +261,7 @@ func TestQuickSQLCompletion(t *testing.T) {
 	}
 	a.palette.quick = nil
 	feed(t, a, " selec<CR>")
-	if !strings.HasSuffix(a.palette.input.Text, " select") {
+	if !strings.HasSuffix(a.palette.input.Text, " select ") {
 		t.Errorf("↵ takes the first: %q", a.palette.input.Text)
 	}
 	if feed(t, a, "<Tab>"); strings.HasPrefix(a.palette.input.Text, ";") {

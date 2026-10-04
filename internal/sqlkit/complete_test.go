@@ -2,6 +2,7 @@ package sqlkit
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -54,5 +55,21 @@ func TestCompletionContext(t *testing.T) {
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("%s:\n got %+v\nwant %+v", c.sql, got, want)
 		}
+	}
+}
+
+// Common has DML and DDL starts, and the dialect's own clauses.
+func TestCommonKeywords(t *testing.T) {
+	has := func(d Dialect, k string) bool { return slices.Contains(Common(d), k) }
+	for _, k := range []string{"insert into", "update", "delete from", "create table"} {
+		if !has(PG, k) || !has(MySQL, k) {
+			t.Errorf("%s missing", k)
+		}
+	}
+	if !has(PG, "returning") || has(MySQL, "returning") || !has(MySQL, "replace into") || has(PG, "replace into") {
+		t.Error("dialect keywords")
+	}
+	if SpaceAfter("null") || SpaceAfter("count") || !SpaceAfter("and") {
+		t.Error("space after")
 	}
 }

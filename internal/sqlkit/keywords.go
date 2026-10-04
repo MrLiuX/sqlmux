@@ -1,6 +1,9 @@
 package sqlkit
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // keywords are the words Scan takes as Keyword, in PG and MySQL alike:
 // lazysql's sqlKeywords (components/sql_lexer.go) and the common words of
@@ -32,13 +35,44 @@ func init() {
 	}
 }
 
-// Common are the keywords completion offers besides the names of tables
+// common are the keywords completion offers besides the names of tables
 // and columns: the common ones of lazysql's builtinKeywords
 // (components/sql_completer.go), a few functions and clauses of two words
-// among them.
-var Common = []string{
-	"select", "from", "where", "and", "or", "not", "in", "is", "null", "like", "between", "exists",
-	"as", "on", "join", "left join", "using", "group by", "order by", "having", "limit", "offset",
-	"union", "all", "distinct", "case", "when", "then", "else", "end", "with", "values", "explain", "show",
-	"count", "sum", "avg", "min", "max", "coalesce", "cast", "asc", "desc",
+// among them, and the starts and clauses of DML and DDL (§9.7).
+var common = strings.Fields(`select from where and or not in is null like between exists
+	as on join using having limit offset union all distinct case when then else end with values explain show
+	count sum avg min max coalesce ifnull cast convert asc desc
+	intersect except recursive set update truncate begin commit rollback call
+	unique check constraint default references cascade`)
+
+// commonPairs are the keywords of more than one word, which Fields would split.
+var commonPairs = []string{
+	"left join", "inner join", "right join", "full join", "cross join", "natural join",
+	"group by", "order by", "insert into", "delete from",
+	"create table", "create index", "create unique index", "create view", "alter table",
+	"drop table", "drop index", "drop view", "add column", "drop column", "rename to",
+	"primary key", "foreign key", "if exists", "if not exists",
 }
+
+// Common is the keywords completion offers on a connection of dialect d:
+// the shared ones, and what only PG (returning, on conflict) or only MySQL
+// (replace into, on duplicate key update) has.
+func Common(d Dialect) []string {
+	out := append(slices.Clone(common), commonPairs...)
+	if d == PG {
+		return append(out, "returning", "on conflict", "do nothing", "do update set")
+	}
+	return append(out, "replace into", "on duplicate key update", "use", "describe")
+}
+
+// noSpace are the candidates that stay as they are as one is taken: values,
+// which are often what a condition ends with, and functions, which take a
+// ( next. The other keywords get a space after (§9.7).
+var noSpace = map[string]bool{
+	"null": true, "true": true, "false": true, "is null": true, "is not null": true,
+	"count": true, "sum": true, "avg": true, "min": true, "max": true,
+	"coalesce": true, "ifnull": true, "cast": true, "convert": true,
+}
+
+// SpaceAfter reports whether taking keyword k adds a space after it.
+func SpaceAfter(k string) bool { return !noSpace[k] }

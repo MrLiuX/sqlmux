@@ -375,6 +375,26 @@ func TestConsoleExternal(t *testing.T) {
 	}
 }
 
+// A keyword taken in a console gets a space, and a DML start is offered
+// (§9.7); one undo takes it back with the INSERT.
+func TestConsoleKeywordSpace(t *testing.T) {
+	a, c := inConsole(t, "", "")
+	for _, w := range []string{"ins", "upd", "del"} {
+		feed(t, a, "<Esc>ggdGi"+w)
+		if c.comp == nil || len(c.comp.items) == 0 {
+			t.Fatalf("%s: no candidates", w)
+		}
+	}
+	feed(t, a, "<Esc>ggdGiselec<CR>")
+	if text(c) != "select " || c.ed.Cursor().Col != 7 {
+		t.Fatalf("selec ↵: %q at %v", text(c), c.ed.Cursor())
+	}
+	feed(t, a, "<Esc>u")
+	if text(c) != "" {
+		t.Errorf("u: %q", text(c))
+	}
+}
+
 // In a console the candidates follow the cursor's place (§9.7): tables
 // after FROM; an alias's columns right after its ., fetched once and
 // completed again as they come; CTE names among the tables; C-n with

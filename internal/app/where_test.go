@@ -204,6 +204,34 @@ func TestAcceptIgnoresCase(t *testing.T) {
 	}
 }
 
+// A keyword takes a space as it is taken, the cursor going past one that is
+// there; a value does not; ↵ runs only when neither text nor cursor moves
+// (§9.7).
+func TestAcceptKeywordSpace(t *testing.T) {
+	for _, c := range []struct {
+		text         string
+		pos          int
+		cd           candidate
+		want         string
+		wantPos      int
+		wantAccepted bool
+	}{
+		{"selec", 5, candidate{insert: "select", space: true}, "select ", 7, true},
+		{"a = 1 an", 8, candidate{insert: "and", space: true}, "a = 1 and ", 10, true},
+		{"a = 1 and", 9, candidate{insert: "and", space: true}, "a = 1 and ", 10, true},
+		{"a = 1 and b", 9, candidate{insert: "and", space: true}, "a = 1 and b", 10, true},
+		{"a = nul", 7, candidate{insert: "null"}, "a = null", 8, true},
+		{"a = null", 8, candidate{insert: "null"}, "a = null", 8, false},
+	} {
+		in := ui.Input{Text: c.text, Pos: c.pos}
+		start := strings.LastIndexAny(c.text[:c.pos], " ") + 1
+		cp := &completion{items: []candidate{c.cd}, start: start}
+		if got := cp.accept(&in); got != c.wantAccepted || in.Text != c.want || in.Pos != c.wantPos {
+			t.Errorf("%q at %d: %v %q at %d", c.text, c.pos, got, in.Text, in.Pos)
+		}
+	}
+}
+
 // Every WHERE run goes into the table's history; C-r lists favorites then
 // history, a star or a clock before each, all of it till something is
 // typed, then filtered by it; Tab, ↓, S-Tab and ↑ move around the ends;

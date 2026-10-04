@@ -203,10 +203,15 @@ func (a *App) consoleComplete(t *consoleTab, manual bool) tea.Cmd {
 func (a *App) consoleAccept(t *consoleTab) (ok bool, cmd tea.Cmd) {
 	c, cur := t.comp, t.ed.Cursor()
 	t.comp = nil
-	if cd := c.items[c.sel]; !strings.EqualFold(t.ed.Lines()[cur.Line][c.start:cur.Col], cd.insert) {
-		return true, a.consoleDid(t, t.ed.Complete(c.start, cd.insert))
+	ins, drop, changed := c.plan(t.ed.Lines()[cur.Line], cur.Col)
+	if !changed {
+		return false, nil
 	}
-	return false, nil
+	eff := t.ed.Complete(c.start, ins)
+	for range drop {
+		eff = t.ed.Feed("<Del>")
+	}
+	return true, a.consoleDid(t, eff)
 }
 
 // vimCmds are what any vim's eff asks of the app: the clipboard gets
