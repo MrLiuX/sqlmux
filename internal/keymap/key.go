@@ -13,7 +13,7 @@ import (
 )
 
 // Key is one keystroke in canonical vim notation: a single character ("a",
-// "A", "%"), or a bracketed name with modifiers in C-M-S order ("<C-p>",
+// "A", "%"), or a bracketed name with modifiers in C-M-D-S order ("<C-p>",
 // "<Space>", "<S-Tab>"). "<" itself is "<lt>" so a sequence can be
 // concatenated and re-parsed unambiguously.
 type Key string
@@ -97,7 +97,7 @@ func plain(s string) Key {
 }
 
 func parseBracket(body string) (Key, error) {
-	var ctrl, alt, shift bool
+	var ctrl, alt, shift, super bool
 	for len(body) > 2 && body[1] == '-' {
 		switch unicode.ToUpper(rune(body[0])) {
 		case 'C':
@@ -106,12 +106,14 @@ func parseBracket(body string) (Key, error) {
 			alt = true
 		case 'S':
 			shift = true
+		case 'D':
+			super = true
 		default:
 			return "", fmt.Errorf("<%s>：不认识的修饰键 %q", body, body[0])
 		}
 		body = body[2:]
 	}
-	mod := ctrl || alt || shift
+	mod := ctrl || alt || shift || super
 	if name, ok := names[strings.ToLower(body)]; ok {
 		switch {
 		case name == "Leader" && mod:
@@ -119,7 +121,7 @@ func parseBracket(body string) (Key, error) {
 		case len(name) == 1 && !mod: // <Bar>, <Bslash> are just the characters
 			return Key(name), nil
 		}
-		return mods(ctrl, alt, shift, name), nil
+		return mods(ctrl, alt, shift, super, name), nil
 	}
 	r, n := utf8.DecodeRuneInString(body)
 	if n != len(body) {
@@ -131,14 +133,14 @@ func parseBracket(body string) (Key, error) {
 	case shift && unicode.IsLetter(r):
 		r, shift = unicode.ToUpper(r), false // <S-a> is A
 	}
-	if !ctrl && !alt && !shift {
+	if !ctrl && !alt && !shift && !super {
 		return plain(string(r)), nil
 	}
 	name := string(r)
 	if r == '<' {
 		name = "lt"
 	}
-	return mods(ctrl, alt, shift, name), nil
+	return mods(ctrl, alt, shift, super, name), nil
 }
 
 // String renders keys back to vim notation.
@@ -199,16 +201,20 @@ var teaNames = map[rune]string{
 	tea.KeyF7: "F7", tea.KeyF8: "F8", tea.KeyF9: "F9", tea.KeyF10: "F10", tea.KeyF11: "F11", tea.KeyF12: "F12",
 }
 
-// FromTea converts a key press to canonical notation.
+// FromTea converts a key press to canonical notation. Super, Hyper and Meta
+// are all <D-…> (vim's D, the Cmd key): a key held with one is never the
+// text it would type, so it cannot leak into an input, and it can be bound
+// in [keys.global] (§6.2).
 func FromTea(k tea.Key) Key {
 	ctrl, alt, shift := k.Mod.Contains(tea.ModCtrl), k.Mod.Contains(tea.ModAlt), k.Mod.Contains(tea.ModShift)
+	super := k.Mod.Contains(tea.ModSuper) || k.Mod.Contains(tea.ModHyper) || k.Mod.Contains(tea.ModMeta)
 	if name, ok := teaNames[k.Code]; ok {
-		if name == "Space" && !ctrl && !alt {
+		if name == "Space" && !ctrl && !alt && !super {
 			return "<Space>"
 		}
-		return mods(ctrl, alt, shift, name)
+		return mods(ctrl, alt, shift, super, name)
 	}
-	if !ctrl && !alt {
+	if !ctrl && !alt && !super {
 		if k.Text == "" {
 			return plain(string(k.Code))
 		}
@@ -226,16 +232,19 @@ func FromTea(k tea.Key) Key {
 	if r == '<' {
 		name = "lt"
 	}
-	return mods(ctrl, alt, ctrl && shift, name)
+	return mods(ctrl, alt, ctrl && shift || super && shift && !unicode.IsLetter(r), super, name)
 }
 
-func mods(ctrl, alt, shift bool, name string) Key {
+func mods(ctrl, alt, shift, super bool, name string) Key {
 	s := "<"
 	if ctrl {
 		s += "C-"
 	}
 	if alt {
 		s += "M-"
+	}
+	if super {
+		s += "D-"
 	}
 	if shift {
 		s += "S-"

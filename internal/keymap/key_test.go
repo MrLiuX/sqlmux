@@ -79,6 +79,11 @@ func TestFromTea(t *testing.T) {
 		{tea.Key{Code: tea.KeyUp}, "<Up>"},
 		{tea.Key{Code: 'a', Mod: tea.ModCtrl | tea.ModShift}, "<C-S-a>"}, // kitty only, but must match what Parse gives
 		{tea.Key{Code: 'a', Mod: tea.ModAlt | tea.ModShift}, "<M-A>"},
+		// Cmd is never the character it is held with, and Parse gives the same keys
+		{tea.Key{Code: 'x', Mod: tea.ModSuper}, "<D-x>"},
+		{tea.Key{Code: 't', Mod: tea.ModSuper | tea.ModShift}, "<D-T>"},
+		{tea.Key{Code: '[', Mod: tea.ModSuper | tea.ModShift}, "<D-S-[>"},
+		{tea.Key{Code: tea.KeyEnter, Mod: tea.ModSuper}, "<D-CR>"},
 		// multi-rune clusters come as one KeyExtended event
 		{tea.Key{Code: tea.KeyExtended, Text: "e\u0301"}, "e\u0301"},
 		{tea.Key{Code: tea.KeyExtended, Text: "👍🏽"}, "👍🏽"},
@@ -87,6 +92,17 @@ func TestFromTea(t *testing.T) {
 		if got := FromTea(c.k); got != c.want {
 			t.Errorf("FromTea(%v) = %q, want %q", c.k, got, c.want)
 		}
+	}
+}
+
+func TestParseSuper(t *testing.T) {
+	for in, want := range map[string]Key{"<D-x>": "<D-x>", "<D-S-t>": "<D-T>", "<D-S-[>": "<D-S-[>", "<D-CR>": "<D-CR>", "<C-D-w>": "<C-D-w>", "<S-D-w>": "<D-W>"} {
+		if ks, err := Parse(in); err != nil || len(ks) != 1 || ks[0] != want {
+			t.Errorf("Parse(%q) = %v, %v; want %q", in, ks, err, want)
+		}
+	}
+	if ks, _ := Parse("<D-w>"); Display(ks) != "D-w" {
+		t.Errorf("Display: %q", Display(ks))
 	}
 }
 

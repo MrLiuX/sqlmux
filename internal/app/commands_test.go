@@ -3,6 +3,8 @@ package app
 import (
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"sqlmux/internal/editor"
 )
 
@@ -137,5 +139,24 @@ func TestTabReopen(t *testing.T) {
 	a.run("tab.reopen", 0) // already open: shown, not twice
 	if n := len(p.Tabs); n != 2 || dataOf(p) == nil {
 		t.Errorf("a table open already: %d tabs", n)
+	}
+}
+
+// A key held with Cmd types nothing and does nothing the plain key would,
+// in NORMAL or INSERT; bound in [keys.global] it runs (F5.17).
+func TestSuperKeys(t *testing.T) {
+	a, c := inConsole(t, "", "[keys.global]\n\"<D-w>\" = \"tree.toggle\"\n")
+	feed(t, a, "iselect abc<Esc>")
+	open := a.win().TreeOpen
+	press := func(code rune) { a.Update(tea.KeyPressMsg{Code: code, Mod: tea.ModSuper}) }
+	press('x')
+	feed(t, a, "i")
+	press('y')
+	feed(t, a, "<Esc>")
+	if text(c) != "select abc" {
+		t.Errorf("typed: %q", text(c))
+	}
+	if press('w'); a.win().TreeOpen == open {
+		t.Error("<D-w> did not run")
 	}
 }
