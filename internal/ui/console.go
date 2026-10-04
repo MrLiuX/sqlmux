@@ -220,7 +220,8 @@ func SQLColors(th *Theme, text string, d sqlkit.Dialect, names SQLNames) []color
 		case sqlkit.Op:
 			col = th.SQLOperator
 		case sqlkit.Punct:
-			if strings.Contains(";,()", text[t.Start:t.End]) { // not the . of schema.table, and not [ ]
+			switch text[t.Start] { // not the . of schema.table, and not [ ]
+			case ';', ',', '(', ')':
 				col = th.SQLOperator
 			}
 		case sqlkit.Ident, sqlkit.Quoted:

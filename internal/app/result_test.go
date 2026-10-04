@@ -530,4 +530,7 @@ func TestResultCap(t *testing.T) {
 	if got := tabNames(b.win().Result); got != "日志 console_1 #1·3 console_1 #1·4 console_1 #1·5 console_1 #1·6 console_1 #1·7 console_1 #1·8 console_1 #1·9 console_1 #1·10 console_1 #1·11 console_1 #1·12" {
 		t.Errorf("twelve sets: %s", got)
 	}
+	if res := b.win().Result; res.Cur != 1 {
+		t.Errorf("shown: tab %d, want the first one left", res.Cur)
+	}
 }

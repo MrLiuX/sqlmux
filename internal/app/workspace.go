@@ -703,16 +703,12 @@ func (a *App) closeTab(p *Pane, i int) {
 // closeTabAsking is x on pane p's tab i (F3.35): a console's is written
 // first, asked about only when its connection's transaction would go with
 // it (§10.5, §11); a table's with changes asks first.
-func (a *App) closeTabAsking(p *Pane, i int) tea.Cmd { return a.closeTabThen(p, i, nil) }
+func (a *App) closeTabAsking(p *Pane, i int) tea.Cmd {
+	return a.closeTabThen(p, i, func() tea.Cmd { return nil })
+}
 
 // closeTabThen is closeTabAsking, then runs after once the tab is closed.
 func (a *App) closeTabThen(p *Pane, i int, after func() tea.Cmd) tea.Cmd {
-	then := func() tea.Cmd {
-		if after != nil {
-			return after()
-		}
-		return nil
-	}
 	if i < 0 || i >= len(p.Tabs) { // tab.close.at's i may come from a user's map
 		return nil
 	}
@@ -722,14 +718,14 @@ func (a *App) closeTabThen(p *Pane, i int, after func() tea.Cmd) tea.Cmd {
 				return a.saveFailed(err)
 			}
 			a.closeTab(p, i)
-			return then()
+			return after()
 		})
 	}
 	n, name := 0, ""
 	if t := p.Tabs[i].Data; t != nil {
 		n, name = t.changes(), t.table.Name+" "
 	}
-	return a.unlessLost(n, name, nil, "关闭", func() tea.Cmd { a.closeTab(p, i); return then() })
+	return a.unlessLost(n, name, nil, "关闭", func() tea.Cmd { a.closeTab(p, i); return after() })
 }
 
 // removePane takes pane id out of the tree: its sibling gets the space and
@@ -990,6 +986,9 @@ func (a *App) reopenTab() tea.Cmd {
 					return nil
 				}
 			}
+		}
+		if a.consoleOpen(config.ConsolePath(c.console)) { // another session's: two editors on one file overwrite each other (§11)
+			return nil
 		}
 	}
 	p := a.openTarget()

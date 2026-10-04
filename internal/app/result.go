@@ -387,13 +387,13 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 	if len(tabs) == 0 {
 		shown = r.prev
 	}
-	at, _ := a.placeRun(r, shown)
+	a.placeRun(r, shown)
 	p := r.win.Result
 	selectTab(p, 0) // the log, unless a result set shows
-	if m.err == nil && len(tabs) > 0 {
-		selectTab(p, at)
-	}
 	a.capResults(p)
+	if m.err == nil && len(tabs) > 0 { // the first set that is left, if the cap took some
+		selectTab(p, slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Result != nil && tb.Result.run == r }))
+	}
 	if ddl {
 		r.conn.dropCols() // as tree.refresh
 		cmds = append(cmds, a.loadCatalog(r.conn))
