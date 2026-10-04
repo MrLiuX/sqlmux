@@ -3,7 +3,7 @@
 sqlmux：按 tmux 的 session / window / pane 思路组织的终端数据库客户端，技术栈为 Go + Bubble Tea v2。
 
 - 设计与决策以 [`specs/tech-design.md`](specs/tech-design.md) 为准。要改设计，先改这份文档，再写代码。
-- 产品需求：[PRD - DB TUI v0.0.2](https://claude.ai/design/p/e6118404-bf7a-4420-abfd-e31198df2ba8?file=PRD+-+DB+TUI+v0.0.2.dc.html)；设计稿：[DB TUI v0.0.2](https://claude.ai/design/p/e6118404-bf7a-4420-abfd-e31198df2ba8?file=DB+TUI+v0.0.2.dc.html)。
+- 产品需求：[PRD - DB TUI v0.0.2](https://claude.ai/design/p/e6118404-bf7a-4420-abfd-e31198df2ba8?file=PRD+-+DB+TUI+v0.0.2.dc.html)；设计稿：[DB TUI v0.0.2](https://claude.ai/design/p/e6118404-bf7a-4420-abfd-e31198df2ba8?file=DB+TUI+v0.0.2.dc.html)，2026-10-04 起不再跟进，界面按现有实现的风格做（tech-design §18）。
 
 ## 目录结构
 
