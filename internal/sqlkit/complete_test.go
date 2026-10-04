@@ -66,14 +66,40 @@ func TestCommonKeywords(t *testing.T) {
 			t.Errorf("%s missing", k)
 		}
 	}
-	for k, d := range map[string]Dialect{"returning": PG, "full join": PG, "replace into": MySQL, "ifnull": MySQL} {
-		other := PG + MySQL - d
-		if !has(d, k) || has(other, k) {
-			t.Errorf("%s: only in dialect %v", k, d)
+	for _, c := range []struct {
+		k       string
+		in, not Dialect
+	}{{"returning", PG, MySQL}, {"full join", PG, MySQL}, {"replace into", MySQL, PG}, {"ifnull", MySQL, PG}} {
+		if !has(c.in, c.k) || has(c.not, c.k) {
+			t.Errorf("%s: in one dialect only", c.k)
 		}
 	}
 	if SpaceAfter("null") || SpaceAfter("count") || !SpaceAfter("and") {
 		t.Error("space after")
+	}
+}
+
+// UPDATE is followed by a table where it starts a statement, not as a clause
+// of an upsert or a lock (F5.12 review).
+func TestUpdateClause(t *testing.T) {
+	for _, c := range []struct {
+		sql    string
+		d      Dialect
+		kind   CompKind
+		tables []TableRef
+	}{
+		{"update t_o|", PG, CompTables, []TableRef{{Name: "t_o"}}},
+		{"update |", PG, CompTables, nil},
+		{"insert into t (id) values (1) on conflict (id) do update |", PG, CompAny, []TableRef{{Name: "t"}}},
+		{"insert into t (id) values (1) on duplicate key update st|", MySQL, CompAny, []TableRef{{Name: "t"}}},
+		{"select * from t for update|", PG, CompAny, []TableRef{{Name: "t"}}},
+		{"select * from t for no key update of t|", PG, CompAny, []TableRef{{Name: "t"}}},
+	} {
+		pos := strings.Index(c.sql, "|")
+		got := CompletionContext(c.sql[:pos]+c.sql[pos+1:], pos, c.d)
+		if got.Kind != c.kind || !reflect.DeepEqual(got.Tables, c.tables) {
+			t.Errorf("%s: %v %+v, want %v %+v", c.sql, got.Kind, got.Tables, c.kind, c.tables)
+		}
 	}
 }
 

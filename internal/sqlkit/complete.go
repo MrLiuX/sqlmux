@@ -84,10 +84,17 @@ func CompletionContext(text string, pos int, d Dialect) Completion {
 		}
 	}
 	word := func(i int) string { return lower(text, ts, i) }
+	// UPDATE names a table at the start of a statement, not after DO (PG's
+	// ON CONFLICT DO UPDATE), KEY (MySQL's ON DUPLICATE KEY UPDATE) or FOR
+	// (FOR UPDATE, FOR NO KEY UPDATE), where it is a clause
+	update := func(i int) bool {
+		prev := word(i - 1)
+		return word(i) == "update" && prev != "do" && prev != "key" && prev != "for"
+	}
 	switch p := before - 1; {
 	case word(p) == "." && p > 0 && ts[p-1].End == ts[p].Start && ts[p-1].Kind != Punct:
 		c.Kind, c.Qualifier = CompColumns, unquote(text[ts[p-1].Start:ts[p-1].End])
-	case word(p) == "from" || word(p) == "join" || word(p) == "update" || word(p) == "into" || word(p) == "table":
+	case word(p) == "from" || word(p) == "join" || update(p) || word(p) == "into" || word(p) == "table":
 		c.Kind = CompTables
 	case word(p) == ",":
 		for j := p - 1; j >= 0; j-- { // a FROM list's comma: its clause is FROM
@@ -105,7 +112,7 @@ func CompletionContext(text string, pos int, d Dialect) Completion {
 	c.readInsert(text, ts, depth, before)
 	for i := 0; i < len(ts); i++ {
 		switch w := word(i); {
-		case w == "from" || w == "join" || w == "update" || w == "into":
+		case w == "from" || w == "join" || update(i) || w == "into":
 			i = c.readTables(text, ts, depth, i+1) - 1
 		case w == "with" && depth[i] == 0: // the names; the FROMs in them are read on
 			c.readCTEs(text, ts, i+1)

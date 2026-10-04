@@ -227,6 +227,12 @@ func identStart(r rune) bool {
 	return r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= utf8.RuneSelf
 }
 
+// IdentByte reports whether b can be inside an identifier or keyword: a
+// letter, digit, _ or $, or a byte of a rune past ASCII.
+func IdentByte(b byte) bool {
+	return identStart(rune(b)) || b >= '0' && b <= '9' || b == '$'
+}
+
 // advance is past the runes from i that are in: whole runes, so a
 // rune past ASCII moves it as one.
 func advance(s string, i int, in func(rune) bool) int {

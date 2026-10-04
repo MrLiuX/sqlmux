@@ -801,7 +801,10 @@ func (a *App) focusNext() {
 		}
 	}
 	half := func(v vec) int { // 0 from 12 o'clock to before 6, 1 from 6 to before 12
-		if v.x > 0 || v.x == 0 && v.y > 0 {
+		switch {
+		case v.x == 0 && v.y == 0: // on the middle: it has no direction, and is first
+			return -1
+		case v.x > 0 || v.x == 0 && v.y > 0:
 			return 0
 		}
 		return 1

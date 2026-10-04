@@ -210,7 +210,7 @@ func TestAcceptIgnoresCase(t *testing.T) {
 // closing quote that is there already moves nothing (§9.7). The words of a
 // keyword written before the cursor are not put in twice.
 func TestAcceptKeywordSpace(t *testing.T) {
-	kw := func(s string) candidate { return candidate{insert: s, note: "关键字", space: true} }
+	kw := func(s string) candidate { return candidate{insert: s, note: "关键字", kw: true, space: true} }
 	val := candidate{insert: "null", note: "关键字"}
 	quoted := candidate{insert: "'done'", note: "值"}
 	for _, c := range []struct {

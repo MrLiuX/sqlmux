@@ -33,6 +33,7 @@ type completion struct {
 type candidate struct {
 	label, insert, note string
 	pos                 []int
+	kw                  bool // a keyword, not by what the list says of it
 	space               bool // a keyword that takes a space after it (§9.7)
 }
 
@@ -75,7 +76,7 @@ func (a *App) complete(t *dataTab) {
 		}
 		for _, k := range whereKeywords {
 			if k != "ilike" || t.conn.eng.Dialect() == sqlkit.PG { // PG's alone
-				kws = append(kws, candidate{label: k, insert: k, note: "关键字", space: sqlkit.SpaceAfter(k)})
+				kws = append(kws, candidate{label: k, insert: k, note: "关键字", kw: true, space: sqlkit.SpaceAfter(k)})
 			}
 		}
 		groups = [][]candidate{cols, kws}
@@ -142,7 +143,7 @@ func ranked(text string, pos int, pattern string, start int, groups ...[]candida
 // (insert in, the list's word is in): those are taken in, not typed again.
 func (c *completion) startOf(text string, cd candidate) int {
 	words := strings.Fields(cd.insert)
-	if cd.note != "关键字" || len(words) < 2 {
+	if !cd.kw || len(words) < 2 {
 		return c.start
 	}
 	for n := len(words) - 1; n >= 1; n-- {
@@ -153,7 +154,7 @@ func (c *completion) startOf(text string, cd candidate) int {
 				e--
 			}
 			w := words[k]
-			if e == s || e < len(w) || !strings.EqualFold(text[e-len(w):e], w) || e > len(w) && isWordByte(text[e-len(w)-1]) {
+			if e == s || e < len(w) || !strings.EqualFold(text[e-len(w):e], w) || e > len(w) && sqlkit.IdentByte(text[e-len(w)-1]) {
 				s = -1
 				break
 			}
@@ -164,10 +165,6 @@ func (c *completion) startOf(text string, cd candidate) int {
 		}
 	}
 	return c.start
-}
-
-func isWordByte(b byte) bool {
-	return b == '_' || b == '$' || b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= 0x80
 }
 
 // atWordStart is where pattern matches s with its first character at a
@@ -445,7 +442,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 		}
 		var kws []candidate
 		for _, k := range sqlkit.Common(conn.eng.Dialect()) {
-			kws = append(kws, candidate{label: k, insert: k, note: "关键字", space: sqlkit.SpaceAfter(k)})
+			kws = append(kws, candidate{label: k, insert: k, note: "关键字", kw: true, space: sqlkit.SpaceAfter(k)})
 		}
 		groups = [][]candidate{near, far, append(ctes, tables(schema, named)...), kws}
 	}

@@ -395,6 +395,7 @@ func TestConsoleKeywordSpace(t *testing.T) {
 		"alter table t rename to":   "alter table t rename to ",
 		"insert into":               "insert into ",
 		"select 1 from t union all": "select 1 from t union all ",
+		"insert into t_order (id) values (1) on conflict (id) do update set": "insert into t_order (id) values (1) on conflict (id) do update set ",
 	} {
 		feed(t, a, "<Esc>ggdGi"+in+"<CR>")
 		if text(c) != want || c.ed.Cursor().Col != len(want) {

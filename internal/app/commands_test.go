@@ -51,6 +51,19 @@ func TestFocusNext(t *testing.T) {
 	if got := []int{step(0), step(1), step(2)}; !slices.Equal(got, []int{1, 2, 0}) {
 		t.Errorf("result area hidden: %v", got)
 	}
+	// the data pane split, 1 above 3: 树 → 1 → 2 → 3 → 树, a clockwise turn, not ⟨n⟩ order
+	c := sized(160, 45, "nerd")
+	cw := c.win()
+	cw.focus(1)
+	c.splitPane(Vert) // the new pane, 3, is below 1
+	cstep := func(from int) int {
+		cw.focus(from)
+		c.run("pane.focus.next", 0)
+		return cw.Focus
+	}
+	if got := []int{cstep(0), cstep(1), cstep(2), cstep(3)}; !slices.Equal(got, []int{1, 2, 3, 0}) {
+		t.Errorf("1 above 3: %v", got)
+	}
 	// a pane split, the sidebar and the result area: all five, round once
 	b.toggleResult()
 	bw.focus(1)
