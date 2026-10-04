@@ -1,0 +1,7 @@
+@|▶  1 select * from play.t_log;|
+ |>....kkkkkk.o.kkkk...........o|
+ |     rrrrrrrrrrrrrrrrrrrrrrrrr|
+ |▶  2 select f(a, b) from t[1];|
+ |>ddd.kkkkkk.fo.o..o.kkkk...n.o|
+ |                              |
+cursor 5,0

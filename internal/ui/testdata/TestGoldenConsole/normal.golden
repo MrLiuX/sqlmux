@@ -2,19 +2,19 @@
  |.ddd.cccccccccccc.......................|
  |     rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr|
  |▶  2 select id, count(*) from t_user    |
- |>ddd.kkkkkk.....fffff.o..kkkk...........|
+ |>ddd.kkkkkk...o.fffffooo.kkkk...........|
  |     rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr|
 @|   3 where name = 'a' and n > 42        |
  |.....kkkkk......o.sss.kkk...o.nn........|
  |     rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr|
  |   4 group by id;                       |
- |.ddd.kkkkk.kk...........................|
+ |.ddd.kkkkk.kk...o.......................|
  |     rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr|
  |   5                                    |
  |.ddd....................................|
  |                                        |
  |▶  6 select now();                      |
- |>ddd.kkkkkk.fff.........................|
+ |>ddd.kkkkkk.fffooo......................|
  |                                        |
  |                                        |
  |........................................|

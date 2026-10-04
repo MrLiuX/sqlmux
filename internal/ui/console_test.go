@@ -105,6 +105,7 @@ func TestGoldenConsole(t *testing.T) {
 		{"scrolled", Console{Lines: scrolled, Left: 24, Cursor: TextPos{0, 32}, CursorCol: 31, Normal: true}, 20, 2},
 		{"wide cut at the left", Console{Lines: []string{"a中" + strings.Repeat("x", 20)}, Left: 2, Cursor: TextPos{0, 17}, CursorCol: 16, Normal: true}, 20, 1},
 		{"insert", Console{Lines: []string{"select 1;", ""}, Cursor: TextPos{1, 0}}, 20, 3},
+		{"punct", Console{Lines: []string{"select * from play.t_log;", "select f(a, b) from t[1];"}, Cursor: TextPos{0, 0}, Normal: true}, 30, 2},
 		{"names", Console{Lines: []string{"select * from t_order where user_id = 'df'"}, Cursor: TextPos{0, 0}, Names: sqlNames("t_order", "user_id")}, 50, 1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
