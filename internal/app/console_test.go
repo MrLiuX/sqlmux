@@ -395,6 +395,34 @@ func TestConsoleKeywordSpace(t *testing.T) {
 	}
 }
 
+// INSERT INTO t ( lists the columns the parentheses lack, all of them first,
+// and a generated one never; taking all of them leaves the cursor before the
+// ) (§9.7).
+func TestConsoleInsertColumns(t *testing.T) {
+	a, c := inConsole(t, "", "")
+	table, cols, _ := ordersTable(0)
+	cols.Cols[2].Generated = true
+	for i, tb := range a.sess.Conns[0].Tables {
+		if tb.Name == "t_order" {
+			a.sess.Conns[0].Tables[i] = table
+		}
+	}
+	a.sess.Conns[0].cols[idOf(table)] = cols
+	feed(t, a, "iinsert into t_order(")
+	if c.comp == nil || len(c.comp.items) != 7 || c.comp.items[0].note != "全部 6 列" || !strings.HasPrefix(c.comp.items[0].label, "id, status, paid") {
+		t.Fatalf("after (: %+v", c.comp)
+	}
+	feed(t, a, "<CR>")
+	if text(c) != "insert into t_order(id, status, paid, meta, note, created_at)" || c.ed.Cursor().Col != len(text(c))-1 {
+		t.Fatalf("all: %q at %v", text(c), c.ed.Cursor())
+	}
+	feed(t, a, "<Esc>ggdGiinsert into t_order(id")
+	feed(t, a, ", ")
+	if c.comp == nil || len(c.comp.items) != 6 || c.comp.items[0].label == "id" || c.comp.items[1].label != "status" {
+		t.Fatalf("after a comma: %+v", c.comp)
+	}
+}
+
 // In a console the candidates follow the cursor's place (§9.7): tables
 // after FROM; an alias's columns right after its ., fetched once and
 // completed again as they come; CTE names among the tables; C-n with

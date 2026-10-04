@@ -391,12 +391,16 @@ func TestReadOnlyTables(t *testing.T) {
 		"create table m (id int primary key) engine = myisam",
 		"create table bk (id binary(16) primary key)",
 		"create table bt (id int primary key, f bit(1))",
+		"create table gc (id int primary key, a int, v int as (a + 1), s int as (a + 2) stored, d int default (a))",
 	} {
 		if _, err := c.Query(ctx, s); err != nil {
 			t.Fatalf("%s: %v", s, err)
 		}
 	}
 	cfg, _ := Config(dsn, "")
+	if cs, err := my.TableColumns(ctx, c, cfg.DBName, "gc"); err != nil || cs.Cols[1].Generated || !cs.Cols[2].Generated || !cs.Cols[3].Generated || cs.Cols[4].Generated {
+		t.Errorf("Generated (plain, virtual, stored, expression default): %+v %v", cs.Cols, err)
+	}
 	for table, want := range map[string]string{"m": "引擎 MyISAM 不支持事务", "bk": "行标识列 id 是 binary(16)", "bt": ""} {
 		cs, err := my.TableColumns(ctx, c, cfg.DBName, table)
 		if err != nil || cs.ReadOnly != want {

@@ -14,12 +14,13 @@ func (t Table) View() bool { return t.Kind == "v" || t.Kind == "m" }
 // Column is one column's attributes, for the grid and the cell editor
 // (§8.4, §10.2).
 type Column struct {
-	Name    string
-	Type    string // as the server formats it: "bigint", "numeric(10,2)", "order_status"
-	NotNull bool
-	Default string   // the default's expression, an identity column's how it is generated; "" when there is none
-	Enum    []string // the labels in their sort order, when the type is an enum
-	Fixed   bool     // not to edit: MySQL's BIT, shown as a number it does not take back (§8.1)
+	Name      string
+	Type      string // as the server formats it: "bigint", "numeric(10,2)", "order_status"
+	NotNull   bool
+	Default   string   // the default's expression, an identity column's how it is generated; "" when there is none
+	Enum      []string // the labels in their sort order, when the type is an enum
+	Generated bool     // the server makes the value: an identity column that is always generated, a generated column; INSERT may not name it
+	Fixed     bool     // not to edit: MySQL's BIT, shown as a number it does not take back (§8.1)
 }
 
 // Columns is what the catalog knows of one table's columns.

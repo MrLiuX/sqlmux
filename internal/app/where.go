@@ -344,6 +344,32 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 		}
 	case sqlkit.CompTables:
 		groups = [][]candidate{append(ctes, tables(schema, nil)...)}
+	case sqlkit.CompInsertCols: // what the parentheses lack, and all of it at once (§9.7)
+		resolved = true
+		t, found := table(c.Into.Schema, c.Into.Name)
+		if !found {
+			break
+		}
+		columns(t) // fetches them when the cache lacks them
+		var rest []candidate
+		for _, col := range conn.cols[idOf(t)].Cols {
+			if !col.Generated && !slices.ContainsFunc(c.Listed, func(l string) bool { return strings.EqualFold(l, col.Name) }) {
+				rest = append(rest, candidate{label: col.Name, insert: col.Name, note: col.Type})
+			}
+		}
+		if len(rest) > 1 && c.Prefix == "" {
+			names := make([]string, len(rest))
+			for i, r := range rest {
+				names[i] = r.label
+			}
+			all := strings.Join(names, ", ")
+			label := all
+			if r := []rune(all); len(r) > 40 {
+				label = string(r[:39]) + "…"
+			}
+			rest = append([]candidate{{label: label, insert: all, note: "全部 " + strconv.Itoa(len(rest)) + " 列"}}, rest...)
+		}
+		groups = [][]candidate{rest}
 	default:
 		var near, far []candidate
 		named := map[tableID]bool{}

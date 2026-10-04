@@ -73,7 +73,7 @@ order by ordinal_position`, db.Val{S: schema}, db.Val{S: table})
 		return out, err
 	}
 	for _, row := range r.Rows {
-		col := db.Column{Name: row[0].S, Type: row[1].S, NotNull: row[2].S == "1", Default: row[3].S, Enum: enumOf(row[1].S), Fixed: strings.HasPrefix(row[1].S, "bit")}
+		col := db.Column{Name: row[0].S, Type: row[1].S, NotNull: row[2].S == "1", Default: row[3].S, Enum: enumOf(row[1].S), Generated: strings.Contains(strings.ToLower(row[4].S), " generated"), Fixed: strings.HasPrefix(row[1].S, "bit")}
 		switch {
 		case strings.Contains(row[4].S, "auto_increment"):
 			col.Default = "auto_increment"

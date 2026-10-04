@@ -1,12 +1,15 @@
 package sqlkit
 
+import "slices"
+
 // CompKind is what goes where the cursor is (§9.7).
 type CompKind int
 
 const (
-	CompAny     CompKind = iota // the statement's tables' columns, tables, keywords
-	CompTables                  // after FROM, JOIN, UPDATE, INTO, TABLE, or a comma of FROM's list
-	CompColumns                 // after Qualifier.: its columns, or its tables when it is a schema
+	CompAny        CompKind = iota // the statement's tables' columns, tables, keywords
+	CompTables                     // after FROM, JOIN, UPDATE, INTO, TABLE, or a comma of FROM's list
+	CompColumns                    // after Qualifier.: its columns, or its tables when it is a schema
+	CompInsertCols                 // in INSERT INTO t (…): Into's columns not in Listed
 )
 
 // TableRef is a table a statement names, as Schema.Name, and the alias it
@@ -26,6 +29,8 @@ type Completion struct {
 	Depth     int    // the parentheses the cursor is in
 	Tables    []TableRef
 	CTEs      []string
+	Into      TableRef // CompInsertCols: the table inserted into
+	Listed    []string // CompInsertCols: the columns the parentheses name already, quotes off
 }
 
 // CompletionContext tells what the cursor at pos in text is at (§9.7):
@@ -97,6 +102,7 @@ func CompletionContext(text string, pos int, d Dialect) Completion {
 			}
 		}
 	}
+	c.readInsert(text, ts, depth, before)
 	for i := 0; i < len(ts); i++ {
 		switch w := word(i); {
 		case w == "from" || w == "join" || w == "update" || w == "into":
@@ -106,6 +112,39 @@ func CompletionContext(text string, pos int, d Dialect) Completion {
 		}
 	}
 	return c
+}
+
+// readInsert makes c a CompInsertCols when the cursor, with ts[:before]
+// ahead of it, is in the parentheses of "INSERT | REPLACE [IGNORE] INTO
+// [schema.]name (", at that level: after the ( or a comma, with the word
+// being typed maybe. Another parenthesis (VALUES, SELECT) or one inside the
+// list is none.
+func (c *Completion) readInsert(text string, ts []Token, depth []int, before int) {
+	w := func(i int) string { return lower(text, ts, i) }
+	name := func(i int) bool { return i < len(ts) && (ts[i].Kind == Ident || ts[i].Kind == Quoted) }
+	for i := 1; i < before; i++ {
+		if w(i) != "into" || w(i-1) != "insert" && w(i-1) != "replace" && w(i-1) != "ignore" || !name(i+1) {
+			continue
+		}
+		into, k := TableRef{Name: unquote(text[ts[i+1].Start:ts[i+1].End])}, i+2
+		if w(k) == "." && name(k+1) {
+			into.Schema, into.Name, k = into.Name, unquote(text[ts[k+1].Start:ts[k+1].End]), k+2
+		}
+		if w(k) != "(" || k >= before || w(before-1) != "(" && w(before-1) != "," {
+			continue
+		}
+		if c.Depth != depth[k]+1 || slices.ContainsFunc(depth[k+1:before], func(d int) bool { return d <= depth[k] }) {
+			continue // in an expression of the list, or past its )
+		}
+		var listed []string
+		for j := k + 1; j < len(ts) && depth[j] > depth[k]; j++ {
+			if depth[j] == depth[k]+1 && (w(j-1) == "(" || w(j-1) == ",") && (name(j) || ts[j].Kind == Keyword) && !(j == before && c.Prefix != "") {
+				listed = append(listed, unquote(text[ts[j].Start:ts[j].End]))
+			}
+		}
+		c.Kind, c.Into, c.Listed = CompInsertCols, into, listed
+		return
+	}
 }
 
 // fromEnds are the words a FROM list stops at.

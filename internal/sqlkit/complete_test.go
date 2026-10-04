@@ -73,3 +73,32 @@ func TestCommonKeywords(t *testing.T) {
 		t.Error("space after")
 	}
 }
+
+// The columns of an INSERT's parentheses: after the ( or a comma, not once
+// they are closed, not inside an expression of them, not in VALUES' own.
+func TestInsertColumnsContext(t *testing.T) {
+	for _, c := range []struct {
+		sql, prefix string
+		d           Dialect
+		ok          bool
+		into        TableRef
+		listed      []string
+	}{
+		{"insert into t_log(|)", "", PG, true, TableRef{Name: "t_log"}, nil},
+		{"insert into play.t_log (id, |", "", PG, true, TableRef{Schema: "play", Name: "t_log"}, []string{"id"}},
+		{`insert into "T" ("a", "b", c|, d)`, "c", PG, true, TableRef{Name: "T"}, []string{"a", "b", "d"}},
+		{"replace into `t` (`a`,|", "", MySQL, true, TableRef{Name: "t"}, []string{"a"}},
+		{"insert into t (a, f(x), |", "", PG, true, TableRef{Name: "t"}, []string{"a", "f"}},
+		{"insert into t (a, f(|", "", PG, false, TableRef{}, nil},
+		{"insert into t (a) values (|", "", PG, false, TableRef{}, nil},
+		{"insert into t (a) select (|", "", PG, false, TableRef{}, nil},
+		{"insert into t (a) values (1);\nselect (|", "", PG, false, TableRef{}, nil},
+		{"select * from t (|", "", PG, false, TableRef{}, nil},
+	} {
+		pos := strings.Index(c.sql, "|")
+		got := CompletionContext(c.sql[:pos]+c.sql[pos+1:], pos, c.d)
+		if ok := got.Kind == CompInsertCols; ok != c.ok || ok && (got.Into != c.into || !slices.Equal(got.Listed, c.listed) || got.Prefix != c.prefix) {
+			t.Errorf("%s: %v %+v %q", c.sql, got.Kind, got.Into, got.Listed)
+		}
+	}
+}
