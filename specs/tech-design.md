@@ -250,6 +250,7 @@ type Action struct {                // 注册表是 map[id]Action，id 如 "pane
   - F1–F12：经常被操作系统占用，在 Mac 笔记本上还要同时按住 fn。
 - **kitty 键盘协议只顺带开启**：终端支持时会打开（Bubble Tea v2 里只是一个字段），用户可以在配置里自己绑定 C-↵ 这类键。终端不支持时，这类绑定不生效，对应的提示也不显示。
   - 默认键位不依赖这个协议。有一条单测保证 `default.toml` 里不出现只能在这个协议下使用的键。
+- **终端翻译过来的键**（M5 F5.17，用户要用 Cmd、Ctrl+Shift 组合）：这类键用传统编码送不进来，用户可以让终端把它翻成 CSI u 编码的键（如 `<C-S-w>`）再送进来，做法同用户 kitty + tmux 里给 nvim 的那套：kitty 把键翻成 tmux 前缀加一个键，tmux 看 pane 里跑的是什么再决定发什么。这类键绑在 `[keys.global]` 里，在任何模式下都生效，不会当成文字输进去；终端或 tmux 没有协商 kitty 协议时也要能解析。具体送法由 F5.17 实测后补在这里。默认键位照旧不用它们。
 - **兜底**：键盘不方便的操作，都能用鼠标（§7.4）或命令面板完成。
 
 ### 6.3 键位记法
@@ -403,6 +404,13 @@ H = "0"
 
 M5 新增的命令都不带默认键，在命令面板里执行：`conn.new`「新建连接…」、`console.conn`「切换连接…」、`tx.mode`「手动提交事务」（开关类，手动时为 ON）、`tx.commit`「提交」、`tx.rollback`「回滚」。
 
+M5 验收后加的命令同样不带默认键（F5.16，用户在 keymaps.toml 里自己绑）：
+
+- `pane.focus.next`「下一个 pane」：焦点按「树（展开着时）→ 各个 pane（按布局从左到右、从上到下）→ 结果区（显示着时）→ 回到树」循环。
+- `tab.quit`「关闭 tab，空了连 pane / window 一起关」：先照 `tab.close` 关掉当前 tab（有未保存的修改照样确认）；pane 里没有 tab 了、window 里还有别的 pane，就关掉这个 pane；window 里只剩这一个空 pane，就关掉这个 window；是 session 里最后一个 window 时不关，留下引导页，和 `tab.close` 一样。
+- `tab.reopen`「重开关掉的 tab」：每个 session 在内存里记最近关掉的 20 个表和 console tab（引导页不记，重启后不留），每次重开最近的一个，再按往前一个。开回原来的 pane，那个 pane 已经没了就开在当前 pane；表恢复关掉时的 WHERE、ORDER、LIMIT，console 打开原来的文件、用原来的连接和 schema。这张表在那个 pane 里已经开着时（F3.37 一张表在一个 pane 里只有一个 tab），只切过去。关掉时放弃了的未保存修改不恢复。
+- `session.new`「新建 session」：和 session 列表里的 `n` 相同，在哪里都能执行。
+
 console 里的 `x` 是 vim 的删除字符，所以 console 的 tab 用 `:q` 关闭。
 
 各浮层内的键位如下，全部取自 PRD。等到相应的浮层实现时，再加进 `default.toml`。
@@ -490,7 +498,7 @@ time    = "#fc9867"
 | `edited_bg` | #2d2a24 | 已修改单元格的底色 |
 | `keyword` | #bb9af7 | SQL 关键字、VISUAL |
 | `sql_string` / `comment` | #9ece6a / 同 `dim` | console 里 SQL 的字符串字面量 / 注释（M3）。`string` 是表格里字符串值的颜色，默认不着色，所以另设一个 |
-| `sql_table` / `sql_column` / `sql_operator` | #2ac3de / #73daca / #89ddff | console 和 WHERE 输入框里的表名 / 列名 / 运算符（F3.27）。按词法加 catalog 缓存判断，别名、CTE 名不着色 |
+| `sql_table` / `sql_column` / `sql_operator` | #2ac3de / #73daca / #89ddff | console 和 WHERE 输入框里的表名 / 列名 / 运算符（F3.27）。按词法加 catalog 缓存判断，别名、CTE 名不着色。`sql_operator` 也用于标点 `;` `,` `(` `)`（M5 F5.14，用户验收时要求 `*`、`;` 这类符号同一个颜色）；`.` 不着色，`schema.table` 里的点着了色反而碎 |
 | `yank` | #e0af68 底、`bg` 字 | 复制时闪一下被复制的范围，150ms，同 nvim 的 `vim.hl.on_yank`（F3.32） |
 | `info` | #7dcfff | 连接信息、COMMAND |
 | `error` | #f7768e | 错误、Redis 标识 |
@@ -589,7 +597,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
 - 写了 `fg` 的图标在任何位置都用这个颜色；没写时跟随所在位置的颜色，比如标题聚焦时是 `focus` 色。
 - **图标后面留 1 个空格再接文字**（M1 用户反馈）：树、面板的搜索行与候选、pane 标题、侧栏标题、状态栏、查询条都一样。Nerd Font 图标按 1 列计算（§7.1），但不少终端和字体把它画得比 1 列宽，溢出到后一格，紧挨着文字时看起来贴在一起，悬停底色也只盖住半个。留一格空白正好接住溢出的部分。
 - 默认颜色：`save`、`refresh`、`transpose` 用 `info` 色，`sort_asc` / `sort_desc` 和 WHERE 历史下拉里的 `star` 用 `warn` 色（收藏和历史只靠图标区分，黄星一眼能认出）；都可以在 `[icon]` 里用 `fg` 覆盖。
-- 可以覆盖的图标：`schema`、`table`、`data`、`console`、`filter`、`search`、`keys`、`conn`、`key`、`postgres`，以及命令面板用的 `command`（nf-fa-bolt，U+F0E7，ascii 为 `:`）和 `window`（nf-fa-window_restore，U+F2D2，ascii 为 `[]`）；查询条的 `save`（U+F0C7，ascii `[S]`）、`refresh`（U+F021，ascii `[R]`）、`transpose`（U+F0EC，ascii `[T]`）、`sort_asc`（nf-fa-sort_amount_asc，U+F160，ascii `↑`）、`sort_desc`（nf-fa-sort_amount_desc，U+F161，ascii `↓`）；树的 `view`（nf-fa-eye，U+F06E，ascii `v`）、`column`（nf-cod-symbol_field，U+EB5F，ascii `-`）、只读连接的 `lock`（nf-fa-lock，U+F023，ascii `RO`，M5 F5.3）；查询条新增的 `row_add`（nf-fa-plus，U+F067，ascii `+`）、`row_delete`（nf-fa-minus，U+F068，ascii `-`）、`auto_refresh`（nf-fa-clock_o，U+F017，ascii `@`）、`stop`（nf-fa-stop，U+F04D，ascii `#`）；结果区的 `result`（nf-fa-list_alt，U+F022，ascii `=`）、`pin`（nf-oct-pin，U+F435，ascii `*`）、`export`（nf-fa-download，U+F019，ascii `>`）、`close`（nf-fa-times，U+F00D，ascii `x`）、日志 tab 的 `log`（nf-fa-file_text_o，U+F0F6，ascii `L`）；WHERE 历史下拉的 `star`（nf-fa-star，U+F005，ascii `*`）、`history`（nf-fa-history，U+F1DA，ascii `h`）。M3 起去掉 `data`：表 tab 在 pane 标题、tab 栏、树的工作区、面板的 pane 行里一律用 `table` 图标，console tab 用 `console`，引导 tab 不画图标。`mysql`（nf-dev-mysql，U+E704，ascii `my`，M5 F5.4）。以后新增的图标也按名字加入。名字写错时启动报错。
+- 可以覆盖的图标：`schema`、`table`、`data`、`console`、`filter`、`search`、`keys`、`conn`、`key`、`postgres`，以及命令面板用的 `command`（nf-fa-bolt，U+F0E7，ascii 为 `:`）和 `window`（nf-fa-window_restore，U+F2D2，ascii 为 `[]`）；查询条的 `save`（U+F0C7，ascii `[S]`）、`refresh`（U+F021，ascii `[R]`）、`transpose`（U+F0EC，ascii `[T]`）、`sort_asc`（nf-fa-sort_amount_asc，U+F160，ascii `↑`）、`sort_desc`（nf-fa-sort_amount_desc，U+F161，ascii `↓`）；树的 `view`（nf-fa-eye，U+F06E，ascii `v`）、`column`（nf-cod-symbol_field，U+EB5F，ascii `-`）、只读连接的 `lock`（nf-fa-lock，U+F023，ascii `RO`，M5 F5.3）；查询条新增的 `row_add`（nf-fa-plus，U+F067，ascii `+`）、`row_delete`（nf-fa-minus，U+F068，ascii `-`）、`auto_refresh`（nf-fa-clock_o，U+F017，ascii `@`）、`stop`（nf-fa-stop，U+F04D，ascii `#`）；结果区的 `result`（nf-fa-list_alt，U+F022，ascii `=`）、`pin`（nf-oct-pin，U+F435，ascii `*`）、`export`（nf-fa-download，U+F019，ascii `>`）、`close`（nf-fa-times，U+F00D，ascii `x`）、日志 tab 的 `log`（nf-fa-file_text_o，U+F0F6，ascii `L`）；WHERE 历史下拉的 `star`（nf-fa-star，U+F005，ascii `*`）、`history`（nf-fa-history，U+F1DA，ascii `h`）；树的工作区里 pane 节点的 `pane`（nf-fa-columns，U+F0DB，ascii `|`，M5 F5.15）。M3 起去掉 `data`：表 tab 在 pane 标题、tab 栏、树的工作区、面板的 pane 行里一律用 `table` 图标，console tab 用 `console`，引导 tab 不画图标。`mysql`（nf-dev-mysql，U+E704，ascii `my`，M5 F5.4）。以后新增的图标也按名字加入。名字写错时启动报错。
 
 ### 7.8 默认尺寸与样式（取自设计稿）
 
@@ -633,7 +641,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
       - **分组节点**：`Tables (n)`、`Views (n)`，n 为这个 schema 下的个数；n 为 0 时照样显示，没有 `▸`。Tables 含普通表、分区表的父表、外部表；Views 含视图和物化视图。函数、序列、角色等不列：目前对它们没有可做的操作，有用处时再加。
       - **表 / 视图节点**：图标（`func` 色）+ 名字 + 右对齐的行数量级（`border` 色）；普通视图没有行数，不显示。
       - **列节点**：展开表的时候才从 `Meta` 取列，与打开表共用列缓存（§8.4），取回之前不显示子节点，也不显示「加载中」。每行是图标 + 列名 + 右侧 `dim` 色的类型（`format_type`）；主键列用 `key` 图标（`pk` 色），其余用 `column` 图标。
-      - **工作区节点**：当前 session 的 window → pane → tab，最小粒度是 tab（M1 用户反馈）。pane 节点显示为 `pane-<n>`、不画图标（图标那一格留空对齐，M2/M3 验收时定，单独一个编号太单薄），只列普通 pane 和结果区，空 pane 没有子节点；tab 节点比 pane 节点多缩进一级，结果区的「日志」tab 画图标 `log`（F3.30）；在 pane 节点上 `↵` 或单击是展开 / 折叠，不跳转；在 tab 节点上才聚焦过去；tab 节点显示表名加 `dim` 色的条件摘要（WHERE、非默认的 ORDER）。打开、关闭、切换 tab 后跟着变。
+      - **工作区节点**：当前 session 的 window → pane → tab，最小粒度是 tab（M1 用户反馈）。pane 节点显示为 `<pane 图标> pane-<n>`（M5 F5.15 起画图标 `pane`，用户验收时觉得前面空一格很怪；原来不画、留空对齐），只列普通 pane 和结果区，空 pane 没有子节点；tab 节点比 pane 节点多缩进一级，结果区的「日志」tab 画图标 `log`（F3.30）；在 pane 节点上 `↵` 或单击是展开 / 折叠，不跳转；在 tab 节点上才聚焦过去；tab 节点显示表名加 `dim` 色的条件摘要（WHERE、非默认的 ORDER）。打开、关闭、切换 tab 后跟着变。
       - **默认展开**：启动时的连接、它 `current_schema()` 所在的 schema 和那个 schema 的 Tables、工作区及其下所有节点；其余折叠，其他连接也折叠着、不连。之后连上的连接同样展开它的 `current_schema()` 和 Tables。展开状态记在 session 上（节点按连接区分），只在内存里。
       - 行数量级：n < 1000 原样显示；1000 以上用 k / m / b 后缀，一律向下取整，首位只有一位数字时保留一位小数（`8.1k`、`2.1m`），否则取整（`48k`、`410k`）；`reltuples < 0` 显示 `?`。
       - 右侧注释（行数、列的类型）放不下时整个不显示，先保名字；侧栏只有 24 列时列节点的名字只剩十来列，可以拖宽侧栏。
@@ -983,8 +991,9 @@ MySQL 的 schema 就是 database（M5 F5.4 定，同 DataGrip）：树里 MySQL 
 | 光标所在位置 | 候选 |
 |---|---|
 | FROM / JOIN / UPDATE / INTO / TABLE 之后 | 表名（含视图）；输入 `schema.` 后，只列该 schema 下的表 |
+| `INSERT INTO 表 (` 之后，以及这个括号里的逗号之后 | 这张表还没写进括号的列，按表里的列顺序；第一项是「全部列」（M5 F5.13，见下面「INSERT 的列」） |
 | `别名.` 或 `表名.` 之后 | 这张表的列。别名从当前语句的 FROM / JOIN 子句中解析，例如 `from t_order o` 中 `o` 指 `t_order` |
-| console 的其他位置 | 依次为：当前语句引用到的表的列、其余表名、SQL 关键字 |
+| console 的其他位置 | 依次为：当前语句引用到的表的列、其余表名、SQL 关键字。关键字包括查询、DML、DDL 的开头和子句（`insert into`、`update`、`set`、`delete from`、`values`、`returning`、`create table` 等；M5 F5.12 补齐，原来只有查询用的，用户验收时发现 insert / update / delete 补不出来），清单参照 lazysql 的 `builtinKeywords`，MySQL 另有 `replace into`、`on duplicate key update` |
 | WHERE 输入框 | 当前表的列名（附带类型）和常用关键字（`and` `or` `is null` `in` `like` `between` 等）。在 `列 =`、`列 <>`、`列 in (` 之后，枚举列和布尔列给出可选值 |
 
 - **排序**：先按上表中候选组的顺序，再按 fzf 得分。
@@ -999,6 +1008,7 @@ MySQL 的 schema 就是 database（M5 F5.4 定，同 DataGrip）：树里 MySQL 
 - `↵` 接受选中的一项，但接受之后文字不变时（输入的词已经和选中项一样，如 `null`、`agent`；比较不分大小写，SQL 的关键字和不加引号的标识符本来就不分大小写，输入 `NULL` 不该被改成 `null`），`↵` 照常执行原来的功能：console 里换行，WHERE 和快速 SQL 里执行。这是 VS Code `acceptSuggestionOnEnter: "smart"` 的做法。列表没有弹出时，`↵` 也照常执行。
   - 这样取代了 F1.9 的「弱高亮 / 强高亮」：F1.9 实测的三个问题里，`as x` 被换成 `max` 靠首字符过滤解决，`null`、`agent` 被替换靠「文字不变就执行」解决；而用户看到第一项已经选中、第一次按 `Tab` 却停在原地，会以为焦点跑回了输入框（M1 用户反馈）。
   - 已知的代价：输入的是某个候选的前缀，比如别名 `as ma`，`↵` 会补成 `max`，要执行得先 `esc`。
+- **接受关键字时补一个空格**（M5 F5.12，用户验收时要求：`selec` 补成 `select |`，WHERE 里 `an` 补成 `and |`）：光标落在空格后面；光标后面已经是空白时不再补，光标移到那个空白后面。值和函数不补：`null`、`true`、`false`、`is null`、`is not null` 打完常常就要执行，`count` 这类函数后面跟的是 `(`；表名、列名、枚举值也不补，后面常跟 `.`、`,`、`(`、`)`。所以打完整个 `and` 再按 `↵`，文字从 `and` 变成 `and `，算接受、不执行；原来文字不变就执行，WHERE 里会把半截的 `… and` 发出去报错（用户验收时遇到）。打完 `null` 按 `↵` 照常执行。
 - 快速 SQL 的面板里，`Tab` / `S-Tab` 在列表开着时移动候选，关着时照常切换范围。
 - `esc`：快速 SQL（没有 vim 模式的单行输入框）里，第一次关闭候选列表，第二次才退出输入（WHERE 在 F3.39 起同 console：一次 `esc` 关列表并回 NORMAL），与 COLS 下拉「先清空，再关闭」的规则一致。console 里照 nvim-cmp 的做法，`esc` 关掉列表的同时退出 INSERT：console 里几乎每敲一个标识符都会弹出列表，「打完一个词按 esc」是 vim 用户最常见的动作，分两步会让后面的 `k`、`0` 都被当成文字打进去（M3 F3.10 实测）。
 - 鼠标：悬停即移动选择，点击即接受。
@@ -1008,8 +1018,14 @@ MySQL 的 schema 就是 database（M5 F5.4 定，同 DataGrip）：树里 MySQL 
 - 先跳过字符串、带引号的标识符和注释，再看光标前面：光标前是标识符的一部分，就是列名 / 关键字模式；光标前是 `列 =`、`列 <>`、`列 in (`（含 in 列表里逗号之后），后面可以跟半截值（`'d`、`tr`），就是取值模式，只针对枚举列和布尔列。写之前先看 lazysql 的 `sql_lexer.go` / `sql_context.go`。
 - **弹出时机**：列名 / 关键字模式在输入标识符字符时弹出，前缀为空不弹（刚敲了空格）；取值模式到了取值位置就弹，前缀可以为空，所以输入 `status = ` 就直接列出枚举值。
 - **候选**：列名（附类型）在前；关键字在后：and、or、not、is null、is not null、in、like、ilike、between、true、false、null；取值模式下枚举值带引号（`'done'`）、按 enumsortorder 排，布尔值为 true / false。先按组，组内按 fzf 分数。
-- **接受**：用候选替换光标前的前缀，取值模式下替换半截值（`'d` → `'done'`）；接受后不自动补空格。
+- **接受**：用候选替换光标前的前缀，取值模式下替换半截值（`'d` → `'done'`）；关键字照上面「接受关键字时补一个空格」的规则补空格，列名和值不补（M5 F5.12 起，原来一律不补）。
 - **列表组件** `ui.Complete`：画在输入框下方、光标所在列，最多 8 行；每行是候选（匹配字符高亮）加右侧 dim 注释（列的类型、「关键字」、「值」）。不复用下拉框，因为补全没有过滤框。键位在 `[keys.complete]`：`Tab` / `C-n` / `↓` 下一项，`S-Tab` / `C-p` / `↑` 上一项。`↵` 和 `esc` 不绑，交给输入框按上面的规则处理：绑在 complete 作用域里的键会被这个作用域吃掉，没法在「没选过」时交回输入框去执行。鼠标：悬停即选中，点击即接受。
+
+**INSERT 的列**（M5 F5.13，用户验收时要求：`insert into t_log(` 之后要能看到有哪些列，也能一下全加上）：
+
+- **位置**：`insert into <表> (` 的括号里，光标在 `(` 之后或逗号之后（可以带半截列名）；表名可以带 schema、带引号，PG 和 MySQL 都算。到了这个位置就弹出，前缀可以为空，和 WHERE 的取值模式一样；所以敲 `(`（自动配对成 `(|)`）或 `, ` 就直接列出来。
+- **候选**：这张表里还没写进括号的列，按表里的列顺序，右侧注释照常是类型；不是 `generated always` 的才列（`generated always as identity` 和生成列插不进去，写了会报错）。前缀为空时第一项是「全部列」：显示成剩下的列用 `, ` 连起来，放不下的用省略号，右侧注释「全部 N 列」；有前缀后这一项不出现，其余照 fzf 匹配。
+- **接受**：单个列插入列名，不补空格（后面接 `,` 或 `)`）；「全部列」把剩下的列用 `, ` 连起来一次插进去，光标停在最后一列后面，正好在 `)` 前。列名需要引号时照方言加（PG `"…"`、MySQL `` `…` ``），和其他地方插入标识符的规则相同。
 
 **WHERE 的 `C-r` 历史 / 收藏下拉**：也按当前输入模糊过滤，体验与 shell 里 fzf 的 CTRL-R 相同。
 

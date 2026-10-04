@@ -1,6 +1,6 @@
 # M5 工作现场与 MySQL · 任务清单
 
-- **状态**：**开发完成，等用户验收**（2026-10-03），验收通过后打 tag `m5`。F5.1–F5.11 全部 passed，完整回归在 91fc2c1 上全过（70 个脚本 1874 项，e2e a5539b2；集成测试在 PG 和 MySQL 上都过）。按 F5.5–F5.9 → F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，四个审查节点 2026-10-02 / 10-03 依次通过。
+- **状态**：**验收中，做用户的验收意见 F5.12–F5.17**（2026-10-04 定，用户说这几点做完再接着验收），之后验收通过再打 tag `m5`。F5.1–F5.11 全部 passed，完整回归在 91fc2c1 上全过（70 个脚本 1874 项，e2e a5539b2；集成测试在 PG 和 MySQL 上都过）。按 F5.5–F5.9 → F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，四个审查节点 2026-10-02 / 10-03 依次通过。
 - **目标**：
   - 一个 session 多个连接：目录树的根是 connections.toml 里的全部连接，用到时才连；
   - 支持多个 session、多个 window；
@@ -16,14 +16,15 @@
   - 事务模式按连接：每个 console 标题上 `Tx: 自动 ▾`，手动时有提交 ✓、回滚 ↺（照 DataGrip，用户给的截图）；同一个连接上的 console 和表格保存共用这个事务。
   - 只读按连接：connections.toml 的 `read_only = true`。
 - **完成标准**：
-  - F5.1–F5.11 全部 passed；
+  - F5.1–F5.17 全部 passed；
   - 前面各阶段的集成测试在 MySQL 上也全部通过；
   - 用户验收通过后，打 tag `m5`。
 - **审查节点**：
   0. F5.9 之后：F5.5–F5.9，M4 验收意见，先做；
   1. F5.11 之后：F5.10、F5.11，连接模型。几乎所有用到 `a.sess` 的地方都要改，后面几个 feature 都建在它上面，先单独审；
   2. F5.3 之后：F5.1–F5.3，多 session、多 window、只读与事务模式；
-  3. F5.4 之后：MySQL 单独一批。
+  3. F5.4 之后：MySQL 单独一批；
+  4. F5.17 之后：F5.12–F5.17，用户的 M5 验收意见，一批。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
 
@@ -339,3 +340,77 @@
 - [x] 单测：没有用户改动时，导出的全是注释，原样加载后和默认完全一样；有改动时导出再加载，生效的键位不变（往返）；去掉一行的 `#` 改了键后生效；config.toml 里写 `[keys]` 时报错。
 - [x] e2e：只有 keymaps.toml、里面改了一个键时，界面上的键位提示跟着变。
 
+## F5.12 补全：接受关键字补空格，补齐 DML / DDL 关键字 · 状态：todo
+
+- **依赖**：F1.14、F3.39
+- **涉及**：`internal/sqlkit`（`keywords.go` 的 `Common`、补全上下文）、`internal/app`（console、WHERE、快速 SQL 的接受）
+
+**开发**
+- [ ] 接受关键字时补一个空格，光标落在空格后；值（`null`、`true`、`false`、`is null`、`is not null`）、函数、表名、列名、枚举值不补；光标后已经是空白时不补、光标移过去（§9.7「接受关键字时补一个空格」）。console、WHERE、快速 SQL 三处一样，改在它们共用的那一处。
+- [ ] 关键字候选补齐 DML / DDL 的开头和子句，清单参照 lazysql 的 `builtinKeywords`，MySQL 另有 `replace into`、`on duplicate key update`（§9.7 候选表）。具体清单开工前发给决策者。
+
+**验收**
+- [ ] 单测：`selec` 接受后是 `select `、光标在空格后；`an` 接受后是 `and `；`nul` 接受后是 `null`、不带空格；光标后已有空格时不多补。
+- [ ] e2e：WHERE 里打完整个 `and`、列表里是 `and` 时按 `↵`，文字变成 `… and `、不执行查询、没有报错（用户验收时的复现）；打完 `null` 按 `↵` 照常执行。
+- [ ] e2e：console 里输入 `ins`、`upd`、`del` 都能补出来。
+
+## F5.13 INSERT 的列补全 · 状态：todo
+
+- **依赖**：F5.12
+- **涉及**：`internal/sqlkit`（补全上下文）、`internal/app`（console、快速 SQL）
+
+**开发**
+- [ ] `insert into <表> (` 的括号里，`(` 或逗号之后弹出这张表还没写进去的列，第一项「全部列」，接受后一次插入剩下的列（§9.7「INSERT 的列」）。PG、MySQL 都做。
+
+**验收**
+- [ ] 单测：上下文识别（带 schema、带引号、MySQL 反引号、逗号之后、已经写了几列）；`generated always` 的列不出现。
+- [ ] e2e：console 里输入 `insert into t_log(`，不再敲别的就弹出列表，第一项是全部列，`↵` 后括号里是全部列、光标在 `)` 前；再试一次只选一列、敲 `, ` 后列表里少了这一列。
+
+## F5.14 标点用运算符的颜色 · 状态：todo
+
+- **依赖**：F3.27
+- **涉及**：`internal/ui`（SQL 着色）
+
+**开发**
+- [ ] `;` `,` `(` `)` 用 `sql_operator` 色，`.` 不着色（§7.3）。console、WHERE 输入框、快速 SQL 一样。
+- [ ] 通过后决策者把用户主题 `ristretto.toml` 的 `sql_operator` 改成用户要的 `#ee9089`。
+
+**验收**
+- [ ] golden：`select * from t_log;` 里 `*` 和 `;` 是 `sql_operator` 色；`play.t_log` 的点不着色。
+
+## F5.15 树的 pane 节点加图标 · 状态：todo
+
+- **依赖**：F1.12
+- **涉及**：`internal/ui`（图标表、树）
+
+**开发**
+- [ ] 工作区的 pane 节点画图标 `pane`（nf-fa-columns，U+F0DB，ascii `|`），可以在主题的 `[icon]` 里覆盖（§7.7、§7.8 工作区节点）。
+
+**验收**
+- [ ] golden：工作区里的 `pane-1`、`pane-2` 前面有图标，图标后留一格。
+
+## F5.16 新命令：循环切焦点、关 tab 连带关 pane / window、重开关掉的 tab、新建 session · 状态：todo
+
+- **依赖**：F5.1、F5.2
+- **涉及**：`internal/app`（焦点、tab / pane / window 的关闭、session）、`internal/keymap`（标题）
+
+**开发**
+- [ ] `pane.focus.next`、`tab.quit`、`tab.reopen`、`session.new` 四个命令，规则见 §6.8「M5 验收后加的命令」；都不带默认键，都有标题，命令面板里能搜到。
+
+**验收**
+- [ ] 单测：`pane.focus.next` 的循环顺序（树收起、结果区隐藏时跳过它们）；`tab.quit` 的三种情况（pane 里还有 tab、pane 空了关 pane、window 空了关 window）和最后一个 window 不关；`tab.reopen` 恢复 WHERE / ORDER / LIMIT，原 pane 没了时开在当前 pane，连按往前翻。
+- [ ] e2e：keymaps.toml 里给四个命令各绑一个键，在真实终端里各按一遍，界面变化符合上面的规则。
+
+## F5.17 终端翻译过来的修饰键（先实测） · 状态：todo
+
+- **依赖**：F5.9
+- **涉及**：`internal/keymap`（键的解析与记法）、`e2e/`（tester）
+
+**开发**
+- [ ] 先实测，再决定改不改代码（§6.2「终端翻译过来的键」）：在 tmux 3.7b 里，用 `send-keys` 把 CSI u 编码的键（如 `<C-S-w>`、`<C-S-[>`、`<C-S-t>`）送进跑着 sqlmux 的 pane，试原始字节（`send-keys -H`）和 tmux 自己的 extended-keys 两种送法；看 `[keys.global]` 里绑的命令在表格、树、console 的 NORMAL 和 INSERT、WHERE 的 INSERT 下是否都生效、是否有字符漏进输入框。不通的地方改解析或记法，通的就只加 e2e。
+- [ ] 结果和推荐的送法（tmux 那一侧的命令）发给决策者，决策者写进 §6.2，并据此配用户的 kitty / tmux。
+
+**验收**
+- [ ] e2e：用推荐的送法送一个绑在 `[keys.global]` 的键，在表格和 console 的 INSERT 下都执行了对应命令，输入框里没有多出字符。
+
+**通过后决策者给用户配键**（用户 2026-10-04 要的一组，写进 `~/.config/sqlmux/keymaps.toml`，只写改动；Cmd / Ctrl+Shift 那几个照用户给 nvim 的做法，改 kitty.conf 和 .tmux.conf.local 的分支，先备份）：`s` 表格里选排序列（`grid.order`）；`Cmd+Shift+[` / `]` 同一个 pane 里左右切 tab；`Cmd+Shift+T` 重开关掉的 tab；`Ctrl+Shift+[` / `]` 左右切 window；`tc` 新建 window；`tC` 新建 session；`tt` 上一个 window（`window.last`）；`Cmd+1` 循环切焦点；`Cmd+W` 关 tab、空了连 window 一起关（`tab.quit`）；`SPC q` 收起结果区（`result.toggle`）；`SPC ll` 格式化当前语句（console 里映射成 `gqq`，VISUAL 下 `gq`）。为了不和 `t…`、`SPC l…` 冲突，解绑树和引导页的 `t`、默认的 `SPC l`。
