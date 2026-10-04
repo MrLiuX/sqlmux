@@ -406,7 +406,8 @@ M5 新增的命令都不带默认键，在命令面板里执行：`conn.new`「�
 
 M5 验收后加的命令同样不带默认键（F5.16，用户在 keymaps.toml 里自己绑）：
 
-- `pane.focus.next`「下一个 pane」：焦点按「树（展开着时）→ 各个 pane（按布局从左到右、从上到下）→ 结果区（显示着时）→ 回到树」循环。
+- `pane.focus.next`「下一个 pane」：按屏幕上的位置顺时针切到下一个 pane（用户定，同 tmux 的 `select-pane -t :.+` 加方位）：以整个界面的中心为圆心，各 pane（含树和结果区）按自己中心点的角度顺时针排，从当前焦点所在的那个往下一个，到最后一个再回到第一个。树收起时、结果区隐藏或还没出现时不算在内。
+- `console.format`「格式化整个 console」：对整个 console 做格式化，规则同 `gq`（§9.5），算一次修改、`u` 一次撤销；光标移到它原来所在那条语句的开头。VISUAL 下格式化选区照旧用 `gq`。
 - `tab.quit`「关闭 tab，空了连 pane / window 一起关」：先照 `tab.close` 关掉当前 tab（有未保存的修改照样确认）；pane 里没有 tab 了、window 里还有别的 pane，就关掉这个 pane；window 里只剩这一个空 pane，就关掉这个 window；是 session 里最后一个 window 时不关，留下引导页，和 `tab.close` 一样。
 - `tab.reopen`「重开关掉的 tab」：每个 session 在内存里记最近关掉的 20 个表和 console tab（引导页不记，重启后不留），每次重开最近的一个，再按往前一个。开回原来的 pane，那个 pane 已经没了就开在当前 pane；表恢复关掉时的 WHERE、ORDER、LIMIT，console 打开原来的文件、用原来的连接和 schema。这张表在那个 pane 里已经开着时（F3.37 一张表在一个 pane 里只有一个 tab），只切过去。关掉时放弃了的未保存修改不恢复。
 - `session.new`「新建 session」：和 session 列表里的 `n` 相同，在哪里都能执行。
@@ -1311,6 +1312,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - `q` 关闭当前结果 tab。
   - 快速 SQL 里按 `C-t`，结果会作为一个已固定的 tab 放进结果区。
 - **切换**：`gt` / `gT`，或者直接点击 tab（T-02）。
+- **上限**（M5 F5.18，用户验收时要求）：日志 tab 之外最多 10 个结果 tab（160 列宽下大约放得下这么多）。新出一个 tab 超过上限时，关掉最久没更新过的那个（按最后一次执行或重跑的时间，固定的也算），不问；正在执行的不关。一次执行多个结果集时，这一组本身超过上限的，只留最后 10 个。
 
 **焦点**：执行之后，焦点留在 console，方便接着写；结果区只切换到对应的 tab。按 `C-j` 进入结果区。
 

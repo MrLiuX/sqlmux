@@ -1,6 +1,6 @@
 # M5 工作现场与 MySQL · 任务清单
 
-- **状态**：**验收中，做用户的验收意见 F5.12–F5.17**（2026-10-04 定，用户说这几点做完再接着验收），之后验收通过再打 tag `m5`。F5.1–F5.11 全部 passed，完整回归在 91fc2c1 上全过（70 个脚本 1874 项，e2e a5539b2；集成测试在 PG 和 MySQL 上都过）。按 F5.5–F5.9 → F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，四个审查节点 2026-10-02 / 10-03 依次通过。
+- **状态**：**验收中，做用户的验收意见 F5.12–F5.18**（2026-10-04 定，用户说这几点做完再接着验收），之后验收通过再打 tag `m5`。F5.1–F5.11 全部 passed，完整回归在 91fc2c1 上全过（70 个脚本 1874 项，e2e a5539b2；集成测试在 PG 和 MySQL 上都过）。按 F5.5–F5.9 → F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，四个审查节点 2026-10-02 / 10-03 依次通过。
 - **目标**：
   - 一个 session 多个连接：目录树的根是 connections.toml 里的全部连接，用到时才连；
   - 支持多个 session、多个 window；
@@ -16,7 +16,7 @@
   - 事务模式按连接：每个 console 标题上 `Tx: 自动 ▾`，手动时有提交 ✓、回滚 ↺（照 DataGrip，用户给的截图）；同一个连接上的 console 和表格保存共用这个事务。
   - 只读按连接：connections.toml 的 `read_only = true`。
 - **完成标准**：
-  - F5.1–F5.17 全部 passed；
+  - F5.1–F5.18 全部 passed；
   - 前面各阶段的集成测试在 MySQL 上也全部通过；
   - 用户验收通过后，打 tag `m5`。
 - **审查节点**：
@@ -24,7 +24,7 @@
   1. F5.11 之后：F5.10、F5.11，连接模型。几乎所有用到 `a.sess` 的地方都要改，后面几个 feature 都建在它上面，先单独审；
   2. F5.3 之后：F5.1–F5.3，多 session、多 window、只读与事务模式；
   3. F5.4 之后：MySQL 单独一批；
-  4. F5.17 之后：F5.12–F5.17，用户的 M5 验收意见，一批。
+  4. F5.18 之后：F5.12–F5.18，用户的 M5 验收意见，一批。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
 
@@ -389,17 +389,17 @@
 **验收**
 - [ ] golden：工作区里的 `pane-1`、`pane-2` 前面有图标，图标后留一格。
 
-## F5.16 新命令：循环切焦点、关 tab 连带关 pane / window、重开关掉的 tab、新建 session · 状态：todo
+## F5.16 新命令：顺时针切焦点、关 tab 连带关 pane / window、重开关掉的 tab、新建 session、格式化整个 console · 状态：todo
 
 - **依赖**：F5.1、F5.2
 - **涉及**：`internal/app`（焦点、tab / pane / window 的关闭、session）、`internal/keymap`（标题）
 
 **开发**
-- [ ] `pane.focus.next`、`tab.quit`、`tab.reopen`、`session.new` 四个命令，规则见 §6.8「M5 验收后加的命令」；都不带默认键，都有标题，命令面板里能搜到。
+- [ ] `pane.focus.next`、`console.format`、`tab.quit`、`tab.reopen`、`session.new` 五个命令，规则见 §6.8「M5 验收后加的命令」；都不带默认键，都有标题，命令面板里能搜到。
 
 **验收**
-- [ ] 单测：`pane.focus.next` 的循环顺序（树收起、结果区隐藏时跳过它们）；`tab.quit` 的三种情况（pane 里还有 tab、pane 空了关 pane、window 空了关 window）和最后一个 window 不关；`tab.reopen` 恢复 WHERE / ORDER / LIMIT，原 pane 没了时开在当前 pane，连按往前翻。
-- [ ] e2e：keymaps.toml 里给四个命令各绑一个键，在真实终端里各按一遍，界面变化符合上面的规则。
+- [ ] 单测：`pane.focus.next` 的顺时针顺序（左右分割、上下分割、树和结果区都在、树收起、结果区隐藏）；`console.format` 格式化全部语句、一次 `u` 撤回、光标在原语句开头；`tab.quit` 的三种情况（pane 里还有 tab、pane 空了关 pane、window 空了关 window）和最后一个 window 不关；`tab.reopen` 恢复 WHERE / ORDER / LIMIT，原 pane 没了时开在当前 pane，连按往前翻。
+- [ ] e2e：keymaps.toml 里给五个命令各绑一个键，在真实终端里各按一遍，界面变化符合上面的规则。
 
 ## F5.17 终端翻译过来的修饰键（先实测） · 状态：todo
 
@@ -413,4 +413,15 @@
 **验收**
 - [ ] e2e：用推荐的送法送一个绑在 `[keys.global]` 的键，在表格和 console 的 INSERT 下都执行了对应命令，输入框里没有多出字符。
 
-**通过后决策者给用户配键**（用户 2026-10-04 要的一组，写进 `~/.config/sqlmux/keymaps.toml`，只写改动；Cmd / Ctrl+Shift 那几个照用户给 nvim 的做法，改 kitty.conf 和 .tmux.conf.local 的分支，先备份）：`s` 表格里选排序列（`grid.order`）；`Cmd+Shift+[` / `]` 同一个 pane 里左右切 tab；`Cmd+Shift+T` 重开关掉的 tab；`Ctrl+Shift+[` / `]` 左右切 window；`tc` 新建 window；`tC` 新建 session；`tt` 上一个 window（`window.last`）；`Cmd+1` 循环切焦点；`Cmd+W` 关 tab、空了连 window 一起关（`tab.quit`）；`SPC q` 收起结果区（`result.toggle`）；`SPC ll` 格式化当前语句（console 里映射成 `gqq`，VISUAL 下 `gq`）。为了不和 `t…`、`SPC l…` 冲突，解绑树和引导页的 `t`、默认的 `SPC l`。
+**通过后决策者给用户配键**（用户 2026-10-04 要的一组，写进 `~/.config/sqlmux/keymaps.toml`，只写改动；Cmd / Ctrl+Shift 那几个照用户给 nvim 的做法，改 kitty.conf 和 .tmux.conf.local 的分支，先备份）：`s` 表格里选排序列（`grid.order`）；`Cmd+Shift+[` / `]` 同一个 pane 里左右切 tab；`Cmd+Shift+T` 重开关掉的 tab；`Ctrl+Shift+[` / `]` 左右切 window；`tc` 新建 window；`tC` 新建 session；`tt` 上一个 window（`window.last`）；`Cmd+1` 顺时针切到下一个 pane（`pane.focus.next`）；`Cmd+W` 关 tab、空了连 window 一起关（`tab.quit`）；`SPC q` 收起结果区（`result.toggle`）；`SPC ll` 在 console 的 NORMAL 下格式化整个文件（`console.format`），VISUAL 下格式化选区（`[map.console.visual]` 映射成 `gq`）。为了不和 `t…`、`SPC l…` 冲突，解绑树和引导页的 `t`、默认的 `SPC l`。
+
+## F5.18 结果 tab 的上限 · 状态：todo
+
+- **依赖**：F3.6
+- **涉及**：`internal/app`（结果区）
+
+**开发**
+- [ ] 结果区里日志之外最多 10 个结果 tab，超过时关掉最久没更新的那个（§11「tab 的组织」的「上限」）。
+
+**验收**
+- [ ] 单测：开到第 11 个时关掉最久没更新的；固定的也会被关；正在执行的不关；一次 12 个结果集只留最后 10 个。
