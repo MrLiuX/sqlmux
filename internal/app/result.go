@@ -213,6 +213,7 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 	at, old := a.placeRun(r, []Tab{{Name: r.label(1), Result: &resultTab{run: r}}})
 	r.prev = old
 	selectTab(p, at)
+	a.capResults(p)
 	r.conn.busy++
 	texts := make([]string, len(stmts))
 	// ponytail: select set_config('search_path', …) goes by unseen (its first
@@ -303,6 +304,32 @@ func (a *App) placeRun(r *run, tabs []Tab) (at int, old []Tab) {
 	return at, old
 }
 
+// maxResults is how many result tabs the area keeps besides the log (§11).
+const maxResults = 10
+
+// capResults closes the result tabs of p's area beyond maxResults, the one
+// whose run began longest ago first, a pinned one too, the first of a group
+// that began together (so a run's last sets stay); a run going on keeps its
+// tab, even if that leaves more (F5.18).
+func (a *App) capResults(p *Pane) {
+	for len(p.Tabs)-1 > maxResults {
+		oldest := -1
+		for i := 1; i < len(p.Tabs); i++ {
+			rt := p.Tabs[i].Result
+			if rt == nil || rt.run == nil || !rt.run.done {
+				continue
+			}
+			if oldest < 0 || rt.run.start.Before(p.Tabs[oldest].Result.run.start) {
+				oldest = i
+			}
+		}
+		if oldest < 0 {
+			return
+		}
+		a.closeTab(p, oldest)
+	}
+}
+
 // gotRun shows what run r did (§11): a line of the log a statement, a
 // result tab a result set in place of the placeholder, or what was there
 // before when there is none; a failure, logged, shows the log and turns
@@ -366,6 +393,7 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 	if m.err == nil && len(tabs) > 0 {
 		selectTab(p, at)
 	}
+	a.capResults(p)
 	if ddl {
 		r.conn.dropCols() // as tree.refresh
 		cmds = append(cmds, a.loadCatalog(r.conn))

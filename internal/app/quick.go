@@ -170,6 +170,7 @@ func (a *App) quickToResult() tea.Cmd {
 	a.log(r, r.sql, resultText(q.res), false)
 	p.Tabs = append(p.Tabs, Tab{Name: r.label(1), Result: &resultTab{gridState: gridState{page: q.res}, run: r, part: 1, pinned: true}})
 	selectTab(p, len(p.Tabs)-1)
+	a.capResults(p)
 	return nil
 }
 

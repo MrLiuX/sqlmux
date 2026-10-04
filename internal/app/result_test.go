@@ -3,6 +3,7 @@ package app
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -491,4 +492,42 @@ func TestGoldenResult(t *testing.T) {
 	a.consoleDid(c, c.ed.Feed("j"))
 	press(t, a, "<CR>")
 	golden.RequireEqual(t, strings.Join(titles, "\n")+"\n\n"+ansi.Cut(running, r.Min.X, r.Max.X)+"\n\n"+a.render().String())
+}
+
+// The area keeps ten result tabs besides the log: past that the run that
+// began longest ago goes, pinned too, a run going on never; twelve sets of
+// one run leave the last ten (F5.18).
+func TestResultCap(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	p := a.resultPane(a.win())
+	base := time.Now()
+	add := func(name string, age int, pinned, done bool) {
+		r := &run{name: name, seq: age, start: base.Add(time.Duration(-age) * time.Minute), done: done}
+		p.Tabs = append(p.Tabs, Tab{Name: name, Result: &resultTab{run: r, pinned: pinned}})
+	}
+	for i := 1; i <= 10; i++ {
+		add(fmt.Sprint("t", i), i, i == 10, true) // t10 is the oldest, pinned
+	}
+	add("busy", 99, false, false) // the oldest of all, still running
+	a.capResults(p)
+	if got := tabNames(p); got != "日志 t1 t2 t3 t4 t5 t6 t7 t8 t9 busy" {
+		t.Errorf("11th: %s", got)
+	}
+	add("new", 0, false, true)
+	a.capResults(p)
+	if got := tabNames(p); got != "日志 t1 t2 t3 t4 t5 t6 t7 t8 busy new" {
+		t.Errorf("another: %s", got)
+	}
+
+	sql := ""
+	res := map[string]db.Result{}
+	for i := 1; i <= 12; i++ {
+		sql += fmt.Sprintf("select %d;\n", i)
+		res[fmt.Sprintf("select %d", i)] = rows(1)
+	}
+	b, _ := inRun(t, &execDB{res: res}, sql)
+	press(t, b, "ggVG<CR>")
+	if got := tabNames(b.win().Result); got != "日志 console_1 #1·3 console_1 #1·4 console_1 #1·5 console_1 #1·6 console_1 #1·7 console_1 #1·8 console_1 #1·9 console_1 #1·10 console_1 #1·11 console_1 #1·12" {
+		t.Errorf("twelve sets: %s", got)
+	}
 }
