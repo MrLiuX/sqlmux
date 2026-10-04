@@ -364,6 +364,9 @@
 
 **开发**
 - [ ] `insert into <表> (` 的括号里，`(` 或逗号之后弹出这张表还没写进去的列，第一项「全部列」，接受后一次插入剩下的列（§9.7「INSERT 的列」）。PG、MySQL 都做。
+  - 细节（worker 提议，已定）：上下文 `CompInsertCols`，只认 `insert into [schema.]表` 后面的第一个括号（MySQL 还有 `replace into`），括号里光标所在词以外的名字（前后都算）都算已经写了；`values (`、`insert … select (`、catalog 里没有的表都不弹。列还没缓存时照现有的做法去取，取到再弹。
+  - catalog 加 `Column.Generated`：PG 是 `attgenerated <> ''` 或 `attidentity = 'a'`，MySQL 是 `extra` 含 `VIRTUAL GENERATED` / `STORED GENERATED`（`DEFAULT_GENERATED` 只是表达式默认值，不算）。粘贴行（yank.go）的判断这次不动。
+  - 「全部列」：显示剩下的列用 `, ` 连起来，超过 40 个字符截断加 `…`，注释「全部 N 列」，插入的是完整的文字；只在前缀为空、剩下两列及以上时出现，排第一、默认选中；只剩一列时只列这一列。列名原样插入、不加引号，和其他补全一样（沿用现有的 ponytail）。
 
 **验收**
 - [ ] 单测：上下文识别（带 schema、带引号、MySQL 反引号、逗号之后、已经写了几列）；`generated always` 的列不出现。
