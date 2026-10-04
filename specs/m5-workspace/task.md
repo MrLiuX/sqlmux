@@ -348,6 +348,9 @@
 **开发**
 - [ ] 接受关键字时补一个空格，光标落在空格后；值（`null`、`true`、`false`、`is null`、`is not null`）、函数、表名、列名、枚举值不补；光标后已经是空白时不补、光标移过去（§9.7「接受关键字时补一个空格」）。console、WHERE、快速 SQL 三处一样，改在它们共用的那一处。
 - [ ] 关键字候选补齐 DML / DDL 的开头和子句，清单参照 lazysql 的 `builtinKeywords`，MySQL 另有 `replace into`、`on duplicate key update`（§9.7 候选表）。具体清单开工前发给决策者。
+  - 细节（worker 提议，已定）：两种方言共用的在原来 41 个之外加 join 类（inner / right / full / cross / natural join）、intersect、except、recursive、ifnull、convert、insert into、update、set、delete from、DDL（create table / index / unique index / view，alter table，drop table / index / view，add column，drop column，rename to，primary key，foreign key，references，unique，check，constraint，default，truncate，if exists，if not exists，cascade）、begin、commit、rollback、call；PG 另有 returning、on conflict、do nothing、do update set，MySQL 另有 replace into、on duplicate key update、use、describe。不收 lazysql 的 fetch / next / rows / only / top，也不收 vacuum、copy 这类 PG 维护命令。WHERE 的关键字不变（MySQL 照旧没有 ilike）。
+  - 不补空格的：null、true、false、is null、is not null，以及函数 count、sum、avg、min、max、coalesce、ifnull、cast、convert；其余关键字都补。补空格的逻辑放在三处共用的接受函数里，console 的关键字表按方言给。
+  - 光标后已经是空白时，文字不变、只把光标移过去：这也算接受，`↵` 不执行（WHERE 里在中间补 `and` 时不该把查询发出去）。「文字和光标都没变」才照常执行。
 
 **验收**
 - [ ] 单测：`selec` 接受后是 `select `、光标在空格后；`an` 接受后是 `and `；`nul` 接受后是 `null`、不带空格；光标后已有空格时不多补。
