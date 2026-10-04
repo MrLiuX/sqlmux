@@ -33,7 +33,7 @@ type Icons struct {
 	Conn          Icon
 	Key           Icon // primary key columns
 	Command       Icon // palette rows (K-03)
-	Window        Icon
+	Window, Pane  Icon // the tree's workspace (§7.8)
 	// The query bar's buttons (Q-05) and ORDER's direction; nil Fg: info
 	// and warn (§7.7)
 	Save, Refresh, Transpose Icon
@@ -64,6 +64,7 @@ var NerdIcons = &Icons{
 	Key:         Icon{Text: "\uf084"}, // nf-fa-key
 	Command:     Icon{Text: "\uf0e7"}, // nf-fa-bolt
 	Window:      Icon{Text: "\uf2d2"}, // nf-fa-window_restore
+	Pane:        Icon{Text: "\uf0db"}, // nf-fa-columns
 	Save:        Icon{Text: "\uf0c7"}, // nf-fa-save
 	Refresh:     Icon{Text: "\uf021"}, // nf-fa-refresh
 	Transpose:   Icon{Text: "\uf0ec"}, // nf-fa-exchange
@@ -96,6 +97,7 @@ var ASCIIIcons = &Icons{
 	Key:         Icon{Text: "*"},
 	Command:     Icon{Text: ":"},
 	Window:      Icon{Text: "[]"},
+	Pane:        Icon{Text: "|"},
 	Save:        Icon{Text: "[S]"},
 	Refresh:     Icon{Text: "[R]"},
 	Transpose:   Icon{Text: "[T]"},
@@ -157,6 +159,6 @@ func (ic *Icons) byName() map[string]*Icon {
 		"row_add": &ic.RowAdd, "row_delete": &ic.RowDelete, "auto_refresh": &ic.AutoRefresh, "stop": &ic.Stop,
 		"sort_asc": &ic.SortAsc, "sort_desc": &ic.SortDesc, "view": &ic.View, "column": &ic.Column, "lock": &ic.Lock,
 		"result": &ic.Result, "pin": &ic.Pin, "export": &ic.Export, "close": &ic.Close,
-		"log": &ic.Log, "star": &ic.Star, "history": &ic.History,
+		"pane": &ic.Pane, "log": &ic.Log, "star": &ic.Star, "history": &ic.History,
 	}
 }

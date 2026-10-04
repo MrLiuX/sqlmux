@@ -355,9 +355,9 @@ func (a *App) treeNodes() (ns []node, matches int) {
 		if !add(node{id: wid, kind: nodeWindow, win: wi, TreeNode: ui.TreeNode{Depth: 1, Branch: len(leaves) > 0, Open: a.sess.opened(wid, true), Icon: ic.Window, IconFg: th.Info, Text: w.Name}}) {
 			continue
 		}
-		for n, p := range leaves { // pane-<n> by ⟨n⟩: the sidebar is 0; no icon, the tabs have theirs (§7.8)
+		for n, p := range leaves { // pane-<n> by ⟨n⟩: the sidebar is 0 (§7.8)
 			pid := paneNode(w, p)
-			if !add(node{id: pid, kind: nodePane, win: wi, pane: p, TreeNode: ui.TreeNode{Depth: 2, Branch: len(p.Tabs) > 0, Open: a.sess.opened(pid, true), Icon: ui.Icon{Text: " "}, Text: fmt.Sprintf("pane-%d", n+1)}}) {
+			if !add(node{id: pid, kind: nodePane, win: wi, pane: p, TreeNode: ui.TreeNode{Depth: 2, Branch: len(p.Tabs) > 0, Open: a.sess.opened(pid, true), Icon: ic.Pane, IconFg: th.Info, Text: fmt.Sprintf("pane-%d", n+1)}}) {
 				continue
 			}
 			for i, tb := range p.Tabs {
