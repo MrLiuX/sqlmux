@@ -96,7 +96,8 @@ sqlmux/
 ├─ internal/editor/         vim 编辑器的纯逻辑：缓冲区、移动/文本对象/操作符、撤销、搜索与 : 命令行；不 import ui 和 bubbletea，console 的绘制在 ui/console.go；testdata/ 存放 nvim 差分用例
 ├─ internal/sqlkit/         词法扫描、分句、读写判定、自动 LIMIT、WHERE 拼接校验、补全上下文判断、格式化（内嵌 sql-formatter）
 ├─ internal/db/             Conn/Engine 接口、Worker、postgres/、mysql/、catalog 查询
-├─ internal/config/         config / connections / state 的读写与 XDG 路径
+├─ internal/config/         config / connections / state / 布局文件的读写与 XDG 路径
+├─ internal/i18n/           界面文案的翻译：T(中文, 参数…)，en 表（M6 F6.4）
 ├─ docker-compose.yml       集成测试用的 postgres 与 mysql
 └─ README.md、LICENSE、assets/  GitHub 上的说明、许可证与截图
 ```
@@ -429,6 +430,33 @@ console 里的 `x` 是 vim 的删除字符，所以 console 的 tab 用 `:q` 关
 | 补全列表（`complete`） | `Tab` / `C-n` / `↓` · `S-Tab` / `C-p` / `↑` | 下一项 · 上一项，到头绕回；弹出时第一项已选中。`↵`（接受，文字不变时照常执行）和 `esc`（第一次关列表）由输入框处理，不在这个作用域里 | §9.7 |
 | 确认框（`confirm`） | `y` / `↵` · `n` / `esc` | 确认 · 取消；`C-c` 等同 `esc`；两个按钮都能点击 | §10.5 |
 | 新建连接表单（`form`） | `Tab` / `S-Tab` · `↵` / `C-s` · `esc` | 下一个 · 上一个字段（到头绕回）· 保存 · 取消；`C-c` 等同 `esc`。开关字段（engine、read_only）上的 `space` 由表单自己处理、不进作用域，文字字段里照常输入空格 | 新增（M5 F5.1） |
+
+### 6.9 非 vim 模式（M6 F6.6）
+
+用户只用 vim 模式，但要照顾不用 vim 的人（2026-09-30）。`config.toml` 里 `vim = true | false`，默认 `true`。关掉之后改的只有两处，其余界面、命令、鼠标都不变：
+
+**1. console 和 WHERE 是没有模式的普通编辑器**（F6.6a，`internal/editor` 里的另一层，和 vim 层共用缓冲区、撤销栈和绘制）：
+
+- 一直可以输入；方向键移动；`S-←/→/↑/↓` 和鼠标拖动选择，选区用 `visual` 底；再输入就替换选区。`C-a` / `C-e` 行首 / 行尾，`C-w` 删到词首（同 §7.9），`Backspace` / `Delete` 删一个字素或删掉选区，`C-z` 撤销、`C-y` 重做，`Tab` 插入 `tab_width` 个空格。`C-c` 取消选区、关补全列表，没有可取消的时照旧算退出的第一次。Home / End、Alt+方向键这类终端分不清的键不作默认（§6.2），用 `C-a` / `C-e`。
+- console 里 `↵` 换行，执行用 `C-e`（`console.run`，F6.6b 的键位层改绑；标题上的 `▶ run` 按钮照旧可以点）；有选区时执行选区，否则执行光标所在语句。`:` 只是字符：关 tab 用 tab 栏的 `×` 或面板的「关闭 tab」；格式化用面板的「格式化整个 console」，有选区时格式化选区。
+- WHERE 里 `↵` 执行，`C-r` 历史 / 收藏下拉照旧；`esc` 回表格。
+- 补全：弹出、`Tab` / `S-Tab` 移动、`↵` 接受都和 vim 模式相同；`esc` 只关列表，没有模式可退。
+- 复制、粘贴不另配键：终端自己的选择和 `Cmd-V` 就是非 vim 用户的习惯；寄存器只在 vim 模式下有。
+- 编辑器里没有 NORMAL 上下文：leader、`gt` / `gT`、`?`、`[map.*]` 在编辑器里都不生效（`SPC` 是要打的字），只有 Ctrl 组合（`C-h/j/k/l` 切焦点、`C-p` 面板、`C-s`、`C-c`）能到；表格、树、引导页上这些照常。状态栏不显示模式块。
+- 编辑器行为不再对照 nvim，nvim 差分测试不适用，用普通单测。
+
+**2. 一套叠加的非 vim 默认键位**（F6.6b，`default-novim.toml`，`vim = false` 时叠在 `default.toml` 上，同一套解析、冲突检查和导出；`sqlmux keys` 按配置导出叠加后的结果）：
+
+| 作用域 | 加的键 | 操作 |
+|---|---|---|
+| grid / tree | `←` `→` `↑` `↓` | 移动（hjkl 照旧也在：表格和树里字母不会被当成输入，留着不碍事） |
+| grid | `PgUp` `PgDn` | 上一页 / 下一页（`[` `]` 照旧；Terminal.app 吃掉这两个键的人用 `[` `]`） |
+| grid | `Delete` | 标记 / 取消删除这一行（`dd` 照旧） |
+| console | `<CR>` 解绑、`<C-e>` | 换行交给编辑器；`C-e` 执行 |
+
+这一层允许用 PgUp / PgDn / Delete：它们正是非 vim 用户要的键，§6.2 的「默认键位不用」只管 `default.toml`；检查「只用处处可用的键」的单测对这一层放开这三个键，其余限制照旧。
+
+两个键的对应 `yy` / `dd` / `gg` / `go` 这些照旧可用：它们在表格和树里不会打进输入框，which-key 也会提示。所有有标题的 Action 本来就都在命令面板里，不用再为「只有 vim 键能触发的操作」另加命令；编辑器里的 `gq`、`"+y` 对应 `console.format` 和终端自己的复制。
 
 ## 7. 渲染与鼠标
 
@@ -1431,7 +1459,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 | `~/.config/sqlmux/themes/*.toml` | 只有用户写 | 自定义主题 |
 | `~/.local/state/sqlmux/state.json` | 由应用写入 | 最近使用、每张表的 WHERE 历史与收藏、快速 SQL 历史、console 文件最后用的连接和 schema（M5） |
 | `~/.local/share/sqlmux/consoles/` | 由应用写入 | console 的 SQL 文件 `console_<n>.sql`（M5 起不再按连接分目录） |
-| `~/.config/sqlmux/layouts/*.toml` | 用户手写，或「保存布局为…」写入 | 命名布局（M6 F6.5） |
+| `~/.config/sqlmux/layouts/*.toml` | 用户手写，或「保存布局为…」写入 | 命名布局（M6 F6.5，格式见下面「布局文件」） |
 | `~/.local/state/sqlmux/last.toml` | 由应用写入 | 退出时的工作现场，`sqlmux` 不带参数时恢复（M6 F6.5） |
 
 - 连接定义单独放一个文件，是因为应用改写 TOML 时会丢掉注释，所以不能去改用户手写的 config.toml。
@@ -1444,6 +1472,12 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - 命令面板按当前语言的标题搜索，action id 照旧可以搜。
   - 键位文字不属于文案，照旧从 keymap 读（§6.7）。
   - 测试：单测扫一遍所有包，找出没走翻译的中文字面量；`en` 表里缺的条目也由单测报出来。golden 和 e2e 照旧按 `zh` 断言，`en` 另加几张 golden。
+- **布局文件**（M6 F6.5，用户 2026-09-30 提出，细节 2026-10-05 按 worker 的提议定）：
+  - **格式**：TOML，`version = 1`；每个 `[[session]]` 记 `name`、`connection`（启动连接）、`active`；每个 `[[session.window]]` 记 `name`、`layout`（分割树，嵌套的内联表：`split = "h" | "v"`、`ratio`、`a`、`b`，叶子是 `pane = <id>`）、`focus`、`zoom`、`sidebar_open`、`sidebar_width`、`result_height`；每个 `[[session.window.pane]]` 记 `id` 和它的 tab：表 tab 是 `kind = "table"`、`connection`、`schema`、`table`、`where`、`order`、`desc`、`limit`、`page`、`cols`（隐藏的列）、`transpose`；console tab 是 `kind = "console"`、`n`、`connection`、`schema`；再记当前 tab。不存：结果集、正在跑的查询、未保存的单元格修改（退出前本来就要确认）、引导页。
+  - **恢复**：第一个 session 的启动连接照现在连（连不上就是启动错误）；其余被 tab 用到的连接在后台连（Cmd），连上后它的表 tab 才取数；连不上的连接，它的 tab 整个丢掉，每个连接一条 toast。catalog 里没有的表、没了的 console 文件、不存在的连接：跳过这一项、toast 一条，其余照建。布局里的 console 编号已经被另一个正在跑的 session 用着时，换下一个空号，内容仍是它文件里的。
+  - **保存**：`last.toml` 只在正常退出时写（`:qa`、两次 `C-c`、关掉最后一个 session），不是每次改动都写；进程被杀掉就丢掉这次的布局改动（`ponytail:` 标出）。不管这次是怎么启动的，退出都覆盖 `last`，同 DataGrip。
+  - **命令**：`layout.save`「保存布局为…」在面板的输入行里要名字（同快速 SQL 的输入），写 `layouts/<名字>.toml`，同名覆盖；名字含 `/` 或以 `.` 开头拒绝。`layout.open`「打开布局」列出 `layouts/*.toml`，选中后替换正在跑的全部 session，有未保存的东西先按 §10.5 确认；`--layout` 和它走同一段代码。
+  - **启动**：`sqlmux` 不带参数时有 `last.toml` 就恢复，没有照默认布局；`sqlmux <连接名>` 用这个连接开默认布局、不恢复 `last`；`sqlmux --layout <名字或路径>` 打开这个布局；连接名和 `--layout` 同时给时报错退出「连接名和 --layout 只能给一个」。`last.toml` 读不了：toast、默认布局，坏文件改名为 `last.toml.broken`。
 - **state.json**（M1 F1.5 起）：路径 `$XDG_STATE_HOME/sqlmux/state.json`，读写都在 `config` 包里。
   - 内容：`recent` 是面板的最近使用，记成 `{"kind": "table", "id": "play/public.t_order"}`，kind 为 window / pane / table / command，M5 起表的 id 带连接名，旧的不带连接名的条目读到时丢掉；`consoles` 记每个 console 文件最后用的连接和 schema，如 `{"console_1": {"conn": "play", "schema": "public"}}`，换连接或 schema 时写入（M5 F5.11）；`tables` 的键是 `"<连接名>/<schema>.<表>"`（不同连接可能有同名表），每张表下存 history 和 favorites。
   - 启动时读一次；每次改动（执行 WHERE、收藏、面板运行）都写一次。写入：在 Update 里序列化，在 Cmd 里写临时文件再 rename，权限 0600；用互斥锁和版本号，丢掉比已写入版本更旧的快照，避免两个 Cmd 并发时旧内容覆盖新内容。
@@ -1453,6 +1487,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 # config.toml
 theme        = "tokyonight-storm"
 icons        = "nerd"            # nerd | ascii
+vim          = true              # false 时 console / WHERE 是普通编辑器，表格、树多一层方向键（§6.9，M6）
 language     = "zh"              # zh | en，界面文案的语言（M6）
 timeoutlen   = 1000
 result_height = 0.4              # 底部结果区默认所占的高度比例
