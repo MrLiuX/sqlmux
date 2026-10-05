@@ -1426,9 +1426,9 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 ## 13. 安全
 
 - **危险语句先确认**（M6 F6.7，用户 2026-10-05 要求：没带条件的 delete / update、删表这类操作一定要有闸门）。参照 DataGrip 执行前的「DELETE 语句没有 WHERE」提示和 MySQL 的 `sql_safe_updates`。
-  - **哪些算危险**（只做词法判断，`sqlkit`，和 §9.3 的读写判定建在同一个扫描器上）：顶层没有 `WHERE` 的 `DELETE` 和 `UPDATE`（子查询、CTE 里的 `where` 不算，`delete from t using …` 照样看顶层有没有 where；MySQL 的 `delete … limit` 没有 where 也算）；`TRUNCATE`；`DROP`（表、库、schema、索引、视图都算，`drop … if exists` 也算）。`ALTER TABLE … DROP COLUMN` 也算。只读连接上这些本来就执行不了，不会走到确认。
+  - **哪些算危险**（只做词法判断，`sqlkit`，和 §9.3 的读写判定建在同一个扫描器上）：顶层没有 `WHERE` 的 `DELETE` 和 `UPDATE`（子查询、CTE 里的 `where` 不算，`delete from t using …` 照样看顶层有没有 where；MySQL 的 `delete … limit` 没有 where 也算）；`TRUNCATE`；`DROP`（表、库、schema、索引、视图都算，`drop … if exists`、MySQL 的 `drop temporary table` 也算，不细分）。`ALTER TABLE … DROP COLUMN` 也算（PG 可以省略 COLUMN，所以 `drop <列名>` 也算；`drop constraint / index / key / primary / foreign / check / default / not null / expression / identity / partition` 不算）。`EXPLAIN ANALYZE` 后面跟着危险语句的也算，它真的会执行。主语句词的取法：开头是 `with` 时取第一个括号深度 0 的语句词（CTE 体都在括号里），同 §9.3。只读连接上这些本来就执行不了，不会走到确认。
   - **什么时候问**：console 执行（`↵` / `C-e` / `▶ run`，含选区执行）、结果区的重跑 `R`，在真正发出前先扫这次要执行的全部语句；有危险语句就弹确认框（§10.5 的样式）：标题「这次执行有 N 条危险语句」，每条列第一行（截短），按钮「执行」/「取消」，`y` / `↵` 执行、`n` / `esc` 取消整次（不是跳过那几条）。一次执行只问一次。手动事务模式下也问：MySQL 的 DDL 会隐式提交，回滚救不回来。快速 SQL 在只读事务里跑，写语句本来就被拦下（§12），不用问。
-  - **表格的保存**：保存里含删除行时也先确认：「将删除 N 行（另有 M 处修改），确定保存？」，`y` / `↵` 保存、`n` / `esc` 回到表格、标记都还在。只改格子、新增行的保存不问：每格都带旧值检查，影响的只是看得见的那几格。
+  - **表格的保存**：保存里含删除行时也先确认：「将删除 N 行（另有 M 处修改），确定保存？」（M 为 0 时不带括号），`y` / `↵` 保存、`n` / `esc` 回到表格、标记都还在。只改格子、新增行的保存不问：每格都带旧值检查，影响的只是看得见的那几格。
   - **配置**：`config.toml` 的 `confirm_dangerous = true`，默认开；关掉后上面两种确认都不弹。不按语句类型细分开关。
   - 这是防误操作的闸门，不是权限边界：拼接在存储过程、函数里的写操作认不出来，真正要限制权限用只读账号或只读连接。
 - **只读连接（S-04；M5 起按连接，connections.toml 的 `read_only = true`）**：
