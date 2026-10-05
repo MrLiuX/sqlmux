@@ -10,6 +10,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"sqlmux/internal/editor"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -117,6 +118,13 @@ func (a *App) render() *ui.Frame {
 			}
 		}
 	}
+	if in := a.layoutName; in != nil { // over the status bar's left: "布局名: " and the name typed (F6.5)
+		label := i18n.T("布局名：")
+		f.Fill(uv.Rect(0, y, a.w, 1), uv.Style{Fg: th.Fg, Bg: th.Border})
+		f.Text(1, y, a.w, label, uv.Style{Fg: th.Warn, Bg: th.Border})
+		c := in.Draw(f, uv.Rect(1+ui.Width(label), y, max(a.w-ui.Width(label)-2, 1), 1), uv.Style{Fg: th.Fg, Bg: th.Border})
+		f.Cursor = &c
+	}
 	if a.keyHelp != nil {
 		a.keyHelpView().Draw(f, a.overlayArea())
 	}
@@ -180,11 +188,11 @@ func (a *App) render() *ui.Frame {
 		}
 	}
 	if c := a.confirm; c != nil {
-		ui.Confirm{
-			Text:   c.text,
-			YesKey: a.keys.Hint("confirm.yes", "confirm"), Yes: c.yes,
-			NoKey: a.keys.Hint("confirm.no", "confirm"), No: "取消",
-		}.Draw(f, a.window())
+		cf := ui.Confirm{Text: c.text, YesKey: a.keys.Hint("confirm.yes", "confirm"), Yes: c.yes}
+		if c.then != nil { // a notice has no "no" (§6.7)
+			cf.NoKey, cf.No = a.keys.Hint("confirm.no", "confirm"), i18n.T("取消")
+		}
+		cf.Draw(f, a.window())
 	}
 	if a.toast != "" && y > 0 { // over the palette's mask too: dimmed, it can hardly be read (§7.5)
 		t := " " + a.toast + " "
@@ -217,7 +225,7 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 		}
 		tabHints = bound(
 			ui.Hint{Key: a.hints("grid", "", "grid.left", "grid.down", "grid.up", "grid.right")},
-			ui.Hint{Key: a.keys.Hint("grid.transpose", "grid"), Label: "转置", Action: "grid.transpose"},
+			ui.Hint{Key: a.keys.Hint("grid.transpose", "grid"), Label: i18n.T("转置"), Action: "grid.transpose"},
 			ui.Hint{Key: a.hints("normal", "/", "tab.next", "tab.prev")},
 		)
 	case consoleOf(p) != nil:
@@ -225,9 +233,9 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 		// (§7.8): ▶ run, the connection and the schema as one, the
 		// transaction's as one, ↵.
 		c := consoleOf(p)
-		mode := "Tx: 自动 ▾"
+		mode := i18n.T("Tx: 自动 ▾")
 		if c.conn.Manual {
-			mode = "Tx: 手动 ▾"
+			mode = i18n.T("Tx: 手动 ▾")
 		}
 		b.Hints = append(b.Hints, ui.Hint{Label: mode, Action: "console.tx", Color: th.Fg, Prio: 2, Group: 2})
 		if c.conn.Manual { // dim, and no button, out of a transaction
@@ -252,7 +260,7 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 		tabHints = bound(
 			ui.Hint{Key: a.hints("grid", "", "grid.left", "grid.down", "grid.up", "grid.right")},
 			ui.Hint{Key: a.keys.Hint("grid.edit", "grid"), Label: "edit", Action: "grid.edit"},
-			ui.Hint{Key: a.keys.Hint("grid.transpose", "grid"), Label: "转置", Action: "grid.transpose"},
+			ui.Hint{Key: a.keys.Hint("grid.transpose", "grid"), Label: i18n.T("转置"), Action: "grid.transpose"},
 			ui.Hint{Key: a.hints("normal", "/", "tab.next", "tab.prev")},
 		)
 	}
@@ -272,8 +280,8 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 	tabs.Draw(f, uv.Rect(in.Min.X, in.Max.Y-1, in.Dx(), 1))
 	if p.tab().landing() { // what it can become (§5「引导页」)
 		ui.Landing{Pane: p.ID, Buttons: []ui.LandingButton{
-			{Icon: a.icons.Table, Label: "打开表", Key: a.keys.Hint("tab.table", "landing"), Action: "tab.table"},
-			{Icon: a.icons.Console, Label: "新建 console", Key: a.keys.Hint("console.new", "landing"), Action: "console.new"},
+			{Icon: a.icons.Table, Label: i18n.T("打开表"), Key: a.keys.Hint("tab.table", "landing"), Action: "tab.table"},
+			{Icon: a.icons.Console, Label: i18n.T("新建 console"), Key: a.keys.Hint("console.new", "landing"), Action: "console.new"},
 		}}.Draw(f, bodyRect(r))
 		return
 	}
@@ -425,9 +433,9 @@ func (a *App) drawResult(f *ui.Frame, p *Pane, rt *resultTab, r uv.Rectangle) {
 	case rt.run == nil:
 		ui.Log{Lines: a.win().log, Top: rt.top}.Draw(f, r)
 	case !rt.run.done:
-		s := fmt.Sprintf("执行中 · %ds", int(time.Since(rt.run.start).Seconds()))
+		s := fmt.Sprintf(i18n.T("执行中 · %ds"), int(time.Since(rt.run.start).Seconds()))
 		if k := a.keys.Hint("cancel", "global"); k != "" {
-			s += " · " + k + " 取消"
+			s += " · " + i18n.T("%s 取消", k)
 		}
 		f.Text(r.Min.X+1, r.Min.Y, r.Max.X-1, s, uv.Style{Fg: th.Dim, Bg: th.PaneBg})
 	default:
@@ -508,16 +516,19 @@ func (a *App) statusLine() ui.StatusLine {
 	s.Right = append(s.Right, ui.Segment{Runs: iconRuns(ic.Conn, conn, " "+c.Spec.Name+" · "+c.Addr+" "), Drop: dropConn})
 	switch c.tx { // Main's transaction, one a console began in the auto mode too (§7.8)
 	case 'T':
-		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: " 事务中 ", Style: bar(th.Warn)}}})
+		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: i18n.T(" 事务中 "), Style: bar(th.Warn)}}})
 	case 'E':
-		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: " 事务出错 ", Style: bar(th.Error)}}})
+		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: i18n.T(" 事务出错 "), Style: bar(th.Error)}}})
 	}
 	if c.busy > 0 { // a click cancels it, as C-c does (§8.3)
 		busy := " busy "
 		if k := a.keys.Hint("cancel", "global"); k != "" {
-			busy += "· " + k + " 取消 "
+			busy += "· " + i18n.T("%s 取消 ", k)
 		}
 		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: busy, Style: bar(th.Warn)}}, Action: "cancel"})
+	}
+	if a.plain { // no modes to name (§6.9)
+		return s
 	}
 	name := strings.ToUpper(mode.String())
 	if ed := a.vim(); ed != nil { // V-LINE, V-BLOCK and REPLACE in the colors of VISUAL and INSERT
@@ -536,11 +547,11 @@ func (a *App) selectionInfo(ed *editor.Editor) string {
 	case lines == 0:
 		return ""
 	case ed.Mode() == editor.VisualBlock:
-		s = fmt.Sprintf("%d 行 × %d 列", lines, n)
+		s = fmt.Sprintf(i18n.T("%d 行 × %d 列"), lines, n)
 	case n > 0:
-		s = fmt.Sprintf("%d 字符", n)
+		s = fmt.Sprintf(i18n.T("%d 字符"), n)
 	default:
-		s = fmt.Sprintf("%d 行", lines)
+		s = fmt.Sprintf(i18n.T("%d 行"), lines)
 	}
 	if k := a.keys.Hint("console.run", "console"); k != "" {
 		s += " · " + k + " run"

@@ -29,6 +29,9 @@ type Context struct {
 	Focus   []string // focused widget scopes, most specific first: {"result", "grid"}
 	Pane    string   // pane type for [map.<pane>.<mode>]: console | grid | tree
 	Mode    Mode
+	// Plain is the modeless editor (§6.9): typed keys are text, so of the
+	// pane's and NORMAL's bindings only the Ctrl ones apply, as C-h and C-e.
+	Plain bool
 }
 
 // scopes lists the tables for c, highest priority first: overlay → user maps
@@ -51,11 +54,11 @@ func (m *Map) scopes(c Context, maps bool) []string {
 	for _, f := range c.Focus {
 		// grid/tree/console/result keys are NORMAL/VISUAL keys: in INSERT only
 		// the input being typed into has bindings (↵ in console inserts a newline).
-		if !c.Mode.typing() || f == "cell" || f == "input" {
+		if !c.Mode.typing() || f == "cell" || f == "input" || c.Plain {
 			ts = append(ts, "keys."+f)
 		}
 	}
-	if c.Mode == Normal {
+	if c.Mode == Normal || c.Plain {
 		ts = append(ts, "keys.normal")
 	}
 	ts = append(ts, "keys.global")
@@ -91,6 +94,9 @@ func (m *Map) trie(c Context, maps bool) *node {
 	root := &node{}
 	for _, t := range m.scopes(c, maps) {
 		bs := m.tables[t]
+		if c.Plain && t != "keys."+c.Overlay && t != "keys."+c.Under && t != "keys.global" && t != "leader" && !strings.HasPrefix(t, "keys.input") {
+			bs = ctrlOnly(m, bs) // not the keys that are text
+		}
 		if t == "leader" {
 			bs, t = nil, "keys.normal"
 			for _, b := range m.tables[t] {
@@ -256,4 +262,15 @@ func digits(s string) []Key {
 		ks = append(ks, Key(string(r)))
 	}
 	return ks
+}
+
+// ctrlOnly is the bindings of bs that start with a Ctrl key.
+func ctrlOnly(m *Map, bs []Binding) []Binding {
+	var out []Binding
+	for _, b := range bs {
+		if ks := m.expand(b.Keys); len(ks) > 0 && strings.HasPrefix(string(ks[0]), "<C-") {
+			out = append(out, b)
+		}
+	}
+	return out
 }

@@ -10,6 +10,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"sqlmux/internal/i18n"
 )
 
 // Key is one keystroke in canonical vim notation: a single character ("a",
@@ -109,7 +111,7 @@ func parseBracket(body string) (Key, error) {
 		case 'D':
 			super = true
 		default:
-			return "", fmt.Errorf("<%s>：不认识的修饰键 %q", body, body[0])
+			return "", fmt.Errorf(i18n.T("<%s>：不认识的修饰键 %q"), body, body[0])
 		}
 		body = body[2:]
 	}
@@ -117,7 +119,7 @@ func parseBracket(body string) (Key, error) {
 	if name, ok := names[strings.ToLower(body)]; ok {
 		switch {
 		case name == "Leader" && mod:
-			return "", fmt.Errorf("<%s>：<Leader> 不能带修饰键", body)
+			return "", fmt.Errorf(i18n.T("<%s>：<Leader> 不能带修饰键"), body)
 		case len(name) == 1 && !mod: // <Bar>, <Bslash> are just the characters
 			return Key(name), nil
 		}
@@ -125,7 +127,7 @@ func parseBracket(body string) (Key, error) {
 	}
 	r, n := utf8.DecodeRuneInString(body)
 	if n != len(body) {
-		return "", fmt.Errorf("<%s>：不认识的键名", body)
+		return "", fmt.Errorf(i18n.T("<%s>：不认识的键名"), body)
 	}
 	switch {
 	case ctrl:

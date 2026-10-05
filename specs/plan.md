@@ -9,8 +9,8 @@
 | M2 编辑 | [m2-edit/task.md](m2-edit/task.md) | 编辑单元格、选项浮层、保存与刷新 | 完成（用户 2026-10-02 与 M3、M4 一起验收，tag `m2`） |
 | M3 console | [m3-console/task.md](m3-console/task.md) | vim 编辑器、执行、底部结果区、格式化、补全、schema 下拉；表格与 console 混放 tab | 完成（用户 2026-10-02 验收，tag `m3`） |
 | M4 命令面板 | [m4-palette/task.md](m4-palette/task.md) | 快速 SQL 接上 M3、DDL 预览、面板里 tab 的层级 | 完成（用户 2026-10-02 验收，tag `m4`）；验收意见排进 M5 的 F5.5–F5.9 |
-| M5 工作现场 | [m5-workspace/task.md](m5-workspace/task.md) | 一个 session 多个连接、多 session / window、只读与事务模式、MySQL；先做 M4 验收意见 F5.5–F5.9 | F5.1–F5.11 passed（2026-10-03）；验收中，用户的验收意见 F5.12–F5.19（节点 4、5）；M5 不单独验收，和 M6 一起（用户 10-05 定），节点 5 通过后直接开工 M6 |
-| M6 配置 | [m6-config/task.md](m6-config/task.md) | 键位配置收尾、主题、持久化、界面中英文切换、布局文件（保存与恢复工作现场）、可以关掉 vim 模式 | draft |
+| M5 工作现场 | [m5-workspace/task.md](m5-workspace/task.md) | 一个 session 多个连接、多 session / window、只读与事务模式、MySQL；先做 M4 验收意见 F5.5–F5.9 | F5.1–F5.11 passed（2026-10-03）；验收中，用户的验收意见 F5.12–F5.19（节点 4 passed 2026-10-05，节点 5 审查中）；M5 不单独验收，和 M6 一起（用户 10-05 定），节点 5 通过后直接开工 M6 |
+| M6 配置 | [m6-config/task.md](m6-config/task.md) | 键位配置收尾、主题、持久化、界面中英文切换、布局文件（保存与恢复工作现场）、可以关掉 vim 模式 | todo（2026-10-05 定稿，四个审查节点；M5 节点 5 通过后开工；和 M5 一起验收） |
 
 ## 任务文件的格式
 

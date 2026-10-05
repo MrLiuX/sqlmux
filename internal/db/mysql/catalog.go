@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"sqlmux/internal/db"
+	"sqlmux/internal/i18n"
 )
 
 // Catalog queries (§8.4), over information_schema as lazysql's
@@ -109,7 +110,7 @@ order by s.index_name <> 'PRIMARY', s.index_name, s.seq_in_index`, db.Val{S: sch
 	for _, k := range out.Key() {
 		for _, col := range out.Cols {
 			if t := col.Type; col.Name == k && (strings.Contains(t, "binary") || strings.Contains(t, "blob") || col.Fixed) {
-				out.ReadOnly = "行标识列 " + k + " 是 " + t
+				out.ReadOnly = i18n.T("行标识列 %s 是 %s", k, t)
 			}
 		}
 	}
@@ -122,7 +123,7 @@ where t.table_schema = ? and t.table_name = ?`, db.Val{S: schema}, db.Val{S: tab
 		return out, err
 	}
 	if len(r.Rows) > 0 && r.Rows[0][1].S != "YES" {
-		out.ReadOnly = "引擎 " + r.Rows[0][0].S + " 不支持事务"
+		out.ReadOnly = i18n.T("引擎 %s 不支持事务", r.Rows[0][0].S)
 	}
 	return out, nil
 }

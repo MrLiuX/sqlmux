@@ -12,6 +12,7 @@ import (
 
 	"sqlmux/internal/db"
 	"sqlmux/internal/editor"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -65,6 +66,7 @@ func (a *App) gotConnected(m connected) tea.Cmd {
 	}
 	if m.err != nil {
 		c.State = connFailed
+		a.dropPending(c)
 		return a.showToast(c.Spec.Name+"："+m.err.Error(), toastTTL)
 	}
 	c.take(m.d)
@@ -108,6 +110,7 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 		return nil
 	}
 	if m.err != nil {
+		a.dropPending(m.conn)
 		return a.showToast(m.conn.Spec.Name+"："+m.err.Error(), toastTTL)
 	}
 	c := m.conn
@@ -123,7 +126,7 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	if !slices.Contains(c.Schemas, c.Schema) { // the first load, or the schema is gone (§7.8)
 		c.Schema = c.home
 	}
-	var cmds []tea.Cmd
+	cmds := a.resolvePending(c)
 	for _, t := range a.consoles() { // opened before the tree had a schema, or in one gone: the connection's (§8.6)
 		if t.conn == c && !slices.Contains(c.Schemas, t.schema) {
 			t.schema = c.Schema
@@ -343,7 +346,7 @@ func (a *App) treeNodes() (ns []node, matches int) {
 	if filtering { // the workspace isn't what a filter looks for (§7.8)
 		return ns, len(pos)
 	}
-	if !add(node{id: "workspace", kind: nodeWorkspace, TreeNode: ui.TreeNode{Branch: true, Open: a.sess.opened("workspace", true), Icon: ic.Window, IconFg: th.Info, Text: "工作区"}}) {
+	if !add(node{id: "workspace", kind: nodeWorkspace, TreeNode: ui.TreeNode{Branch: true, Open: a.sess.opened("workspace", true), Icon: ic.Window, IconFg: th.Info, Text: i18n.T("工作区")}}) {
 		return ns, len(pos)
 	}
 	for wi, w := range s.Windows {

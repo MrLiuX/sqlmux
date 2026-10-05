@@ -6,6 +6,7 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -112,8 +113,8 @@ func (a *App) colsView() ui.Dropdown {
 		Pane:  m.pane.ID,
 		Count: fmt.Sprintf("%d/%d", len(ms), len(t.page.Cols)),
 		Hints: bound(
-			ui.Hint{Key: a.keys.Hint("cols.all", "cols"), Label: "全选", Action: "cols.all"},
-			ui.Hint{Key: a.keys.Hint("cols.none", "cols"), Label: "全不选", Action: "cols.none"},
+			ui.Hint{Key: a.keys.Hint("cols.all", "cols"), Label: i18n.T("全选"), Action: "cols.all"},
+			ui.Hint{Key: a.keys.Hint("cols.none", "cols"), Label: i18n.T("全不选"), Action: "cols.none"},
 		),
 	}
 	for _, mt := range ms {

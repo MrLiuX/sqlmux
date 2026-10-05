@@ -18,6 +18,7 @@ import (
 
 	"sqlmux/internal/db"
 	"sqlmux/internal/editor"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/sqlkit"
 	"sqlmux/internal/ui"
 )
@@ -72,7 +73,7 @@ func resultOf(p *Pane) *resultTab {
 func (a *App) resultPane(w *Window) *Pane {
 	if w.Result == nil {
 		w.lastID++
-		w.Result = &Pane{ID: w.lastID, Tabs: []Tab{{Name: "日志", Result: &resultTab{}}}, Prev: -1}
+		w.Result = &Pane{ID: w.lastID, Tabs: []Tab{{Name: i18n.T("日志"), Result: &resultTab{}}}, Prev: -1}
 		a.putResult(w)
 	}
 	return w.Result
@@ -163,7 +164,7 @@ func consoleSpan(t *consoleTab, arg string) (text string, from, to int) {
 				from, to = stmts[i].Start, stmts[i].End
 			}
 		}
-	case visual && ed.Mode() == editor.Visual:
+	case visual && (ed.Mode() == editor.Visual || ed.Plain()):
 		from, to = at(s), at(e)
 		if l := lines[e.Line]; e.Col < len(l) { // the last character is in
 			gr, _ := ansi.FirstGraphemeCluster(l[e.Col:], ansi.GraphemeWidth)
@@ -179,7 +180,11 @@ func consoleSpan(t *consoleTab, arg string) (text string, from, to int) {
 		}
 	}
 	if _, _, visual := ed.Selection(); visual {
-		ed.Feed("<Esc>")
+		if ed.Plain() {
+			ed.ClearSelection()
+		} else {
+			ed.Feed("<Esc>")
+		}
 	}
 	return text, from, to
 }
@@ -199,10 +204,13 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 	if len(stmts) == 0 || t.running != nil {
 		return nil
 	}
+	if conn.State != connReady { // a layout's console, its connection not up yet (F6.5)
+		return a.showToast(i18n.T("连接还没连上"), toastTTL)
+	}
 	if conn.Spec.ReadOnly {
 		if i := slices.IndexFunc(stmts, func(s sqlkit.Stmt) bool { return sqlkit.BreaksReadOnly(sql[s.Start:s.End], d) }); i >= 0 {
 			p := a.showResult(a.win())
-			a.log(&run{name: name, win: a.win()}, sql[stmts[i].Start:stmts[i].End], conn.Spec.Name+" 是只读连接，整次都没有执行", true)
+			a.log(&run{name: name, win: a.win()}, sql[stmts[i].Start:stmts[i].End], i18n.T("%s 是只读连接，整次都没有执行", conn.Spec.Name), true)
 			selectTab(p, 0)
 			return nil
 		}
@@ -367,8 +375,8 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 			stmt = m.set
 		}
 		if errors.Is(m.err, context.Canceled) {
-			a.log(r, stmt, "已取消", false)
-			cmds = append(cmds, a.showToast("查询已取消", toastTTL))
+			a.log(r, stmt, i18n.T("已取消"), false)
+			cmds = append(cmds, a.showToast(i18n.T("查询已取消"), toastTTL))
 		} else {
 			e, text := a.logError(r, stmt, m.err), strings.Join(r.from.ed.Lines(), "\n")
 			var at []string
@@ -440,9 +448,9 @@ func resultText(r db.Result) string {
 	case r.Cols == nil:
 		return r.Tag + " · " + took
 	case r.Truncated:
-		return fmt.Sprintf("%d+ 行 · %s", len(r.Rows), took)
+		return fmt.Sprintf(i18n.T("%d+ 行 · %s"), len(r.Rows), took)
 	}
-	return fmt.Sprintf("%d 行 · %s", len(r.Rows), took)
+	return fmt.Sprintf(i18n.T("%d 行 · %s"), len(r.Rows), took)
 }
 
 // rerun is 重跑: the SQL of the result tab's run, as a new run of its
@@ -477,7 +485,7 @@ func (a *App) exportResult() tea.Cmd {
 	if err != nil {
 		return a.showToast(err.Error(), toastTTL)
 	}
-	return a.showToast("已导出 "+path, toastTTL)
+	return a.showToast(i18n.T("已导出 %s", path), toastTTL)
 }
 
 // csvOf is r as CSV: the header, the rows, NULL as nothing, as lazysql's

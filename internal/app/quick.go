@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"sqlmux/internal/db"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/sqlkit"
 	"sqlmux/internal/ui"
 )
@@ -102,7 +103,7 @@ func (a *App) gotQuick(m quickMsg) tea.Cmd {
 	sql := q.running
 	q.running = ""
 	if errors.Is(m.err, context.Canceled) {
-		return a.showToast("查询已取消", toastTTL)
+		return a.showToast(i18n.T("查询已取消"), toastTTL)
 	}
 	q.ran, q.res, q.err, q.write, q.top, q.left = sql, m.res, "", false, 0, 0
 	q.conn, q.schema = m.conn, m.schema
@@ -119,20 +120,20 @@ func (a *App) quickView(q *quickSQL) *ui.PaletteResult {
 	var title []string
 	switch {
 	case q.running != "":
-		title = append(title, "… 行")
+		title = append(title, i18n.T("… 行"))
 	case q.err != "", q.write:
 	case q.res.Cols == nil: // no rows to show: what it did
 		title = append(title, q.res.Tag)
 	case q.res.Truncated:
-		title = append(title, fmt.Sprintf("%d+ 行", len(q.res.Rows)))
+		title = append(title, fmt.Sprintf(i18n.T("%d+ 行"), len(q.res.Rows)))
 	default:
-		title = append(title, fmt.Sprintf("%d 行", len(q.res.Rows)))
+		title = append(title, fmt.Sprintf(i18n.T("%d 行"), len(q.res.Rows)))
 	}
 	if q.running == "" && q.res.Took > 0 {
 		title = append(title, q.res.Took.Round(time.Millisecond).String())
 	}
 	r := &ui.PaletteResult{
-		Title: strings.Join(append(title, "只读"), " · "),
+		Title: strings.Join(append(title, i18n.T("只读")), " · "),
 		Err:   q.err,
 		Grid:  ui.Grid{Rows: q.res.Rows, Row: -1, Col: -1, Top: q.top, Left: q.left, Key: a.icons.Key},
 	}
@@ -141,15 +142,15 @@ func (a *App) quickView(q *quickSQL) *ui.PaletteResult {
 	}
 	edit := ui.Hint{Key: a.keys.Hint("quicksql.edit", "palette"), Label: "console", Action: "quicksql.edit"}
 	if q.write {
-		r.Err, r.Warn = "写语句不在这里执行", true
+		r.Err, r.Warn = i18n.T("写语句不在这里执行"), true
 		if edit.Key != "" {
-			r.Err += " · " + edit.Key + " 在 console 中打开"
+			r.Err += " · " + i18n.T("%s 在 console 中打开", edit.Key)
 		}
 	}
 	if q.res.Cols != nil { // rows to copy, or to put in the result area
 		r.Hints = append(r.Hints,
 			ui.Hint{Key: a.keys.Hint("quicksql.copy", "palette"), Label: "CSV", Action: "quicksql.copy"},
-			ui.Hint{Key: a.keys.Hint("palette.open.tab", "palette"), Label: "结果区", Action: "palette.open.tab"})
+			ui.Hint{Key: a.keys.Hint("palette.open.tab", "palette"), Label: i18n.T("结果区"), Action: "palette.open.tab"})
 	}
 	r.Hints = bound(append(r.Hints, edit)...)
 	return r
@@ -206,8 +207,8 @@ func (a *App) gotQuickRerun(m quickRerun) tea.Cmd {
 	r.done = true
 	switch {
 	case errors.Is(m.err, context.Canceled):
-		a.log(r, r.sql, "已取消", false)
-		return a.showToast("查询已取消", toastTTL)
+		a.log(r, r.sql, i18n.T("已取消"), false)
+		return a.showToast(i18n.T("查询已取消"), toastTTL)
 	case m.err != nil:
 		a.logError(r, r.sql, m.err)
 		selectTab(r.win.Result, 0) // the log's, made if need be

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 
 	"sqlmux/internal/app"
 	"sqlmux/internal/config"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 )
 
@@ -26,36 +28,90 @@ func main() {
 	}
 }
 
-// run is `sqlmux [connection]`. Whatever fails before the UI is up ends the
-// program with the error on the terminal (§14「启动时找不到连接」).
+// run is `sqlmux [--layout name-or-path] [connection]`. Whatever fails before
+// the UI is up ends the program with the error on the terminal (§14「启动时找不到连接」).
 func run(args []string) error {
+	flags := flag.NewFlagSet("sqlmux", flag.ContinueOnError)
+	layout := flags.String("layout", "", "打开这个布局（名字或路径）")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
 	name := ""
-	switch len(args) {
+	switch flags.NArg() {
 	case 0:
 	case 1:
-		name = args[0]
+		name = flags.Arg(0)
 	default:
-		return errors.New("用法：sqlmux [连接名]")
+		return errors.New("用法：sqlmux [--layout 名字或路径] [连接名]")
+	}
+	if name != "" && *layout != "" {
+		return errors.New("连接名和 --layout 只能给一个")
 	}
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
-	sess, warning, err := open(name)
+	i18n.Set(cfg.Language) // from here on, what is shown follows it (§14)
+	var warning string
+	l, err := startLayout(name, *layout, &warning)
 	if err != nil {
 		return err
+	}
+	var sess *app.Session
+	var restored *app.Restored
+	if l != nil {
+		conns, _, w, err := config.LoadConnections("")
+		if err != nil {
+			return err
+		}
+		warning = strings.TrimPrefix(warning+"；"+w, "；")
+		if restored, err = app.Restore(context.Background(), conns, l); err != nil {
+			return err
+		}
+		sess = restored.Sessions[0]
+	} else {
+		var w string
+		if sess, w, err = open(name); err != nil {
+			return err
+		}
+		warning = strings.TrimPrefix(warning+"；"+w, "；")
 	}
 	st, err := config.LoadState()
 	if err != nil { // the broken file is kept aside; start empty (§14)
 		warning = strings.TrimPrefix(warning+"；"+err.Error(), "；")
 	}
-	// ponytail: problems are only reported by `sqlmux keys --check`; the startup
-	// conflict overlay (§6.7) is M6.
-	keys, _ := keymap.New(cfg)
+	keys, problems := keymap.New(cfg)
 	a := app.New(cfg, keys, sess, st, warning)
+	if restored != nil {
+		a.Adopt(restored)
+	}
+	a.SaveLayoutOnExit(config.LastPath())
+	a.KeyProblems(problems)
 	defer a.Close()
 	_, err = tea.NewProgram(a).Run()
 	return err
+}
+
+// startLayout is the layout the program starts from, nil for the default
+// one (§14「启动」): --layout's, which has to be there; else last.toml when no
+// connection is named, which is kept aside, said in warning, when it does
+// not read.
+func startLayout(name, layout string, warning *string) (*config.Layout, error) {
+	switch {
+	case layout != "":
+		return config.LoadLayout(layout)
+	case name != "":
+		return nil, nil
+	}
+	l, err := config.LoadLayout(config.LastPath())
+	switch {
+	case err == nil:
+		return l, nil
+	case errors.Is(err, fs.ErrNotExist):
+		return nil, nil
+	}
+	*warning = err.Error()
+	return nil, config.BrokenLast()
 }
 
 // open is a session over connections.toml, connected to connection
@@ -86,6 +142,7 @@ func keysCmd(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "sqlmux:", err)
 		return 1
 	}
+	i18n.Set(cfg.Language)
 	keys, problems := keymap.New(cfg)
 	for _, p := range problems {
 		fmt.Fprintln(stderr, p)

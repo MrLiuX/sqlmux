@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"sqlmux/internal/config"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -86,7 +87,7 @@ func (a *App) sessionsAttach(i int) {
 func (a *App) attach(s *Session) {
 	a.sess = s
 	a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.keyHelp = false, false, nil, nil, nil, nil
-	a.confirm, a.form, a.winRename, a.sessList = nil, nil, nil, nil
+	a.confirm, a.form, a.winRename, a.layoutName, a.sessList = nil, nil, nil, nil, nil
 	a.res.Reset()
 }
 
@@ -105,7 +106,7 @@ type sessionDialed struct {
 func (a *App) dialSession() tea.Cmd {
 	a.sessList = nil
 	spec := a.conn().Spec
-	return tea.Batch(a.showToast("正在连接 "+spec.Name+"…", toastTTL), func() tea.Msg {
+	return tea.Batch(a.showToast(i18n.T("正在连接 %s…", spec.Name), toastTTL), func() tea.Msg {
 		d, err := dial(context.Background(), spec)
 		return sessionDialed{spec, d, err}
 	})
@@ -154,7 +155,7 @@ func (a *App) killSession() tea.Cmd {
 		return a.quit()
 	}
 	s, ps := r.s, r.s.panes()
-	return a.unlessLost(unsaved(ps...), s.Name+" 里", txConns(s), "关闭", func() tea.Cmd {
+	return a.unlessLost(unsaved(ps...), i18n.T("%s 里", s.Name), txConns(s), verbClose, func() tea.Cmd {
 		if cmd, ok := a.flushAll(ps...); !ok { // the consoles' text is not lost (§11)
 			return cmd
 		}
@@ -196,7 +197,7 @@ func (a *App) renameKey(k keymap.Key) tea.Cmd {
 	switch s := a.sessionRows()[l.sel].s; {
 	case name == "" || name == s.Name:
 	case slices.ContainsFunc(a.sessions, func(o *Session) bool { return o.Name == name }):
-		return a.showToast("已有同名 session", toastTTL)
+		return a.showToast(i18n.T("已有同名 session"), toastTTL)
 	default:
 		s.Name = name
 	}

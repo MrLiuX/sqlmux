@@ -1,6 +1,6 @@
 # M5 工作现场与 MySQL · 任务清单
 
-- **状态**：**做用户的验收意见 F5.12–F5.19**（2026-10-04 定）。用户 2026-10-05 决定 M5 不单独验收，和 M6 一起验收：节点 5 通过后直接开工 M6，tag `m5` 等那时再打。F5.1–F5.11 全部 passed，完整回归在 91fc2c1 上全过（70 个脚本 1874 项，e2e a5539b2；集成测试在 PG 和 MySQL 上都过）。按 F5.5–F5.9 → F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，四个审查节点 2026-10-02 / 10-03 依次通过。
+- **状态**：**做用户的验收意见 F5.12–F5.19**（2026-10-04 定）。节点 4（F5.12–F5.18）2026-10-05 passed（a526d79；e2e d2f8f32，73 个脚本 2022 项全过）。用户 2026-10-05 决定 M5 不单独验收，和 M6 一起验收：节点 5 通过后直接开工 M6，tag `m5` 等那时再打。F5.1–F5.11 全部 passed，完整回归在 91fc2c1 上全过（70 个脚本 1874 项，e2e a5539b2；集成测试在 PG 和 MySQL 上都过）。按 F5.5–F5.9 → F5.10 → F5.11 → F5.1 → F5.2 → F5.3 → F5.4 的顺序做，四个审查节点 2026-10-02 / 10-03 依次通过。
 - **目标**：
   - 一个 session 多个连接：目录树的根是 connections.toml 里的全部连接，用到时才连；
   - 支持多个 session、多个 window；
@@ -341,102 +341,102 @@
 - [x] 单测：没有用户改动时，导出的全是注释，原样加载后和默认完全一样；有改动时导出再加载，生效的键位不变（往返）；去掉一行的 `#` 改了键后生效；config.toml 里写 `[keys]` 时报错。
 - [x] e2e：只有 keymaps.toml、里面改了一个键时，界面上的键位提示跟着变。
 
-## F5.12 补全：接受关键字补空格，补齐 DML / DDL 关键字 · 状态：todo
+## F5.12 补全：接受关键字补空格，补齐 DML / DDL 关键字 · 状态：passed（a526d79；e2e d2f8f32）
 
 - **依赖**：F1.14、F3.39
 - **涉及**：`internal/sqlkit`（`keywords.go` 的 `Common`、补全上下文）、`internal/app`（console、WHERE、快速 SQL 的接受）
 
 **开发**
-- [ ] 接受关键字时补一个空格，光标落在空格后；值（`null`、`true`、`false`、`is null`、`is not null`）、函数、表名、列名、枚举值不补；光标后已经是空白时不补、光标移过去（§9.7「接受关键字时补一个空格」）。console、WHERE、快速 SQL 三处一样，改在它们共用的那一处。
-- [ ] 关键字候选补齐 DML / DDL 的开头和子句，清单参照 lazysql 的 `builtinKeywords`，MySQL 另有 `replace into`、`on duplicate key update`（§9.7 候选表）。具体清单开工前发给决策者。
+- [x] 接受关键字时补一个空格，光标落在空格后；值（`null`、`true`、`false`、`is null`、`is not null`）、函数、表名、列名、枚举值不补；光标后已经是空白时不补、光标移过去（§9.7「接受关键字时补一个空格」）。console、WHERE、快速 SQL 三处一样，改在它们共用的那一处。
+- [x] 关键字候选补齐 DML / DDL 的开头和子句，清单参照 lazysql 的 `builtinKeywords`，MySQL 另有 `replace into`、`on duplicate key update`（§9.7 候选表）。具体清单开工前发给决策者。
   - 细节（worker 提议，已定）：两种方言共用的在原来 43 个之外加 join 类（inner / right / cross / natural join）、intersect、except、recursive、convert、insert into、update、set、delete from、DDL（create table / index / unique index / view，alter table，drop table / index / view，add column，drop column，rename to，primary key，foreign key，references，unique，check，constraint，default，truncate，if exists，if not exists，cascade）、begin、commit、rollback、call；PG 另有 full join、returning、on conflict、do nothing、do update set，MySQL 另有 ifnull、replace into、on duplicate key update、use、describe（审查时定：MySQL 没有 FULL JOIN，PG 没有 ifnull）。不收 lazysql 的 fetch / next / rows / only / top，也不收 vacuum、copy 这类 PG 维护命令。WHERE 的关键字不变（MySQL 照旧没有 ilike）。
   - 不补空格的：null、true、false、is null、is not null，以及函数 count、sum、avg、min、max、coalesce、ifnull、cast、convert；其余关键字都补。补空格的逻辑放在三处共用的接受函数里，console 的关键字表按方言给。
   - 光标后已经是空白时，文字不变、只把光标移过去：这也算接受，`↵` 不执行（WHERE 里在中间补 `and` 时不该把查询发出去）。「文字和光标都没变」才照常执行。
 
 **验收**
-- [ ] 单测：`selec` 接受后是 `select `、光标在空格后；`an` 接受后是 `and `；`nul` 接受后是 `null`、不带空格；光标后已有空格时不多补。
-- [ ] e2e：WHERE 里打完整个 `and`、列表里是 `and` 时按 `↵`，文字变成 `… and `、不执行查询、没有报错（用户验收时的复现）；打完 `null` 按 `↵` 照常执行。
-- [ ] e2e：console 里输入 `ins`、`upd`、`del` 都能补出来。
+- [x] 单测：`selec` 接受后是 `select `、光标在空格后；`an` 接受后是 `and `；`nul` 接受后是 `null`、不带空格；光标后已有空格时不多补。
+- [x] e2e：WHERE 里打完整个 `and`、列表里是 `and` 时按 `↵`，文字变成 `… and `、不执行查询、没有报错（用户验收时的复现）；打完 `null` 按 `↵` 照常执行。
+- [x] e2e：console 里输入 `ins`、`upd`、`del` 都能补出来。
 
-## F5.13 INSERT 的列补全 · 状态：todo
+## F5.13 INSERT 的列补全 · 状态：passed（a526d79；e2e d2f8f32）
 
 - **依赖**：F5.12
 - **涉及**：`internal/sqlkit`（补全上下文）、`internal/app`（console、快速 SQL）
 
 **开发**
-- [ ] `insert into <表> (` 的括号里，`(` 或逗号之后弹出这张表还没写进去的列，第一项「全部列」，接受后一次插入剩下的列（§9.7「INSERT 的列」）。PG、MySQL 都做。
+- [x] `insert into <表> (` 的括号里，`(` 或逗号之后弹出这张表还没写进去的列，第一项「全部列」，接受后一次插入剩下的列（§9.7「INSERT 的列」）。PG、MySQL 都做。
   - 细节（worker 提议，已定）：上下文 `CompInsertCols`，只认 `insert into [schema.]表` 后面的第一个括号（MySQL 还有 `replace into`），括号里光标所在词以外的名字（前后都算）都算已经写了；`values (`、`insert … select (`、catalog 里没有的表都不弹。列还没缓存时照现有的做法去取，取到再弹。
   - catalog 加 `Column.Generated`：PG 是 `attgenerated <> ''` 或 `attidentity = 'a'`，MySQL 是 `extra` 含 `VIRTUAL GENERATED` / `STORED GENERATED`（`DEFAULT_GENERATED` 只是表达式默认值，不算）。粘贴行（yank.go）的判断这次不动。
   - 「全部列」：显示剩下的列用 `, ` 连起来，超过 40 个字符截断加 `…`，注释「全部 N 列」，插入的是完整的文字；只在前缀为空、剩下两列及以上时出现，排第一、默认选中；只剩一列时只列这一列。列名原样插入、不加引号，和其他补全一样（沿用现有的 ponytail）。
 
 **验收**
-- [ ] 单测：上下文识别（带 schema、带引号、MySQL 反引号、逗号之后、已经写了几列）；`generated always` 的列不出现。
-- [ ] e2e：console 里输入 `insert into t_log(`，不再敲别的就弹出列表，第一项是全部列，`↵` 后括号里是全部列、光标在 `)` 前；再试一次只选一列、敲 `, ` 后列表里少了这一列。
+- [x] 单测：上下文识别（带 schema、带引号、MySQL 反引号、逗号之后、已经写了几列）；`generated always` 的列不出现。
+- [x] e2e：console 里输入 `insert into t_log(`，不再敲别的就弹出列表，第一项是全部列，`↵` 后括号里是全部列、光标在 `)` 前；再试一次只选一列、敲 `, ` 后列表里少了这一列。
 
-## F5.14 标点用运算符的颜色 · 状态：todo
+## F5.14 标点用运算符的颜色 · 状态：passed（a526d79；e2e d2f8f32）
 
 - **依赖**：F3.27
 - **涉及**：`internal/ui`（SQL 着色）
 
 **开发**
-- [ ] `;` `,` `(` `)` 用 `sql_operator` 色，`.` 不着色（§7.3）。console 和 WHERE 输入框；快速 SQL 的输入框本来就不着色，这次不加（审查时发现，用户没要）。
-- [ ] 通过后决策者把用户主题 `ristretto.toml` 的 `sql_operator` 改成用户要的 `#ee9089`。
+- [x] `;` `,` `(` `)` 用 `sql_operator` 色，`.` 不着色（§7.3）。console 和 WHERE 输入框；快速 SQL 的输入框本来就不着色，这次不加（审查时发现，用户没要）。
+- [x] 通过后决策者把用户主题 `ristretto.toml` 的 `sql_operator` 改成用户要的 `#ee9089`。
 
 **验收**
-- [ ] golden：`select * from t_log;` 里 `*` 和 `;` 是 `sql_operator` 色；`play.t_log` 的点不着色。
+- [x] golden：`select * from t_log;` 里 `*` 和 `;` 是 `sql_operator` 色；`play.t_log` 的点不着色。
 
-## F5.15 树的 pane 节点加图标 · 状态：todo
+## F5.15 树的 pane 节点加图标 · 状态：passed（a526d79；e2e d2f8f32）
 
 - **依赖**：F1.12
 - **涉及**：`internal/ui`（图标表、树）
 
 **开发**
-- [ ] 工作区的 pane 节点画图标 `pane`（nf-fa-columns，U+F0DB，ascii `|`），可以在主题的 `[icon]` 里覆盖（§7.7、§7.8 工作区节点）。
+- [x] 工作区的 pane 节点画图标 `pane`（nf-fa-columns，U+F0DB，ascii `|`），可以在主题的 `[icon]` 里覆盖（§7.7、§7.8 工作区节点）。
 
 **验收**
-- [ ] golden：工作区里的 `pane-1`、`pane-2` 前面有图标，图标后留一格。
+- [x] golden：工作区里的 `pane-1`、`pane-2` 前面有图标，图标后留一格。
 
-## F5.16 新命令：顺时针切焦点、关 tab 连带关 pane / window、重开关掉的 tab、新建 session、格式化整个 console · 状态：todo
+## F5.16 新命令：顺时针切焦点、关 tab 连带关 pane / window、重开关掉的 tab、新建 session、格式化整个 console · 状态：passed（a526d79；e2e d2f8f32）
 
 - **依赖**：F5.1、F5.2
 - **涉及**：`internal/app`（焦点、tab / pane / window 的关闭、session）、`internal/keymap`（标题）
 
 **开发**
-- [ ] `pane.focus.next`、`console.format`、`tab.quit`、`tab.reopen`、`session.new` 五个命令，规则见 §6.8「M5 验收后加的命令」；都不带默认键，都有标题，命令面板里能搜到。
+- [x] `pane.focus.next`、`console.format`、`tab.quit`、`tab.reopen`、`session.new` 五个命令，规则见 §6.8「M5 验收后加的命令」；都不带默认键，都有标题，命令面板里能搜到。
   - 细节（worker 提议，已定）：`pane.focus.next` 从 12 点方向起顺时针算角度，圆心和同角度的规则以 §6.8 为准（审查时改：圆心含状态栏，同角度按 tmux 编号），只有一个 pane 时不动。`console.format` 格式化第一条语句开头到最后一条结尾之间（外面的注释、空行不动），按语句序号把光标放回原语句开头，格式化后语句数变了就停在 gq 放的位置；只在 NORMAL 下生效，失败、超时同 gq 弹 toast。
   - `tab.quit`：关 tab 走 `tab.close` 的确认；pane 空了且是 window 里唯一的 pane，就走 `window.close` 的确认关掉 window，session 里最后一个 window 不关；按下时 pane 本来就空：有别的 pane 就关这个 pane，否则关 window；焦点在树上不做事，在结果 tab 上同 `tab.close`。
   - `tab.reopen`：只记逐个关掉的 tab（`tab.close`、`tab.quit`、`:q`、`:wq`、`×`），整个 pane / window 关掉时里面的 tab 不记；记在 Session 上、最多 20 个，每按一次取最新的一个。表记连接、表、WHERE、ORDER 和方向、LIMIT（不记页码和隐藏的列），console 记文件、连接、schema；console 的文件已经在别处开着时切过去、丢掉这一条，在别的 session 里就 attach 过去（审查时定）；原来的 window 和 pane 都还在才开回去，否则开在当前 pane，引导页照 openTableIn 被替换；列表空了什么都不做、不弹 toast。`session.new` 和 session 列表的 `n` 走同一段代码，用当前连接。
 
 **验收**
-- [ ] 单测：`pane.focus.next` 的顺时针顺序（左右分割、上下分割、树和结果区都在、树收起、结果区隐藏）；`console.format` 格式化全部语句、一次 `u` 撤回、光标在原语句开头；`tab.quit` 的三种情况（pane 里还有 tab、pane 空了关 pane、window 空了关 window）和最后一个 window 不关；`tab.reopen` 恢复 WHERE / ORDER / LIMIT，原 pane 没了时开在当前 pane，连按往前翻。
-- [ ] e2e：keymaps.toml 里给五个命令各绑一个键，在真实终端里各按一遍，界面变化符合上面的规则。
+- [x] 单测：`pane.focus.next` 的顺时针顺序（左右分割、上下分割、树和结果区都在、树收起、结果区隐藏）；`console.format` 格式化全部语句、一次 `u` 撤回、光标在原语句开头；`tab.quit` 的三种情况（pane 里还有 tab、pane 空了关 pane、window 空了关 window）和最后一个 window 不关；`tab.reopen` 恢复 WHERE / ORDER / LIMIT，原 pane 没了时开在当前 pane，连按往前翻。
+- [x] e2e：keymaps.toml 里给五个命令各绑一个键，在真实终端里各按一遍，界面变化符合上面的规则。
 
-## F5.17 终端翻译过来的修饰键（先实测） · 状态：todo
+## F5.17 终端翻译过来的修饰键（先实测） · 状态：passed（a526d79；e2e d2f8f32）
 
 - **依赖**：F5.9
 - **涉及**：`internal/keymap`（键的解析与记法）、`e2e/`（tester）
 
 **开发**
-- [ ] 先实测，再决定改不改代码（§6.2「终端翻译过来的键」）：在 tmux 3.7b 里，用 `send-keys` 把 CSI u 编码的键（如 `<C-S-w>`、`<C-S-[>`、`<C-S-t>`）送进跑着 sqlmux 的 pane，试原始字节（`send-keys -H`）和 tmux 自己的 extended-keys 两种送法；看 `[keys.global]` 里绑的命令在表格、树、console 的 NORMAL 和 INSERT、WHERE 的 INSERT 下是否都生效、是否有字符漏进输入框。不通的地方改解析或记法，通的就只加 e2e。
-- [ ] 结果和推荐的送法（tmux 那一侧的命令）发给决策者，决策者写进 §6.2，并据此配用户的 kitty / tmux。
+- [x] 先实测，再决定改不改代码（§6.2「终端翻译过来的键」）：在 tmux 3.7b 里，用 `send-keys` 把 CSI u 编码的键（如 `<C-S-w>`、`<C-S-[>`、`<C-S-t>`）送进跑着 sqlmux 的 pane，试原始字节（`send-keys -H`）和 tmux 自己的 extended-keys 两种送法；看 `[keys.global]` 里绑的命令在表格、树、console 的 NORMAL 和 INSERT、WHERE 的 INSERT 下是否都生效、是否有字符漏进输入框。不通的地方改解析或记法，通的就只加 e2e。
+- [x] 结果和推荐的送法（tmux 那一侧的命令）发给决策者，决策者写进 §6.2，并据此配用户的 kitty / tmux。
   - 实测结果（worker，已写进 §6.2）：`send-keys -H` 原始字节可行、不用改解析；tmux 自己的 `send-keys C-S-w` 不行。另外加一项：带 Super 的键记作 `<D-x>`、`Parse` 认它，不再当成普通字符输入（决策者同意）。
 
 **验收**
-- [ ] e2e：用推荐的送法送一个绑在 `[keys.global]` 的键，在表格和 console 的 INSERT 下都执行了对应命令，输入框里没有多出字符。
+- [x] e2e：用推荐的送法送一个绑在 `[keys.global]` 的键，在表格和 console 的 INSERT 下都执行了对应命令，输入框里没有多出字符。
 
 **通过后决策者给用户配键**（用户 2026-10-04 要的一组，写进 `~/.config/sqlmux/keymaps.toml`，只写改动；Cmd / Ctrl+Shift 那几个照用户给 nvim 的做法，改 kitty.conf 和 .tmux.conf.local 的分支，先备份）：`s` 表格里选排序列（`grid.order`）；`Cmd+Shift+[` / `]` 同一个 pane 里左右切 tab；`Cmd+Shift+T` 重开关掉的 tab；`Ctrl+Shift+[` / `]` 左右切 window；`tc` 新建 window；`tC` 新建 session；`tt` 上一个 window（`window.last`）；`Cmd+1` 顺时针切到下一个 pane（`pane.focus.next`）；`Cmd+W` 关 tab、空了连 window 一起关（`tab.quit`）；`SPC q` 收起结果区（`result.toggle`）；`SPC ll` 在 console 的 NORMAL 下格式化整个文件（`console.format`），VISUAL 下格式化选区（`[map.console.visual]` 映射成 `gq`）；10-05 追加：`SPC wl` / `SPC wj` 左右 / 上下分割（`pane.split.right` / `pane.split.below`），`SPC j` 打开面板的「窗口」范围（`palette.window`），`SPC k` 打开「Tab」范围（`palette.tab`）。为了不和 `t…`、`SPC l…` 冲突，解绑树和引导页的 `t`、默认的 `SPC l`。
 
-## F5.18 结果 tab 的上限 · 状态：todo
+## F5.18 结果 tab 的上限 · 状态：passed（a526d79；e2e d2f8f32）
 
 - **依赖**：F3.8
 - **涉及**：`internal/app`（结果区）
 
 **开发**
-- [ ] 结果区里日志之外最多 10 个结果 tab，超过时关掉最久没更新的那个（§11「tab 的组织」的「上限」）。
+- [x] 结果区里日志之外最多 10 个结果 tab，超过时关掉最久没更新的那个（§11「tab 的组织」的「上限」）。
   - 「更新」按结果到达的时间算（执行或重跑完成时），不按开始时间（审查时定：否则先开始、后跑完的长查询一到，刚到的结果反被关掉）。
 
 **验收**
-- [ ] 单测：开到第 11 个时关掉最久没更新的；固定的也会被关；正在执行的不关；一次 12 个结果集只留最后 10 个。
+- [x] 单测：开到第 11 个时关掉最久没更新的；固定的也会被关；正在执行的不关；一次 12 个结果集只留最后 10 个。
 
 ## F5.19 命令面板的「窗口」和「Tab」范围 · 状态：todo
 

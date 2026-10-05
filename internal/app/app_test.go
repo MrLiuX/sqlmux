@@ -112,6 +112,7 @@ func wide(w, h int) *App {
 func sized(w, h int, icons string) *App {
 	c := config.Default()
 	c.Icons = ui.IconSet(icons)
+	c.BaseIcons = c.Icons
 	return sizedWith(w, h, c)
 }
 

@@ -1,13 +1,24 @@
 package app
 
 import (
+	"errors"
+	"fmt"
+	"image/color"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/exp/golden"
 
+	"sqlmux/internal/config"
 	"sqlmux/internal/db"
 	"sqlmux/internal/editor"
+	"sqlmux/internal/i18n"
+	"sqlmux/internal/keymap"
+	"sqlmux/internal/ui"
 )
 
 // pane.focus.next goes clockwise round the middle of the screen, the
@@ -274,5 +285,437 @@ func TestSuperKeys(t *testing.T) {
 	}
 	if press('w'); a.win().TreeOpen == open {
 		t.Error("<D-w> did not run")
+	}
+}
+
+// Lines of keymaps.toml that did not take are listed in a notice at the
+// start, one a line, closed by ↵; the program is as usual after it (§6.7,
+// F6.1).
+func TestKeyProblemsNotice(t *testing.T) {
+	c := userConfig(t, "", "[keys.normal]\n\"g\" = \"tab.next\"\n\"gz\" = \"tab.prev\"\n\"<C-p>\" = \"tab.next\"\n\"<c-p>\" = \"tab.prev\"\n")
+	keys, problems := keymap.New(c)
+	if len(problems) < 2 {
+		t.Fatalf("problems: %v", problems)
+	}
+	a := New(c, keys, testSession(), &config.State{}, "")
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
+	a.KeyProblems(problems)
+	if a.confirm == nil || !strings.HasPrefix(a.confirm.text, "keymaps.toml 有 2 处问题") || strings.Count(a.confirm.text, "\n") != len(problems) {
+		t.Fatalf("notice: %+v", a.confirm)
+	}
+	screen := a.render().String()
+	for _, p := range problems {
+		if !strings.Contains(screen, p.String()) {
+			t.Errorf("%q is not on screen", p)
+		}
+	}
+	if !strings.Contains(screen, "知道了") || strings.Contains(screen, "取消") {
+		t.Error("the one button: 知道了")
+	}
+	if feed(t, a, "<CR>"); a.confirm != nil {
+		t.Error("↵ keeps it")
+	}
+	a.KeyProblems(nil)
+	if a.confirm != nil {
+		t.Error("none: a notice")
+	}
+	if feed(t, a, "<Space>c"); len(a.sess.Windows) != 2 {
+		t.Error("the program is as usual")
+	}
+}
+
+// theme.switch lists the themes there are, the one in use marked; the pick
+// is on the screen at once, a token the file leaves out as tokyonight-storm
+// has it, the icons chosen kept with the theme's [icon] on them; a theme
+// that cannot be read says why and changes nothing; nothing is written
+// (F6.2).
+func TestThemeSwitch(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	themes := filepath.Join(dir, "sqlmux", "themes")
+	os.MkdirAll(themes, 0o755)
+	os.WriteFile(filepath.Join(themes, "mine.toml"), []byte("bg = \"#101010\"\n[icon.table]\ntext = \"T\"\n"), 0o644)
+	os.WriteFile(filepath.Join(themes, "bad.toml"), []byte("bg = \"red\"\n"), 0o644)
+	a := sized(160, 45, "ascii")
+	a.run("theme.switch", 0)
+	items, current := a.dropItems()
+	if a.drop == nil || a.drop.kind != dropTheme || !slices.Equal(items, []string{"bad", "mine", "tokyonight-storm"}) || current != 2 {
+		t.Fatalf("list: %+v %v current %d", a.drop, items, current)
+	}
+	feed(t, a, "mi<CR>")
+	if a.drop != nil || a.themeName != "mine" || ansiHex(a.theme.Bg) != "#101010" || a.theme.Fg != ui.TokyonightStorm.Fg || a.icons.Table.Text != "T" || a.icons.Schema.Text != "#" {
+		t.Fatalf("mine: bg %v fg %v table %q schema %q", a.theme.Bg, a.theme.Fg, a.icons.Table.Text, a.icons.Schema.Text)
+	}
+	if !strings.Contains(a.toast, "config.toml") {
+		t.Errorf("toast %q", a.toast)
+	}
+	a.run("theme.switch", 0)
+	feed(t, a, "bad<CR>")
+	if a.themeName != "mine" || !strings.Contains(a.toast, "bad.toml") {
+		t.Errorf("a theme that cannot be read: %q, toast %q", a.themeName, a.toast)
+	}
+	a.run("theme.switch", 0)
+	feed(t, a, "tokyo<CR>")
+	if a.theme != ui.TokyonightStorm || a.icons.Table.Text != "+" {
+		t.Error("back to tokyonight-storm and the icons chosen")
+	}
+}
+
+func ansiHex(c color.Color) string {
+	r, g, b, _ := c.RGBA()
+	return fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8)
+}
+
+// With language = "en" the screen is in English: the landing page, the
+// palette, the confirm box over a table with changes, the query bar, the
+// result area's log, a table's saved note (§14「界面语言」, F6.4).
+func TestGoldenEnglish(t *testing.T) {
+	if err := i18n.Set("en"); err != nil {
+		t.Fatal(err)
+	}
+	defer i18n.Set("zh")
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	scenes := map[string]func() *App{
+		"landing": func() *App { return wide(160, 45) },
+		"palette": func() *App {
+			a := wide(160, 45)
+			feed(t, a, "<C-p>")
+			return a
+		},
+		"confirm": func() *App {
+			a := wide(160, 45)
+			tab := loadOrders(t, a, 60)
+			tab.edits = map[editKey]edit{{joinKey([]string{"1"}), "status"}: {val: db.Val{S: "done"}, orig: db.Val{S: "running"}}}
+			feed(t, a, "x")
+			return a
+		},
+		"table": func() *App {
+			a := wide(160, 45)
+			tab := loadOrders(t, a, 60)
+			tab.note = ui.Note{Head: i18n.T("已保存 %d 行%s · %s", 2, "", "3ms")}
+			return a
+		},
+		"result": func() *App {
+			a, _ := inRun(t, &execDB{res: map[string]db.Result{"select 1": rows(3)}}, "select 1;")
+			press(t, a, "<CR>")
+			return a
+		},
+	}
+	for name, scene := range scenes {
+		t.Run(name, func(t *testing.T) {
+			golden.RequireEqual(t, scene().render().String())
+		})
+	}
+}
+
+// layoutApp is an app over a session of a layout with the first session's
+// connection ready; the others wait.
+func layoutRestored(t *testing.T, l *config.Layout) *Restored {
+	t.Helper()
+	specs := []config.Connection{{Name: "doraemon", Engine: "postgres"}, {Name: "play", Engine: "postgres"}}
+	r, err := restore(specs, l, func(c *Conn) error {
+		c.State, c.Main, c.Meta = connReady, db.NewWorker(noDB{}), db.NewWorker(noDB{})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// A layout is the sessions as they were: the windows, their split trees,
+// the focus, the tabs with a table's request and a console's schema; and
+// what the file gives comes back as it was given (§14「布局文件」, F6.5).
+func TestLayoutSnapshotAndBuild(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a := sized(160, 45, "nerd")
+	win := a.win()
+	data := win.pane(1)
+	data.Tabs = []Tab{{Name: "t_order", Data: newDataTab(a.sess.Conns[0], db.Table{Schema: "public", Name: "t_order"})}, landing()}
+	d := data.Tabs[0].Data
+	d.request.applied, d.request.order, d.request.desc, d.request.limit, d.request.pageNo = "id > 1", "amount", true, 500, 2
+	d.hidden["note"], d.transpose = true, true
+	data.Cur = 0
+	consoleOf(win.pane(2)).schema = "agentable"
+	win.focus(2)
+	a.resultPane(win) // the area is not saved, its height is
+	win.TreeW = 40
+	a.run("window.new", 0)
+	a.run("window.select 0", 0)
+
+	l := a.layoutOf()
+	w0 := l.Sessions[0].Windows[0]
+	if len(l.Sessions) != 1 || len(l.Sessions[0].Windows) != 2 || w0.Focus != 2 || w0.SidebarWidth != 40 || w0.ResultHeight == 0 {
+		t.Fatalf("window: %+v", w0)
+	}
+	if len(w0.Panes) != 2 || w0.Layout.Split != "h" || w0.Layout.A.Pane != 1 || w0.Layout.B.Pane != 2 {
+		t.Fatalf("tree: %+v panes %+v", w0.Layout, w0.Panes)
+	}
+	tab := w0.Panes[0].Tabs
+	if len(tab) != 1 || tab[0].Kind != "table" || tab[0].Table != "t_order" || tab[0].Where != "id > 1" || tab[0].Order != "amount" || !tab[0].Desc || tab[0].Limit != 500 || tab[0].Page != 2 || !tab[0].Transpose || len(tab[0].Cols) != 1 {
+		t.Fatalf("table tab (no landing tab): %+v", tab)
+	}
+	if c := w0.Panes[1].Tabs[0]; c.Kind != "console" || c.N != 1 || c.Schema != "agentable" {
+		t.Fatalf("console tab: %+v", c)
+	}
+
+	r := layoutRestored(t, l)
+	s := r.Sessions[0]
+	if len(r.Warnings) != 0 || len(s.Windows) != 2 || s.Active != 0 {
+		t.Fatalf("restored: %v, %d windows", r.Warnings, len(s.Windows))
+	}
+	w := s.Windows[0]
+	got := w.pane(1).Tabs[0].Data
+	if w.Root.Split != Horiz || w.Focus != 2 || w.TreeW != 40 || w.resultRatio == 0 || got == nil || !got.pending ||
+		got.applied != "id > 1" || got.where.Text != "id > 1" || got.order != "amount" || !got.desc || got.limit != 500 || got.pageNo != 2 || !got.hidden["note"] || !got.transpose {
+		t.Fatalf("rebuilt: %+v", got)
+	}
+	if c := consoleOf(w.pane(2)); c == nil || c.n != 1 || c.schema != "agentable" {
+		t.Fatalf("console: %+v", c)
+	}
+}
+
+// What cannot be built is left out and said; the rest is built: a console
+// number another session has goes to the next free one, a connection that
+// is not there takes its tabs with it, a pane the tree names is made, a
+// layout of nothing has the default window (§14「恢复」).
+func TestLayoutRestoreGaps(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	console := func(n int) config.LayoutTab { return config.LayoutTab{Kind: "console", N: n, Connection: "doraemon"} }
+	l := &config.Layout{Version: 1, Sessions: []config.LayoutSession{
+		{Name: "1", Connection: "doraemon", Windows: []config.LayoutWindow{{
+			Name: "a", Layout: &config.LayoutNode{Split: "h", Ratio: 0.5, A: &config.LayoutNode{Pane: 1}, B: &config.LayoutNode{Pane: 7}},
+			Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{console(1), {Kind: "table", Connection: "gone", Table: "t"}}}},
+		}}},
+		{Name: "2", Connection: "nowhere", Windows: []config.LayoutWindow{{Name: "b", Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{console(1)}}}}}},
+		{Name: "3", Connection: "play"},
+	}}
+	r := layoutRestored(t, l)
+	if len(r.Sessions) != 3 {
+		t.Fatalf("%d sessions", len(r.Sessions))
+	}
+	w := r.Sessions[0].Windows[0]
+	if len(w.Root.Leaves()) != 2 || w.pane(7) == nil || len(w.pane(1).Tabs) != 1 || w.lastID != 7 {
+		t.Errorf("panes: %d, 7 %v, tabs %d, last %d", len(w.Root.Leaves()), w.pane(7), len(w.pane(1).Tabs), w.lastID)
+	}
+	if c := consoleOf(r.Sessions[1].Windows[0].pane(1)); c == nil || c.n != 2 {
+		t.Errorf("the second session's console_1 is taken: %+v", c)
+	}
+	if r.Sessions[1].last.Spec.Name != "doraemon" || len(r.Sessions[2].Windows) != 1 || consoleOf(r.Sessions[2].Windows[0].pane(2)).n != 3 {
+		t.Errorf("a connection that is not there starts on the first; no window is the default")
+	}
+	if got := strings.Join(r.Warnings, "|"); !strings.Contains(got, "gone") || !strings.Contains(got, "nowhere") {
+		t.Errorf("warnings: %q", got)
+	}
+	if r.Sessions[2].last.State == connReady || r.Sessions[1].last.State == connReady {
+		t.Error("only the first session's start is dialed now")
+	}
+}
+
+// A table tab of a layout waits for its connection's catalog: with the table
+// there it fetches, without it the tab is closed and a toast says so; a
+// connection that fails takes its waiting tabs, the toast being its own
+// (§14「恢复」, F6.5).
+func TestLayoutPendingTabs(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	tab := func(conn, table string) config.LayoutTab {
+		return config.LayoutTab{Kind: "table", Connection: conn, Schema: "public", Table: table}
+	}
+	l := &config.Layout{Version: 1, Sessions: []config.LayoutSession{{Name: "1", Connection: "doraemon", Windows: []config.LayoutWindow{{
+		Name: "a", Layout: &config.LayoutNode{Pane: 1},
+		Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{tab("doraemon", "t_order"), tab("doraemon", "dropped"), tab("play", "x")}}},
+	}}}}}
+	r := layoutRestored(t, l)
+	a := New(config.Default(), mustKeys(t), r.Sessions[0], &config.State{}, "")
+	a.Adopt(r)
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
+	cmds := a.connectsNow()
+	if len(cmds) != 2 { // the first's catalog, play's connect
+		t.Errorf("at start: %d commands", len(cmds))
+	}
+	doraemon, play := r.Sessions[0].Conns[0], r.Sessions[0].Conns[1]
+	p := r.Sessions[0].Windows[0].pane(1)
+	if len(p.Tabs) != 3 {
+		t.Fatalf("tabs %d", len(p.Tabs))
+	}
+	a.Update(catalogMsg{conn: doraemon, schemas: []string{"public"}, current: "public", tables: []db.Table{{Schema: "public", Name: "t_order", Rows: 5}}})
+	if len(p.Tabs) != 2 || p.Tabs[0].Data.pending || p.Tabs[0].Data.table.Rows != 5 || p.Tabs[0].Data.seq == 0 || !strings.Contains(a.toast, "dropped") {
+		t.Fatalf("after the catalog: %d tabs, %+v, toast %q", len(p.Tabs), p.Tabs[0].Data, a.toast)
+	}
+	if !p.Tabs[1].Data.pending {
+		t.Error("play's waits")
+	}
+	a.Update(connected{conn: play, err: errors.New("refused")})
+	if len(p.Tabs) != 1 || !strings.Contains(a.toast, "refused") {
+		t.Errorf("play failed: %d tabs, toast %q", len(p.Tabs), a.toast)
+	}
+}
+
+func mustKeys(t *testing.T) *keymap.Map {
+	t.Helper()
+	k, _ := keymap.New(config.Default())
+	return k
+}
+
+// The working set is written as the program quits, once it is told where:
+// not by the tests, which are never told (F6.5).
+func TestLayoutSavedOnQuit(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a := sized(160, 45, "nerd")
+	path := filepath.Join(t.TempDir(), "last.toml")
+	if feed(t, a, ":qa<CR>"); !quits(a.quit()) {
+		t.Fatal("quit")
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Fatal("written with nowhere to write")
+	}
+	a.SaveLayoutOnExit(path)
+	a.quit()
+	l, err := config.LoadLayout(path)
+	if err != nil || len(l.Sessions) != 1 || len(l.Sessions[0].Windows[0].Panes) != 2 {
+		t.Fatalf("last: %+v %v", l, err)
+	}
+}
+
+// layout.save asks the name in the status bar: ↵ writes layouts/<name>.toml,
+// esc and a click away drop it, a name that cannot be one is said; layout.open
+// lists them, last first when there is one, and a pick replaces the sessions
+// of the layout it loaded (F6.5).
+func TestLayoutSaveAndOpen(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a := sized(160, 45, "nerd")
+	a.run("layout.save", 0)
+	if a.layoutName == nil || a.mode() != keymap.Insert || a.render().Cursor == nil {
+		t.Fatal("no prompt")
+	}
+	if feed(t, a, "my/x<CR>"); a.layoutName != nil || !strings.Contains(a.toast, "/") {
+		t.Errorf("a bad name: %q", a.toast)
+	}
+	a.run("layout.save", 0)
+	feed(t, a, "<Esc>")
+	if a.layoutName != nil || len(config.LayoutNames()) != 0 {
+		t.Error("esc")
+	}
+	a.run("layout.save", 0)
+	feed(t, a, "work<CR>")
+	if l, err := config.LoadLayout("work"); err != nil || len(l.Sessions) != 1 || !strings.Contains(a.toast, "work") {
+		t.Fatalf("saved: %v, toast %q", err, a.toast)
+	}
+	config.SaveLayout(config.LastPath(), a.layoutOf())
+	a.run("layout.open", 0)
+	if items, _ := a.dropItems(); !slices.Equal(items, []string{"last", "work"}) {
+		t.Fatalf("layouts: %v", items)
+	}
+	// what a pick brings: the sessions are the layout's, the old ones closed
+	r := layoutRestored(t, &config.Layout{Version: 1, Sessions: []config.LayoutSession{{Name: "x", Connection: "doraemon"}, {Name: "y", Connection: "play"}}, Active: 1})
+	a.drop = nil
+	a.Update(layoutOpened{r: r})
+	if len(a.sessions) != 2 || a.sess.Name != "y" || !a.restored {
+		t.Errorf("replaced: %d sessions, on %q", len(a.sessions), a.sess.Name)
+	}
+	a.Update(layoutOpened{err: errors.New("no such layout")})
+	if len(a.sessions) != 2 || !strings.Contains(a.toast, "no such layout") {
+		t.Error("an error changes nothing and is said")
+	}
+}
+
+// shiftArrow presses an arrow with Shift, as a terminal sends it.
+func shiftArrow(a *App, code rune, n int) {
+	for range n {
+		a.Update(tea.KeyPressMsg{Code: code, Mod: tea.ModShift})
+	}
+}
+
+// vim = false: a console is typed into at once, ↵ makes a line, Esc and the
+// vim keys are text or nothing, there is no mode to name, and the pane focus
+// keys still go (§6.9, F6.6a).
+func TestPlainConsole(t *testing.T) {
+	a, c := inConsole(t, "vim = false", "")
+	feed(t, a, "select 1<CR>gt<Space>x<Esc>")
+	if text(c) != "select 1\ngt x" || c.ed.Mode() != editor.Insert {
+		t.Fatalf("typed: %q in %v", text(c), c.ed.Mode())
+	}
+	if row := statusRow(a); strings.Contains(row, "INSERT") || strings.Contains(row, "NORMAL") {
+		t.Errorf("a mode block: %q", row)
+	}
+	win := a.win()
+	feed(t, a, "<C-h>")
+	if win.Focus == 2 {
+		t.Error("C-h does not move the focus")
+	}
+	feed(t, a, "<C-l>")
+	if win.Focus != 2 {
+		t.Error("C-l does not move it back")
+	}
+	feed(t, a, "ab<C-a>X")
+	if got := c.ed.Lines()[1]; got != "Xgt xab" {
+		t.Errorf("C-a: %q", got)
+	}
+}
+
+// A selection made with Shift and the arrows is what runs, else the
+// statement at the cursor; it is replaced by what is typed (§6.9).
+func TestPlainConsoleSelectionRuns(t *testing.T) {
+	d := &execDB{res: map[string]db.Result{"select 1": rows(1), "select 2": rows(1)}}
+	a, c := inConsole(t, "vim = false", "")
+	a.sess.Conns[0].Main = db.NewWorker(d)
+	c.schema = ""
+	feed(t, a, "select 1;<CR>select 2;")
+	feed(t, a, "<C-a>")
+	shiftArrow(a, tea.KeyRight, 9)
+	if got := c.ed.SelectedText(); got != "select 2;" {
+		t.Fatalf("selected %q", got)
+	}
+	press(t, a, "<C-e>") // vim = false: C-e runs a console (default-novim.toml)
+	if len(d.ran) != 1 || !strings.HasPrefix(d.ran[0], "select 2") || c.ed.HasSelection() {
+		t.Errorf("a selection: ran %q, still selected %v", d.ran, c.ed.HasSelection())
+	}
+	d.ran = nil
+	deliver(a, a.run("console.run", 0)) // none: the statement at the cursor
+	if len(d.ran) != 1 {
+		t.Errorf("none selected: ran %q", d.ran)
+	}
+	shiftArrow(a, tea.KeyLeft, 3)
+	if feed(t, a, "<C-c>"); c.ed.HasSelection() || a.toast != "" {
+		t.Errorf("C-c with a selection only ends it: toast %q", a.toast)
+	}
+	if feed(t, a, "<C-c>"); !strings.Contains(a.toast, "退出") {
+		t.Errorf("C-c with nothing: the first press of quit: %q", a.toast)
+	}
+}
+
+// vim = false: the WHERE is typed into, ↵ runs it, Esc closes the list and
+// then leaves it; C-r is still its history (§6.9, F6.6a).
+func TestPlainWhere(t *testing.T) {
+	c := userConfig(t, "vim = false", "")
+	a := sizedWith(160, 45, c)
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
+	a.win().focus(1)
+	tab := loadOrders(t, a, 3)
+	feed(t, a, "/")
+	if tab.typing != "where" || tab.ed == nil || !tab.ed.Plain() || tab.ed.Mode() != editor.Insert {
+		t.Fatalf("typing %q, %+v", tab.typing, tab.ed)
+	}
+	feed(t, a, "id = 1")
+	if tab.where.Text != "id = 1" {
+		t.Fatalf("where %q", tab.where.Text)
+	}
+	feed(t, a, "<C-a>x<C-e>y")
+	if tab.where.Text != "xid = 1y" {
+		t.Fatalf("C-a, C-e: %q", tab.where.Text)
+	}
+	feed(t, a, "<Esc>")
+	if tab.where.Text != "" || tab.typing != "" { // what was not run goes, as the vim's second esc
+		t.Errorf("esc leaves: %q, typing %q", tab.where.Text, tab.typing)
+	}
+	feed(t, a, "/ and st")
+	if tab.comp == nil {
+		t.Fatalf("no list")
+	}
+	feed(t, a, "<Esc>")
+	if tab.comp != nil || tab.typing != "where" {
+		t.Errorf("the first esc closes the list only: %v %q", tab.comp, tab.typing)
 	}
 }

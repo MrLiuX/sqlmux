@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"sqlmux/internal/config"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -99,9 +100,9 @@ func (a *App) saveConnForm() tea.Cmd {
 
 func (a *App) formView() ui.Form {
 	f := a.form
-	return ui.Form{Title: "新建连接", Fields: f.fields, Sel: f.sel, Err: f.err, Hints: bound(
-		ui.Hint{Key: a.keys.Hint("form.next", "form"), Label: "下一项", Action: "form.next"},
-		ui.Hint{Key: a.keys.Hint("form.save", "form"), Label: "保存", Action: "form.save"},
-		ui.Hint{Key: a.keys.Hint("form.cancel", "form"), Label: "取消", Action: "form.cancel"},
+	return ui.Form{Title: i18n.T("新建连接"), Fields: f.fields, Sel: f.sel, Err: f.err, Hints: bound(
+		ui.Hint{Key: a.keys.Hint("form.next", "form"), Label: i18n.T("下一项"), Action: "form.next"},
+		ui.Hint{Key: a.keys.Hint("form.save", "form"), Label: i18n.T("保存"), Action: "form.save"},
+		ui.Hint{Key: a.keys.Hint("form.cancel", "form"), Label: i18n.T("取消"), Action: "form.cancel"},
 	)}
 }

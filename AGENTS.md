@@ -21,7 +21,8 @@ sqlmux/
 │  ├─ editor/                 vim 编辑器；testdata/ 放 nvim 差分用例
 │  ├─ sqlkit/                 词法、分句、读写判定、补全上下文、格式化
 │  ├─ db/                     连接、Worker、postgres/、mysql/、catalog
-│  └─ config/                 config / connections / state 文件，以及 XDG 路径
+│  ├─ config/                 config / connections / state / 布局文件，以及 XDG 路径
+│  └─ i18n/                   界面文案的翻译（M6 F6.4）
 ├─ e2e/                       tester 的黑盒测试脚本，从 e2e 分支合并进来
 ├─ testdata/seed/             集成测试的种子数据（M1 起）
 ├─ docker-compose.yml         集成测试用的 PG / MySQL（M1 起）

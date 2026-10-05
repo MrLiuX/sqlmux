@@ -10,10 +10,16 @@ import (
 	"time"
 
 	"sqlmux/internal/config"
+	"sqlmux/internal/i18n"
 )
 
 //go:embed default.toml
 var defaultTOML string
+
+// noVimTOML is what vim = false adds over it (§6.9).
+//
+//go:embed default-novim.toml
+var noVimTOML string
 
 // tables is every [keys.*] / [map.*] table a config may use (§6.4, §6.6),
 // in resolution priority order for the export. which-key is no scope: keys
@@ -65,7 +71,7 @@ func New(user *config.Config) (*Map, []Problem) {
 	var problems []Problem
 	if user.Leader != "" {
 		if ks, err := Parse(user.Leader); err != nil || len(ks) == 0 || slices.Contains(ks, Leader) {
-			problems = append(problems, Problem{"keys", "leader", fmt.Sprintf("leader 写法不对：%q", user.Leader)})
+			problems = append(problems, Problem{"keys", "leader", i18n.T("leader 写法不对：%q", user.Leader)})
 		} else {
 			m.Leader = ks
 		}
@@ -74,6 +80,15 @@ func New(user *config.Config) (*Map, []Problem) {
 	// on expanded sequences, so a user's "<Space>s" rebinds the default "<Leader>s".
 	if ps := m.apply(def); len(ps) > 0 {
 		panic(fmt.Sprint("default.toml: ", ps))
+	}
+	if !user.Vim { // the same defaults, for the export and the check, with the arrow keys on
+		_, nv, err := config.ParseKeys(noVimTOML)
+		if err != nil {
+			panic("default-novim.toml: " + err.Error())
+		}
+		if ps := m.apply(nv); len(ps) > 0 {
+			panic(fmt.Sprint("default-novim.toml: ", ps))
+		}
 	}
 	m.defaults = map[string][]Binding{}
 	for t, bs := range m.tables {
@@ -90,26 +105,26 @@ func (m *Map) apply(bs []config.Binding) []Problem {
 	var ps []Problem
 	seen := map[string]string{} // table + normalized key → spelling, within this file
 	for _, b := range bs {
-		bad := func(format string, a ...any) { ps = append(ps, Problem{b.Table, b.Key, fmt.Sprintf(format, a...)}) }
+		bad := func(msg string) { ps = append(ps, Problem{b.Table, b.Key, msg}) }
 		if !slices.Contains(tables, b.Table) {
-			bad("没有这个表")
+			bad(i18n.T("没有这个表"))
 			continue
 		}
 		keys, err := Parse(b.Key)
 		if err != nil || len(keys) == 0 {
-			bad("键位写法不对：%v", err)
+			bad(i18n.T("键位写法不对：%v", err))
 			continue
 		}
 		id := b.Table + " " + String(m.expand(keys))
 		if prev, dup := seen[id]; dup {
-			bad("与 %q 是同一个键", prev)
+			bad(i18n.T("与 %q 是同一个键", prev))
 			continue
 		}
 		seen[id] = b.Key
 		nb := Binding{Keys: keys, Action: b.Value}
 		if strings.HasPrefix(b.Table, "map.") {
 			if nb.RHS, err = Parse(b.Value); err != nil {
-				bad("映射写法不对：%v", err)
+				bad(i18n.T("映射写法不对：%v", err))
 				continue
 			}
 			nb.Action = ""
@@ -145,7 +160,7 @@ func (m *Map) ambiguities() []Problem {
 			for _, b := range m.tables[t] {
 				ka, kb := m.expand(a.Keys), m.expand(b.Keys)
 				if len(ka) < len(kb) && slices.Equal(ka, kb[:len(ka)]) {
-					ps = append(ps, Problem{t, String(a.Keys), fmt.Sprintf("是 %s 的前缀，要等 timeoutlen 之后才执行", String(b.Keys))})
+					ps = append(ps, Problem{t, String(a.Keys), fmt.Sprintf(i18n.T("是 %s 的前缀，要等 timeoutlen 之后才执行"), String(b.Keys))})
 					break
 				}
 			}
@@ -200,7 +215,7 @@ func (m *Map) Actions() []string {
 // Markdown renders the effective keymap as a table (`sqlmux keys`).
 func (m *Map) Markdown() string {
 	var b strings.Builder
-	b.WriteString("| 作用域 | 键 | 操作 |\n|---|---|---|\n")
+	b.WriteString(i18n.T("| 作用域 | 键 | 操作 |\n|---|---|---|\n"))
 	for _, t := range tables {
 		for _, bd := range m.tables[t] {
 			op := bd.Action
@@ -217,28 +232,28 @@ func mdEscape(s string) string { return strings.ReplaceAll(s, "|", `\|`) }
 
 // when is the note above each section of the export: when its keys apply (§6.4).
 var when = map[string]string{
-	"keys.global":      "任何时候，输入框里也生效",
-	"keys.normal":      "NORMAL 模式，焦点在任何 pane",
-	"keys.grid":        "焦点在表格（NORMAL）",
-	"keys.tree":        "焦点在 schema 树（NORMAL）",
-	"keys.console":     "console 的 NORMAL / VISUAL（M3）",
-	"keys.landing":     "引导页：新 tab、没有 tab 的 pane（M3）",
-	"keys.result":      "结果区，叠在 grid 之上（M3）",
-	"keys.palette":     "命令面板打开时",
-	"keys.dropdown":    "ORDER / LIMIT 下拉框打开时",
-	"keys.complete":    "补全列表弹出时（↵、esc 由输入框处理）",
-	"keys.where":       "WHERE 的历史 / 收藏下拉打开时",
-	"keys.input":       "任何输入框里",
-	"keys.wherenormal": "WHERE 输入框在 NORMAL 下（F3.39）",
-	"keys.cols":        "COLS 列表打开时",
-	"keys.cell":        "编辑单元格时（M2）",
-	"keys.sessions":    "session 列表打开时（M5）",
-	"keys.form":        "新建连接的表单打开时（M5）",
-	"keys.confirm":     "确认框打开时",
-	"keys.newrow":      "编辑还没保存的新行的格时，叠在选项 / 分段浮层之上（F3.33）",
-	"keys.options":     "非时间列的单元格，选项浮层展开、而且有选项时",
-	"keys.segments":    "时间列的单元格，分段浮层展开时",
-	"keys.keyhelp":     "? 键位帮助打开时",
+	"keys.global":      i18n.N("任何时候，输入框里也生效"),
+	"keys.normal":      i18n.N("NORMAL 模式，焦点在任何 pane"),
+	"keys.grid":        i18n.N("焦点在表格（NORMAL）"),
+	"keys.tree":        i18n.N("焦点在 schema 树（NORMAL）"),
+	"keys.console":     i18n.N("console 的 NORMAL / VISUAL（M3）"),
+	"keys.landing":     i18n.N("引导页：新 tab、没有 tab 的 pane（M3）"),
+	"keys.result":      i18n.N("结果区，叠在 grid 之上（M3）"),
+	"keys.palette":     i18n.N("命令面板打开时"),
+	"keys.dropdown":    i18n.N("ORDER / LIMIT 下拉框打开时"),
+	"keys.complete":    i18n.N("补全列表弹出时（↵、esc 由输入框处理）"),
+	"keys.where":       i18n.N("WHERE 的历史 / 收藏下拉打开时"),
+	"keys.input":       i18n.N("任何输入框里"),
+	"keys.wherenormal": i18n.N("WHERE 输入框在 NORMAL 下（F3.39）"),
+	"keys.cols":        i18n.N("COLS 列表打开时"),
+	"keys.cell":        i18n.N("编辑单元格时（M2）"),
+	"keys.sessions":    i18n.N("session 列表打开时（M5）"),
+	"keys.form":        i18n.N("新建连接的表单打开时（M5）"),
+	"keys.confirm":     i18n.N("确认框打开时"),
+	"keys.newrow":      i18n.N("编辑还没保存的新行的格时，叠在选项 / 分段浮层之上（F3.33）"),
+	"keys.options":     i18n.N("非时间列的单元格，选项浮层展开、而且有选项时"),
+	"keys.segments":    i18n.N("时间列的单元格，分段浮层展开时"),
+	"keys.keyhelp":     i18n.N("? 键位帮助打开时"),
 }
 
 // TOML renders the effective keymap as a whole keymaps.toml (`sqlmux keys
@@ -290,12 +305,12 @@ func (m *Map) TOML(titles map[string]string) string {
 		if len(lines) > 0 {
 			b.WriteString("\n")
 			if when[t] != "" {
-				fmt.Fprintf(&b, "# %s\n", when[t])
+				fmt.Fprintf(&b, "# %s\n", i18n.T(when[t]))
 			}
 			fmt.Fprintf(&b, "[%s]\n%s\n", t, strings.Join(lines, "\n"))
 		}
 	}
-	b.WriteString("\n# 用户映射（§6.6）：键 → 一串键（noremap）。[map.normal] 所有 pane 通用，下面这种只在表格里生效\n# [map.grid.normal]\n# \"J\" = \"5j\"\n")
+	b.WriteString(i18n.T("\n# 用户映射（§6.6）：键 → 一串键（noremap）。[map.normal] 所有 pane 通用，下面这种只在表格里生效\n# [map.grid.normal]\n# \"J\" = \"5j\"\n"))
 	return b.String()
 }
 

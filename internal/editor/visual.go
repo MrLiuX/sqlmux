@@ -11,6 +11,9 @@ func (e *Editor) visual() bool {
 // order, both ends in; whole lines in V-LINE, and in V-BLOCK the columns
 // Block tells. ok is false outside VISUAL.
 func (e *Editor) Selection() (from, to Pos, ok bool) {
+	if e.plain {
+		return e.plainSelection()
+	}
 	if !e.visual() {
 		return Pos{}, Pos{}, false
 	}

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"os/exec"
 	"slices"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"sqlmux/internal/editor"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/sqlkit"
 )
 
@@ -88,7 +88,7 @@ func format(sql string, d sqlkit.Dialect, prg string, o sqlkit.Options) (string,
 		out, err = runPrg(sql, prg)
 	}
 	if err == nil && strings.TrimSpace(out) == "" {
-		err = errors.New("没有输出")
+		err = errors.New(i18n.T("没有输出"))
 	}
 	return out, err
 }
@@ -116,12 +116,12 @@ func (a *App) gotFormat(m formatDone) tea.Cmd {
 	switch {
 	case !slices.Contains(a.consoles(), m.t): // closed meanwhile, or closed and opened again on its file
 		return nil
-	case m.t.ver != m.ver, m.t.ed.Mode() != editor.Normal: // the text changed meanwhile, or is being typed
+	case m.t.ver != m.ver, m.t.ed.Mode() != editor.Normal && !m.t.ed.Plain(): // the text changed meanwhile, or is being typed
 		return nil
 	case errors.Is(m.err, sqlkit.ErrTimeout):
-		return a.showToast(fmt.Sprintf("格式化超时（%v）", sqlkit.FormatTimeout), toastTTL)
+		return a.showToast(i18n.T("格式化超时（%v）", sqlkit.FormatTimeout), toastTTL)
 	case m.err != nil:
-		return a.showToast("格式化失败："+m.err.Error(), toastTTL)
+		return a.showToast(i18n.T("格式化失败：%s", m.err.Error()), toastTTL)
 	}
 	eff := m.t.ed.Replace(m.from, m.to, m.text)
 	if m.at >= 0 {
@@ -137,8 +137,11 @@ func (a *App) gotFormat(m formatDone) tea.Cmd {
 // formatAll is console.format: all the statements of console t laid out as
 // gq does (§9.5, F5.16).
 func (a *App) formatAll(t *consoleTab) tea.Cmd {
-	if t.ed.Mode() != editor.Normal {
+	if t.ed.Mode() != editor.Normal && !t.ed.Plain() {
 		return nil
+	}
+	if from, to, ok := t.ed.SelectionSpan(); ok && t.ed.Plain() { // a selection: as it is, as gq in VISUAL does
+		return a.consoleFormat(t, editor.FormatSpan{From: from, To: to, Selected: true}, false)
 	}
 	lines := t.ed.Lines()
 	return a.consoleFormat(t, editor.FormatSpan{To: editor.Pos{Line: len(lines) - 1, Col: len(lines[len(lines)-1])}}, true)

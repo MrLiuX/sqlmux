@@ -1,10 +1,15 @@
 package config
 
 import (
+	"bufio"
+	"errors"
+	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -19,7 +24,9 @@ func TestState(t *testing.T) {
 	}
 	at := time.Date(2026, 9, 24, 14, 5, 0, 0, time.UTC)
 	want := &State{
-		Recent: []Recent{{Kind: "table", ID: "doraemon/public.t_order"}, {Kind: "table", ID: "public.t_order"}, {Kind: "command", ID: "quit"}},
+		Recent:   []Recent{{Kind: "table", ID: "doraemon/public.t_order"}, {Kind: "table", ID: "public.t_order"}, {Kind: "command", ID: "quit"}},
+		SQL:      map[string][]string{"doraemon": {"select 2", "select 1"}},
+		Consoles: map[string]ConsoleState{"console_1": {Conn: "doraemon", Schema: "agentable"}, "console_2": {Conn: "play"}},
 		Tables: map[string]*TableState{"doraemon/public.t_order": {
 			History:   []Query{{Where: "id > 5", At: at}},
 			Favorites: []Query{{Where: "status = 'done'", Order: "amount", Desc: true, Limit: 500, At: at}},
@@ -51,5 +58,121 @@ func TestState(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err == nil {
 		t.Error("and out of the next save's way")
+	}
+}
+
+// A process killed after the temp file is written and before it is renamed
+// leaves the state.json there was whole (§14, F6.3).
+func TestStateKilledMidWrite(t *testing.T) {
+	if os.Getenv("SQLMUX_KILL_HELPER") != "" { // the child: write, and stop at the rename
+		beforeRename = func() {
+			os.Stdout.WriteString("ready\n")
+			select {}
+		}
+		Snapshot(&State{Recent: []Recent{{Kind: "command", ID: "new"}}})()
+		return
+	}
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	old := &State{Recent: []Recent{{Kind: "command", ID: "old"}}}
+	if err := Snapshot(old)(); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestStateKilledMidWrite$")
+	cmd.Env = append(os.Environ(), "SQLMUX_KILL_HELPER=1")
+	out, _ := cmd.StdoutPipe()
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if line, _ := bufio.NewReader(out).ReadString('\n'); line != "ready\n" {
+		t.Fatalf("the child said %q", line)
+	}
+	cmd.Process.Kill()
+	cmd.Wait()
+	got, err := LoadState()
+	if err != nil || !reflect.DeepEqual(got, old) {
+		t.Fatalf("after the kill: %+v %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(StateDir(), "state.json.broken")); err == nil {
+		t.Error("the file was moved aside")
+	}
+}
+
+// A layout is written and read back whole; a hand-written one with inline
+// tables reads the same; another version, an empty file and a bad name are
+// refused; layouts are listed by name (§14「布局文件」, F6.5).
+func TestLayoutFile(t *testing.T) {
+	cfg, st := t.TempDir(), t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", cfg)
+	t.Setenv("XDG_STATE_HOME", st)
+	want := &Layout{Version: 1, Active: 1, Sessions: []LayoutSession{
+		{Name: "1", Connection: "doraemon", Active: 0, Windows: []LayoutWindow{{
+			Name: "data", Focus: 2, Zoom: 0, SidebarOpen: true, SidebarWidth: 40, ResultHeight: 0.5,
+			Layout: &LayoutNode{Split: "h", Ratio: 0.55, A: &LayoutNode{Pane: 1}, B: &LayoutNode{Split: "v", Ratio: 0.5, A: &LayoutNode{Pane: 2}, B: &LayoutNode{Pane: 3}}},
+			Panes: []LayoutPane{
+				{ID: 1, Current: 1, Tabs: []LayoutTab{
+					{Kind: "table", Connection: "doraemon", Schema: "public", Table: "t_order", Where: "id > 5", Order: "amount", Desc: true, Limit: 500, Page: 2, Cols: []string{"meta", "note"}, Transpose: true},
+					{Kind: "console", N: 1, Connection: "doraemon", Schema: "agentable"},
+				}},
+				{ID: 2}, {ID: 3},
+			},
+		}}},
+		{Name: "2", Connection: "play"},
+	}}
+	if err := SaveLayout(LastPath(), want); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := os.Stat(LastPath()); info.Mode().Perm() != 0o600 {
+		t.Errorf("mode %v", info.Mode().Perm())
+	}
+	got, err := LoadLayout(LastPath())
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("round trip: %+v %v", got, err)
+	}
+	hand := `version = 1
+[[session]]
+name = "s"
+connection = "doraemon"
+[[session.window]]
+name = "w"
+layout = { split = "h", ratio = 0.5, a = { pane = 1 }, b = { pane = 2 } }
+[[session.window.pane]]
+id = 1
+[[session.window.pane]]
+id = 2
+`
+	os.MkdirAll(LayoutsDir(), 0o755)
+	os.WriteFile(filepath.Join(LayoutsDir(), "mine.toml"), []byte(hand), 0o644)
+	os.WriteFile(filepath.Join(LayoutsDir(), "a.toml"), []byte("version = 2\n"), 0o644)
+	os.WriteFile(filepath.Join(LayoutsDir(), "empty.toml"), []byte("version = 1\n"), 0o644)
+	l, err := LoadLayout("mine")
+	if err != nil || l.Sessions[0].Windows[0].Layout.B.Pane != 2 || l.Sessions[0].Windows[0].Layout.Split != "h" {
+		t.Fatalf("by name, inline tables: %+v %v", l, err)
+	}
+	if _, err := LoadLayout("a"); err == nil || !strings.Contains(err.Error(), "version = 2") {
+		t.Errorf("version: %v", err)
+	}
+	if _, err := LoadLayout("empty"); err == nil || !strings.Contains(err.Error(), "[[session]]") {
+		t.Errorf("no session: %v", err)
+	}
+	if _, err := LoadLayout("nope"); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("missing: %v", err)
+	}
+	if names := LayoutNames(); !slices.Equal(names, []string{"a", "empty", "mine"}) {
+		t.Errorf("names %v", names)
+	}
+	for _, bad := range []string{"", "  ", "a/b", ".x", `a\b`} {
+		if CheckLayoutName(bad) == nil {
+			t.Errorf("%q is a name", bad)
+		}
+	}
+	os.WriteFile(LastPath(), []byte("{"), 0o600)
+	if err := BrokenLast(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(LastPath() + ".broken"); err != nil {
+		t.Error("the broken file is kept aside")
+	}
+	if BrokenLast() != nil {
+		t.Error("none to move is no error")
 	}
 }

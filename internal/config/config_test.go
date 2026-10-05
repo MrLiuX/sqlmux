@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -131,6 +132,9 @@ func TestThemeFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if names := ThemeNames(); !slices.Equal(names, []string{"ristretto", "tokyonight-storm", "typo"}) || c.ThemeName != "ristretto" || c.BaseIcons == c.Icons {
+		t.Errorf("themes %v, in use %q, base icons kept apart: %v", names, c.ThemeName, c.BaseIcons != c.Icons)
+	}
 	if c.Theme.PaneBg == ui.TokyonightStorm.PaneBg || c.Theme.Fg != ui.TokyonightStorm.Fg {
 		t.Errorf("pane_bg %v fg %v", c.Theme.PaneBg, c.Theme.Fg)
 	}
@@ -147,5 +151,32 @@ func TestThemeFile(t *testing.T) {
 	}
 	if c, err := Parse(`theme = "nope"`); err != nil || c.Theme != ui.TokyonightStorm {
 		t.Errorf("Parse reads no theme file: %v", err)
+	}
+}
+
+// language is "zh" or "en", zh when not written; another one is an error
+// that says what is allowed (§14「界面语言」).
+func TestLanguage(t *testing.T) {
+	if c, err := Parse(""); err != nil || c.Language != "zh" {
+		t.Errorf("default: %q %v", c.Language, err)
+	}
+	if c, err := Parse(`language = "en"`); err != nil || c.Language != "en" {
+		t.Errorf("en: %v", err)
+	}
+	if _, err := Parse(`language = "fr"`); err == nil || !strings.Contains(err.Error(), `language = "fr"`) {
+		t.Errorf("fr: %v", err)
+	}
+}
+
+// vim is true unless it is written false (§6.9).
+func TestVimOption(t *testing.T) {
+	if c, err := Parse(""); err != nil || !c.Vim {
+		t.Errorf("default: %v %v", c.Vim, err)
+	}
+	if c, err := Parse("vim = false"); err != nil || c.Vim {
+		t.Errorf("false: %v %v", c.Vim, err)
+	}
+	if _, err := Parse(`vim = "no"`); err == nil {
+		t.Error("a string is not a bool")
 	}
 }
