@@ -42,7 +42,9 @@ func TestOpenPasswordSources(t *testing.T) {
 	dsn, pw := testDB(t)
 	u, _ := url.Parse(dsn)
 	pgpass := filepath.Join(t.TempDir(), "pgpass")
-	os.WriteFile(pgpass, []byte(strings.Join([]string{u.Hostname(), "*", "*", u.User.Username(), pw}, ":")+"\n"), 0o600)
+	if err := os.WriteFile(pgpass, []byte(strings.Join([]string{u.Hostname(), "*", "*", u.User.Username(), pw}, ":")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	for name, c := range map[string]struct {
 		extra, env, val string
 		fails           bool

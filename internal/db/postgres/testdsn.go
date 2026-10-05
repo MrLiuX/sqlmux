@@ -44,7 +44,7 @@ func OwnDB(t *testing.T) string {
 	}
 	t.Cleanup(func() { admin.Close() })
 	name := fmt.Sprintf("sqlmux_worker_%d_%s", os.Getpid(), strings.ToLower(strings.ReplaceAll(t.Name(), "/", "_")))
-	drop := func() { admin.Query(ctx, "drop database if exists "+name+" with (force)") }
+	drop := func() { _, _ = admin.Query(ctx, "drop database if exists "+name+" with (force)") }
 	drop()
 	if _, err := admin.Query(ctx, "create database "+name); err != nil {
 		t.Fatal(err)

@@ -250,8 +250,10 @@ func TestResultKeys(t *testing.T) {
 	}
 	dir := t.TempDir()
 	wd, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(wd)
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(wd) }()
 	a.run("result.export", 0)
 	if data, err := os.ReadFile(filepath.Join(dir, "console_1-2.csv")); err != nil || string(data) != "n\na\nb\n" || !strings.HasPrefix(a.toast, "已导出 ") {
 		t.Errorf("export: %q %v, toast %q", data, err, a.toast)

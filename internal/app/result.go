@@ -547,12 +547,12 @@ func csvOf(r db.Result) string {
 	for i, c := range r.Cols {
 		rec[i] = c.Name
 	}
-	w.Write(rec)
+	_ = w.Write(rec)
 	for _, row := range r.Rows {
 		for i, v := range row {
 			rec[i] = v.S // "" when NULL
 		}
-		w.Write(rec)
+		_ = w.Write(rec)
 	}
 	w.Flush()
 	return b.String()

@@ -49,7 +49,9 @@ func TestState(t *testing.T) {
 		t.Errorf("mode %v", info.Mode().Perm())
 	}
 	path := filepath.Join(StateDir(), "state.json")
-	os.WriteFile(path, []byte("{"), 0o600)
+	if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if s, err := LoadState(); err == nil || len(s.Tables) != 0 {
 		t.Error("a broken file is an error, and an empty state")
 	}
@@ -69,7 +71,7 @@ func TestStateKilledMidWrite(t *testing.T) {
 			os.Stdout.WriteString("ready\n")
 			select {}
 		}
-		Snapshot(&State{Recent: []Recent{{Kind: "command", ID: "new"}}})()
+		_ = Snapshot(&State{Recent: []Recent{{Kind: "command", ID: "new"}}})()
 		return
 	}
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
@@ -86,8 +88,8 @@ func TestStateKilledMidWrite(t *testing.T) {
 	if line, _ := bufio.NewReader(out).ReadString('\n'); line != "ready\n" {
 		t.Fatalf("the child said %q", line)
 	}
-	cmd.Process.Kill()
-	cmd.Wait()
+	_ = cmd.Process.Kill()
+	_ = cmd.Wait()
 	got, err := LoadState()
 	if err != nil || !reflect.DeepEqual(got, old) {
 		t.Fatalf("after the kill: %+v %v", got, err)
@@ -140,10 +142,18 @@ id = 1
 [[session.window.pane]]
 id = 2
 `
-	os.MkdirAll(LayoutsDir(), 0o755)
-	os.WriteFile(filepath.Join(LayoutsDir(), "mine.toml"), []byte(hand), 0o644)
-	os.WriteFile(filepath.Join(LayoutsDir(), "a.toml"), []byte("version = 2\n"), 0o644)
-	os.WriteFile(filepath.Join(LayoutsDir(), "empty.toml"), []byte("version = 1\n"), 0o644)
+	if err := os.MkdirAll(LayoutsDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(LayoutsDir(), "mine.toml"), []byte(hand), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(LayoutsDir(), "a.toml"), []byte("version = 2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(LayoutsDir(), "empty.toml"), []byte("version = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	l, err := LoadLayout(LayoutPath("mine"))
 	if err != nil || l.Sessions[0].Windows[0].Layout.B.Pane != 2 || l.Sessions[0].Windows[0].Layout.Split != "h" {
 		t.Fatalf("by name, inline tables: %+v %v", l, err)
@@ -173,7 +183,9 @@ id = 2
 			t.Errorf("--layout %q is %q", arg, got)
 		}
 	}
-	os.WriteFile(LastPath(), []byte("{"), 0o600)
+	if err := os.WriteFile(LastPath(), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := BrokenLast(); err != nil {
 		t.Fatal(err)
 	}

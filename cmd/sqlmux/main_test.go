@@ -22,7 +22,9 @@ func writeConfig(t *testing.T, name, toml string) {
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("XDG_DATA_HOME", t.TempDir()) // open() reads the consoles there
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	os.MkdirAll(filepath.Join(dir, "sqlmux"), 0o755)
+	if err := os.MkdirAll(filepath.Join(dir, "sqlmux"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(dir, "sqlmux", name), []byte(toml), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +124,9 @@ const oneSession = "version = 1\n[[session]]\nname = \"s\"\nconnection = \"c\"\n
 func TestStartLayout(t *testing.T) {
 	writeConfig(t, "config.toml", "")
 	mine := filepath.Join(t.TempDir(), "mine.toml")
-	os.WriteFile(mine, []byte(oneSession), 0o600)
+	if err := os.WriteFile(mine, []byte(oneSession), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	var warning string
 
 	if l, err := startLayout("", mine, &warning); err != nil || l == nil || l.Sessions[0].Name != "s" {
@@ -138,15 +142,21 @@ func TestStartLayout(t *testing.T) {
 		t.Errorf("no last.toml: %v %v %q", l, err, warning)
 	}
 
-	os.MkdirAll(config.StateDir(), 0o755)
-	os.WriteFile(config.LastPath(), []byte(oneSession), 0o600)
+	if err := os.MkdirAll(config.StateDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config.LastPath(), []byte(oneSession), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if l, err := startLayout("", "", &warning); l == nil || err != nil {
 		t.Errorf("last.toml: %v %v", l, err)
 	}
 	if l, err := startLayout("play", "", &warning); l != nil || err != nil {
 		t.Errorf("a connection name does not restore last: %v %v", l, err)
 	}
-	os.WriteFile(config.LastPath(), []byte("{"), 0o600)
+	if err := os.WriteFile(config.LastPath(), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if l, err := startLayout("", "", &warning); l != nil || err != nil || !strings.Contains(warning, "last.toml") {
 		t.Errorf("a last.toml that does not read: %v %v %q", l, err, warning)
 	}

@@ -332,9 +332,15 @@ func TestThemeSwitch(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	themes := filepath.Join(dir, "sqlmux", "themes")
-	os.MkdirAll(themes, 0o755)
-	os.WriteFile(filepath.Join(themes, "mine.toml"), []byte("bg = \"#101010\"\n[icon.table]\ntext = \"T\"\n"), 0o644)
-	os.WriteFile(filepath.Join(themes, "bad.toml"), []byte("bg = \"red\"\n"), 0o644)
+	if err := os.MkdirAll(themes, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(themes, "mine.toml"), []byte("bg = \"#101010\"\n[icon.table]\ntext = \"T\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(themes, "bad.toml"), []byte("bg = \"red\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	a := sized(160, 45, "ascii")
 	a.run("theme.switch", 0)
 	items, current := a.dropItems()

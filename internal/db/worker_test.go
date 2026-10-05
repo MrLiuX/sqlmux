@@ -34,7 +34,7 @@ func TestWorkerRunsOneRequestAtATime(t *testing.T) {
 	w := NewWorker(c)
 	var wg sync.WaitGroup
 	for range 8 {
-		wg.Go(func() { w.Query(context.Background(), "x") })
+		wg.Go(func() { _, _ = w.Query(context.Background(), "x") })
 	}
 	wg.Wait()
 	if c.most.Load() != 1 {

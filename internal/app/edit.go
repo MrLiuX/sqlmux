@@ -74,7 +74,7 @@ func joinKey(vals []string) string {
 }
 
 func splitKey(key string) (vals []string) {
-	json.Unmarshal([]byte(key), &vals)
+	_ = json.Unmarshal([]byte(key), &vals)
 	return vals
 }
 

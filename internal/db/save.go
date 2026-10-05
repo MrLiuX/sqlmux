@@ -73,8 +73,8 @@ func Guarded(ctx context.Context, c Conn, name string, f func() error) error {
 		return err
 	}
 	if err := f(); err != nil {
-		End(ctx, c, "rollback to savepoint "+name)
-		End(ctx, c, "release savepoint "+name)
+		_, _ = End(ctx, c, "rollback to savepoint "+name)
+		_, _ = End(ctx, c, "release savepoint "+name)
 		return err
 	}
 	_, err := End(ctx, c, "release savepoint "+name)
@@ -133,7 +133,7 @@ func Save(ctx context.Context, w *Worker, e Engine, schema, table string, keyCol
 		nested := manual || TxStatus(c) != 'I'
 		if TxStatus(c) == 'I' {
 			if _, err := c.Query(ctx, "begin"); err != nil {
-				End(ctx, c, "rollback") // a cancel may land once the server has begun
+				_, _ = End(ctx, c, "rollback") // a cancel may land once the server has begun
 				return err
 			}
 		}
@@ -141,7 +141,7 @@ func Save(ctx context.Context, w *Worker, e Engine, schema, table string, keyCol
 			return Guarded(ctx, c, "sqlmux_save", write)
 		}
 		if err := write(); err != nil {
-			End(ctx, c, "rollback")
+			_, _ = End(ctx, c, "rollback")
 			return err
 		}
 		_, err := End(ctx, c, "commit")

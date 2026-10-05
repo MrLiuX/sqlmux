@@ -96,21 +96,33 @@ func TestLoadUsesXDGConfigHome(t *testing.T) {
 		t.Fatalf("missing files: %+v %v", c, err)
 	}
 	conf, keys := filepath.Join(dir, "sqlmux", "config.toml"), filepath.Join(dir, "sqlmux", "keymaps.toml")
-	os.MkdirAll(filepath.Join(dir, "sqlmux"), 0o755)
-	os.WriteFile(keys, []byte("[keys.grid]\nx = \"\""), 0o644)
+	if err := os.MkdirAll(filepath.Join(dir, "sqlmux"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keys, []byte("[keys.grid]\nx = \"\""), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if c, err := Load(); err != nil || len(c.Bindings) != 1 {
 		t.Fatalf("keymaps.toml alone: %+v %v", c, err)
 	}
-	os.WriteFile(conf, []byte(`icons = "ascii"`), 0o644)
+	if err := os.WriteFile(conf, []byte(`icons = "ascii"`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if c, err := Load(); err != nil || c.Icons != ui.ASCIIIcons || len(c.Bindings) != 1 {
 		t.Fatalf("got %+v %v", c, err)
 	}
-	os.WriteFile(conf, []byte("[keys.grid]\nx = \"\""), 0o644)
+	if err := os.WriteFile(conf, []byte("[keys.grid]\nx = \"\""), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := Load(); err == nil || !strings.HasPrefix(err.Error(), conf+": ") || !strings.Contains(err.Error(), "keymaps.toml") {
 		t.Errorf("keys in config.toml: %v", err)
 	}
-	os.WriteFile(conf, nil, 0o644)
-	os.WriteFile(keys, []byte(`theme = "x"`), 0o644)
+	if err := os.WriteFile(conf, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keys, []byte(`theme = "x"`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := Load(); err == nil || !strings.HasPrefix(err.Error(), keys+": theme：") {
 		t.Errorf("theme in keymaps.toml: %v", err)
 	}
@@ -120,12 +132,20 @@ func TestThemeFile(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	themes := filepath.Join(dir, "sqlmux", "themes")
-	os.MkdirAll(themes, 0o755)
-	os.WriteFile(filepath.Join(themes, "ristretto.toml"), []byte("pane_bg = \"#393333\"\n[icon]\nconsole = { text = \"C\" }"), 0o644)
-	os.WriteFile(filepath.Join(themes, "typo.toml"), []byte(`rwo = "#393333"`), 0o644)
+	if err := os.MkdirAll(themes, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(themes, "ristretto.toml"), []byte("pane_bg = \"#393333\"\n[icon]\nconsole = { text = \"C\" }"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(themes, "typo.toml"), []byte(`rwo = "#393333"`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	load := func(config string) (*Config, error) {
 		t.Helper()
-		os.WriteFile(filepath.Join(dir, "sqlmux", "config.toml"), []byte(config), 0o644)
+		if err := os.WriteFile(filepath.Join(dir, "sqlmux", "config.toml"), []byte(config), 0o644); err != nil {
+			t.Fatal(err)
+		}
 		return Load()
 	}
 

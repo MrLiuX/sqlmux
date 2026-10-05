@@ -59,10 +59,10 @@ func Format(sql string, d Dialect, o Options) (string, error) {
 		return "", f.err
 	}
 	opts := f.vm.NewObject()
-	opts.Set("language", map[Dialect]string{PG: "postgresql", MySQL: "mysql"}[d])
-	opts.Set("keywordCase", o.KeywordCase)
-	opts.Set("dataTypeCase", o.KeywordCase) // PG's type names are keywords (15.x has them apart)
-	opts.Set("tabWidth", o.TabWidth)
+	_ = opts.Set("language", map[Dialect]string{PG: "postgresql", MySQL: "mysql"}[d])
+	_ = opts.Set("keywordCase", o.KeywordCase)
+	_ = opts.Set("dataTypeCase", o.KeywordCase) // PG's type names are keywords (15.x has them apart)
+	_ = opts.Set("tabWidth", o.TabWidth)
 	vm, fired := f.vm, make(chan struct{})
 	timer := time.AfterFunc(FormatTimeout, func() { vm.Interrupt(ErrTimeout); close(fired) })
 	v, err := f.format(goja.Undefined(), vm.ToValue(sql), opts)

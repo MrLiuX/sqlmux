@@ -189,9 +189,15 @@ func TestLayoutRestoreGaps(t *testing.T) {
 
 	t.Run("console numbers", func(t *testing.T) {
 		t.Setenv("XDG_DATA_HOME", t.TempDir())
-		os.MkdirAll(filepath.Dir(config.ConsolePath(1)), 0o755)
-		os.WriteFile(config.ConsolePath(1), []byte("one\n"), 0o600)
-		os.WriteFile(config.ConsolePath(2), []byte("two\n"), 0o600)
+		if err := os.MkdirAll(filepath.Dir(config.ConsolePath(1)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(config.ConsolePath(1), []byte("one\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(config.ConsolePath(2), []byte("two\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
 		win := func(n int) []config.LayoutWindow {
 			return []config.LayoutWindow{{Name: "w", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{console(n, "")}}}}}
 		}
@@ -218,7 +224,9 @@ func TestLayoutRestoreGaps(t *testing.T) {
 
 	t.Run("console file unreadable", func(t *testing.T) {
 		t.Setenv("XDG_DATA_HOME", t.TempDir())
-		os.MkdirAll(config.ConsolePath(1), 0o755) // a file that does not read
+		if err := os.MkdirAll(config.ConsolePath(1), 0o755); err != nil {
+			t.Fatal(err)
+		} // a file that does not read
 		r := Restore(layoutSpecs, &config.Layout{Version: 1, Sessions: []config.LayoutSession{
 			{Name: "1", Connection: "doraemon"},
 			{Name: "2", Connection: "doraemon", Windows: []config.LayoutWindow{{Name: "w", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{console(1, "")}}}}}},
@@ -438,7 +446,9 @@ func TestLayoutSaveAndList(t *testing.T) {
 		os.Remove("x.toml")
 		t.Error("written in the working directory")
 	}
-	config.SaveLayout(config.LastPath(), a.layoutOf())
+	if err := config.SaveLayout(config.LastPath(), a.layoutOf()); err != nil {
+		t.Fatal(err)
+	}
 	a.run("layout.open", 0)
 	if items, _ := a.dropItems(); !slices.Equal(items, []string{"last", "work", "x.toml"}) {
 		t.Fatalf("layouts: %v", items)
@@ -480,7 +490,9 @@ func TestPickLayout(t *testing.T) {
 	a.confirm = nil
 
 	console := consoleOf(a.win().pane(2))
-	os.MkdirAll(console.path+"d", 0o755)
+	if err := os.MkdirAll(console.path+"d", 0o755); err != nil {
+		t.Fatal(err)
+	}
 	oldPath := console.path
 	console.path = oldPath + "d" // a console that cannot be written: nothing is replaced
 	a.pickLayout("two")

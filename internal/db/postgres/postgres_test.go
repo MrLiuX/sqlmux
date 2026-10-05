@@ -207,7 +207,7 @@ func TestTxStatusDropped(t *testing.T) {
 	if _, err := other.Query(ctx, "select pg_terminate_backend($1::int)", pid.Rows[0][0]); err != nil {
 		t.Fatal(err)
 	}
-	c.Query(ctx, "select 1") // finds it gone
+	_, _ = c.Query(ctx, "select 1") // finds it gone
 	if got := c.TxStatus(); got != 'I' {
 		t.Errorf("dropped: %c", got)
 	}
@@ -249,7 +249,7 @@ func TestReadOnlyUnlocks(t *testing.T) {
 	} {
 		conn := connect(t, true)
 		if c.begin {
-			conn.Exec(ctx, "begin", 0)
+			_, _ = conn.Exec(ctx, "begin", 0)
 		}
 		if _, err := conn.Exec(ctx, c.stmt, 0); err != nil {
 			t.Fatalf("%s: %v", c.stmt, err)

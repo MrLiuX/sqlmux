@@ -120,7 +120,7 @@ func tsv(vals []string) string {
 	var b strings.Builder
 	w := csv.NewWriter(&b)
 	w.Comma = '\t'
-	w.Write(vals)
+	_ = w.Write(vals)
 	w.Flush()
 	return strings.TrimSuffix(b.String(), "\n")
 }

@@ -154,7 +154,7 @@ func TestSaveCancel(t *testing.T) {
 	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled: %v", err)
 	}
-	lock.Exec(ctx, "rollback", 0)
+	_, _ = lock.Exec(ctx, "rollback", 0)
 	if got := q("select coalesce(note, '<null>') from t_order where id = 5"); got != "<null>" {
 		t.Errorf("written: %s", got)
 	}

@@ -582,7 +582,7 @@ func (a *App) paletteDo(it paletteItem) tea.Cmd {
 		a.selectWindow(a.sess.windowByID(id))
 	case itemTab: // another window's: that window first (F5.2)
 		var wi, id, i int
-		fmt.Sscan(it.id, &wi, &id, &i)
+		_, _ = fmt.Sscan(it.id, &wi, &id, &i)
 		if a.selectWindow(wi); a.win().pane(id) != nil {
 			a.showTab(a.win().pane(id), i)
 		}
@@ -626,7 +626,7 @@ func (a *App) tabsByUse(items []paletteItem) []paletteItem {
 	var kept []paletteItem
 	for _, it := range items {
 		var wi, id, i int
-		fmt.Sscan(it.id, &wi, &id, &i)
+		_, _ = fmt.Sscan(it.id, &wi, &id, &i)
 		tab := &a.sess.Windows[wi].pane(id).Tabs[i]
 		key := tabKey(tab)
 		if key == nil {

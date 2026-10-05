@@ -25,7 +25,7 @@ import (
 
 // The driver logs what goes wrong on a connection, one the server dropped,
 // to stderr, over the screen; the caller gets the error anyway.
-func init() { mysql.SetLogger(log.New(io.Discard, "", 0)) }
+func init() { _ = mysql.SetLogger(log.New(io.Discard, "", 0)) }
 
 type Conn struct {
 	pool *sql.DB
@@ -274,7 +274,7 @@ func (c *Conn) watch(ctx context.Context) (stop func()) {
 			defer cancel()
 			pool := sql.OpenDB(c.kill)
 			defer pool.Close()
-			pool.ExecContext(ctx, "kill query "+c.id)
+			_, _ = pool.ExecContext(ctx, "kill query "+c.id)
 		case <-done:
 		}
 	}()

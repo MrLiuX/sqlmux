@@ -60,7 +60,7 @@ func scan(t *testing.T) (keys map[string][]int, outside []literal) {
 	t.Helper()
 	keys = map[string][]int{}
 	root := filepath.Join("..", "..")
-	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		rel, _ := filepath.Rel(root, path)
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") ||
 			strings.HasPrefix(rel, "internal/i18n") || strings.HasPrefix(rel, "e2e") {
@@ -73,6 +73,9 @@ func scan(t *testing.T) (keys map[string][]int, outside []literal) {
 		scanFile(rel, f, keys, &outside)
 		return nil
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	return keys, outside
 }
 

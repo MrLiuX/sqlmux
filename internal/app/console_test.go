@@ -216,7 +216,9 @@ func soloSession() *Session {
 // says so and the rest starts (§11).
 func TestConsoleUnreadable(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
-	os.MkdirAll(config.ConsolePath(1), 0o700) // a directory where the file goes
+	if err := os.MkdirAll(config.ConsolePath(1), 0o700); err != nil {
+		t.Fatal(err)
+	} // a directory where the file goes
 	s := soloSession()
 	if p := s.Windows[0].Root.B.Pane; len(p.Tabs) != 0 || !strings.HasPrefix(s.warning, "读取失败：") {
 		t.Fatalf("tabs %v, warning %q", p.Tabs, s.warning)
@@ -366,7 +368,9 @@ func TestConsoleExternal(t *testing.T) {
 	if data, _ := os.ReadFile(c.path); string(data) != "select 1\n" {
 		t.Fatalf("not written first: %q", data)
 	}
-	os.WriteFile(c.path, []byte("select 2;\nselect 3;\n"), 0o600)
+	if err := os.WriteFile(c.path, []byte("select 2;\nselect 3;\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	a.Update(externalDone{c, nil})
 	if text(c) != "select 2;\nselect 3;" || c.saved != c.ver {
 		t.Fatalf("read back: %q, saved %d of %d", text(c), c.saved, c.ver)

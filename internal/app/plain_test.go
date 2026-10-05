@@ -182,7 +182,9 @@ func TestPlainFreshConsole(t *testing.T) {
 func TestPlainExternalEditor(t *testing.T) {
 	a, c := inConsole(t, "vim = false", "")
 	feed(t, a, "select 1")
-	os.MkdirAll(filepath.Dir(c.path), 0o700)
+	if err := os.MkdirAll(filepath.Dir(c.path), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(c.path, []byte("select 2\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

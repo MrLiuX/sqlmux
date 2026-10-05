@@ -51,7 +51,7 @@ func TestFormatError(t *testing.T) {
 // The VM is made once, by the first format, and kept (F3.9).
 func TestFormatVMOnce(t *testing.T) {
 	o := Options{KeywordCase: "lower", TabWidth: 2}
-	Format("select 1", PG, o)
+	_, _ = Format("select 1", PG, o)
 	vm := formatter.vm
 	if _, err := Format("select 2", PG, o); err != nil || vm == nil || formatter.vm != vm {
 		t.Errorf("a second VM, or none: %v", err)
@@ -77,7 +77,7 @@ func BenchmarkFirstFormat(b *testing.B) {
 
 // A format past FormatTimeout is interrupted, the VM usable after (§9.5).
 func TestFormatTimeout(t *testing.T) {
-	Format("select 1", PG, Options{KeywordCase: "preserve", TabWidth: 2}) // the VM made, not timed
+	_, _ = Format("select 1", PG, Options{KeywordCase: "preserve", TabWidth: 2}) // the VM made, not timed
 	defer func(d time.Duration) { FormatTimeout = d }(FormatTimeout)
 	FormatTimeout = time.Millisecond
 	if _, err := Format("insert into t (a) values "+strings.Repeat("(1), ", 300)+"(1)", PG, Options{KeywordCase: "preserve", TabWidth: 2}); err != ErrTimeout {

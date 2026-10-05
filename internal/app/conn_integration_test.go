@@ -389,7 +389,7 @@ func manualTxTable(t *testing.T, eng, _ string) {
 	tab.applied = "no_such = 1"
 	settle(a, a.fetch(tab, false))
 	var tx byte
-	play.Main.Run(context.Background(), func(_ context.Context, c db.Conn) error { tx = db.TxStatus(c); return nil })
+	_ = play.Main.Run(context.Background(), func(_ context.Context, c db.Conn) error { tx = db.TxStatus(c); return nil })
 	if tab.bar == nil || tx != 'T' {
 		t.Fatalf("a WHERE failing: bar %v, %c", tab.bar, tx)
 	}

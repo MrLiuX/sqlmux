@@ -327,10 +327,10 @@ func TestTxEnds(t *testing.T) {
 	}
 	// a and b lock 1 and 2 the other way round: one of them is taken back
 	for _, s := range []string{"begin", "update k set n = 2 where id = 1"} {
-		a.Query(ctx, s)
+		_, _ = a.Query(ctx, s)
 	}
 	for _, s := range []string{"begin", "update k set n = 2 where id = 2"} {
-		b.Query(ctx, s)
+		_, _ = b.Query(ctx, s)
 	}
 	errA := make(chan error, 1)
 	go func() { _, err := a.Query(ctx, "update k set n = 3 where id = 2"); errA <- err }()
@@ -343,8 +343,8 @@ func TestTxEnds(t *testing.T) {
 	if !errors.As(err, new(db.RolledBack)) || errno(err) != 1213 || victim.TxStatus() != 'I' {
 		t.Errorf("deadlock: %v, %c", err, victim.TxStatus())
 	}
-	a.Query(ctx, "rollback")
-	b.Query(ctx, "rollback")
+	_, _ = a.Query(ctx, "rollback")
+	_, _ = b.Query(ctx, "rollback")
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
 	if _, err := a.Exec(cancelled, "insert into k values (9, 9)", 0); !errors.Is(err, context.Canceled) {
