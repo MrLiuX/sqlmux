@@ -579,7 +579,7 @@ func TestNoVimLayer(t *testing.T) {
 	if toml := on.TOML(map[string]string{}); !strings.Contains(toml, "# \"<Down>\" = \"grid.down\"") || !strings.Contains(toml, "# \"<C-e>\" = \"console.run\"") {
 		t.Errorf("the export has them as defaults:\n%s", toml)
 	}
-	if !strings.Contains(on.TOML(nil), "console 的编辑器，只有 Ctrl 开头的键生效") || strings.Contains(off.TOML(nil), "console 的编辑器") {
+	if !strings.Contains(on.TOML(nil), "console 的编辑器，只有 Ctrl 开头的键生效，C-h 除外") || strings.Contains(off.TOML(nil), "console 的编辑器") {
 		t.Error("the console's note tells of the editor with vim = false only")
 	}
 }

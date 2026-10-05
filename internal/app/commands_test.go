@@ -454,39 +454,9 @@ func TestPlainConsole(t *testing.T) {
 	}
 }
 
-// A selection made with Shift and the arrows is what runs, else the
-// statement at the cursor; it is replaced by what is typed (§6.9).
-func TestPlainConsoleSelectionRuns(t *testing.T) {
-	d := &execDB{res: map[string]db.Result{"select 1": rows(1), "select 2": rows(1)}}
-	a, c := inConsole(t, "vim = false", "")
-	a.sess.Conns[0].Main = db.NewWorker(d)
-	c.schema = ""
-	feed(t, a, "select 1;<CR>select 2;")
-	feed(t, a, "<C-a>")
-	shiftArrow(a, tea.KeyRight, 9)
-	if from, to, _ := c.ed.SelectionSpan(); from != (editor.Pos{Line: 1}) || to != (editor.Pos{Line: 1, Col: 9}) {
-		t.Fatalf("selected %v to %v", from, to)
-	}
-	press(t, a, "<C-e>") // vim = false: C-e runs a console (default-novim.toml)
-	if len(d.ran) != 1 || !strings.HasPrefix(d.ran[0], "select 2") || c.ed.HasSelection() {
-		t.Errorf("a selection: ran %q, still selected %v", d.ran, c.ed.HasSelection())
-	}
-	d.ran = nil
-	deliver(a, a.run("console.run", 0)) // none: the statement at the cursor
-	if len(d.ran) != 1 {
-		t.Errorf("none selected: ran %q", d.ran)
-	}
-	shiftArrow(a, tea.KeyLeft, 3)
-	if feed(t, a, "<C-c>"); c.ed.HasSelection() || a.toast != "" {
-		t.Errorf("C-c with a selection only ends it: toast %q", a.toast)
-	}
-	if feed(t, a, "<C-c>"); !strings.Contains(a.toast, "退出") {
-		t.Errorf("C-c with nothing: the first press of quit: %q", a.toast)
-	}
-}
-
-// vim = false: the WHERE is typed into, ↵ runs it, Esc closes the list and
-// then leaves it; C-r is still its history (§6.9, F6.6a).
+// vim = false: the WHERE is typed into, C-a and C-e go to the ends of the
+// line, Esc closes the list and then leaves it (§6.9, F6.6a); ↵ and C-r are
+// TestPlainWhereKeys'.
 func TestPlainWhere(t *testing.T) {
 	c := userConfig(t, "vim = false", "")
 	a := sizedWith(160, 45, c)

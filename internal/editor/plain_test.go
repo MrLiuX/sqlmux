@@ -365,7 +365,7 @@ func TestPlainSelectionInDroppedIndent(t *testing.T) {
 		t.Fatalf("auto-indent: %q", text(e))
 	}
 	feed(e, "<S-Up>", "x")
-	if got := text(e); !strings.Contains(got, "x") {
+	if got := text(e); got != "  x" {
 		t.Errorf("S-Up then a key: %q", got)
 	}
 	e = plain("")
@@ -373,7 +373,123 @@ func TestPlainSelectionInDroppedIndent(t *testing.T) {
 	e.Click(1, 2)
 	e.Drag(0, 0)
 	feed(e, "x")
-	if got := text(e); !strings.Contains(got, "x") {
+	if got := text(e); got != "x" {
 		t.Errorf("a drag from the indent: %q", got)
+	}
+}
+
+// What Load brings is a step of its own, and the indent a line got before it
+// is not the loaded text's to lose.
+func TestPlainLoadSteps(t *testing.T) {
+	e := plain("abc")
+	feed(e, "x", "y")
+	e.Load("zzz")
+	feed(e, "<C-z>")
+	if text(e) != "abcxy" {
+		t.Errorf("the load is a step: %q", text(e))
+	}
+	feed(e, "<C-z>")
+	if text(e) != "abc" {
+		t.Errorf("and what was typed one before: %q", text(e))
+	}
+	e = plain("")
+	feed(e, " ", " ", "a", "<CR>")
+	e.Load("  a\n    b")
+	feed(e, "<Up>")
+	if text(e) != "  a\n    b" {
+		t.Errorf("the auto-indent of before is gone with the load: %q", text(e))
+	}
+}
+
+// A drag begun where the cursor stands, with what was typed before it, ends
+// that typing's step; so do a Tab and a bracket over a selection, and what is
+// typed then is a step of its own; C-w goes back past where typing began; a
+// Tab with no selection leaves no selection.
+func TestPlainStepsAroundSelections(t *testing.T) {
+	undo := func(e *Editor) string { feed(e, "<C-z>"); return text(e) }
+	e := plain("hello")
+	feed(e, "a", "b")
+	e.Click(0, 7)
+	e.Drag(0, 3)
+	feed(e, "X")
+	if got := undo(e); got != "helloab" {
+		t.Errorf("a drag: %q", got)
+	}
+	e = plain("a\nb\nc")
+	e.TabWidth = 4
+	e.Goto(Pos{})
+	feed(e, "<S-Down>", "<S-Down>", "<Tab>", "X")
+	if text(e) != "X\nc" || undo(e) != "    a\n    b\nc" {
+		t.Errorf("a Tab, then typing over: %q", text(e))
+	}
+	e = plain("ab")
+	e.AutoPairs = true
+	feed(e, "<C-a>", "<S-Right>", "<S-Right>", "(", "X")
+	if text(e) != "(X)" || undo(e) != "(ab)" {
+		t.Errorf("a bracket, then typing over: %q", text(e))
+	}
+	e = plain("foo")
+	feed(e, "<Left>", "<Right>", "b", "a", "r", "<C-w>")
+	if text(e) != "" {
+		t.Errorf("C-w past where typing began: %q", text(e))
+	}
+	e = plain("ab")
+	e.TabWidth = 4
+	e.Goto(Pos{})
+	feed(e, "<S-Right>", "<S-Left>", "<Tab>", "x")
+	if text(e) != "    xab" {
+		t.Errorf("a Tab with an empty selection: %q", text(e))
+	}
+	e = plain("one two")
+	feed(e, "<S-Left>", "<S-Left>", "<C-h>")
+	if text(e) != "one t" {
+		t.Errorf("C-h over a selection takes it: %q", text(e))
+	}
+}
+
+// A redo puts the cursor at the end of what came back: after a paste, an
+// indent, a bracket, a long backspace (§6.9); an undo as before.
+func TestPlainRedoEnd(t *testing.T) {
+	redo := func(e *Editor) { feed(e, "<C-z>", "<C-y>") }
+	e := plain("abcdef")
+	e.Paste("line1\nline2\nline3")
+	redo(e)
+	feed(e, "k")
+	if text(e) != "abcdefline1\nline2\nline3k" {
+		t.Errorf("paste: %q", text(e))
+	}
+	e = plain("a\nb\nc")
+	e.TabWidth = 4
+	e.Goto(Pos{})
+	feed(e, "<S-Down>", "<S-Down>", "<Tab>")
+	redo(e)
+	feed(e, "x")
+	if text(e) != "    a\n    xb\nc" {
+		t.Errorf("indent: %q", text(e))
+	}
+	e = plain("ab")
+	e.AutoPairs = true
+	feed(e, "<C-a>", "<S-Right>", "<S-Right>", "(")
+	redo(e)
+	feed(e, "x")
+	if text(e) != "(ab)x" {
+		t.Errorf("bracket: %q", text(e))
+	}
+	e = plain("abcdef")
+	feed(e, "<BS>", "<BS>", "<BS>", "<BS>")
+	redo(e)
+	feed(e, "x")
+	if text(e) != "abx" {
+		t.Errorf("backspace: %q", text(e))
+	}
+	e = plain("abcdef")
+	feed(e, "<BS>", "<BS>", "<C-z>")
+	if e.Cursor() != (Pos{0, 6}) {
+		t.Errorf("undo is as vim puts it: %v", e.Cursor())
+	}
+	e = plain("")
+	feed(e, "a", "b", "<CR>", "c", "d", "e", "<C-y>")
+	if e.Cursor() != (Pos{1, 3}) {
+		t.Errorf("nothing to redo moves the cursor: %v", e.Cursor())
 	}
 }

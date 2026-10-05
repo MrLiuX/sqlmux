@@ -227,7 +227,11 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 			}
 		}
 		if len(risky) > 0 { // no run is begun, no log line made, till the answer is yes (§13)
+			asked := t.conn // a connection that lands meanwhile may take the console over
 			a.confirm = &confirmBox{dangerText(risky), i18n.T("执行"), func() tea.Cmd {
+				if t.conn != asked {
+					return a.showToast(i18n.T("确认时 console 换了连接，没有执行"), toastTTL)
+				}
 				return a.startRun(t, conn, schema, name, sql, base, ver, stmts) // the overlay had the keys: nothing began a run meanwhile
 			}}
 			return nil
@@ -236,17 +240,20 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 	return a.startRun(t, conn, schema, name, sql, base, ver, stmts)
 }
 
-// dangerousListed is how many dangerous statements the confirm box names.
-const dangerousListed = 8
+// What the confirm box names of dangerous statements: this many, each cut to
+// this many cells.
+const (
+	dangerousListed = 8
+	dangerousWidth  = 60
+)
 
 // dangerText is the confirm box over a run with the dangerous statements
-// risky: how many, each by its first line cut to a width, and how many more
-// there are than it lists (§13).
+// risky: how many, each with its white space (lines, tabs) squeezed to a
+// space and cut to a width, and how many more there are than it lists (§13).
 func dangerText(risky []string) string {
 	lines := []string{i18n.T("这次执行有 %d 条危险语句：", len(risky))}
 	for _, s := range risky[:min(len(risky), dangerousListed)] {
-		first, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
-		lines = append(lines, "  "+ansi.Truncate(strings.TrimSpace(first), 60, "…"))
+		lines = append(lines, "  "+ui.Truncate(strings.Join(strings.Fields(s), " "), dangerousWidth))
 	}
 	if len(risky) > dangerousListed {
 		lines = append(lines, i18n.T("… 另有 %d 条", len(risky)-dangerousListed))

@@ -91,6 +91,13 @@ func TestPlainWhereKeys(t *testing.T) {
 	if _, to, _ := tab.ed.SelectionSpan(); to.Col != 4 {
 		t.Errorf("the button is up: the selection stays, %v", to)
 	}
+	// a drag whose WHERE is not typed into any more goes nowhere
+	feed(t, a, "<Esc><Esc>")
+	a.dragWhere = pn.ID
+	a.Update(tea.MouseMotionMsg{X: r.Min.X + 2, Y: r.Min.Y, Button: tea.MouseLeft})
+	if tab.typing != "" {
+		t.Errorf("typing %q", tab.typing)
+	}
 }
 
 // C-c in a plain console ends the selection, else closes the list, else is
@@ -117,6 +124,37 @@ func TestPlainConsoleKeys(t *testing.T) {
 	feed(t, a, "<C-j>")
 	if win.Focus != 2 {
 		t.Error("C-j with nothing below stays")
+	}
+}
+
+// A console a key makes has no modes for the keys after it, in a mapping
+// too: a ? is the text, not the help (§6.9).
+func TestPlainFreshConsoleByMapping(t *testing.T) {
+	for in, want := range map[string]string{`"c?"`: "?", `"cab"`: "ab", `"cx"`: "x"} {
+		a := sizedWith(160, 45, userConfig(t, "vim = false", "[map.normal]\nQ = "+in+"\n"))
+		a.win().focus(1)
+		feed(t, a, "Q")
+		c := a.focusedConsole()
+		if c == nil || a.keyHelp != nil || text(c) != want || c.ed.Mode() != editor.Insert {
+			t.Errorf("Q = %s: text %q, help %v", in, text(c), a.keyHelp != nil)
+		}
+	}
+}
+
+// With the list open, C-e still runs the console, and a selection is not
+// needed for it (§6.9).
+func TestPlainConsoleRunWithList(t *testing.T) {
+	d := &execDB{}
+	a, c := inConsole(t, "vim = false", "")
+	a.sess.Conns[0].Main = db.NewWorker(d)
+	c.schema = ""
+	feed(t, a, "sele")
+	if c.comp == nil {
+		t.Fatal("no list")
+	}
+	press(t, a, "<C-e>")
+	if got := ran(d); len(got) != 1 || got[0] != "sele" {
+		t.Errorf("ran %q", got)
 	}
 }
 

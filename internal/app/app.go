@@ -162,7 +162,8 @@ func (a *App) Init() tea.Cmd {
 
 // plainConsoles has every console without modes with vim = false (§6.9):
 // they are made all over, the sessions of a layout before the App, so what
-// there is is gone through after each message, before the next key.
+// there is is gone through before each key, a mapping's too, and after each
+// message, for what is drawn.
 func (a *App) plainConsoles() {
 	if a.plain {
 		for _, t := range a.consoles() {
@@ -304,6 +305,7 @@ func (a *App) press(k keymap.Key) tea.Cmd { return a.feed(k, true) }
 // back from the resolver to go in here key by key, maps off (noremap), each
 // meeting the editor as it then is (§6.6).
 func (a *App) feed(k keymap.Key, maps bool) tea.Cmd {
+	a.plainConsoles() // one a key before it made, by a mapping, has no modes as this one meets it
 	if a.paneNumbers {
 		a.jumpToPane(k)
 		return nil

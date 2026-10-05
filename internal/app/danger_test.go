@@ -9,8 +9,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/exp/golden"
 
+	"sqlmux/internal/config"
 	"sqlmux/internal/db"
 	"sqlmux/internal/editor"
+	"sqlmux/internal/ui"
 )
 
 // A run with a dangerous statement asks first, once, listing them; no is no
@@ -126,26 +128,57 @@ func TestConfirmDangerousReadOnlyAndSelection(t *testing.T) {
 	}
 }
 
-// The box lists eight, a first line each cut to the width, and says how many
-// more there are.
+// The box lists eight, each with its white space squeezed to a space and cut
+// to 60 cells, and says how many more there are.
 func TestDangerText(t *testing.T) {
 	var risky []string
 	for i := range 10 {
-		risky = append(risky, fmt.Sprintf("delete from t%d\nwhere x", i))
+		risky = append(risky, fmt.Sprintf("delete\nfrom\tt%d", i))
 	}
 	risky[0] = "  drop table " + strings.Repeat("long_", 30)
+	risky[2] = "delete from " + strings.Repeat("表", 40)
 	lines := strings.Split(dangerText(risky), "\n")
 	if len(lines) != 10 || lines[0] != "这次执行有 10 条危险语句：" || lines[2] != "  delete from t1" || lines[9] != "… 另有 2 条" {
-		t.Errorf("%q", lines)
+		t.Fatalf("%q", lines)
 	}
-	if !strings.HasSuffix(lines[1], "…") || len([]rune(lines[1])) > 63 {
-		t.Errorf("a long line: %q", lines[1])
+	for _, i := range []int{1, 3} {
+		if w := ui.Width(strings.TrimPrefix(lines[i], "  ")); !strings.HasSuffix(lines[i], "…") || w < 59 || w > 60 { // a wide rune is not split
+			t.Errorf("a long line is cut to 60 cells: %q is %d", lines[i], w)
+		}
+	}
+}
+
+// A connection the console waits for may land while the box asks, and the
+// console goes over to it: yes then runs nothing, as it was asked about
+// another connection (§13).
+func TestConfirmDangerousConnLands(t *testing.T) {
+	d := &execDB{}
+	a, c := inConsole(t, "", "")
+	a.sess.Conns[0].Main = db.NewWorker(d)
+	c.schema = ""
+	a.consoleDid(c, c.ed.Load("delete from t_log"))
+	idle := newConn(config.Connection{Name: "idle", Engine: "postgres"})
+	a.sess.Conns = append(a.sess.Conns, idle)
+	c.want, idle.State = idle, connConnecting
+	feed(t, a, "<CR>")
+	if a.confirm == nil {
+		t.Fatal("no question")
+	}
+	a.Update(connected{conn: idle, d: dialed{main: &execDB{}, meta: noDB{}}})
+	if c.conn != idle {
+		t.Fatalf("the console stays on %s", c.conn.Spec.Name)
+	}
+	_, cmd := a.Update(teaKey("y"))
+	deliver(a, cmd)
+	if len(d.ran) != 0 || a.sess.RunSeq != 0 || c.running != nil || a.toast == "" {
+		t.Errorf("ran %q, run %d, toast %q", d.ran, a.sess.RunSeq, a.toast)
 	}
 }
 
 // A save that deletes rows asks first, with what else it holds; no, and the
 // table is as it was, nothing sent; a save of cells and new rows, and one
-// with the question off, goes (§13, F6.7).
+// with the question off, goes; one on its way is not asked about again, and
+// :wq's close stays (§13, F6.7).
 func TestConfirmDeletes(t *testing.T) {
 	setup := func(conf string) (*App, *dataTab, *tagDB) {
 		a := sizedWith(160, 45, userConfig(t, conf, ""))
@@ -192,9 +225,16 @@ func TestConfirmDeletes(t *testing.T) {
 	}
 
 	a, _, _ = setup("")
-	feed(t, a, "lix<Esc>")
+	feed(t, a, "lix<Esc>jo")
 	if cmd := save(a); a.confirm != nil || cmd == nil {
-		t.Errorf("a cell changed: confirm %v, sent %v", a.confirm, cmd != nil)
+		t.Errorf("a cell changed and a row added: confirm %v, sent %v", a.confirm, cmd != nil)
+	}
+	a, tab, _ = setup("")
+	feed(t, a, "dd")
+	a.run("tab.save.close", 0)
+	press(t, a, "y") // on its way
+	if cmd := save(a); a.confirm != nil || cmd != nil || !tab.saving || !tab.closing {
+		t.Errorf("while it saves: confirm %v, cmd %v, closing %v", a.confirm, cmd != nil, tab.closing)
 	}
 	a, _, _ = setup("confirm_dangerous = false")
 	feed(t, a, "dd")

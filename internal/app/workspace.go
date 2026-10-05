@@ -730,8 +730,9 @@ func (a *App) closeTab(p *Pane, i int) {
 	}
 }
 
-// dropTab takes tab i out of p, the pane staying: the tab shown is the one
-// before it, or the one that was current before (T-01).
+// dropTab takes tab i out of p, the pane staying: when it was the current
+// one, the one used before it gives way to take its place (vim's alternate),
+// else the one that now stands where it did (T-01).
 func dropTab(p *Pane, i int) {
 	p.Tabs = slices.Delete(p.Tabs, i, i+1)
 	switch {

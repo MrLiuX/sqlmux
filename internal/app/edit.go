@@ -638,9 +638,6 @@ func (a *App) save() tea.Cmd {
 // is as it was, the marks and the changes there. closing is :wq's: the tab
 // closes once the save lands.
 func (a *App) saveTab(t *dataTab, closing bool) tea.Cmd {
-	if t.changes() == 0 {
-		return nil
-	}
 	if n := len(t.deleted); n > 0 && a.confirmDangerous && !t.saving {
 		text := i18n.T("将删除 %d 行，确定保存？", n)
 		if other := t.changes() - n; other > 0 {

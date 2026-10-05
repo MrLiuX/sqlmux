@@ -1,13 +1,16 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -149,20 +152,30 @@ func TestLayoutRestoreGaps(t *testing.T) {
 			Name: "a", Layout: &config.LayoutNode{Split: "h", Ratio: 3, A: leafNode(1), B: &config.LayoutNode{Split: "v", A: leafNode(0), B: leafNode(7)}},
 			Panes: []config.LayoutPane{
 				{ID: 0, Tabs: []config.LayoutTab{console(8, "")}}, // not a pane
-				{ID: 1, Tabs: []config.LayoutTab{console(1, ""), table("doraemon", "public", "t"), table("doraemon", "public", "t"), table("gone", "public", "u")}},
-				{ID: 9, Tabs: []config.LayoutTab{console(5, "")}}, // not in the tree: no tab of it is made
+				{ID: 9, Tabs: []config.LayoutTab{console(1, "")}}, // not in the tree: no tab of it is made, nor a number taken
+				{ID: 1, Tabs: []config.LayoutTab{console(1, ""), table("doraemon", "public", "t"), table("doraemon", "public", "t"), table("gone", "public", "u"), table("play", "public", "t")}},
 				{ID: 1, Tabs: []config.LayoutTab{console(6, "")}}, // a second entry is not read
 			},
 		}))
 		w := r.Sessions[0].Windows[0]
-		if len(w.Root.Leaves()) != 2 || w.pane(7) == nil || w.pane(9) != nil || len(w.pane(1).Tabs) != 2 || w.lastID != 7 || w.Root.Ratio != 0.5 {
+		if len(w.Root.Leaves()) != 2 || w.pane(7) == nil || w.pane(9) != nil || len(w.pane(1).Tabs) != 3 || w.lastID != 7 || w.Root.Ratio != 0.5 {
 			t.Errorf("panes %d, tabs %d, last %d, ratio %v", len(w.Root.Leaves()), len(w.pane(1).Tabs), w.lastID, w.Root.Ratio)
 		}
-		if got := consoles(r.Sessions[0]); !slices.Equal(got, []int{1}) {
-			t.Errorf("consoles %v", got)
+		if c := consoleOf(w.pane(1)); c == nil || c.n != 1 {
+			t.Errorf("the pane the tree has gets console_1: %+v", c)
+		}
+		if tb := w.pane(1).Tabs[2]; tb.Data == nil || tb.Data.conn.Spec.Name != "play" {
+			t.Errorf("the same table on another connection stays: %+v", tb)
 		}
 		if len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "gone") {
 			t.Errorf("warnings %q", r.Warnings)
+		}
+	})
+
+	t.Run("a pane twice in the tree", func(t *testing.T) {
+		r := restoredFrom(t, oneWindow(config.LayoutWindow{Name: "a", Layout: &config.LayoutNode{Split: "h", A: leafNode(1), B: leafNode(1)}, Panes: []config.LayoutPane{{ID: 1}}}))
+		if n := len(r.Sessions[0].Windows[0].Root.Leaves()); n != 1 {
+			t.Errorf("%d leaves", n)
 		}
 	})
 
@@ -186,6 +199,7 @@ func TestLayoutRestoreGaps(t *testing.T) {
 			{Name: "1", Connection: "doraemon", Windows: win(1)},
 			{Name: "2", Connection: "nowhere", Windows: win(1)}, // the number is taken: the next, with its own file
 			{Name: "3", Connection: "play"},                     // no window: the default, on the next free number
+			{Name: "4", Connection: "play"},                     // and the next one's the one after
 		}}))
 		text := func(s *Session) string { return strings.Join(s.consoles()[0].ed.Lines(), "\n") }
 		if text(r.Sessions[0]) != "one" || r.Sessions[1].consoles()[0].n != 2 || text(r.Sessions[1]) != "two" {
@@ -197,8 +211,8 @@ func TestLayoutRestoreGaps(t *testing.T) {
 		if r.Sessions[1].start.Spec.Name != "doraemon" || len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "nowhere") {
 			t.Errorf("a connection that is not there: starts on %s, warnings %q", r.Sessions[1].start.Spec.Name, r.Warnings)
 		}
-		if r.Sessions[2].start.State == connReady || r.Sessions[1].start.State == connReady {
-			t.Error("only the first session's start is dialed now")
+		if got := consoles(r.Sessions[3]); !slices.Equal(got, []int{4}) {
+			t.Errorf("a second default window: consoles %v", got)
 		}
 	})
 
@@ -265,7 +279,7 @@ func TestLayoutRestoreGaps(t *testing.T) {
 func TestLayoutPendingTabs(t *testing.T) {
 	l := oneWindow(config.LayoutWindow{Name: "a", Layout: &config.LayoutNode{Split: "h", A: leafNode(1), B: leafNode(2)}, Panes: []config.LayoutPane{
 		{ID: 1, Tabs: []config.LayoutTab{table("doraemon", "public", "t_order"), table("doraemon", "public", "dropped"), table("play", "public", "x"), table("", "", "t_user"), table("doraemon", "public", "t_user")}},
-		{ID: 2, Tabs: []config.LayoutTab{{Kind: "console", N: 3, Connection: "play"}}},
+		{ID: 2, Tabs: []config.LayoutTab{{Kind: "console", N: 3, Connection: "play", Schema: "s_play"}}},
 	}})
 	r := restoredFrom(t, l)
 	a := layoutApp(r)
@@ -278,7 +292,10 @@ func TestLayoutPendingTabs(t *testing.T) {
 	if len(p.Tabs) != 5 {
 		t.Fatalf("tabs %d", len(p.Tabs))
 	}
-	for _, i := range []int{0, 2} { // a connection that is ready or not: not before the catalog
+	if c := consoleOf(r.Sessions[0].Windows[0].pane(2)); c.want != play || c.wantSchema != "s_play" || c.schema != "" {
+		t.Errorf("a console on the start waiting for play: %+v", c)
+	}
+	for _, i := range []int{0, 2} { // pending: not before the catalog, the connection ready or not
 		if d := p.Tabs[i].Data; a.fetch(d, true) != nil || d.seq != 0 || d.conn.busy != 0 {
 			t.Errorf("tab %d fetched while pending", i)
 		}
@@ -296,9 +313,40 @@ func TestLayoutPendingTabs(t *testing.T) {
 	if _, ok := a.state.Consoles["console_3"]; ok {
 		t.Error("a console on its way to play is not put on the start's in the state")
 	}
+	if c := consoleOf(r.Sessions[0].Windows[0].pane(2)); c.schema != "" {
+		t.Errorf("nor is the start's schema its: %q", c.schema)
+	}
 	a.Update(connected{conn: play, err: errors.New("refused")})
 	if len(p.Tabs) != 2 || !strings.Contains(a.toast, "refused") {
 		t.Errorf("play failed: %d tabs, toast %q", len(p.Tabs), a.toast)
+	}
+}
+
+// A tab of a connection that is not up, closed and reopened, waits for its
+// catalog as a layout's does, and fetches then (§14「恢复」).
+func TestReopenPending(t *testing.T) {
+	r := restoredFrom(t, &config.Layout{Version: 1, Sessions: []config.LayoutSession{{Name: "1", Connection: "doraemon", Windows: []config.LayoutWindow{{
+		Name: "a", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{table("play", "public", "x"), table("doraemon", "public", "y")}}},
+	}}}}})
+	a := layoutApp(r)
+	play := r.Sessions[0].Conns[1]
+	p := r.Sessions[0].Windows[0].pane(1)
+	a.closeTab(p, 0)
+	a.reopenTab()
+	at := func() *dataTab {
+		i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Data != nil && tb.Data.table.Name == "x" })
+		if i < 0 {
+			t.Fatalf("no x among %d tabs", len(p.Tabs))
+		}
+		return p.Tabs[i].Data
+	}
+	if d := at(); !d.pending || d.seq != 0 {
+		t.Fatalf("reopened with play not up: pending %v, seq %d", d.pending, d.seq)
+	}
+	play.State, play.Main, play.Meta = connReady, db.NewWorker(noDB{}), db.NewWorker(noDB{})
+	a.Update(catalogMsg{conn: play, schemas: []string{"public"}, current: "public", tables: []db.Table{{Schema: "public", Name: "x"}}})
+	if d := at(); d.pending || d.seq == 0 {
+		t.Errorf("play's catalog came: pending %v, seq %d", d.pending, d.seq)
 	}
 }
 
@@ -406,9 +454,14 @@ func TestPickLayout(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sized(160, 45, "nerd")
+	closed := &atomic.Int32{}
+	old := a.sess.Conns[0]
+	old.Main, old.Meta = db.NewWorker(closeDB{n: closed}), db.NewWorker(closeDB{n: closed})
+	old.Spec.DSN = "postgres://u@127.0.0.1:1/db?connect_timeout=1" // the new sessions' connections: refused at once
 	next := &config.Layout{Version: 1, Active: 1, Sessions: []config.LayoutSession{
 		{Name: "x", Connection: "doraemon", Windows: []config.LayoutWindow{{Name: "w", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{{Kind: "console", N: 1}}}}}}},
 		{Name: "y", Connection: "doraemon"},
+		{Name: "z", Connection: "gone"},
 	}}
 	for _, path := range []string{config.LayoutPath("two"), config.LastPath()} {
 		if err := config.SaveLayout(path, next); err != nil {
@@ -440,15 +493,71 @@ func TestPickLayout(t *testing.T) {
 	if a.pickLayout("nope"); len(a.sessions) != 1 || !strings.Contains(a.toast, "nope.toml") {
 		t.Errorf("a layout that is not there: %d sessions, toast %q", len(a.sessions), a.toast)
 	}
+	a.toast = ""
 	cmd := a.pickLayout("last")
-	if cmd == nil || len(a.sessions) != 2 || a.sess.Name != "y" {
+	if cmd == nil || len(a.sessions) != 3 || a.sess.Name != "y" {
 		t.Fatalf("replaced: %d sessions, on %q", len(a.sessions), a.sess.Name)
 	}
 	if got := strings.Join(a.sessions[0].consoles()[0].ed.Lines(), "\n"); got != "abc" {
 		t.Errorf("the new console reads %q, what was typed", got)
 	}
-	if a.sessions[0].start.State == connReady || a.sessions[1].start.State == connReady {
-		t.Error("every connection is dialed in the background, none now")
+	for _, s := range a.sessions {
+		if s.start.State != connConnecting {
+			t.Errorf("session %s: its start is %v, to be dialed in the background", s.Name, s.start.State)
+		}
+	}
+	if !strings.Contains(a.toast, "gone") {
+		t.Errorf("the layout's warnings are a toast: %q", a.toast)
+	}
+	for _, c := range cmd().(tea.BatchMsg) { // the old connections are closed, the new ones dialed (refused)
+		go c()
+	}
+	for i := 0; closed.Load() != 2; i++ {
+		if i > 200 {
+			t.Fatalf("the old session's workers closed: %d of 2", closed.Load())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// a pick is by name: x.toml is the file x.toml.toml of layouts/, not ./x.toml
+	t.Chdir(t.TempDir())
+	byName := &config.Layout{Version: 1, Sessions: []config.LayoutSession{{Name: "viaName", Connection: "doraemon"}}}
+	byPath := &config.Layout{Version: 1, Sessions: []config.LayoutSession{{Name: "viaPath", Connection: "doraemon"}}}
+	if err := errors.Join(config.SaveLayout(config.LayoutPath("x.toml"), byName), config.SaveLayout("x.toml", byPath)); err != nil {
+		t.Fatal(err)
+	}
+	a.pickLayout("x.toml")
+	if a.sess.Name != "viaName" {
+		t.Errorf("x.toml: %q", a.sess.Name)
+	}
+}
+
+// closeDB counts its closes.
+type closeDB struct {
+	noDB
+	n *atomic.Int32
+}
+
+func (d closeDB) Close() error { d.n.Add(1); return nil }
+
+// A session keeps the connection it was started on (§14).
+func TestNewSessionStart(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	conns := []*Conn{readyConn("a"), readyConn("b")}
+	s := newSession("x", conns, conns[1], 1)
+	a.sessions, a.sess = []*Session{s}, s
+	if got := a.layoutOf().Sessions[0].Connection; got != "b" {
+		t.Errorf("started on b, saved %q", got)
+	}
+}
+
+// The first session's start connection is dialed now, and a failure names
+// it (§14「恢复」).
+func TestDialStartFails(t *testing.T) {
+	specs := []config.Connection{{Name: "far", Engine: "postgres", DSN: "postgres://u@127.0.0.1:1/db?connect_timeout=1"}}
+	r := Restore(specs, &config.Layout{Version: 1, Sessions: []config.LayoutSession{{Name: "1", Connection: "far"}}})
+	if err := r.DialStart(context.Background()); err == nil || !strings.HasPrefix(err.Error(), "far: ") {
+		t.Errorf("a refused connection: %v", err)
 	}
 }
 

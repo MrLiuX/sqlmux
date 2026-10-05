@@ -9,12 +9,12 @@
 │       ▸  agent_version  530 │ │  4 │    4 │ pendi… │   4.99 │ t    │ {"n": 4, … │ note 4        │
 │       ▸  goal            57 │ │  5 │    5 │ runni… │   5.99 │ t    │ {"n": 5, … │ line one↵lin… │
 │       ▸  mt_task        812 │ │  6 │    6 │ done   │   6.99 │ t    │ {"n": 6, … │ <null>        │
-│       ▸  m┌───────────────────────────────────────────────────────────────────────┐ote 7        │
-│       ▸  s│ 1 unsaved change(s); quitting would discard them.                     │ine one↵lin… │
-│       ▸  t│ doraemon has an uncommitted transaction; quitting would roll it back. │null>        │
-│       ▸  t│                                                                       │ote 10       │
-│       ▸  t│                                                    y Quit   n Cancel  │ine one↵lin… │
-│       ▸  t└───────────────────────────────────────────────────────────────────────┘null>        │
+│       ▸  mt_┌───────────────────────────────────────────────────────────────────┐ note 7        │
+│       ▸  sch│ 1 unsaved change(s); quitting would discard them.                 │ line one↵lin… │
+│       ▸  t_o│ Uncommitted transaction in doraemon; quitting would roll it back. │ <null>        │
+│       ▸  t_o│                                                                   │ note 10       │
+│       ▸  t_p│                                                y Quit   n Cancel  │ line one↵lin… │
+│       ▸  t_r└───────────────────────────────────────────────────────────────────┘ <null>        │
 │       ▸  t_sku         8.1k │ │ 13 │   13 │ runni… │  13.99 │ t    │ {"n": 13,… │ note 13       │
 │       ▸  t_user         38k │ │ 14 │   14 │ done   │  14.99 │ t    │ {"n": 14,… │ line one↵lin… │
 │       ▸  t_user_address 52k │ │ 15 │   15 │ failed │  15.99 │ t    │ {"n": 15,… │ <null>        │

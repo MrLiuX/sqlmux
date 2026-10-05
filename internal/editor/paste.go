@@ -26,7 +26,6 @@ func (e *Editor) Paste(text string) Effect {
 	case Insert, Replace:
 		if e.plain { // a paste replaces the selection, and is a step of its own
 			e.endChange()
-			e.ins.fresh = true
 			e.deleteSelection()
 		}
 		e.editKey(pasteKey + text) // kept with the keys: a count types it again
