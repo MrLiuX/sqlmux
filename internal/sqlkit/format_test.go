@@ -1,6 +1,7 @@
 package sqlkit
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -80,7 +81,7 @@ func TestFormatTimeout(t *testing.T) {
 	_, _ = Format("select 1", PG, Options{KeywordCase: "preserve", TabWidth: 2}) // the VM made, not timed
 	defer func(d time.Duration) { FormatTimeout = d }(FormatTimeout)
 	FormatTimeout = time.Millisecond
-	if _, err := Format("insert into t (a) values "+strings.Repeat("(1), ", 300)+"(1)", PG, Options{KeywordCase: "preserve", TabWidth: 2}); err != ErrTimeout {
+	if _, err := Format("insert into t (a) values "+strings.Repeat("(1), ", 300)+"(1)", PG, Options{KeywordCase: "preserve", TabWidth: 2}); !errors.Is(err, ErrTimeout) {
 		t.Fatalf("err %v", err)
 	}
 	FormatTimeout = 5 * time.Second
