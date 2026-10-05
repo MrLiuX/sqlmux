@@ -53,4 +53,19 @@ leader k
 check "执行之后：日志 tab 和结果 tab（console_1 #1）也在列表里" eval 'n=$(names); [[ $n == *日志* && $n == *"console_1 #1"* ]] || { echo "  $n"; false; }'
 key Escape
 
+# ---- 审查补的：窗口范围不按「最近用过的」重排；焦点在侧栏时不记聚焦；两个命令有标题、能在面板里搜到
+e2e_stop; start -K "$D/keymaps.toml"; two_tabs
+e2e_keys Space; e2e_type c; sleep 0.8; e2e_keys Space; e2e_type p; sleep 0.5
+leader j; key Down; key Enter; sleep 0.5
+leader j
+check "刚在窗口范围里选过 window 1：再打开，顺序仍是 0: data、1: data（不按最近用过的重排）" eval '[[ $(names) == "0: data,1: data," ]]'
+key Escape
+key C-h; sleep 0.3
+leader k
+check "焦点在侧栏时不记聚焦：最后聚焦的那个 tab 仍算当前，排最后；打开就是 ↵ 回到上一个" eval 'n=$(names); [[ $n == *, ]] && last=${n%,}; last=${last##*,}; [[ -n $last ]] && ! [[ $(sel) == "$last" ]] || { echo "  $(names) sel=$(sel)"; false; }'
+key Escape
+e2e_keys C-p; sleep 0.3; e2e_type ">palette"; sleep 0.6
+check "命令面板里搜得到 palette.window、palette.tab，有标题" eval 'list | grep -q "palette.window" && list | grep -q "palette.tab" && ! list | grep "palette.window\|palette.tab" | grep -q "^palette\."'
+key Escape
+
 e2e_done
