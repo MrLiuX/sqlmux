@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -29,7 +30,7 @@ func quickResult(n int) db.Result {
 		if i%2 == 0 {
 			note = db.Val{Null: true}
 		}
-		r.Rows = append(r.Rows, []db.Val{{S: fmt.Sprint(i)}, note})
+		r.Rows = append(r.Rows, []db.Val{{S: strconv.Itoa(i)}, note})
 	}
 	return r
 }

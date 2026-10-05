@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -79,7 +80,7 @@ func TestTableErrorBar(t *testing.T) {
 		t.Fatal("esc closes it")
 	}
 	a.fetch(tab, false)
-	a.Update(pageMsg{tab: tab, seq: tab.seq, err: fmt.Errorf("gone")})
+	a.Update(pageMsg{tab: tab, seq: tab.seq, err: errors.New("gone")})
 	click(a, find(t, a, ui.Target{Kind: ui.KindButton, Action: fmt.Sprintf("pane.error.close %d", p.ID)}).Min)
 	if tab.bar != nil {
 		t.Error("× closes it")

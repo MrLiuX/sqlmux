@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -43,7 +45,7 @@ func ordersTable(n int) (db.Table, db.Columns, db.Result) {
 			note = db.Val{S: "line one\nline two\tafter tab \x1b[31mred"}
 		}
 		page.Rows = append(page.Rows, []db.Val{
-			{S: fmt.Sprint(i)}, {S: status[i%4]}, {S: fmt.Sprintf("%d.99", i%1000)}, {S: "t"},
+			{S: strconv.Itoa(i)}, {S: status[i%4]}, {S: fmt.Sprintf("%d.99", i%1000)}, {S: "t"},
 			{S: fmt.Sprintf(`{"n": %d, "tags": ["a", "b"]}`, i)}, note,
 			{S: fmt.Sprintf("2026-09-01 00:%02d:00+00", i%60)},
 		})
@@ -216,7 +218,7 @@ func TestGridCancelAndError(t *testing.T) {
 		t.Fatalf("cancelled: toast %q rows %d bar %+v", a.toast, len(tab.page.Rows), tab.bar)
 	}
 	a.fetch(tab, false)
-	a.Update(pageMsg{tab: tab, seq: tab.seq, err: fmt.Errorf("permission denied for table t_order")})
+	a.Update(pageMsg{tab: tab, seq: tab.seq, err: errors.New("permission denied for table t_order")})
 	f := a.render()
 	if st := styleOf(t, f, "permission denied"); st.Fg != a.theme.Error || st.Bg != a.theme.ErrorBg || !strings.Contains(f.String(), "note 1") {
 		t.Errorf("error bar: %+v", st)
