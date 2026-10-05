@@ -1444,6 +1444,9 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - `connections.toml` 支持 `password_cmd`（例如 macOS 的 `security` 命令、`pass`）、`password_env`；PG 还会被 pgconn 自动读取 `~/.pgpass`。
   - 也允许直接写明文 `password`。但如果此时文件对同组或其他用户可读（`mode & 0o044 != 0`），进入界面后用 toast 警告 3 秒（§7.8），例如「connections.toml 里有明文密码，且其他用户可读，建议 chmod 600」。不打到 stderr，因为 alt screen 会把它盖住。DSN 里写的密码（`postgres://u:p@…`）不检查。
   - 密码来源的优先级：`password_cmd` > `password_env` > `password` > DSN 里写的 / `~/.pgpass`（后两者交给 pgconn）。写了多个只取优先级最高的，不报错。
+  - **环境变量展开**（M7 F7.3，用户 2026-10-05 问「要不要支持环境变量配连接」）：`dsn` 和 `password` 里的 `${VAR}` 在读文件时用 `os.Expand` 展开（只认 `${VAR}` 这一种写法，`$VAR` 不展开，免得 DSN 里的 `$` 误伤）；变量没设置时报错「`${PGURL}`：这个环境变量没有设置」，和 `password_env` 一致。这样 `dsn = "${DATABASE_URL}"` 就能整条走环境变量（同 dbmate、Atlas 的 `env("DATABASE_URL")`、sqlc 的 `${}`），`password_env` 保留、不删（已经有人用）。
+  - **表单里的密码**（M7 F7.3）：新建连接表单加一个 `password` 字段，输入时画成 `*`（同 DataGrip 和所有登录框），`dsn` 字段照旧明文（它本来就不该含密码）。保存时密码不写进 connections.toml：macOS 上用 `security add-generic-password -U -a sqlmux -s sqlmux-<name> -w <密码>` 存进钥匙串，文件里写 `password_cmd = "security find-generic-password -a sqlmux -s sqlmux-<name> -w"`；Linux 上有 `secret-tool` 就用它（`secret-tool store --label sqlmux-<name> sqlmux <name>` / `secret-tool lookup sqlmux <name>`）；两者都没有时写明文 `password`，文件 0600，并 toast 提醒。不引入 keyring 库：`password_cmd` 已经是通用机制，钥匙串只是替用户把命令写好（pgtui 用 99designs/keyring 直接读写钥匙串，等有第三个平台要支持时再考虑）。
+  - **界面上不显示密码**：状态栏地址块、树、面板、日志里都只有用户名和 host，DSN 的密码照 §13「日志」脱敏；表单的 `password` 字段是唯一出现密码的地方，画 `*`。
   - `password_cmd` 用 `sh -c` 执行，去掉末尾的换行；结果在进程内按连接名缓存（一次运行里 connections.toml 只读一次，同名就是同一条；测试里换密码来源时先清缓存），`Main`、`Meta` 和别的 session 建同一个连接时都用它（免得钥匙串一再弹窗），建连失败时丢掉缓存，下次重新执行。非 0 退出时报错，错误里带上它的 stderr；`password_env` 指的变量没设置或为空时报错。这些错误对启动时的连接是打印后退出（§14），对其他连接是标成失败、进 toast（§7.8）。
 - **注入**：值一律参数化，标识符一律按方言加引号。
 - **日志与文件**：
