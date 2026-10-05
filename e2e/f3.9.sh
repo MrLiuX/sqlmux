@@ -68,10 +68,10 @@ key g; key q; key q; sleep 1
 check "formatprg 没有输出：toast「格式化失败：没有输出」，缓冲区不变" eval 'e2e_text 1 160 44 | grep -q "格式化失败：没有输出" && [[ $(lines 2) == "$SQL||" ]]'
 
 # ---- 内置格式化也有 5s 超时（goja 跑大语句很慢，§9.5）：打断后 VM 还能继续用
-start; key C-l; setsql "insert into t values $(for i in $(seq 400); do printf "(%d, 'v%d'), " $i $i; done)(0, 'end')"
+start; key C-l; setsql "insert into t values $(for i in $(seq 900); do printf "(%d, 'v%d'), " $i $i; done)(0, 'end')"
 key 0; t0=$(date +%s); key g; key q; key q
 wait_for 9 eval 'e2e_text 1 160 44 | grep -q "格式化超时"'
-check "400 行的 insert：约 5s 后 toast「格式化超时（5s）」，缓冲区不变" eval 'e2e_text 1 160 44 | grep -q "格式化超时（5s）" && (( $(date +%s) - t0 <= 8 )) && [[ $(line 1) == "insert into t values (1, '"'v1'"'), (2,"* && -z $(line 2) ]]'
+check "900 行的 insert：约 5s 后 toast「格式化超时（5s）」，缓冲区不变" eval 'e2e_text 1 160 44 | grep -q "格式化超时（5s）" && (( $(date +%s) - t0 <= 8 )) && [[ $(line 1) == "insert into t values (1, '"'v1'"'), (2,"* && -z $(line 2) ]]'
 setsql "$SQL"; key g; key q; key q; sleep 1.5
 check "超时之后内置格式化照常能用" eval '[[ $(line 1) == select && $(line 4) == from ]] || { echo "  $(lines 4)"; false; }'
 

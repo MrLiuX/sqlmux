@@ -14,7 +14,7 @@ ovl_lines() { e2e_plain | grep -E '^ *│? *│ +\[keys\.' | sed 's/^[^[]*//; s/
 
 # ---- 冲突：启动时浮层，一行一条
 start -K "$D/conflict.toml"; sleep 1
-check "启动：浮层标题「keymaps.toml 有 3 处问题，这些行没有生效：」" eval 'e2e_plain | grep -q "keymaps.toml 有 3 处问题，这些行没有生效："'
+check "启动：浮层标题「keymaps.toml 有 3 处问题：」" eval 'e2e_plain | grep -q "keymaps.toml 有 3 处问题："'
 check "一行一条：<c-b> 与 <C-b> 同键、nosuch 没有这个表、g 是 gg 的前缀" eval 'e2e_plain | grep -q "\[keys.grid\] <c-b>: 与 \"<C-b>\" 是同一个键" && e2e_plain | grep -q "\[keys.nosuch\] x: 没有这个表" && e2e_plain | grep -q "\[keys.grid\] g: 是 gg 的前缀"'
 check "按钮显示 confirm.yes 的键（默认 y）：「y 知道了」" eval 'e2e_plain | grep -q "y 知道了"'
 key Enter

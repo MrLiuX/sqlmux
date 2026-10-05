@@ -15,7 +15,7 @@ wh() { e2e_text 36 103 2 | sed 's/ *▾.*//; s/^ *WHERE *//; s/ *$//'; }
 cline() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }
 toast_text() { e2e_text 1 "$(e2e_flag pane_width)" $(( $(H) - 1 )); }
 # startl ARGS…：带命令行参数启动（配置、state、数据目录都用 $D 里的，重启时沿用）
-startl() { e2e_start -C "$D/cfg" -S "$D/st" -D "$D/data" "$E2E_BIN $*"; wait_for 6 eval 'flag_is alternate_on 1 || exited'; sleep 1.5; }
+startl() { e2e_start -C "${CFG:-$D/cfg}" -S "$D/st" -D "$D/data" "$E2E_BIN $*"; wait_for 6 eval 'flag_is alternate_on 1 || exited'; sleep 1.5; }
 quit_all() { e2e_type ":"; sleep 0.3; e2e_type qa; key Enter; sleep 1.5; }
 save_layout() { e2e_keys C-p; sleep 0.3; e2e_type ">save layout"; sleep 0.2; clear_input; e2e_type ">保存布局"; sleep 0.5; key Enter; sleep 0.4; e2e_type "$1"; key Enter; sleep 0.6; }
 # snap：当前 window 的摘要「window 列表 | ① 的 tab 栏 | WHERE | ② 的 tab 栏」
@@ -109,6 +109,20 @@ quit_all; e2e_stop
 startl; sleep 1.5
 check "两个 session（doraemon 和 1）恢复，当前是退出时的 1，里面开着 t_user" eval '[[ $(sname) == 1 && $(tabbar 1) == *t_user* ]] && e2e_keys Space && e2e_type s && sleep 0.5 && e2e_plain | grep -q "doraemon  1 windows" && e2e_plain | grep -q "1  1 windows"'
 key Escape
+
+# ---- 审查补的：保留名 last 不能当布局名；--layout 启动时连不上是启动错误（退出），layout.open 里连不上只是 toast
+rm -f "$D/st/sqlmux/last.toml" "$D/st/sqlmux/last.toml.broken"
+cp -R "$D/cfg" "$D/cfg2"
+printf '\n[[connection]]\nname = "bad"\nengine = "postgres"\ndsn = "postgres://x:y@127.0.0.1:1/z?sslmode=disable&connect_timeout=2"\n' >>"$D/cfg2/connections.toml"
+sed 's/connection = "doraemon"/connection = "bad"/' "$D/cfg/layouts/a.toml" >"$D/cfg2/layouts/d.toml"
+CFG=$D/cfg2 startl doraemon
+e2e_keys C-p; sleep 0.3; e2e_type ">保存布局"; sleep 0.5; key Enter; sleep 0.4; e2e_type "last"; key Enter; sleep 0.5
+check "layout.save 的名字是保留名 last：toast 拒绝，layouts 里没有 last.toml" eval 'toast_text | grep -q "last" && [[ ! -e "$E2E_TMP/config/sqlmux/layouts/last.toml" ]]'
+e2e_keys C-p; sleep 0.3; e2e_type ">打开布局"; sleep 0.5; key Enter; sleep 0.5; e2e_type d; sleep 0.4; key Enter; sleep 4
+check "layout.open 一个启动连接连不上的布局：程序不退出，toast 提到连接 bad" eval 'running && screen_has "bad"'
+CFG=$D/cfg2 startl --layout d; sleep 3
+check "--layout 启动时连不上（bad）：和 sqlmux <连接名> 一样，是启动错误，退出码 1" eval 'screen_has "[e2e-exit 1]"'
+e2e_stop
 
 
 e2e_done
