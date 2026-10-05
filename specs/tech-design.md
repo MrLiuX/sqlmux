@@ -413,6 +413,7 @@ M5 验收后加的命令同样不带默认键（F5.16，用户在 keymaps.toml �
 - `tab.quit`「关闭 tab，空了连 pane / window 一起关」：先照 `tab.close` 关掉当前 tab（有未保存的修改照样确认）；pane 里没有 tab 了、window 里还有别的 pane，就关掉这个 pane；window 里只剩这一个空 pane（结果区不算），就关掉这个 window，结果区和里面的结果 tab（含固定的）一起关、不另外确认，同 `window.close`；是 session 里最后一个 window 时不关，留下引导页，和 `tab.close` 一样。
 - `tab.reopen`「重开关掉的 tab」：每个 session 在内存里记最近关掉的 20 个表和 console tab（引导页不记，重启后不留），每次重开最近的一个，再按往前一个。开回原来的 pane，那个 pane 已经没了就开在当前 pane；表恢复关掉时的 WHERE、ORDER、LIMIT，console 打开原来的文件、用原来的连接和 schema；这个文件已经在别处开着时切过去，在别的 session 里就 attach 那个 session 再切过去（F5.16 审查时定）。这张表在那个 pane 里已经开着时（F3.37 一张表在一个 pane 里只有一个 tab），只切过去。关掉时放弃了的未保存修改不恢复。
 - `session.new`「新建 session」：和 session 列表里的 `n` 相同，在哪里都能执行。
+- `palette.window`、`palette.tab`（F5.19）：打开面板的「窗口」/「Tab」范围（§12）。
 
 console 里的 `x` 是 vim 的删除字符，所以 console 的 tab 用 `:q` 关闭。
 
@@ -1338,7 +1339,8 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
     - 浮层作用域里的，比如面板自己的 `palette.up` / `palette.down` / `palette.run` / `palette.close`，以及以后的 `where.*`、`cols.*`；
     - `cell`、`input` 作用域里的，比如 `cell.accept`「确定」、`cell.up`「加一」。
   - 判断方法是「只在这些作用域里有绑定」。
-- **范围与前缀**：按 PRD K-02，范围标签为 所有 / 会话 / 窗口·Pane / 表 / 命令 / SQL，M0 先有 所有、窗口·Pane、表、命令，M5 F5.1 加上会话。`Tab` / `S-Tab` 切换范围标签；输入前缀直接限定范围：`>` 命令、`@` 表、`%` 窗口·Pane、`$` 会话、`;` SQL。
+- **范围与前缀**：按 PRD K-02，范围标签为 所有 / 会话 / 窗口·Pane / 窗口 / Tab / 表 / 命令 / SQL，M0 先有 所有、窗口·Pane、表、命令，M5 F5.1 加上会话，F5.19 加上窗口和 Tab。`Tab` / `S-Tab` 切换范围标签；输入前缀直接限定范围：`>` 命令、`@` 表、`%` 窗口·Pane、`&` 窗口、`#` Tab、`$` 会话、`;` SQL。
+  - **窗口 `&`** 和 **Tab `#`**（M5 F5.19，用户要照 nvim 的习惯用 `SPC j` 切 window、`SPC k` 在最近用过的 tab 之间切）：「窗口」只列当前 session 的 window，按编号排；「Tab」列当前 session 所有 window 里打开着的表、console、结果 tab，按最近聚焦的时间从新到旧，当前 tab 排最后，这样打开就 `↵` 等于回到上一个 tab（同 telescope `buffers` 的 `sort_mru` + `ignore_current_buffer`）。tab 的「最近聚焦」是它最后一次成为焦点 pane 的当前 tab 的时刻，记在 session 上、不持久化。`palette.window`「命令面板：窗口」、`palette.tab`「命令面板：Tab」分别预填 `&`、`#`，同 `palette.command`，都不带默认键。「窗口·Pane」照旧，三者混在一起、按编号。前缀不用 `^`、`!`：fzf 扩展语法里它们是前缀锚点和排除。
   - 范围只由输入里的前缀决定，不另存状态：`Tab` / `S-Tab` 就是改写前缀（「命令」→ `>`、「表」→ `@`、「窗口·Pane」→ `%`，「所有」去掉前缀），输入的其余内容保留；范围标签按当前前缀高亮。`palette.command` 相当于输入了 `>`，也是同一套机制；F5.8 起 `:` 默认绑 `palette.open`，打开「所有」。
 - **每一行**（K-03）：图标、名称、所在位置（`dim` 色）、右侧的键位或 ON / OFF、类型标签（命令 / 表 / Pane / 窗口）。图标都放在最左列对齐。
   - pane 的名称是 `⟨1⟩ data · t_order`，所在位置是它所在的 window，如 `0: data`（M4 F4.3 起写全层级 `play › 0: data`）；
