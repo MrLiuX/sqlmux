@@ -2,10 +2,10 @@ package db
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/sqlkit"
 )
 
@@ -28,10 +28,16 @@ type Change struct {
 // one to delete that is gone; ErrNotInserted one to insert that went in as
 // none, a PG BEFORE trigger's NULL.
 var (
-	ErrStale       = errors.New("行数据已变化或行不存在")
-	ErrGone        = errors.New("行不存在")
-	ErrNotInserted = errors.New("没有插入")
+	ErrStale       = msgError(i18n.N("行数据已变化或行不存在"))
+	ErrGone        = msgError(i18n.N("行不存在"))
+	ErrNotInserted = msgError(i18n.N("没有插入"))
 )
+
+// msgError is an error that says itself in the language in use, when it is
+// asked (§14「界面语言」); the same text is the same error.
+type msgError string
+
+func (e msgError) Error() string { return i18n.T(string(e)) }
 
 // Changes is what a save writes (§10.3, §10.6): the rows to delete, by
 // their row identity's values; the rows to update; the rows to insert,

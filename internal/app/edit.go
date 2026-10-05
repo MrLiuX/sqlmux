@@ -18,6 +18,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"sqlmux/internal/db"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/sqlkit"
 	"sqlmux/internal/ui"
 )
@@ -164,11 +165,11 @@ func (t *dataTab) put(add *newRow, k editKey, e edit) {
 func (t *dataTab) whyNoEdit() string {
 	switch {
 	case t.conn.Spec.ReadOnly:
-		return t.conn.Spec.Name + " 是只读连接"
+		return i18n.T("%s 是只读连接", t.conn.Spec.Name)
 	case t.cols.Key() == nil:
-		return t.table.Name + " 没有主键，也没有全部列都非空的唯一索引，只读"
+		return i18n.T("%s 没有主键，也没有全部列都非空的唯一索引，只读", t.table.Name)
 	case t.cols.ReadOnly != "":
-		return t.table.Name + " 的" + t.cols.ReadOnly + "，只读"
+		return i18n.T("%s 的%s，只读", t.table.Name, t.cols.ReadOnly)
 	}
 	return ""
 }
@@ -196,7 +197,7 @@ func (a *App) editCell(pasted *string) tea.Cmd {
 	}
 	field := t.fieldAt(t.col)
 	if col := t.column(t.page.Cols[field].Name); col.Fixed {
-		return a.showToast(col.Name+" 是 "+col.Type+"，只读", toastTTL)
+		return a.showToast(i18n.T("%s 是 %s，只读", col.Name, col.Type), toastTTL)
 	}
 	c := &cellEdit{key: editKey{key, t.page.Cols[field].Name}, add: sr.add, orig: db.Val{Null: true}} // a row added's: DEFAULT, till set
 	if sr.add == nil {
@@ -257,10 +258,10 @@ func (t *dataTab) options() []option {
 	}
 	var out []option
 	if timeKind(col.Type) != ui.NotTime {
-		out = append(out, option{label: "◷ 现在", now: true})
+		out = append(out, option{label: i18n.T("◷ 现在"), now: true})
 	}
 	for _, m := range ui.Filter(pattern, labels) {
-		out = append(out, option{label: labels[m.Index], note: "值", pos: m.Pos, set: edit{val: db.Val{S: vals[m.Index]}, orig: c.orig}})
+		out = append(out, option{label: labels[m.Index], note: i18n.T("值"), pos: m.Pos, set: edit{val: db.Val{S: vals[m.Index]}, orig: c.orig}})
 	}
 	if !col.NotNull {
 		out = append(out, option{label: "∅ NULL", set: edit{val: db.Val{Null: true}, orig: c.orig}})
@@ -269,7 +270,7 @@ func (t *dataTab) options() []option {
 		out = append(out, option{label: "DEFAULT", set: edit{val: db.Val{Null: true}, def: true, orig: c.orig}})
 	}
 	if _, ok := t.edits[c.key]; ok && c.add == nil { // a row added's r takes the whole row back
-		out = append(out, option{label: "↺ 原值", set: edit{val: c.orig, orig: c.orig}})
+		out = append(out, option{label: i18n.T("↺ 原值"), set: edit{val: c.orig, orig: c.orig}})
 	}
 	return out
 }
@@ -692,7 +693,7 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 	t.closing = false
 	switch {
 	case errors.Is(m.err, context.Canceled):
-		t.note = ui.Note{Head: "已取消，已回滚", Fg: a.theme.Warn}
+		t.note = ui.Note{Head: i18n.T("已取消，已回滚"), Fg: a.theme.Warn}
 	case m.err != nil: // on the error bar: the query bar keeps what went well alone (§7.8「错误栏」)
 		t.note = ui.Note{}
 		head := ""
@@ -702,7 +703,7 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 				named = append(named, t.cols.Key()[i]+" = "+v)
 			}
 			if t.failed = &key; errors.Is(m.err, db.ErrStale) || errors.Is(m.err, db.ErrGone) {
-				return strings.Join(named, ", ") + " 的"
+				return i18n.T("%s 的", strings.Join(named, ", "))
 			}
 			return strings.Join(named, ", ") + "："
 		}
@@ -713,12 +714,12 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 		case i < len(m.dels)+len(m.rows):
 			head = named(joinKey(m.rows[i-len(m.dels)].Key))
 		default:
-			head = fmt.Sprintf("新增的第 %d 行", i-len(m.dels)-len(m.rows)+1)
+			head = i18n.T("新增的第 %d 行", i-len(m.dels)-len(m.rows)+1)
 			if !errors.Is(m.err, db.ErrNotInserted) { // ours reads on: 新增的第 2 行没有插入
 				head += "："
 			}
 		}
-		t.bar = newErrorBar("save", t.conn.eng.ErrorOf(m.err), head, "，已回滚")
+		t.bar = newErrorBar("save", t.conn.eng.ErrorOf(m.err), head, i18n.T("，已回滚"))
 		return a.deadlocked(t.conn, m.err)
 	default:
 		clearBar(&t.bar, "save")
@@ -742,9 +743,9 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 		cmd := a.fetch(t, true) // the rows may leave the WHERE now
 		uncommitted := ""
 		if m.tx == 'T' {
-			uncommitted = "（未提交）"
+			uncommitted = i18n.T("（未提交）")
 		}
-		t.note = ui.Note{Head: fmt.Sprintf("已保存 %d 行%s · %s", len(m.dels)+len(m.rows)+len(m.adds), uncommitted, m.took.Round(time.Millisecond))}
+		t.note = ui.Note{Head: i18n.T("已保存 %d 行%s · %s", len(m.dels)+len(m.rows)+len(m.adds), uncommitted, m.took.Round(time.Millisecond))}
 		return cmd
 	}
 	return nil
@@ -769,13 +770,27 @@ func unsaved(panes ...*Pane) int {
 	return n
 }
 
+// lostVerb is what a question about changes to lose is for, in the words of
+// its button and its two sentences (§10.5).
+type lostVerb struct{ label, discard, rollback string }
+
+var (
+	verbClose   = lostVerb{i18n.N("关闭"), i18n.N("关闭会丢弃。"), i18n.N("关闭会回滚。")}
+	verbQuit    = lostVerb{i18n.N("退出"), i18n.N("退出会丢弃。"), i18n.N("退出会回滚。")}
+	verbRefresh = lostVerb{label: i18n.N("刷新"), discard: i18n.N("刷新会丢弃。")}
+)
+
 // unlessLost runs then, or asks first (§10.5): with n changes, of what,
 // to lose, "<what>有 N 处修改未保存，<verb>会丢弃。"; with the
 // transactions of conns to roll back, "<names> 有未提交的事务，<verb>会回滚。".
-func (a *App) unlessLost(n int, what string, conns []*Conn, verb string, then func() tea.Cmd) tea.Cmd {
+func (a *App) unlessLost(n int, what string, conns []*Conn, verb lostVerb, then func() tea.Cmd) tea.Cmd {
 	var text string
 	if n > 0 {
-		text = fmt.Sprintf("%s有 %d 处修改未保存，%s会丢弃。", what, n, verb)
+		if what == "" {
+			text = i18n.T("有 %d 处修改未保存，", n) + i18n.T(verb.discard)
+		} else {
+			text = i18n.T("%s有 %d 处修改未保存，", what, n) + i18n.T(verb.discard)
+		}
 	}
 	var names []string
 	for _, c := range conns {
@@ -784,12 +799,12 @@ func (a *App) unlessLost(n int, what string, conns []*Conn, verb string, then fu
 		}
 	}
 	if len(names) > 0 {
-		text += strings.Join(names, "、") + " 有未提交的事务，" + verb + "会回滚。"
+		text += i18n.T("%s 有未提交的事务，", strings.Join(names, i18n.T("、"))) + i18n.T(verb.rollback)
 	}
 	if text == "" {
 		return then()
 	}
-	a.confirm = &confirmBox{text, verb, then}
+	a.confirm = &confirmBox{text, i18n.T(verb.label), then}
 	return nil
 }
 
@@ -813,7 +828,7 @@ func (a *App) quit() tea.Cmd {
 	for _, s := range a.sessions {
 		ps = append(ps, s.panes()...)
 	}
-	return a.unlessLost(unsaved(ps...), "", txConns(a.sessions...), "退出", func() tea.Cmd {
+	return a.unlessLost(unsaved(ps...), "", txConns(a.sessions...), verbQuit, func() tea.Cmd {
 		if cmd, ok := a.flushAll(ps...); !ok { // the consoles' text is not lost (§11)
 			return cmd
 		}
@@ -842,14 +857,14 @@ func cellCheck(typ, text string) string {
 	case intBits[t] > 0:
 		n := strings.TrimLeft(s, "+-")
 		if len(s)-len(n) > 1 || !pgInteger.MatchString(n) {
-			return "不是有效的整数"
+			return i18n.T("不是有效的整数")
 		}
 		sign, base, n := s[:len(s)-len(n)], 10, strings.ReplaceAll(n, "_", "")
 		if len(n) > 1 && strings.ContainsAny(n[1:2], "xXoObB") { // 010 is ten, as in PG: base 0 only past a prefix
 			base = 0
 		}
 		if _, err := strconv.ParseInt(sign+n, base, intBits[t]); err != nil {
-			return fmt.Sprintf("超出 int%d 的范围", intBits[t]/8)
+			return i18n.T("超出 int%d 的范围", intBits[t]/8)
 		}
 	case t == "numeric", t == "real", t == "double precision":
 		n := strings.TrimLeft(s, "+-")
@@ -857,14 +872,14 @@ func cellCheck(typ, text string) string {
 		special := w == "nan" || w == "inf" || w == "infinity"
 		switch sign := s[:len(s)-len(n)]; {
 		case len(sign) > 1, t == "numeric" && w == "nan" && sign != "": // numeric's NaN takes no sign, a float's may
-			return "不是有效的数字"
+			return i18n.T("不是有效的数字")
 		case t == "numeric":
 			var p, sc int
 			switch k, _ := fmt.Sscanf(typ, "numeric(%d,%d)", &p, &sc); {
 			case !special && !pgDecimal.MatchString(n) && !pgInteger.MatchString(n):
-				return "不是有效的数字"
+				return i18n.T("不是有效的数字")
 			case k == 2 && w != "nan" && (special || !numericFits(n, p, sc)):
-				return "超出 " + typ + " 的范围"
+				return i18n.T("超出 %s 的范围", typ)
 			}
 		case special:
 		default: // strtod's: ParseFloat's, but for a hex float's exponent, _ and underflow
@@ -879,9 +894,9 @@ func cellCheck(typ, text string) string {
 			bits := map[string]int{"real": 32, "double precision": 64}[t]
 			switch v, err := strconv.ParseFloat(f, bits); {
 			case errors.Is(err, strconv.ErrRange), err == nil && v == 0 && strings.Trim(mant, "0.") != "": // so small it is 0: PG's out of range too
-				return fmt.Sprintf("超出 float%d 的范围", bits/8)
+				return i18n.T("超出 float%d 的范围", bits/8)
 			case err != nil, strings.Contains(s, "_"): // ParseFloat takes 1_000, strtod doesn't
-				return "不是有效的数字"
+				return i18n.T("不是有效的数字")
 			}
 		}
 	case t == "boolean": // a prefix of one of PG's words, on and off by two letters
@@ -891,14 +906,14 @@ func cellCheck(typ, text string) string {
 				return ""
 			}
 		}
-		return "不是有效的布尔值"
+		return i18n.T("不是有效的布尔值")
 	case t == "uuid":
 		if !validUUID(text) {
-			return "不是有效的 UUID"
+			return i18n.T("不是有效的 UUID")
 		}
 	case t == "json" || t == "jsonb":
 		if !json.Valid([]byte(text)) {
-			return "不是有效的 JSON"
+			return i18n.T("不是有效的 JSON")
 		}
 	case timeKind(typ) != ui.NotTime:
 		k := timeKind(typ)
@@ -907,7 +922,7 @@ func cellCheck(typ, text string) string {
 			words = []string{"now", "allballs"}
 		}
 		if !slices.Contains(words, strings.ToLower(s)) && !isoTimeOK(isoTime[k], s) {
-			return "不是有效的日期 / 时间"
+			return i18n.T("不是有效的日期 / 时间")
 		}
 	}
 	return ""

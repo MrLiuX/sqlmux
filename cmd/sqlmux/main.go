@@ -13,6 +13,7 @@ import (
 
 	"sqlmux/internal/app"
 	"sqlmux/internal/config"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 )
 
@@ -41,6 +42,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	i18n.Set(cfg.Language) // from here on, what is shown follows it (§14)
 	sess, warning, err := open(name)
 	if err != nil {
 		return err
@@ -85,6 +87,7 @@ func keysCmd(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "sqlmux:", err)
 		return 1
 	}
+	i18n.Set(cfg.Language)
 	keys, problems := keymap.New(cfg)
 	for _, p := range problems {
 		fmt.Fprintln(stderr, p)

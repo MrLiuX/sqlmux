@@ -13,6 +13,7 @@ import (
 
 	"sqlmux/internal/config"
 	"sqlmux/internal/editor"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -109,11 +110,11 @@ func (a *App) KeyProblems(ps []keymap.Problem) {
 	if len(ps) == 0 {
 		return
 	}
-	lines := []string{fmt.Sprintf("keymaps.toml 有 %d 处问题，这些行没有生效：", len(ps))}
+	lines := []string{fmt.Sprintf(i18n.T("keymaps.toml 有 %d 处问题，这些行没有生效："), len(ps))}
 	for _, p := range ps {
 		lines = append(lines, "  "+p.String())
 	}
-	a.confirm = &confirmBox{text: strings.Join(lines, "\n"), yes: "知道了"}
+	a.confirm = &confirmBox{text: strings.Join(lines, "\n"), yes: i18n.T("知道了")}
 }
 
 // Init switches Bubble Tea's renderer to grapheme widths, the same as Frame

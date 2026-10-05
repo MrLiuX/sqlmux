@@ -14,6 +14,7 @@ import (
 
 	"sqlmux/internal/db"
 	"sqlmux/internal/editor"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/sqlkit"
 	"sqlmux/internal/ui"
@@ -155,7 +156,7 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 	t.seq++
 	// a ; would end the statement and start another: 1=1; drop table t (§9.6)
 	if sqlkit.HasSemicolon(t.applied, t.conn.eng.Dialect()) {
-		t.bar = &errorBar{ui.ErrorBar{First: ui.Note{Head: "WHERE 里不能有 ;"}}, "fetch"}
+		t.bar = &errorBar{ui.ErrorBar{First: ui.Note{Head: i18n.T("WHERE 里不能有 ;")}}, "fetch"}
 		t.backToShown()
 		return nil
 	}
@@ -210,7 +211,7 @@ func (a *App) gotPage(m pageMsg) tea.Cmd {
 		if t.typing != "where" {
 			t.where = ui.Input{Text: t.applied, Pos: len(t.applied)}
 		}
-		return a.showToast("查询已取消", toastTTL)
+		return a.showToast(i18n.T("查询已取消"), toastTTL)
 	case m.err != nil: // under the rows shown, which stay; its WHERE is there to be fixed (backToShown), the count owed
 		// ponytail: no 位置 line, the SQL being ours, not the WHERE typed;
 		// map Position into the WHERE if it is ever wanted
@@ -497,7 +498,7 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 	case estimated:
 		rows = "~" + ui.Magnitude(float64(t.count))
 	}
-	right := "auto · " + rows + " 行"
+	right := i18n.T("auto · %s 行", rows)
 	if t.page.Cols != nil {
 		right += " · " + t.page.Took.Round(time.Millisecond).String()
 	}
@@ -553,7 +554,7 @@ var autoIntervals = []time.Duration{0, 2 * time.Second, 5 * time.Second, 10 * ti
 // autoLabel is an interval as its dropdown and button say it: 关, 5s, 60s.
 func autoLabel(d time.Duration) string {
 	if d == 0 {
-		return "关"
+		return i18n.T("关")
 	}
 	return fmt.Sprintf("%ds", int(d/time.Second))
 }

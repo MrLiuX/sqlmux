@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+
+	"sqlmux/internal/i18n"
 )
 
 // Connection is one [[connection]] in connections.toml (§14).
@@ -36,7 +38,7 @@ func LoadConnections(name string) (conns []Connection, start int, warning string
 	path := connectionsPath()
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, 0, "", fmt.Errorf("找不到 %s", path)
+		return nil, 0, "", fmt.Errorf(i18n.T("找不到 %s"), path)
 	}
 	if err != nil {
 		return nil, 0, "", err
@@ -50,12 +52,12 @@ func LoadConnections(name string) (conns []Connection, start int, warning string
 	}
 	if name != "" {
 		if start = slices.Index(names, name); start < 0 {
-			return nil, 0, "", fmt.Errorf("%s: 没有名为 %q 的连接，已有：%s", path, name, strings.Join(names, ", "))
+			return nil, 0, "", fmt.Errorf(i18n.T("%s: 没有名为 %q 的连接，已有：%s"), path, name, strings.Join(names, ", "))
 		}
 	}
 	plain := slices.ContainsFunc(conns, func(c Connection) bool { return c.Password != "" })
 	if info, err := os.Stat(path); err == nil && plain && info.Mode().Perm()&0o044 != 0 {
-		warning = "connections.toml 里有明文密码，且其他用户可读，建议 chmod 600"
+		warning = i18n.T("connections.toml 里有明文密码，且其他用户可读，建议 chmod 600")
 	}
 	return conns, start, warning, nil
 }
@@ -70,12 +72,12 @@ func parseConnections(path, text string) ([]Connection, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	if len(file.Connection) == 0 {
-		return nil, fmt.Errorf("%s: 里面没有 [[connection]]", path)
+		return nil, fmt.Errorf(i18n.T("%s: 里面没有 [[connection]]"), path)
 	}
 	var names []string
 	for i, c := range file.Connection {
 		if _, p := c.Check(names); p != "" {
-			return nil, fmt.Errorf("%s: 第 %d 个连接：%s", path, i+1, p)
+			return nil, fmt.Errorf(i18n.T("%s: 第 %d 个连接：%s"), path, i+1, p)
 		}
 		names = append(names, c.Name)
 	}
@@ -87,18 +89,18 @@ func parseConnections(path, text string) ([]Connection, error) {
 func (c Connection) Check(names []string) (field, problem string) {
 	for _, f := range [][2]string{{"name", c.Name}, {"engine", c.Engine}, {"dsn", c.DSN}} {
 		if f[1] == "" {
-			return f[0], "缺少 " + f[0]
+			return f[0], i18n.T("缺少 %s", f[0])
 		}
 	}
 	// the name keys state.json's tables and tree node IDs (§14)
 	if strings.ContainsAny(c.Name, `/\`) || strings.HasPrefix(c.Name, ".") {
-		return "name", fmt.Sprintf(`name = %q：不能含 / 或 \，也不能以 . 开头`, c.Name)
+		return "name", fmt.Sprintf(i18n.T(`name = %q：不能含 / 或 \，也不能以 . 开头`), c.Name)
 	}
 	if slices.Contains(names, c.Name) { // the tree's roots go by it too (§5)
-		return "name", fmt.Sprintf("name = %q 重复了", c.Name)
+		return "name", fmt.Sprintf(i18n.T("name = %q 重复了"), c.Name)
 	}
 	if c.Engine != "postgres" && c.Engine != "mysql" {
-		return "engine", fmt.Sprintf("engine = %q：只能是 postgres 或 mysql", c.Engine)
+		return "engine", fmt.Sprintf(i18n.T("engine = %q：只能是 postgres 或 mysql"), c.Engine)
 	}
 	return "", ""
 }
@@ -163,7 +165,7 @@ func (c Connection) Secret() (string, error) {
 		if s := os.Getenv(c.PasswordEnv); s != "" {
 			return s, nil
 		}
-		return "", fmt.Errorf("password_env = %q：这个环境变量没有设置", c.PasswordEnv)
+		return "", fmt.Errorf(i18n.T("password_env = %q：这个环境变量没有设置"), c.PasswordEnv)
 	}
 	return c.Password, nil
 }

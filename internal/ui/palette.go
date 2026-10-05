@@ -6,6 +6,7 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/sqlkit"
 )
 
@@ -129,7 +130,7 @@ func (p Palette) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 	f.Fill(box, bg)
 	border := uv.NormalBorder().Style(uv.Style{Fg: th.Focus, Bg: th.PaneBg})
 	border.Draw(f.Buf, box)
-	f.Text(box.Min.X+2, box.Min.Y, box.Max.X-1, " 命令面板 ", uv.Style{Fg: th.Focus, Bg: th.PaneBg, Attrs: uv.AttrBold})
+	f.Text(box.Min.X+2, box.Min.Y, box.Max.X-1, i18n.T(" 命令面板 "), uv.Style{Fg: th.Focus, Bg: th.PaneBg, Attrs: uv.AttrBold})
 
 	x0, x1 := box.Min.X+2, box.Max.X-2 // one column of padding inside the border
 	y := box.Min.Y + 1

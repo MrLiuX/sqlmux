@@ -17,6 +17,7 @@ import (
 	"sqlmux/internal/config"
 	"sqlmux/internal/db"
 	"sqlmux/internal/editor"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/sqlkit"
 	"sqlmux/internal/ui"
@@ -59,10 +60,10 @@ func (a *App) complete(t *dataTab) {
 				continue
 			}
 			for _, e := range c.Enum {
-				vals = append(vals, candidate{label: e, insert: "'" + strings.ReplaceAll(e, "'", "''") + "'", note: "值"})
+				vals = append(vals, candidate{label: e, insert: "'" + strings.ReplaceAll(e, "'", "''") + "'", note: i18n.T("值")})
 			}
 			if c.Type == "boolean" || c.Type == "tinyint(1)" { // MySQL's takes true and false too
-				vals = append(vals, candidate{label: "true", insert: "true", note: "值"}, candidate{label: "false", insert: "false", note: "值"})
+				vals = append(vals, candidate{label: "true", insert: "true", note: i18n.T("值")}, candidate{label: "false", insert: "false", note: i18n.T("值")})
 			}
 		}
 		groups, pattern = [][]candidate{vals}, strings.TrimLeft(w.Prefix, `'"`) // MySQL's "…" too
@@ -76,7 +77,7 @@ func (a *App) complete(t *dataTab) {
 		}
 		for _, k := range whereKeywords {
 			if k != "ilike" || t.conn.eng.Dialect() == sqlkit.PG { // PG's alone
-				kws = append(kws, candidate{label: k, insert: k, note: "关键字", kw: true, space: sqlkit.SpaceAfter(k)})
+				kws = append(kws, candidate{label: k, insert: k, note: i18n.T("关键字"), kw: true, space: sqlkit.SpaceAfter(k)})
 			}
 		}
 		groups = [][]candidate{cols, kws}
@@ -354,9 +355,9 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 	tables := func(in string, skip map[tableID]bool) (out []candidate) {
 		for _, t := range conn.Tables {
 			if t.Schema == in && !skip[idOf(t)] {
-				note := "表"
+				note := i18n.T("表")
 				if t.View() {
-					note = "视图"
+					note = i18n.T("视图")
 				}
 				out = append(out, candidate{label: t.Name, insert: t.Name, note: note})
 			}
@@ -422,7 +423,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 			if r := []rune(all); len(r) > 40 {
 				label = string(r[:39]) + "…"
 			}
-			rest = append([]candidate{{label: label, insert: all, note: "全部 " + strconv.Itoa(len(rest)) + " 列"}}, rest...)
+			rest = append([]candidate{{label: label, insert: all, note: i18n.T("全部 %d 列", len(rest))}}, rest...)
 		}
 		groups = [][]candidate{rest}
 	default:
@@ -442,7 +443,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 		}
 		var kws []candidate
 		for _, k := range sqlkit.Common(conn.eng.Dialect()) {
-			kws = append(kws, candidate{label: k, insert: k, note: "关键字", kw: true, space: sqlkit.SpaceAfter(k)})
+			kws = append(kws, candidate{label: k, insert: k, note: i18n.T("关键字"), kw: true, space: sqlkit.SpaceAfter(k)})
 		}
 		groups = [][]candidate{near, far, append(ctes, tables(schema, named)...), kws}
 	}

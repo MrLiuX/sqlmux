@@ -14,6 +14,7 @@ import (
 
 	"sqlmux/internal/config"
 	"sqlmux/internal/editor"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -58,7 +59,7 @@ func openConsole(c *Conn, n int) (*consoleTab, error) {
 	path := config.ConsolePath(n)
 	text, err := config.ReadConsole(path)
 	if err != nil {
-		return nil, fmt.Errorf("读取失败：%w", err)
+		return nil, fmt.Errorf(i18n.T("读取失败：%w"), err)
 	}
 	return &consoleTab{conn: c, schema: c.Schema, ed: editor.New(text), n: n, path: path, failed: -1}, nil
 }
@@ -273,7 +274,7 @@ func (a *App) ex(c string) tea.Cmd {
 	if id := exAliases[strings.TrimSpace(c)]; id != "" {
 		return a.run(id, 0)
 	}
-	return a.showToast("不支持的命令："+c, toastTTL)
+	return a.showToast(i18n.T("不支持的命令：%s", c), toastTTL)
 }
 
 // flush writes console t's file if it changed since it was last written.
@@ -311,7 +312,7 @@ func (a *App) flushAll(panes ...*Pane) (tea.Cmd, bool) {
 }
 
 func (a *App) saveFailed(err error) tea.Cmd {
-	return a.showToast("保存失败："+err.Error(), toastTTL)
+	return a.showToast(i18n.T("保存失败：%s", err.Error()), toastTTL)
 }
 
 type externalDone struct {

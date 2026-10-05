@@ -10,10 +10,12 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/exp/golden"
 
 	"sqlmux/internal/config"
 	"sqlmux/internal/db"
 	"sqlmux/internal/editor"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -361,4 +363,46 @@ func TestThemeSwitch(t *testing.T) {
 func ansiHex(c color.Color) string {
 	r, g, b, _ := c.RGBA()
 	return fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8)
+}
+
+// With language = "en" the screen is in English: the landing page, the
+// palette, the confirm box over a table with changes, the query bar, the
+// result area's log, a table's saved note (§14「界面语言」, F6.4).
+func TestGoldenEnglish(t *testing.T) {
+	if err := i18n.Set("en"); err != nil {
+		t.Fatal(err)
+	}
+	defer i18n.Set("zh")
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	scenes := map[string]func() *App{
+		"landing": func() *App { return wide(160, 45) },
+		"palette": func() *App {
+			a := wide(160, 45)
+			feed(t, a, "<C-p>")
+			return a
+		},
+		"confirm": func() *App {
+			a := wide(160, 45)
+			tab := loadOrders(t, a, 60)
+			tab.edits = map[editKey]edit{{joinKey([]string{"1"}), "status"}: {val: db.Val{S: "done"}, orig: db.Val{S: "running"}}}
+			feed(t, a, "x")
+			return a
+		},
+		"table": func() *App {
+			a := wide(160, 45)
+			tab := loadOrders(t, a, 60)
+			tab.note = ui.Note{Head: i18n.T("已保存 %d 行%s · %s", 2, "", "3ms")}
+			return a
+		},
+		"result": func() *App {
+			a, _ := inRun(t, &execDB{res: map[string]db.Result{"select 1": rows(3)}}, "select 1;")
+			press(t, a, "<CR>")
+			return a
+		},
+	}
+	for name, scene := range scenes {
+		t.Run(name, func(t *testing.T) {
+			golden.RequireEqual(t, scene().render().String())
+		})
+	}
 }

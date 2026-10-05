@@ -1,0 +1,45 @@
+┌─ ⓪  doraemon ─────── SPC b ─┐ ┌─ ① ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  15 tables                  │ │                                                                                                                             │
+│──────────────────────────────│ │                                                                                                                             │
+│ ▾  doraemon                 │ │                                                                                                                             │
+│   ▸  agentable              │ │                                                                                                                             │
+│   ▾  public                 │ │                                                                                                                             │
+│     ▾  Tables (14)          │ │                                                                                                                             │
+│       ▸  agent          124┌─ Command palette ────────────────────────────────────────────────────────────────────────────────┐                             │
+│       ▸  agent_version  530│  All   Session $   Window·Pane %   Window &   Tab #   Table @   Command >   SQL ;                │                             │
+│       ▸  goal            57│                                                                                                 │                             │
+│       ▸  mt_task        812│──────────────────────────────────────────────────────────────────────────────────────────────────│                             │
+│       ▸  mt_task_log    96k│  doraemon                                  1 windows                                    Session │                             │
+│       ▸  schema_migrations │  0: data                                   doraemon                                      Window │                             │
+│       ▸  t_order       1.2m│  ⓪ schema                                  doraemon › 0: data                              Pane │                             │
+│       ▸  t_order_item  3.4m│   ①                                         doraemon › 0: data                              Pane │                             │
+│       ▸  t_payment     410k│  agent                                     doraemon.public                                Table │                             │
+│       ▸  t_refund       12k│  agent_version                             doraemon.public                                Table │                             │
+│       ▸  t_sku         8.1k│  goal                                      doraemon.public                                Table │                             │
+│       ▸  t_user         38k│  mt_task                                   doraemon.public                                Table │                             │
+│       ▸  t_user_address 52k│  mt_task_log                               doraemon.public                                Table │                             │
+│       ▸  t_user_profile 38k│  schema_migrations                         doraemon.public                                Table │                             │
+│        Views (0)           │  t_order                                   doraemon.public                                Table │                             │
+│ ▾  Workspace               │  t_order_item                              doraemon.public                                Table │                             │
+│   ▾  data                  │──────────────────────────────────────────────────────────────────────────────────────────────────│                             │
+│        pane-1              │ ↑/↓ Move · Tab/S-Tab Scope · esc Close                                                  ↵ Switch │                             │
+│                             └──────────────────────────────────────────────────────────────────────────────────────────────────┘                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│──────────────────────────────│ │                                                                                                                             │
+│ j/k move · ↵ open            │ │ +                                                                                                                           │
+└──────────────────────────────┘ └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ doraemon ▾  0: data*                                                                                            ·     doraemon · pg@localhost:5432  COMMAND 

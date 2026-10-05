@@ -6,6 +6,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"sqlmux/internal/i18n"
 )
 
 // Search and the : line (§11): patterns are Go's RE2, which reads close to
@@ -124,7 +126,7 @@ type search struct {
 	backwards bool
 }
 
-const noPattern = "没有上一个模式" // vim's E35
+var noPattern = i18n.N("没有上一个模式") // vim's E35; shown through i18n.T where it is set
 
 // hasUpper is whether a pattern has an upper case letter for 'smartcase';
 // what a backslash escapes does not count: \D is not (search.c
@@ -194,7 +196,7 @@ func (e *Editor) searchCmd(cl *cmdline) {
 	s := search{pattern: pattern, ignore: !hasUpper(pattern), backwards: cl.prompt == "?"}
 	if s.pattern == "" {
 		if e.lastSearch.pattern == "" {
-			e.eff.Error = noPattern
+			e.eff.Error = i18n.T(noPattern)
 			return
 		}
 		s.pattern, s.ignore = e.lastSearch.pattern, e.lastSearch.ignore
@@ -219,18 +221,18 @@ func (e *Editor) searchNext(p Pos, count int, back bool) target {
 	s := e.lastSearch
 	fail := target{to: e.cur}
 	if s.pattern == "" {
-		e.eff.Error = noPattern
+		e.eff.Error = i18n.T(noPattern)
 		return fail
 	}
 	m, err := compile(s.pattern, s.ignore)
 	if err != nil {
-		e.eff.Error = "正则有误：" + err.Error()
+		e.eff.Error = i18n.T("正则有误：") + err.Error()
 		return fail
 	}
 	for ; count > 0; count-- {
 		var ok bool
 		if p, ok = e.searchFrom(m, p, back); !ok {
-			e.eff.Error = "找不到：" + s.pattern
+			e.eff.Error = i18n.T("找不到：") + s.pattern
 			return fail
 		}
 	}
@@ -323,7 +325,7 @@ func star(back bool) motion {
 }
 
 // badRange is vim's E16, a range past the text.
-const badRange = "范围无效"
+var badRange = i18n.N("范围无效") // shown through i18n.T where it is set
 
 // ex runs a : line: {n} goes to line n and s substitutes; the rest is the
 // console's (:w, :q), handed on as Effect.Ex. Lines of the text are from 0
@@ -337,7 +339,7 @@ func (e *Editor) ex(line string) {
 		e.eff.Error = err
 	case rest == "" && given: // :{n}: past the end is the last line (ex_docmd.c)
 		if to < -1 {
-			e.eff.Error = badRange
+			e.eff.Error = i18n.T(badRange)
 			return
 		}
 		e.cur.Line = min(max(to, 0), last)
@@ -345,7 +347,7 @@ func (e *Editor) ex(line string) {
 	case len(rest) >= 2 && rest[0] == 's' && strings.IndexByte(`\"| `, rest[1]) < 0 &&
 		!unicode.IsLetter(rune(rest[1])) && !unicode.IsDigit(rune(rest[1])):
 		if from < -1 || to > last { // invalid_range; line 0 is line 1 (correct_range)
-			e.eff.Error = badRange
+			e.eff.Error = i18n.T(badRange)
 			return
 		}
 		e.substitute(max(from, 0), max(to, 0), rest[1:])
@@ -368,7 +370,7 @@ func (e *Editor) lineRange(s string) (from, to int, given bool, rest, err string
 		from, to = to, e.cur.Line
 		line, r, ok := e.address(s)
 		if !ok {
-			return 0, 0, false, "", "没有选区" // vim's E20: '< and '> not set
+			return 0, 0, false, "", i18n.T("没有选区") // vim's E20: '< and '> not set
 		}
 		if r != s {
 			to, s, given = line, r, true
@@ -439,7 +441,7 @@ func (e *Editor) substitute(from, to int, arg string) {
 	ignore := !hasUpper(pattern)
 	if pattern == "" {
 		if e.lastSearch.pattern == "" {
-			e.eff.Error = noPattern
+			e.eff.Error = i18n.T(noPattern)
 			return
 		}
 		pattern, ignore = e.lastSearch.pattern, e.lastSearch.ignore
@@ -447,7 +449,7 @@ func (e *Editor) substitute(from, to int, arg string) {
 	e.lastSearch = search{pattern: pattern, ignore: ignore, backwards: e.lastSearch.backwards}
 	m, err := compile(pattern, ignore || strings.Contains(flags, "i"))
 	if err != nil {
-		e.eff.Error = "正则有误：" + err.Error()
+		e.eff.Error = i18n.T("正则有误：") + err.Error()
 		return
 	}
 	template := replacement(repl)
@@ -484,7 +486,7 @@ func (e *Editor) substitute(from, to int, arg string) {
 		changed = n
 	}
 	if changed < 0 {
-		e.eff.Error = "找不到：" + pattern
+		e.eff.Error = i18n.T("找不到：") + pattern
 		return
 	}
 	e.cur = Pos{changed, firstNonBlank(e.lines[changed])}

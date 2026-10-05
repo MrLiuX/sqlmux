@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"sqlmux/internal/db"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/ui"
 )
 
@@ -51,5 +52,5 @@ func errorAt(text string, off int, stmt string, pos int) string {
 	}
 	at := off + i
 	start := strings.LastIndexByte(text[:at], '\n') + 1
-	return fmt.Sprintf("位置：第 %d 行第 %d 列", strings.Count(text[:at], "\n")+1, utf8.RuneCountInString(text[start:at])+1)
+	return fmt.Sprintf(i18n.T("位置：第 %d 行第 %d 列"), strings.Count(text[:at], "\n")+1, utf8.RuneCountInString(text[start:at])+1)
 }

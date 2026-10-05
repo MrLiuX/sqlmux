@@ -9,6 +9,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"sqlmux/internal/config"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -84,7 +85,7 @@ func (a *App) setTheme(name string) tea.Cmd {
 		return a.showToast(err.Error(), toastTTL)
 	}
 	a.theme, a.icons, a.themeName = th, ic, name
-	return a.showToast("写进 config.toml 的 theme 才会保留", toastTTL)
+	return a.showToast(i18n.T("写进 config.toml 的 theme 才会保留"), toastTTL)
 }
 
 // openConsoleDrop opens the focused console's dropdown of kind k, schema
@@ -118,9 +119,9 @@ func (a *App) dropItems() (items []string, current int) {
 		if d.console.conn.Manual {
 			current = 1
 		}
-		return []string{"自动", "手动"}, current
+		return []string{i18n.T("自动"), i18n.T("手动")}, current
 	case dropOrder: // first the row identity, "默认"; then the columns
-		items = []string{"默认"}
+		items = []string{i18n.T("默认")}
 		current = 0
 		for i, c := range d.tab.page.Cols {
 			items = append(items, c.Name)

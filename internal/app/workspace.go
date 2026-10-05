@@ -15,6 +15,7 @@ import (
 	"sqlmux/internal/db"
 	"sqlmux/internal/db/mysql"
 	"sqlmux/internal/db/postgres"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -45,7 +46,7 @@ func (p *Pane) tab() *Tab {
 
 // landing is what a new tab is until a table or a console takes its place
 // (§5「引导页」).
-func landing() Tab { return Tab{Name: "新 tab"} }
+func landing() Tab { return Tab{Name: i18n.T("新 tab")} }
 
 // landing reports whether t shows the landing page: a new tab, or no tab.
 func (t *Tab) landing() bool { return t == nil || t.Data == nil && t.Console == nil && t.Result == nil }
@@ -374,7 +375,7 @@ func (a *App) closeWindow() tea.Cmd {
 	if w.Root != nil {
 		ps = w.Root.Leaves()
 	}
-	return a.closeAsking(unsaved(ps...), "这个 window 里", consolesIn(ps...), func() tea.Cmd {
+	return a.closeAsking(unsaved(ps...), i18n.T("这个 window 里"), consolesIn(ps...), func() tea.Cmd {
 		if cmd, ok := a.flushAll(ps...); !ok {
 			return cmd
 		}
@@ -596,9 +597,9 @@ func (a *App) pickConn(t *consoleTab, c *Conn) tea.Cmd {
 func (t *consoleTab) stayReason() string {
 	switch {
 	case t.running != nil:
-		return "正在执行，结束后再换连接"
+		return i18n.T("正在执行，结束后再换连接")
 	case t.conn.inTx():
-		return txOpen
+		return i18n.T(txOpen)
 	}
 	return ""
 }
@@ -758,7 +759,7 @@ func (a *App) closeTabThen(p *Pane, i int, after func() tea.Cmd) tea.Cmd {
 	if t := p.Tabs[i].Data; t != nil {
 		n, name = t.changes(), t.table.Name+" "
 	}
-	return a.unlessLost(n, name, nil, "关闭", func() tea.Cmd { a.closeTab(p, i); return after() })
+	return a.unlessLost(n, name, nil, verbClose, func() tea.Cmd { a.closeTab(p, i); return after() })
 }
 
 // removePane takes pane id out of the tree: its sibling gets the space and

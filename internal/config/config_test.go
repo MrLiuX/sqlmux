@@ -153,3 +153,17 @@ func TestThemeFile(t *testing.T) {
 		t.Errorf("Parse reads no theme file: %v", err)
 	}
 }
+
+// language is "zh" or "en", zh when not written; another one is an error
+// that says what is allowed (§14「界面语言」).
+func TestLanguage(t *testing.T) {
+	if c, err := Parse(""); err != nil || c.Language != "zh" {
+		t.Errorf("default: %q %v", c.Language, err)
+	}
+	if c, err := Parse(`language = "en"`); err != nil || c.Language != "en" {
+		t.Errorf("en: %v", err)
+	}
+	if _, err := Parse(`language = "fr"`); err == nil || !strings.Contains(err.Error(), `language = "fr"`) {
+		t.Errorf("fr: %v", err)
+	}
+}

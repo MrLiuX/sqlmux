@@ -8,17 +8,18 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"sqlmux/internal/db"
+	"sqlmux/internal/i18n"
 )
 
 // txOpen is why a connection's transaction keeps it as it is: a console on
 // it, or the auto mode (§5).
-const txOpen = "当前连接有未提交的事务，先提交或回滚"
+var txOpen = i18n.N("当前连接有未提交的事务，先提交或回滚")
 
 // setTxMode puts c in the manual transaction mode, or back in the auto one
 // except with a transaction going on, which nothing would end then (§5).
 func (a *App) setTxMode(c *Conn, manual bool) tea.Cmd {
 	if !manual && c.inTx() {
-		return a.showToast(txOpen, toastTTL)
+		return a.showToast(i18n.T(txOpen), toastTTL)
 	}
 	c.Manual = manual
 	return nil
@@ -67,7 +68,7 @@ func (a *App) gotTx(m txDone) tea.Cmd {
 	case m.err != nil:
 		cmds = append(cmds, a.showToast(m.err.Error(), toastTTL))
 	case m.sql == "commit" && m.tag == "ROLLBACK":
-		cmds = append(cmds, a.showToast("事务已出错，提交改为了回滚", toastTTL))
+		cmds = append(cmds, a.showToast(i18n.T("事务已出错，提交改为了回滚"), toastTTL))
 	}
 	return tea.Batch(cmds...)
 }
@@ -98,7 +99,7 @@ func (a *App) deadlocked(c *Conn, err error) tea.Cmd {
 	if !errors.As(err, new(db.RolledBack)) {
 		return nil
 	}
-	return tea.Batch(append(a.txEnded(c), a.showToast("死锁，整个事务已回滚", toastTTL))...)
+	return tea.Batch(append(a.txEnded(c), a.showToast(i18n.T("死锁，整个事务已回滚"), toastTTL))...)
 }
 
 // orphaned is the session's connections in a transaction that closing the
@@ -123,10 +124,10 @@ func (a *App) orphaned(cs []*consoleTab) []*Conn {
 // come in after, a connection left in a transaction with no console.
 func (a *App) closeAsking(n int, what string, cs []*consoleTab, shut func() tea.Cmd) tea.Cmd {
 	if slices.ContainsFunc(cs, func(t *consoleTab) bool { return t.running != nil }) {
-		return a.showToast("正在执行，结束后再关闭", toastTTL)
+		return a.showToast(i18n.T("正在执行，结束后再关闭"), toastTTL)
 	}
 	lost := a.orphaned(cs)
-	return a.unlessLost(n, what, lost, "关闭", func() tea.Cmd {
+	return a.unlessLost(n, what, lost, verbClose, func() tea.Cmd {
 		cmds := []tea.Cmd{shut()}
 		for _, c := range lost {
 			if !slices.ContainsFunc(a.sess.consoles(), func(t *consoleTab) bool { return t.conn == c }) {

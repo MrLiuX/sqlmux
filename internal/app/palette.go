@@ -15,6 +15,7 @@ import (
 
 	"sqlmux/internal/config"
 	"sqlmux/internal/db"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -58,7 +59,7 @@ const (
 
 // itemTags name a row's kind. The SQL history, a list of one kind, has
 // none (§12).
-var itemTags = [...]string{itemSession: "会话", itemWindow: "窗口", itemPane: "Pane", itemTab: "Tab", itemTable: "表", itemCommand: "命令", itemSQL: ""}
+var itemTags = [...]string{itemSession: i18n.N("会话"), itemWindow: i18n.N("窗口"), itemPane: "Pane", itemTab: "Tab", itemTable: i18n.N("表"), itemCommand: i18n.N("命令"), itemSQL: ""}
 
 // scopes are the palette's tabs (K-02). The prefix typed in the input is the
 // only scope state: Tab rewrites it, and palette.command is `>` typed (§12).
@@ -68,13 +69,13 @@ type scopeTab struct {
 }
 
 var scopes = []scopeTab{
-	{"所有", "", []itemKind{itemSession, itemWindow, itemPane, itemTab, itemTable, itemCommand}}, // not the SQL history (§12)
-	{"会话", "$", []itemKind{itemSession}},
-	{"窗口·Pane", "%", []itemKind{itemWindow, itemPane, itemTab}},
-	{"窗口", "&", []itemKind{itemWindow}},
+	{i18n.N("所有"), "", []itemKind{itemSession, itemWindow, itemPane, itemTab, itemTable, itemCommand}}, // not the SQL history (§12)
+	{i18n.N("会话"), "$", []itemKind{itemSession}},
+	{i18n.N("窗口·Pane"), "%", []itemKind{itemWindow, itemPane, itemTab}},
+	{i18n.N("窗口"), "&", []itemKind{itemWindow}},
 	{"Tab", "#", []itemKind{itemTab}},
-	{"表", "@", []itemKind{itemTable}},
-	{"命令", ">", []itemKind{itemCommand}},
+	{i18n.N("表"), "@", []itemKind{itemTable}},
+	{i18n.N("命令"), ">", []itemKind{itemCommand}},
 	{"SQL", ";", []itemKind{itemSQL}}, // what follows the ; is SQL, the history while there is none
 }
 
@@ -179,7 +180,7 @@ func (a *App) paletteItems() []paletteItem {
 	}
 	slices.Sort(ids)
 	for _, id := range ids {
-		items = append(items, paletteItem{itemCommand, id, a.icons.Command, actions[id].Title, id})
+		items = append(items, paletteItem{itemCommand, id, a.icons.Command, i18n.T(actions[id].Title), id})
 	}
 	for _, sql := range a.state.SQL[cur.Spec.Name] {
 		items = append(items, paletteItem{itemSQL, sql, a.icons.Console, sql, ""})
@@ -256,7 +257,7 @@ func (a *App) paletteView() ui.Palette {
 	scope, query := a.paletteScope()
 	p := ui.Palette{Search: a.icons.Search, Input: a.palette.input, Scope: scope, Sel: a.palette.sel, Top: a.palette.top}
 	for _, s := range scopes {
-		p.Scopes = append(p.Scopes, strings.TrimSpace(s.label+" "+s.prefix)) // "表 @": the tab says what to type
+		p.Scopes = append(p.Scopes, strings.TrimSpace(i18n.T(s.label)+" "+s.prefix)) // "表 @": the tab says what to type
 	}
 	for _, m := range ms {
 		it := items[m.Index]
@@ -267,26 +268,26 @@ func (a *App) paletteView() ui.Palette {
 				right = map[bool]string{true: "ON", false: "OFF"}[on(a)]
 			}
 		}
-		p.Rows = append(p.Rows, ui.PaletteRow{Icon: it.icon, Name: it.name, Where: it.where, Pos: m.Pos, Right: right, Tag: itemTags[it.kind]})
+		p.Rows = append(p.Rows, ui.PaletteRow{Icon: it.icon, Name: it.name, Where: it.where, Pos: m.Pos, Right: right, Tag: i18n.T(itemTags[it.kind])})
 	}
 	scopeKeys := a.hints("palette", "/", "palette.scope.next", "palette.scope.prev")
 	p.Footer = bound(
-		ui.Hint{Key: a.hints("palette", "/", "palette.up", "palette.down"), Label: "移动"},
-		ui.Hint{Key: scopeKeys, Label: "范围"},
-		ui.Hint{Key: a.keys.Hint("palette.close", "palette"), Label: "关闭", Action: "palette.close"},
+		ui.Hint{Key: a.hints("palette", "/", "palette.up", "palette.down"), Label: i18n.T("移动")},
+		ui.Hint{Key: scopeKeys, Label: i18n.T("范围")},
+		ui.Hint{Key: a.keys.Hint("palette.close", "palette"), Label: i18n.T("关闭"), Action: "palette.close"},
 	)
 	switch run := a.keys.Hint("palette.run", "palette"); {
 	case scope == sqlScope && strings.TrimSpace(query) != "":
-		label := "执行"
+		label := i18n.T("执行")
 		if q := a.palette.quick; q != nil && run != "" && query != q.last() { // F-03
-			run, label = "已修改，"+run, "重新执行"
+			run, label = i18n.T("已修改，%s", run), i18n.T("重新执行")
 		}
 		p.Enter = bound(ui.Hint{Key: run, Label: label, Action: "palette.run"})
 	case a.palette.sel < len(ms):
 		it := items[ms[a.palette.sel].Index]
-		enter := [...]string{itemSession: "切换", itemWindow: "切换", itemPane: "聚焦", itemTab: "切换", itemTable: "打开", itemCommand: "执行", itemSQL: "执行"}[it.kind]
+		enter := [...]string{itemSession: i18n.T("切换"), itemWindow: i18n.T("切换"), itemPane: i18n.T("聚焦"), itemTab: i18n.T("切换"), itemTable: i18n.T("打开"), itemCommand: i18n.T("执行"), itemSQL: i18n.T("执行")}[it.kind]
 		if it.kind == itemCommand && actions[it.id].On != nil {
-			enter = "切换"
+			enter = i18n.T("切换")
 		}
 		p.Enter = bound(ui.Hint{Key: run, Label: enter, Action: "palette.run"}) // C-t is ↵ for a table: no hint of its own (F3.37)
 	}

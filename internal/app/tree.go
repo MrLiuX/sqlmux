@@ -12,6 +12,7 @@ import (
 
 	"sqlmux/internal/db"
 	"sqlmux/internal/editor"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -343,7 +344,7 @@ func (a *App) treeNodes() (ns []node, matches int) {
 	if filtering { // the workspace isn't what a filter looks for (§7.8)
 		return ns, len(pos)
 	}
-	if !add(node{id: "workspace", kind: nodeWorkspace, TreeNode: ui.TreeNode{Branch: true, Open: a.sess.opened("workspace", true), Icon: ic.Window, IconFg: th.Info, Text: "工作区"}}) {
+	if !add(node{id: "workspace", kind: nodeWorkspace, TreeNode: ui.TreeNode{Branch: true, Open: a.sess.opened("workspace", true), Icon: ic.Window, IconFg: th.Info, Text: i18n.T("工作区")}}) {
 		return ns, len(pos)
 	}
 	for wi, w := range s.Windows {
