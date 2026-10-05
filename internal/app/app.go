@@ -288,7 +288,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseWheelMsg:
 		a.wheel(msg.Mouse())
 	case keyTimeout:
-		cmd := a.dispatch(a.res.Timeout(a.context(), msg.seq))
+		cmd := a.dispatch(a.res.Timeout(msg.seq))
 		a.whichKey = a.whichKey && len(a.res.Next()) > 0
 		return a, cmd
 	case whichKeyDue: // only opens it; key presses close it

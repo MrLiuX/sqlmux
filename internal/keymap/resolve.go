@@ -157,10 +157,10 @@ func (r *Resolver) Feed(c Context, k Key, maps bool) (out []Result, wait bool) {
 }
 
 // Timeout fires the pending ambiguous binding, if seq is still current.
-func (r *Resolver) Timeout(c Context, seq int) []Result {
+func (r *Resolver) Timeout(seq int) []Result {
 	var out []Result
 	if seq == r.seq && r.node != nil && r.node.bound {
-		r.fire(c, &out)
+		r.fire(&out)
 	}
 	return out
 }
@@ -228,11 +228,11 @@ func (r *Resolver) feed(c Context, k Key, root *node, out *[]Result) {
 		r.keys = append(r.keys, k)
 		r.node = next
 		if len(next.next) == 0 {
-			r.fire(c, out)
+			r.fire(out)
 		}
 	case r.node != root && r.node.bound:
 		// The shorter binding of an ambiguous node fires; k starts afresh.
-		r.fire(c, out)
+		r.fire(out)
 		r.feed(c, k, root, out)
 	case k == Esc && (r.node != root || r.count != ""):
 		r.Reset() // esc cancels a pending sequence or count
@@ -242,7 +242,7 @@ func (r *Resolver) feed(c Context, k Key, root *node, out *[]Result) {
 	}
 }
 
-func (r *Resolver) fire(_ Context, out *[]Result) {
+func (r *Resolver) fire(out *[]Result) {
 	n, count := r.node, r.count
 	r.Reset()
 	if n.rhs == nil {

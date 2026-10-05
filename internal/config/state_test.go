@@ -88,8 +88,10 @@ func TestStateKilledMidWrite(t *testing.T) {
 	if line, _ := bufio.NewReader(out).ReadString('\n'); line != "ready\n" {
 		t.Fatalf("the child said %q", line)
 	}
-	_ = cmd.Process.Kill()
-	_ = cmd.Wait()
+	if err := cmd.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	_ = cmd.Wait() // a killed child reports it
 	got, err := LoadState()
 	if err != nil || !reflect.DeepEqual(got, old) {
 		t.Fatalf("after the kill: %+v %v", got, err)

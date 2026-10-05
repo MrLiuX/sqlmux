@@ -96,7 +96,7 @@ func TestFailedFetchBackToShown(t *testing.T) {
 	fail := func() { a.Update(pageMsg{tab: tab, seq: tab.seq, err: &pgconn.PgError{Code: "42883", Message: "no"}}) }
 	feed(t, a, "gonote<CR>")
 	fail()
-	if sql := lastSQL(t, a, rec, a.run("grid.order.toggle", 0)); !strings.Contains(sql, `order by "id" desc`) {
+	if sql := lastSQL(t, rec, a.run("grid.order.toggle", 0)); !strings.Contains(sql, `order by "id" desc`) {
 		t.Errorf("the chip's id ↑ turned: %s", sql)
 	}
 	fail()
@@ -111,7 +111,7 @@ func TestFailedFetchBackToShown(t *testing.T) {
 	if tab.request != (request{applied: "bad", limit: 100}) || tab.where.Text != "bad" {
 		t.Errorf("the WHERE stays: %+v, input %q", tab.request, tab.where.Text)
 	}
-	if sql := lastSQL(t, a, rec, a.run("grid.refresh", 0)); !strings.Contains(sql, "bad") {
+	if sql := lastSQL(t, rec, a.run("grid.refresh", 0)); !strings.Contains(sql, "bad") {
 		t.Errorf("R tries it again: %s", sql)
 	}
 	fail()

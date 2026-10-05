@@ -33,7 +33,7 @@ func (r *recDB) Close() error                                           { return
 
 // lastSQL runs the fetch cmd starts, when it is the page's alone, and is
 // the SQL it sent.
-func lastSQL(t *testing.T, _ *App, rec *recDB, cmd tea.Cmd) string {
+func lastSQL(t *testing.T, rec *recDB, cmd tea.Cmd) string {
 	t.Helper()
 	if cmd == nil {
 		t.Fatal("no fetch")
@@ -137,7 +137,7 @@ func TestWhereSemicolonLatePage(t *testing.T) {
 func TestPageSQL(t *testing.T) {
 	a, tab, rec := withRecorder(t)
 	tab.applied, tab.order, tab.desc, tab.limit, tab.pageNo = "status = 'done' -- 备注", "status", true, 500, 2
-	sql := lastSQL(t, a, rec, a.fetch(tab, false))
+	sql := lastSQL(t, rec, a.fetch(tab, false))
 	want := `select * from "public"."t_order" where (` + "\nstatus = 'done' -- 备注\n" + `) order by "status" desc, "id" limit 501 offset 1000`
 	if sql != want {
 		t.Errorf("sql\n%s\nwant\n%s", sql, want)
@@ -271,11 +271,11 @@ func TestOrderToggle(t *testing.T) {
 		return find(t, a, ui.Target{Kind: ui.KindHint, Pane: 1, Action: "grid.order.toggle"}).Min
 	}
 	tab.pageNo = 2
-	if sql := lastSQL(t, a, rec, click(a, icon())); tab.order != "id" || !tab.desc || tab.pageNo != 0 || !strings.Contains(sql, `order by "id" desc limit`) {
+	if sql := lastSQL(t, rec, click(a, icon())); tab.order != "id" || !tab.desc || tab.pageNo != 0 || !strings.Contains(sql, `order by "id" desc limit`) {
 		t.Fatalf("default: order %q desc %v page %d, %s", tab.order, tab.desc, tab.pageNo, sql)
 	}
 	answer(a, tab)
-	if sql := lastSQL(t, a, rec, click(a, icon())); tab.desc || !strings.Contains(sql, `order by "id" asc limit`) {
+	if sql := lastSQL(t, rec, click(a, icon())); tab.desc || !strings.Contains(sql, `order by "id" asc limit`) {
 		t.Errorf("again: %s", sql)
 	}
 	answer(a, tab)
@@ -304,7 +304,7 @@ func TestOrderToggle(t *testing.T) {
 	a.drop = nil
 	tab.cols = db.Columns{PK: []string{"occurred_at", "id"}, Cols: tab.cols.Cols}
 	tab.order, tab.desc = "", false
-	if sql := lastSQL(t, a, rec, a.run("grid.order.toggle", 0)); tab.order != "occurred_at" || !tab.desc || !strings.Contains(sql, `order by "occurred_at" desc, "id" limit`) {
+	if sql := lastSQL(t, rec, a.run("grid.order.toggle", 0)); tab.order != "occurred_at" || !tab.desc || !strings.Contains(sql, `order by "occurred_at" desc, "id" limit`) {
 		t.Errorf("a composite key: %q %v, %s", tab.order, tab.desc, sql)
 	}
 	tab.cols = db.Columns{PK: []string{"note", "id"}, Cols: tab.cols.Cols}
@@ -480,7 +480,7 @@ func TestCustomLimit(t *testing.T) {
 	if v := a.dropView(); len(v.Items) != 1 || v.Items[0] != "250" || v.Sel != 0 {
 		t.Fatalf("250: %v", v.Items)
 	}
-	if sql := lastSQL(t, a, rec, a.press("<CR>")); tab.limit != 250 || tab.pageNo != 0 || !strings.HasSuffix(sql, "limit 251 offset 0") {
+	if sql := lastSQL(t, rec, a.press("<CR>")); tab.limit != 250 || tab.pageNo != 0 || !strings.HasSuffix(sql, "limit 251 offset 0") {
 		t.Fatalf("↵: limit %d page %d, %s", tab.limit, tab.pageNo, sql)
 	}
 	answer(a, tab)

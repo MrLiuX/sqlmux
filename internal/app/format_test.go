@@ -12,7 +12,7 @@ import (
 
 // gqIn presses keys in console c, the last starting a format, and
 // delivers what the Cmd brings back.
-func gqIn(t *testing.T, a *App, _ *consoleTab, keys string) {
+func gqIn(t *testing.T, a *App, keys string) {
 	t.Helper()
 	ks, _ := keymap.Parse(keys)
 	for _, k := range ks[:len(ks)-1] {
@@ -32,7 +32,7 @@ func gqIn(t *testing.T, a *App, _ *consoleTab, keys string) {
 func TestFormatStatement(t *testing.T) {
 	a, c := inConsole(t, "", "")
 	a.consoleDid(c, c.ed.Load("x;\nselect a,b from t;"))
-	gqIn(t, a, c, "jgqq")
+	gqIn(t, a, "jgqq")
 	if got := text(c); got != "x;\nselect\n  a,\n  b\nfrom\n  t;" || c.ed.Cursor() != (editor.Pos{Line: 5, Col: 2}) {
 		t.Fatalf("%q, cursor %v", got, c.ed.Cursor())
 	}
@@ -40,12 +40,12 @@ func TestFormatStatement(t *testing.T) {
 		t.Fatalf("u: %q", text(c))
 	}
 	a.consoleDid(c, c.ed.Load("select 1 union select 2\nfrom t"))
-	gqIn(t, a, c, "gg0v$gq")
+	gqIn(t, a, "gg0v$gq")
 	if got := text(c); got != "select\n  1\nunion\nselect\n  2\nfrom t" || c.ed.Mode() != editor.Normal {
 		t.Errorf("a charwise selection: %q in %v", got, c.ed.Mode())
 	}
 	a.consoleDid(c, c.ed.Load("select 1; select 2;\n\nselect 3"))
-	gqIn(t, a, c, "gggqap")
+	gqIn(t, a, "gggqap")
 	if got := text(c); got != "select\n  1;\n\nselect\n  2;\n\nselect 3" || c.ed.Mode() != editor.Normal {
 		t.Errorf("gqap: %q in %v", got, c.ed.Mode())
 	}
@@ -68,13 +68,13 @@ func TestFormatDropsAndFails(t *testing.T) {
 		feed(t, a, "<Esc>")
 	}
 	a.consoleDid(c, c.ed.Load("select 'a"))
-	gqIn(t, a, c, "gqq")
+	gqIn(t, a, "gqq")
 	if text(c) != "select 'a" || !strings.HasPrefix(a.toast, "格式化失败：Parse error") {
 		t.Errorf("%q, toast %q", text(c), a.toast)
 	}
 	a, c = inConsole(t, `formatprg = "true"`, "")
 	a.consoleDid(c, c.ed.Load("select a from t;"))
-	if gqIn(t, a, c, "gqq"); text(c) != "select a from t;" || a.toast != "格式化失败：没有输出" {
+	if gqIn(t, a, "gqq"); text(c) != "select a from t;" || a.toast != "格式化失败：没有输出" {
 		t.Errorf("no output: %q, toast %q", text(c), a.toast)
 	}
 	defer func(d time.Duration) { sqlkit.FormatTimeout = d }(sqlkit.FormatTimeout)
@@ -82,7 +82,7 @@ func TestFormatDropsAndFails(t *testing.T) {
 	a, c = inConsole(t, `formatprg = "sleep 10; echo x"`, "")
 	a.consoleDid(c, c.ed.Load("select a from t"))
 	start := time.Now()
-	if gqIn(t, a, c, "gqq"); text(c) != "select a from t" || a.toast != "格式化超时（200ms）" || time.Since(start) > 2*time.Second {
+	if gqIn(t, a, "gqq"); text(c) != "select a from t" || a.toast != "格式化超时（200ms）" || time.Since(start) > 2*time.Second {
 		t.Errorf("formatprg's child past the timeout: %q, toast %q, after %v", text(c), a.toast, time.Since(start))
 	}
 }
@@ -92,13 +92,13 @@ func TestFormatDropsAndFails(t *testing.T) {
 func TestFormatPrg(t *testing.T) {
 	a, c := inConsole(t, `formatprg = "tr a-z A-Z"`, "")
 	a.consoleDid(c, c.ed.Load("select a from t"))
-	gqIn(t, a, c, "gqq")
+	gqIn(t, a, "gqq")
 	if text(c) != "SELECT A FROM T" {
 		t.Errorf("%q", text(c))
 	}
 	a, c = inConsole(t, `formatprg = "echo 'no good' >&2; echo second >&2; exit 3"`, "")
 	a.consoleDid(c, c.ed.Load("select a from t"))
-	gqIn(t, a, c, "gqq")
+	gqIn(t, a, "gqq")
 	if text(c) != "select a from t" || a.toast != "格式化失败：no good" {
 		t.Errorf("%q, toast %q", text(c), a.toast)
 	}

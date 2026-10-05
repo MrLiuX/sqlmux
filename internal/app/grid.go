@@ -509,7 +509,7 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 		rows = strconv.FormatInt(t.count, 10)
 	case estimated:
 		rows = "~" + ui.Magnitude(float64(t.count))
-	default: // counting: the placeholder stays
+	case counting: // the placeholder stays
 	}
 	right := i18n.T("auto · %s 行", rows)
 	if t.page.Cols != nil {

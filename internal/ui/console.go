@@ -182,7 +182,7 @@ func (s Sel) has(n, col, v, w int) bool {
 		return n >= s.From.Line && n <= s.To.Line
 	case SelBlock:
 		return n >= s.From.Line && n <= s.To.Line && v <= s.Right && v+w-1 >= s.Left
-	default: // SelChars: from From to To, below
+	case SelChars: // from From to To, below
 	}
 	return (n > s.From.Line || n == s.From.Line && col >= s.From.Col) && (n < s.To.Line || n == s.To.Line && col <= s.To.Col)
 }
@@ -238,7 +238,7 @@ func SQLColors(th *Theme, text string, d sqlkit.Dialect, names SQLNames) []color
 			case n == ColumnName:
 				col = th.SQLColumn
 			}
-		default: // space: the plain color
+		case sqlkit.Space: // the plain color
 		}
 		for j := t.Start; j < t.End; j++ {
 			out[j] = col

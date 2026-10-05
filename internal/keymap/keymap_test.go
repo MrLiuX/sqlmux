@@ -149,7 +149,7 @@ func TestPurePrefixWaits(t *testing.T) {
 	if len(out) != 0 || wait || Display(r.Pending()) != "SPC" {
 		t.Fatalf("SPC: out %v wait %v pending %q", out, wait, Display(r.Pending()))
 	}
-	if got := r.Timeout(grid, r.Seq()); len(got) != 0 {
+	if got := r.Timeout(r.Seq()); len(got) != 0 {
 		t.Fatalf("a pure prefix must not time out: %v", got)
 	}
 	out, _ = press(t, r, grid, "%")
@@ -173,10 +173,10 @@ func TestAmbiguousNodeTimesOut(t *testing.T) {
 		t.Fatalf("g: out %v wait %v", out, wait)
 	}
 	seq := r.Seq()
-	if got := r.Timeout(grid, seq-1); len(got) != 0 {
+	if got := r.Timeout(seq - 1); len(got) != 0 {
 		t.Fatalf("stale timeout fired: %v", got)
 	}
-	if got := r.Timeout(grid, seq); !reflect.DeepEqual(actions(got), []string{"my.g"}) {
+	if got := r.Timeout(seq); !reflect.DeepEqual(actions(got), []string{"my.g"}) {
 		t.Fatalf("timeout: %v", actions(got))
 	}
 	if out, _ := press(t, r, grid, "gt"); !reflect.DeepEqual(actions(out), []string{"tab.next"}) {

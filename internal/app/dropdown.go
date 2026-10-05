@@ -250,7 +250,7 @@ func (a *App) dropPick(i int) tea.Cmd {
 			return nil
 		}
 		return autoTick(t)
-	default: // the dropdowns of the table state (below) have no item to take here
+	case dropOrder, dropLimit: // below
 	}
 	switch t := d.tab; d.kind {
 	case dropOrder:
@@ -264,7 +264,7 @@ func (a *App) dropPick(i int) tea.Cmd {
 		}
 	case dropLimit:
 		t.limit, _ = strconv.Atoi(item)
-	default: // the others are taken above
+	case dropSchema, dropConsoleConn, dropTx, dropAuto, dropTheme, dropLayout: // above
 	}
 	d.tab.pageNo = 0
 	return a.fetch(d.tab, false)

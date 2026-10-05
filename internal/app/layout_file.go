@@ -64,7 +64,7 @@ func nodeLayout(n *Node) *config.LayoutNode {
 		return &config.LayoutNode{Split: "h", Ratio: n.Ratio, A: nodeLayout(n.A), B: nodeLayout(n.B)}
 	case Vert:
 		return &config.LayoutNode{Split: "v", Ratio: n.Ratio, A: nodeLayout(n.A), B: nodeLayout(n.B)}
-	default: // a leaf
+	case Leaf: // below
 	}
 	return &config.LayoutNode{Pane: n.Pane.ID}
 }
