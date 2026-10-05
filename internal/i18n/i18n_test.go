@@ -64,7 +64,7 @@ func scan(t *testing.T) (keys map[string][]int, outside []literal) {
 		rel, _ := filepath.Rel(root, path)
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") ||
 			strings.HasPrefix(rel, "internal/i18n") || strings.HasPrefix(rel, "e2e") {
-			return nil
+			return nil //nolint:nilerr // an entry that cannot be read is skipped, the walk goes on
 		}
 		f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
 		if err != nil {
