@@ -89,6 +89,7 @@ check "连按两次 C-q 退出" quit_clean
 
 # ---- timeoutlen（§6.5）：歧义节点等 timeoutlen 后执行
 start_with '[keys.normal]\ng = "palette.open"\n'
+e2e_keys Enter; sleep 0.4   # F6.1: g is a prefix of gt, so the start-up overlay lists it first; ↵ closes it
 e2e_type g; sleep 0.4
 check "g 是 gt 的前缀：0.4 秒时还没执行" eval '! palette_open'
 sleep 1

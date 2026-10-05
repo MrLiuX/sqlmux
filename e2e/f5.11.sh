@@ -120,6 +120,7 @@ check "console 文件在 consoles/console_1.sql（不再按连接分目录）" e
 e2e_click 60 20; sleep 0.3; key c; sleep 0.5; key g s; e2e_type agen; sleep 0.3; key Enter; sleep 1.5   # ① 新建 console_2，选 agentable：state 记下它
 check "① 的 console_2 选了 agentable，state.json 记下 console_2 的连接和 schema" eval '[[ $(python3 -c "import json,sys; c=json.load(open(sys.argv[1]))[\"consoles\"][\"console_2\"]; print(c[\"schema\"])" "$ST/sqlmux/state.json") == agentable ]]'
 key :; e2e_type qa; key Enter; wait_for 3 screen_has "[e2e-exit 0]"
+rm -f "$ST/sqlmux/last.toml"   # F6.5: a start without arguments restores last.toml; this one checks the default layout
 start -C "$D/c" -S "$ST" -D "$D/data"
 check "重启：console_1 先挂在启动时的 d，后台连上 s 之后换回 s · <库>.agentable ▾" eval 'wait_for 6 eval "on s agentable >/dev/null" || on s agentable'
 key C-l; setsql "show search_path"; run
