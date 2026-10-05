@@ -1,6 +1,6 @@
 # M7 工程质量 · 任务清单
 
-- **状态**：draft（用户 2026-10-05 提出）。M6 全部 passed 之后开工；`.golangci.yml` 的规则由 reviewer 在 M6 的审查队列清空后先起草，不等 M6 结束。开工前 worker 补充 F7.2 的清单，决策者确认后改为 todo。
+- **状态**：todo（2026-10-06，M6 全部 passed，worker 的 F7.2 清单已确认）。F7.3、F7.4 的细节照常开工前由 worker 提议。用户验收 M5 + M6 和 M7 开发并行：验收版是 1489851 编的，M7 的改动不影响它。
 - **目标**：用 golangci-lint 守住代码质量和规范，每个 commit、每次审查都先过 lint；仓库有 CI；常规操作统一走 `just`；连接凭据不再需要明文落盘（F7.3）；没有连接也能启动，用表单新建（F7.4）。
 - **范围**：tech-design §4（新增文件）、§15「静态检查」「CI」「常规操作走 just」；AGENTS.md 的 worker 和 reviewer 规则。
 - **依赖**：M6 F6.1–F6.7 全部 passed（lint 的修改会碰到所有包，不和 M6 的修复撞车）。
@@ -16,7 +16,7 @@
 
 ---
 
-## F7.1 golangci-lint 与 CI · 状态：draft
+## F7.1 golangci-lint 与 CI · 状态：todo
 
 - **依赖**：M6 全部 passed
 - **涉及**：仓库根 `.golangci.yml`、`.github/workflows/ci.yml`，以及 lint 报告涉及的所有包
@@ -31,19 +31,20 @@
 - [ ] `golangci-lint run ./...` 零报告；`go test ./...`、集成测试、全量 e2e 都过且期望值没改（tester 对比 e2e 分支）。
 - [ ] 在 GitHub 上跑过一次绿的 CI（推送要等用户验收打 tag 之后，所以这一项在 M6/M7 验收通过、推送后由决策者确认）。
 
-## F7.2 justfile · 状态：draft
+## F7.2 justfile · 状态：todo
 
 - **依赖**：F7.1（`just lint` 要用它的配置）
 - **涉及**：仓库根 `justfile`、AGENTS.md、README.md
 
-**开发**（清单由 worker 开工前补充；要有的入口见 §15「常规操作走 just」）
-- [ ] `justfile`：build（到 `bin/`）、run、test、test-integration、e2e [脚本…]（只编译一次 sqlmux，各脚本共用）、lint、fmt、tidy、check（vet + test + lint + gofmt + tidy 检查）、golden（更新 golden）、db-up / db-down、keys（导出）、clean。
-- [ ] AGENTS.md 和 README 里的命令改成 just 的入口（决策者改 AGENTS.md / README，worker 提供对应关系）。
+**开发**（worker 2026-10-06 的清单，决策者确认）
+- [ ] `justfile`（每条就是现在手敲的命令，不加新逻辑）：`build`（到 `bin/`）、`run *args`、`test`、`test-integration`（`SQLMUX_TEST_PG` / `SQLMUX_TEST_MYSQL` 用 `env()` 给 compose 的默认值，用户设了不覆盖）、`e2e *scripts`（先编译到临时目录一次，`E2E_BIN` / `E2E_NOBUILD=1` 逐个跑，不带参数跑全部，一个失败不中断、最后汇总并退出非 0，跑完删二进制）、`lint`（钉 v2.14.0，版本不对报错并给 `go install` 命令）、`fmt`、`tidy`、`check`（vet 含 integration tag + test + test-integration + lint + gofmt 为空 + tidy 后无改动，任一失败即停；只有一个 check，数据库没起时提示 `just db-up`，不另加 check-fast）、`golden *pkgs`（默认 app、ui，自动把 XDG 三个目录指到临时目录、PATH 前放假 pbcopy）、`generate`（nvim 差分）、`db-up` / `db-down` / `db-reset`（`down -v` 再 up，改 seed 后用）、`keys *args`、`clean`；默认配方是 `--list`。
+- [ ] CI 的 job 拆开跑（lint / test / integration），justfile 不管 CI。
+- [ ] AGENTS.md 和 README 里的命令改成 just 的入口（决策者改）：vet / test / gofmt / tidy / lint → `just check`；全量 e2e → `just e2e`；更新 golden → `just golden`；`docker compose up -d postgres` → `just db-up`；`go generate ./internal/editor` → `just generate`。
 
 **验收**
 - [ ] `just --list` 列出全部入口，每个都能跑；`just check` 在干净仓库上全绿；`just e2e f0.1 f0.2` 只编译一次。
 
-## F7.3 凭据：环境变量展开、表单里的密码走钥匙串 · 状态：draft
+## F7.3 凭据：环境变量展开、表单里的密码走钥匙串 · 状态：todo
 
 用户 2026-10-05 提出：密码明文放在 connections.toml 里不放心；DataGrip 输入密码只显示 `*`。现状：已有 `password_cmd` / `password_env` / 明文 `password` / pgpass 四种来源，明文且文件可被其他用户读时 toast 警告；表单没有密码字段，只能填 dsn 和 password_cmd。别的项目：lazysql 把带密码的 URL 明文写在配置里；pgtui、pgcli 用 keyring 存进系统钥匙串；psql / usql 靠 `PGPASSWORD` 和 `~/.pgpass`；DBeaver 用固定密钥加密（形同明文）；DataGrip 存进 IDE 的密码库（系统钥匙串或 KeePass），输入框打 `*`。
 
@@ -59,7 +60,7 @@
 - [ ] 单测：`${VAR}` 展开、`$VAR` 不展开、缺变量报错带变量名；表单保存后 connections.toml 里没有明文密码、有 password_cmd（用假的 `security` / `secret-tool` 放在 PATH 前面，e2e 的做法）；两者都没有时写明文并有 toast。
 - [ ] e2e：表单里输入密码显示 `*`；保存后能连上（假钥匙串命令返回密码）；`dsn = "${X}"` 启动时 X 没设置的报错文字。
 
-## F7.4 新建连接表单重做：分字段、无连接时启动、侧栏 ＋ 按钮 · 状态：draft
+## F7.4 新建连接表单重做：分字段、无连接时启动、侧栏 ＋ 按钮 · 状态：todo
 
 用户 2026-10-05 提出：没有配置连接时启动直接给表单；表单按 host / port / user / password / database 分字段填，持久化到 connections.toml；界面上加一个新建连接的按钮；表单居中、好看点。
 
