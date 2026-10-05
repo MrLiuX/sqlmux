@@ -66,6 +66,7 @@ func (a *App) gotConnected(m connected) tea.Cmd {
 	}
 	if m.err != nil {
 		c.State = connFailed
+		a.dropPending(c)
 		return a.showToast(c.Spec.Name+"："+m.err.Error(), toastTTL)
 	}
 	c.take(m.d)
@@ -109,6 +110,7 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 		return nil
 	}
 	if m.err != nil {
+		a.dropPending(m.conn)
 		return a.showToast(m.conn.Spec.Name+"："+m.err.Error(), toastTTL)
 	}
 	c := m.conn
@@ -124,7 +126,7 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	if !slices.Contains(c.Schemas, c.Schema) { // the first load, or the schema is gone (§7.8)
 		c.Schema = c.home
 	}
-	var cmds []tea.Cmd
+	cmds := a.resolvePending(c)
 	for _, t := range a.consoles() { // opened before the tree had a schema, or in one gone: the connection's (§8.6)
 		if t.conn == c && !slices.Contains(c.Schemas, t.schema) {
 			t.schema = c.Schema

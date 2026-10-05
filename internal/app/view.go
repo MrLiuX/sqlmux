@@ -118,6 +118,13 @@ func (a *App) render() *ui.Frame {
 			}
 		}
 	}
+	if in := a.layoutName; in != nil { // over the status bar's left: "布局名: " and the name typed (F6.5)
+		label := i18n.T("布局名：")
+		f.Fill(uv.Rect(0, y, a.w, 1), uv.Style{Fg: th.Fg, Bg: th.Border})
+		f.Text(1, y, a.w, label, uv.Style{Fg: th.Warn, Bg: th.Border})
+		c := in.Draw(f, uv.Rect(1+ui.Width(label), y, max(a.w-ui.Width(label)-2, 1), 1), uv.Style{Fg: th.Fg, Bg: th.Border})
+		f.Cursor = &c
+	}
 	if a.keyHelp != nil {
 		a.keyHelpView().Draw(f, a.overlayArea())
 	}

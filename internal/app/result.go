@@ -200,6 +200,9 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 	if len(stmts) == 0 || t.running != nil {
 		return nil
 	}
+	if conn.State != connReady { // a layout's console, its connection not up yet (F6.5)
+		return a.showToast(i18n.T("连接还没连上"), toastTTL)
+	}
 	if conn.Spec.ReadOnly {
 		if i := slices.IndexFunc(stmts, func(s sqlkit.Stmt) bool { return sqlkit.BreaksReadOnly(sql[s.Start:s.End], d) }); i >= 0 {
 			p := a.showResult(a.win())

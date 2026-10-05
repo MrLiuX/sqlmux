@@ -2,11 +2,14 @@ package config
 
 import (
 	"bufio"
+	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -91,5 +94,85 @@ func TestStateKilledMidWrite(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(StateDir(), "state.json.broken")); err == nil {
 		t.Error("the file was moved aside")
+	}
+}
+
+// A layout is written and read back whole; a hand-written one with inline
+// tables reads the same; another version, an empty file and a bad name are
+// refused; layouts are listed by name (§14「布局文件」, F6.5).
+func TestLayoutFile(t *testing.T) {
+	cfg, st := t.TempDir(), t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", cfg)
+	t.Setenv("XDG_STATE_HOME", st)
+	want := &Layout{Version: 1, Active: 1, Sessions: []LayoutSession{
+		{Name: "1", Connection: "doraemon", Active: 0, Windows: []LayoutWindow{{
+			Name: "data", Focus: 2, Zoom: 0, SidebarOpen: true, SidebarWidth: 40, ResultHeight: 0.5,
+			Layout: &LayoutNode{Split: "h", Ratio: 0.55, A: &LayoutNode{Pane: 1}, B: &LayoutNode{Split: "v", Ratio: 0.5, A: &LayoutNode{Pane: 2}, B: &LayoutNode{Pane: 3}}},
+			Panes: []LayoutPane{
+				{ID: 1, Current: 1, Tabs: []LayoutTab{
+					{Kind: "table", Connection: "doraemon", Schema: "public", Table: "t_order", Where: "id > 5", Order: "amount", Desc: true, Limit: 500, Page: 2, Cols: []string{"meta", "note"}, Transpose: true},
+					{Kind: "console", N: 1, Connection: "doraemon", Schema: "agentable"},
+				}},
+				{ID: 2}, {ID: 3},
+			},
+		}}},
+		{Name: "2", Connection: "play"},
+	}}
+	if err := SaveLayout(LastPath(), want); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := os.Stat(LastPath()); info.Mode().Perm() != 0o600 {
+		t.Errorf("mode %v", info.Mode().Perm())
+	}
+	got, err := LoadLayout(LastPath())
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("round trip: %+v %v", got, err)
+	}
+	hand := `version = 1
+[[session]]
+name = "s"
+connection = "doraemon"
+[[session.window]]
+name = "w"
+layout = { split = "h", ratio = 0.5, a = { pane = 1 }, b = { pane = 2 } }
+[[session.window.pane]]
+id = 1
+[[session.window.pane]]
+id = 2
+`
+	os.MkdirAll(LayoutsDir(), 0o755)
+	os.WriteFile(filepath.Join(LayoutsDir(), "mine.toml"), []byte(hand), 0o644)
+	os.WriteFile(filepath.Join(LayoutsDir(), "a.toml"), []byte("version = 2\n"), 0o644)
+	os.WriteFile(filepath.Join(LayoutsDir(), "empty.toml"), []byte("version = 1\n"), 0o644)
+	l, err := LoadLayout("mine")
+	if err != nil || l.Sessions[0].Windows[0].Layout.B.Pane != 2 || l.Sessions[0].Windows[0].Layout.Split != "h" {
+		t.Fatalf("by name, inline tables: %+v %v", l, err)
+	}
+	if _, err := LoadLayout("a"); err == nil || !strings.Contains(err.Error(), "version = 2") {
+		t.Errorf("version: %v", err)
+	}
+	if _, err := LoadLayout("empty"); err == nil || !strings.Contains(err.Error(), "[[session]]") {
+		t.Errorf("no session: %v", err)
+	}
+	if _, err := LoadLayout("nope"); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("missing: %v", err)
+	}
+	if names := LayoutNames(); !slices.Equal(names, []string{"a", "empty", "mine"}) {
+		t.Errorf("names %v", names)
+	}
+	for _, bad := range []string{"", "  ", "a/b", ".x", `a\b`} {
+		if CheckLayoutName(bad) == nil {
+			t.Errorf("%q is a name", bad)
+		}
+	}
+	os.WriteFile(LastPath(), []byte("{"), 0o600)
+	if err := BrokenLast(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(LastPath() + ".broken"); err != nil {
+		t.Error("the broken file is kept aside")
+	}
+	if BrokenLast() != nil {
+		t.Error("none to move is no error")
 	}
 }

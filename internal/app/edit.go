@@ -832,6 +832,7 @@ func (a *App) quit() tea.Cmd {
 		if cmd, ok := a.flushAll(ps...); !ok { // the consoles' text is not lost (§11)
 			return cmd
 		}
+		a.saveLast()
 		return tea.Quit
 	})
 }

@@ -66,6 +66,7 @@ type dataTab struct {
 	added    []*newRow        // rows added, not saved: those at one place in the order they show (§10.6)
 	deleted  map[string]bool  // rows marked for deletion, by row key (§10.6)
 	saving   bool             // a save is on its way (§10.3)
+	pending  bool             // restored from a layout: its connection's catalog is to come, then it fetches (F6.5)
 	closing  bool             // :wq: the tab closes once the save lands, if nothing is left unsaved (§11)
 	note     ui.Note          // how the last save went, until the next fetch or change (Q-06)
 	failed   *string          // the row key a failed save names (§10.3), nil for none

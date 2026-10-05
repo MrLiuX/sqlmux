@@ -25,8 +25,9 @@ const (
 	dropSchema
 	dropConsoleConn
 	dropTx
-	dropAuto  // auto refresh's interval (§7.8「自动刷新」)
-	dropTheme // the theme in use (F6.2)
+	dropAuto   // auto refresh's interval (§7.8「自动刷新」)
+	dropTheme  // the theme in use (F6.2)
+	dropLayout // layout.open: the layouts there are (F6.5)
 )
 
 // dropdown is the open one-pick dropdown; tab or console, in pane, is what
@@ -109,6 +110,8 @@ func (a *App) dropItems() (items []string, current int) {
 	case dropTheme:
 		names := config.ThemeNames()
 		return names, slices.Index(names, a.themeName)
+	case dropLayout:
+		return layoutNames(), -1
 	case dropConsoleConn:
 		for _, c := range a.sess.Conns {
 			items = append(items, c.Spec.Name)
@@ -200,7 +203,7 @@ func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 		entry = a.chipRect(d.pane, d.tab, "grid.order")
 	case dropLimit:
 		entry = a.chipRect(d.pane, d.tab, "grid.limit")
-	case dropTheme:
+	case dropTheme, dropLayout:
 		r := a.layout()[d.pane.ID]
 		entry = uv.Rect(r.Min.X+2, r.Min.Y, w, 1)
 	case dropAuto:
@@ -240,6 +243,8 @@ func (a *App) dropPick(i int) tea.Cmd {
 		return a.setTxMode(d.console.conn, at == 1)
 	case dropTheme:
 		return a.setTheme(item)
+	case dropLayout:
+		return a.pickLayout(item)
 	case dropAuto: // the ticking so far stops; this interval's starts
 		if t.auto, t.autoGen = autoIntervals[at], t.autoGen+1; t.auto == 0 {
 			return nil

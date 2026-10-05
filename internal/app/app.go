@@ -24,10 +24,13 @@ type App struct {
 	icons *ui.Icons
 	// baseIcons is what `icons` chose, a theme's [icon] not on it, and themeName
 	// the theme in use: theme.switch loads another over them (F6.2).
-	baseIcons *ui.Icons
-	themeName string
-	keys      *keymap.Map
-	res       *keymap.Resolver
+	layoutName *ui.Input // layout.save's name typed in the status bar (F6.5)
+	lastPath   string    // where the working set is kept as the program quits; "" for nowhere
+	restored   bool      // the sessions are a layout's: console_1 is not looked up in state.json (F6.5)
+	baseIcons  *ui.Icons
+	themeName  string
+	keys       *keymap.Map
+	res        *keymap.Resolver
 	// sess is the session attached, one of sessions (§5, F5.1).
 	sess     *Session
 	sessions []*Session
@@ -126,15 +129,17 @@ func (a *App) KeyProblems(ps []keymap.Problem) {
 // TestRendererUsesGraphemeWidths still passes, and whether a real option
 // has appeared.
 func (a *App) Init() tea.Cmd {
-	cmds := []tea.Cmd{
-		func() tea.Msg { return tea.ModeReportMsg{Mode: ansi.ModeUnicodeCore, Value: ansi.ModeSet} },
-		a.loadCatalog(a.sess.last),
+	cmds := []tea.Cmd{func() tea.Msg { return tea.ModeReportMsg{Mode: ansi.ModeUnicodeCore, Value: ansi.ModeSet} }}
+	if a.restored { // a layout's: its connections now, its consoles as it had them (F6.5)
+		cmds = append(cmds, a.connectsNow()...)
+	} else {
+		cmds = append(cmds, a.loadCatalog(a.sess.last))
+		for _, t := range a.sess.consoles() { // console_1, where it last ran (§11)
+			cmds = append(cmds, a.restoreConsole(t))
+		}
 	}
 	if a.warning != "" {
 		cmds = append(cmds, a.showToast(a.warning, toastTTL))
-	}
-	for _, t := range a.sess.consoles() { // console_1, where it last ran (§11)
-		cmds = append(cmds, a.restoreConsole(t))
 	}
 	return tea.Batch(cmds...)
 }
@@ -156,6 +161,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.gotConnected(msg)
 	case sessionDialed:
 		return a, a.gotSessionDialed(msg)
+	case layoutOpened:
+		return a, a.gotLayoutOpened(msg)
 	case catalogMsg:
 		return a, a.gotCatalog(msg)
 	case pageMsg:
@@ -298,6 +305,10 @@ func (a *App) feed(k keymap.Key, maps bool) tea.Cmd {
 // same actions keys run.
 func (a *App) click(p uv.Position) tea.Cmd {
 	t, ok := ui.HitAt(a.hits, p)
+	if a.layoutName != nil { // so is a click off the layout name's (F6.5)
+		a.layoutName = nil
+		return nil
+	}
 	if a.winRename != nil { // a click off its input is esc, and no more (§5)
 		if t.Action != fmt.Sprintf("window.select %d", a.sess.Active) {
 			a.winRename = nil
@@ -506,6 +517,8 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 				a.formKey(k)
 			case a.winRename != nil:
 				a.renameWindowKey(k)
+			case a.layoutName != nil:
+				cmds = append(cmds, a.layoutNameKey(k))
 			case a.drop != nil:
 				a.dropKey(k)
 			case a.cols != nil:
@@ -527,7 +540,7 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 // mode is derived from state, never stored (§3 principle 3).
 func (a *App) mode() keymap.Mode {
 	switch t, ed := a.typingTab(), a.vim(); {
-	case a.form != nil, a.winRename != nil, a.sessList != nil && a.sessList.rename != nil: // inputs with the keys over the panes (§7.8)
+	case a.form != nil, a.winRename != nil, a.layoutName != nil, a.sessList != nil && a.sessList.rename != nil: // inputs with the keys over the panes (§7.8)
 		return keymap.Insert
 	case a.overlaid(), t != nil && t.hist != nil: // an overlay has the keys (§7.8)
 		return keymap.Command
@@ -556,7 +569,7 @@ func (a *App) context() keymap.Context {
 		return keymap.Context{Overlay: "sessions", Mode: keymap.Command}
 	case a.form != nil: // its inputs: unbound keys are text
 		return keymap.Context{Overlay: "form", Mode: keymap.Insert}
-	case a.winRename != nil:
+	case a.winRename != nil, a.layoutName != nil:
 		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Insert}
 	case a.drop != nil:
 		return keymap.Context{Overlay: "dropdown", Mode: keymap.Command}

@@ -43,6 +43,8 @@ func init() {
 		"palette.open":    {Title: i18n.N("命令面板"), Run: do(func(a *App, _ Args) { a.openPalette("") })},
 		"palette.command": {Title: i18n.N("命令面板：命令"), Run: do(func(a *App, _ Args) { a.openPalette(">") })}, // as if > was typed; bind : to it for the command scope (§6.8)
 		"theme.switch":    {Title: i18n.N("切换主题…"), Run: do(func(a *App, _ Args) { a.openThemeDrop() })},
+		"layout.save":     {Title: i18n.N("保存布局为…"), Run: do(func(a *App, _ Args) { a.askLayoutName() })},
+		"layout.open":     {Title: i18n.N("打开布局"), Run: do(func(a *App, _ Args) { a.openLayoutDrop() })},
 		"palette.window":  {Title: i18n.N("命令面板：窗口"), Run: do(func(a *App, _ Args) { a.openPalette("&") })},
 		"palette.tab":     {Title: i18n.N("命令面板：Tab"), Run: do(func(a *App, _ Args) { a.openPalette("#") })},
 		"palette.sql":     {Title: i18n.N("快速 SQL"), Run: do(func(a *App, _ Args) { a.openPalette(";") })}, // ; as if ; was typed (§12)
