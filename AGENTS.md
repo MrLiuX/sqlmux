@@ -29,7 +29,10 @@ sqlmux/
 ├─ specs/
 │  ├─ tech-design.md          技术方案
 │  ├─ plan.md                 里程碑索引与推进规则
-│  └─ m0-skeleton/ … m6-config/task.md   各里程碑的任务清单
+│  └─ m0-skeleton/ … m7-quality/task.md  各里程碑的任务清单
+├─ justfile                   常规操作的入口：构建、测试、lint、e2e、起数据库（M7 F7.2）
+├─ .golangci.yml              golangci-lint 的规则，reviewer 起草、worker 提交（M7 F7.1）
+├─ .github/workflows/ci.yml   GitHub Actions：lint、vet、单测、集成测试（M7 F7.1）
 ├─ bin/                       构建产物，不入库
 └─ .handoff/                  会话交接文档，不入库
 ```
@@ -176,6 +179,7 @@ sqlmux/
   - 不要对整个工作区执行 stash、checkout 或 reset。所有 worktree 共用同一个 stash 栈。需要把工作暂时放到一边时，只处理自己的代码路径，例如 `git stash push -u -m "<唯一标签>" -- internal/ cmd/`，或者提交一个临时的 WIP commit。
 - **每个 commit 自己保证测试通过**（按批审查后，没有人逐个 commit 替你把关）：
   - `go vet ./...`、`go test ./...` 通过，`gofmt -l .` 输出为空，`go mod tidy` 之后没有改动；
+  - **M7 F7.1 起**：`golangci-lint run ./...` 零报告（`just lint`），用仓库里的 `.golangci.yml`；要屏蔽某条报告，用带理由的 `//nolint:<linter> // 为什么`，不改配置放宽规则（放宽规则是设计变更，提给决策者和 reviewer）。装的是 golangci-lint v2（v1 不支持 Go 1.26）；
   - 涉及数据库的，`go test -tags integration ./...` 通过；
   - e2e 只跑和这次改动相关的脚本（合入 `e2e` 分支之后）。**全量 e2e 每个审查节点跑一次**；修复 commit 也只跑相关的脚本，tester 在批次上会跑全量，里程碑最后还有一次完整回归（M1 复盘：全量一轮约 20 分钟，每个 commit 都跑，一天等了 217 分钟）；
   - **送审和全量 e2e 同时进行**（用户：提速，但首要保证质量）：上面的检查和相关的 e2e 都通过后就送审，全量 e2e 同时在后台跑。送审消息里写明全量还在跑，并列出预期的失败。跑完只有出现清单外的失败时，才再给 reviewer 发一条，算这一轮的补充，不另开一轮。跑到一半合进了 `e2e` 分支的，不重跑，除非新脚本覆盖的正是这一批；
@@ -197,6 +201,7 @@ sqlmux/
   2. **可维护性与 ponytail**：有没有过度设计、重复造轮子、多余的依赖、死代码；非平凡的逻辑有没有测试。可以用 `code-review` 和 `ponytail:ponytail-review` skill。
   3. **与文档一致**：实现是否符合 tech-design 和 task.md 的开发清单，有没有做清单以外的事。
   4. **本文件的约定**：SQL 相关的实现有没有先参考开源实现；默认键位是否只用了任何终端都能区分的键；界面上的键位文字是否都从 keymap 读取；测试有没有隔离用户数据。
+  5. **lint 先过再审**（M7 F7.1 起，用户 2026-10-05 要求）：在自己的 worktree 里对送审的 sha 跑 `just lint`，有报告就直接退回，不开始人工审查；新加的 `//nolint` 要有理由，理由不成立算必须改。`.golangci.yml` 由 reviewer 起草和维护（规则是质量门槛，归审查管），改动由 worker 提交。
 - **意见分两级**：
   - 「必须改」：不改就不能提测；
   - 「建议」：不阻塞提测。

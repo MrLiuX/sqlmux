@@ -99,6 +99,9 @@ sqlmux/
 ├─ internal/config/         config / connections / state / 布局文件的读写与 XDG 路径
 ├─ internal/i18n/           界面文案的翻译：T(中文, 参数…)，en 表（M6 F6.4）
 ├─ docker-compose.yml       集成测试用的 postgres 与 mysql
+├─ justfile                 常规操作的入口（M7 F7.2）
+├─ .golangci.yml            golangci-lint v2 的规则（M7 F7.1）
+├─ .github/workflows/ci.yml GitHub Actions：lint、vet、单测、集成测试（M7 F7.1）
 └─ README.md、LICENSE、assets/  GitHub 上的说明、许可证与截图
 ```
 
@@ -1545,6 +1548,10 @@ read_only    = false
 ```
 
 ## 15. 测试
+
+- **静态检查**（M7 F7.1，用户 2026-10-05 要求）：golangci-lint v2，规则在仓库根的 `.golangci.yml`，每个 commit 零报告，reviewer 审查前先跑。规则以 golangci-lint 的默认集（errcheck、govet、ineffassign、staticcheck、unused）为底，加上能抓到真 bug 和误用的：errorlint、nilerr、exhaustive、copyloopvar、intrange、unconvert、unparam、wastedassign、prealloc、perfsprint、usestdlibvars、misspell、gocritic（diagnostic + performance 组）、revive（默认规则）、nolintlint；formatters 用 gofmt、goimports。不开和 gofmt 打架或只讲风格的（wsl、nlreturn、lll、godot、varnamelen、exhaustruct 等），也不开 depguard、gochecknoglobals 这类要为项目逐个配的。每个开启的 linter 在配置里一行注释写为什么；屏蔽用带理由的 `//nolint`。最终清单由 reviewer 起草时定。
+- **CI**（M7 F7.1）：GitHub Actions，push 和 PR 到 main 时跑 lint、vet、单测、集成测试（PG 17 和 MySQL 8.4 用 services 起，seed 同 docker-compose）；e2e 不进 CI（要 tmux 和 40 分钟以上，本地由 tester 跑）。
+- **常规操作走 `just`**（M7 F7.2）：`justfile` 里有 build、run、test、test-integration、e2e（只编译一次）、lint、fmt、tidy、check（commit 前的全部检查）、golden 更新、db-up / db-down、keys 导出、clean；AGENTS.md 里写命令的地方都改成 just 的入口。
 
 - **单元测试**（表驱动）：
   - `sqlkit`：扫描、分句、读写判定、自动 LIMIT、WHERE 拼接与多语句拦截，以及补全上下文判断（光标位置 → 候选类别、表的别名、CTE 和子查询的层级）。用例可以参考 lazysql 的 `sql_context_test.go`。
