@@ -424,7 +424,7 @@
 **验收**
 - [x] e2e：用推荐的送法送一个绑在 `[keys.global]` 的键，在表格和 console 的 INSERT 下都执行了对应命令，输入框里没有多出字符。
 
-**通过后决策者给用户配键**（用户 2026-10-04 要的一组，写进 `~/.config/sqlmux/keymaps.toml`，只写改动；Cmd / Ctrl+Shift 那几个照用户给 nvim 的做法，改 kitty.conf 和 .tmux.conf.local 的分支，先备份）：`s` 表格里选排序列（`grid.order`）；`Cmd+Shift+[` / `]` 同一个 pane 里左右切 tab；`Cmd+Shift+T` 重开关掉的 tab；`Ctrl+Shift+[` / `]` 左右切 window；`tc` 新建 window；`tC` 新建 session；`tt` 上一个 window（`window.last`）；`Cmd+1` 顺时针切到下一个 pane（`pane.focus.next`）；`Cmd+W` 关 tab、空了连 window 一起关（`tab.quit`）；`SPC q` 收起结果区（`result.toggle`）；`SPC ll` 在 console 的 NORMAL 下格式化整个文件（`console.format`），VISUAL 下格式化选区（`[map.console.visual]` 映射成 `gq`）；10-05 追加：`SPC wl` / `SPC wj` 左右 / 上下分割（`pane.split.right` / `pane.split.below`），`SPC j` 打开面板的「窗口」范围（`palette.window`），`SPC k` 打开「Tab」范围（`palette.tab`）。为了不和 `t…`、`SPC l…` 冲突，解绑树和引导页的 `t`、默认的 `SPC l`。
+**通过后决策者给用户配键**（用户 2026-10-04 要的一组，写进 `~/.config/sqlmux/keymaps.toml`，只写改动；Cmd / Ctrl+Shift 那几个照用户给 nvim 的做法，改 kitty.conf 和 .tmux.conf.local 的分支，先备份）：`s` 表格里选排序列（`grid.order`）；`Cmd+Shift+[` / `]` 同一个 pane 里左右切 tab；`Cmd+Shift+T` 重开关掉的 tab；`Ctrl+Shift+[` / `]` 左右切 window；`tc` 新建 window；`tC` 新建 session；`tt` 上一个 window（`window.last`）；`Cmd+1` 顺时针切到下一个 pane（`pane.focus.next`）；`Cmd+W` 关 tab、空了连 window 一起关（`tab.quit`）；`SPC q` 收起结果区（`result.toggle`）；`SPC ll` 在 console 的 NORMAL 下格式化整个文件（`console.format`），VISUAL 下格式化选区（`[map.console.visual]` 映射成 `gq`）；10-05 追加：`SPC wl` / `SPC wj` 左右 / 上下分割（`pane.split.right` / `pane.split.below`），`SPC wz` 最大化 / 还原当前 pane（`pane.zoom`，默认的 `SPC z` 留着），`SPC j` 打开面板的「窗口」范围（`palette.window`），`SPC k` 打开「Tab」范围（`palette.tab`）。为了不和 `t…`、`SPC l…` 冲突，解绑树和引导页的 `t`、默认的 `SPC l`。
 
 ## F5.18 结果 tab 的上限 · 状态：passed（a526d79；e2e d2f8f32）
 
