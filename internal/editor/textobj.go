@@ -566,7 +566,7 @@ func (e *Editor) extendPara(start, count int, include bool) bool {
 			break
 		}
 		prevWhite := -1
-		for t := 0; t < 2; t++ {
+		for range 2 {
 			start += dir
 			w := 0
 			if e.blank(start) {

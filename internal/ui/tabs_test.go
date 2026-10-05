@@ -39,7 +39,7 @@ func TestTabsNoShift(t *testing.T) {
 				return s
 			}
 			want := regions(base)
-			for x := 0; x < w; x++ {
+			for x := range w {
 				f := NewFrame(w, 1, TokyonightStorm)
 				f.Mouse = uv.Pos(x, 0)
 				tb.Draw(f, uv.Rect(0, 0, w, 1))

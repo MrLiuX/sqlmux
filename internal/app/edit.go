@@ -1038,7 +1038,7 @@ func validUUID(s string) bool {
 	}
 	s = strings.TrimSuffix(strings.TrimPrefix(s, "{"), "}")
 	n := 0
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		switch c := s[i]; {
 		case '0' <= c && c <= '9', 'a' <= c && c <= 'f', 'A' <= c && c <= 'F':
 			n++
