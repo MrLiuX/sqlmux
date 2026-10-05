@@ -97,9 +97,11 @@ func (e *Editor) plainKey(k string) {
 		if k == "<C-z>" {
 			e.undo(1)
 		} else {
-			before := e.lines
+			before, n := e.lines, len(e.undone)
 			e.redo(1)
-			e.cur = redoEnd(before, e.lines)
+			if len(e.undone) < n { // with nothing to redo the cursor stays
+				e.cur = redoEnd(before, e.lines)
+			}
 		}
 		e.clampCursor() // the step's cursor is of the text before it
 		in.start, in.fresh, in.arrowed = e.cur, true, false

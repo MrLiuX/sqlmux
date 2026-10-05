@@ -487,4 +487,9 @@ func TestPlainRedoEnd(t *testing.T) {
 	if e.Cursor() != (Pos{0, 6}) {
 		t.Errorf("undo is as vim puts it: %v", e.Cursor())
 	}
+	e = plain("")
+	feed(e, "a", "b", "<CR>", "c", "d", "e", "<C-y>")
+	if e.Cursor() != (Pos{1, 3}) {
+		t.Errorf("nothing to redo moves the cursor: %v", e.Cursor())
+	}
 }
