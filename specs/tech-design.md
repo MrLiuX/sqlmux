@@ -1471,7 +1471,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - 做法照 gettext：中文原文就是 key，`en` 是一张「中文 → 英文」的表，找不到就显示原文。这样现有代码只需要把字符串包一层，不用先给每条文案起名字。带参数的文案用占位符（如「已保存 %d 行」）。
   - 命令面板按当前语言的标题搜索，action id 照旧可以搜。
   - 键位文字不属于文案，照旧从 keymap 读（§6.7）。
-  - 不翻译的还有：读 config.toml / keymaps.toml / 主题文件本身时的错误（语言就是正在读的内容之一）和 `sqlmux` 命令行的用法说明、flag 错误，这些照 zh；config 读完之后的启动错误、`sqlmux keys` 的输出跟着语言（F6.4 定）。
+  - 不翻译的还有：解析 config.toml / keymaps.toml 的错误（语言就是正在读的内容之一）和 `sqlmux` 命令行的用法说明、flag 错误，这些照 zh；主题文件的错误走 `T`，启动时读到的照样是中文（还没 `Set`），运行中 `theme.switch` 读坏文件时跟着语言（F6.4 审查时定）；config 读完之后的启动错误、`sqlmux keys` 的输出跟着语言（F6.4 定）。
   - 测试：单测扫一遍所有包，找出没走翻译的中文字面量；`en` 表里缺的条目也由单测报出来。golden 和 e2e 照旧按 `zh` 断言，`en` 另加几张 golden。
 - **布局文件**（M6 F6.5，用户 2026-09-30 提出，细节 2026-10-05 按 worker 的提议定）：
   - **格式**：TOML，`version = 1`；每个 `[[session]]` 记 `name`、`connection`（启动连接）、`active`；每个 `[[session.window]]` 记 `name`、`layout`（分割树，TOML 表：`split = "h" | "v"`、`ratio`、`a`、`b`，叶子是 `pane = <id>`；程序写成子表 `[session.window.layout.a]`，手写成内联表也能读）、`focus`、`zoom`、`sidebar_open`、`sidebar_width`、`result_height`；每个 `[[session.window.pane]]` 记 `id` 和它的 tab：表 tab 是 `kind = "table"`、`connection`、`schema`、`table`、`where`、`order`、`desc`、`limit`、`page`、`cols`（隐藏的列）、`transpose`；console tab 是 `kind = "console"`、`n`、`connection`、`schema`；再记当前 tab。不存：结果集、正在跑的查询、未保存的单元格修改（退出前本来就要确认）、引导页。

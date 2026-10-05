@@ -70,7 +70,7 @@
 - [ ] 扫描单测：用 go/ast 过一遍所有包，含汉字的字符串字面量不是 `T` 的参数、不在注释和 `_test.go` 里、不在小的允许名单（数据库错误前缀等）里的，报出来；每个 `T` 的 key 在 `en` 表里都有。
 - [ ] 分两个 commit：先机制、扫描测试和 `internal/app` 的文案，再 `internal/ui`、`internal/config`、`cmd`（现在约 350 行中文字面量）。
 - [ ] `config.toml` 的 `language = "zh" | "en"`，默认 `zh`，写错启动报错、带路径。
-- 细节（worker 提议，已定）：API 是 `T(zh, args...)`、`N(zh)`（同 gettext 的 N_，表里的文案在定义处标、在画的时候 `T(变量)`）、`Set(lang)`；`en` 表是 `internal/i18n/en.go` 里一个按区域分组的 map 字面量，带参数的文案两边动词同序，有测试查；拼接出来的句子改成一条带 `%s` 的 `T`。扫描测试：含汉字的字面量只能出现在 `T(` / `N(` 里，允许名单只有 CLI 的用法说明和 flag 错误，以及读 config.toml / keymaps.toml / 主题本身时的错误（那时还不知道语言，照 zh）；再查 `T` / `N` 的每个 key 都在 `en` 表里、`en` 表的每个 key 都有人用。`sqlmux keys` 的输出和 config 读完之后的启动错误跟着语言。实际合成了一个 commit（a0eda0f）：扫描测试要全部包都转完才能过，临时允许名单反而让 diff 更大；审查时接受，不再拆。
+- 细节（worker 提议，已定）：API 是 `T(zh, args...)`、`N(zh)`（同 gettext 的 N_，表里的文案在定义处标、在画的时候 `T(变量)`）、`Set(lang)`；`en` 表是 `internal/i18n/en.go` 里一个按区域分组的 map 字面量，带参数的文案两边动词同序，有测试查；拼接出来的句子改成一条带 `%s` 的 `T`。扫描测试：含汉字的字面量只能出现在 `T(` / `N(` 里，允许名单只有 CLI 的用法说明和 flag 错误，以及解析 config.toml / keymaps.toml 的错误（那时还不知道语言，照 zh）；主题文件的错误走 `T`（运行中切主题也会读它，审查时定）；再查 `T` / `N` 的每个 key 都在 `en` 表里、`en` 表的每个 key 都有人用。`sqlmux keys` 的输出和 config 读完之后的启动错误跟着语言。实际合成了一个 commit（a0eda0f）：扫描测试要全部包都转完才能过，临时允许名单反而让 diff 更大；审查时接受，不再拆。
 
 **验收**
 - [ ] 单测：扫描测试通过；`en` 表覆盖全部文案。
