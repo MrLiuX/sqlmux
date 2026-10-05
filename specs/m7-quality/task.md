@@ -24,7 +24,8 @@
 **开发**
 - [x] reviewer 起草 `.golangci.yml`（golangci-lint v2 格式；linter 清单和理由见 §15「静态检查」），发给 worker 和决策者；worker 原样提交。2026-10-05 已起草（v2.14.0），决策者接受全部取舍；398899a 上 131 条报告，其中生产代码的 20 条 errcheck 都是可以安全丢掉的，写成 `_ =`；真问题有 ineffassign 1、wastedassign 4、unparam 1、unused 1、7 处变量名遮住内置函数。
 - [ ] worker 在全仓库跑 `golangci-lint run ./...`，修到零报告：一类报告一个 commit（如 `lint: errorlint`），**不改行为**，测试期望一个都不改；确实该屏蔽的用带理由的 `//nolint`。修的过程中觉得某条规则不合适，提给 reviewer 和决策者，不自己改配置。
-- [ ] `.github/workflows/ci.yml`：push 和 PR 到 main 时跑 lint（golangci-lint-action）、vet、`go test ./...`、`go test -tags integration ./...`（PG 17、MySQL 8.4 用 services 起，用 `testdata/seed` 导入）。Go 版本从 go.mod 读。e2e 不进 CI。
+  - 细节（worker 2026-10-06 提议，已定）：第一个 commit 只放 `.golangci.yml`（它自己的 lint 是红的，之后一个 linter 一个 commit 修干净，最后一个 commit 是 ci.yml；「每个 commit lint 零报告」从 F7.1 落地后算起）。修法：生产的 errcheck 写 `_ =`，测试里的检查失败 `t.Fatal`；exhaustive 只在故意不全的 switch 上加带注释的空 `default:`，该列全成员的就列全；revive 遮住内置函数的改名、未用参数改 `_`；unparam 去掉没人用的返回值和常量参数，改调用点、期望不动；editor 里 vim 移植的三处 wastedassign 做最小改动并跑 nvim 差分；misspell 的 `"SEL\nECT"` 加 `//nolint:misspell`。
+- [ ] `.github/workflows/ci.yml`：push 和 PR 到 main 时跑 lint（golangci-lint-action）、vet、`go test ./...`、`go test -tags integration ./...`（PG 17、MySQL 8.4 用 services 起，用 `testdata/seed` 导入）。Go 版本从 go.mod 读。e2e 不进 CI。job 拆成 lint / test / integration 三个；本机跑不了 Actions，第一次真绿要等推送。
 - [ ] 本地工具：golangci-lint v2.14.0（`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`；现在装的 v1.63.4 不支持 Go 1.26），版本钉进 justfile 和 CI。装到默认位置 `~/go/bin`，覆盖用户的 v1.63.4（用户 2026-10-05 定：用最新版直接覆盖）；钉的版本就是当时的最新版。
 
 **验收**
@@ -37,7 +38,7 @@
 - **涉及**：仓库根 `justfile`、AGENTS.md、README.md
 
 **开发**（worker 2026-10-06 的清单，决策者确认）
-- [ ] `justfile`（每条就是现在手敲的命令，不加新逻辑）：`build`（到 `bin/`）、`run *args`、`test`、`test-integration`（`SQLMUX_TEST_PG` / `SQLMUX_TEST_MYSQL` 用 `env()` 给 compose 的默认值，用户设了不覆盖）、`e2e *scripts`（先编译到临时目录一次，`E2E_BIN` / `E2E_NOBUILD=1` 逐个跑，不带参数跑全部，一个失败不中断、最后汇总并退出非 0，跑完删二进制）、`lint`（钉 v2.14.0，版本不对报错并给 `go install` 命令）、`fmt`、`tidy`、`check`（vet 含 integration tag + test + test-integration + lint + gofmt 为空 + tidy 后无改动，任一失败即停；只有一个 check，数据库没起时提示 `just db-up`，不另加 check-fast）、`golden *pkgs`（默认 app、ui，自动把 XDG 三个目录指到临时目录、PATH 前放假 pbcopy）、`generate`（nvim 差分）、`db-up` / `db-down` / `db-reset`（`down -v` 再 up，改 seed 后用）、`keys *args`、`clean`；默认配方是 `--list`。
+- [ ] `justfile`（每条就是现在手敲的命令，不加新逻辑）：`build`（到 `bin/`）、`run *args`、`test`、`test-integration`（`SQLMUX_TEST_PG` / `SQLMUX_TEST_MYSQL` 用 `env()` 给 compose 的默认值，用户设了不覆盖）、`e2e *scripts`（先编译到临时目录一次，`E2E_BIN` / `E2E_NOBUILD=1` 逐个跑，不带参数跑全部，一个失败不中断、最后汇总并退出非 0，跑完删二进制）、`lint`（钉 v2.14.0，版本不对报错并给 `go install` 命令）、`fmt`、`tidy`、`check`（vet 含 integration tag + test + test-integration + lint + gofmt 为空 + tidy 后无改动，任一失败即停；只有一个 check，集成测试失败时末尾印一行「if the databases are not up: just db-up」——条件句不算误导，几十条 connection refused 后面要有个出口（审查时定，worker 自查删掉后加回），不另加 check-fast）、`golden *pkgs`（默认 app、ui，自动把 XDG 三个目录指到临时目录、PATH 前放假 pbcopy）、`generate`（nvim 差分）、`db-up` / `db-down` / `db-reset`（`down -v` 再 up，改 seed 后用）、`keys *args`、`clean`；默认配方是 `--list`。
 - [ ] CI 的 job 拆开跑（lint / test / integration），justfile 不管 CI。
 - [ ] AGENTS.md 和 README 里的命令改成 just 的入口（决策者改）：vet / test / gofmt / tidy / lint → `just check`；全量 e2e → `just e2e`；更新 golden → `just golden`；`docker compose up -d postgres` → `just db-up`；`go generate ./internal/editor` → `just generate`。
 
@@ -54,6 +55,7 @@
 **开发**（§13「凭据」的三条新内容）
 - [ ] `dsn`、`password` 里的 `${VAR}` 用 `os.Expand` 展开，只认 `${}`，没设置报错；启动时的连接报错退出，其他连接标失败、toast（同 `password_env`）。
 - [ ] 表单加 `password` 字段，输入画 `*`（`ui.Input` 加一个掩码开关，光标位置照常）；保存时按平台存进钥匙串并写 `password_cmd`，没有钥匙串工具时写明文 + 0600 + toast。dsn 里带了密码（`user:pass@`）照旧交给驱动，不拆。
+  - 细节（worker 提议，已定）：展开用正则 `\$\{([^}]+)\}` + `os.LookupEnv`，不用 `os.Expand`（它连 `$VAR` 一起展开），不做 `${X:-默认}`；变量没设置或为空都报错；在 `dial` 里 `Secret()` 之前展开，启动连接的错误照旧打印退出。掩码在 `ui.FormField` 上（`Mask`），按字素画 `*`。`config.StorePassword` 按平台包装 `security` / `secret-tool`，名字里的 `'` 转义；macOS 的 `security -w <密码>` 会短暂出现在进程参数里，`ponytail:` 标出。密码留空什么都不存。**钥匙串工具在但执行失败**（锁着、被拒）：不保存、不降级成明文，错误（stderr 第一行）写在表单的错误行，表单留着让用户重试或清掉密码（决策者定）。
 - [ ] README 的配置一节写清四种来源、`${VAR}`、钥匙串（决策者改 README）。
 
 **验收**
