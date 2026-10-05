@@ -300,7 +300,7 @@ func TestKeyProblemsNotice(t *testing.T) {
 	a := New(c, keys, testSession(), &config.State{}, "")
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
 	a.KeyProblems(problems)
-	if a.confirm == nil || !strings.HasPrefix(a.confirm.text, "keymaps.toml 有 2 处问题") || strings.Count(a.confirm.text, "\n") != len(problems) {
+	if a.confirm == nil || !strings.HasPrefix(a.confirm.text, "keymaps.toml 有 2 处问题：\n") || strings.Count(a.confirm.text, "\n") != len(problems) {
 		t.Fatalf("notice: %+v", a.confirm)
 	}
 	screen := a.render().String()

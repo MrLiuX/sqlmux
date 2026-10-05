@@ -114,7 +114,7 @@ func (a *App) KeyProblems(ps []keymap.Problem) {
 	if len(ps) == 0 {
 		return
 	}
-	lines := []string{fmt.Sprintf(i18n.T("keymaps.toml 有 %d 处问题，这些行没有生效："), len(ps))}
+	lines := []string{fmt.Sprintf(i18n.T("keymaps.toml 有 %d 处问题："), len(ps))}
 	for _, p := range ps {
 		lines = append(lines, "  "+p.String())
 	}
