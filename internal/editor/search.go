@@ -226,13 +226,13 @@ func (e *Editor) searchNext(p Pos, count int, back bool) target {
 	}
 	m, err := compile(s.pattern, s.ignore)
 	if err != nil {
-		e.eff.Error = i18n.T("正则有误：") + err.Error()
+		e.eff.Error = i18n.T("正则有误：%s", err)
 		return fail
 	}
 	for ; count > 0; count-- {
 		var ok bool
 		if p, ok = e.searchFrom(m, p, back); !ok {
-			e.eff.Error = i18n.T("找不到：") + s.pattern
+			e.eff.Error = i18n.T("找不到：%s", s.pattern)
 			return fail
 		}
 	}
@@ -449,7 +449,7 @@ func (e *Editor) substitute(from, to int, arg string) {
 	e.lastSearch = search{pattern: pattern, ignore: ignore, backwards: e.lastSearch.backwards}
 	m, err := compile(pattern, ignore || strings.Contains(flags, "i"))
 	if err != nil {
-		e.eff.Error = i18n.T("正则有误：") + err.Error()
+		e.eff.Error = i18n.T("正则有误：%s", err)
 		return
 	}
 	template := replacement(repl)
@@ -486,7 +486,7 @@ func (e *Editor) substitute(from, to int, arg string) {
 		changed = n
 	}
 	if changed < 0 {
-		e.eff.Error = i18n.T("找不到：") + pattern
+		e.eff.Error = i18n.T("找不到：%s", pattern)
 		return
 	}
 	e.cur = Pos{changed, firstNonBlank(e.lines[changed])}

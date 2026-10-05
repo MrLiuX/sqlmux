@@ -117,7 +117,7 @@ func (a *App) dialSession() tea.Cmd {
 // the form added meanwhile too (§7.8).
 func (a *App) gotSessionDialed(m sessionDialed) tea.Cmd {
 	if m.err != nil {
-		return a.showToast(m.spec.Name+"："+m.err.Error(), toastTTL)
+		return a.showToast(i18n.T("%s：%s", m.spec.Name, m.err), toastTTL)
 	}
 	conns, start := make([]*Conn, len(a.sess.Conns)), 0
 	for i, c := range a.sess.Conns {

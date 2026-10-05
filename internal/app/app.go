@@ -81,7 +81,9 @@ type App struct {
 }
 
 // toastLine flattens a toast onto its one row (§7.8).
-var toastLine = strings.NewReplacer("\n", "；", "\t", " ")
+func toastLine(s string) string {
+	return strings.NewReplacer("\n", i18n.T("；"), "\t", " ").Replace(s)
+}
 
 // toastTTL is how long a toast stays up (§7.8).
 var toastTTL = 3 * time.Second
@@ -112,7 +114,7 @@ func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, 
 // JoinNotes is the notes that are not empty on one line, the way a toast says
 // several.
 func JoinNotes(notes ...string) string {
-	return strings.Join(slices.DeleteFunc(slices.Clone(notes), func(s string) bool { return s == "" }), "；")
+	return strings.Join(slices.DeleteFunc(slices.Clone(notes), func(s string) bool { return s == "" }), i18n.T("；"))
 }
 
 // KeyProblems opens a notice of the lines of keymaps.toml that did not take
@@ -652,7 +654,7 @@ func (a *App) focused() *Pane {
 }
 
 func (a *App) showToast(s string, ttl time.Duration) tea.Cmd {
-	a.toast = toastLine.Replace(s) // one row: a driver's error may have many (§7.8)
+	a.toast = toastLine(s) // one row: a driver's error may have many (§7.8)
 	a.toastSeq++
 	seq := a.toastSeq
 	return tea.Tick(ttl, func(time.Time) tea.Msg { return toastExpired{seq} })

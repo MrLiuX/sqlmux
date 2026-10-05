@@ -12,6 +12,7 @@ import (
 
 	"sqlmux/internal/app"
 	"sqlmux/internal/config"
+	"sqlmux/internal/i18n"
 )
 
 // writeConfig makes a config dir of the test's own with file name in it.
@@ -46,6 +47,18 @@ func TestKeysCheck(t *testing.T) {
 	errb.Reset()
 	if code := keysCmd([]string{"--check"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "config.toml: [keys] / [map] 要写在 keymaps.toml 里") {
 		t.Fatalf("keys in config.toml: exit %d, stderr %q", code, errb.String())
+	}
+}
+
+// `sqlmux keys` says its headings in the language of config.toml (§14).
+func TestKeysFollowLanguage(t *testing.T) {
+	defer i18n.Set("zh")
+	for lang, want := range map[string]string{"zh": "| 作用域 | 键 | 操作 |", "en": "| Scope | Key | Action |"} {
+		writeConfig(t, "config.toml", "language = \""+lang+"\"\n")
+		var out, errb bytes.Buffer
+		if code := keysCmd(nil, &out, &errb); code != 0 || !strings.Contains(out.String(), want) {
+			t.Errorf("language = %s: exit %d, output %.60q", lang, code, out.String())
+		}
 	}
 }
 

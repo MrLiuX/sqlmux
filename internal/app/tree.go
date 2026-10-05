@@ -67,7 +67,7 @@ func (a *App) gotConnected(m connected) tea.Cmd {
 	if m.err != nil {
 		c.State = connFailed
 		a.dropPending(c)
-		return a.showToast(c.Spec.Name+"："+m.err.Error(), toastTTL)
+		return a.showToast(i18n.T("%s：%s", c.Spec.Name, m.err), toastTTL)
 	}
 	c.take(m.d)
 	cmds := []tea.Cmd{a.loadCatalog(c)}
@@ -111,7 +111,7 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	}
 	if m.err != nil {
 		a.dropPending(m.conn)
-		return a.showToast(m.conn.Spec.Name+"："+m.err.Error(), toastTTL)
+		return a.showToast(i18n.T("%s：%s", m.conn.Spec.Name, m.err), toastTTL)
 	}
 	c := m.conn
 	c.Schemas, c.Tables = m.schemas, m.tables

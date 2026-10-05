@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sqlmux/internal/i18n"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -236,7 +237,7 @@ func LoadTheme(name string, icons *ui.Icons) (*ui.Theme, *ui.Icons, error) {
 		if th, ok := ui.Themes[name]; ok {
 			return th, icons, nil
 		}
-		return nil, nil, fmt.Errorf("找不到 %s，也没有这个内置主题", path)
+		return nil, nil, fmt.Errorf(i18n.T("找不到 %s，也没有这个内置主题"), path)
 	}
 	if err != nil {
 		return nil, nil, err

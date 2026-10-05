@@ -358,6 +358,14 @@ func TestThemeSwitch(t *testing.T) {
 	if a.theme != ui.TokyonightStorm || a.icons.Table.Text != "+" {
 		t.Error("back to tokyonight-storm and the icons chosen")
 	}
+	// the file is read as the program runs: what it says goes with the language
+	i18n.Set("en")
+	defer i18n.Set("zh")
+	a.run("theme.switch", 0)
+	feed(t, a, "bad<CR>")
+	if !strings.Contains(a.toast, "write a color as #rrggbb") || strings.Contains(a.toast, "颜色") {
+		t.Errorf("in English: toast %q", a.toast)
+	}
 }
 
 func ansiHex(c color.Color) string {
@@ -369,9 +377,7 @@ func ansiHex(c color.Color) string {
 // palette, the confirm box over a table with changes, the query bar, the
 // result area's log, a table's saved note (§14「界面语言」, F6.4).
 func TestGoldenEnglish(t *testing.T) {
-	if err := i18n.Set("en"); err != nil {
-		t.Fatal(err)
-	}
+	i18n.Set("en")
 	defer i18n.Set("zh")
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	scenes := map[string]func() *App{
@@ -386,6 +392,21 @@ func TestGoldenEnglish(t *testing.T) {
 			tab := loadOrders(t, a, 60)
 			tab.edits = map[editKey]edit{{joinKey([]string{"1"}), "status"}: {val: db.Val{S: "done"}, orig: db.Val{S: "running"}}}
 			feed(t, a, "x")
+			return a
+		},
+		// 80 columns: the scopes of the palette all fit
+		"palette80": func() *App {
+			a := wide(80, 24)
+			feed(t, a, "<C-p>")
+			return a
+		},
+		// both questions of a quit, a line each
+		"confirm2": func() *App {
+			a := wide(100, 30)
+			tab := loadOrders(t, a, 60)
+			tab.edits = map[editKey]edit{{joinKey([]string{"1"}), "status"}: {val: db.Val{S: "done"}, orig: db.Val{S: "running"}}}
+			a.sess.Conns[0].tx = 'T'
+			feed(t, a, ":qa<CR>")
 			return a
 		},
 		"table": func() *App {

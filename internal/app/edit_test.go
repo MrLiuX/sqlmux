@@ -1077,7 +1077,7 @@ func TestSaveRows(t *testing.T) {
 	}
 	d.err = nil // INSERT 0 0: a BEFORE trigger's NULL
 	_, cmd = a.Update(teaKey("<C-s>"))
-	if a.Update(cmd()); tab.bar == nil || tab.bar.First != (ui.Note{Head: "新增的第 1 行", Mid: "没有插入", Tail: "，已回滚"}) {
+	if a.Update(cmd()); tab.bar == nil || tab.bar.First != (ui.Note{Head: "新增的第 1 行没有插入", Tail: "，已回滚"}) {
 		t.Fatalf("not inserted: %+v", tab.bar)
 	}
 	d.fail, d.err = "delete", nil

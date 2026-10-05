@@ -13,21 +13,31 @@ import (
 	"testing"
 )
 
-var han = regexp.MustCompile(`\p{Han}`)
+// text is what a string needing translation is made of: Han, and the
+// punctuation of a Chinese text, ideographic and full-width, which shows in
+// English as it is (、 ： ；).
+var text = regexp.MustCompile(`[\p{Han}\x{3000}-\x{303F}\x{FF00}-\x{FFEF}]`)
 
-// stays is where a Chinese text is shown as it is, whatever language: what
-// is read before `language` is, and the command line (§14「界面语言」).
+// stays is where a Chinese text is shown as it is, whatever language, as
+// "file:function" and why: what is read before `language` is, and the
+// command line (§14「界面语言」).
 var stays = map[string]string{
-	"internal/config/config.go": "config.toml and keymaps.toml's own errors: the language is one of the things being read",
-	"internal/ui/theme.go":      "theme files' errors, read with config.toml",
-	"cmd/sqlmux/main.go":        "usage and flag errors",
+	"internal/config/config.go:Parse":     "config.toml's own errors: the language is one of the things being read",
+	"internal/config/config.go:ParseKeys": "keymaps.toml's own errors",
+	"cmd/sqlmux/main.go:run":              "usage and flag errors",
+	"cmd/sqlmux/main.go:keysCmd":          "flag errors",
 }
 
-// calls is every i18n.T and i18n.N call of the program's code, and the
-// Chinese literals outside both.
-func scan(t *testing.T) (keys map[string]bool, outside []string) {
+// literal is a string or character of the program's code with a place.
+type literal struct{ rel, fn, text string }
+
+// scan is every key of i18n.T and i18n.N, with how many arguments the
+// formatting takes for it, and the literals needing translation that are
+// not one: only a bare string as the first argument of T or N is a key, any
+// other argument of theirs is as outside as anything.
+func scan(t *testing.T) (keys map[string][]int, outside []literal) {
 	t.Helper()
-	keys = map[string]bool{}
+	keys = map[string][]int{}
 	root := filepath.Join("..", "..")
 	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		rel, _ := filepath.Rel(root, path)
@@ -39,65 +49,122 @@ func scan(t *testing.T) (keys map[string]bool, outside []string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var walk func(n ast.Node, inT bool)
-		walk = func(n ast.Node, inT bool) {
-			ast.Inspect(n, func(c ast.Node) bool {
-				switch x := c.(type) {
-				case *ast.CallExpr:
-					if sel, ok := x.Fun.(*ast.SelectorExpr); ok {
-						if id, ok := sel.X.(*ast.Ident); ok && id.Name == "i18n" && (sel.Sel.Name == "T" || sel.Sel.Name == "N") {
-							if lit, ok := x.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
-								s, _ := strconv.Unquote(lit.Value)
-								if han.MatchString(s) {
-									keys[s] = true
-								}
-							}
-							for _, a := range x.Args {
-								walk(a, true)
-							}
-							return false
-						}
-					}
-				case *ast.BasicLit:
-					if s, _ := strconv.Unquote(x.Value); x.Kind == token.STRING && han.MatchString(s) && !inT && stays[rel] == "" {
-						outside = append(outside, rel+": "+s)
-					}
-				}
-				return true
-			})
-		}
-		walk(f, false)
+		scanFile(rel, f, keys, &outside)
 		return nil
 	})
 	return keys, outside
+}
+
+// scanFile adds what file f, at rel, holds to keys and outside.
+func scanFile(rel string, f *ast.File, keys map[string][]int, outside *[]literal) {
+	isCall := func(c *ast.CallExpr, pkg string, names ...string) bool {
+		sel, ok := c.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return false
+		}
+		id, _ := sel.X.(*ast.Ident)
+		return id != nil && id.Name == pkg && slices.Contains(names, sel.Sel.Name)
+	}
+	for _, decl := range f.Decls {
+		fn := ""
+		if fd, ok := decl.(*ast.FuncDecl); ok {
+			fn = fd.Name.Name
+		}
+		// fmt.Sprintf(T(k), args...) and fmt.Errorf(T(k), args...): the arguments are the outer call's
+		outer := map[*ast.CallExpr]int{}
+		ast.Inspect(decl, func(n ast.Node) bool {
+			if c, ok := n.(*ast.CallExpr); ok && isCall(c, "fmt", "Sprintf", "Errorf") && len(c.Args) > 0 {
+				if in, ok := c.Args[0].(*ast.CallExpr); ok && isCall(in, "i18n", "T") && !c.Ellipsis.IsValid() {
+					outer[in] = len(c.Args) - 1
+				}
+			}
+			return true
+		})
+		key := map[*ast.BasicLit]bool{} // the first argument of a T or N, when it is a bare string
+		ast.Inspect(decl, func(n ast.Node) bool {
+			switch x := n.(type) {
+			case *ast.CallExpr:
+				if lit, ok := firstArg(x).(*ast.BasicLit); ok && isCall(x, "i18n", "T", "N") && lit.Kind == token.STRING {
+					key[lit] = true
+					if s, _ := strconv.Unquote(lit.Value); text.MatchString(s) {
+						n := len(x.Args) - 1
+						if o, ok := outer[x]; ok {
+							n = o
+						}
+						if x.Ellipsis.IsValid() { // T(k, args...): not counted
+							n = -1
+						}
+						keys[s] = append(keys[s], n)
+					}
+				}
+			case *ast.BasicLit:
+				if s, _ := strconv.Unquote(x.Value); !key[x] && (x.Kind == token.STRING || x.Kind == token.CHAR) && text.MatchString(s) && stays[rel+":"+fn] == "" {
+					*outside = append(*outside, literal{rel, fn, s})
+				}
+			}
+			return true
+		})
+	}
+}
+
+func firstArg(c *ast.CallExpr) ast.Expr {
+	if len(c.Args) == 0 {
+		return nil
+	}
+	return c.Args[0]
 }
 
 // Every Chinese text the program shows goes through T or N, bar what stays
 // (§14「界面语言」).
 func TestNoChineseOutsideT(t *testing.T) {
 	_, outside := scan(t)
-	for _, s := range outside {
-		t.Errorf("not translated: %s", s)
+	for _, l := range outside {
+		t.Errorf("not translated: %s %s: %q", l.rel, l.fn, l.text)
 	}
 }
 
-// The English table has every text T and N are given, and nothing else, each
-// one taking the arguments its Chinese does.
+// The English table has every text T and N are given, and nothing else,
+// each one taking the arguments its Chinese does; and a call gives T as many
+// arguments as its text takes.
 func TestEnglishTableCoversAll(t *testing.T) {
 	keys, _ := scan(t)
-	for k := range keys {
+	for k, uses := range keys {
 		if en[k] == "" {
 			t.Errorf("no English for %q", k)
 		}
+		for _, n := range uses {
+			if n >= 0 && n != len(verbs(k)) {
+				t.Errorf("%q takes %d arguments and is given %d", k, len(verbs(k)), n)
+			}
+		}
 	}
 	for k, v := range en {
-		if !keys[k] {
+		if len(keys[k]) == 0 {
 			t.Errorf("English for %q, which nothing shows", k)
 		}
-		if !slices.Equal(Verbs(k), Verbs(v)) {
-			t.Errorf("%q: verbs %v, English %v", k, Verbs(k), Verbs(v))
+		if !slices.Equal(verbs(k), verbs(v)) {
+			t.Errorf("%q: verbs %v, English %v", k, verbs(k), verbs(v))
 		}
 	}
+}
+
+// verbs is the formatting verbs of s in order.
+func verbs(s string) []string {
+	var out []string
+	for i := 0; i < len(s); i++ {
+		if s[i] != '%' {
+			continue
+		}
+		j := i + 1
+		for j < len(s) && strings.IndexByte("+-# 0123456789.*[]", s[j]) >= 0 {
+			j++
+		}
+		if j < len(s) && s[j] != '%' {
+			out = append(out, s[i:j+1])
+		}
+		i = j
+	}
+	return out
 }
 
 func TestT(t *testing.T) {
@@ -114,10 +181,43 @@ func TestT(t *testing.T) {
 	if got := T("没有这条"); got != "没有这条" {
 		t.Errorf("missing: %q", got)
 	}
-	if err := Set("fr"); err == nil || Lang() != "en" {
-		t.Errorf("a language that is not: %v, %s", err, Lang())
-	}
-	if got := Verbs("%s 有 %d %% 个 %-5.2f %v"); !slices.Equal(got, []string{"%s", "%d", "%-5.2f", "%v"}) {
+	if got := verbs("%s 有 %d %% 个 %-5.2f %v"); !slices.Equal(got, []string{"%s", "%d", "%-5.2f", "%v"}) {
 		t.Errorf("verbs: %v", got)
+	}
+}
+
+// The scan sees what a text is made of: a key is a bare string first
+// argument; a prefix, a Sprintf, a second argument, a rune and a full-width
+// mark are outside it, unless the place is one that stays.
+func TestScanSeesWhatItShould(t *testing.T) {
+	src := `package x
+import ("fmt"; "sqlmux/internal/i18n")
+func f(x string) {
+	_ = i18n.T("前缀" + x)
+	_ = i18n.T(fmt.Sprintf("中文 %s", x))
+	_ = i18n.T("%s 的", "参数里的中文")
+	_ = i18n.N("x" + "：")
+	_ = '汉'
+	_ = "，"
+	_ = i18n.T("是 key")
+	_ = fmt.Sprintf(i18n.T("两个 %s %s"), x)
+}
+`
+	f, err := parser.ParseFile(token.NewFileSet(), "x.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := map[string][]int{}
+	var outside []literal
+	scanFile("x.go", f, keys, &outside)
+	var got []string
+	for _, l := range outside {
+		got = append(got, l.text)
+	}
+	if want := []string{"前缀", "中文 %s", "参数里的中文", "：", "汉", "，"}; !slices.Equal(got, want) {
+		t.Errorf("outside %q, want %q", got, want)
+	}
+	if !slices.Equal(keys["是 key"], []int{0}) || !slices.Equal(keys["%s 的"], []int{1}) || !slices.Equal(keys["两个 %s %s"], []int{1}) {
+		t.Errorf("keys %v", keys)
 	}
 }

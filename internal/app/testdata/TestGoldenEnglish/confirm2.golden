@@ -1,0 +1,30 @@
+┌─ ⓪  doraemon ─────── SPC b ─┐ ┌─ ①  t_order ───────────────────────────────────────────────────┐
+│  15 tables                  │ │ WHERE                                                         ▾ │
+│──────────────────────────────│ │  ORDER id    LIMIT 100   PAGE 1/?   COLS 7/7     1           │
+│ ▾  doraemon                 │ │    │  id │ status │ amount │ paid │ meta       │ note          │
+│   ▸  agentable              │ │────┼──────┼────────┼────────┼──────┼────────────┼───────────────│
+│   ▾  public                 │ │  1 │    1 │ done   │   1.99 │ t    │ {"n": 1, … │ note 1        │
+│     ▾  Tables (14)          │ │  2 │    2 │ done   │   2.99 │ t    │ {"n": 2, … │ line one↵lin… │
+│       ▸  agent          124 │ │  3 │    3 │ failed │   3.99 │ t    │ {"n": 3, … │ <null>        │
+│       ▸  agent_version  530 │ │  4 │    4 │ pendi… │   4.99 │ t    │ {"n": 4, … │ note 4        │
+│       ▸  goal            57 │ │  5 │    5 │ runni… │   5.99 │ t    │ {"n": 5, … │ line one↵lin… │
+│       ▸  mt_task        812 │ │  6 │    6 │ done   │   6.99 │ t    │ {"n": 6, … │ <null>        │
+│       ▸  m┌───────────────────────────────────────────────────────────────────────┐ote 7        │
+│       ▸  s│ 1 unsaved change(s); quitting would discard them.                     │ine one↵lin… │
+│       ▸  t│ doraemon has an uncommitted transaction; quitting would roll it back. │null>        │
+│       ▸  t│                                                                       │ote 10       │
+│       ▸  t│                                                    y Quit   n Cancel  │ine one↵lin… │
+│       ▸  t└───────────────────────────────────────────────────────────────────────┘null>        │
+│       ▸  t_sku         8.1k │ │ 13 │   13 │ runni… │  13.99 │ t    │ {"n": 13,… │ note 13       │
+│       ▸  t_user         38k │ │ 14 │   14 │ done   │  14.99 │ t    │ {"n": 14,… │ line one↵lin… │
+│       ▸  t_user_address 52k │ │ 15 │   15 │ failed │  15.99 │ t    │ {"n": 15,… │ <null>        │
+│       ▸  t_user_profile 38k │ │ 16 │   16 │ pendi… │  16.99 │ t    │ {"n": 16,… │ note 16       │
+│        Views (0)            │ │ 17 │   17 │ runni… │  17.99 │ t    │ {"n": 17,… │ line one↵lin… │
+│ ▾  Workspace                │ │ 18 │   18 │ done   │  18.99 │ t    │ {"n": 18,… │ <null>        │
+│   ▾  data                   │ │ 19 │   19 │ failed │  19.99 │ t    │ {"n": 19,… │ note 19       │
+│     ▾  pane-1               │ │ 20 │   20 │ pendi… │  20.99 │ t    │ {"n": 20,… │ line one↵lin… │
+│            t_order          │ │ 21 │   21 │ runni… │  21.99 │ t    │ {"n": 21,… │ <null>        │
+│──────────────────────────────│ │ 22 │   22 │ done   │  22.99 │ t    │ {"n": 22,… │ note 22       │
+│ j/k move · ↵ open            │ │ 1: t_order* │ +            hjkl · ↵ edit · T Transpose · gt/gT │
+└──────────────────────────────┘ └─────────────────────────────────────────────────────────────────┘
+ doraemon ▾  0: data*                    ·    1,1   doraemon · pg@localhost:5432  In tx  COMMAND 

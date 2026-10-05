@@ -1,0 +1,24 @@
+┌─ ⓪  doraemon ───────┐ ┌─ ① ─────────────────────────────────────────────────┐
+│  15 tables          │ │                                                     │
+│──────────────────────│ │                                                     │
+│ ┌─ Command palette ────────────────────────────────────────────────────────┐ │
+│ │  All   Session $   Win·Pane %   Win &   Tab #   Table @   Cmd >   SQL ;  │ │
+│ │                                                                         │ │
+│ │──────────────────────────────────────────────────────────────────────────│ │
+│ │  doraemon                        1 windows                      Session │ │
+│ │  0: data                         doraemon                           Win │ │
+│ │  ⓪ schema                        doraemon › 0: data                Pane │ │
+│ │   ①                               doraemon › 0: data                Pane │ │
+│ │  agent                           doraemon.public                  Table │ │
+│ │  agent_version                   doraemon.public                  Table │ │
+│ │  goal                            doraemon.public                  Table │ │
+│ │  mt_task                         doraemon.public                  Table │ │
+│ │  mt_task_log                     doraemon.public                  Table │ │
+│ │  schema_migrations               doraemon.public                  Table │ │
+│ │  t_order                         doraemon.public                  Table │ │
+│ │  t_order_item                    doraemon.public                  Table │ │
+│ │──────────────────────────────────────────────────────────────────────────│ │
+│─│ ↑/↓ Move · Tab/S-Tab Scope · esc Close                          ↵ Switch │ │
+│ └──────────────────────────────────────────────────────────────────────────┘ │
+└──────────────────────┘ └─────────────────────────────────────────────────────┘
+ doraemon ▾  0: data*            ·     doraemon · pg@localhost:5432  COMMAND 

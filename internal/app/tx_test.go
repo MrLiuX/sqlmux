@@ -38,7 +38,7 @@ func TestCloseAsksForTx(t *testing.T) {
 	a = sized(160, 45, "nerd")
 	tab := loadOrders(t, a, 3)
 	a.sess.Conns[0].tx = 'E'
-	if feed(t, a, "lix<Esc>:qa<CR>"); a.confirm == nil || a.confirm.text != "有 1 处修改未保存，退出会丢弃。doraemon 有未提交的事务，退出会回滚。" {
+	if feed(t, a, "lix<Esc>:qa<CR>"); a.confirm == nil || a.confirm.text != "有 1 处修改未保存，退出会丢弃。\ndoraemon 有未提交的事务，退出会回滚。" {
 		t.Fatalf("quit: %+v", a.confirm)
 	}
 	if feed(t, a, "<Esc>"); len(tab.edits) != 1 {

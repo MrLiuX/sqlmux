@@ -6,6 +6,7 @@ import (
 	"maps"
 	"regexp"
 	"slices"
+	"sqlmux/internal/i18n"
 
 	"github.com/BurntSushi/toml"
 	"github.com/charmbracelet/x/ansi"
@@ -84,7 +85,7 @@ func ParseTheme(data string, icons *Icons) (*Theme, *Icons, error) {
 			for _, name := range slices.Sorted(maps.Keys(specs)) {
 				icon, ok := glyphs[name]
 				if !ok {
-					return nil, nil, fmt.Errorf("[icon]：没有叫 %s 的图标", name)
+					return nil, nil, fmt.Errorf(i18n.T("[icon]：没有叫 %s 的图标"), name)
 				}
 				s := specs[name]
 				if s.Text != nil {
@@ -100,25 +101,25 @@ func ParseTheme(data string, icons *Icons) (*Theme, *Icons, error) {
 		}
 		field, ok := colors[key]
 		if !ok {
-			return nil, nil, fmt.Errorf("没有叫 %s 的 token", key)
+			return nil, nil, fmt.Errorf(i18n.T("没有叫 %s 的 token"), key)
 		}
 		var v string
 		if err := md.PrimitiveDecode(raw[key], &v); err != nil {
-			return nil, nil, fmt.Errorf("%s：颜色要写成字符串 \"#rrggbb\"", key)
+			return nil, nil, fmt.Errorf(i18n.T("%s：颜色要写成字符串 \"#rrggbb\""), key)
 		}
 		if *field, err = hex(key, v); err != nil {
 			return nil, nil, err
 		}
 	}
 	if u := md.Undecoded(); len(u) > 0 { // e.g. `bg` inside an [icon] entry
-		return nil, nil, fmt.Errorf("不认识 %s", u[0])
+		return nil, nil, fmt.Errorf(i18n.T("不认识 %s"), u[0])
 	}
 	return &th, &ic, nil
 }
 
 func hex(key, v string) (color.Color, error) {
 	if !hexColor.MatchString(v) {
-		return nil, fmt.Errorf("%s = %q：颜色要写成 #rrggbb", key, v)
+		return nil, fmt.Errorf(i18n.T("%s = %q：颜色要写成 #rrggbb"), key, v)
 	}
 	return c(v), nil
 }

@@ -696,7 +696,7 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 		t.note = ui.Note{Head: i18n.T("已取消，已回滚"), Fg: a.theme.Warn}
 	case m.err != nil: // on the error bar: the query bar keeps what went well alone (§7.8「错误栏」)
 		t.note = ui.Note{}
-		head := ""
+		head, e := "", t.conn.eng.ErrorOf(m.err)
 		named := func(key string) string {
 			var named []string
 			for i, v := range splitKey(key) {
@@ -705,7 +705,7 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 			if t.failed = &key; errors.Is(m.err, db.ErrStale) || errors.Is(m.err, db.ErrGone) {
 				return i18n.T("%s 的", strings.Join(named, ", "))
 			}
-			return strings.Join(named, ", ") + "："
+			return i18n.T("%s：", strings.Join(named, ", "))
 		}
 		switch i := m.failed; {
 		case i < 0:
@@ -714,12 +714,14 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 		case i < len(m.dels)+len(m.rows):
 			head = named(joinKey(m.rows[i-len(m.dels)].Key))
 		default:
-			head = i18n.T("新增的第 %d 行", i-len(m.dels)-len(m.rows)+1)
-			if !errors.Is(m.err, db.ErrNotInserted) { // ours reads on: 新增的第 2 行没有插入
-				head += "："
+			n := i - len(m.dels) - len(m.rows) + 1
+			if errors.Is(m.err, db.ErrNotInserted) { // ours: the whole sentence, nothing of the database's to read on
+				head, e.Message = i18n.T("新增的第 %d 行没有插入", n), ""
+			} else {
+				head = i18n.T("新增的第 %d 行：", n)
 			}
 		}
-		t.bar = newErrorBar("save", t.conn.eng.ErrorOf(m.err), head, i18n.T("，已回滚"))
+		t.bar = newErrorBar("save", e, head, i18n.T("，已回滚"))
 		return a.deadlocked(t.conn, m.err)
 	default:
 		clearBar(&t.bar, "save")
@@ -784,12 +786,12 @@ var (
 // to lose, "<what>有 N 处修改未保存，<verb>会丢弃。"; with the
 // transactions of conns to roll back, "<names> 有未提交的事务，<verb>会回滚。".
 func (a *App) unlessLost(n int, what string, conns []*Conn, verb lostVerb, then func() tea.Cmd) tea.Cmd {
-	var text string
+	var sentences []string // a line each: one runs on past a 。 in Chinese only
 	if n > 0 {
 		if what == "" {
-			text = i18n.T("有 %d 处修改未保存，", n) + i18n.T(verb.discard)
+			sentences = append(sentences, i18n.T("有 %d 处修改未保存，", n)+i18n.T(verb.discard))
 		} else {
-			text = i18n.T("%s有 %d 处修改未保存，", what, n) + i18n.T(verb.discard)
+			sentences = append(sentences, i18n.T("%s有 %d 处修改未保存，", what, n)+i18n.T(verb.discard))
 		}
 	}
 	var names []string
@@ -799,11 +801,12 @@ func (a *App) unlessLost(n int, what string, conns []*Conn, verb lostVerb, then 
 		}
 	}
 	if len(names) > 0 {
-		text += i18n.T("%s 有未提交的事务，", strings.Join(names, i18n.T("、"))) + i18n.T(verb.rollback)
+		sentences = append(sentences, i18n.T("%s 有未提交的事务，", strings.Join(names, i18n.T("、")))+i18n.T(verb.rollback))
 	}
-	if text == "" {
+	if len(sentences) == 0 {
 		return then()
 	}
+	text := strings.Join(sentences, "\n")
 	a.confirm = &confirmBox{text, i18n.T(verb.label), then}
 	return nil
 }
