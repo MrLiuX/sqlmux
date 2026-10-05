@@ -159,7 +159,8 @@ func (t *dataTab) query() db.Query {
 // for its connection and catalog: nothing goes out yet, the request it has
 // by then is the one that does.
 func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
-	if t.pending || t.conn.State != connReady { // a layout's: it fetches once its catalog is in (F6.5)
+	if t.pending || t.conn.State != connReady { // a layout's, or one reopened meanwhile: it fetches once its catalog is in (F6.5)
+		t.pending = true
 		return nil
 	}
 	t.note, t.failed = ui.Note{}, nil // until the next fetch the user asks for (§10.3)

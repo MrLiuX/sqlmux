@@ -97,7 +97,9 @@ func (e *Editor) plainKey(k string) {
 		if k == "<C-z>" {
 			e.undo(1)
 		} else {
+			before := e.lines
 			e.redo(1)
+			e.cur = redoEnd(before, e.lines)
 		}
 		e.clampCursor() // the step's cursor is of the text before it
 		in.start, in.fresh, in.arrowed = e.cur, true, false
@@ -157,13 +159,12 @@ func (e *Editor) plainKey(k string) {
 		e.anchor = nil
 	default:
 		text := keyText(k)
-		if r, n := utf8.DecodeRuneInString(text); e.AutoPairs && n == len(text) && e.surround(r) {
+		if r, _ := utf8.DecodeRuneInString(text); e.AutoPairs && e.surround(r) {
 			return
 		}
 		switch {
-		case k == "<CR>" || strings.HasPrefix(k, pasteKey): // a step of its own
+		case k == "<CR>": // a step of its own
 			e.endChange()
-			in.fresh = true
 			e.deleteSelection()
 		case text != "" || k == "<Tab>":
 			e.deleteSelection()
@@ -172,6 +173,26 @@ func (e *Editor) plainKey(k string) {
 		}
 	}
 	e.insertKey(k)
+}
+
+// redoEnd is where the cursor goes when a redo has put text after in place
+// of before: the end of what came in, the place the common ending of the
+// last line changed starts at; the start of the line the lines went from,
+// when none came (§6.9; vim goes back to where the step began).
+func redoEnd(before, after []string) Pos {
+	p, oldN, newN := diff(before, after)
+	if newN == 0 {
+		return Pos{Line: min(p, len(after)-1)}
+	}
+	now := after[p+newN-1]
+	same := 0
+	if oldN > 0 { // the bytes the two last lines end alike
+		old := before[p+oldN-1]
+		for same < len(old) && same < len(now) && old[len(old)-1-same] == now[len(now)-1-same] {
+			same++
+		}
+	}
+	return Pos{p + newN - 1, head(now, len(now)-same)}
 }
 
 // indentSelection is Tab and S-Tab over a selection: the lines it touches
@@ -186,7 +207,6 @@ func (e *Editor) indentSelection(left bool) bool {
 	if to.Col == 0 && to.Line > from.Line {
 		to.Line--
 	}
-	e.endChange()
 	e.shift(span{start: Pos{from.Line, 0}, end: Pos{to.Line, 0}, linewise: true}, left, 1)
 	if slices.Equal(e.snap, e.lines) { // nothing moved: no step
 		e.snap = nil
@@ -194,7 +214,6 @@ func (e *Editor) indentSelection(left bool) bool {
 	e.endChange()
 	at := Pos{from.Line, 0}
 	e.anchor, e.cur, e.want = &at, Pos{to.Line, len(e.lines[to.Line])}, wantUnset
-	e.ins.fresh = true
 	return true
 }
 
@@ -202,18 +221,16 @@ func (e *Editor) indentSelection(left bool) bool {
 // puts the pair round, the text staying selected; it is false when r is
 // none or nothing is selected (§7.9, F6.6).
 func (e *Editor) surround(r rune) bool {
-	close, ok := closers[r]
+	closer, ok := closers[r]
 	from, to, sel := e.SelectionSpan()
 	if !ok || !sel {
 		return false
 	}
 	open := string(r)
 	backwards := e.cur.less(*e.anchor)
-	e.endChange() // a step of its own
-	e.ins.fresh = true
 	e.arrived()
 	l := e.lines[to.Line]
-	e.setLine(to.Line, l[:to.Col]+close+l[to.Col:])
+	e.setLine(to.Line, l[:to.Col]+closer+l[to.Col:])
 	l = e.lines[from.Line]
 	e.setLine(from.Line, l[:from.Col]+open+l[from.Col:])
 	from.Col += len(open)
@@ -224,8 +241,7 @@ func (e *Editor) surround(r rune) bool {
 		from, to = to, from
 	}
 	e.anchor, e.cur, e.want = &from, to, wantUnset
-	e.ins.ai = false
-	e.endChange()
+	e.endChange() // a step of its own: typing over the pair's text does not undo with it
 	return true
 }
 

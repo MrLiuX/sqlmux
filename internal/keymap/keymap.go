@@ -272,7 +272,7 @@ var when = map[string]string{
 
 // whenPlainConsole is keys.console's note with vim = false, where the console
 // has no NORMAL and the Ctrl keys reach its editor (§6.9).
-var whenPlainConsole = i18n.N("console 的编辑器，只有 Ctrl 开头的键生效（F6.6）；NORMAL / VISUAL 是 vim 模式的")
+var whenPlainConsole = i18n.N("console 的编辑器，只有 Ctrl 开头的键生效，C-h 除外，它是退格（F6.6）；NORMAL / VISUAL 是 vim 模式的")
 
 // TOML renders the effective keymap as a whole keymaps.toml (`sqlmux keys
 // --format toml`, §6.7): every scope, with its defaults commented out, so

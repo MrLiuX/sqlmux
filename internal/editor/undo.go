@@ -242,7 +242,7 @@ func (e *Editor) Load(text string) Effect {
 		e.endChange()
 	}
 	if e.plain {
-		e.ins = &insertion{cmd: "i", count: 1, start: e.cur, fresh: true}
+		e.ins = &insertion{cmd: "i", count: 1, start: e.cur}
 	}
 	e.scrollToCursor()
 	return e.eff

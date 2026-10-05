@@ -655,7 +655,7 @@ func (a *App) whereDrag(id int, p uv.Position) {
 func (a *App) whereCol(pn *Pane, t *dataTab, p uv.Position) int {
 	r := a.queryBar(pn, t).InputRect(bodyRect(a.layout()[pn.ID]))
 	shown := t.where.Text[:t.where.Start(r.Dx())]
-	return max(ui.Width(ui.Printable(shown))+p.X-r.Min.X, 0)
+	return ui.Width(ui.Printable(shown)) + p.X - r.Min.X
 }
 
 // editPaired is editInput with autopairs, the quick SQL's (§7.9): an

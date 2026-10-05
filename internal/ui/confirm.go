@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Confirm asks before changes are thrown away (§10.5): lines of text and
@@ -18,7 +19,12 @@ type Confirm struct {
 func (c Confirm) Draw(f *Frame, screen uv.Rectangle) {
 	th := f.Theme
 	f.Region(screen, Target{Kind: KindBackdrop})
-	lines := strings.Split(c.Text, "\n")
+	// a line the screen cannot hold goes on the next: a question that loses
+	// what it asks about is read wrong
+	var lines []string
+	for _, l := range strings.Split(c.Text, "\n") {
+		lines = append(lines, strings.Split(ansi.Wrap(l, max(screen.Dx()-4, 1), ""), "\n")...)
+	}
 	yes, no := " "+c.YesKey+" "+c.Yes+" ", ""
 	buttons := Width(yes)
 	if c.No != "" {
