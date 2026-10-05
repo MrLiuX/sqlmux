@@ -426,15 +426,6 @@ func TestPlainConsole(t *testing.T) {
 	if row := statusRow(a); strings.Contains(row, "INSERT") || strings.Contains(row, "NORMAL") {
 		t.Errorf("a mode block: %q", row)
 	}
-	win := a.win()
-	feed(t, a, "<C-h>")
-	if win.Focus == 2 {
-		t.Error("C-h does not move the focus")
-	}
-	feed(t, a, "<C-l>")
-	if win.Focus != 2 {
-		t.Error("C-l does not move it back")
-	}
 	feed(t, a, "ab<C-a>X")
 	if got := c.ed.Lines()[1]; got != "Xgt xab" {
 		t.Errorf("C-a: %q", got)
@@ -451,8 +442,8 @@ func TestPlainConsoleSelectionRuns(t *testing.T) {
 	feed(t, a, "select 1;<CR>select 2;")
 	feed(t, a, "<C-a>")
 	shiftArrow(a, tea.KeyRight, 9)
-	if got := c.ed.SelectedText(); got != "select 2;" {
-		t.Fatalf("selected %q", got)
+	if from, to, _ := c.ed.SelectionSpan(); from != (editor.Pos{Line: 1}) || to != (editor.Pos{Line: 1, Col: 9}) {
+		t.Fatalf("selected %v to %v", from, to)
 	}
 	press(t, a, "<C-e>") // vim = false: C-e runs a console (default-novim.toml)
 	if len(d.ran) != 1 || !strings.HasPrefix(d.ran[0], "select 2") || c.ed.HasSelection() {

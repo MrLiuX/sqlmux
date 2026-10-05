@@ -255,7 +255,9 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 		}
 		b.Hints = append(b.Hints, ui.Hint{Label: "▶ run", Action: "console.run", Button: true})
 		b.Hints = append(b.Hints, bound(ui.Hint{Key: a.keys.Hint("console.run", "console"), Action: "console.run", Prio: 3, Attached: true})...)
-		tabHints = bound(ui.Hint{Key: a.hints("normal", "/", "tab.next", "tab.prev")})
+		if !a.plain { // gt there is text to type
+			tabHints = bound(ui.Hint{Key: a.hints("normal", "/", "tab.next", "tab.prev")})
+		}
 	case dataOf(p) != nil:
 		tabHints = bound(
 			ui.Hint{Key: a.hints("grid", "", "grid.left", "grid.down", "grid.up", "grid.right")},

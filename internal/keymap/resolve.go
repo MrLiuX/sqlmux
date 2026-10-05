@@ -94,7 +94,7 @@ func (m *Map) trie(c Context, maps bool) *node {
 	root := &node{}
 	for _, t := range m.scopes(c, maps) {
 		bs := m.tables[t]
-		if c.Plain && t != "keys."+c.Overlay && t != "keys."+c.Under && t != "keys.global" && t != "leader" && !strings.HasPrefix(t, "keys.input") {
+		if c.Plain && t != "keys."+c.Overlay && t != "keys."+c.Under && t != "keys.global" && t != "leader" && t != "keys.input" {
 			bs = ctrlOnly(m, bs) // not the keys that are text
 		}
 		if t == "leader" {
@@ -264,11 +264,13 @@ func digits(s string) []Key {
 	return ks
 }
 
-// ctrlOnly is the bindings of bs that start with a Ctrl key.
+// ctrlOnly is the bindings of bs that start with a Ctrl key but C-h, which
+// the modeless editor takes as Backspace: some terminals send that key as
+// ^H (§6.2, §6.9).
 func ctrlOnly(m *Map, bs []Binding) []Binding {
 	var out []Binding
 	for _, b := range bs {
-		if ks := m.expand(b.Keys); len(ks) > 0 && strings.HasPrefix(string(ks[0]), "<C-") {
+		if ks := m.expand(b.Keys); len(ks) > 0 && strings.HasPrefix(string(ks[0]), "<C-") && ks[0] != "<C-h>" {
 			out = append(out, b)
 		}
 	}

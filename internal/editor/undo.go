@@ -217,12 +217,16 @@ func (e *Editor) undoLine() {
 
 // Load puts text in place of the whole text, as reading the file again
 // after another editor changed it: one undo step, in NORMAL, the cursor
-// where it was as far as the new text allows.
+// where it was as far as the new text allows. The modeless editor has no
+// NORMAL: it ends its step and its selection, and goes on typing.
 func (e *Editor) Load(text string) Effect {
 	e.eff = Effect{}
 	switch {
 	case e.cl != nil:
 		e.closeCmdline()
+	case e.plain:
+		e.endChange()
+		e.anchor = nil
 	case e.ins != nil:
 		e.escape()
 	}
@@ -236,6 +240,9 @@ func (e *Editor) Load(text string) Effect {
 		e.lines, e.uLine = ls, -1
 		e.clampCursor()
 		e.endChange()
+	}
+	if e.plain {
+		e.ins = &insertion{cmd: "i", count: 1, start: e.cur, fresh: true}
 	}
 	e.scrollToCursor()
 	return e.eff
@@ -257,6 +264,9 @@ func (e *Editor) Replace(from, to Pos, text string) Effect {
 	ls[last] += after
 	if slices.Equal(ls, e.lines[from.Line:to.Line+1]) {
 		return e.eff
+	}
+	if e.plain { // what was typed is a step of its own, not the formatting's
+		e.endChange()
 	}
 	e.cur = from
 	e.setLine(from.Line, ls[0])

@@ -164,7 +164,10 @@ func consoleSpan(t *consoleTab, arg string) (text string, from, to int) {
 				from, to = stmts[i].Start, stmts[i].End
 			}
 		}
-	case visual && (ed.Mode() == editor.Visual || ed.Plain()):
+	case visual && ed.Plain(): // no mode, and the span is what lies between the cursor places
+		s, e, _ = ed.SelectionSpan()
+		from, to = at(s), at(e)
+	case visual && ed.Mode() == editor.Visual:
 		from, to = at(s), at(e)
 		if l := lines[e.Line]; e.Col < len(l) { // the last character is in
 			gr, _ := ansi.FirstGraphemeCluster(l[e.Col:], ansi.GraphemeWidth)

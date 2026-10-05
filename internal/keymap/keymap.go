@@ -52,6 +52,7 @@ type Map struct {
 	Timeout time.Duration
 
 	tables        map[string][]Binding
+	novim         map[string]bool      // table + key of what default-novim.toml bound: the hints name these first (§6.9)
 	defaults      map[string][]Binding // for the export: what the user changed
 	defaultLeader []Key
 	tries         map[string]*node // merged per context, see trie
@@ -88,6 +89,11 @@ func New(user *config.Config) (*Map, []Problem) {
 		}
 		if ps := m.apply(nv); len(ps) > 0 {
 			panic(fmt.Sprint("default-novim.toml: ", ps))
+		}
+		m.novim = map[string]bool{}
+		for _, b := range nv {
+			ks, _ := Parse(b.Key)
+			m.novim[b.Table+" "+String(ks)] = true
 		}
 	}
 	m.defaults = map[string][]Binding{}
@@ -188,14 +194,22 @@ func (m *Map) expand(ks []Key) []Key {
 }
 
 // Hint is how the UI shows the first key bound to action in scope, or "" when
-// unbound (§6.7). All key text on screen goes through here.
+// unbound (§6.7). All key text on screen goes through here. With vim = false
+// a key default-novim.toml bound comes first: ↓ for the grid, not j.
 func (m *Map) Hint(action, scope string) string {
+	first := ""
 	for _, b := range m.tables["keys."+scope] {
-		if b.Action == action {
+		if b.Action != action {
+			continue
+		}
+		if m.novim["keys."+scope+" "+String(b.Keys)] {
 			return Display(m.expand(b.Keys))
 		}
+		if first == "" {
+			first = Display(m.expand(b.Keys))
+		}
 	}
-	return ""
+	return first
 }
 
 // Actions lists every bound action ID, args stripped, once each: app's
@@ -256,6 +270,10 @@ var when = map[string]string{
 	"keys.keyhelp":     i18n.N("? 键位帮助打开时"),
 }
 
+// whenPlainConsole is keys.console's note with vim = false, where the console
+// has no NORMAL and the Ctrl keys reach its editor (§6.9).
+var whenPlainConsole = i18n.N("console 的编辑器，只有 Ctrl 开头的键生效（F6.6）；NORMAL / VISUAL 是 vim 模式的")
+
 // TOML renders the effective keymap as a whole keymaps.toml (`sqlmux keys
 // --format toml`, §6.7): every scope, with its defaults commented out, so
 // an old export never pins a new version's defaults, and only what the
@@ -304,8 +322,12 @@ func (m *Map) TOML(titles map[string]string) string {
 		lines = append(lines, unbound[t]...)
 		if len(lines) > 0 {
 			b.WriteString("\n")
-			if when[t] != "" {
-				fmt.Fprintf(&b, "# %s\n", i18n.T(when[t]))
+			note := when[t]
+			if t == "keys.console" && m.novim != nil {
+				note = whenPlainConsole
+			}
+			if note != "" {
+				fmt.Fprintf(&b, "# %s\n", i18n.T(note))
 			}
 			fmt.Fprintf(&b, "[%s]\n%s\n", t, strings.Join(lines, "\n"))
 		}

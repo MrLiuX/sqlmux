@@ -30,6 +30,22 @@ func mustLoad(t *testing.T, toml string) *Map {
 	return m
 }
 
+// loadNoVim is mustLoad with vim = false, default-novim.toml over the defaults.
+func loadNoVim(t *testing.T, toml string) *Map {
+	t.Helper()
+	cfg := config.Default()
+	cfg.Vim = false
+	var err error
+	if cfg.Leader, cfg.Bindings, err = config.ParseKeys(toml); err != nil {
+		t.Fatal(err)
+	}
+	m, ps := New(cfg)
+	if len(ps) > 0 {
+		t.Fatalf("problems: %v", ps)
+	}
+	return m
+}
+
 var (
 	grid    = Context{Focus: []string{"grid"}, Pane: "grid"}
 	tree    = Context{Focus: []string{"tree"}, Pane: "tree"}
@@ -111,7 +127,8 @@ func TestSequences(t *testing.T) {
 		{Context{Overlay: "options", Focus: []string{"cell"}, Mode: Insert}, "<Tab>", []string{"cell.option.next"}},
 		{Context{Overlay: "newrow", Under: "options", Focus: []string{"cell"}, Mode: Insert}, "<Tab><Down>", []string{"cell.field.next", "cell.option.next"}},
 		// the modeless editor (§6.9): Ctrl keys of the pane and NORMAL apply, the keys that are text do not
-		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<C-h>", []string{"pane.focus.left"}},
+		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<C-h>", []string{"keys <C-h>"}}, // Backspace there
+		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<C-j>", []string{"pane.focus.down"}},
 		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<C-p>", []string{"palette.open"}},
 		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<CR>", []string{"keys <CR>"}},
 		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<Space>sgt", []string{"keys <Space>", "keys s", "keys g", "keys t"}},
@@ -391,22 +408,33 @@ Z = "3j"
 
 // §6.2: default keys must work in any terminal — no Alt, no Ctrl+Shift, no
 // modified Enter, no Ctrl+digit, and no C-i/C-m/C-[ (they are Tab/CR/Esc).
+//
+// With vim = false the layer default-novim.toml is among them, and may use
+// PgUp, PgDn and Delete, which are what someone who does not use vim has to
+// hand (§6.9); only the layer has them.
 func TestDefaultsArePortable(t *testing.T) {
 	ctrl := regexp.MustCompile(`^<C-([a-z])>$`)
 	named := regexp.MustCompile(`^<(S-Tab|Space|CR|Esc|Tab|BS|Up|Down|Left|Right|lt|Leader)>$`)
-	m := mustLoad(t, "")
-	for table, bs := range m.tables {
-		for _, b := range bs {
-			for _, k := range b.Keys {
-				s := string(k)
-				switch sub := ctrl.FindStringSubmatch(s); {
-				case len([]rune(s)) == 1 || named.MatchString(s):
-				case sub != nil && sub[1] != "i" && sub[1] != "m":
-					if sub[1] == "h" && table != "keys.normal" {
-						t.Errorf("[%s] %s: C-h is Backspace in some terminals, NORMAL only", table, String(b.Keys))
+	layer := regexp.MustCompile(`^<(PageUp|PageDown|Del)>$`)
+	for _, vim := range []bool{true, false} {
+		m := mustLoad(t, "")
+		if !vim {
+			m = loadNoVim(t, "")
+		}
+		for table, bs := range m.tables {
+			for _, b := range bs {
+				for _, k := range b.Keys {
+					s := string(k)
+					switch sub := ctrl.FindStringSubmatch(s); {
+					case len([]rune(s)) == 1 || named.MatchString(s):
+					case !vim && layer.MatchString(s):
+					case sub != nil && sub[1] != "i" && sub[1] != "m":
+						if sub[1] == "h" && table != "keys.normal" {
+							t.Errorf("[%s] %s: C-h is Backspace in some terminals, NORMAL only", table, String(b.Keys))
+						}
+					default:
+						t.Errorf("vim = %v [%s] %s: %s is not portable", vim, table, String(b.Keys), s)
 					}
-				default:
-					t.Errorf("[%s] %s: %s is not portable", table, String(b.Keys), s)
 				}
 			}
 		}
@@ -506,22 +534,8 @@ func TestMapNext(t *testing.T) {
 // the grid and the tree, PgUp, PgDn and Delete in the grid, ↵ unbound in a
 // console and C-e running it; with vim on none of it is there (§6.9, F6.6b).
 func TestNoVimLayer(t *testing.T) {
-	novim := func(toml string) *Map {
-		t.Helper()
-		cfg := config.Default()
-		cfg.Vim = false
-		var err error
-		if cfg.Leader, cfg.Bindings, err = config.ParseKeys(toml); err != nil {
-			t.Fatal(err)
-		}
-		m, ps := New(cfg)
-		if len(ps) > 0 {
-			t.Fatalf("problems: %v", ps)
-		}
-		return m
-	}
 	plainConsole := Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}
-	off, on := mustLoad(t, ""), novim("")
+	off, on := mustLoad(t, ""), loadNoVim(t, "")
 	for _, c := range []struct {
 		ctx     Context
 		in      string
@@ -546,29 +560,26 @@ func TestNoVimLayer(t *testing.T) {
 			t.Errorf("vim off, %v %q: got %v, want %v", c.ctx.Focus, c.in, actions(got), c.on)
 		}
 	}
+	// the hints name the layer's keys first, and the vim ones without it
+	for _, c := range []struct{ action, scope, off, on string }{
+		{"grid.down", "grid", "j", "↓"}, {"tree.up", "tree", "k", "↑"}, {"grid.page.next", "grid", "]", "PageDown"}, {"grid.row.delete", "grid", "dd", "Del"},
+	} {
+		if got := off.Hint(c.action, c.scope); got != c.off {
+			t.Errorf("vim on, hint of %s: %q, want %q", c.action, got, c.off)
+		}
+		if got := on.Hint(c.action, c.scope); got != c.on {
+			t.Errorf("vim off, hint of %s: %q, want %q", c.action, got, c.on)
+		}
+	}
 	// one of them rebound is an ordinary remap, no conflict; the export has them as defaults
-	m := novim("[keys.grid]\n\"<PageDown>\" = \"grid.bottom\"\n")
+	m := loadNoVim(t, "[keys.grid]\n\"<PageDown>\" = \"grid.bottom\"\n")
 	if got, _ := press(t, NewResolver(m), grid, "<PageDown>"); !reflect.DeepEqual(actions(got), []string{"grid.bottom"}) {
 		t.Errorf("rebound: %v", actions(got))
 	}
 	if toml := on.TOML(map[string]string{}); !strings.Contains(toml, "# \"<Down>\" = \"grid.down\"") || !strings.Contains(toml, "# \"<C-e>\" = \"console.run\"") {
 		t.Errorf("the export has them as defaults:\n%s", toml)
 	}
-}
-
-// The layer may use PgUp, PgDn and Delete, which default.toml may not
-// (§6.9, §6.2); the rest is as portable as the defaults.
-func TestNoVimLayerIsPortable(t *testing.T) {
-	_, bs, err := config.ParseKeys(noVimTOML)
-	if err != nil {
-		t.Fatal(err)
-	}
-	named := regexp.MustCompile(`^<(Up|Down|Left|Right|PageUp|PageDown|Del|CR|C-e)>$`)
-	for _, b := range bs {
-		for _, k := range (&Map{}).expand([]Key{Key(b.Key)}) {
-			if !named.MatchString(string(k)) {
-				t.Errorf("[%s] %s is not portable", b.Table, b.Key)
-			}
-		}
+	if !strings.Contains(on.TOML(nil), "console 的编辑器，只有 Ctrl 开头的键生效") || strings.Contains(off.TOML(nil), "console 的编辑器") {
+		t.Error("the console's note tells of the editor with vim = false only")
 	}
 }

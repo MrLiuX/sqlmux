@@ -121,7 +121,6 @@ func (a *App) consoleView(p *Pane, t *consoleTab) (ui.Console, uv.Rectangle) {
 	body.Max.Y = max(body.Max.Y-t.bar.rows(), body.Min.Y)
 	text := ui.Console{Lines: ed.Lines()}.TextArea(body)
 	ed.TabWidth, ed.AutoPairs = a.tabWidth, a.autoPairs
-	ed.SetPlain(a.plain)
 	ed.SetHeight(text.Dy())
 	ed.SetWidth(text.Dx())
 	c := ui.Console{

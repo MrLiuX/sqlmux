@@ -75,6 +75,7 @@ type App struct {
 	drag        *handle     // the split border being dragged
 	dragTree    bool        // the sidebar's edge is being dragged
 	dragText    int         // the pane whose console text is being selected by dragging; 0 for none
+	dragWhere   int         // the same for a WHERE's text (vim = false)
 	lastClick   ui.Target   // with lastClickAt, to spot a double click
 	lastClickAt time.Time
 }
@@ -155,6 +156,11 @@ func (a *App) Init() tea.Cmd {
 // Update is update, then the columns the consoles on screen want (§7.3)
 // and the DDL the palette's selection may (F4.2).
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if a.plain { // consoles are made all over, before the App too: each has no modes before the key that reaches it (§6.9)
+		for _, t := range a.consoles() {
+			t.ed.SetPlain(true)
+		}
+	}
 	_, cmd := a.update(msg)
 	a.sess.last = a.conn() // where the focus goes next may name none (§5)
 	a.sess.touch(a.focused().tab())
@@ -240,6 +246,9 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.ed.Drag(n, v)
 			}
 		}
+		if a.dragWhere != 0 {
+			a.whereDrag(a.dragWhere, a.mouse)
+		}
 		if t, _ := ui.HitAt(a.hits, a.mouse); t.Kind == ui.KindRow { // hover selects (K-03, §9.7)
 			switch c := a.completing(); {
 			case c != nil:
@@ -249,7 +258,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case tea.MouseReleaseMsg:
-		a.drag, a.dragTree, a.dragText = nil, false, 0
+		a.drag, a.dragTree, a.dragText, a.dragWhere = nil, false, 0, 0
 	case tea.MouseClickMsg:
 		switch m := msg.Mouse(); m.Button {
 		case tea.MouseLeft:
@@ -586,7 +595,7 @@ func (a *App) context() keymap.Context {
 	case typing != nil && typing.hist != nil: // filtered by the WHERE typed
 		return keymap.Context{Overlay: "where", Focus: []string{"input"}, Mode: keymap.Command}
 	case typing != nil && typing.comp != nil:
-		return keymap.Context{Overlay: "complete", Focus: []string{"input"}, Mode: keymap.Insert}
+		return keymap.Context{Overlay: "complete", Focus: []string{"input"}, Mode: keymap.Insert, Plain: typing.typing == "where" && a.plain}
 	case a.focusedConsole() != nil && a.focusedConsole().comp != nil: // ↵ and esc are its vim's, as a WHERE's
 		return keymap.Context{Overlay: "complete", Focus: []string{"console"}, Mode: keymap.Insert, Plain: a.plain}
 	case typing != nil && typing.cell != nil:
@@ -601,7 +610,7 @@ func (a *App) context() keymap.Context {
 			c.Overlay, c.Under = "newrow", c.Overlay
 		}
 		return c
-	case typing != nil && typing.typing == "where" && typing.ed.Plain():
+	case typing != nil && typing.typing == "where" && a.plain:
 		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Insert, Plain: true}
 	case typing != nil && typing.typing == "where" && vimMode(typing.ed.Mode()) != keymap.Insert:
 		// its vim's NORMAL or VISUAL: user maps as any pane's, esc and ↵ in
@@ -617,8 +626,7 @@ func (a *App) context() keymap.Context {
 	if s := a.paneScope(); s == "result" { // over grid's keys, which its tables move by (§6.4)
 		return keymap.Context{Focus: []string{"result", "grid"}, Pane: "grid", Mode: a.mode()}
 	}
-	plain := a.vim() != nil && a.vim().Plain() && a.paneScope() == "console"
-	return keymap.Context{Focus: []string{a.paneScope()}, Pane: a.paneScope(), Mode: a.mode(), Plain: plain}
+	return keymap.Context{Focus: []string{a.paneScope()}, Pane: a.paneScope(), Mode: a.mode(), Plain: a.plain && a.paneScope() == "console"}
 }
 
 // paneScope is the keymap scope of the focused pane: its current tab's.

@@ -9,7 +9,8 @@ func (e *Editor) visual() bool {
 
 // Selection is what VISUAL has selected, from one end to the other in text
 // order, both ends in; whole lines in V-LINE, and in V-BLOCK the columns
-// Block tells. ok is false outside VISUAL.
+// Block tells. ok is false outside VISUAL, and for the modeless editor with
+// nothing selected.
 func (e *Editor) Selection() (from, to Pos, ok bool) {
 	if e.plain {
 		return e.plainSelection()

@@ -47,8 +47,10 @@ func (e *Editor) Drag(n, vcol int) {
 			at := e.cur
 			e.anchor = &at
 		}
+		was := e.cur
 		n = min(max(n, 0), len(e.lines)-1)
 		e.cur, e.want = Pos{n, e.coladvance(n, vcol)}, vcol
+		e.insMoved(was) // typing after it is a step of its own, as after an arrow key
 		e.scrollToCursor()
 		return
 	}

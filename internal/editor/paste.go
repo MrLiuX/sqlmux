@@ -24,10 +24,15 @@ func (e *Editor) Paste(text string) Effect {
 		cl := e.cl
 		cl.text, cl.pos = cl.text[:cl.pos]+ls[0]+cl.text[cl.pos:], cl.pos+len(ls[0])
 	case Insert, Replace:
-		if e.plain {
-			e.deleteSelection() // a paste replaces it
+		if e.plain { // a paste replaces the selection, and is a step of its own
+			e.endChange()
+			e.ins.fresh = true
+			e.deleteSelection()
 		}
 		e.editKey(pasteKey + text) // kept with the keys: a count types it again
+		if e.plain {
+			e.endChange()
+		}
 	default:
 		// ponytail: pending keys go; nvim keeps an operator (d then a
 		// paste pastes, d still waiting). Keep it if anyone pastes there.

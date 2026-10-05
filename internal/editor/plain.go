@@ -1,6 +1,10 @@
 package editor
 
-import "strings"
+import (
+	"slices"
+	"strings"
+	"unicode/utf8"
+)
 
 // The editor without modes (tech-design §6.9): INSERT that never ends, with
 // a selection, so what is typed is text and the arrow keys move. It is the
@@ -22,17 +26,13 @@ func (e *Editor) SetPlain(on bool) {
 // Plain is whether the editor has no modes.
 func (e *Editor) Plain() bool { return e.plain }
 
-// plainSelection is the selection of the modeless editor: from the end it
-// began at to the cursor, in text order and as the vim's VISUAL has it, the
-// last character in, the end of a line counting as one; ok is false with
-// none.
+// plainSelection is the selection of the modeless editor as the vim's VISUAL
+// has it: from the end it began at to the cursor, in text order, the last
+// character in, the end of a line counting as one; ok is false with none.
 func (e *Editor) plainSelection() (from, to Pos, ok bool) {
-	if e.anchor == nil || *e.anchor == e.cur {
+	from, to, ok = e.SelectionSpan()
+	if !ok {
 		return Pos{}, Pos{}, false
-	}
-	from, to = *e.anchor, e.cur
-	if to.less(from) {
-		from, to = to, from
 	}
 	if to.Col > 0 {
 		to.Col = prev(e.lines[to.Line], to.Col)
@@ -43,7 +43,7 @@ func (e *Editor) plainSelection() (from, to Pos, ok bool) {
 }
 
 // SelectionSpan is the selection as the text between two cursor places, from
-// in and to out; ok is false with none.
+// in and to out; ok is false with none. In the modeless editor only.
 func (e *Editor) SelectionSpan() (from, to Pos, ok bool) {
 	if e.anchor == nil || *e.anchor == e.cur {
 		return Pos{}, Pos{}, false
@@ -53,21 +53,6 @@ func (e *Editor) SelectionSpan() (from, to Pos, ok bool) {
 		from, to = to, from
 	}
 	return from, to, true
-}
-
-// SelectedText is what the modeless selection holds, "" with none: the
-// statement run with a selection runs it.
-func (e *Editor) SelectedText() string {
-	from, to, ok := e.SelectionSpan()
-	if !ok {
-		return ""
-	}
-	if from.Line == to.Line {
-		return e.lines[from.Line][from.Col:to.Col]
-	}
-	parts := []string{e.lines[from.Line][from.Col:]}
-	parts = append(parts, e.lines[from.Line+1:to.Line]...)
-	return strings.Join(append(parts, e.lines[to.Line][:to.Col]), "\n")
 }
 
 // HasSelection is whether the modeless editor has a selection.
@@ -99,7 +84,8 @@ func (e *Editor) deleteSelection() bool {
 
 // plainKey is key k in the modeless editor. A selection is replaced by what
 // is typed, taken out by BS and Delete; the arrow keys end it, with Shift
-// they move its far end.
+// they move its far end. Typing is one undo step; an arrow key, ↵, a paste
+// and a formatting end it.
 func (e *Editor) plainKey(k string) {
 	in := e.ins
 	switch k {
@@ -113,6 +99,7 @@ func (e *Editor) plainKey(k string) {
 		} else {
 			e.redo(1)
 		}
+		e.clampCursor() // the step's cursor is of the text before it
 		in.start, in.fresh, in.arrowed = e.cur, true, false
 		e.want = wantUnset
 		return
@@ -123,15 +110,23 @@ func (e *Editor) plainKey(k string) {
 		}
 		e.curswant()
 		if k == "<S-Up>" || k == "<S-Down>" {
-			e.arrow("<" + k[3:])
+			e.arrow("<" + strings.TrimPrefix(k, "<S-"))
 		} else {
 			e.step(k == "<S-Right>")
 		}
 		return
+	case "<Tab>", "<S-Tab>":
+		if e.indentSelection(k == "<S-Tab>") {
+			return
+		}
+		e.anchor = nil
 	case "<Left>", "<Right>":
 		if from, to, ok := e.SelectionSpan(); ok { // it ends where the key points
 			was := e.cur
-			e.cur, e.anchor = map[string]Pos{"<Left>": from, "<Right>": to}[k], nil
+			e.cur, e.anchor = from, nil
+			if k == "<Right>" {
+				e.cur = to
+			}
 			e.want = wantUnset
 			e.insMoved(was)
 			return
@@ -139,6 +134,8 @@ func (e *Editor) plainKey(k string) {
 		e.step(k == "<Right>")
 		return
 	case "<C-a>", "<C-e>":
+		// A console never gets C-e: default-novim.toml binds it to console.run
+		// and the line end has no key there (§6.9); a WHERE has no such binding.
 		was := e.cur
 		e.anchor = nil
 		if k == "<C-a>" {
@@ -159,13 +156,77 @@ func (e *Editor) plainKey(k string) {
 	case "<Up>", "<Down>":
 		e.anchor = nil
 	default:
-		if keyText(k) != "" || k == "<CR>" || k == "<Tab>" || strings.HasPrefix(k, pasteKey) {
+		text := keyText(k)
+		if r, n := utf8.DecodeRuneInString(text); e.AutoPairs && n == len(text) && e.surround(r) {
+			return
+		}
+		switch {
+		case k == "<CR>" || strings.HasPrefix(k, pasteKey): // a step of its own
+			e.endChange()
+			in.fresh = true
 			e.deleteSelection()
-		} else {
+		case text != "" || k == "<Tab>":
+			e.deleteSelection()
+		default:
 			e.anchor = nil
 		}
 	}
 	e.insertKey(k)
+}
+
+// indentSelection is Tab and S-Tab over a selection: the lines it touches
+// move a tab stop right or left, as > and < do, and stay selected. It is
+// false with none, Tab then being a tab stop's worth of spaces. The last
+// line is not one when the selection ends before its first character.
+func (e *Editor) indentSelection(left bool) bool {
+	from, to, ok := e.SelectionSpan()
+	if !ok {
+		return false
+	}
+	if to.Col == 0 && to.Line > from.Line {
+		to.Line--
+	}
+	e.endChange()
+	e.shift(span{start: Pos{from.Line, 0}, end: Pos{to.Line, 0}, linewise: true}, left, 1)
+	if slices.Equal(e.snap, e.lines) { // nothing moved: no step
+		e.snap = nil
+	}
+	e.endChange()
+	at := Pos{from.Line, 0}
+	e.anchor, e.cur, e.want = &at, Pos{to.Line, len(e.lines[to.Line])}, wantUnset
+	e.ins.fresh = true
+	return true
+}
+
+// surround is an opening bracket or quote typed over a selection, which it
+// puts the pair round, the text staying selected; it is false when r is
+// none or nothing is selected (§7.9, F6.6).
+func (e *Editor) surround(r rune) bool {
+	close, ok := closers[r]
+	from, to, sel := e.SelectionSpan()
+	if !ok || !sel {
+		return false
+	}
+	open := string(r)
+	backwards := e.cur.less(*e.anchor)
+	e.endChange() // a step of its own
+	e.ins.fresh = true
+	e.arrived()
+	l := e.lines[to.Line]
+	e.setLine(to.Line, l[:to.Col]+close+l[to.Col:])
+	l = e.lines[from.Line]
+	e.setLine(from.Line, l[:from.Col]+open+l[from.Col:])
+	from.Col += len(open)
+	if to.Line == from.Line {
+		to.Col += len(open)
+	}
+	if backwards {
+		from, to = to, from
+	}
+	e.anchor, e.cur, e.want = &from, to, wantUnset
+	e.ins.ai = false
+	e.endChange()
+	return true
 }
 
 // step is a character right or left, past the end of a line to the next, as

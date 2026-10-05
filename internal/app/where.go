@@ -631,11 +631,31 @@ func (a *App) whereDid(t *dataTab, eff editor.Effect) tea.Cmd {
 // editor's tabs go to the tabstop: past a pasted tab a click lands short;
 // map through the byte offset if tabs ever show up in a WHERE
 func (a *App) whereClick(pn *Pane, t *dataTab, p uv.Position) {
-	r := a.queryBar(pn, t).InputRect(bodyRect(a.layout()[pn.ID]))
-	shown := t.where.Text[:t.where.Start(r.Dx())]
-	t.ed.Click(0, ui.Width(ui.Printable(shown))+p.X-r.Min.X)
+	t.ed.Click(0, a.whereCol(pn, t, p))
 	t.syncWhere()
 	t.comp = nil
+	if t.ed.Plain() { // dragging from there selects (§6.9)
+		a.dragWhere = pn.ID
+	}
+}
+
+// whereDrag is the pointer dragged to p with the button down from the WHERE
+// of pane id: the selection's far end follows it.
+func (a *App) whereDrag(id int, p uv.Position) {
+	if pn := a.win().pane(id); pn != nil {
+		if t := dataOf(pn); t != nil && t.typing == "where" {
+			t.ed.Drag(0, a.whereCol(pn, t, p))
+			t.syncWhere()
+		}
+	}
+}
+
+// whereCol is the display column of the WHERE's text that p, a place on
+// pane pn's input, is at.
+func (a *App) whereCol(pn *Pane, t *dataTab, p uv.Position) int {
+	r := a.queryBar(pn, t).InputRect(bodyRect(a.layout()[pn.ID]))
+	shown := t.where.Text[:t.where.Start(r.Dx())]
+	return max(ui.Width(ui.Printable(shown))+p.X-r.Min.X, 0)
 }
 
 // editPaired is editInput with autopairs, the quick SQL's (§7.9): an
