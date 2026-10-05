@@ -8,14 +8,15 @@
 - **依赖**：M5 F5.1–F5.19 全部 passed。
 - **已经有的**（worker 起草时清点，清单据此缩短）：state.json 已是原子写入（临时文件 → rename、0600、带版本号）、读一次、坏文件挪开；`sqlmux keys` 已导出全部作用域；主题文件已能加载；`keymap.New` 已返回冲突、只是 `main.go` 丢掉了；代码里搜不到写死的键位文字。
 - **完成标准**：
-  - F6.1–F6.6 全部 passed；
+  - F6.1–F6.7 全部 passed；
   - 全量 e2e 回归通过；
   - 用户验收通过后打 tag `m6`。
 - **审查节点**（2026-10-05 按 worker 的提议改为四个）：
   1. F6.3 之后：F6.1–F6.3，键位收尾、主题切换、持久化的测试；
   2. F6.4 之后：F6.4 单独一批（改动面广，要扫遍所有包的文案）；
   3. F6.5 之后：F6.5 单独一批（动数据模型和启动）；
-  4. F6.6b 之后：F6.6a、F6.6b 一批（非 vim 模式）。
+  4. F6.6b 之后：F6.6a、F6.6b 一批（非 vim 模式）；
+  5. F6.7 之后：F6.7 单独一批（用户 2026-10-05 追加，节点 4 已在审查）。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
 
@@ -120,3 +121,18 @@
 **验收**
 - [ ] 单测：叠加后 grid 的 `↓` 是 `grid.down`、console 的 `↵` 没有绑定、`C-e` 是 `console.run`；`vim = true` 时这些都不在。
 - [ ] e2e：`vim = false` 时，只用方向键、`↵`、`Delete`、`PgDn`、`C-e` 和鼠标，完成浏览、翻页、筛选、编辑保存、写 SQL 并执行，全程不按 vim 键。
+
+## F6.7 危险语句先确认 · 状态：todo
+
+- **依赖**：F3.8、F2.3、F5.3
+- **涉及**：`internal/sqlkit`（危险判定）、`internal/app`（console 执行、结果区重跑、表格保存前的确认）、`internal/config`（`confirm_dangerous`）
+
+**开发**（§13「危险语句先确认」；动手前先看 lazysql `drivers/validation.go` 怎么识别语句类型，MySQL `sql_safe_updates` 的规则也参考）
+- [ ] `sqlkit`：判一条语句是否危险：顶层没有 WHERE 的 DELETE / UPDATE、TRUNCATE、DROP、ALTER TABLE … DROP COLUMN；PG、MySQL 都要对（表驱动测试，含 CTE / 子查询里的 where、`delete … using`、MySQL `delete … limit`、带注释和字符串的情况）。
+- [ ] console 执行和结果区重跑：发出前扫全部语句，有危险的弹确认框列出它们，取消就整次不执行、不算一次执行、不记日志。
+- [ ] 表格保存含删除行时先确认，取消回到表格、标记保留。
+- [ ] `config.toml` 的 `confirm_dangerous = true | false`，默认 true。
+
+**验收**
+- [ ] 单测：危险判定的表驱动用例；确认框取消后没有发出任何语句。
+- [ ] e2e：console 里执行 `delete from t_log` 弹确认，`n` 后表里行数不变、日志没有这一条；`y` 后执行；`delete from t_log where id = 1` 不弹；`drop table` 弹；表格里 `dd` 两行再 `C-s` 弹「将删除 2 行」，`n` 后标记还在；`confirm_dangerous = false` 时都不弹。
