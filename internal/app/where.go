@@ -33,6 +33,7 @@ type completion struct {
 type candidate struct {
 	label, insert, note string
 	pos                 []int
+	kw                  bool // a keyword, not by what the list says of it
 	space               bool // a keyword that takes a space after it (§9.7)
 }
 
@@ -75,41 +76,95 @@ func (a *App) complete(t *dataTab) {
 		}
 		for _, k := range whereKeywords {
 			if k != "ilike" || t.conn.eng.Dialect() == sqlkit.PG { // PG's alone
-				kws = append(kws, candidate{label: k, insert: k, note: "关键字", space: sqlkit.SpaceAfter(k)})
+				kws = append(kws, candidate{label: k, insert: k, note: "关键字", kw: true, space: sqlkit.SpaceAfter(k)})
 			}
 		}
 		groups = [][]candidate{cols, kws}
 	}
-	t.comp = ranked(pattern, w.Start, groups...)
+	t.comp = ranked(in.Text, in.Pos, pattern, w.Start, groups...)
 }
 
 // ranked is the candidates of groups that pattern matches, group by group
 // and best first within each (§9.7), completing what starts at start in the
-// input; nil when none does. Pattern's first character matches at a word
-// start, fuzzy past it as VS Code's does: evt finds mt_event and tord
-// t_order, but x no longer max.
-func ranked(pattern string, start int, groups ...[]candidate) *completion {
+// text, the cursor at pos; nil when none does. One that is just what is
+// typed comes first of all, or a table's name would take the place of a
+// finished set or to. Pattern's first character matches at a word start,
+// fuzzy past it as VS Code's does: evt finds mt_event and tord t_order, but
+// x no longer max.
+func ranked(text string, pos int, pattern string, start int, groups ...[]candidate) *completion {
 	c := &completion{start: start}
 	// no smart case: an upper-case letter would make fzf exact about case
 	// (§9.7); the palette, tree and COLS keep it
 	pattern = strings.ToLower(pattern)
+	var exact []candidate
+	add := func(cd candidate, from int) {
+		if pattern != "" && strings.EqualFold(text[from:pos], cd.insert) {
+			exact = append(exact, cd)
+		} else {
+			c.items = append(c.items, cd)
+		}
+	}
 	for _, g := range groups {
 		labels := make([]string, len(g))
+		cover := make([]int, len(g)) // where each one replaces from
 		for i, cd := range g {
-			labels[i] = cd.label
+			labels[i], cover[i] = cd.label, c.startOf(text, cd)
 		}
+		matched := make([]bool, len(g))
 		for _, m := range ui.Filter(pattern, labels) {
 			cd := g[m.Index]
 			if cd.pos = atWordStart(pattern, cd.label, m.Pos); pattern != "" && cd.pos == nil {
 				continue
 			}
-			c.items = append(c.items, cd)
+			matched[m.Index] = true
+			add(cd, cover[m.Index])
+		}
+		// a keyword of several words, all typed: a word after a space is no
+		// word start, so rename to is not found by the to, and is what is
+		// typed (§9.7)
+		for i, cd := range g {
+			if cover[i] != start && !matched[i] && strings.EqualFold(text[cover[i]:pos], cd.insert) {
+				cd.pos = nil
+				for j := range []rune(cd.label) {
+					cd.pos = append(cd.pos, j)
+				}
+				add(cd, cover[i])
+			}
 		}
 	}
-	if len(c.items) == 0 {
+	if c.items = append(exact, c.items...); len(c.items) == 0 {
 		return nil
 	}
 	return c
+}
+
+// startOf is where the text cd replaces starts: the list's, or further back
+// when cd is a keyword of several words and its first are written already
+// (insert in, the list's word is in): those are taken in, not typed again.
+func (c *completion) startOf(text string, cd candidate) int {
+	words := strings.Fields(cd.insert)
+	if !cd.kw || len(words) < 2 {
+		return c.start
+	}
+	for n := len(words) - 1; n >= 1; n-- {
+		s := c.start
+		for k := n - 1; k >= 0; k-- {
+			e := s
+			for e > 0 && (text[e-1] == ' ' || text[e-1] == '\t') {
+				e--
+			}
+			w := words[k]
+			if e == s || e < len(w) || !strings.EqualFold(text[e-len(w):e], w) || e > len(w) && sqlkit.IdentByte(text[e-len(w)-1]) {
+				s = -1
+				break
+			}
+			s = e - len(w)
+		}
+		if s >= 0 {
+			return s
+		}
+	}
+	return c.start
 }
 
 // atWordStart is where pattern matches s with its first character at a
@@ -387,14 +442,14 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 		}
 		var kws []candidate
 		for _, k := range sqlkit.Common(conn.eng.Dialect()) {
-			kws = append(kws, candidate{label: k, insert: k, note: "关键字", space: sqlkit.SpaceAfter(k)})
+			kws = append(kws, candidate{label: k, insert: k, note: "关键字", kw: true, space: sqlkit.SpaceAfter(k)})
 		}
 		groups = [][]candidate{near, far, append(ctes, tables(schema, named)...), kws}
 	}
 	if c.Prefix == "" && !manual && !resolved {
 		return nil, cmds
 	}
-	return ranked(c.Prefix, c.Start, groups...), cmds
+	return ranked(sql, pos, c.Prefix, c.Start, groups...), cmds
 }
 
 // completing is the candidate list that is up, if any: the palette's quick
@@ -413,8 +468,8 @@ func (a *App) completing() *completion {
 }
 
 // acceptCompletion puts the selected candidate in place of what it
-// completes, closes the list, and reports whether the text changed: ↵ runs
-// as usual when it would not (§9.7, VS Code's acceptSuggestionOnEnter
+// completes, closes the list, and reports whether the text or the cursor
+// changed: ↵ runs as usual when neither did (§9.7, VS Code's acceptSuggestionOnEnter
 // smart). A console's change is saved as typing is (cmd).
 func (a *App) acceptCompletion() (changed bool, cmd tea.Cmd) {
 	if p := a.palette; p != nil {
@@ -432,51 +487,69 @@ func (a *App) acceptCompletion() (changed bool, cmd tea.Cmd) {
 func (a *App) whereAccept(t *dataTab) bool {
 	c, in := t.comp, t.where
 	t.comp = nil
-	ins, drop, changed := c.plan(in.Text, in.Pos)
-	if !changed {
+	p := c.plan(in.Text, in.Pos)
+	if !p.changed {
 		return false
 	}
-	t.ed.Complete(c.start, ins)
-	for range drop {
-		t.ed.Feed("<Del>")
-	}
+	p.put(t.ed)
 	t.syncWhere()
 	return true
 }
 
+// accepted is what taking a candidate does: ins goes in place of the text
+// from start to the cursor, and drop bytes after the cursor go. changed
+// says ↵ is taken, not run: the text or the cursor moves.
+type accepted struct {
+	start, drop int
+	ins         string
+	changed     bool
+}
+
 // plan is what taking the selected candidate does to text with the cursor at
-// pos: ins goes in place of what is from c.start to the cursor, and drop
-// bytes after the cursor go, the closing quote autopairs put there or one
-// typed, as the insert has its own (§7.9), or the whitespace a keyword
-// moves the cursor past instead of adding a space (§9.7). changed is false
-// when neither the text nor the cursor moves, the case aside: ↵ runs as
-// usual then.
-func (c *completion) plan(text string, pos int) (ins string, drop int, changed bool) {
+// pos (§9.7): what is typed in the candidate's case stays as it is, a word
+// like NULL is not made null; a keyword gets a space after it, or the
+// cursor moves past the whitespace that is there, which is a change though
+// the text is the same. The closing quote after the cursor, autopairs'
+// or typed, goes when the insert has its own (§7.9): that alone is none.
+func (c *completion) plan(text string, pos int) accepted {
 	cd := c.items[c.sel]
-	ins, after := cd.insert, text[pos:]
-	if n := len(ins); n > 0 && strings.ContainsRune("'\"`", rune(ins[n-1])) && strings.HasPrefix(after, ins[n-1:]) {
-		drop = 1
+	p := accepted{start: c.startOf(text, cd), ins: cd.insert}
+	if typed := text[p.start:pos]; strings.EqualFold(typed, p.ins) {
+		p.ins = typed
 	}
+	after := text[pos:]
+	if n := len(p.ins); n > 0 && strings.ContainsRune("'\"`", rune(p.ins[n-1])) && strings.HasPrefix(after, p.ins[n-1:]) {
+		p.drop = 1
+	}
+	moved := false
 	if cd.space {
 		if after != "" && (after[0] == ' ' || after[0] == '\t') {
-			ins, drop = ins+after[:1], 1
+			p.ins, p.drop, moved = p.ins+after[:1], 1, true
 		} else {
-			ins += " "
+			p.ins += " "
 		}
 	}
-	changed = c.start+len(ins) != pos || !strings.EqualFold(text[c.start:pos+drop], ins)
-	return ins, drop, changed
+	p.changed = moved || text[:p.start]+p.ins+text[pos+p.drop:] != text
+	return p
+}
+
+// put does p in e, an INSERT, as typing it would.
+func (p accepted) put(e *editor.Editor) editor.Effect {
+	eff := e.Complete(p.start, p.ins)
+	for range p.drop {
+		eff = e.Feed("<Del>")
+	}
+	return eff
 }
 
 // accept takes the selected candidate into in, and reports whether that
-// changed it. A candidate that differs from the word only in case changes
-// nothing, as SQL's keywords and bare names ignore it: NULL stays NULL.
+// changed it.
 func (c *completion) accept(in *ui.Input) bool {
-	ins, drop, changed := c.plan(in.Text, in.Pos)
-	if !changed {
+	p := c.plan(in.Text, in.Pos)
+	if !p.changed {
 		return false
 	}
-	in.Text, in.Pos = in.Text[:c.start]+ins+in.Text[in.Pos+drop:], c.start+len(ins)
+	in.Text, in.Pos = in.Text[:p.start]+p.ins+in.Text[in.Pos+p.drop:], p.start+len(p.ins)
 	return true
 }
 

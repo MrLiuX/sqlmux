@@ -89,7 +89,7 @@ func TestWhereCompletion(t *testing.T) {
 func TestRankedIgnoresCase(t *testing.T) {
 	cands := []candidate{{label: "status"}, {label: "amount"}, {label: "t_order"}, {label: "Mixed_Case"}}
 	for pattern, want := range map[string]string{"St": "status", "STA": "status", "Am": "amount", "T_OR": "t_order", "mix": "Mixed_Case"} {
-		if c := ranked(pattern, 0, cands); c == nil || len(c.items) != 1 || c.items[0].label != want {
+		if c := ranked(pattern, len(pattern), pattern, 0, cands); c == nil || len(c.items) != 1 || c.items[0].label != want {
 			t.Errorf("%s: %+v, want %s", pattern, c, want)
 		}
 	}
@@ -111,7 +111,7 @@ func TestRankedWordStart(t *testing.T) {
 		"id": {"orderId"}, "b": {"a.b-c$d"}, "c": {"a.b-c$d"}, "d": {"a.b-c$d"},
 	} {
 		var got []string
-		if c := ranked(pattern, 0, cands); c != nil {
+		if c := ranked(pattern, len(pattern), pattern, 0, cands); c != nil {
 			for _, it := range c.items {
 				got = append(got, it.label)
 			}
@@ -126,13 +126,13 @@ func TestRankedWordStart(t *testing.T) {
 	if m := ui.Filter("abcdef", []string{s}); len(m) != 1 || m[0].Pos[0] != 1 {
 		t.Fatalf("fzf no longer prefers the run: %+v", m)
 	}
-	c := ranked("abcdef", 0, []candidate{{label: s}})
+	c := ranked("abcdef", len("abcdef"), "abcdef", 0, []candidate{{label: s}})
 	if c == nil || !slices.Equal(c.items[0].pos, []int{8, 29, 30, 31, 32, 33}) {
 		t.Errorf("from the word start: %+v", c)
 	}
 	// a value with a space: fzf's terms each match anywhere, the first
 	// position may be the second term's
-	c = ranked("in p", 0, []candidate{{label: "prod in"}, {label: "in progress"}, {label: "on hold"}})
+	c = ranked("in p", len("in p"), "in p", 0, []candidate{{label: "prod in"}, {label: "in progress"}, {label: "on hold"}})
 	if c == nil || len(c.items) != 1 || c.items[0].label != "in progress" {
 		t.Errorf("in p: %+v", c)
 	}
@@ -204,29 +204,43 @@ func TestAcceptIgnoresCase(t *testing.T) {
 	}
 }
 
-// A keyword takes a space as it is taken, the cursor going past one that is
-// there; a value does not; ↵ runs only when neither text nor cursor moves
-// (§9.7).
+// A keyword takes a space as it is taken, or the cursor goes past the
+// whitespace that is there, in a space or a tab: ↵ runs only when neither
+// the text nor the cursor moves, and what is typed stays in its case; the
+// closing quote that is there already moves nothing (§9.7). The words of a
+// keyword written before the cursor are not put in twice.
 func TestAcceptKeywordSpace(t *testing.T) {
+	kw := func(s string) candidate { return candidate{insert: s, note: "关键字", kw: true, space: true} }
+	val := candidate{insert: "null", note: "关键字"}
+	quoted := candidate{insert: "'done'", note: "值"}
 	for _, c := range []struct {
-		text         string
-		pos          int
-		cd           candidate
-		want         string
-		wantPos      int
-		wantAccepted bool
+		text       string
+		pos, start int // the cursor, and where the list's word starts
+		cd         candidate
+		want       string
+		wantPos    int
+		changed    bool
 	}{
-		{"selec", 5, candidate{insert: "select", space: true}, "select ", 7, true},
-		{"a = 1 an", 8, candidate{insert: "and", space: true}, "a = 1 and ", 10, true},
-		{"a = 1 and", 9, candidate{insert: "and", space: true}, "a = 1 and ", 10, true},
-		{"a = 1 and b", 9, candidate{insert: "and", space: true}, "a = 1 and b", 10, true},
-		{"a = nul", 7, candidate{insert: "null"}, "a = null", 8, true},
-		{"a = null", 8, candidate{insert: "null"}, "a = null", 8, false},
+		{"selec", 5, 0, kw("select"), "select ", 7, true},
+		{"a = 1 an", 8, 6, kw("and"), "a = 1 and ", 10, true},
+		{"a = 1 and", 9, 6, kw("and"), "a = 1 and ", 10, true},
+		{"a = 1 and b", 9, 6, kw("and"), "a = 1 and b", 10, true}, // past the space
+		{"a = 1 and\tb", 9, 6, kw("and"), "a = 1 and\tb", 10, true},
+		{"a = 1 AND b", 9, 6, kw("and"), "a = 1 AND b", 10, true}, // typed case kept
+		{"SELECT", 6, 0, kw("select"), "SELECT ", 7, true},
+		{"insert into", 11, 7, kw("insert into"), "insert into ", 12, true},
+		{"insert in", 9, 7, kw("insert into"), "insert into ", 12, true},
+		{"x rename to", 11, 9, kw("rename to"), "x rename to ", 12, true},
+		{"x REPLACE in", 12, 10, kw("replace into"), "x replace into ", 15, true}, // partly typed: the candidate's
+		{"a = nul", 7, 4, val, "a = null", 8, true},
+		{"a = null", 8, 4, val, "a = null", 8, false},
+		{"a = NULL", 8, 4, val, "a = NULL", 8, false},
+		{"s = 'done", 9, 4, quoted, "s = 'done'", 10, true},
+		{"s = 'done'", 9, 4, quoted, "s = 'done'", 9, false}, // the quote autopairs put there
 	} {
 		in := ui.Input{Text: c.text, Pos: c.pos}
-		start := strings.LastIndexAny(c.text[:c.pos], " ") + 1
-		cp := &completion{items: []candidate{c.cd}, start: start}
-		if got := cp.accept(&in); got != c.wantAccepted || in.Text != c.want || in.Pos != c.wantPos {
+		cp := &completion{items: []candidate{c.cd}, start: c.start}
+		if got := cp.accept(&in); got != c.changed || in.Text != c.want || in.Pos != c.wantPos {
 			t.Errorf("%q at %d: %v %q at %d", c.text, c.pos, got, in.Text, in.Pos)
 		}
 	}

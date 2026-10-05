@@ -4,8 +4,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"maps"
-	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -783,30 +781,40 @@ func (a *App) focusSide(side string) {
 }
 
 // focusNext is pane.focus.next: the pane after the focused one going
-// clockwise round the middle of the screen, as each one's middle lies from
-// 12 o'clock, the nearer first on a tie; the last gives way to the first
-// (F5.16). A cell is about twice as tall as wide.
+// clockwise round the middle of the screen, the status bar in it, as each
+// pane's middle lies from 12 o'clock; a tie is by ⟨n⟩, tmux's order; the
+// last gives way to the first (§6.8, F5.16). Whole numbers, doubled so a
+// middle is one, which keeps two on one ray equal.
 func (a *App) focusNext() {
 	win := a.win()
 	rects := a.layout()
 	if !win.TreeOpen {
 		delete(rects, win.Tree.ID)
 	}
-	w := a.window()
-	cx, cy := float64(w.Min.X+w.Max.X)/2, float64(w.Min.Y+w.Max.Y)/2
-	at := func(id int) (angle, dist float64) {
-		r := rects[id]
-		dx, dy := float64(r.Min.X+r.Max.X)/2-cx, 2*(float64(r.Min.Y+r.Max.Y)/2-cy)
-		if angle = math.Atan2(dx, -dy); angle < 0 {
-			angle += 2 * math.Pi
+	type vec struct{ x, y int } // from the middle, y up
+	at := map[int]vec{}
+	var ids []int
+	for _, p := range a.panesByNumber() {
+		if r, ok := rects[p.ID]; ok {
+			at[p.ID] = vec{r.Min.X + r.Max.X - a.w, a.h - (r.Min.Y + r.Max.Y)}
+			ids = append(ids, p.ID)
 		}
-		return angle, math.Hypot(dx, dy)
 	}
-	ids := slices.Collect(maps.Keys(rects))
-	slices.SortFunc(ids, func(x, y int) int {
-		ax, dx := at(x)
-		ay, dy := at(y)
-		return cmp.Or(cmp.Compare(ax, ay), cmp.Compare(dx, dy), cmp.Compare(x, y))
+	half := func(v vec) int { // 0 from 12 o'clock to before 6, 1 from 6 to before 12
+		switch {
+		case v.x == 0 && v.y == 0: // on the middle: it has no direction, and is first
+			return -1
+		case v.x > 0 || v.x == 0 && v.y > 0:
+			return 0
+		}
+		return 1
+	}
+	slices.SortStableFunc(ids, func(x, y int) int {
+		u, v := at[x], at[y]
+		if c := cmp.Compare(half(u), half(v)); c != 0 {
+			return c
+		}
+		return cmp.Compare(u.x*v.y, u.y*v.x) // v clockwise of u: the cross product u × v is negative
 	})
 	if i := slices.Index(ids, win.Focus); i >= 0 {
 		win.focus(ids[(i+1)%len(ids)])
@@ -978,17 +986,19 @@ func (a *App) reopenTab() tea.Cmd {
 	c := s.closed[len(s.closed)-1]
 	s.closed = s.closed[:len(s.closed)-1]
 	if c.console > 0 {
-		for wi, w := range s.Windows {
-			for _, p := range w.Root.Leaves() {
-				if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Console != nil && tb.Console.n == c.console }); i >= 0 {
-					a.selectWindow(wi)
-					a.showTab(p, i)
-					return nil
+		for _, s2 := range a.sessions {
+			for wi, w := range s2.Windows {
+				for _, p := range w.Root.Leaves() {
+					if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Console != nil && tb.Console.n == c.console }); i >= 0 {
+						if s2 != s {
+							a.attach(s2)
+						}
+						a.selectWindow(wi)
+						a.showTab(p, i)
+						return nil
+					}
 				}
 			}
-		}
-		if a.consoleOpen(config.ConsolePath(c.console)) { // another session's: two editors on one file overwrite each other (§11)
-			return nil
 		}
 	}
 	p := a.openTarget()

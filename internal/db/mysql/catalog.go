@@ -73,7 +73,7 @@ order by ordinal_position`, db.Val{S: schema}, db.Val{S: table})
 		return out, err
 	}
 	for _, row := range r.Rows {
-		col := db.Column{Name: row[0].S, Type: row[1].S, NotNull: row[2].S == "1", Default: row[3].S, Enum: enumOf(row[1].S), Generated: strings.Contains(strings.ToLower(row[4].S), " generated"), Fixed: strings.HasPrefix(row[1].S, "bit")}
+		col := db.Column{Name: row[0].S, Type: row[1].S, NotNull: row[2].S == "1", Default: row[3].S, Enum: enumOf(row[1].S), Generated: generatedExtra(row[4].S), Fixed: strings.HasPrefix(row[1].S, "bit")}
 		switch {
 		case strings.Contains(row[4].S, "auto_increment"):
 			col.Default = "auto_increment"
@@ -165,4 +165,12 @@ func (e Engine) DDL(ctx context.Context, c db.Conn, schema, name string) (string
 		return "", err
 	}
 	return r.Rows[0][1].S + ";", nil
+}
+
+// generatedExtra reports whether information_schema's EXTRA says the server
+// makes the column's value: VIRTUAL GENERATED or STORED GENERATED, not
+// DEFAULT_GENERATED, a default that is an expression.
+func generatedExtra(extra string) bool {
+	e := strings.ToUpper(extra)
+	return strings.Contains(e, "VIRTUAL GENERATED") || strings.Contains(e, "STORED GENERATED")
 }

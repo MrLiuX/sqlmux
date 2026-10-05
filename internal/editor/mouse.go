@@ -24,6 +24,16 @@ func (e *Editor) Click(n, vcol int) {
 	e.scrollToCursor()
 }
 
+// Goto puts the cursor at byte column pos.Col of line pos.Line, in NORMAL
+// the nearest character: where a program, not the mouse, wants it. j and k
+// aim for the column it is at then.
+func (e *Editor) Goto(pos Pos) {
+	e.keys = nil
+	e.cur, e.want = pos, wantUnset
+	e.clampCursor()
+	e.scrollToCursor()
+}
+
 // Drag selects from where the button went down, where Click put the
 // cursor, to line n at display column vcol, in VISUAL. An INSERT ends
 // first: nvim would select in "(insert) VISUAL", which the editor lacks.

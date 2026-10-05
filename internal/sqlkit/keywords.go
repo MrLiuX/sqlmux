@@ -41,13 +41,13 @@ func init() {
 // among them, and the starts and clauses of DML and DDL (§9.7).
 var common = strings.Fields(`select from where and or not in is null like between exists
 	as on join using having limit offset union all distinct case when then else end with values explain show
-	count sum avg min max coalesce ifnull cast convert asc desc
+	count sum avg min max coalesce cast convert asc desc
 	intersect except recursive set update truncate begin commit rollback call
 	unique check constraint default references cascade`)
 
 // commonPairs are the keywords of more than one word, which Fields would split.
 var commonPairs = []string{
-	"left join", "inner join", "right join", "full join", "cross join", "natural join",
+	"left join", "inner join", "right join", "cross join", "natural join",
 	"group by", "order by", "insert into", "delete from",
 	"create table", "create index", "create unique index", "create view", "alter table",
 	"drop table", "drop index", "drop view", "add column", "drop column", "rename to",
@@ -55,14 +55,14 @@ var commonPairs = []string{
 }
 
 // Common is the keywords completion offers on a connection of dialect d:
-// the shared ones, and what only PG (returning, on conflict) or only MySQL
-// (replace into, on duplicate key update) has.
+// the shared ones, and what only PG (full join, returning, on conflict) or
+// only MySQL (ifnull, replace into, on duplicate key update) has.
 func Common(d Dialect) []string {
 	out := append(slices.Clone(common), commonPairs...)
 	if d == PG {
-		return append(out, "returning", "on conflict", "do nothing", "do update set")
+		return append(out, "full join", "returning", "on conflict", "do nothing", "do update set")
 	}
-	return append(out, "replace into", "on duplicate key update", "use", "describe")
+	return append(out, "ifnull", "replace into", "on duplicate key update", "use", "describe")
 }
 
 // noSpace are the candidates that stay as they are as one is taken: values,

@@ -494,29 +494,42 @@ func TestGoldenResult(t *testing.T) {
 	golden.RequireEqual(t, strings.Join(titles, "\n")+"\n\n"+ansi.Cut(running, r.Min.X, r.Max.X)+"\n\n"+a.render().String())
 }
 
-// The area keeps ten result tabs besides the log: past that the run that
-// began longest ago goes, pinned too, a run going on never; twelve sets of
-// one run leave the last ten (F5.18).
+// The area keeps ten result tabs besides the log: past that the one whose
+// rows came in longest ago goes, whenever its run began, pinned too, a run
+// going on never; twelve sets of one run leave the last ten (F5.18).
 func TestResultCap(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	p := a.resultPane(a.win())
 	base := time.Now()
-	add := func(name string, age int, pinned, done bool) {
-		r := &run{name: name, seq: age, start: base.Add(time.Duration(-age) * time.Minute), done: done}
-		p.Tabs = append(p.Tabs, Tab{Name: name, Result: &resultTab{run: r, pinned: pinned}})
+	// add puts a tab whose run began at start minutes before base, its rows in at arrived
+	add := func(name string, start, arrived int, pinned, done bool) {
+		r := &run{name: name, seq: start, start: base.Add(time.Duration(-start) * time.Minute), done: done}
+		p.Tabs = append(p.Tabs, Tab{Name: name, Result: &resultTab{run: r, pinned: pinned, arrived: base.Add(time.Duration(-arrived) * time.Minute)}})
 	}
 	for i := 1; i <= 10; i++ {
-		add(fmt.Sprint("t", i), i, i == 10, true) // t10 is the oldest, pinned
+		add(fmt.Sprint("t", i), i, i, i == 10, true) // t10 is the oldest, pinned
 	}
-	add("busy", 99, false, false) // the oldest of all, still running
+	add("busy", 99, 99, false, false) // the oldest of all, still running
 	a.capResults(p)
 	if got := tabNames(p); got != "日志 t1 t2 t3 t4 t5 t6 t7 t8 t9 busy" {
 		t.Errorf("11th: %s", got)
 	}
-	add("new", 0, false, true)
+	add("new", 0, 0, false, true)
 	a.capResults(p)
 	if got := tabNames(p); got != "日志 t1 t2 t3 t4 t5 t6 t7 t8 busy new" {
 		t.Errorf("another: %s", got)
+	}
+	// a run that began first and ended last: its sets are the newest
+	p.Tabs = p.Tabs[:1]
+	for i := 1; i <= 9; i++ {
+		add(fmt.Sprint("other", i), 1, 5+i, false, true)
+	}
+	for i := 1; i <= 10; i++ {
+		add(fmt.Sprint("long", i), 60, 0, false, true) // began an hour ago, arrived now
+	}
+	a.capResults(p)
+	if got := tabNames(p); got != "日志 long1 long2 long3 long4 long5 long6 long7 long8 long9 long10" {
+		t.Errorf("a long run: %s", got)
 	}
 
 	sql := ""

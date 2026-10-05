@@ -29,6 +29,7 @@ type resultTab struct {
 	run       *run
 	part      int // which of the run's result sets, from 1
 	pinned    bool
+	arrived   time.Time // when the run's rows came in, or a rerun's: what the cap goes by (§11)
 }
 
 // run is one run of a console's SQL (§11「执行」), or a quick SQL's rows
@@ -308,9 +309,9 @@ func (a *App) placeRun(r *run, tabs []Tab) (at int, old []Tab) {
 const maxResults = 10
 
 // capResults closes the result tabs of p's area beyond maxResults, the one
-// whose run began longest ago first, a pinned one too, the first of a group
-// that began together (so a run's last sets stay); a run going on keeps its
-// tab, even if that leaves more (F5.18).
+// whose rows came in longest ago first, a pinned one too, the first of a
+// run's sets when they came together (so its last stay); a run going on
+// keeps its tab, even if that leaves more (F5.18).
 func (a *App) capResults(p *Pane) {
 	for len(p.Tabs)-1 > maxResults {
 		oldest := -1
@@ -319,7 +320,7 @@ func (a *App) capResults(p *Pane) {
 			if rt == nil || rt.run == nil || !rt.run.done {
 				continue
 			}
-			if oldest < 0 || rt.run.start.Before(p.Tabs[oldest].Result.run.start) {
+			if oldest < 0 || rt.arrived.Before(p.Tabs[oldest].Result.arrived) {
 				oldest = i
 			}
 		}
@@ -382,6 +383,10 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 			}
 			cmds = append(cmds, a.deadlocked(r.conn, m.err))
 		}
+	}
+	now := time.Now()
+	for _, tb := range tabs {
+		tb.Result.arrived = now
 	}
 	shown := tabs
 	if len(tabs) == 0 {
