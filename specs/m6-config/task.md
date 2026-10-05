@@ -29,7 +29,7 @@
 **开发**
 - [ ] 启动时 keymaps.toml 有冲突（§6.7 的两种）就用浮层列出来，一行一条，`↵` / `esc` 关掉；复用确认框，它能画多行就用它，不行再做一个小浮层。程序照常启动，出问题的行跳过，和 `keymap.New` 现在一样。
 - [ ] 「界面上的键位文字都从 keymap 读取」做成单测，不是一次性的搜索：扫 `internal/app`、`internal/ui` 的非测试 Go 文件，字符串字面量里出现 `C-x`、`SPC`、`esc`、`↵`、`Tab` 这类键位写法的报出来，带一张允许名单。已知的一条：console INSERT 下的 `C-n` 写在代码里（`ponytail:`，keymap 没有 console 的 INSERT 作用域），留着、进允许名单。
-- 细节（worker 提议，已定）：`ui.Confirm` 改成能画多行文字（每行一行，框跟着长），`No` 为空时只画一个按钮；冲突浮层就是它：标题「keymaps.toml 有 N 处问题，这些行没有生效：」，一行一条 `keymap.Problem.String()`，按钮「↵ 知道了」，`↵` / `y` / `esc` 都关。只在第一帧出现一次、在警告 toast 之前，两者都有就都显示。审计测试用 go/parser 扫非测试文件，规则是字面量里出现 `\b(C|M|S)-[a-z]\b`、`SPC`、`esc`、`↵`、`Tab`，允许名单是「文件:片段 → 理由」，只放真正的例外。
+- 细节（worker 提议，已定）：`ui.Confirm` 改成能画多行文字（每行一行，框跟着长），`No` 为空时只画一个按钮；冲突浮层就是它：标题「keymaps.toml 有 N 处问题，这些行没有生效：」，一行一条 `keymap.Problem.String()`，按钮显示 `confirm.yes` 的键（默认 `y`，同其他确认框，不另加按键取显示文字的接口），`↵` / `y` / `esc` 都关（审查时定）。只在第一帧出现一次、在警告 toast 之前，两者都有就都显示。审计测试用 go/parser 扫非测试文件，规则是字面量里出现 `\b(C|M|S)-[a-z]\b`、`SPC`、`esc`、`↵`、`Tab`，允许名单是「文件:片段 → 理由」，只放真正的例外。
 
 **验收**
 - [ ] 单测：keymaps.toml 里写一对冲突，启动后浮层列出它们，关掉后界面正常。
@@ -70,7 +70,7 @@
 - [ ] 扫描单测：用 go/ast 过一遍所有包，含汉字的字符串字面量不是 `T` 的参数、不在注释和 `_test.go` 里、不在小的允许名单（数据库错误前缀等）里的，报出来；每个 `T` 的 key 在 `en` 表里都有。
 - [ ] 分两个 commit：先机制、扫描测试和 `internal/app` 的文案，再 `internal/ui`、`internal/config`、`cmd`（现在约 350 行中文字面量）。
 - [ ] `config.toml` 的 `language = "zh" | "en"`，默认 `zh`，写错启动报错、带路径。
-- 细节（worker 提议，已定）：API 是 `T(zh, args...)`、`N(zh)`（同 gettext 的 N_，表里的文案在定义处标、在画的时候 `T(变量)`）、`Set(lang)`；`en` 表是 `internal/i18n/en.go` 里一个按区域分组的 map 字面量，带参数的文案两边动词同序，有测试查；拼接出来的句子改成一条带 `%s` 的 `T`。扫描测试：含汉字的字面量只能出现在 `T(` / `N(` 里，允许名单只有 CLI 的用法说明和 flag 错误，以及读 config.toml / keymaps.toml / 主题本身时的错误（那时还不知道语言，照 zh）；再查 `T` / `N` 的每个 key 都在 `en` 表里、`en` 表的每个 key 都有人用。`sqlmux keys` 的输出和 config 读完之后的启动错误跟着语言。第一个 commit 把还没翻的包放进临时的允许名单、第二个 commit 去掉，每个 commit 都绿。
+- 细节（worker 提议，已定）：API 是 `T(zh, args...)`、`N(zh)`（同 gettext 的 N_，表里的文案在定义处标、在画的时候 `T(变量)`）、`Set(lang)`；`en` 表是 `internal/i18n/en.go` 里一个按区域分组的 map 字面量，带参数的文案两边动词同序，有测试查；拼接出来的句子改成一条带 `%s` 的 `T`。扫描测试：含汉字的字面量只能出现在 `T(` / `N(` 里，允许名单只有 CLI 的用法说明和 flag 错误，以及读 config.toml / keymaps.toml / 主题本身时的错误（那时还不知道语言，照 zh）；再查 `T` / `N` 的每个 key 都在 `en` 表里、`en` 表的每个 key 都有人用。`sqlmux keys` 的输出和 config 读完之后的启动错误跟着语言。实际合成了一个 commit（a0eda0f）：扫描测试要全部包都转完才能过，临时允许名单反而让 diff 更大；审查时接受，不再拆。
 
 **验收**
 - [ ] 单测：扫描测试通过；`en` 表覆盖全部文案。
