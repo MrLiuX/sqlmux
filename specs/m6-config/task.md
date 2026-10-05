@@ -86,7 +86,8 @@
 - [ ] 格式：TOML，`version = 1`，`[[session]]` → `[[session.window]]`（名字、分割树、焦点、缩放、侧栏、结果区高度）→ `[[session.window.pane]]`（tab 列表和当前 tab；表 tab 记连接、schema、表、WHERE / ORDER / 方向 / LIMIT / PAGE / 隐藏列 / 转置，console tab 记编号、连接、schema）。不存结果集、正在跑的查询、未保存的修改、引导页。
 - [ ] 恢复：第一个 session 的启动连接照现在连；其余用到的连接在后台连，连上后表 tab 才取数；连不上的连接整个丢掉它的 tab、一条 toast；没有的表、没了的 console 文件、不存在的连接跳过那一项、一条 toast。console 编号被别的 session 占着时换下一个空号。
 - [ ] 保存：`last.toml` 只在正常退出时写，`ponytail:` 标出被杀掉会丢；不管怎么启动，退出都覆盖。
-- [ ] 命令 `layout.save`「保存布局为…」（面板输入行要名字，`/` 开头的 `.` 拒绝，同名覆盖）、`layout.open`「打开布局」（列出 `layouts/*.toml`，替换正在跑的全部 session，有未保存的先确认）；`--layout` 走同一段代码。
+- [ ] 命令 `layout.save`「保存布局为…」（状态栏单行输入要名字，同 `window.rename`；含 `/` 或 `.` 开头拒绝，同名覆盖）、`layout.open`「打开布局」（下拉框列出 `layouts/*.toml` 和 `last`，替换正在跑的全部 session，有未保存的先确认）；`--layout` 走同一段代码。
+- 细节（worker 开工时提议，已定，写进 §14）：分割树由程序写成子表、手写内联表也能读；恢复的表 tab 挂起到连接的 catalog 到了再取数；console tab 先建在启动连接上、把布局里的连接和 schema 当作想要的，连上后挪过去；其他 session 的启动连接也在启动时后台连。
 - [ ] 命令行：不带参数恢复 `last`；给连接名就默认布局、不恢复；`--layout <名字或路径>`；两个都给报错退出。`last.toml` 读不了：toast、默认布局、改名 `.broken`。
 
 **验收**
