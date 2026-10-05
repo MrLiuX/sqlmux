@@ -446,6 +446,7 @@
 **开发**
 - [ ] 两个新范围：「窗口 `&`」只列当前 session 的 window，按编号；「Tab `#`」列当前 session 全部 window 里打开着的 tab，按最近聚焦从新到旧、当前 tab 排最后（§12「窗口 & 和 Tab #」）。tab 的最近聚焦时刻记在 session 上。
 - [ ] `palette.window`、`palette.tab` 预填前缀打开面板，有标题、不带默认键（§6.8）。
+  - 细节（worker 提议，已定）：两个范围标签放在「窗口·Pane」和「表」之间；tab 的聚焦时刻在每次 Update 结束时给焦点 pane 的当前 tab 盖一次（点击、`gt`、面板、切 window 都算，焦点在侧栏时不盖），记在 Session 上、按 tab 对象索引、不持久化；「Tab」列表、console、结果 tab（含日志），不列引导页，顺序是盖过章的从新到旧、没聚焦过的按 window / pane 顺序、当前 tab 最后，有输入时 fzf 分数优先、这个顺序作平局；「窗口」显示成 `0: data`；两个新范围不套「最近用过的」重排。
 
 **验收**
 - [ ] 单测：「Tab」的顺序（切过几个 tab 之后，上一个排第一、当前排最后；别的 window 里的也列）；「窗口」只有 window；`Tab` / `S-Tab` 能切到新范围。
