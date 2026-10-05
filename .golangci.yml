@@ -1,0 +1,67 @@
+# golangci-lint v2 (tech-design §15「静态检查」). Every commit lints clean; a
+# report is fixed, or silenced on its line with `//nolint:<linter> // why`.
+# Loosening a rule here is a design change: ask the lead and the reviewer.
+version: "2"
+
+run:
+  build-tags: [integration] # the integration tests are code too
+
+linters:
+  # standard: errcheck (unchecked errors), govet (vet's analyzers),
+  # ineffassign (assignments never read), staticcheck (bugs and
+  # simplifications), unused (dead code)
+  default: standard
+  enable:
+    - errorlint # == and type switches on errors miss wrapped ones; errors.Is / As
+    - nilerr # returns nil while holding a non-nil error: the error is swallowed
+    - exhaustive # a switch over our enums that misses a member, with no default to say so
+    - copyloopvar # copies of loop variables Go 1.22 made pointless
+    - intrange # for i := 0; i < n; i++ where range n says it
+    - unconvert # conversions to the type the value already has
+    - unparam # parameters always given the same value, results nobody reads
+    - wastedassign # values overwritten before they are read
+    - perfsprint # fmt where a plain string, strconv or errors.New says it
+    - usestdlibvars # literals the standard library has a name for
+    - misspell # typos in comments and in strings; en.go's are what users read
+    - gocritic # diagnostic and performance checks, settings below
+    - revive # golint's default rules: shadowed builtins, empty blocks, unused parameters
+    - nolintlint # a //nolint names its linter and says why, and is still needed
+  settings:
+    govet:
+      enable: [nilness] # nil dereferences and tests that are always true or false
+    staticcheck:
+      # the default minus QF*: quick fixes are refactorings to taste
+      # (De Morgan, tagged switch), not bugs
+      checks: ["all", "-ST1000", "-ST1003", "-ST1016", "-ST1020", "-ST1021", "-ST1022", "-QF*"]
+    exhaustive:
+      default-signifies-exhaustive: true # a default: says the rest is meant
+      ignore-enum-types: 'keymap\.Key$' # a string type with a few named keys, not an enum
+    gocritic:
+      enabled-tags: [diagnostic, performance]
+      disabled-tags: [style, opinionated]
+      disabled-checks:
+        - evalOrder # flags `return a, a.update(m)` on a pointer a: all false positives here
+        - filepathJoin # flags relative paths like "../../testdata/seed/pg.sql" written whole on purpose
+        - hugeParam # speed with nothing measured (AGENTS.md: no unmeasured optimizations)
+        - rangeValCopy # same
+    perfsprint:
+      concat-loop: false # a strings.Builder in place of += is speed with nothing measured
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+  exclusions:
+    presets:
+      - comments # doc comments say why (AGENTS.md), not "X is ..." on every export
+      - std-error-handling # Close / Flush / Remove / print errors left unchecked, the usual Go way
+
+formatters:
+  enable:
+    - gofmt
+    - goimports # imports in three groups: standard, others, sqlmux
+  settings:
+    goimports:
+      local-prefixes: [sqlmux]
+
+issues:
+  max-issues-per-linter: 0 # all of them, not the first 50
+  max-same-issues: 0
