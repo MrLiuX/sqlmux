@@ -14,6 +14,7 @@ func (e *Editor) Click(n, vcol int) {
 	if e.visual() {
 		e.endVisual()
 	}
+	e.anchor = nil
 	// ponytail: a pending operator goes; nvim applies it up to the click
 	// (d, a click, deletes to there). Do that if anyone asks for it.
 	e.keys = nil
@@ -39,6 +40,16 @@ func (e *Editor) Goto(pos Pos) {
 // first: nvim would select in "(insert) VISUAL", which the editor lacks.
 func (e *Editor) Drag(n, vcol int) {
 	if e.mode == Command {
+		return
+	}
+	if e.plain { // the button went down where Click put the cursor: that is where the selection begins
+		if e.anchor == nil {
+			at := e.cur
+			e.anchor = &at
+		}
+		n = min(max(n, 0), len(e.lines)-1)
+		e.cur, e.want = Pos{n, e.coladvance(n, vcol)}, vcol
+		e.scrollToCursor()
 		return
 	}
 	if !e.visual() {

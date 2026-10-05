@@ -527,6 +527,9 @@ func (a *App) statusLine() ui.StatusLine {
 		}
 		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: busy, Style: bar(th.Warn)}}, Action: "cancel"})
 	}
+	if a.plain { // no modes to name (§6.9)
+		return s
+	}
 	name := strings.ToUpper(mode.String())
 	if ed := a.vim(); ed != nil { // V-LINE, V-BLOCK and REPLACE in the colors of VISUAL and INSERT
 		name = ed.Mode().String()

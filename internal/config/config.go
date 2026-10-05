@@ -23,6 +23,7 @@ type Config struct {
 	BaseIcons  *ui.Icons // what `icons` chose, a theme's [icon] not on it: a theme switched to goes on this
 	ThemeName  string    // the theme in use: `theme`, or tokyonight-storm
 	Language   string    // `language = "zh" | "en"` (§14「界面语言」)
+	Vim        bool      // `vim = false`: console and WHERE are plain editors, the grid and tree get arrow keys too (§6.9)
 	Timeoutlen int       // ms to wait on an ambiguous key sequence
 	TabWidth   int       // the console's indent, and the formatter's (§14)
 	// ResultHeight is the share of the window the result area first takes;
@@ -50,7 +51,7 @@ type Binding struct {
 }
 
 func Default() *Config {
-	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "zh", Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 1000, KeywordCase: "lower", AutoPairs: true}
+	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "zh", Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 1000, KeywordCase: "lower", AutoPairs: true}
 }
 
 // Dir is $XDG_CONFIG_HOME/sqlmux, falling back to ~/.config/sqlmux on every
@@ -106,6 +107,7 @@ func Parse(data string) (*Config, error) {
 		Theme      *string  `toml:"theme"`
 		Icons      *string  `toml:"icons"`
 		Language   *string  `toml:"language"`
+		Vim        *bool    `toml:"vim"`
 		Timeoutlen *int     `toml:"timeoutlen"`
 		TabWidth   *int     `toml:"tab_width"`
 		Height     *float64 `toml:"result_height"`
@@ -136,6 +138,9 @@ func Parse(data string) (*Config, error) {
 			return nil, fmt.Errorf(`language = %q：只能是 "zh" 或 "en"`, *raw.Language)
 		}
 		c.Language = *raw.Language
+	}
+	if raw.Vim != nil {
+		c.Vim = *raw.Vim
 	}
 	if raw.Theme != nil {
 		c.theme = *raw.Theme

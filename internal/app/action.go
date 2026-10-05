@@ -78,7 +78,15 @@ func init() {
 				p.conn.Meta.Cancel()
 				return nil
 			}
-			if a.mode() != keymap.Normal || inWhere(a) { // in any input C-c is esc, as in vim (§6.8), in a WHERE's NORMAL too (F3.39)
+			if ed := a.vim(); ed != nil && ed.Plain() { // a plain editor's: the selection, then the list, else the first press (§6.9)
+				switch {
+				case ed.HasSelection():
+					ed.ClearSelection()
+					return nil
+				case a.completing() != nil:
+					return a.press(keymap.Esc)
+				}
+			} else if a.mode() != keymap.Normal || inWhere(a) { // in any input C-c is esc, as in vim (§6.8), in a WHERE's NORMAL too (F3.39)
 				return a.press(keymap.Esc)
 			}
 			if c := a.conn(); c.busy > 0 { // a query or a save of the current connection is running: cancel it (§8.3, §10.3)

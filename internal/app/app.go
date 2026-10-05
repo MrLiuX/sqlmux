@@ -26,6 +26,7 @@ type App struct {
 	// the theme in use: theme.switch loads another over them (F6.2).
 	layoutName *ui.Input // layout.save's name typed in the status bar (F6.5)
 	lastPath   string    // where the working set is kept as the program quits; "" for nowhere
+	plain      bool      // vim = false: console and WHERE edit without modes (§6.9)
 	restored   bool      // the sessions are a layout's: console_1 is not looked up in state.json (F6.5)
 	baseIcons  *ui.Icons
 	themeName  string
@@ -99,7 +100,7 @@ var whichKeyDelay = 400 * time.Millisecond
 // not "", shows as a toast on start.
 func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, warning string) *App {
 	return &App{
-		theme: cfg.Theme, icons: cfg.Icons, baseIcons: cfg.BaseIcons, themeName: cfg.ThemeName, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, resultHeight: cfg.ResultHeight,
+		theme: cfg.Theme, icons: cfg.Icons, baseIcons: cfg.BaseIcons, plain: !cfg.Vim, themeName: cfg.ThemeName, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, resultHeight: cfg.ResultHeight,
 		keywordCase: cfg.KeywordCase, formatPrg: cfg.FormatPrg, autoPairs: cfg.AutoPairs,
 		keys: keys, res: keymap.NewResolver(keys), sess: sess, sessions: []*Session{sess},
 		mouse: uv.Pos(-1, -1), warning: strings.Trim(warning+"；"+sess.warning, "；"), state: st,
@@ -582,7 +583,7 @@ func (a *App) context() keymap.Context {
 	case typing != nil && typing.comp != nil:
 		return keymap.Context{Overlay: "complete", Focus: []string{"input"}, Mode: keymap.Insert}
 	case a.focusedConsole() != nil && a.focusedConsole().comp != nil: // ↵ and esc are its vim's, as a WHERE's
-		return keymap.Context{Overlay: "complete", Focus: []string{"console"}, Mode: keymap.Insert}
+		return keymap.Context{Overlay: "complete", Focus: []string{"console"}, Mode: keymap.Insert, Plain: a.plain}
 	case typing != nil && typing.cell != nil:
 		c := keymap.Context{Focus: []string{"cell"}, Mode: keymap.Insert}
 		if !typing.cell.folded && len(typing.options()) > 0 {
@@ -595,6 +596,8 @@ func (a *App) context() keymap.Context {
 			c.Overlay, c.Under = "newrow", c.Overlay
 		}
 		return c
+	case typing != nil && typing.typing == "where" && typing.ed.Plain():
+		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Insert, Plain: true}
 	case typing != nil && typing.typing == "where" && vimMode(typing.ed.Mode()) != keymap.Insert:
 		// its vim's NORMAL or VISUAL: user maps as any pane's, esc and ↵ in
 		// VISUAL the vim's, as a console's (F3.39)
@@ -609,7 +612,8 @@ func (a *App) context() keymap.Context {
 	if s := a.paneScope(); s == "result" { // over grid's keys, which its tables move by (§6.4)
 		return keymap.Context{Focus: []string{"result", "grid"}, Pane: "grid", Mode: a.mode()}
 	}
-	return keymap.Context{Focus: []string{a.paneScope()}, Pane: a.paneScope(), Mode: a.mode()}
+	plain := a.vim() != nil && a.vim().Plain() && a.paneScope() == "console"
+	return keymap.Context{Focus: []string{a.paneScope()}, Pane: a.paneScope(), Mode: a.mode(), Plain: plain}
 }
 
 // paneScope is the keymap scope of the focused pane: its current tab's.

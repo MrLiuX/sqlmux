@@ -81,6 +81,11 @@ type Editor struct {
 	// The app runs INSERT's <CR> and turns a paste's newlines to spaces.
 	OneLine bool
 
+	// plain is the modeless editing (SetPlain), anchor the end its selection
+	// began at.
+	plain  bool
+	anchor *Pos
+
 	lines  []string
 	cur    Pos
 	want   int // the display column j and k aim for (curswant)
@@ -153,10 +158,12 @@ func (e *Editor) SetWidth(n int) {
 // Feed takes one key.
 func (e *Editor) Feed(k string) Effect {
 	e.eff = Effect{}
-	switch e.mode {
-	case Insert, Replace:
+	switch {
+	case e.plain:
+		e.plainKey(k)
+	case e.mode == Insert || e.mode == Replace:
 		e.insertKey(k)
-	case Command:
+	case e.mode == Command:
 		e.cmdKey(k)
 		e.settle()
 	default:
@@ -490,7 +497,7 @@ func (e *Editor) clampCursor() {
 	e.cur.Line = min(max(e.cur.Line, 0), len(e.lines)-1)
 	l := e.line()
 	end := last(l)
-	if e.visual() {
+	if e.visual() || e.plain { // the end of the line is a place there
 		end = len(l)
 	}
 	e.cur.Col = head(l, min(max(e.cur.Col, 0), end))

@@ -167,3 +167,16 @@ func TestLanguage(t *testing.T) {
 		t.Errorf("fr: %v", err)
 	}
 }
+
+// vim is true unless it is written false (§6.9).
+func TestVimOption(t *testing.T) {
+	if c, err := Parse(""); err != nil || !c.Vim {
+		t.Errorf("default: %v %v", c.Vim, err)
+	}
+	if c, err := Parse("vim = false"); err != nil || c.Vim {
+		t.Errorf("false: %v %v", c.Vim, err)
+	}
+	if _, err := Parse(`vim = "no"`); err == nil {
+		t.Error("a string is not a bool")
+	}
+}

@@ -110,6 +110,12 @@ func TestSequences(t *testing.T) {
 		{Context{Overlay: "segments", Focus: []string{"cell"}, Mode: Insert}, "<Tab>", []string{"cell.segment.next"}},
 		{Context{Overlay: "options", Focus: []string{"cell"}, Mode: Insert}, "<Tab>", []string{"cell.option.next"}},
 		{Context{Overlay: "newrow", Under: "options", Focus: []string{"cell"}, Mode: Insert}, "<Tab><Down>", []string{"cell.field.next", "cell.option.next"}},
+		// the modeless editor (§6.9): Ctrl keys of the pane and NORMAL apply, the keys that are text do not
+		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<C-h>", []string{"pane.focus.left"}},
+		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<C-p>", []string{"palette.open"}},
+		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<CR>", []string{"keys <CR>"}},
+		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<Space>sgt", []string{"keys <Space>", "keys s", "keys g", "keys t"}},
+		{Context{Focus: []string{"input"}, Mode: Insert, Plain: true}, "<C-l>?", []string{"pane.focus.right", "keys ?"}},
 		// COMMAND is typing too: no counts, no widget keys, no user maps
 		{Context{Overlay: "palette", Mode: Command}, "5<CR>", []string{"keys 5", "palette.run"}},
 	} {

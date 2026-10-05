@@ -164,7 +164,7 @@ func consoleSpan(t *consoleTab, arg string) (text string, from, to int) {
 				from, to = stmts[i].Start, stmts[i].End
 			}
 		}
-	case visual && ed.Mode() == editor.Visual:
+	case visual && (ed.Mode() == editor.Visual || ed.Plain()):
 		from, to = at(s), at(e)
 		if l := lines[e.Line]; e.Col < len(l) { // the last character is in
 			gr, _ := ansi.FirstGraphemeCluster(l[e.Col:], ansi.GraphemeWidth)
@@ -180,7 +180,11 @@ func consoleSpan(t *consoleTab, arg string) (text string, from, to int) {
 		}
 	}
 	if _, _, visual := ed.Selection(); visual {
-		ed.Feed("<Esc>")
+		if ed.Plain() {
+			ed.ClearSelection()
+		} else {
+			ed.Feed("<Esc>")
+		}
 	}
 	return text, from, to
 }

@@ -267,6 +267,10 @@ func (e *Editor) Replace(from, to Pos, text string) Effect {
 	n := from.Line + last
 	e.cur, e.want = Pos{n, firstNonBlank(e.lines[n])}, wantUnset
 	e.settle()
+	if e.plain { // INSERT has no step to end it
+		e.endChange()
+		e.anchor, e.ins.fresh = nil, true
+	}
 	e.scrollToCursor()
 	return e.eff
 }

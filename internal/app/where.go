@@ -566,7 +566,11 @@ func (a *App) startWhere(t *dataTab) {
 	t.typing, t.comp, t.hist = "where", nil, nil
 	t.ed = editor.New(t.where.Text)
 	t.ed.TabWidth, t.ed.AutoPairs, t.ed.OneLine = a.tabWidth, a.autoPairs, true
-	t.ed.Feed("A")
+	if t.ed.SetPlain(a.plain); a.plain {
+		t.ed.Goto(editor.Pos{Col: len(t.where.Text)})
+	} else {
+		t.ed.Feed("A")
+	}
 	t.syncWhere()
 }
 
@@ -584,6 +588,14 @@ func (a *App) whereKey(t *dataTab, k keymap.Key) tea.Cmd {
 			return nil
 		}
 		return a.runWhere(t)
+	}
+	if k == keymap.Esc && t.ed.Plain() { // there is no mode to leave: the list, else the input (§6.9)
+		if t.comp != nil {
+			t.comp = nil
+		} else {
+			t.stopTyping()
+		}
+		return nil
 	}
 	return a.whereDid(t, t.ed.Feed(string(k)))
 }

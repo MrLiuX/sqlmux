@@ -620,3 +620,97 @@ func TestLayoutSaveAndOpen(t *testing.T) {
 		t.Error("an error changes nothing and is said")
 	}
 }
+
+// shiftArrow presses an arrow with Shift, as a terminal sends it.
+func shiftArrow(a *App, code rune, n int) {
+	for range n {
+		a.Update(tea.KeyPressMsg{Code: code, Mod: tea.ModShift})
+	}
+}
+
+// vim = false: a console is typed into at once, ↵ makes a line, Esc and the
+// vim keys are text or nothing, there is no mode to name, and the pane focus
+// keys still go (§6.9, F6.6a).
+func TestPlainConsole(t *testing.T) {
+	a, c := inConsole(t, "vim = false", "")
+	feed(t, a, "select 1<CR>gt<Space>x<Esc>")
+	if text(c) != "select 1\ngt x" || c.ed.Mode() != editor.Insert {
+		t.Fatalf("typed: %q in %v", text(c), c.ed.Mode())
+	}
+	if row := statusRow(a); strings.Contains(row, "INSERT") || strings.Contains(row, "NORMAL") {
+		t.Errorf("a mode block: %q", row)
+	}
+	win := a.win()
+	feed(t, a, "<C-h>")
+	if win.Focus == 2 {
+		t.Error("C-h does not move the focus")
+	}
+	feed(t, a, "<C-l>")
+	if win.Focus != 2 {
+		t.Error("C-l does not move it back")
+	}
+	feed(t, a, "ab<C-a>X<C-e>Y")
+	if got := c.ed.Lines()[1]; got != "gt xabXY"[:0]+"Xgt xabY" && got != "Xgt xabY" {
+		t.Errorf("C-a, C-e: %q", got)
+	}
+}
+
+// A selection made with Shift and the arrows is what runs, else the
+// statement at the cursor; it is replaced by what is typed (§6.9).
+func TestPlainConsoleSelectionRuns(t *testing.T) {
+	d := &execDB{res: map[string]db.Result{"select 1": rows(1), "select 2": rows(1)}}
+	a, c := inRun(t, d, "")
+	a.plain = true
+	feed(t, a, "select 1;<CR>select 2;")
+	feed(t, a, "<C-a>")
+	shiftArrow(a, tea.KeyRight, 9)
+	if got := c.ed.SelectedText(); got != "select 2;" {
+		t.Fatalf("selected %q", got)
+	}
+	deliver(a, a.run("console.run", 0))
+	if len(d.ran) != 1 || !strings.HasPrefix(d.ran[0], "select 2") || c.ed.HasSelection() {
+		t.Errorf("a selection: ran %q, still selected %v", d.ran, c.ed.HasSelection())
+	}
+	d.ran = nil
+	deliver(a, a.run("console.run", 0)) // none: the statement at the cursor
+	if len(d.ran) != 1 {
+		t.Errorf("none selected: ran %q", d.ran)
+	}
+	shiftArrow(a, tea.KeyLeft, 3)
+	if feed(t, a, "<C-c>"); c.ed.HasSelection() || a.toast != "" {
+		t.Errorf("C-c with a selection only ends it: toast %q", a.toast)
+	}
+	if feed(t, a, "<C-c>"); !strings.Contains(a.toast, "退出") {
+		t.Errorf("C-c with nothing: the first press of quit: %q", a.toast)
+	}
+}
+
+// vim = false: the WHERE is typed into, ↵ runs it, Esc closes the list and
+// then leaves it; C-r is still its history (§6.9, F6.6a).
+func TestPlainWhere(t *testing.T) {
+	c := userConfig(t, "vim = false", "")
+	a := sizedWith(160, 45, c)
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
+	a.win().focus(1)
+	tab := loadOrders(t, a, 3)
+	feed(t, a, "/")
+	if tab.typing != "where" || tab.ed == nil || !tab.ed.Plain() || tab.ed.Mode() != editor.Insert {
+		t.Fatalf("typing %q, %+v", tab.typing, tab.ed)
+	}
+	feed(t, a, "id = 1")
+	if tab.where.Text != "id = 1" {
+		t.Fatalf("where %q", tab.where.Text)
+	}
+	feed(t, a, "<C-a>x<Esc>")
+	if tab.where.Text != "" || tab.typing != "" { // what was not run goes, as the vim's second esc
+		t.Errorf("esc leaves: %q, typing %q", tab.where.Text, tab.typing)
+	}
+	feed(t, a, "/ and st")
+	if tab.comp == nil {
+		t.Fatalf("no list")
+	}
+	feed(t, a, "<Esc>")
+	if tab.comp != nil || tab.typing != "where" {
+		t.Errorf("the first esc closes the list only: %v %q", tab.comp, tab.typing)
+	}
+}
