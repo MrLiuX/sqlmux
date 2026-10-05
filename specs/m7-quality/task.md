@@ -24,7 +24,7 @@
 - [x] reviewer 起草 `.golangci.yml`（golangci-lint v2 格式；linter 清单和理由见 §15「静态检查」），发给 worker 和决策者；worker 原样提交。2026-10-05 已起草（v2.14.0），决策者接受全部取舍；398899a 上 131 条报告，其中生产代码的 20 条 errcheck 都是可以安全丢掉的，写成 `_ =`；真问题有 ineffassign 1、wastedassign 4、unparam 1、unused 1、7 处变量名遮住内置函数。
 - [ ] worker 在全仓库跑 `golangci-lint run ./...`，修到零报告：一类报告一个 commit（如 `lint: errorlint`），**不改行为**，测试期望一个都不改；确实该屏蔽的用带理由的 `//nolint`。修的过程中觉得某条规则不合适，提给 reviewer 和决策者，不自己改配置。
 - [ ] `.github/workflows/ci.yml`：push 和 PR 到 main 时跑 lint（golangci-lint-action）、vet、`go test ./...`、`go test -tags integration ./...`（PG 17、MySQL 8.4 用 services 起，用 `testdata/seed` 导入）。Go 版本从 go.mod 读。e2e 不进 CI。
-- [ ] 本地工具：golangci-lint v2.14.0（`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`；现在装的 v1.63.4 不支持 Go 1.26），版本钉进 justfile 和 CI。装到 `~/go/bin` 会替换用户的 v1.63.4，装之前知会用户。
+- [ ] 本地工具：golangci-lint v2.14.0（`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`；现在装的 v1.63.4 不支持 Go 1.26），版本钉进 justfile 和 CI。装到默认位置 `~/go/bin`，覆盖用户的 v1.63.4（用户 2026-10-05 定：用最新版直接覆盖）；钉的版本就是当时的最新版。
 
 **验收**
 - [ ] `golangci-lint run ./...` 零报告；`go test ./...`、集成测试、全量 e2e 都过且期望值没改（tester 对比 e2e 分支）。
