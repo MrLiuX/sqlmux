@@ -49,10 +49,9 @@ func run(args []string) error {
 	if err != nil { // the broken file is kept aside; start empty (§14)
 		warning = strings.TrimPrefix(warning+"；"+err.Error(), "；")
 	}
-	// ponytail: problems are only reported by `sqlmux keys --check`; the startup
-	// conflict overlay (§6.7) is M6.
-	keys, _ := keymap.New(cfg)
+	keys, problems := keymap.New(cfg)
 	a := app.New(cfg, keys, sess, st, warning)
+	a.KeyProblems(problems)
 	defer a.Close()
 	_, err = tea.NewProgram(a).Run()
 	return err

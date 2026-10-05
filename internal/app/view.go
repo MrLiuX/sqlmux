@@ -180,11 +180,11 @@ func (a *App) render() *ui.Frame {
 		}
 	}
 	if c := a.confirm; c != nil {
-		ui.Confirm{
-			Text:   c.text,
-			YesKey: a.keys.Hint("confirm.yes", "confirm"), Yes: c.yes,
-			NoKey: a.keys.Hint("confirm.no", "confirm"), No: "取消",
-		}.Draw(f, a.window())
+		cf := ui.Confirm{Text: c.text, YesKey: a.keys.Hint("confirm.yes", "confirm"), Yes: c.yes}
+		if c.then != nil { // a notice has no "no" (§6.7)
+			cf.NoKey, cf.No = a.keys.Hint("confirm.no", "confirm"), "取消"
+		}
+		cf.Draw(f, a.window())
 	}
 	if a.toast != "" && y > 0 { // over the palette's mask too: dimmed, it can hardly be read (§7.5)
 		t := " " + a.toast + " "

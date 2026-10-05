@@ -2,12 +2,15 @@ package app
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 
+	"sqlmux/internal/config"
 	"sqlmux/internal/db"
 	"sqlmux/internal/editor"
+	"sqlmux/internal/keymap"
 )
 
 // pane.focus.next goes clockwise round the middle of the screen, the
@@ -274,5 +277,41 @@ func TestSuperKeys(t *testing.T) {
 	}
 	if press('w'); a.win().TreeOpen == open {
 		t.Error("<D-w> did not run")
+	}
+}
+
+// Lines of keymaps.toml that did not take are listed in a notice at the
+// start, one a line, closed by ↵; the program is as usual after it (§6.7,
+// F6.1).
+func TestKeyProblemsNotice(t *testing.T) {
+	c := userConfig(t, "", "[keys.normal]\n\"g\" = \"tab.next\"\n\"gz\" = \"tab.prev\"\n\"<C-p>\" = \"tab.next\"\n\"<c-p>\" = \"tab.prev\"\n")
+	keys, problems := keymap.New(c)
+	if len(problems) < 2 {
+		t.Fatalf("problems: %v", problems)
+	}
+	a := New(c, keys, testSession(), &config.State{}, "")
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
+	a.KeyProblems(problems)
+	if a.confirm == nil || !strings.HasPrefix(a.confirm.text, "keymaps.toml 有 2 处问题") || strings.Count(a.confirm.text, "\n") != len(problems) {
+		t.Fatalf("notice: %+v", a.confirm)
+	}
+	screen := a.render().String()
+	for _, p := range problems {
+		if !strings.Contains(screen, p.String()) {
+			t.Errorf("%q is not on screen", p)
+		}
+	}
+	if !strings.Contains(screen, "知道了") || strings.Contains(screen, "取消") {
+		t.Error("the one button: 知道了")
+	}
+	if feed(t, a, "<CR>"); a.confirm != nil {
+		t.Error("↵ keeps it")
+	}
+	a.KeyProblems(nil)
+	if a.confirm != nil {
+		t.Error("none: a notice")
+	}
+	if feed(t, a, "<Space>c"); len(a.sess.Windows) != 2 {
+		t.Error("the program is as usual")
 	}
 }

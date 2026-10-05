@@ -98,6 +98,20 @@ func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, 
 	}
 }
 
+// KeyProblems opens a notice of the lines of keymaps.toml that did not take
+// (§6.7): the conflicts and the keys it could not read, one a line; ↵ or
+// esc closes it. None, nothing opens.
+func (a *App) KeyProblems(ps []keymap.Problem) {
+	if len(ps) == 0 {
+		return
+	}
+	lines := []string{fmt.Sprintf("keymaps.toml 有 %d 处问题，这些行没有生效：", len(ps))}
+	for _, p := range ps {
+		lines = append(lines, "  "+p.String())
+	}
+	a.confirm = &confirmBox{text: strings.Join(lines, "\n"), yes: "知道了"}
+}
+
 // Init switches Bubble Tea's renderer to grapheme widths, the same as Frame
 // (§7.1「宽度」): with wcwidth it re-flows lines holding 👍🏽 or ❤️ and pushes
 // the border off the row. Bubble Tea v2.0.9 only switches when the terminal

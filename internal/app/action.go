@@ -354,6 +354,9 @@ func init() {
 		"confirm.yes": {Title: "确定", Local: true, Run: when(inConfirm, func(a *App) tea.Cmd {
 			then := a.confirm.then
 			a.confirm = nil
+			if then == nil { // a notice
+				return nil
+			}
 			return then()
 		})},
 		"confirm.no": {Title: "取消", Local: true, Run: when(inConfirm, func(a *App) tea.Cmd { a.confirm = nil; return nil })},
