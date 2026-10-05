@@ -534,8 +534,8 @@ func TestToolButtons(t *testing.T) {
 	if v := a.dropView(); strings.Join(v.Items, " ") != "关 2s 5s 10s 30s 60s" || v.Mark != 0 {
 		t.Fatalf("items %v, mark %d", v.Items, v.Mark)
 	}
-	_, cmd := a.Update(teaKey("<Down>"))
-	_, cmd = a.Update(teaKey("<CR>"))
+	a.Update(teaKey("<Down>"))
+	_, cmd := a.Update(teaKey("<CR>"))
 	if auto := a.toolButtons(tab)[2].Buttons[0]; tab.auto != 2*time.Second || cmd == nil || auto.Tail != "2s" || auto.Fg != a.theme.Warn || auto.Plain {
 		t.Errorf("2s: auto %v, button %+v", tab.auto, auto)
 	}

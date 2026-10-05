@@ -152,7 +152,7 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 	bg := uv.Style{Fg: th.Fg, Bg: th.PaneBg}
 	dim := uv.Style{Fg: th.Dim, Bg: th.PaneBg}
 	f.Region(uv.Rect(r.Min.X, r.Min.Y, r.Dx(), 1), Target{Kind: KindHint, Pane: q.Pane, Action: "grid.where"}) // a click types in it (Q-01)
-	x := f.Text(r.Min.X+1, r.Min.Y, r.Max.X-1, "WHERE", uv.Style{Fg: th.Keyword, Bg: th.PaneBg, Attrs: uv.AttrBold})
+	f.Text(r.Min.X+1, r.Min.Y, r.Max.X-1, "WHERE", uv.Style{Fg: th.Keyword, Bg: th.PaneBg, Attrs: uv.AttrBold})
 	vx := r.Max.X - 2 // ▾: the history and favorites (Q-02)
 	vst := dim
 	if f.Region(uv.Rect(vx, r.Min.Y, 1, 1), Target{Kind: KindHint, Pane: q.Pane, Action: "where.history"}) {
@@ -215,7 +215,7 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 			f.Text(x, y, r.Max.X-1, " ", st)
 		}
 	}
-	x = q.end(r, chips, groups)
+	x := q.end(r, chips, groups)
 	right, st := q.Right, dim
 	if n := q.Note; n != (Note{}) {
 		if right = n.Fit(r.Max.X - 2 - x); n.Fg != nil {
