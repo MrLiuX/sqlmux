@@ -1,6 +1,10 @@
 package app
 
 import (
+	"fmt"
+	"image/color"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -11,6 +15,7 @@ import (
 	"sqlmux/internal/db"
 	"sqlmux/internal/editor"
 	"sqlmux/internal/keymap"
+	"sqlmux/internal/ui"
 )
 
 // pane.focus.next goes clockwise round the middle of the screen, the
@@ -314,4 +319,46 @@ func TestKeyProblemsNotice(t *testing.T) {
 	if feed(t, a, "<Space>c"); len(a.sess.Windows) != 2 {
 		t.Error("the program is as usual")
 	}
+}
+
+// theme.switch lists the themes there are, the one in use marked; the pick
+// is on the screen at once, a token the file leaves out as tokyonight-storm
+// has it, the icons chosen kept with the theme's [icon] on them; a theme
+// that cannot be read says why and changes nothing; nothing is written
+// (F6.2).
+func TestThemeSwitch(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	themes := filepath.Join(dir, "sqlmux", "themes")
+	os.MkdirAll(themes, 0o755)
+	os.WriteFile(filepath.Join(themes, "mine.toml"), []byte("bg = \"#101010\"\n[icon.table]\ntext = \"T\"\n"), 0o644)
+	os.WriteFile(filepath.Join(themes, "bad.toml"), []byte("bg = \"red\"\n"), 0o644)
+	a := sized(160, 45, "ascii")
+	a.run("theme.switch", 0)
+	items, current := a.dropItems()
+	if a.drop == nil || a.drop.kind != dropTheme || !slices.Equal(items, []string{"bad", "mine", "tokyonight-storm"}) || current != 2 {
+		t.Fatalf("list: %+v %v current %d", a.drop, items, current)
+	}
+	feed(t, a, "mi<CR>")
+	if a.drop != nil || a.themeName != "mine" || ansiHex(a.theme.Bg) != "#101010" || a.theme.Fg != ui.TokyonightStorm.Fg || a.icons.Table.Text != "T" || a.icons.Schema.Text != "#" {
+		t.Fatalf("mine: bg %v fg %v table %q schema %q", a.theme.Bg, a.theme.Fg, a.icons.Table.Text, a.icons.Schema.Text)
+	}
+	if !strings.Contains(a.toast, "config.toml") {
+		t.Errorf("toast %q", a.toast)
+	}
+	a.run("theme.switch", 0)
+	feed(t, a, "bad<CR>")
+	if a.themeName != "mine" || !strings.Contains(a.toast, "bad.toml") {
+		t.Errorf("a theme that cannot be read: %q, toast %q", a.themeName, a.toast)
+	}
+	a.run("theme.switch", 0)
+	feed(t, a, "tokyo<CR>")
+	if a.theme != ui.TokyonightStorm || a.icons.Table.Text != "+" {
+		t.Error("back to tokyonight-storm and the icons chosen")
+	}
+}
+
+func ansiHex(c color.Color) string {
+	r, g, b, _ := c.RGBA()
+	return fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8)
 }

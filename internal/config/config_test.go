@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -130,6 +131,9 @@ func TestThemeFile(t *testing.T) {
 	c, err := load("theme = \"ristretto\"\nicons = \"ascii\"")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if names := ThemeNames(); !slices.Equal(names, []string{"ristretto", "tokyonight-storm", "typo"}) || c.ThemeName != "ristretto" || c.BaseIcons == c.Icons {
+		t.Errorf("themes %v, in use %q, base icons kept apart: %v", names, c.ThemeName, c.BaseIcons != c.Icons)
 	}
 	if c.Theme.PaneBg == ui.TokyonightStorm.PaneBg || c.Theme.Fg != ui.TokyonightStorm.Fg {
 		t.Errorf("pane_bg %v fg %v", c.Theme.PaneBg, c.Theme.Fg)

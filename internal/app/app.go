@@ -21,8 +21,12 @@ type App struct {
 	w, h  int
 	theme *ui.Theme
 	icons *ui.Icons
-	keys  *keymap.Map
-	res   *keymap.Resolver
+	// baseIcons is what `icons` chose, a theme's [icon] not on it, and themeName
+	// the theme in use: theme.switch loads another over them (F6.2).
+	baseIcons *ui.Icons
+	themeName string
+	keys      *keymap.Map
+	res       *keymap.Resolver
 	// sess is the session attached, one of sessions (§5, F5.1).
 	sess     *Session
 	sessions []*Session
@@ -91,7 +95,7 @@ var whichKeyDelay = 400 * time.Millisecond
 // not "", shows as a toast on start.
 func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, warning string) *App {
 	return &App{
-		theme: cfg.Theme, icons: cfg.Icons, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, resultHeight: cfg.ResultHeight,
+		theme: cfg.Theme, icons: cfg.Icons, baseIcons: cfg.BaseIcons, themeName: cfg.ThemeName, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, resultHeight: cfg.ResultHeight,
 		keywordCase: cfg.KeywordCase, formatPrg: cfg.FormatPrg, autoPairs: cfg.AutoPairs,
 		keys: keys, res: keymap.NewResolver(keys), sess: sess, sessions: []*Session{sess},
 		mouse: uv.Pos(-1, -1), warning: strings.Trim(warning+"；"+sess.warning, "；"), state: st,

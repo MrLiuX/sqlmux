@@ -41,6 +41,7 @@ func init() {
 	actions = map[string]Action{
 		"palette.open":    {Title: "命令面板", Run: do(func(a *App, _ Args) { a.openPalette("") })},
 		"palette.command": {Title: "命令面板：命令", Run: do(func(a *App, _ Args) { a.openPalette(">") })}, // as if > was typed; bind : to it for the command scope (§6.8)
+		"theme.switch":    {Title: "切换主题…", Run: do(func(a *App, _ Args) { a.openThemeDrop() })},
 		"palette.window":  {Title: "命令面板：窗口", Run: do(func(a *App, _ Args) { a.openPalette("&") })},
 		"palette.tab":     {Title: "命令面板：Tab", Run: do(func(a *App, _ Args) { a.openPalette("#") })},
 		"palette.sql":     {Title: "快速 SQL", Run: do(func(a *App, _ Args) { a.openPalette(";") })}, // ; as if ; was typed (§12)

@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 
+	"sqlmux/internal/config"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
@@ -23,7 +24,8 @@ const (
 	dropSchema
 	dropConsoleConn
 	dropTx
-	dropAuto // auto refresh's interval (§7.8「自动刷新」)
+	dropAuto  // auto refresh's interval (§7.8「自动刷新」)
+	dropTheme // the theme in use (F6.2)
 )
 
 // dropdown is the open one-pick dropdown; tab or console, in pane, is what
@@ -65,6 +67,26 @@ func (a *App) openDrop(k dropKind) {
 	a.dropMove(0)
 }
 
+// openThemeDrop is theme.switch: the themes in a dropdown under the focused
+// pane's title, the one in use marked (F6.2).
+func (a *App) openThemeDrop() {
+	p := a.focused()
+	a.drop = &dropdown{kind: dropTheme, pane: p}
+	_, a.drop.sel = a.dropItems()
+	a.dropMove(0)
+}
+
+// setTheme puts theme name on the screen at once; it is this run's, nothing
+// is written: config.toml is the user's alone (§14).
+func (a *App) setTheme(name string) tea.Cmd {
+	th, ic, err := config.LoadTheme(name, a.baseIcons)
+	if err != nil {
+		return a.showToast(err.Error(), toastTTL)
+	}
+	a.theme, a.icons, a.themeName = th, ic, name
+	return a.showToast("写进 config.toml 的 theme 才会保留", toastTTL)
+}
+
 // openConsoleDrop opens the focused console's dropdown of kind k, schema
 // (gs, §8.6), connection or transaction mode, its selection on the one it
 // has.
@@ -83,6 +105,9 @@ func (a *App) dropItems() (items []string, current int) {
 	switch d.kind {
 	case dropSchema:
 		return d.console.conn.Schemas, slices.Index(d.console.conn.Schemas, d.console.schema)
+	case dropTheme:
+		names := config.ThemeNames()
+		return names, slices.Index(names, a.themeName)
 	case dropConsoleConn:
 		for _, c := range a.sess.Conns {
 			items = append(items, c.Spec.Name)
@@ -174,6 +199,9 @@ func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 		entry = a.chipRect(d.pane, d.tab, "grid.order")
 	case dropLimit:
 		entry = a.chipRect(d.pane, d.tab, "grid.limit")
+	case dropTheme:
+		r := a.layout()[d.pane.ID]
+		entry = uv.Rect(r.Min.X+2, r.Min.Y, w, 1)
 	case dropAuto:
 		r := a.layout()[d.pane.ID]
 		if entry = a.queryBar(d.pane, d.tab).ButtonRect(bodyRect(r), "grid.refresh.auto"); entry.Empty() {
@@ -209,6 +237,8 @@ func (a *App) dropPick(i int) tea.Cmd {
 		return a.pickConn(d.console, a.sess.Conns[at])
 	case dropTx:
 		return a.setTxMode(d.console.conn, at == 1)
+	case dropTheme:
+		return a.setTheme(item)
 	case dropAuto: // the ticking so far stops; this interval's starts
 		if t.auto, t.autoGen = autoIntervals[at], t.autoGen+1; t.auto == 0 {
 			return nil

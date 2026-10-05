@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -18,6 +20,8 @@ import (
 type Config struct {
 	Theme      *ui.Theme // `theme = "<name>"` (§7.3), resolved by Load
 	Icons      *ui.Icons // `icons = "nerd" | "ascii"`, with the theme file's [icon] on top (§7.7)
+	BaseIcons  *ui.Icons // what `icons` chose, a theme's [icon] not on it: a theme switched to goes on this
+	ThemeName  string    // the theme in use: `theme`, or tokyonight-storm
 	Timeoutlen int       // ms to wait on an ambiguous key sequence
 	TabWidth   int       // the console's indent, and the formatter's (§14)
 	// ResultHeight is the share of the window the result area first takes;
@@ -45,7 +49,7 @@ type Binding struct {
 }
 
 func Default() *Config {
-	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 1000, KeywordCase: "lower", AutoPairs: true}
+	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 1000, KeywordCase: "lower", AutoPairs: true}
 }
 
 // Dir is $XDG_CONFIG_HOME/sqlmux, falling back to ~/.config/sqlmux on every
@@ -70,9 +74,10 @@ func Load() (*Config, error) {
 		return nil, err
 	default:
 		if c, err = Parse(string(data)); err == nil && c.theme != "" {
-			if c.Theme, c.Icons, err = loadTheme(c.theme, c.Icons); err != nil {
+			if c.Theme, c.Icons, err = LoadTheme(c.theme, c.BaseIcons); err != nil {
 				err = fmt.Errorf("theme = %q: %w", c.theme, err)
 			}
+			c.ThemeName = c.theme
 		}
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", path, err)
@@ -122,6 +127,7 @@ func Parse(data string) (*Config, error) {
 			return nil, fmt.Errorf(`icons = %q：只能是 "nerd" 或 "ascii"`, *raw.Icons)
 		}
 		c.Icons = ui.IconSet(*raw.Icons)
+		c.BaseIcons = c.Icons
 	}
 	if raw.Theme != nil {
 		c.theme = *raw.Theme
@@ -195,9 +201,22 @@ func ParseKeys(data string) (leader string, bindings []Binding, err error) {
 	return leader, bindings, nil
 }
 
-// loadTheme finds a theme by name (§7.3): themes/<name>.toml first, then a
-// built-in theme.
-func loadTheme(name string, icons *ui.Icons) (*ui.Theme, *ui.Icons, error) {
+// ThemeNames are the themes there are: the files of themes/ and the
+// built-in ones, by name.
+func ThemeNames() []string {
+	names := slices.Collect(maps.Keys(ui.Themes))
+	files, _ := filepath.Glob(filepath.Join(Dir(), "themes", "*.toml"))
+	for _, f := range files {
+		names = append(names, strings.TrimSuffix(filepath.Base(f), ".toml"))
+	}
+	slices.Sort(names)
+	return slices.Compact(names)
+}
+
+// LoadTheme finds a theme by name (§7.3): themes/<name>.toml first, then a
+// built-in theme; with the icons that `icons` chose, a theme's [icon] on
+// them.
+func LoadTheme(name string, icons *ui.Icons) (*ui.Theme, *ui.Icons, error) {
 	path := filepath.Join(Dir(), "themes", name+".toml")
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
