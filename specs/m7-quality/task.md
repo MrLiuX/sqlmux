@@ -67,7 +67,7 @@
 - **涉及**：`internal/app`（表单、启动时没有连接的工作区、侧栏按钮）、`internal/ui`（表单的绘制：分段开关、折叠的「高级」、按钮）、`internal/config`（拼 dsn）、`cmd/sqlmux`（没有连接不再退出）
 
 **开发**（§7.8「新建连接表单」「新建连接的入口」，§14「启动时找不到连接」）
-- [ ] 表单重做：字段 name / engine / host / port / user / password / database / read_only，折叠的「高级」里是 dsn 和 password_cmd；样式照 §7.8；保存时拼 dsn，文件格式不变。
+- [ ] 表单重做：字段 name / engine / host / port / user / password / database / read_only，折叠的「高级」里是 dsn 和 password_cmd；每行「Nerd Font 图标 + 字段名 + 输入框」，图标清单见 §7.8 / §7.7，ascii 模式有替代字符；样式照 §7.8；保存时拼 dsn，文件格式不变。
 - [ ] 没有 connections.toml 或没有连接时照常进界面：空树一行提示，自动打开表单；保存第一个连接后连上并展开；`esc` 关掉表单也能用。`sqlmux <名字>` 找不到照旧报错退出。
 - [ ] 侧栏第一行右端 `＋` 按钮打开表单；空树那一行可点击。
 - [ ] 细节（engine 切换时 port 的默认值怎么跟、「高级」展开时上面字段怎么变灰、sslmode 要不要给选项）开工前 worker 提议。
