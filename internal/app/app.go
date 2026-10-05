@@ -103,12 +103,14 @@ var whichKeyDelay = 400 * time.Millisecond
 // New is the app over sess and the state kept from before; warning, if
 // not "", shows as a toast on start.
 func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, warning string) *App {
-	return &App{
+	a := &App{
 		theme: cfg.Theme, icons: cfg.Icons, baseIcons: cfg.BaseIcons, plain: !cfg.Vim, themeName: cfg.ThemeName, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, resultHeight: cfg.ResultHeight,
 		keywordCase: cfg.KeywordCase, formatPrg: cfg.FormatPrg, autoPairs: cfg.AutoPairs,
 		keys: keys, res: keymap.NewResolver(keys), sess: sess, sessions: []*Session{sess},
 		mouse: uv.Pos(-1, -1), warning: JoinNotes(warning, sess.warning), state: st,
 	}
+	a.plainConsoles()
+	return a
 }
 
 // JoinNotes is the notes that are not empty on one line, the way a toast says
@@ -155,15 +157,22 @@ func (a *App) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// Update is update, then the columns the consoles on screen want (§7.3)
-// and the DDL the palette's selection may (F4.2).
-func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if a.plain { // consoles are made all over, before the App too: each has no modes before the key that reaches it (§6.9)
+// plainConsoles has every console without modes with vim = false (§6.9):
+// they are made all over, the sessions of a layout before the App, so what
+// there is is gone through after each message, before the next key.
+func (a *App) plainConsoles() {
+	if a.plain {
 		for _, t := range a.consoles() {
 			t.ed.SetPlain(true)
 		}
 	}
+}
+
+// Update is update, then the columns the consoles on screen want (§7.3)
+// and the DDL the palette's selection may (F4.2).
+func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	_, cmd := a.update(msg)
+	a.plainConsoles()
 	a.sess.last = a.conn() // where the focus goes next may name none (§5)
 	a.sess.touch(a.focused().tab())
 	return a, tea.Batch(cmd, a.wantCols(), a.wantDDL())

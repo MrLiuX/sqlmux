@@ -292,6 +292,7 @@ func (s *Session) restoreTab(lt config.LayoutTab, used map[int]bool) (tb Tab, wa
 func (a *App) Adopt(r *Restored) {
 	a.sessions, a.sess = r.Sessions, r.Sessions[r.Active]
 	a.warning = JoinNotes(append([]string{a.warning}, r.Warnings...)...)
+	a.plainConsoles()
 	a.restored = true
 }
 
@@ -337,9 +338,14 @@ func (a *App) resolvePending(c *Conn) []tea.Cmd {
 					continue
 				}
 				d.pending = false
-				if d.table.Schema == "" { // a hand's layout left it out
-					d.table.Schema = c.home
+				home := func(t db.Table) string { return cmp.Or(t.Schema, c.home) } // a hand's layout may leave it out
+				if slices.ContainsFunc(p.Tabs[:i], func(o Tab) bool {
+					return o.Data != nil && o.Data.conn == c && o.Data.table.Name == d.table.Name && home(o.Data.table) == home(d.table)
+				}) { // the same table as one before it: a pane has it once (F3.37)
+					dropTab(p, i)
+					continue
 				}
+				d.table.Schema = home(d.table)
 				if j := slices.IndexFunc(c.Tables, func(t db.Table) bool { return idOf(t) == idOf(d.table) }); j >= 0 {
 					d.table = c.Tables[j]
 					cmds = append(cmds, a.fetch(d, true))

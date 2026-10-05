@@ -168,7 +168,7 @@ id = 2
 	if CheckLayoutName("x.toml") != nil || LayoutPath("x.toml") != filepath.Join(LayoutsDir(), "x.toml.toml") {
 		t.Error("a name is a name, whatever it ends in")
 	}
-	for arg, want := range map[string]string{"work": LayoutPath("work"), "a/b.toml": "a/b.toml", "x.toml": "x.toml", "./w": "./w"} {
+	for arg, want := range map[string]string{"work": LayoutPath("work"), "a/b.toml": "a/b.toml", "x.toml": "x.toml", "./w": "./w", "last": LastPath()} {
 		if got := LayoutArg(arg); got != want {
 			t.Errorf("--layout %q is %q", arg, got)
 		}

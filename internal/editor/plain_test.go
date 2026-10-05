@@ -355,3 +355,25 @@ func TestPlainSelectionKeys(t *testing.T) {
 		t.Error("a formatting ends the selection")
 	}
 }
+
+// The indent a new line got goes when the cursor leaves it, and a selection
+// that stood in it is cut to the line: the next key does not slice past it.
+func TestPlainSelectionInDroppedIndent(t *testing.T) {
+	e := plain("")
+	feed(e, " ", " ", "a", "<CR>")
+	if text(e) != "  a\n  " {
+		t.Fatalf("auto-indent: %q", text(e))
+	}
+	feed(e, "<S-Up>", "x")
+	if got := text(e); !strings.Contains(got, "x") {
+		t.Errorf("S-Up then a key: %q", got)
+	}
+	e = plain("")
+	feed(e, " ", " ", "a", "<CR>")
+	e.Click(1, 2)
+	e.Drag(0, 0)
+	feed(e, "x")
+	if got := text(e); !strings.Contains(got, "x") {
+		t.Errorf("a drag from the indent: %q", got)
+	}
+}

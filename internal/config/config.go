@@ -10,11 +10,11 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sqlmux/internal/i18n"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/ui"
 )
 

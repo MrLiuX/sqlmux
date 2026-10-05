@@ -396,6 +396,9 @@ func (e *Editor) insMoved(was Pos) {
 		e.cur = was
 		e.dropIndent()
 		e.cur = at
+		if a := e.anchor; a != nil { // the indent it stood in may be gone
+			a.Col = min(a.Col, len(e.lines[a.Line]))
+		}
 	}
 	in := e.ins
 	in.arrowed, in.fresh, in.ai, in.keys, in.count = true, true, false, nil, 1

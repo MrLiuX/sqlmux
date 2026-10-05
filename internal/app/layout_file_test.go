@@ -264,7 +264,7 @@ func TestLayoutRestoreGaps(t *testing.T) {
 // going (§14「恢复」, F6.5).
 func TestLayoutPendingTabs(t *testing.T) {
 	l := oneWindow(config.LayoutWindow{Name: "a", Layout: &config.LayoutNode{Split: "h", A: leafNode(1), B: leafNode(2)}, Panes: []config.LayoutPane{
-		{ID: 1, Tabs: []config.LayoutTab{table("doraemon", "public", "t_order"), table("doraemon", "public", "dropped"), table("play", "public", "x"), table("", "", "t_user")}},
+		{ID: 1, Tabs: []config.LayoutTab{table("doraemon", "public", "t_order"), table("doraemon", "public", "dropped"), table("play", "public", "x"), table("", "", "t_user"), table("doraemon", "public", "t_user")}},
 		{ID: 2, Tabs: []config.LayoutTab{{Kind: "console", N: 3, Connection: "play"}}},
 	}})
 	r := restoredFrom(t, l)
@@ -275,7 +275,7 @@ func TestLayoutPendingTabs(t *testing.T) {
 	}
 	doraemon, play := r.Sessions[0].Conns[0], r.Sessions[0].Conns[1]
 	p := r.Sessions[0].Windows[0].pane(1)
-	if len(p.Tabs) != 4 {
+	if len(p.Tabs) != 5 {
 		t.Fatalf("tabs %d", len(p.Tabs))
 	}
 	for _, i := range []int{0, 2} { // a connection that is ready or not: not before the catalog

@@ -103,6 +103,9 @@ func LayoutPath(name string) string { return filepath.Join(LayoutsDir(), name+".
 // in .toml), else a layout's by name. Only the command line takes both; the
 // commands go by name (§14「命令」).
 func LayoutArg(nameOrPath string) string {
+	if nameOrPath == "last" { // where the program left off, as layout.open's
+		return LastPath()
+	}
 	if strings.ContainsRune(nameOrPath, '/') || strings.HasSuffix(nameOrPath, ".toml") {
 		return nameOrPath
 	}
