@@ -303,9 +303,9 @@ var en = map[string]string{
 	"新建连接":         "New connection",
 	"正在执行，结束后再换连接": "Running: change the connection when it ends",
 	"正在连接 %s…":     "Connecting to %s…",
-	"确认时控制台换了连接，没有执行": "The console moved to another connection while asking: nothing ran",
-	"行标识列 %s 是 %s":    "the row identity column %s is %s",
-	"这个 window 里":     "This window ",
+	"确认时 console 换了连接，没有执行": "The console moved to another connection while asking: nothing ran",
+	"行标识列 %s 是 %s":          "the row identity column %s is %s",
+	"这个 window 里":           "This window ",
 
 	// Layout files
 	"%s 里没有表 %s，跳过":                  "%s has no table %s: skipped",

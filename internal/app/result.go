@@ -230,7 +230,7 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 			asked := t.conn // a connection that lands meanwhile may take the console over
 			a.confirm = &confirmBox{dangerText(risky), i18n.T("执行"), func() tea.Cmd {
 				if t.conn != asked {
-					return a.showToast(i18n.T("确认时控制台换了连接，没有执行"), toastTTL)
+					return a.showToast(i18n.T("确认时 console 换了连接，没有执行"), toastTTL)
 				}
 				return a.startRun(t, conn, schema, name, sql, base, ver, stmts) // the overlay had the keys: nothing began a run meanwhile
 			}}

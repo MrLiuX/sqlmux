@@ -22,7 +22,7 @@ func TestDangerous(t *testing.T) {
 		"alter table t add column c int, drop column d": true, "alter table only public.t drop column c cascade": true,
 		"alter table t add column c int": false, "alter table t drop constraint c": false, "alter table t alter column c drop default": false,
 		"alter table t alter column c drop not null": false, "alter table t alter column c drop identity": false,
-		"alter table t alter column c drop expression": false, "alter table t alter c drop default, drop c": true,
+		"alter table t alter column c drop expression": false, "alter table t alter c drop default, drop c": true, "alter table t alter c drop default": false, "alter table t alter c drop not null": false,
 		"alter table t drop partition p": true, "alter table t rename to u": false, "alter index i rename to j": false,
 		"alter table t drop": false, "alter publication p drop table t": false, "alter extension e drop function f()": false, "alter type ty drop attribute a": false,
 		"select 1": false, "select * from t for update": false, "": false, "selec 1": false,
