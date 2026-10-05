@@ -28,7 +28,7 @@ check "选中另一个（y）：立即重绘，背景变成 y 的 #303a52" eval 
 check "toast：写进 config.toml 的 theme 才会保留" eval 'screen_has "写进 config.toml 的 theme 才会保留"'
 switch; key Up; key Up; key Enter; sleep 0.6
 check "再切到内置的 tokyonight-storm：背景是默认主题的（缺的 token 沿用它）" eval '[[ $(bg) == "$DEFAULT_BG" ]] || { echo "  $(bg) vs $DEFAULT_BG"; false; }'
-check "不写任何文件：config.toml 没变，state.json 里没有主题" eval '[[ $(cat "$D/c/config.toml") == "$before" ]] && ! grep -rq '"theme"' "$E2E_TMP/state" 2>/dev/null'
+check "不写任何文件：config.toml 没变，state.json 里没有主题" eval '[[ $(cat "$D/c/config.toml") == "$before" ]] || { echo "  config changed"; false; }; ! grep -rq "\"theme\"" "$E2E_TMP/state" || { echo "  state has theme"; false; }'
 e2e_stop; start -C "$D/c"; open_table t_order
 check "重启：回到 config.toml 的主题 x（#101010）" eval '[[ $(bg) == "#101010" ]]'
 
