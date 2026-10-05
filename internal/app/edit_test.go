@@ -1046,6 +1046,7 @@ func TestSaveRowsAdded(t *testing.T) {
 // row added by its place among them, or says it went in as none (§10.6).
 func TestSaveRows(t *testing.T) {
 	a := wide(160, 45)
+	a.confirmDangerous = false // the delete is asked about in TestConfirmDeletes
 	tab := loadOrders(t, a, 3)
 	d := &tagDB{}
 	a.sess.Conns[0].Main = db.NewWorker(d)

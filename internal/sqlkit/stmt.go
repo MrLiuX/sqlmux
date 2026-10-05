@@ -283,7 +283,16 @@ func isRead(s string, ts []Token, depth []int) bool {
 // statement, so it reads as that does; in (ANALYZE false) and the like it
 // is off.
 func explainRead(s string, ts []Token, depth []int) bool {
-	analyze, i := false, 0
+	analyze, i := explainOptions(s, ts)
+	if !analyze || i >= len(ts) {
+		return true
+	}
+	return isRead(s, ts[i:], depth[i:])
+}
+
+// explainOptions is whether the options after EXPLAIN, ts following it,
+// turn ANALYZE on, and where the statement explained begins.
+func explainOptions(s string, ts []Token) (analyze bool, i int) {
 	for {
 		switch lower(s, ts, i) {
 		case "analyze", "analyse":
@@ -302,12 +311,8 @@ func explainRead(s string, ts []Token, depth []int) bool {
 			i++
 			continue
 		}
-		break
+		return analyze, i
 	}
-	if !analyze || i >= len(ts) {
-		return true
-	}
-	return isRead(s, ts[i:], depth[i:])
 }
 
 // queryWords start a query: what AutoLimit limits and quick SQL declares a

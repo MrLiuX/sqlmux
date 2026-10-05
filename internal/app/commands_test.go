@@ -400,6 +400,7 @@ func TestGoldenEnglish(t *testing.T) {
 			feed(t, a, "<C-p>")
 			return a
 		},
+		"danger": func() *App { return dangerScene(t) },
 		// both questions of a quit, a line each
 		"confirm2": func() *App {
 			a := wide(100, 30)

@@ -627,8 +627,38 @@ func (a *App) save() tea.Cmd {
 		}
 		return nil
 	}
-	t := dataOf(p)
-	if t == nil || t.changes() == 0 || t.saving {
+	if t := dataOf(p); t != nil {
+		return a.saveTab(t, false)
+	}
+	return nil
+}
+
+// saveTab is save of tab t, asked first when it deletes rows (§13「危险语句
+// 先确认」): "将删除 N 行（另有 M 处修改），确定保存？"; no, and the table
+// is as it was, the marks and the changes there. closing is :wq's: the tab
+// closes once the save lands.
+func (a *App) saveTab(t *dataTab, closing bool) tea.Cmd {
+	if t.changes() == 0 {
+		return nil
+	}
+	if n := len(t.deleted); n > 0 && a.confirmDangerous && !t.saving {
+		text := i18n.T("将删除 %d 行，确定保存？", n)
+		if other := t.changes() - n; other > 0 {
+			text = i18n.T("将删除 %d 行（另有 %d 处修改），确定保存？", n, other)
+		}
+		a.confirm = &confirmBox{text, i18n.T("保存"), func() tea.Cmd { return a.sendSave(t, closing) }}
+		return nil
+	}
+	return a.sendSave(t, closing)
+}
+
+// sendSave is the save of tab t, its changes taken as they are now.
+func (a *App) sendSave(t *dataTab, closing bool) tea.Cmd {
+	if t.changes() == 0 {
+		return nil
+	}
+	if t.saving { // one is on its way: :wq closes the tab when it lands
+		t.closing = t.closing || closing
 		return nil
 	}
 	m := saveMsg{tab: t, sent: maps.Clone(t.edits), dels: slices.Sorted(maps.Keys(t.deleted)), adds: slices.Clone(t.added)}
@@ -662,7 +692,7 @@ func (a *App) save() tea.Cmd {
 		}
 		ch.Inserts = append(ch.Inserts, cols)
 	}
-	t.saving = true
+	t.saving, t.closing = true, closing
 	t.conn.busy++
 	t.out++
 	main, eng, table, key, manual := t.conn.Main, t.conn.eng, t.table, t.cols.Key(), t.conn.Manual

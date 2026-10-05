@@ -43,6 +43,9 @@ type App struct {
 	keywordCase  string  // gq's (§9.5)
 	formatPrg    string
 	autoPairs    bool // a console's INSERT, a WHERE and the quick SQL (§7.9)
+	// confirmDangerous asks before a run that would delete or drop, and a
+	// save that deletes rows (§13).
+	confirmDangerous bool
 
 	palette   *palette     // non-nil while the command palette is open (COMMAND mode)
 	sessList  *sessionList // non-nil while the session list is open (§7.8)
@@ -105,7 +108,7 @@ var whichKeyDelay = 400 * time.Millisecond
 func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, warning string) *App {
 	a := &App{
 		theme: cfg.Theme, icons: cfg.Icons, baseIcons: cfg.BaseIcons, plain: !cfg.Vim, themeName: cfg.ThemeName, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, resultHeight: cfg.ResultHeight,
-		keywordCase: cfg.KeywordCase, formatPrg: cfg.FormatPrg, autoPairs: cfg.AutoPairs,
+		keywordCase: cfg.KeywordCase, formatPrg: cfg.FormatPrg, autoPairs: cfg.AutoPairs, confirmDangerous: cfg.ConfirmDangerous,
 		keys: keys, res: keymap.NewResolver(keys), sess: sess, sessions: []*Session{sess},
 		mouse: uv.Pos(-1, -1), warning: JoinNotes(warning, sess.warning), state: st,
 	}

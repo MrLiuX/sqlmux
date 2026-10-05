@@ -20,13 +20,14 @@ result_height = 0.3
 keyword_case = "upper"
 formatprg = "pg_format -"
 autopairs = false
+confirm_dangerous = false
 [console]
 max_rows = 50
 `)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Icons != ui.ASCIIIcons || c.Timeoutlen != 300 || c.TabWidth != 4 || c.ResultHeight != 0.3 || c.MaxRows != 50 || c.KeywordCase != "upper" || c.FormatPrg != "pg_format -" || c.AutoPairs {
+	if c.Icons != ui.ASCIIIcons || c.Timeoutlen != 300 || c.TabWidth != 4 || c.ResultHeight != 0.3 || c.MaxRows != 50 || c.KeywordCase != "upper" || c.FormatPrg != "pg_format -" || c.AutoPairs || c.ConfirmDangerous {
 		t.Fatalf("got %+v", c)
 	}
 }
@@ -63,6 +64,7 @@ func TestParseErrors(t *testing.T) {
 		`result_height = 1`,
 		`keyword_case = "title"`,
 		`autopairs = "yes"`,
+		`confirm_dangerous = "no"`,
 		"[console]\nmax_rows = 0",
 		"[keys]\nleader = \"<C-a>\"",
 		"[map.normal]\nJ = \"5j\"",
@@ -178,5 +180,16 @@ func TestVimOption(t *testing.T) {
 	}
 	if _, err := Parse(`vim = "no"`); err == nil {
 		t.Error("a string is not a bool")
+	}
+}
+
+// The confirmation of dangerous statements is on unless config.toml turns it
+// off (§13, F6.7).
+func TestConfirmDangerousDefault(t *testing.T) {
+	if c, err := Parse(""); err != nil || !c.ConfirmDangerous {
+		t.Errorf("default: %v %v", c, err)
+	}
+	if c, err := Parse("confirm_dangerous = false"); err != nil || c.ConfirmDangerous {
+		t.Errorf("off: %v %v", c, err)
 	}
 }

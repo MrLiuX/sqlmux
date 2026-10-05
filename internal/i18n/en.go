@@ -229,9 +229,11 @@ var en = map[string]string{
 	"默认":        "Default",
 
 	// Cells, saving, and what asks before it loses something
-	"%s 是 %s，只读":  "%s is %s, read-only",
-	"%s 是只读连接":    "%s is a read-only connection",
-	"%s 有未提交的事务，": "%s has an uncommitted transaction; ",
+	"将删除 %d 行，确定保存？":            "%d row(s) will be deleted. Save?",
+	"将删除 %d 行（另有 %d 处修改），确定保存？": "%d row(s) will be deleted (and %d other change(s)). Save?",
+	"%s 是 %s，只读":                "%s is %s, read-only",
+	"%s 是只读连接":                  "%s is a read-only connection",
+	"%s 有未提交的事务，":               "%s has an uncommitted transaction; ",
 	"%s 没有主键，也没有全部列都非空的唯一索引，只读": "%s has no primary key, nor a unique index of not-null columns, read-only",
 	"%s 的":           "%s: ",
 	"%s 的%s，只读":      "%s: %s, read-only",
@@ -283,11 +285,13 @@ var en = map[string]string{
 	"读取失败：%w":   "Could not read: %w",
 
 	// Result area
-	"%d 行 · %s":  "%d rows · %s",
-	"%d+ 行 · %s": "%d+ rows · %s",
+	"这次执行有 %d 条危险语句：":  "%d dangerous statement(s) in this run:",
+	"… 另有 %d 条":        "… and %d more",
+	"%d 行 · %s":        "%d rows · %s",
+	"%d+ 行 · %s":       "%d+ rows · %s",
 	"%s 是只读连接，整次都没有执行": "%s is a read-only connection, nothing was run",
-	"已导出 %s": "Exported %s",
-	"日志":     "Log",
+	"已导出 %s":           "Exported %s",
+	"日志":               "Log",
 
 	// Sessions, windows, the tree, connections
 	"%s 里":         "Session %s ",

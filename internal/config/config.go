@@ -35,8 +35,11 @@ type Config struct {
 	// or a command to format with instead of it.
 	KeywordCase string
 	FormatPrg   string
-	AutoPairs   bool   // brackets and quotes typed get their other half (§7.9)
-	theme       string // the name Parse read; Load finds the theme, as it touches the disk
+	AutoPairs   bool // brackets and quotes typed get their other half (§7.9)
+	// ConfirmDangerous asks before a run of a DELETE or UPDATE with no WHERE,
+	// a DROP, a TRUNCATE, and a save that deletes rows (§13).
+	ConfirmDangerous bool
+	theme            string // the name Parse read; Load finds the theme, as it touches the disk
 
 	// Leader and Bindings are keymaps.toml's raw [keys] and [map.*]
 	// entries; the keymap package gives them meaning.
@@ -52,7 +55,7 @@ type Binding struct {
 }
 
 func Default() *Config {
-	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "zh", Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 1000, KeywordCase: "lower", AutoPairs: true}
+	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "zh", Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 1000, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true}
 }
 
 // Dir is $XDG_CONFIG_HOME/sqlmux, falling back to ~/.config/sqlmux on every
@@ -115,6 +118,7 @@ func Parse(data string) (*Config, error) {
 		Case       *string  `toml:"keyword_case"`
 		FormatPrg  string   `toml:"formatprg"`
 		AutoPairs  *bool    `toml:"autopairs"`
+		Dangerous  *bool    `toml:"confirm_dangerous"`
 		Console    struct {
 			MaxRows *int `toml:"max_rows"`
 		} `toml:"console"`
@@ -173,6 +177,9 @@ func Parse(data string) (*Config, error) {
 	c.FormatPrg = raw.FormatPrg
 	if raw.AutoPairs != nil {
 		c.AutoPairs = *raw.AutoPairs
+	}
+	if raw.Dangerous != nil {
+		c.ConfirmDangerous = *raw.Dangerous
 	}
 	if n := raw.Console.MaxRows; n != nil {
 		if *n <= 0 {

@@ -113,6 +113,7 @@ func inRun(t *testing.T, d *execDB, text string) (*App, *consoleTab) {
 	t.Helper()
 	a, c := inConsole(t, "", "")
 	a.sess.Conns[0].Main = db.NewWorker(d)
+	a.confirmDangerous = false // what the runs here are about is not the question; TestConfirmDangerousRun's is
 	c.ed.Load(text)
 	c.schema = ""
 	return a, c

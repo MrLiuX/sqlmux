@@ -200,7 +200,8 @@ func consoleSpan(t *consoleTab, arg string) (text string, from, to int) {
 // a row past max_rows, to tell there are more. The result area shows a
 // placeholder meanwhile; the console's red ▶ goes until this run fails.
 // On a read-only connection a statement it keeps back keeps the whole run
-// back, the log saying so (§13).
+// back, the log saying so (§13); on any other, dangerous statements are
+// asked about, once for the run, before it begins.
 func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, ver int) tea.Cmd {
 	d := conn.eng.Dialect()
 	stmts := sqlkit.Statements(sql, d)
@@ -218,6 +219,45 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 			return nil
 		}
 	}
+	if a.confirmDangerous {
+		var risky []string
+		for _, s := range stmts {
+			if text := sql[s.Start:s.End]; sqlkit.Dangerous(text, d) {
+				risky = append(risky, text)
+			}
+		}
+		if len(risky) > 0 { // no run is begun, no log line made, till the answer is yes (§13)
+			a.confirm = &confirmBox{dangerText(risky), i18n.T("执行"), func() tea.Cmd {
+				return a.startRun(t, conn, schema, name, sql, base, ver, stmts) // the overlay had the keys: nothing began a run meanwhile
+			}}
+			return nil
+		}
+	}
+	return a.startRun(t, conn, schema, name, sql, base, ver, stmts)
+}
+
+// dangerousListed is how many dangerous statements the confirm box names.
+const dangerousListed = 8
+
+// dangerText is the confirm box over a run with the dangerous statements
+// risky: how many, each by its first line cut to a width, and how many more
+// there are than it lists (§13).
+func dangerText(risky []string) string {
+	lines := []string{i18n.T("这次执行有 %d 条危险语句：", len(risky))}
+	for _, s := range risky[:min(len(risky), dangerousListed)] {
+		first, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
+		lines = append(lines, "  "+ansi.Truncate(strings.TrimSpace(first), 60, "…"))
+	}
+	if len(risky) > dangerousListed {
+		lines = append(lines, i18n.T("… 另有 %d 条", len(risky)-dangerousListed))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// startRun is runSQL once it is settled that the statements go: the run
+// begun, its placeholder shown, the statements sent.
+func (a *App) startRun(t *consoleTab, conn *Conn, schema, name, sql string, base, ver int, stmts []sqlkit.Stmt) tea.Cmd {
+	d := conn.eng.Dialect()
 	a.sess.RunSeq++
 	r := &run{from: t, conn: conn, schema: schema, name: name, sql: sql, base: base, ver: ver, seq: a.sess.RunSeq, start: time.Now(), win: a.win(), stmts: stmts}
 	t.running, t.failed, t.bar = r, -1, nil

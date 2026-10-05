@@ -120,9 +120,7 @@ func init() {
 		// they are; a console is written by closing it anyway.
 		"tab.save.close": {Title: i18n.N("保存并关闭 tab"), Run: func(a *App, _ Args) tea.Cmd {
 			if t := dataOf(a.focused()); t != nil && t.changes() > 0 {
-				cmd := a.save()
-				t.closing = t.saving
-				return cmd
+				return a.saveTab(t, true)
 			}
 			return a.run("tab.close", 0)
 		}},
