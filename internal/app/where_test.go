@@ -23,7 +23,7 @@ import (
 // Tab and S-Tab move around the ends, ↵ takes the selected one and runs
 // when that changes nothing; esc closes the list before the input.
 func TestWhereCompletion(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	feed(t, a, "/a")
 	if tab.comp == nil || len(tab.comp.items) != 3 || tab.comp.items[0].label != "amount" || tab.comp.items[1].label != "created_at" || tab.comp.sel != 0 || a.mode() != keymap.Insert {
 		t.Fatalf("a: amount, created_at (a word of it), and: %+v", tab.comp)
@@ -142,7 +142,7 @@ func TestRankedWordStart(t *testing.T) {
 // cell's edit or the palette's other scopes, off with autopairs = false
 // (§7.9). Taking a value swallows the closing quote after the cursor.
 func TestAutoPairs(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	feed(t, a, "/status = '")
 	if tab.where.Text != "status = ''" || tab.where.Pos != 10 {
 		t.Fatalf("paired: %q at %d", tab.where.Text, tab.where.Pos)
@@ -252,7 +252,7 @@ func TestAcceptKeywordSpace(t *testing.T) {
 // C-f stars; ↵ runs one with its ORDER and LIMIT; it all outlives a
 // restart (Q-02, §9.7, §14).
 func TestWhereHistory(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	feed(t, a, "/id > 5<CR>")
 	tab.order, tab.limit = "amount", 500
 	wipe := strings.Repeat("<BS>", 20)
@@ -297,7 +297,7 @@ func TestWhereHistory(t *testing.T) {
 
 // A table's WHERE history keeps its last 100 runs (§9.7).
 func TestWhereHistoryRows(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	for i := range whereRows + 1 {
 		feed(t, a, "/<C-u>id = "+strconv.Itoa(i)+"<CR>")
 	}
@@ -436,7 +436,7 @@ func TestWhereVim(t *testing.T) {
 // it in INSERT or REPLACE, so what is typed filters the list: VISUAL and
 // a command pending end first (F3.39).
 func TestWhereHistoryModes(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	for _, ks := range []string{"/id > 5<Esc>vl", "/id > 5<Esc>d", "/id > 5<Esc>0R"} {
 		feed(t, a, ks)
 		a.run("where.history", 0)

@@ -69,7 +69,7 @@ func TestKeyHelp(t *testing.T) {
 // ? opens it in every pane in NORMAL, a console's too, whose VISUAL ?
 // stays vim's backward search; <leader>? anywhere.
 func TestKeyHelpWhere(t *testing.T) {
-	a := inTree(160, 45)
+	a := inTree(45)
 	if feed(t, a, "?"); a.keyHelp == nil || !slices.Contains(helpItems(a), "t "+title("tree.open.tab")+" [keys.tree]") {
 		t.Fatalf("tree: %v", helpItems(a))
 	}

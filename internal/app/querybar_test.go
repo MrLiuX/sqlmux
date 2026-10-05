@@ -45,8 +45,8 @@ func lastSQL(t *testing.T, _ *App, rec *recDB, cmd tea.Cmd) string {
 }
 
 // withRecorder is sized with a t_order loaded and Meta recording SQL.
-func withRecorder(t *testing.T, w, h int) (*App, *dataTab, *recDB) {
-	a := sized(w, h, "nerd")
+func withRecorder(t *testing.T) (*App, *dataTab, *recDB) {
+	a := sized(160, 45, "nerd")
 	tab := loadOrders(t, a, 100)
 	rec := &recDB{}
 	a.sess.Conns[0].Meta = db.NewWorker(rec)
@@ -57,7 +57,7 @@ func withRecorder(t *testing.T, w, h int) (*App, *dataTab, *recDB) {
 // page and counts again; esc goes to its vim's NORMAL, esc again puts back
 // what is in effect (§7.8, F3.39).
 func TestWhere(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	tab.pageNo = 3
 	feed(t, a, "/id > 5")
 	if a.mode() != keymap.Insert || a.statusLine().Info != "-- editing WHERE --" || tab.applied != "" {
@@ -89,7 +89,7 @@ func TestWhere(t *testing.T) {
 // A WHERE with a ; outside strings goes nowhere: the error bar says so
 // under the table, and the history does not keep it (§9.6).
 func TestWhereSemicolon(t *testing.T) {
-	a, tab, rec := withRecorder(t, 160, 45)
+	a, tab, rec := withRecorder(t)
 	sent := len(rec.sqls)
 	feed(t, a, "/1=1; drop table t_log")
 	if _, cmd := a.Update(teaKey("<CR>")); cmd != nil {
@@ -110,7 +110,7 @@ func TestWhereSemicolon(t *testing.T) {
 // A page asked for before a WHERE was refused does not take its place when
 // it comes: the refusal stays, and no count follows it with the ; (§9.6).
 func TestWhereSemicolonLatePage(t *testing.T) {
-	a, tab, rec := withRecorder(t, 160, 45)
+	a, tab, rec := withRecorder(t)
 	feed(t, a, "/id > 5")
 	_, early := a.Update(teaKey("<CR>"))
 	feed(t, a, "/"+strings.Repeat("<BS>", 10)+"1=1; drop table t_log<CR>")
@@ -135,7 +135,7 @@ func TestWhereSemicolonLatePage(t *testing.T) {
 // The page query carries the WHERE, the ORDER with the row identity after
 // it, the LIMIT and the page (§8.5, §9.6).
 func TestPageSQL(t *testing.T) {
-	a, tab, rec := withRecorder(t, 160, 45)
+	a, tab, rec := withRecorder(t)
 	tab.applied, tab.order, tab.desc, tab.limit, tab.pageNo = "status = 'done' -- 备注", "status", true, 500, 2
 	sql := lastSQL(t, a, rec, a.fetch(tab, false))
 	want := `select * from "public"."t_order" where (` + "\nstatus = 'done' -- 备注\n" + `) order by "status" desc, "id" limit 501 offset 1000`
@@ -147,7 +147,7 @@ func TestPageSQL(t *testing.T) {
 // ] and [ turn pages, not past either end; row numbers and row,col count
 // from the page's start (§7.8).
 func TestPaging(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	feed(t, a, "[")
 	if tab.pageNo != 0 {
 		t.Fatal("[ on the first page")
@@ -176,7 +176,7 @@ func TestPaging(t *testing.T) {
 
 // ORDER and LIMIT pick from a dropdown under their chip (§7.8).
 func TestOrderAndLimit(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	tab.pageNo = 4
 	feed(t, a, "go")
 	if a.drop == nil || a.drop.kind != dropOrder || a.dropView().Items[a.drop.sel] != "默认" {
@@ -215,7 +215,7 @@ func TestOrderAndLimit(t *testing.T) {
 // A column named 默认 sorts by itself, not by the row identity: the first
 // item is the default by its place, not its text.
 func TestOrderByAColumnNamedDefault(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	tab.page.Cols[1].Name = "默认"
 	feed(t, a, "go<C-n><C-n><CR>") // past the default and id
 	if tab.order != "默认" {
@@ -231,7 +231,7 @@ func TestOrderByAColumnNamedDefault(t *testing.T) {
 // gives them a color (§7.7); a button is " <icon> ", lit whole under the
 // pointer (§7.8).
 func TestQueryBarIconColors(t *testing.T) {
-	a, _, _ := withRecorder(t, 160, 45)
+	a, _, _ := withRecorder(t)
 	a.removePane(2) // wide enough for every group
 	iconAt := func(action string) uv.Style {
 		r := find(t, a, ui.Target{Kind: ui.KindHint, Pane: 1, Action: action})
@@ -266,7 +266,7 @@ func TestQueryBarIconColors(t *testing.T) {
 // Clicking ORDER's direction turns it; sorted by default, it is the row
 // identity descending. The rest of the chip opens the dropdown (§7.8).
 func TestOrderToggle(t *testing.T) {
-	a, tab, rec := withRecorder(t, 160, 45)
+	a, tab, rec := withRecorder(t)
 	icon := func() uv.Position {
 		return find(t, a, ui.Target{Kind: ui.KindHint, Pane: 1, Action: "grid.order.toggle"}).Min
 	}
@@ -323,7 +323,7 @@ func TestOrderToggle(t *testing.T) {
 // COLS (Q-04): the list has the keys, / the filter; hidden columns leave
 // the grid and the cursor moves off them; esc clears, then closes.
 func TestCols(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	feed(t, a, "ll") // on amount
 	feed(t, a, "gc")
 	if a.cols == nil || a.mode() != keymap.Command {
@@ -360,7 +360,7 @@ func TestCols(t *testing.T) {
 // The count comes in after the page: n, ? past the timeout, ~n with no
 // WHERE on a big table (§8.5).
 func TestCount(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	right := func() string {
 		return a.queryBar(a.focused(), tab).Right
 	}
@@ -419,7 +419,7 @@ func answer(a *App, t *dataTab) tea.Cmd {
 // Until a page is in, what is on screen stays whole: its rows, row numbers
 // and PAGE; a cancel goes back to it, count and all (§7.6, §8.3).
 func TestFetchKeepsWhatIsShown(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	tab.next = true
 	tab.count, tab.counted = 6000, countDone
 	feed(t, a, "]")
@@ -444,7 +444,7 @@ func TestFetchKeepsWhatIsShown(t *testing.T) {
 // With the default order, the chip's key column is the one sorted by:
 // picking it turns it the other way (§7.8).
 func TestOrderDefaultKeyFlips(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	feed(t, a, "go<C-n><CR>") // id
 	if tab.order != "id" || !tab.desc {
 		t.Errorf("order %q desc %v", tab.order, tab.desc)
@@ -454,7 +454,7 @@ func TestOrderDefaultKeyFlips(t *testing.T) {
 // A WHERE's count is owed by the tab: a request that takes the WHERE's
 // place before it is in still counts once its page is (§8.3).
 func TestRecountOutlivesAStaleRequest(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	tab.count, tab.counted, tab.next = 6000, countDone, true
 	feed(t, a, "/id < 3<CR>")
 	s1 := tab.seq
@@ -474,7 +474,7 @@ func TestRecountOutlivesAStaleRequest(t *testing.T) {
 // A whole number typed in LIMIT's filter is the first pick, capped at
 // 10000; ↵ takes it from the first page (§7.8).
 func TestCustomLimit(t *testing.T) {
-	a, tab, rec := withRecorder(t, 160, 45)
+	a, tab, rec := withRecorder(t)
 	tab.pageNo = 3
 	feed(t, a, "gl250")
 	if v := a.dropView(); len(v.Items) != 1 || v.Items[0] != "250" || v.Sel != 0 {
@@ -512,7 +512,7 @@ func TestCustomLimit(t *testing.T) {
 // lit one: stop idle stays dim. With the button given way, auto refresh's
 // dropdown opens at the query bar's right end.
 func TestToolButtons(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	a.removePane(2)
 	tab.out = 0 // the count loadOrders asked for: never answered here
 	bs := a.toolButtons(tab)
@@ -550,7 +550,7 @@ func TestToolButtons(t *testing.T) {
 // The buttons are one sep strip, transpose too, a border │ between
 // groups; the pointer lights one button alone (§7.8「工具按钮」).
 func TestToolButtonStrip(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	a.removePane(2)
 	q, body := a.queryBar(a.focused(), tab), bodyRect(a.layout()[1])
 	add, del, save, tr := q.ButtonRect(body, "grid.row.add"), q.ButtonRect(body, "grid.row.delete"), q.ButtonRect(body, "save"), q.ButtonRect(body, "grid.transpose")
@@ -572,7 +572,7 @@ func TestToolButtonStrip(t *testing.T) {
 // out; else it waits a turn. A new interval, or the tab closed, ends the
 // ticking (§7.8「自动刷新」).
 func TestAutoRefresh(t *testing.T) {
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	tab.out = 0 // the count loadOrders asked for: never answered here
 	tab.auto, tab.autoGen = 2*time.Second, 1
 	tab.note = ui.Note{Head: "已保存 1 行 · 3ms"}

@@ -100,7 +100,7 @@ func tabNames(p *Pane) string {
 }
 
 // twoPanes is sized with m0Layout.
-func twoPanes(w, h int, icons string) *App { return m0Layout(sized(w, h, icons)) }
+func twoPanes(w, h int) *App { return m0Layout(sized(w, h, "nerd")) }
 
 // wide is sized with no console: M1's layout, the data pane to the edge,
 // which the tests of the grid were written at.
@@ -277,7 +277,7 @@ func TestDoubleCtrlCQuits(t *testing.T) {
 }
 
 func TestCloseTab(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	data := a.focused()
 	feed(t, a, ":q<CR>")
 	if tabNames(data) != "t_user" || data.Cur != 0 {
@@ -324,7 +324,7 @@ func TestKeysRunActions(t *testing.T) {
 // With the palette open, keys go to it, not to the focused pane's scope: ↵
 // runs the command instead of console.run.
 func TestPaletteShadowsPaneKeys(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	a.win().Focus = 2 // console
 	if ctx := a.context(); ctx.Mode != keymap.Normal || ctx.Focus[0] != "console" {
 		t.Fatalf("console context %+v", ctx)
@@ -682,7 +682,7 @@ func titles(a *App) []string {
 }
 
 func TestSplitAndClosePanes(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	feed(t, a, `<Space>"`) // split ⟨1⟩ data below
 	if got := strings.Join(titles(a), " "); got != "⟨1⟩table ⟨2⟩ ⟨3⟩console" {
 		t.Fatalf("after SPC \": %s", got)
@@ -711,7 +711,7 @@ func TestSplitAndClosePanes(t *testing.T) {
 }
 
 func TestFocusFollowsGeometry(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	feed(t, a, `<Space>"`) // 1 over 3, console 2 on the right
 	for _, c := range []struct {
 		keys string
@@ -735,7 +735,7 @@ func TestFocusFollowsGeometry(t *testing.T) {
 }
 
 func TestZoom(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	before := a.layout()
 	feed(t, a, "<Space>z")
 	if r := a.layout(); len(r) != 1 || r[1] != uv.Rect(0, 0, 160, 44) {
@@ -776,13 +776,13 @@ func TestResizeKeys(t *testing.T) {
 	if got := a.win().Root.Ratio; math.Abs(got-r0+2*resizeStep) > 1e-9 {
 		t.Fatalf("3 SPC H: ratio %v", got)
 	}
-	if a.layout()[1].Dx() >= twoPanes(160, 45, "nerd").layout()[1].Dx() {
+	if a.layout()[1].Dx() >= twoPanes(160, 45).layout()[1].Dx() {
 		t.Error("the data pane should have narrowed")
 	}
 }
 
 func TestPaneNumbers(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	feed(t, a, "<Space>q")
 	if !a.paneNumbers || !strings.Contains(a.render().String(), " 2 ") {
 		t.Fatal("SPC q should show the numbers")
@@ -856,7 +856,7 @@ func TestFoldSidebarReveals(t *testing.T) {
 // Closing a zoomed pane (here with :q) ends the zoom: the zoom must never
 // point at a pane that is gone.
 func TestCloseZoomedPane(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	feed(t, a, "<Space>z:q<CR>:q<CR>")
 	if a.win().Zoom != 0 || len(a.layout()) != 2 || !strings.Contains(a.render().String(), "console") {
 		t.Fatalf("zoom %d, layout %v", a.win().Zoom, a.layout())

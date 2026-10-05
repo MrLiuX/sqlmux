@@ -32,7 +32,7 @@ func click(a *App, p uv.Position) tea.Cmd {
 }
 
 func TestClickFocusesPane(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	r := a.layout()[2]
 	click(a, uv.Pos(r.Min.X+5, r.Min.Y+5))
 	if a.win().Focus != 2 {
@@ -41,7 +41,7 @@ func TestClickFocusesPane(t *testing.T) {
 }
 
 func TestDoubleClickTitleZooms(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	title := find(t, a, ui.Target{Kind: ui.KindTitle, Pane: 2}).Min
 	click(a, title)
 	if a.win().Zoom != 0 || a.win().Focus != 2 {
@@ -65,7 +65,7 @@ func TestDoubleClickTitleZooms(t *testing.T) {
 }
 
 func TestDragBorder(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	gap := find(t, a, ui.Target{Kind: ui.KindBorder, I: 0})
 	before := a.layout()[1].Dx()
 	a.View()
@@ -125,7 +125,7 @@ func TestClickOutsideOverlayCloses(t *testing.T) {
 }
 
 func TestHover(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	run := find(t, a, ui.Target{Kind: ui.KindHint, Pane: 2, Action: "console.run"})
 	before := a.render().Buf.CellAt(run.Min.X, run.Min.Y).Style.Bg
 	a.Update(tea.MouseMotionMsg{X: run.Min.X, Y: run.Min.Y})
@@ -190,7 +190,7 @@ func TestClickUnderPaneNumbers(t *testing.T) {
 			return find(t, a, ui.Target{Kind: ui.KindButton, Action: "session.list"}).Min
 		}, 1},
 	} {
-		a := twoPanes(160, 45, "nerd")
+		a := twoPanes(160, 45)
 		feed(t, a, "<Space>q")
 		click(a, c.at(a))
 		if a.paneNumbers || a.win().Focus != c.focus || a.sess.Active != 0 || a.sessList != nil {

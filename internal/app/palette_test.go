@@ -44,7 +44,7 @@ func TestPaletteOpensAndCloses(t *testing.T) {
 
 // Titles are Chinese; the action id after them is what `split` finds (§12).
 func TestPaletteFindsByID(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	feed(t, a, "<C-p>split")
 	if got := strings.Join(rowsOf(a), " "); got != `pane.split.below=SPC " pane.split.right=SPC %` {
 		t.Fatalf("split: %s", got)
@@ -55,7 +55,7 @@ func TestPaletteFindsByID(t *testing.T) {
 		t.Fatal("↵ should split and close the palette")
 	}
 
-	a = twoPanes(160, 45, "nerd")
+	a = twoPanes(160, 45)
 	feed(t, a, "<C-p>resize")
 	if got := strings.Join(rowsOf(a), " "); strings.Count(got, "pane.resize.") != 4 || strings.Count(got, "= ") != 3 || !strings.HasSuffix(got, "=") {
 		t.Fatalf("resize has no default keys: %s", got)
@@ -66,7 +66,7 @@ func TestPaletteFindsByID(t *testing.T) {
 		t.Error("the unbound resize ran from the palette")
 	}
 
-	a = twoPanes(160, 45, "nerd")
+	a = twoPanes(160, 45)
 	if feed(t, a, "<C-p>Split"); len(rowsOf(a)) != 0 {
 		t.Errorf("smartcase: an upper-case letter matches case: %v", rowsOf(a))
 	}
@@ -260,12 +260,12 @@ func TestPaletteScopesFilter(t *testing.T) {
 		"@ord": "表:t_order 表:t_order_item",
 		"%con": "Pane:② console · console_1 Tab:console_1 Pane:⓪ schema", // ⓪'s doraemon too; a tie as the empty input has it (§12)
 	} {
-		a := twoPanes(160, 45, "nerd")
+		a := twoPanes(160, 45)
 		if feed(t, a, "<C-p>"+in); strings.Join(namesOf(a), " ") != want {
 			t.Errorf("%s: %v", in, namesOf(a))
 		}
 	}
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	feed(t, a, "<C-p>")
 	all := strings.Join(namesOf(a), " ")
 	for _, s := range []string{"窗口:0: data", "Pane:① table · t_order", "表:t_user", "命令:左右分割"} {
@@ -281,7 +281,7 @@ func TestPaletteScopesFilter(t *testing.T) {
 // From the tree too a table not open yet takes a new tab, over neither a
 // table's tab nor a console's; a landing tab it replaces (§7.8, §12).
 func TestTreeOpensInNewTab(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	data := a.focused()
 	a.win().focus(0)
 	treeTo(t, a, "t_sku")
@@ -304,7 +304,7 @@ func TestTreeOpensInNewTab(t *testing.T) {
 // A table opens in a new tab of the focused pane, else of the one focused
 // last; the tab that was current stays (§12).
 func TestPaletteOpensTables(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	data := a.focused()
 	feed(t, a, "<C-p>@t_user<CR>")
 	if a.palette != nil || tabNames(data) != "t_order t_user t_user" || data.Cur != 2 {
@@ -331,7 +331,7 @@ func TestPaletteOpensTables(t *testing.T) {
 		t.Error("a window's ↵ switches to it (F5.2)")
 	}
 
-	a = twoPanes(160, 45, "nerd")
+	a = twoPanes(160, 45)
 	data = a.focused()
 	data.Tabs, data.Cur, data.Prev = nil, 0, -1 // an empty data pane
 	feed(t, a, "<C-p>@t_user<CR>")
@@ -339,7 +339,7 @@ func TestPaletteOpensTables(t *testing.T) {
 		t.Errorf("into an empty pane: tabs %v cur %d prev %d, want no previous tab", tabNames(data), data.Cur, data.Prev)
 	}
 
-	a = twoPanes(160, 45, "nerd")
+	a = twoPanes(160, 45)
 	feed(t, a, ":q<CR>:q<CR>") // the console's pane left
 	feed(t, a, "<C-p>@t_user<CR>")
 	if leaves := a.win().Root.Leaves(); len(leaves) != 1 || tabNames(leaves[0]) != "console_1 t_user" || leaves[0].Cur != 1 {
@@ -348,7 +348,7 @@ func TestPaletteOpensTables(t *testing.T) {
 }
 
 func TestPaletteFocusesPanes(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	feed(t, a, "<C-p>%console<CR>")
 	if a.palette != nil || a.win().Focus != 2 {
 		t.Fatalf("focus %d, want the console", a.win().Focus)
@@ -367,7 +367,7 @@ func TestPaletteFocusUnzooms(t *testing.T) {
 		{"table in the zoomed data pane", "<C-p>@t_user<CR>", 1, 1, 1},
 		{"pane hidden by the zoom", "<C-p>%t_order<CR>", 2, 1, 0},
 	} {
-		a := twoPanes(160, 45, "nerd")
+		a := twoPanes(160, 45)
 		a.win().focus(c.zoomed)
 		feed(t, a, "<Space>z")
 		feed(t, a, c.keys)
@@ -517,7 +517,7 @@ func TestGoldenPalettePreview160x45(t *testing.T) {
 // focuses its pane, and is not kept among the recent (F4.3). A pane is
 // placed doraemon › 0: data.
 func TestPaletteTabs(t *testing.T) {
-	a := twoPanes(160, 45, "nerd") // ① t_order and t_user, ② console_1
+	a := twoPanes(160, 45) // ① t_order and t_user, ② console_1
 	a.win().focus(2)
 	feed(t, a, "<C-p>%t_us")
 	rows := a.paletteView().Rows

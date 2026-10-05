@@ -91,7 +91,7 @@ func TestTableErrorBar(t *testing.T) {
 // came from, so the chips' keys act on what they show; its WHERE stays, in
 // the input too, for R to try again. A ; turned down likewise (§7.6).
 func TestFailedFetchBackToShown(t *testing.T) {
-	a, tab, rec := withRecorder(t, 160, 45)
+	a, tab, rec := withRecorder(t)
 	tab.next = true
 	fail := func() { a.Update(pageMsg{tab: tab, seq: tab.seq, err: &pgconn.PgError{Code: "42883", Message: "no"}}) }
 	feed(t, a, "gonote<CR>")

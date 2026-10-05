@@ -184,7 +184,7 @@ func hasDefault(col db.Column, added bool) bool {
 // text all selected, or with text pasted in its place; not on a table
 // whyNoEdit names.
 func (a *App) editCell(pasted *string) tea.Cmd {
-	_, t, ok := a.focusedGrid()
+	t, ok := a.focusedGrid()
 	if !ok {
 		return nil
 	}
@@ -320,7 +320,7 @@ func (t *dataTab) applyOption(o option) {
 // cell.default, §10.2); an edit of it under way ends so. Not for a column
 // that can't hold it, nor a table whyNoEdit names.
 func (a *App) setSpecial(def bool) {
-	_, t, ok := a.focusedGrid()
+	t, ok := a.focusedGrid()
 	if !ok || t.whyNoEdit() != "" {
 		return
 	}
@@ -475,7 +475,7 @@ func (t *dataTab) setEdit(k editKey, e edit) {
 // loaded, as its options' ↺ 原值; a row added goes, a row marked for
 // deletion isn't any more (§10.6).
 func (a *App) revertCell() {
-	_, t, ok := a.focusedGrid()
+	t, ok := a.focusedGrid()
 	if !ok {
 		return
 	}
@@ -500,7 +500,7 @@ func (t *dataTab) dropAdded(r *newRow) {
 // addRow is o and the query bar's + (§10.6): a row under the cursor's, on
 // its page, the cursor to its first column.
 func (a *App) addRow() tea.Cmd {
-	_, t, ok := a.focusedGrid()
+	t, ok := a.focusedGrid()
 	if !ok {
 		return nil
 	}
@@ -536,7 +536,7 @@ func (a *App) addRow() tea.Cmd {
 // deleteRow is dd and the query bar's − (§10.6): the cursor's row marked
 // for deletion, or not any more; a row added goes.
 func (a *App) deleteRow() tea.Cmd {
-	_, t, ok := a.focusedGrid()
+	t, ok := a.focusedGrid()
 	if !ok {
 		return nil
 	}

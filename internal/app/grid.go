@@ -626,10 +626,9 @@ func (a *App) chipRect(p *Pane, t *dataTab, action string) uv.Rectangle {
 
 // focusedGrid is the focused pane's table, if it shows one: loaded, with
 // columns to show.
-func (a *App) focusedGrid() (*Pane, *dataTab, bool) {
-	p := a.focused()
-	t := dataOf(p)
-	return p, t, t != nil && len(t.shownCols()) > 0
+func (a *App) focusedGrid() (*dataTab, bool) {
+	t := dataOf(a.focused())
+	return t, t != nil && len(t.shownCols()) > 0
 }
 
 // typingTab is the focused table whose query bar input has the keys.

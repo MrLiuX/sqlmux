@@ -316,7 +316,7 @@ func TestGridWheel(t *testing.T) {
 
 // A click on a cell focuses its pane and moves the cursor there (§7.4).
 func TestGridClickCell(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	tab := loadOrders(t, a, 10)
 	a.win().focus(2)
 	r := find(t, a, ui.Target{Kind: ui.KindCell, Pane: 1, Action: "grid.goto 4 2"})

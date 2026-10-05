@@ -24,7 +24,7 @@ func TestGolden80x24ASCII(t *testing.T) {
 }
 
 func TestFocusColors(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	f, rects := a.render(), a.layout()
 	th := ui.TokyonightStorm
 	if th.Focus != ansi.XParseColor("#9ece6a") {
@@ -86,7 +86,7 @@ func TestSmallSizes(t *testing.T) {
 // §7.8: at 160×45 the console title has "▶ run ↵", the connection and the
 // schema; its name, cut, the rest (no "console" beside its icon, §7.7).
 func TestConsoleTitleAt160(t *testing.T) {
-	top := strings.Split(twoPanes(160, 45, "nerd").render().String(), "\n")[0]
+	top := strings.Split(twoPanes(160, 45).render().String(), "\n")[0]
 	for _, want := range []string{"② " + ui.NerdIcons.Console.Text + " conso…  doraemon · doraemon.public ▾  ▶ run  ↵ ─┐"} {
 		if !strings.Contains(top, want) {
 			t.Errorf("top row lacks %q: %q", want, top)
@@ -144,7 +144,7 @@ func TestSidebarHintRow(t *testing.T) {
 // title just "⟨n⟩", the landing page's two buttons in the middle with
 // their keys, clickable, and a tab bar holding just a clickable + (§5).
 func TestEmptyPane(t *testing.T) {
-	a := twoPanes(160, 45, "nerd")
+	a := twoPanes(160, 45)
 	feed(t, a, ":q<CR>:q<CR>:q<CR>") // both data tabs, then the console's
 	p := a.win().Root.Leaves()[0]
 	if len(a.win().Root.Leaves()) != 1 || len(p.Tabs) != 0 {
@@ -249,7 +249,7 @@ func TestStatusNarrowing(t *testing.T) {
 		{40, []string{"doraemon ▾", " 0: data* ", "·", " NORMAL "}, []string{" 1,1 "}},
 		{36, []string{" 0: data* ", "·", " NORMAL "}, []string{" 1,1 ", "doraemon"}},
 	} {
-		a := twoPanes(c.w, 24, "nerd")
+		a := twoPanes(c.w, 24)
 		loadOrders(t, a, 3) // row,col shows with a table loaded (§7.8)
 		row := statusRow(a)
 		// the palette entry is its icon alone (§7.7)

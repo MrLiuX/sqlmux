@@ -133,7 +133,7 @@ func tsv(vals []string) string {
 // ponytail: a generated (stored) column is copied too, and the save fails
 // on it; leave those out when the catalog tells them apart
 func (a *App) pasteRow() tea.Cmd {
-	_, t, ok := a.focusedGrid()
+	t, ok := a.focusedGrid()
 	if !ok || a.rowCopy == nil || a.rowCopy.conn != t.conn || a.rowCopy.table != idOf(t.table) {
 		return nil
 	}

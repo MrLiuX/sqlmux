@@ -18,8 +18,8 @@ import (
 )
 
 // inTree is sized with the sidebar focused.
-func inTree(w, h int) *App {
-	a := sized(w, h, "nerd")
+func inTree(h int) *App {
+	a := sized(160, h, "nerd")
 	a.win().focus(0)
 	return a
 }
@@ -246,7 +246,7 @@ func TestPaletteTablesOfConns(t *testing.T) {
 
 // j / k / gg / G move over the nodes showing, with counts (§7.8).
 func TestTreeMoves(t *testing.T) {
-	a := inTree(160, 18) // 11 rows show
+	a := inTree(18) // 11 rows show
 	for _, c := range []struct{ keys, want string }{
 		{"j", "agentable"}, {"3j", "agent"}, {"k", "Tables (14)"},
 		{"G", "console_1"}, {"j", "console_1"}, {"gg", "doraemon"}, {"k", "doraemon"},
@@ -266,7 +266,7 @@ func TestTreeMoves(t *testing.T) {
 // parent; on a leaf l does nothing. A table's columns come from Meta the
 // first time it opens, the primary key's with the key icon (§7.8).
 func TestTreeExpand(t *testing.T) {
-	a := inTree(160, 45)
+	a := inTree(45)
 	treeTo(t, a, "agentable")
 	feed(t, a, "l")
 	if !strings.Contains(treeTexts(a), "  ▾ agentable\n    ▸ Tables (1)\n      Views (0)") {
@@ -318,7 +318,7 @@ func TestTreeExpand(t *testing.T) {
 // (§7.8); the tree marks it as open. A table in another schema opens as it
 // is, and puts the tree's schema there.
 func TestTreeOpens(t *testing.T) {
-	a := inTree(160, 45)
+	a := inTree(45)
 	data := a.win().Root.Leaves()[0]
 	treeTo(t, a, "goal")
 	feed(t, a, "<CR>")
@@ -366,7 +366,7 @@ func TestTreeOpens(t *testing.T) {
 // A column's ↵ opens its table on that column: once the page is in for a
 // new tab, at once for one already open, not when COLS hides it (§7.8).
 func TestTreeColumnOpens(t *testing.T) {
-	a := inTree(160, 45)
+	a := inTree(45)
 	table, cols, page := ordersTable(3)
 	for i, tb := range a.sess.Conns[0].Tables {
 		if tb.Name == "t_order" {
@@ -491,7 +491,7 @@ func TestTreeMouse(t *testing.T) {
 // C-w, M-BS and C-u in every input (§7.9): the tree's filter, a WHERE,
 // the palette, a cell's edit, where all of it goes while all selected.
 func TestInputDeleteWord(t *testing.T) {
-	a := inTree(160, 45)
+	a := inTree(45)
 	in := &a.win().tree.filter
 	for _, c := range []struct{ keys, want string }{
 		{"/t_order foo<C-w>", "t_order "}, {"<M-BS>", ""}, {"ab cd<Left><Left><C-u>", "cd"},
@@ -500,7 +500,7 @@ func TestInputDeleteWord(t *testing.T) {
 			t.Errorf("filter %s: %q, want %q", c.keys, in.Text, c.want)
 		}
 	}
-	a, tab, _ := withRecorder(t, 160, 45)
+	a, tab, _ := withRecorder(t)
 	if feed(t, a, "/id > 5<C-w><M-BS>"); tab.where.Text != "id " {
 		t.Errorf("WHERE: %q", tab.where.Text)
 	}
@@ -517,7 +517,7 @@ func TestInputDeleteWord(t *testing.T) {
 // else; ↵ keeps it for the list, esc clears it, the cursor staying on its
 // node.
 func TestTreeFilter(t *testing.T) {
-	a := inTree(160, 45)
+	a := inTree(45)
 	feed(t, a, "/tor")
 	if a.mode() != keymap.Insert || treeTexts(a) != "▾ doraemon\n  ▾ public\n    ▾ Tables (14)\n      ▸ t_order\n      ▸ t_order_item" {
 		t.Fatalf("typing: mode %v\n%s", a.mode(), treeTexts(a))
@@ -593,7 +593,7 @@ func TestPaletteTablesFromCatalog(t *testing.T) {
 // t_order opened to its columns, the key's with its icon, types on the
 // right (§7.8).
 func TestGoldenTreeColumns160x45(t *testing.T) {
-	a := inTree(160, 45)
+	a := inTree(45)
 	table, cols, _ := ordersTable(0)
 	a.sess.Conns[0].Tables[slices.IndexFunc(a.sess.Conns[0].Tables, func(t db.Table) bool { return t.Name == "t_order" })] = table
 	a.sess.Conns[0].cols[idOf(table)] = cols
@@ -604,7 +604,7 @@ func TestGoldenTreeColumns160x45(t *testing.T) {
 
 // A filter across schemas: the matches and what is above them (§7.8).
 func TestGoldenTreeFilter160x45(t *testing.T) {
-	a := inTree(160, 45)
+	a := inTree(45)
 	feed(t, a, "/an")
 	golden.RequireEqual(t, a.render().String())
 }
