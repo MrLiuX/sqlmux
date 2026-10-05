@@ -52,7 +52,8 @@ type Token struct {
 // What is left open runs to the end.
 // ponytail: /*!90000 … */ for a server older than that is code here, a
 // comment to it; after SET sql_mode = 'NO_BACKSLASH_ESCAPES' a \ escapes
-// nothing to the server, still something here (§13)
+// nothing to the server, still something here (§13); so a WHERE in a
+// /*!99999 … */ that the server skips counts for Dangerous
 func Scan(s string, d Dialect) []Token {
 	var out []Token
 	line := 0
