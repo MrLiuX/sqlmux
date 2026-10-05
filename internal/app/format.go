@@ -81,7 +81,8 @@ func (a *App) consoleFormat(t *consoleTab, f editor.FormatSpan, whole bool) tea.
 // line of its stderr when it fails (§9.5). Nothing out is a failure too,
 // not the SQL gone; past sqlkit.FormatTimeout it is sqlkit.ErrTimeout.
 func format(sql string, d sqlkit.Dialect, prg string, o sqlkit.Options) (string, error) {
-	out, err := "", error(nil)
+	var out string
+	var err error
 	if prg == "" {
 		out, err = sqlkit.Format(sql, d, o)
 	} else {

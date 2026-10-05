@@ -249,7 +249,7 @@ func blockObject(open, shut byte) object {
 			oldEnd = e.vstart
 		}
 		var start Pos
-		ok := false
+		var ok bool
 		if _, ok = e.findMatch(e.cur, shut, open, true, false, false); ok {
 			for ; count > 0; count-- {
 				if e.cur, ok = e.findMatch(e.cur, shut, open, true, false, false); !ok {
@@ -363,7 +363,8 @@ func prevQuote(l string, col int, q byte, escape bool) int {
 func quoteObject(q byte) object {
 	return func(e *Editor, count int, include bool) (span, bool) {
 		l := e.line()
-		colStart, colEnd := e.cur.Col, 0
+		colStart := e.cur.Col
+		var colEnd int
 		inclusive, visEmpty, visBefore, inside, selectedQuote := false, true, false, false, false
 		visual := e.visual()
 		if visual {

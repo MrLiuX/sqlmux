@@ -343,7 +343,8 @@ func (e *Editor) typeOnBlock(b block, s, op string) {
 			continue
 		}
 		l := e.lines[n]
-		tsVal, pad, offset := 0, 0, 0
+		tsVal, pad := 0, 0
+		var offset int
 		switch {
 		case before:
 			tsVal, pad, offset = bd.startCharVcols, bd.startspaces, bd.textcol
