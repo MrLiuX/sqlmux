@@ -218,8 +218,8 @@ func TestPlainUndoSteps(t *testing.T) {
 	}
 	e = plain("")
 	feed(e, "s", "e", "l")
-	e.Replace(Pos{0, 0}, Pos{0, 3}, "SEL\nECT")
-	if text(e) != "SEL\nECT" || e.HasSelection() {
+	e.Replace(Pos{0, 0}, Pos{0, 3}, "SEL\nECT")    //nolint:misspell // a word split across lines on purpose
+	if text(e) != "SEL\nECT" || e.HasSelection() { //nolint:misspell // as above
 		t.Fatalf("replace: %q", text(e))
 	}
 	if got := undo(e, 1); got != "sel" {
