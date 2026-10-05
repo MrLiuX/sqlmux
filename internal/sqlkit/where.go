@@ -24,6 +24,7 @@ func WhereContext(s string, pos int, d Dialect) Where {
 			w.Prefix, w.Start, ts, str = s[last.Start:pos], last.Start, ts[:n-1], last.Kind == String
 		case Comment, Quoted:
 			return Where{}
+		default: // a space, an operator or punctuation ends the word: nothing to complete
 		}
 	}
 	// the meaningful tokens before the prefix, last first

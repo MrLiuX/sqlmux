@@ -586,6 +586,7 @@ func (a *App) paletteDo(it paletteItem) tea.Cmd {
 		if a.selectWindow(wi); a.win().pane(id) != nil {
 			a.showTab(a.win().pane(id), i)
 		}
+	default: // itemSQL: paletteRun runs it as quick SQL, before this
 	}
 	return nil
 }

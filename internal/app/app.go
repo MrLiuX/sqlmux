@@ -283,6 +283,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.treeGo(t.I)
 				return a, a.run("tree.open.tab", 0)
 			}
+		default: // other buttons do nothing
 		}
 	case tea.MouseWheelMsg:
 		a.wheel(msg.Mouse())
@@ -481,6 +482,7 @@ func (a *App) wheel(m tea.Mouse) {
 		right = -1
 	case tea.MouseWheelRight:
 		right = 1
+	default: // the other buttons do not scroll
 	}
 	if m.Mod.Contains(tea.ModShift) {
 		down, right = 0, down

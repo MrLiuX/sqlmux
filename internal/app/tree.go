@@ -274,6 +274,7 @@ func (a *App) treeNodes() (ns []node, matches int) {
 			cn.Aside = strings.TrimSpace(cn.Aside + " …")
 		case connFailed:
 			cn.TextFg = th.Error
+		default: // idle and ready: the name as it is
 		}
 		if filtering && !slices.ContainsFunc(c.Tables, func(t db.Table) bool { _, ok := pos[tableNode(c, t)]; return ok }) {
 			continue

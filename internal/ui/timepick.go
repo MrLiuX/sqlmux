@@ -128,6 +128,7 @@ func (u unit) bounds(vals map[unit]int, bc bool) (lo, hi int) {
 		return 1, time.Date(y, time.Month(vals[month])+1, 0, 0, 0, 0, 0, time.UTC).Day()
 	case hour:
 		return 0, 23
+	default: // minute and second: 0..59 below
 	}
 	return 0, 59
 }

@@ -146,6 +146,7 @@ func vimSel(ed *editor.Editor) (s ui.Sel) {
 		case editor.VisualBlock:
 			s.Mode = ui.SelBlock
 			_, _, s.Left, s.Right, _ = ed.Block()
+		default: // the other modes keep the character-wise selection
 		}
 	}
 	return s
