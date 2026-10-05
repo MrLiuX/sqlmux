@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,6 +11,7 @@ import (
 	"testing"
 
 	"sqlmux/internal/app"
+	"sqlmux/internal/config"
 )
 
 // writeConfig makes a config dir of the test's own with file name in it.
@@ -95,5 +98,58 @@ func TestOpenWithoutConnections(t *testing.T) {
 	_, _, err := open("")
 	if err == nil || !strings.Contains(err.Error(), filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "sqlmux", "connections.toml")) {
 		t.Fatalf("no connections.toml: %v", err)
+	}
+}
+
+const oneSession = "version = 1\n[[session]]\nname = \"s\"\nconnection = \"c\"\n"
+
+// The layout the program starts from: --layout's, which has to be there; a
+// connection named starts the default one; else last.toml, kept aside when
+// it does not read (§14「启动」).
+func TestStartLayout(t *testing.T) {
+	writeConfig(t, "config.toml", "")
+	mine := filepath.Join(t.TempDir(), "mine.toml")
+	os.WriteFile(mine, []byte(oneSession), 0o600)
+	var warning string
+
+	if l, err := startLayout("", mine, &warning); err != nil || l == nil || l.Sessions[0].Name != "s" {
+		t.Errorf("--layout path: %v %v", l, err)
+	}
+	if _, err := startLayout("", "nope", &warning); !errors.Is(err, fs.ErrNotExist) || !strings.Contains(err.Error(), "nope.toml") {
+		t.Errorf("--layout that is not there: %v", err)
+	}
+	if l, err := startLayout("play", "", &warning); l != nil || err != nil {
+		t.Errorf("a connection name starts the default: %v %v", l, err)
+	}
+	if l, err := startLayout("", "", &warning); l != nil || err != nil || warning != "" {
+		t.Errorf("no last.toml: %v %v %q", l, err, warning)
+	}
+
+	os.MkdirAll(config.StateDir(), 0o755)
+	os.WriteFile(config.LastPath(), []byte(oneSession), 0o600)
+	if l, err := startLayout("", "", &warning); l == nil || err != nil {
+		t.Errorf("last.toml: %v %v", l, err)
+	}
+	if l, err := startLayout("play", "", &warning); l != nil || err != nil {
+		t.Errorf("a connection name does not restore last: %v %v", l, err)
+	}
+	os.WriteFile(config.LastPath(), []byte("{"), 0o600)
+	if l, err := startLayout("", "", &warning); l != nil || err != nil || !strings.Contains(warning, "last.toml") {
+		t.Errorf("a last.toml that does not read: %v %v %q", l, err, warning)
+	}
+	if _, err := os.Stat(config.LastPath() + ".broken"); err != nil {
+		t.Error("it is kept aside")
+	} else if _, err := os.Stat(config.LastPath()); err == nil {
+		t.Error("and not left to be written over by the next exit")
+	}
+}
+
+// What is wrong with the arguments is said before anything is read.
+func TestRunArguments(t *testing.T) {
+	if err := run([]string{"--layout", "x", "play"}); err == nil || !strings.Contains(err.Error(), "--layout") {
+		t.Errorf("a connection and --layout: %v", err)
+	}
+	if err := run([]string{"a", "b"}); err == nil || !strings.Contains(err.Error(), "用法") {
+		t.Errorf("two connections: %v", err)
 	}
 }

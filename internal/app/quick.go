@@ -77,6 +77,9 @@ func (a *App) runQuick(sql string) tea.Cmd {
 		a.state.SQL = map[string][]string{}
 	}
 	c := p.conn
+	if c.State != connReady { // a layout's other session, still connecting (F6.5)
+		return a.showToast(i18n.T("连接还没连上"), toastTTL)
+	}
 	h := slices.Insert(slices.DeleteFunc(a.state.SQL[c.Spec.Name], func(s string) bool { return s == sql }), 0, sql)
 	a.state.SQL[c.Spec.Name] = h[:min(len(h), quickHistory)]
 	if q := p.quick; sqlkit.IsWrite(sql, c.eng.Dialect()) { // a write is for a console, where running it is the user's own ↵ (F-05)

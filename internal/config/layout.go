@@ -38,7 +38,7 @@ type LayoutSession struct {
 type LayoutWindow struct {
 	Name         string       `toml:"name"`
 	Layout       *LayoutNode  `toml:"layout"`
-	Focus        int          `toml:"focus,omitempty"` // a pane ID; 0 for the sidebar
+	Focus        int          `toml:"focus,omitempty"` // a pane ID; 0 for the sidebar, or none: the result area is not saved
 	Zoom         int          `toml:"zoom,omitempty"`
 	SidebarOpen  bool         `toml:"sidebar_open"`
 	SidebarWidth int          `toml:"sidebar_width,omitempty"`
@@ -96,32 +96,36 @@ func LayoutNames() []string {
 	return names
 }
 
-// LayoutPath is the file a layout is by: a path as it is (it has a / or
-// ends in .toml), else layouts/<name>.toml.
-func LayoutPath(nameOrPath string) string {
+// LayoutPath is the file of the layout called name: layouts/<name>.toml.
+func LayoutPath(name string) string { return filepath.Join(LayoutsDir(), name+".toml") }
+
+// LayoutArg is the file --layout names: a path as it is (it has a / or ends
+// in .toml), else a layout's by name. Only the command line takes both; the
+// commands go by name (§14「命令」).
+func LayoutArg(nameOrPath string) string {
 	if strings.ContainsRune(nameOrPath, '/') || strings.HasSuffix(nameOrPath, ".toml") {
 		return nameOrPath
 	}
-	return filepath.Join(LayoutsDir(), nameOrPath+".toml")
+	return LayoutPath(nameOrPath)
 }
 
-// CheckLayoutName says why name cannot name a layout, "" when it can: it is
-// a file of LayoutsDir.
+// CheckLayoutName says why name cannot name a layout: it is a file of
+// LayoutsDir, and last is last.toml's. The caller has trimmed it, and not
+// asked for a blank one.
 func CheckLayoutName(name string) error {
 	switch {
-	case strings.TrimSpace(name) == "":
-		return errors.New(i18n.T("布局要有名字"))
 	case strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, "."):
 		return errors.New(i18n.T("名字不能含 / 或 \\，也不能以 . 开头"))
+	case name == "last":
+		return errors.New(i18n.T("last 是保留名，指上次退出时的布局"))
 	}
 	return nil
 }
 
-// LoadLayout reads a layout, by name or path. A file that is not there is
+// LoadLayout reads the layout at path. A file that is not there is
 // fs.ErrNotExist in the error; one that does not read, or is of another
 // version, says so with its path.
-func LoadLayout(nameOrPath string) (*Layout, error) {
-	path := LayoutPath(nameOrPath)
+func LoadLayout(path string) (*Layout, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err

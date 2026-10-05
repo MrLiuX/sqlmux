@@ -113,6 +113,11 @@ func newDataTab(c *Conn, t db.Table) *dataTab {
 	return &dataTab{conn: c, table: t, request: r, shown: r, hidden: map[string]bool{}}
 }
 
+// setRequest makes r what t asks and shows, its WHERE typed as it is.
+func (t *dataTab) setRequest(r request) {
+	t.request, t.shown, t.where.Text = r, r, r.applied
+}
+
 type tableID struct{ schema, name string }
 
 func idOf(t db.Table) tableID { return tableID{t.Schema, t.Name} }
@@ -150,8 +155,13 @@ func (t *dataTab) query() db.Query {
 // come first, from Meta, when the catalog hasn't got them yet: they give
 // the row identity it orders by (§8.4, §10.1). recount counts the rows
 // again once a page is in (§8.3): owed by the tab, so a newer request
-// taking this one's place still pays it.
+// taking this one's place still pays it. A tab restored from a layout waits
+// for its connection and catalog: nothing goes out yet, the request it has
+// by then is the one that does.
 func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
+	if t.pending || t.conn.State != connReady { // a layout's: it fetches once its catalog is in (F6.5)
+		return nil
+	}
 	t.note, t.failed = ui.Note{}, nil // until the next fetch the user asks for (§10.3)
 	// what is on its way is older than this now, whether this goes or not
 	t.seq++

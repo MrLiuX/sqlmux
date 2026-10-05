@@ -8,7 +8,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -64,8 +63,9 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		warning = strings.TrimPrefix(warning+"；"+w, "；")
-		if restored, err = app.Restore(context.Background(), conns, l); err != nil {
+		warning = app.JoinNotes(warning, w)
+		restored = app.Restore(conns, l)
+		if err := restored.DialStart(context.Background()); err != nil {
 			return err
 		}
 		sess = restored.Sessions[0]
@@ -74,11 +74,11 @@ func run(args []string) error {
 		if sess, w, err = open(name); err != nil {
 			return err
 		}
-		warning = strings.TrimPrefix(warning+"；"+w, "；")
+		warning = app.JoinNotes(warning, w)
 	}
 	st, err := config.LoadState()
 	if err != nil { // the broken file is kept aside; start empty (§14)
-		warning = strings.TrimPrefix(warning+"；"+err.Error(), "；")
+		warning = app.JoinNotes(warning, err.Error())
 	}
 	keys, problems := keymap.New(cfg)
 	a := app.New(cfg, keys, sess, st, warning)
@@ -99,7 +99,7 @@ func run(args []string) error {
 func startLayout(name, layout string, warning *string) (*config.Layout, error) {
 	switch {
 	case layout != "":
-		return config.LoadLayout(layout)
+		return config.LoadLayout(config.LayoutArg(layout))
 	case name != "":
 		return nil, nil
 	}

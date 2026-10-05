@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"sqlmux/internal/config"
+	"sqlmux/internal/db"
 	"sqlmux/internal/i18n"
 	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
@@ -168,14 +169,18 @@ func (a *App) killSession() tea.Cmd {
 		if l := a.sessList; l != nil {
 			l.sel = min(l.sel, len(a.sessionRows())-1)
 		}
-		ws := s.workers() // here: a connection being made may come in, the loop writing it, as the Cmd reads
-		return func() tea.Msg {
-			for _, w := range ws {
-				w.Close()
-			}
-			return nil
-		}
+		return closeWorkers(s.workers()) // taken here: a connection being made may come in, the loop writing it, as the Cmd reads
 	})
+}
+
+// closeWorkers is a Cmd that closes ws, which waits on what they run.
+func closeWorkers(ws []*db.Worker) tea.Cmd {
+	return func() tea.Msg {
+		for _, w := range ws {
+			w.Close()
+		}
+		return nil
+	}
 }
 
 // renameSession is $ on a session's row: its name typed in its place.

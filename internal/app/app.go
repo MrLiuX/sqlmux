@@ -3,6 +3,7 @@ package app
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -103,8 +104,14 @@ func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, 
 		theme: cfg.Theme, icons: cfg.Icons, baseIcons: cfg.BaseIcons, plain: !cfg.Vim, themeName: cfg.ThemeName, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, resultHeight: cfg.ResultHeight,
 		keywordCase: cfg.KeywordCase, formatPrg: cfg.FormatPrg, autoPairs: cfg.AutoPairs,
 		keys: keys, res: keymap.NewResolver(keys), sess: sess, sessions: []*Session{sess},
-		mouse: uv.Pos(-1, -1), warning: strings.Trim(warning+"；"+sess.warning, "；"), state: st,
+		mouse: uv.Pos(-1, -1), warning: JoinNotes(warning, sess.warning), state: st,
 	}
+}
+
+// JoinNotes is the notes that are not empty on one line, the way a toast says
+// several.
+func JoinNotes(notes ...string) string {
+	return strings.Join(slices.DeleteFunc(slices.Clone(notes), func(s string) bool { return s == "" }), "；")
 }
 
 // KeyProblems opens a notice of the lines of keymaps.toml that did not take
@@ -162,8 +169,6 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.gotConnected(msg)
 	case sessionDialed:
 		return a, a.gotSessionDialed(msg)
-	case layoutOpened:
-		return a, a.gotLayoutOpened(msg)
 	case catalogMsg:
 		return a, a.gotCatalog(msg)
 	case pageMsg:

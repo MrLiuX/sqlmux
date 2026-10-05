@@ -1,0 +1,476 @@
+package app
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"reflect"
+	"slices"
+	"strings"
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
+
+	"sqlmux/internal/config"
+	"sqlmux/internal/db"
+	"sqlmux/internal/keymap"
+)
+
+var layoutSpecs = []config.Connection{{Name: "doraemon", Engine: "postgres"}, {Name: "play", Engine: "postgres"}}
+
+// restoredFrom is l restored over doraemon and play, the first session's
+// start connection ready as the program starts it, the rest waiting.
+func restoredFrom(t *testing.T, l *config.Layout) *Restored {
+	t.Helper()
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	return readyStart(Restore(layoutSpecs, l))
+}
+
+func readyStart(r *Restored) *Restored {
+	c := r.Sessions[0].start
+	c.State, c.Main, c.Meta = connReady, db.NewWorker(noDB{}), db.NewWorker(noDB{})
+	return r
+}
+
+// layoutApp is the program over r, as main makes it.
+func layoutApp(r *Restored) *App {
+	keys, _ := keymap.New(config.Default())
+	a := New(config.Default(), keys, r.Sessions[0], &config.State{}, "")
+	a.Adopt(r)
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
+	return a
+}
+
+func leafNode(id int) *config.LayoutNode { return &config.LayoutNode{Pane: id} }
+
+// oneWindow is a layout of one session, doraemon's, with window lw.
+func oneWindow(lw config.LayoutWindow) *config.Layout {
+	return &config.Layout{Version: 1, Sessions: []config.LayoutSession{{Name: "1", Connection: "doraemon", Windows: []config.LayoutWindow{lw}}}}
+}
+
+func table(conn, schema, name string) config.LayoutTab {
+	return config.LayoutTab{Kind: "table", Connection: conn, Schema: schema, Table: name}
+}
+
+// A layout is the sessions as they were: snapshot, file, read back, restore,
+// snapshot again, and the two snapshots are the same, the first being what
+// the layout said (§14「布局文件」, F6.5). A console waiting for a connection
+// is kept as it is going there; a session keeps the connection it started on,
+// not the one the focus last named.
+func TestLayoutRoundTrip(t *testing.T) {
+	order := config.LayoutTab{Kind: "table", Connection: "doraemon", Schema: "public", Table: "t_order", Where: "id > 5", Order: "amount",
+		Desc: true, Limit: 500, Page: 2, Cols: []string{"meta", "note"}, Transpose: true}
+	want := &config.Layout{Version: 1, Active: 1, Sessions: []config.LayoutSession{
+		{Name: "one", Connection: "doraemon", Active: 1, Windows: []config.LayoutWindow{
+			{
+				Name: "a", Focus: 3, Zoom: 3, SidebarOpen: true, SidebarWidth: 40, ResultHeight: 0.25,
+				Layout: &config.LayoutNode{Split: "h", Ratio: 0.25, A: leafNode(1), B: &config.LayoutNode{Split: "v", Ratio: 0.75, A: leafNode(2), B: leafNode(3)}},
+				Panes: []config.LayoutPane{
+					{ID: 1, Current: 1, Tabs: []config.LayoutTab{order, {Kind: "console", Connection: "play", Schema: "s_play", N: 1}}},
+					{ID: 2, Tabs: []config.LayoutTab{{Kind: "table", Connection: "doraemon", Schema: "agentable", Table: "planner", Limit: 100}}},
+					{ID: 3},
+				},
+			},
+			{Name: "b", Focus: 1, Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1}}},
+		}},
+		{Name: "two", Connection: "play", Windows: []config.LayoutWindow{{
+			Name: "c", Focus: 1, Layout: leafNode(1),
+			Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{{Kind: "console", Connection: "doraemon", Schema: "agentable", N: 2}}}},
+		}}},
+	}}
+	a := layoutApp(restoredFrom(t, want))
+	first := a.layoutOf()
+	if !reflect.DeepEqual(first, want) {
+		t.Fatalf("snapshot of what was restored:\n got %+v\nwant %+v", first, want)
+	}
+	a.sessions[0].last = a.sessions[0].Conns[1]
+	if got := a.layoutOf().Sessions[0].Connection; got != "doraemon" {
+		t.Errorf("the start connection is kept, not the current one: %q", got)
+	}
+
+	path := filepath.Join(t.TempDir(), "x.toml")
+	if err := config.SaveLayout(path, first); err != nil {
+		t.Fatal(err)
+	}
+	back, err := config.LoadLayout(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second := layoutApp(restoredFrom(t, back)).layoutOf(); !reflect.DeepEqual(first, second) {
+		t.Fatalf("after the file:\n got %+v\nwant %+v", second, first)
+	}
+}
+
+// The result area is not saved, its height is: from the area as it is, or
+// as it was left hidden or closed; a focus or zoom in it is the pane focused
+// before it, and none.
+func TestWindowLayoutResult(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	win := a.win()
+	if got := windowLayout(win); got.ResultHeight != 0 {
+		t.Errorf("never opened: %v", got.ResultHeight)
+	}
+	a.resultPane(win)
+	win.Root.Ratio = 0.75
+	win.focus(1)
+	win.focus(2)
+	win.focus(win.Result.ID)
+	win.Zoom = win.Result.ID
+	got := windowLayout(win)
+	if got.ResultHeight != 0.25 || got.Focus != 2 || got.Zoom != 0 || got.Layout.Split != "h" || len(got.Panes) != 2 {
+		t.Errorf("shown: %+v", got)
+	}
+	win.focus(1)
+	a.toggleResult()
+	if got := windowLayout(win); got.ResultHeight != 0.25 || got.Layout.Split != "h" || len(got.Panes) != 2 {
+		t.Errorf("hidden: %+v", got)
+	}
+	win.Result = nil
+	if got := windowLayout(win); got.ResultHeight != 0.25 {
+		t.Errorf("closed: %+v", got)
+	}
+}
+
+// What cannot be built is left out and said; the rest is built (§14「恢复」).
+func TestLayoutRestoreGaps(t *testing.T) {
+	console := func(n int, conn string) config.LayoutTab {
+		return config.LayoutTab{Kind: "console", N: n, Connection: conn}
+	}
+	consoles := func(s *Session) (ns []int) {
+		for _, c := range s.consoles() {
+			ns = append(ns, c.n)
+		}
+		slices.Sort(ns)
+		return ns
+	}
+
+	t.Run("tree and panes", func(t *testing.T) {
+		r := restoredFrom(t, oneWindow(config.LayoutWindow{
+			Name: "a", Layout: &config.LayoutNode{Split: "h", Ratio: 3, A: leafNode(1), B: &config.LayoutNode{Split: "v", A: leafNode(0), B: leafNode(7)}},
+			Panes: []config.LayoutPane{
+				{ID: 0, Tabs: []config.LayoutTab{console(8, "")}}, // not a pane
+				{ID: 1, Tabs: []config.LayoutTab{console(1, ""), table("doraemon", "public", "t"), table("doraemon", "public", "t"), table("gone", "public", "u")}},
+				{ID: 9, Tabs: []config.LayoutTab{console(5, "")}}, // not in the tree: no tab of it is made
+				{ID: 1, Tabs: []config.LayoutTab{console(6, "")}}, // a second entry is not read
+			},
+		}))
+		w := r.Sessions[0].Windows[0]
+		if len(w.Root.Leaves()) != 2 || w.pane(7) == nil || w.pane(9) != nil || len(w.pane(1).Tabs) != 2 || w.lastID != 7 || w.Root.Ratio != 0.5 {
+			t.Errorf("panes %d, tabs %d, last %d, ratio %v", len(w.Root.Leaves()), len(w.pane(1).Tabs), w.lastID, w.Root.Ratio)
+		}
+		if got := consoles(r.Sessions[0]); !slices.Equal(got, []int{1}) {
+			t.Errorf("consoles %v", got)
+		}
+		if len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "gone") {
+			t.Errorf("warnings %q", r.Warnings)
+		}
+	})
+
+	t.Run("no tree", func(t *testing.T) {
+		r := restoredFrom(t, oneWindow(config.LayoutWindow{Name: "a", Panes: []config.LayoutPane{{ID: 0}, {ID: 4, Tabs: []config.LayoutTab{console(1, "")}}, {ID: 5, Tabs: []config.LayoutTab{console(2, "")}}}}))
+		w := r.Sessions[0].Windows[0]
+		if leaves := w.Root.Leaves(); len(leaves) != 1 || leaves[0].ID != 4 || len(leaves[0].Tabs) != 1 || !slices.Equal(consoles(r.Sessions[0]), []int{1}) {
+			t.Errorf("the first pane there is: %+v", w.Root.Leaves())
+		}
+	})
+
+	t.Run("console numbers", func(t *testing.T) {
+		t.Setenv("XDG_DATA_HOME", t.TempDir())
+		os.MkdirAll(filepath.Dir(config.ConsolePath(1)), 0o755)
+		os.WriteFile(config.ConsolePath(1), []byte("one\n"), 0o600)
+		os.WriteFile(config.ConsolePath(2), []byte("two\n"), 0o600)
+		win := func(n int) []config.LayoutWindow {
+			return []config.LayoutWindow{{Name: "w", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{console(n, "")}}}}}
+		}
+		r := readyStart(Restore(layoutSpecs, &config.Layout{Version: 1, Sessions: []config.LayoutSession{
+			{Name: "1", Connection: "doraemon", Windows: win(1)},
+			{Name: "2", Connection: "nowhere", Windows: win(1)}, // the number is taken: the next, with its own file
+			{Name: "3", Connection: "play"},                     // no window: the default, on the next free number
+		}}))
+		text := func(s *Session) string { return strings.Join(s.consoles()[0].ed.Lines(), "\n") }
+		if text(r.Sessions[0]) != "one" || r.Sessions[1].consoles()[0].n != 2 || text(r.Sessions[1]) != "two" {
+			t.Errorf("consoles %v %v", r.Sessions[0].consoles(), r.Sessions[1].consoles())
+		}
+		if got := consoles(r.Sessions[2]); !slices.Equal(got, []int{3}) || r.Sessions[2].start.Spec.Name != "play" || len(r.Sessions[2].Windows) != 1 {
+			t.Errorf("the default window: consoles %v", got)
+		}
+		if r.Sessions[1].start.Spec.Name != "doraemon" || len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "nowhere") {
+			t.Errorf("a connection that is not there: starts on %s, warnings %q", r.Sessions[1].start.Spec.Name, r.Warnings)
+		}
+		if r.Sessions[2].start.State == connReady || r.Sessions[1].start.State == connReady {
+			t.Error("only the first session's start is dialed now")
+		}
+	})
+
+	t.Run("console file unreadable", func(t *testing.T) {
+		t.Setenv("XDG_DATA_HOME", t.TempDir())
+		os.MkdirAll(config.ConsolePath(1), 0o755) // a file that does not read
+		r := Restore(layoutSpecs, &config.Layout{Version: 1, Sessions: []config.LayoutSession{
+			{Name: "1", Connection: "doraemon"},
+			{Name: "2", Connection: "doraemon", Windows: []config.LayoutWindow{{Name: "w", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{console(1, "")}}}}}},
+		}})
+		if len(r.Sessions) != 2 || len(r.Warnings) != 2 || len(r.Sessions[0].Windows) != 1 || len(consoles(r.Sessions[0])) != 0 {
+			t.Errorf("sessions %d, warnings %q", len(r.Sessions), r.Warnings)
+		}
+	})
+
+	t.Run("fields a hand left out", func(t *testing.T) {
+		r := restoredFrom(t, oneWindow(config.LayoutWindow{Name: "a", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{
+			{Kind: "chart"}, console(0, ""),
+			{Kind: "table", Table: "a", Limit: -5}, {Kind: "table", Table: "b", Limit: 5_000_000}, {Kind: "table", Table: "c"}, {Kind: "table", Table: "d", Limit: 500},
+		}}}}))
+		s := r.Sessions[0]
+		tabs := s.Windows[0].pane(1).Tabs
+		if len(r.Warnings) != 1 || r.Warnings[0] != "不认识的 tab" || len(tabs) != 5 {
+			t.Fatalf("warnings %q, %d tabs", r.Warnings, len(tabs))
+		}
+		if c := tabs[0].Console; c == nil || c.conn != s.start || c.want != nil {
+			t.Errorf("a console with no connection is on the start: %+v", c)
+		}
+		for i, want := range []int{100, maxLimit, 100, 500} {
+			if got := tabs[i+1].Data.limit; got != want || tabs[i+1].Data.shown.limit != want {
+				t.Errorf("tab %d limit %d, want %d", i+1, got, want)
+			}
+		}
+	})
+
+	t.Run("focus and zoom", func(t *testing.T) {
+		two := &config.LayoutNode{Split: "h", A: leafNode(1), B: leafNode(2)}
+		for _, c := range []struct {
+			open         bool
+			focus, zoom  int
+			wantF, wantZ int
+		}{
+			{false, 0, 0, 1, 0}, // the sidebar is folded: nothing to focus there
+			{true, 0, 0, 0, 0},  // the sidebar
+			{false, 9, 0, 1, 0}, // a pane that is not there
+			{false, 2, 1, 2, 0}, // a zoom on another pane than the focused one would hide it
+			{false, 2, 2, 2, 2},
+		} {
+			w := restoredFrom(t, oneWindow(config.LayoutWindow{Name: "a", SidebarOpen: c.open, Focus: c.focus, Zoom: c.zoom, Layout: two,
+				Panes: []config.LayoutPane{{ID: 1}, {ID: 2}}})).Sessions[0].Windows[0]
+			if w.Focus != c.wantF || w.Zoom != c.wantZ {
+				t.Errorf("%+v: focus %d, zoom %d", c, w.Focus, w.Zoom)
+			}
+		}
+	})
+}
+
+// A table tab of a layout waits for its connection's catalog: with the table
+// there it fetches (a schema it did not name is the connection's home),
+// without it the tab is closed and a toast says so; a connection that fails
+// takes its waiting tabs, the toast being its own. Until then nothing goes
+// out for it. A console waiting for another connection keeps where it is
+// going (§14「恢复」, F6.5).
+func TestLayoutPendingTabs(t *testing.T) {
+	l := oneWindow(config.LayoutWindow{Name: "a", Layout: &config.LayoutNode{Split: "h", A: leafNode(1), B: leafNode(2)}, Panes: []config.LayoutPane{
+		{ID: 1, Tabs: []config.LayoutTab{table("doraemon", "public", "t_order"), table("doraemon", "public", "dropped"), table("play", "public", "x"), table("", "", "t_user")}},
+		{ID: 2, Tabs: []config.LayoutTab{{Kind: "console", N: 3, Connection: "play"}}},
+	}})
+	r := restoredFrom(t, l)
+	a := layoutApp(r)
+	cmds := slices.DeleteFunc(a.connectsNow(), func(c tea.Cmd) bool { return c == nil })
+	if len(cmds) != 2 { // the first's catalog, play's connect, once
+		t.Errorf("at start: %d commands", len(cmds))
+	}
+	doraemon, play := r.Sessions[0].Conns[0], r.Sessions[0].Conns[1]
+	p := r.Sessions[0].Windows[0].pane(1)
+	if len(p.Tabs) != 4 {
+		t.Fatalf("tabs %d", len(p.Tabs))
+	}
+	for _, i := range []int{0, 2} { // a connection that is ready or not: not before the catalog
+		if d := p.Tabs[i].Data; a.fetch(d, true) != nil || d.seq != 0 || d.conn.busy != 0 {
+			t.Errorf("tab %d fetched while pending", i)
+		}
+	}
+	a.Update(catalogMsg{conn: doraemon, schemas: []string{"public"}, current: "public", tables: []db.Table{{Schema: "public", Name: "t_order", Rows: 5}, {Schema: "public", Name: "t_user"}}})
+	if len(p.Tabs) != 3 || p.Tabs[0].Data.pending || p.Tabs[0].Data.table.Rows != 5 || p.Tabs[0].Data.seq == 0 || !strings.Contains(a.toast, "dropped") {
+		t.Fatalf("after the catalog: %d tabs, %+v, toast %q", len(p.Tabs), p.Tabs[0].Data, a.toast)
+	}
+	if d := p.Tabs[2].Data; d.pending || d.table.Schema != "public" || d.seq == 0 {
+		t.Errorf("home schema: %+v", d.table)
+	}
+	if !p.Tabs[1].Data.pending {
+		t.Error("play's waits")
+	}
+	if _, ok := a.state.Consoles["console_3"]; ok {
+		t.Error("a console on its way to play is not put on the start's in the state")
+	}
+	a.Update(connected{conn: play, err: errors.New("refused")})
+	if len(p.Tabs) != 2 || !strings.Contains(a.toast, "refused") {
+		t.Errorf("play failed: %d tabs, toast %q", len(p.Tabs), a.toast)
+	}
+}
+
+// A connection that is not up is not run on, and a tab on one is not the
+// current connection: a layout's other sessions connect as the program runs.
+func TestUnreadyConnection(t *testing.T) {
+	r := restoredFrom(t, &config.Layout{Version: 1, Sessions: []config.LayoutSession{
+		{Name: "1", Connection: "doraemon", Windows: []config.LayoutWindow{{Name: "a", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{table("play", "public", "x")}}}}}},
+		{Name: "2", Connection: "play"},
+	}})
+	a := layoutApp(r)
+	doraemon, play := r.Sessions[0].Conns[0], r.Sessions[1].start
+	a.win().focus(1)
+	if got := a.conn(); got != doraemon {
+		t.Errorf("a pending tab on play: %s", got.Spec.Name)
+	}
+	a.attach(r.Sessions[1])
+	a.win().focus(0)
+	ns, _ := a.treeNodes() // a connection's node would connect it instead
+	a.treeGo(slices.IndexFunc(ns, func(n node) bool { return n.kind == nodeWorkspace }))
+	for name, run := range map[string]func(){
+		"R on the tree": func() { a.refreshTree() },
+		"quick SQL":     func() { a.palette = &palette{conn: play}; a.runQuick("select 1") },
+		"cancel":        func() { play.cancel() },
+	} {
+		a.toast = ""
+		run()
+		if name != "cancel" && !strings.Contains(a.toast, "连接还没连上") {
+			t.Errorf("%s: toast %q", name, a.toast)
+		}
+	}
+}
+
+// The working set is written as the program quits, once it is told where:
+// not by the tests, which are never told (F6.5).
+func TestLayoutSavedOnQuit(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a := sized(160, 45, "nerd")
+	path := filepath.Join(t.TempDir(), "last.toml")
+	if feed(t, a, ":qa<CR>"); !quits(a.quit()) {
+		t.Fatal("quit")
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Fatal("written with nowhere to write")
+	}
+	a.SaveLayoutOnExit(path)
+	a.quit()
+	l, err := config.LoadLayout(path)
+	if err != nil || len(l.Sessions) != 1 || len(l.Sessions[0].Windows[0].Panes) != 2 {
+		t.Fatalf("last: %+v %v", l, err)
+	}
+}
+
+// layout.save asks the name in the status bar: ↵ writes layouts/<name>.toml,
+// esc drops it, a name that cannot be one is said; layout.open lists them,
+// last first when there is one (F6.5).
+func TestLayoutSaveAndList(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a := sized(160, 45, "nerd")
+	a.run("layout.save", 0)
+	if a.layoutName == nil || a.mode() != keymap.Insert || a.render().Cursor == nil {
+		t.Fatal("no prompt")
+	}
+	for _, bad := range []string{"my/x", "last", ".x"} {
+		a.run("layout.save", 0)
+		if feed(t, a, bad+"<CR>"); a.layoutName != nil || a.toast == "" || len(config.LayoutNames()) != 0 {
+			t.Errorf("%q: toast %q, layouts %v", bad, a.toast, config.LayoutNames())
+		}
+		a.toast = ""
+	}
+	a.run("layout.save", 0)
+	feed(t, a, "<Esc>")
+	if a.layoutName != nil || len(config.LayoutNames()) != 0 {
+		t.Error("esc")
+	}
+	a.run("layout.save", 0)
+	feed(t, a, "work<CR>")
+	if l, err := config.LoadLayout(config.LayoutPath("work")); err != nil || len(l.Sessions) != 1 || !strings.Contains(a.toast, "work") {
+		t.Fatalf("saved: %v, toast %q", err, a.toast)
+	}
+	a.run("layout.save", 0) // the name is the file's, whatever it ends in
+	feed(t, a, "x.toml<CR>")
+	if _, err := os.Stat(filepath.Join(config.LayoutsDir(), "x.toml.toml")); err != nil {
+		t.Errorf("x.toml: %v", err)
+	}
+	if _, err := os.Stat("x.toml"); err == nil {
+		os.Remove("x.toml")
+		t.Error("written in the working directory")
+	}
+	config.SaveLayout(config.LastPath(), a.layoutOf())
+	a.run("layout.open", 0)
+	if items, _ := a.dropItems(); !slices.Equal(items, []string{"last", "work", "x.toml"}) {
+		t.Fatalf("layouts: %v", items)
+	}
+}
+
+// A pick of layout.open is done in the one Update: what is typed in the
+// consoles is written, the layout read and the sessions replaced, so what the
+// new consoles read is what was typed, and nothing is left to arrive late.
+// Asked first when a transaction would go; an error changes nothing (§14).
+func TestPickLayout(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a := sized(160, 45, "nerd")
+	next := &config.Layout{Version: 1, Active: 1, Sessions: []config.LayoutSession{
+		{Name: "x", Connection: "doraemon", Windows: []config.LayoutWindow{{Name: "w", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{{Kind: "console", N: 1}}}}}}},
+		{Name: "y", Connection: "doraemon"},
+	}}
+	for _, path := range []string{config.LayoutPath("two"), config.LastPath()} {
+		if err := config.SaveLayout(path, next); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a.win().focus(2)
+	feed(t, a, "iabc<Esc>")
+
+	conn := a.sess.Conns[0]
+	conn.tx = 'T'
+	if cmd := a.pickLayout("two"); cmd != nil || a.confirm == nil || len(a.sessions) != 1 {
+		t.Fatalf("a transaction is asked about: %v %+v", cmd, a.confirm)
+	}
+	conn.tx = 0
+	a.confirm = nil
+
+	console := consoleOf(a.win().pane(2))
+	os.MkdirAll(console.path+"d", 0o755)
+	oldPath := console.path
+	console.path = oldPath + "d" // a console that cannot be written: nothing is replaced
+	a.pickLayout("two")
+	if len(a.sessions) != 1 {
+		t.Fatal("replaced with a console unwritten")
+	}
+	console.path = oldPath
+
+	a.toast = ""
+	if a.pickLayout("nope"); len(a.sessions) != 1 || !strings.Contains(a.toast, "nope.toml") {
+		t.Errorf("a layout that is not there: %d sessions, toast %q", len(a.sessions), a.toast)
+	}
+	cmd := a.pickLayout("last")
+	if cmd == nil || len(a.sessions) != 2 || a.sess.Name != "y" {
+		t.Fatalf("replaced: %d sessions, on %q", len(a.sessions), a.sess.Name)
+	}
+	if got := strings.Join(a.sessions[0].consoles()[0].ed.Lines(), "\n"); got != "abc" {
+		t.Errorf("the new console reads %q, what was typed", got)
+	}
+	if a.sessions[0].start.State == connReady || a.sessions[1].start.State == connReady {
+		t.Error("every connection is dialed in the background, none now")
+	}
+}
+
+// A tab dropped leaves the one before it or the one that was current
+// before showing (T-01).
+func TestDropTab(t *testing.T) {
+	for _, c := range []struct {
+		cur, prev, drop   int
+		wantCur, wantPrev int
+	}{
+		{2, -1, 0, 1, -1}, // before the current one
+		{1, 2, 2, 1, -1},  // after it, the previous one gone
+		{1, 3, 3, 1, -1},
+		{0, 2, 0, 1, -1},  // the current one: the previous, a place to the left
+		{1, 0, 1, 0, -1},  // the current one: the previous, on its left
+		{3, -1, 3, 2, -1}, // the last one, no previous
+		{1, 2, 0, 0, 1},   // before both: both move
+	} {
+		p := &Pane{Tabs: []Tab{{Name: "a"}, {Name: "b"}, {Name: "c"}, {Name: "d"}}, Cur: c.cur, Prev: c.prev}
+		dropTab(p, c.drop)
+		if len(p.Tabs) != 3 || p.Cur != c.wantCur || p.Prev != c.wantPrev {
+			t.Errorf("%+v: cur %d prev %d", c, p.Cur, p.Prev)
+		}
+	}
+}

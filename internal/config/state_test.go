@@ -144,25 +144,33 @@ id = 2
 	os.WriteFile(filepath.Join(LayoutsDir(), "mine.toml"), []byte(hand), 0o644)
 	os.WriteFile(filepath.Join(LayoutsDir(), "a.toml"), []byte("version = 2\n"), 0o644)
 	os.WriteFile(filepath.Join(LayoutsDir(), "empty.toml"), []byte("version = 1\n"), 0o644)
-	l, err := LoadLayout("mine")
+	l, err := LoadLayout(LayoutPath("mine"))
 	if err != nil || l.Sessions[0].Windows[0].Layout.B.Pane != 2 || l.Sessions[0].Windows[0].Layout.Split != "h" {
 		t.Fatalf("by name, inline tables: %+v %v", l, err)
 	}
-	if _, err := LoadLayout("a"); err == nil || !strings.Contains(err.Error(), "version = 2") {
+	if _, err := LoadLayout(LayoutPath("a")); err == nil || !strings.Contains(err.Error(), "version = 2") {
 		t.Errorf("version: %v", err)
 	}
-	if _, err := LoadLayout("empty"); err == nil || !strings.Contains(err.Error(), "[[session]]") {
+	if _, err := LoadLayout(LayoutPath("empty")); err == nil || !strings.Contains(err.Error(), "[[session]]") {
 		t.Errorf("no session: %v", err)
 	}
-	if _, err := LoadLayout("nope"); !errors.Is(err, fs.ErrNotExist) {
+	if _, err := LoadLayout(LayoutPath("nope")); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("missing: %v", err)
 	}
 	if names := LayoutNames(); !slices.Equal(names, []string{"a", "empty", "mine"}) {
 		t.Errorf("names %v", names)
 	}
-	for _, bad := range []string{"", "  ", "a/b", ".x", `a\b`} {
+	for _, bad := range []string{"a/b", ".x", `a\b`, "last"} {
 		if CheckLayoutName(bad) == nil {
 			t.Errorf("%q is a name", bad)
+		}
+	}
+	if CheckLayoutName("x.toml") != nil || LayoutPath("x.toml") != filepath.Join(LayoutsDir(), "x.toml.toml") {
+		t.Error("a name is a name, whatever it ends in")
+	}
+	for arg, want := range map[string]string{"work": LayoutPath("work"), "a/b.toml": "a/b.toml", "x.toml": "x.toml", "./w": "./w"} {
+		if got := LayoutArg(arg); got != want {
+			t.Errorf("--layout %q is %q", arg, got)
 		}
 	}
 	os.WriteFile(LastPath(), []byte("{"), 0o600)

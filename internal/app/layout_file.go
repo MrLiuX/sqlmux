@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -27,7 +26,7 @@ import (
 func (a *App) layoutOf() *config.Layout {
 	l := &config.Layout{Version: config.LayoutVersion, Active: slices.Index(a.sessions, a.sess)}
 	for _, s := range a.sessions {
-		ls := config.LayoutSession{Name: s.Name, Connection: s.last.Spec.Name, Active: s.Active}
+		ls := config.LayoutSession{Name: s.Name, Connection: s.start.Spec.Name, Active: s.Active}
 		for _, w := range s.Windows {
 			ls.Windows = append(ls.Windows, windowLayout(w))
 		}
@@ -42,17 +41,18 @@ func windowLayout(w *Window) config.LayoutWindow {
 	if w.Result != nil && !w.resultHidden { // the result area is the root's lower half
 		root, ratio = w.Root.A, w.Root.Ratio
 	}
-	if w.Result != nil {
+	if ratio != 0 { // from the area as it is, or as it was when it was closed
 		lw.ResultHeight = 1 - ratio
-		if w.Focus == w.Result.ID {
-			lw.Focus = 0
-		}
-		if w.Zoom == w.Result.ID {
-			lw.Zoom = 0
-		}
+	}
+	leaves := root.Leaves()
+	if w.Result != nil && w.Focus == w.Result.ID { // it is not saved: the pane focused before it is
+		lw.Focus = slices.MaxFunc(leaves, func(a, b *Pane) int { return cmp.Compare(w.focusedAt[a.ID], w.focusedAt[b.ID]) }).ID
+	}
+	if w.Result != nil && w.Zoom == w.Result.ID {
+		lw.Zoom = 0
 	}
 	lw.Layout = nodeLayout(root)
-	for _, p := range root.Leaves() {
+	for _, p := range leaves {
 		lw.Panes = append(lw.Panes, paneLayout(p))
 	}
 	return lw
@@ -84,7 +84,12 @@ func paneLayout(p *Pane) config.LayoutPane {
 			}
 			slices.Sort(lt.Cols)
 		case tb.Console != nil:
-			lt = config.LayoutTab{Kind: "console", Connection: tb.Console.conn.Spec.Name, Schema: tb.Console.schema, N: tb.Console.n}
+			t := tb.Console
+			c, schema := t.conn, t.schema
+			if t.want != nil { // not there yet: it is where it is going that is kept
+				c, schema = t.want, t.wantSchema
+			}
+			lt = config.LayoutTab{Kind: "console", Connection: c.Spec.Name, Schema: schema, N: t.n}
 		default: // a landing tab
 			continue
 		}
@@ -103,28 +108,26 @@ type Restored struct {
 	Warnings []string
 }
 
-// Restore builds the sessions of l over the connections of specs (§14): the
-// first session's start connection is dialed now, a failure being the
-// error; the others connect once the program runs, and a table tab waits
-// for its connection's catalog. What cannot be built is left out, said in
-// Warnings: a connection or a console file that is not there.
-func Restore(ctx context.Context, specs []config.Connection, l *config.Layout) (*Restored, error) {
-	return restore(specs, l, func(c *Conn) error {
-		d, err := dial(ctx, c.Spec)
-		if err != nil {
-			return fmt.Errorf("%s: %w", c.Spec.Name, err)
-		}
-		c.take(d)
-		return nil
-	})
+// DialStart connects the first session's start connection now: at the
+// program's start, a failure is the start's error (§14「恢复」).
+func (r *Restored) DialStart(ctx context.Context) error {
+	c := r.Sessions[0].start
+	d, err := dial(ctx, c.Spec)
+	if err != nil {
+		return fmt.Errorf("%s: %w", c.Spec.Name, err)
+	}
+	c.take(d)
+	return nil
 }
 
-// restore is Restore, with connect making the first session's start
-// connection ready.
-func restore(specs []config.Connection, l *config.Layout, connect func(*Conn) error) (*Restored, error) {
+// Restore builds the sessions of l over the connections of specs (§14),
+// none of them connected: a table tab waits for its connection's catalog.
+// What cannot be built is left out, said in Warnings: a connection that is
+// not there, a console file that does not read.
+func Restore(specs []config.Connection, l *config.Layout) *Restored {
 	r := &Restored{Active: min(max(l.Active, 0), len(l.Sessions)-1)}
 	used := map[int]bool{} // the consoles taken, by number
-	for i, ls := range l.Sessions {
+	for _, ls := range l.Sessions {
 		conns := make([]*Conn, len(specs))
 		for j, spec := range specs {
 			conns[j] = newConn(spec)
@@ -134,12 +137,7 @@ func restore(specs []config.Connection, l *config.Layout, connect func(*Conn) er
 			r.Warnings = append(r.Warnings, i18n.T("没有名为 %s 的连接，session %s 用 %s 开始", ls.Connection, ls.Name, conns[0].Spec.Name))
 			start = 0
 		}
-		if i == 0 {
-			if err := connect(conns[start]); err != nil {
-				return nil, err
-			}
-		}
-		s := &Session{Name: ls.Name, Conns: conns, last: conns[start], open: map[string]bool{}}
+		s := &Session{Name: ls.Name, Conns: conns, start: conns[start], last: conns[start], open: map[string]bool{}}
 		for _, lw := range ls.Windows {
 			s.winID++
 			w, warns := restoreWindow(s, lw, used)
@@ -148,54 +146,29 @@ func restore(specs []config.Connection, l *config.Layout, connect func(*Conn) er
 			r.Warnings = append(r.Warnings, warns...)
 		}
 		if len(s.Windows) == 0 { // a session with no window is one with the default
-			w, warning := s.newWindow(conns[start], freeNumber(used))
-			used[consoleOf(w.Root.B.Pane).n] = true
+			n := freeNumber(func(n int) bool { return used[n] })
+			w, warning := s.newWindow(conns[start], n)
 			if warning != "" {
 				r.Warnings = append(r.Warnings, warning)
+			} else {
+				used[n] = true
 			}
 			s.Windows = append(s.Windows, w)
 		}
 		s.Active = min(max(ls.Active, 0), len(s.Windows)-1)
 		r.Sessions = append(r.Sessions, s)
 	}
-	return r, nil
+	return r
 }
 
-// freeNumber is the least console number not in used.
-func freeNumber(used map[int]bool) int {
-	n := 1
-	for used[n] {
-		n++
-	}
-	return n
-}
-
-// restoreWindow is lw as a window of s: its panes with their tabs, the
-// split tree over them, the focus and the zoom; a pane the tree names that
-// has no entry is an empty one, a window with no tree one pane.
+// restoreWindow is lw as a window of s: the split tree with the panes it
+// names, their tabs, the focus and the zoom. A pane the tree has that no
+// entry gives is an empty one; one the tree does not have gets no tab; a
+// window with no tree is one pane, the first there is.
 func restoreWindow(s *Session, lw config.LayoutWindow, used map[int]bool) (*Window, []string) {
 	var warns []string
-	panes := map[int]*Pane{}
+	panes := map[int]*Pane{} // the tree's
 	w := &Window{Name: lw.Name, TreeOpen: lw.SidebarOpen, TreeW: lw.SidebarWidth, Tree: &Pane{ID: 0}}
-	for _, lp := range lw.Panes {
-		if lp.ID <= 0 || panes[lp.ID] != nil {
-			continue
-		}
-		p := &Pane{ID: lp.ID, Prev: -1}
-		for i, lt := range lp.Tabs {
-			tb, warn := s.restoreTab(lt, used)
-			if warn != "" {
-				warns = append(warns, warn)
-				continue
-			}
-			if i == lp.Current {
-				p.Cur = len(p.Tabs)
-			}
-			p.Tabs = append(p.Tabs, tb)
-		}
-		panes[p.ID] = p
-	}
-	seen := map[int]bool{}
 	var build func(n *config.LayoutNode) *Node
 	build = func(n *config.LayoutNode) *Node {
 		if n == nil {
@@ -215,22 +188,43 @@ func restoreWindow(s *Session, lw config.LayoutWindow, used map[int]bool) (*Wind
 			}
 			return &Node{Split: map[string]Dir{"h": Horiz, "v": Vert}[n.Split], Ratio: ratio, A: a, B: b}
 		}
-		if n.Pane <= 0 || seen[n.Pane] {
+		if n.Pane <= 0 || panes[n.Pane] != nil {
 			return nil
 		}
-		seen[n.Pane] = true
-		if panes[n.Pane] == nil {
-			panes[n.Pane] = &Pane{ID: n.Pane, Prev: -1}
-		}
+		panes[n.Pane] = &Pane{ID: n.Pane, Prev: -1}
 		return leaf(panes[n.Pane])
 	}
-	w.Root = build(lw.Layout)
-	if w.Root == nil { // no tree: the first pane there is, else one
-		p := &Pane{ID: 1, Prev: -1}
-		if len(lw.Panes) > 0 && panes[lw.Panes[0].ID] != nil {
-			p = panes[lw.Panes[0].ID]
+	if w.Root = build(lw.Layout); w.Root == nil {
+		id := 1
+		if i := slices.IndexFunc(lw.Panes, func(lp config.LayoutPane) bool { return lp.ID > 0 }); i >= 0 {
+			id = lw.Panes[i].ID
 		}
-		w.Root = leaf(p)
+		panes[id] = &Pane{ID: id, Prev: -1}
+		w.Root = leaf(panes[id])
+	}
+	filled := map[int]bool{}
+	for _, lp := range lw.Panes {
+		p := panes[lp.ID]
+		if p == nil || filled[lp.ID] { // not in the tree, or a second entry: not read
+			continue
+		}
+		filled[lp.ID] = true
+		for i, lt := range lp.Tabs {
+			tb, warn := s.restoreTab(lt, used)
+			if warn != "" {
+				warns = append(warns, warn)
+				continue
+			}
+			if d := tb.Data; d != nil && slices.ContainsFunc(p.Tabs, func(o Tab) bool {
+				return o.Data != nil && o.Data.conn == d.conn && idOf(o.Data.table) == idOf(d.table)
+			}) { // a table is one tab of a pane (F3.37): the first stays
+				continue
+			}
+			if i == lp.Current {
+				p.Cur = len(p.Tabs)
+			}
+			p.Tabs = append(p.Tabs, tb)
+		}
 	}
 	for _, p := range w.Root.Leaves() {
 		w.lastID = max(w.lastID, p.ID)
@@ -239,57 +233,65 @@ func restoreWindow(s *Session, lw config.LayoutWindow, used map[int]bool) (*Wind
 		w.resultRatio = 1 - lw.ResultHeight
 	}
 	w.focus(w.Root.Leaves()[0].ID)
-	if lw.Focus == 0 && lw.SidebarOpen || w.pane(lw.Focus) != nil {
+	if (lw.Focus != 0 || lw.SidebarOpen) && w.pane(lw.Focus) != nil { // 0 is the sidebar, when there is one
 		w.focus(lw.Focus)
 	}
-	if w.pane(lw.Zoom) != nil && lw.Zoom != 0 {
+	if lw.Zoom != 0 && lw.Zoom == w.Focus { // a zoom of another pane than the focused one hides it
 		w.Zoom = lw.Zoom
 	}
 	return w, warns
 }
 
 // restoreTab is a layout's tab: a table, pending its connection's catalog,
-// or a console on its file; warn says why there is none.
+// or a console on its file; warn says why there is none. A tab with no
+// connection is on the session's start (§14).
 func (s *Session) restoreTab(lt config.LayoutTab, used map[int]bool) (tb Tab, warn string) {
-	i := slices.IndexFunc(s.Conns, func(c *Conn) bool { return c.Spec.Name == lt.Connection })
+	if lt.Kind != "table" && lt.Kind != "console" {
+		return tb, i18n.T("不认识的 tab")
+	}
+	name := cmp.Or(lt.Connection, s.start.Spec.Name)
+	i := slices.IndexFunc(s.Conns, func(c *Conn) bool { return c.Spec.Name == name })
 	if i < 0 {
-		return tb, i18n.T("没有名为 %s 的连接，跳过 %s", lt.Connection, cmp.Or(lt.Table, fmt.Sprintf("console_%d", lt.N)))
+		return tb, i18n.T("没有名为 %s 的连接，跳过 %s", name, cmp.Or(lt.Table, fmt.Sprintf("console_%d", lt.N)))
 	}
 	c := s.Conns[i]
-	switch lt.Kind {
-	case "table":
+	if lt.Kind == "table" { // a schema it does not name is the connection's home, known with the catalog
 		d := newDataTab(c, db.Table{Schema: lt.Schema, Name: lt.Table})
-		r := request{applied: lt.Where, order: lt.Order, desc: lt.Desc, limit: cmp.Or(lt.Limit, limits[0]), pageNo: max(lt.Page, 0)}
-		d.request, d.shown, d.where.Text, d.pending = r, r, lt.Where, true
+		r := d.request
+		r.applied, r.order, r.desc, r.pageNo = lt.Where, lt.Order, lt.Desc, max(lt.Page, 0)
+		if lt.Limit > 0 { // typed by hand it may be anything
+			r.limit = min(lt.Limit, maxLimit)
+		}
+		d.setRequest(r)
+		d.pending = true
 		for _, name := range lt.Cols {
 			d.hidden[name] = true
 		}
 		d.transpose = lt.Transpose
 		return Tab{Name: lt.Table, Data: d}, ""
-	case "console":
-		n := lt.N
-		if n <= 0 || used[n] {
-			n = freeNumber(used)
-		}
-		t, err := openConsole(s.last, n)
-		if err != nil {
-			return tb, err.Error()
-		}
-		used[n] = true
-		t.schema = lt.Schema
-		if c != s.last { // the connection it was on goes over once it is there
-			t.want, t.wantSchema = c, lt.Schema
-		}
-		return Tab{Name: fmt.Sprintf("console_%d", n), Console: t}, ""
 	}
-	return tb, i18n.T("不认识的 tab：%s", lt.Kind)
+	n := lt.N
+	if n <= 0 || used[n] { // taken: the next free one, with its own file
+		n = freeNumber(func(n int) bool { return used[n] })
+	}
+	t, err := openConsole(s.start, n)
+	if err != nil {
+		return tb, err.Error()
+	}
+	used[n] = true
+	if c == s.start {
+		t.schema = lt.Schema
+	} else { // the connection it was on goes over once it is there
+		t.want, t.wantSchema = c, lt.Schema
+	}
+	return Tab{Name: fmt.Sprintf("console_%d", n), Console: t}, ""
 }
 
 // Adopt makes r the program's sessions, the one it names attached; the
 // warnings are said once it runs. Before the program runs only.
 func (a *App) Adopt(r *Restored) {
 	a.sessions, a.sess = r.Sessions, r.Sessions[r.Active]
-	a.warning = strings.Trim(a.warning+"；"+strings.Join(r.Warnings, "；"), "；")
+	a.warning = JoinNotes(append([]string{a.warning}, r.Warnings...)...)
 	a.restored = true
 }
 
@@ -335,6 +337,9 @@ func (a *App) resolvePending(c *Conn) []tea.Cmd {
 					continue
 				}
 				d.pending = false
+				if d.table.Schema == "" { // a hand's layout left it out
+					d.table.Schema = c.home
+				}
 				if j := slices.IndexFunc(c.Tables, func(t db.Table) bool { return idOf(t) == idOf(d.table) }); j >= 0 {
 					d.table = c.Tables[j]
 					cmds = append(cmds, a.fetch(d, true))
@@ -360,15 +365,6 @@ func (a *App) dropPending(c *Conn) {
 			}
 		}
 	}
-}
-
-// dropTab takes tab i out of p as it is, no record kept, the pane staying.
-func dropTab(p *Pane, i int) {
-	p.Tabs = slices.Delete(p.Tabs, i, i+1)
-	if p.Cur > i || p.Cur >= len(p.Tabs) {
-		p.Cur = max(p.Cur-1, 0)
-	}
-	p.Prev = -1
 }
 
 // verbOpen is what opening a layout asks about: it replaces every session
@@ -414,7 +410,7 @@ func (a *App) layoutNameKey(k keymap.Key) tea.Cmd {
 	return a.showToast(i18n.T("已保存布局 %s", name), toastTTL)
 }
 
-// openThemeDrop-like: layout.open lists the layouts, last among them when
+// openLayoutDrop is layout.open: the layouts listed, last among them when
 // there is one.
 func (a *App) openLayoutDrop() {
 	a.drop = &dropdown{kind: dropLayout, pane: a.focused(), sel: 0}
@@ -432,8 +428,11 @@ func layoutNames() []string {
 }
 
 // pickLayout is a layout.open pick: asked first when every session's
-// unsaved changes and transactions would go (§10.5), then every session is
-// replaced.
+// unsaved changes and transactions would go (§10.5); then the consoles are
+// written, the layout read and every session replaced, all in this one
+// Update (§14「命令」): between, what was typed would be lost or written
+// over the new consoles' files. The connections are dialed in the background,
+// the first session's start among them.
 func (a *App) pickLayout(name string) tea.Cmd {
 	path := config.LayoutPath(name)
 	if name == "last" {
@@ -447,43 +446,25 @@ func (a *App) pickLayout(name string) tea.Cmd {
 		if cmd, ok := a.flushAll(ps...); !ok { // the consoles' text is not lost (§11)
 			return cmd
 		}
+		l, err := config.LoadLayout(path)
+		if err != nil {
+			return a.showToast(err.Error(), toastTTL)
+		}
 		specs := make([]config.Connection, len(a.sess.Conns))
 		for i, c := range a.sess.Conns {
 			specs[i] = c.Spec
 		}
-		return func() tea.Msg {
-			l, err := config.LoadLayout(path)
-			if err != nil {
-				return layoutOpened{err: err}
-			}
-			r, err := Restore(context.Background(), specs, l)
-			return layoutOpened{r: r, err: err}
+		r := Restore(specs, l)
+		var ws []*db.Worker
+		for _, s := range a.sessions {
+			ws = append(ws, s.workers()...)
 		}
+		a.sessions = r.Sessions
+		a.attach(r.Sessions[r.Active])
+		cmds := append(a.connectsNow(), closeWorkers(ws))
+		if len(r.Warnings) > 0 {
+			cmds = append(cmds, a.showToast(JoinNotes(r.Warnings...), toastTTL))
+		}
+		return tea.Batch(cmds...)
 	})
-}
-
-// layoutOpened answers pickLayout.
-type layoutOpened struct {
-	r   *Restored
-	err error
-}
-
-// gotLayoutOpened replaces the sessions with the layout's, the old ones'
-// connections closed; the new ones connect as at start (§14).
-func (a *App) gotLayoutOpened(m layoutOpened) tea.Cmd {
-	if m.err != nil {
-		return a.showToast(m.err.Error(), toastTTL)
-	}
-	old := a.sessions
-	a.sessions, a.sess = m.r.Sessions, m.r.Sessions[m.r.Active]
-	a.attach(a.sess)
-	a.restored = true
-	cmds := a.connectsNow()
-	if len(m.r.Warnings) > 0 {
-		cmds = append(cmds, a.showToast(strings.Join(m.r.Warnings, "；"), toastTTL))
-	}
-	for _, s := range old {
-		s.Close()
-	}
-	return tea.Batch(cmds...)
 }

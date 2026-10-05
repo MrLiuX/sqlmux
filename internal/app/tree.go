@@ -128,7 +128,7 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	}
 	cmds := a.resolvePending(c)
 	for _, t := range a.consoles() { // opened before the tree had a schema, or in one gone: the connection's (§8.6)
-		if t.conn == c && !slices.Contains(c.Schemas, t.schema) {
+		if t.conn == c && t.want == nil && !slices.Contains(c.Schemas, t.schema) { // one waiting for another connection has its schema
 			t.schema = c.Schema
 			cmds = append(cmds, a.keepConsole(t))
 		}
@@ -486,6 +486,9 @@ func (a *App) refreshTree() tea.Cmd {
 		return a.treeFold(n, true)
 	}
 	c := a.conn()
+	if c.State != connReady { // a layout's other session, still connecting (F6.5)
+		return a.showToast(i18n.T("连接还没连上"), toastTTL)
+	}
 	c.dropCols()
 	return a.loadCatalog(c)
 }

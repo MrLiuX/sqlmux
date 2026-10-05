@@ -127,6 +127,7 @@ func (w *Window) pane(id int) *Pane {
 type Session struct {
 	Name    string
 	Conns   []*Conn         // connections.toml's, in its order: the tree's roots (§7.8)
+	start   *Conn           // the one it was started on, a layout's: what the file keeps (§14)
 	last    *Conn           // the current connection where nothing focused names one (§5)
 	open    map[string]bool // tree nodes opened or closed by hand, by node ID; the rest as §7.8 says
 	Windows []*Window
@@ -227,24 +228,28 @@ var engines = map[string]db.Engine{"postgres": postgres.Engine{}, "mysql": mysql
 func (a *App) win() *Window { return a.sess.Windows[a.sess.Active] }
 
 // conn is the current connection (§5): the focused tab's, a result tab's
-// where it ran; on the tree, the one the cursor is under once connected;
-// else the last one, so it is always connected.
+// where it ran; on the tree, the one the cursor is under; each once
+// connected, else the last one. That one may not be connected either, a
+// layout's other sessions connect as the program runs (F6.5): what runs
+// on it looks first (Conn.State).
 func (a *App) conn() *Conn {
-	p := a.focused()
-	if p == a.win().Tree {
-		if n, ok := a.treeNode(); ok && n.conn != nil && n.conn.State == connReady {
-			return n.conn
+	var c *Conn
+	if p := a.focused(); p == a.win().Tree {
+		if n, ok := a.treeNode(); ok {
+			c = n.conn
 		}
-		return a.sess.last
+	} else if t := p.tab(); t != nil {
+		switch {
+		case t.Data != nil:
+			c = t.Data.conn
+		case t.Console != nil:
+			c = t.Console.conn
+		case t.Result != nil && t.Result.run != nil:
+			c = t.Result.run.conn
+		}
 	}
-	switch t := p.tab(); {
-	case t == nil:
-	case t.Data != nil:
-		return t.Data.conn
-	case t.Console != nil:
-		return t.Console.conn
-	case t.Result != nil && t.Result.run != nil:
-		return t.Result.run.conn
+	if c != nil && c.State == connReady {
+		return c
 	}
 	return a.sess.last
 }
@@ -255,6 +260,9 @@ func (c *Conn) inTx() bool { return c.tx != 0 && c.tx != 'I' }
 
 // cancel cancels what c's Main and Meta are running (§8.3).
 func (c *Conn) cancel() {
+	if c.State != connReady {
+		return
+	}
 	c.Meta.Cancel()
 	c.Main.Cancel()
 }
@@ -272,7 +280,7 @@ func (c *Conn) dropCols() {
 // file kept (§11). A file that cannot be read leaves that pane with no tab
 // too: opened empty, the autosave would write over it.
 func newSession(name string, conns []*Conn, start *Conn, n int) *Session {
-	s := &Session{Name: name, Conns: conns, last: start, open: map[string]bool{}}
+	s := &Session{Name: name, Conns: conns, start: start, last: start, open: map[string]bool{}}
 	var w *Window
 	w, s.warning = s.newWindow(start, n)
 	s.Windows = []*Window{w}
@@ -494,7 +502,7 @@ func (a *App) openTableAs(p *Pane, c *Conn, t db.Table, r *request) tea.Cmd {
 	// connection, t_order [seed], if that confuses.
 	tab := Tab{Name: t.Name, Data: newDataTab(c, t)}
 	if r != nil {
-		tab.Data.request, tab.Data.shown, tab.Data.where.Text = *r, *r, r.applied
+		tab.Data.setRequest(*r)
 	}
 	putTab(p, tab, landing)
 	return a.fetch(tab.Data, true)
@@ -650,8 +658,13 @@ func (a *App) consoles() []*consoleTab {
 
 // freeConsole is the least n no session has console_n open (§11).
 func (a *App) freeConsole() int {
+	return freeNumber(func(n int) bool { return a.consoleOpen(config.ConsolePath(n)) })
+}
+
+// freeNumber is the least console number taken says is not.
+func freeNumber(taken func(int) bool) int {
 	n := 1
-	for a.consoleOpen(config.ConsolePath(n)) {
+	for taken(n) {
 		n++
 	}
 	return n
@@ -711,6 +724,15 @@ func (a *App) closeTab(p *Pane, i int) {
 		return
 	}
 	a.sess.recordClosed(a.win().ID, p.ID, p.Tabs[i])
+	dropTab(p, i)
+	if len(p.Tabs) == 0 {
+		a.removePane(p.ID)
+	}
+}
+
+// dropTab takes tab i out of p, the pane staying: the tab shown is the one
+// before it, or the one that was current before (T-01).
+func dropTab(p *Pane, i int) {
 	p.Tabs = slices.Delete(p.Tabs, i, i+1)
 	switch {
 	case i != p.Cur:
@@ -728,9 +750,6 @@ func (a *App) closeTab(p *Pane, i int) {
 		p.Cur, p.Prev = p.Prev, -1
 	default:
 		p.Cur, p.Prev = max(min(i, len(p.Tabs)-1), 0), -1
-	}
-	if len(p.Tabs) == 0 {
-		a.removePane(p.ID)
 	}
 }
 
