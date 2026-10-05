@@ -242,7 +242,7 @@ func (r *Resolver) feed(c Context, k Key, root *node, out *[]Result) {
 	}
 }
 
-func (r *Resolver) fire(c Context, out *[]Result) {
+func (r *Resolver) fire(_ Context, out *[]Result) {
 	n, count := r.node, r.count
 	r.Reset()
 	if n.rhs == nil {

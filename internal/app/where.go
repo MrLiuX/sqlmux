@@ -670,13 +670,13 @@ func (a *App) editPaired(in *ui.Input, k keymap.Key) bool {
 		in.Text, in.Pos = before[:len(before)-1]+after[1:], in.Pos-1
 		return true
 	case n > 0 && n == len(t):
-		switch close, skip := editor.Pair(before, after, r); {
+		switch shut, skip := editor.Pair(before, after, r); {
 		case skip:
 			in.Pos += n
 			return false
-		case close != "":
-			in.Insert(t + close)
-			in.Pos -= len(close)
+		case shut != "":
+			in.Insert(t + shut)
+			in.Pos -= len(shut)
 			return true
 		}
 	}

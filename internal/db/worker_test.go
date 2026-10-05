@@ -12,7 +12,7 @@ import (
 // blockConn's Query waits for its ctx, counting how many run at once.
 type blockConn struct{ running, most atomic.Int32 }
 
-func (c *blockConn) Query(ctx context.Context, sql string, args ...Val) (Result, error) {
+func (c *blockConn) Query(ctx context.Context, sql string, _ ...Val) (Result, error) {
 	n := c.running.Add(1)
 	defer c.running.Add(-1)
 	if n > c.most.Load() {

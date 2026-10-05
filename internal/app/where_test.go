@@ -255,15 +255,15 @@ func TestWhereHistory(t *testing.T) {
 	a, tab, _ := withRecorder(t, 160, 45)
 	feed(t, a, "/id > 5<CR>")
 	tab.order, tab.limit = "amount", 500
-	clear := strings.Repeat("<BS>", 20)
-	feed(t, a, "/"+clear+"status = 'done'<CR>")
+	wipe := strings.Repeat("<BS>", 20)
+	feed(t, a, "/"+wipe+"status = 'done'<CR>")
 	tab.order, tab.limit = "", 100
-	feed(t, a, "/"+clear+"id > 5<CR>") // again: to the top, once
+	feed(t, a, "/"+wipe+"id > 5<CR>") // again: to the top, once
 	st := a.tableState(tab)
 	if len(st.History) != 2 || st.History[0].Where != "id > 5" || st.History[1].Limit != 500 {
 		t.Fatalf("history %+v", st.History)
 	}
-	feed(t, a, "/"+clear+"xyz<C-r>") // what is there does not filter it
+	feed(t, a, "/"+wipe+"xyz<C-r>") // what is there does not filter it
 	if es, _ := a.histEntries(tab); tab.hist == nil || a.mode() != keymap.Command || len(es) != 2 {
 		t.Fatalf("C-r opens the list, all of it: %+v", es)
 	}
@@ -280,7 +280,7 @@ func TestWhereHistory(t *testing.T) {
 			t.Errorf("%s: at %d, want %d", keys, tab.hist.sel, want)
 		}
 	}
-	feed(t, a, clear+"don")                                      // filters the list
+	feed(t, a, wipe+"don")                                       // filters the list
 	if es, _ := a.histEntries(tab); len(es) != 2 || !es[0].fav { // the favorite, and its run
 		t.Fatalf("filtered: %+v", es)
 	}

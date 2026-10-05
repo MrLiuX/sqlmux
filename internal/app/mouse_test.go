@@ -181,7 +181,7 @@ func TestClickUnderPaneNumbers(t *testing.T) {
 		focus int
 	}{
 		{"console", func(a *App) uv.Position { r := a.layout()[2]; return uv.Pos(r.Min.X+5, r.Min.Y+5) }, 2},
-		{"sidebar", func(a *App) uv.Position { return uv.Pos(5, 10) }, 0},
+		{"sidebar", func(_ *App) uv.Position { return uv.Pos(5, 10) }, 0},
 		{"status bar", func(*App) uv.Position { return statusBar }, 1},
 		{"a window on the status bar", func(a *App) uv.Position {
 			return find(t, a, ui.Target{Kind: ui.KindButton, Action: "window.select 1"}).Min

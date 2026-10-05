@@ -267,8 +267,8 @@ func TestPair(t *testing.T) {
 		{"(", "]", ')', "", false}, // not the same one: typed
 		{"", "", 'a', "", false},
 	} {
-		if close, skip := Pair(c.before, c.after, c.r); close != c.close || skip != c.skip {
-			t.Errorf("%q|%q %c: %q %v, want %q %v", c.before, c.after, c.r, close, skip, c.close, c.skip)
+		if shut, skip := Pair(c.before, c.after, c.r); shut != c.close || skip != c.skip {
+			t.Errorf("%q|%q %c: %q %v, want %q %v", c.before, c.after, c.r, shut, skip, c.close, c.skip)
 		}
 	}
 	for _, c := range []struct {

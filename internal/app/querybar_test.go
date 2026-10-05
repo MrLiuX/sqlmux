@@ -33,7 +33,7 @@ func (r *recDB) Close() error                                           { return
 
 // lastSQL runs the fetch cmd starts, when it is the page's alone, and is
 // the SQL it sent.
-func lastSQL(t *testing.T, a *App, rec *recDB, cmd tea.Cmd) string {
+func lastSQL(t *testing.T, _ *App, rec *recDB, cmd tea.Cmd) string {
 	t.Helper()
 	if cmd == nil {
 		t.Fatal("no fetch")

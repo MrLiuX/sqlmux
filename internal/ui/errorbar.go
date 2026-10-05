@@ -34,11 +34,11 @@ func (b ErrorBar) Draw(f *Frame, r uv.Rectangle) {
 	st := uv.Style{Fg: th.Fg, Bg: th.ErrorBg}
 	f.Fill(r, st)
 	x := r.Max.X - 3 // " × "
-	close := uv.Style{Fg: th.Dim, Bg: th.ErrorBg}
+	shut := uv.Style{Fg: th.Dim, Bg: th.ErrorBg}
 	if f.Region(uv.Rect(x, r.Min.Y, 3, 1), Target{Kind: KindButton, Action: fmt.Sprintf("pane.error.close %d", b.Pane)}) {
-		close.Bg = th.Select
+		shut.Bg = th.Select
 	}
-	f.Text(x, r.Min.Y, r.Max.X, " × ", close)
+	f.Text(x, r.Min.Y, r.Max.X, " × ", shut)
 	f.Text(r.Min.X+1, r.Min.Y, x, b.First.Fit(x-r.Min.X-2), uv.Style{Fg: th.Error, Bg: th.ErrorBg})
 	for i, l := range b.More[:n-1] {
 		if i == errorBarRows-2 && len(b.More) > n-1 {

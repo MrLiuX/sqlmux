@@ -234,7 +234,10 @@ func blockObject(open, shut byte) object {
 		switch {
 		case !visual || e.cur == e.vstart:
 			if open == '{' { // ignore the indent
-				for e.inIndent(1) && e.inc(&e.cur) == 0 {
+				for e.inIndent(1) {
+					if e.inc(&e.cur) != 0 {
+						break
+					}
 				}
 			}
 			if l := e.line(); e.cur.Col < len(l) && l[e.cur.Col] == open {

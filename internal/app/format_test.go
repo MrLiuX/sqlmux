@@ -12,7 +12,7 @@ import (
 
 // gqIn presses keys in console c, the last starting a format, and
 // delivers what the Cmd brings back.
-func gqIn(t *testing.T, a *App, c *consoleTab, keys string) {
+func gqIn(t *testing.T, a *App, _ *consoleTab, keys string) {
 	t.Helper()
 	ks, _ := keymap.Parse(keys)
 	for _, k := range ks[:len(ks)-1] {

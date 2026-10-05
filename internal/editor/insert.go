@@ -154,14 +154,14 @@ func (e *Editor) arrived() {
 func (e *Editor) typePaired(t string) {
 	if r, n := utf8.DecodeRuneInString(t); e.AutoPairs && e.mode == Insert && n == len(t) {
 		l, c := e.line(), e.cur.Col
-		switch close, skip := Pair(l[:c], l[c:], r); {
+		switch shut, skip := Pair(l[:c], l[c:], r); {
 		case skip:
 			e.cur.Col += n
 			e.ins.ai = false
 			return
-		case close != "":
-			e.typeText(t + close)
-			e.cur.Col -= len(close)
+		case shut != "":
+			e.typeText(t + shut)
+			e.cur.Col -= len(shut)
 			return
 		}
 	}
@@ -173,32 +173,32 @@ var closers = map[rune]string{'(': ")", '[': "]", '{': "}", '\'': "'", '"': `"`,
 
 // Pair is what typing r does with autopairs (§7.9), before and after
 // being the text on each side of the cursor: skip when r is a closing
-// half or a quote the cursor is right before, which it steps over; close
+// half or a quote the cursor is right before, which it steps over; shut
 // is the other half to put after the cursor when r opens a pair there:
 // with the end, a blank or a closing bracket after it, and for a quote
 // no letter, digit or the same quote before it: don't, and a quote
 // typed twice to escape it.
-func Pair(before, after string, r rune) (close string, skip bool) {
+func Pair(before, after string, r rune) (shut string, skip bool) {
 	next, _ := utf8.DecodeRuneInString(after)
 	if next == r && strings.ContainsRune(")]}'\"`", r) {
 		return "", true
 	}
-	close, ok := closers[r]
+	shut, ok := closers[r]
 	if !ok || after != "" && !unicode.IsSpace(next) && !strings.ContainsRune(")]}", next) {
 		return "", false
 	}
-	if p, _ := utf8.DecodeLastRuneInString(before); close == string(r) && before != "" && (unicode.IsLetter(p) || unicode.IsDigit(p) || p == r) {
+	if p, _ := utf8.DecodeLastRuneInString(before); shut == string(r) && before != "" && (unicode.IsLetter(p) || unicode.IsDigit(p) || p == r) {
 		return "", false
 	}
-	return close, false
+	return shut, false
 }
 
 // EmptyPair reports whether the cursor is between the halves of an empty
 // pair, which BS takes both of with autopairs (§7.9).
 func EmptyPair(before, after string) bool {
 	p, _ := utf8.DecodeLastRuneInString(before)
-	close, ok := closers[p]
-	return ok && before != "" && strings.HasPrefix(after, close)
+	shut, ok := closers[p]
+	return ok && before != "" && strings.HasPrefix(after, shut)
 }
 
 func (e *Editor) typeText(t string) {
