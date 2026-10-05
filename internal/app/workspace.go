@@ -135,6 +135,41 @@ type Session struct {
 	RunSeq  int         // the last run's number, #42 on its result tabs (§11)
 	warning string      // console_1's file could not be read: a toast on start (§11)
 	closed  []closedTab // the tabs closed last, the newest last: tab.reopen's (F5.16)
+
+	// When each tab was last the focused pane's current one, a count by
+	// what the tab holds, and the tab that is now (F5.19, §12). Not kept.
+	// ponytail: a closed tab stays in the map; a session opens few enough.
+	tabSeq  map[any]int
+	seq     int
+	focused any
+}
+
+// tabKey is what a tab is known by: its table, console or result; nil for a
+// landing tab, which none are.
+func tabKey(tb *Tab) any {
+	switch {
+	case tb == nil:
+	case tb.Data != nil:
+		return tb.Data
+	case tb.Console != nil:
+		return tb.Console
+	case tb.Result != nil:
+		return tb.Result
+	}
+	return nil
+}
+
+// touch notes that tb, the current tab of the focused pane, is the one in
+// use: the Tab scope of the palette lists them newest first (F5.19). The
+// sidebar and a landing tab are none, the one before staying the one.
+func (s *Session) touch(tb *Tab) {
+	if key := tabKey(tb); key != nil && key != s.focused {
+		if s.tabSeq == nil {
+			s.tabSeq = map[any]int{}
+		}
+		s.seq++
+		s.tabSeq[key], s.focused = s.seq, key
+	}
 }
 
 // connState is how far a Conn got with connecting (§7.8「连接节点」).

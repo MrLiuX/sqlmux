@@ -80,7 +80,7 @@ func TestPaletteListsNoOverlayKeys(t *testing.T) {
 	for _, q := range []string{"关闭", "palette"} {
 		feed(t, a, "<C-p>"+q)
 		for _, r := range rowsOf(a) {
-			if strings.HasPrefix(r, "palette.") && r != "palette.open=:" && r != "palette.command=" && r != "palette.sql=;" {
+			if strings.HasPrefix(r, "palette.") && r != "palette.open=:" && r != "palette.command=" && r != "palette.window=" && r != "palette.tab=" && r != "palette.sql=;" {
 				t.Errorf("%s lists %s", q, r)
 			}
 		}
@@ -239,7 +239,7 @@ func namesOf(a *App) []string {
 func TestPaletteScopesCycle(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	feed(t, a, "<C-p>ord")
-	for _, want := range []string{"$ord", "%ord", "@ord", ">ord", ";ord", "ord"} {
+	for _, want := range []string{"$ord", "%ord", "&ord", "#ord", "@ord", ">ord", ";ord", "ord"} {
 		feed(t, a, "<Tab>")
 		if got := a.palette.input.Text; got != want {
 			t.Fatalf("Tab: %q, want %q", got, want)
@@ -249,7 +249,7 @@ func TestPaletteScopesCycle(t *testing.T) {
 	if in := a.palette.input; in.Text != ";ord" || in.Pos != len(";ord") {
 		t.Fatalf("S-Tab wraps round: %+v", in)
 	}
-	click(a, find(t, a, ui.Target{Kind: ui.KindButton, Action: "palette.scope 3"}).Min)
+	click(a, find(t, a, ui.Target{Kind: ui.KindButton, Action: "palette.scope 5"}).Min)
 	if a.palette.input.Text != "@ord" {
 		t.Errorf("clicking 表: %q", a.palette.input.Text)
 	}
@@ -391,7 +391,7 @@ func TestPaletteLayout(t *testing.T) {
 		a := sized(160, 45, icons)
 		feed(t, a, "<C-p>ab")
 		lines := strings.Split(a.render().String(), "\n")
-		if tabs := lines[8]; !strings.Contains(tabs, " 所有   会话 $   窗口·Pane %   表 @   命令 > ") {
+		if tabs := lines[8]; !strings.Contains(tabs, " 所有   会话 $   窗口·Pane %   窗口 &   Tab #   表 @   命令 > ") {
 			t.Errorf("%s: scope tabs row %q", icons, tabs)
 		}
 		if in := lines[9]; !strings.Contains(in, "│ "+search+" ab ") {
@@ -567,5 +567,50 @@ func TestPaletteTiesKeepOrder(t *testing.T) {
 	feed(t, a, "<C-p>@t_user")
 	if rows := a.paletteView().Rows; len(rows) != 4 || rows[0].Name != "t_user" || rows[0].Where != "doraemon.public" || rows[3].Where != "doraemon.a" {
 		t.Errorf("rows %+v", rows)
+	}
+}
+
+// The Window scope lists this session's windows by number; the Tab scope
+// every table, console and result tab of it, the one focused last first and
+// the current one last, a landing tab none; palette.window and palette.tab
+// open them (F5.19, §12).
+func TestPaletteWindowAndTabScopes(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a := sized(160, 45, "nerd")
+	a.run("palette.window", 0)
+	if a.palette.input.Text != "&" || len(namesOf(a)) != 1 || namesOf(a)[0] != "窗口:0: data" {
+		t.Fatalf("palette.window: %q %v", a.palette.input.Text, namesOf(a))
+	}
+	feed(t, a, "<Esc><Space>c<Space>c")
+	a.state.Recent = []config.Recent{{Kind: "window", ID: "3"}} // picked last, the number goes first
+	a.run("palette.window", 0)
+	if got := namesOf(a); !slices.Equal(got, []string{"窗口:0: data", "窗口:1: data", "窗口:2: data"}) {
+		t.Errorf("by number: %v", got)
+	}
+	feed(t, a, "<Esc><Space>p<Space>p") // back on window 0, console_1 and a table in it
+	loadOrders(t, a, 3)                 // focused: t_order
+	a.win().focus(2)                    // console_1
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
+	a.run("palette.tab", 0)
+	if got := namesOf(a); len(got) == 0 || got[len(got)-1] != "Tab:console_1" || got[0] != "Tab:t_order" {
+		t.Fatalf("Tab scope: %v", got)
+	}
+	got := namesOf(a)
+	for _, n := range got {
+		if n == "Tab:新 tab" {
+			t.Errorf("a landing tab is listed: %v", got)
+		}
+	}
+	// the other windows' consoles are listed too, and the order follows the focus
+	if !slices.Contains(got, "Tab:console_2") || !slices.Contains(got, "Tab:console_3") {
+		t.Errorf("other windows' tabs: %v", got)
+	}
+	feed(t, a, "<CR>") // the first: back to the table
+	if dataOf(a.focused()) == nil || a.focused().ID != 1 {
+		t.Errorf("↵ goes back to the table: pane %d", a.focused().ID)
+	}
+	a.run("palette.tab", 0)
+	if got := namesOf(a); got[len(got)-1] != "Tab:t_order" || got[0] != "Tab:console_1" {
+		t.Errorf("after the switch: %v", got)
 	}
 }

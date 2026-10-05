@@ -71,6 +71,8 @@ var scopes = []scopeTab{
 	{"所有", "", []itemKind{itemSession, itemWindow, itemPane, itemTab, itemTable, itemCommand}}, // not the SQL history (§12)
 	{"会话", "$", []itemKind{itemSession}},
 	{"窗口·Pane", "%", []itemKind{itemWindow, itemPane, itemTab}},
+	{"窗口", "&", []itemKind{itemWindow}},
+	{"Tab", "#", []itemKind{itemTab}},
 	{"表", "@", []itemKind{itemTable}},
 	{"命令", ">", []itemKind{itemCommand}},
 	{"SQL", ";", []itemKind{itemSQL}}, // what follows the ; is SQL, the history while there is none
@@ -222,6 +224,16 @@ func (a *App) paletteMatches() (items []paletteItem, ms []ui.Match) {
 				items = append(items, it)
 			}
 		}
+	}
+	switch scopes[scope].prefix {
+	case "&": // by number, whatever was picked lately
+		slices.SortStableFunc(items, func(x, y paletteItem) int {
+			wx, _ := strconv.Atoi(x.id)
+			wy, _ := strconv.Atoi(y.id)
+			return a.sess.windowByID(wx) - a.sess.windowByID(wy)
+		})
+	case "#":
+		items = a.tabsByUse(items)
 	}
 	texts := make([]string, len(items))
 	for i, it := range items {
@@ -600,4 +612,31 @@ func (a *App) paletteKey(k keymap.Key) tea.Cmd {
 		p.sel, p.top = 0, 0
 	}
 	return a.completeSQL()
+}
+
+// tabsByUse is the tab items by when they were focused, newest first, the
+// current one last, so opening the Tab scope and ↵ goes back to the one
+// before (§12, telescope's buffers with sort_mru and ignore_current_buffer);
+// those never focused come after the focused ones, as they are listed.
+// Landing tabs are left out.
+func (a *App) tabsByUse(items []paletteItem) []paletteItem {
+	s := a.sess
+	rank := map[string]int{}
+	var kept []paletteItem
+	for _, it := range items {
+		var wi, id, i int
+		fmt.Sscan(it.id, &wi, &id, &i)
+		tab := &a.sess.Windows[wi].pane(id).Tabs[i]
+		key := tabKey(tab)
+		if key == nil {
+			continue
+		}
+		rank[it.id] = s.tabSeq[key]
+		if key == s.focused {
+			rank[it.id] = -1
+		}
+		kept = append(kept, it)
+	}
+	slices.SortStableFunc(kept, func(x, y paletteItem) int { return rank[y.id] - rank[x.id] })
+	return kept
 }
