@@ -30,14 +30,23 @@ orbit() { local n=$1 i out=; for ((i = 0; i < n; i++)); do key F2; out+="$(focus
 # ---- pane.focus.next：顺时针（从 12 点起）。默认布局：树在左、① 在中、② console 在右，树和 ① 的中心同一水平线，近的在前
 begin
 check "（准备）默认布局：焦点在 ①" focus_is 1
-check "F2：① → 树 → ② → ①（树和 ① 角度相同，近的 ① 在前；② 在 3 点钟方向，最先）" eval '[[ $(orbit 3) == "0 2 1 " ]]'
+check "F2：① → ② → 树 → ①（② 在 3 点钟方向最先；树和 ① 的中心在同一水平线，角度相同时按编号：树在前）" eval '[[ $(orbit 3) == "2 0 1 " ]] || { echo "  $(orbit 0)"; false; }'
 key C-l; key i; paste "select 1 as a"; key Escape; key Enter; wait_for 8 eval '[[ $(panes) == *3* ]]'; settle
 check "（准备）② 执行：结果区 ③ 出现在 ② 下面" eval '[[ $(panes) == "0 1 2 3 " ]] && g2=($(geom 2)) && g3=($(geom 3)) && (( g3[1] > g2[1] ))'
 check "有结果区时从 ② 起：② → ③ → 树 → ① → ②（各 pane 的中心相对界面中心的角度：② 81°、③ 128°、树 270°、① 306°）" eval '[[ $(focused) == 2 && $(orbit 4) == "3 0 1 2 " ]] || { echo "  $(orbit 0)"; false; }'
 e2e_keys Space; e2e_type r; sleep 0.4
-check "SPC r 收起结果区：③ 不算在内；① 回到整高，和树在同一水平线，近的在前：② → ① → 树 → ②" eval '[[ $(panes) == "0 1 2 " && $(orbit 3) == "1 0 2 " ]] || { echo "  $(panes) | $(orbit 0)"; false; }'
+check "SPC r 收起结果区：③ 不算在内；① 回到整高，和树在同一水平线，角度相同按编号：② → 树 → ① → ②" eval '[[ $(panes) == "0 1 2 " && $(orbit 3) == "0 1 2 " ]] || { echo "  $(panes) | $(orbit 0)"; false; }'
 e2e_keys Space; e2e_type b; sleep 0.4
 check "再收起树（SPC b）：只剩 ① 和 ②，F2 在两个之间来回" eval 'o=$(orbit 4); [[ $o == "1 2 1 2 " ]] || { echo "  $o"; false; }'
+
+# 一排满高 [树|1|2|3]：树 → 1 → 2 → 3 → 树（同一水平线上，右边的 ②③ 先，左边的树 ① 后，各自按编号）
+begin; key C-l; e2e_keys Space; e2e_type %; sleep 0.6
+check "（准备）② 右边分出 ③，一排四个满高的 pane，焦点在 ③" eval '[[ $(panes) == "0 1 2 3 " ]] && focus_is 3'
+check "F2：③ → 树 → ① → ② → ③（编号顺序 树 → 1 → 2 → 3 → 树）" eval '[[ $(orbit 4) == "0 1 2 3 " ]] || { echo "  $(orbit 0)"; false; }'
+# ① 上下分开（1 在上、3 在下）：树 → 1 → 2 → 3 → 树
+begin; e2e_keys Space; e2e_type '"'; sleep 0.6
+check "（准备）① 分成上 ① 和下 ②（新 pane，焦点在它），console 变成 ③（编号按位置）" eval '[[ $(panes | tr " " "\n" | sort | tr "\n" " ") == "0 1 2 3 " ]] && g1=($(geom 1)) && g2=($(geom 2)) && g3=($(geom 3)) && (( g2[1] > g1[1] && g3[0] > g1[0] )) && focus_is 2'
+check "F2：下 ② → 树 → 上 ① → console ③ → 下 ②（树 → 左上 → 右 → 左下，按中心的角度顺时针：树 270°、① 315°、③ 90°、② 225°）" eval '[[ $(orbit 4) == "0 1 3 2 " ]] || { echo "  $(orbit 0)"; false; }'
 
 # ---- console.format：第一条语句开头到最后一条结尾之间格式化，外面的注释、空行不动；一次 u 撤回；光标回到原语句开头；INSERT 下不做
 begin; key C-l; key i
@@ -97,60 +106,59 @@ key F3; key y
 check "再 F3、y：tab 关了，pane 空了跟着关" eval '[[ $(panes) == "0 1 " ]]'
 
 # ---- tab.reopen：只记逐个关掉的 tab，恢复 WHERE / ORDER / LIMIT；连按往前翻；原 pane 没了开在当前 pane；console 回到原来的文件
+# （tab.close 关到空 pane 时 pane 也跟着关，所以用「① 里还有别的 tab」的布局测「原 pane 还在」）
 qbar() { e2e_text 36 103 3; }
 wh() { e2e_text 36 103 2 | sed 's/ *▾.*//; s/^ *WHERE *//; s/ *$//'; }
+t1() { tabbar 1 | sed 's/-//g; s/\*//g'; }
 begin
 key F4; sleep 0.4
 check "没有关过的 tab：F4 什么都不做，不弹 toast" eval '[[ $(panes) == "0 1 2 " ]] && ! screen_has "没有" && running'
-open_table t_order; settle
+two_tabs; settle
 key /; clear_in; e2e_type "id < 50"; key Enter; settle
 key g l; key C-n; key Enter; settle
 key g o; sleep 0.3; e2e_type amount; key Enter; settle
-check "（准备）t_order：WHERE id < 50、ORDER amount、LIMIT 500" eval '[[ $(wh) == "id < 50" ]] && [[ $(qbar) == *"ORDER amount"* && $(qbar) == *"LIMIT 500"* ]]'
+check "（准备）① 里 t_user、t_order，t_order：WHERE id < 50、ORDER amount、LIMIT 500" eval 'tabs_are 1 "1:t_user- │ 2:t_order*" && [[ $(wh) == "id < 50" && $(qbar) == *"ORDER amount"* && $(qbar) == *"LIMIT 500"* ]]'
 key x
-check "x 关掉：① 变成引导页" eval 'e2e_plain | grep -q "打开表" && [[ $(panes) == "0 1 2 " ]]'
+check "x 关掉 t_order：① 里只剩 t_user" eval 'tabs_are 1 "1:t_user*" && [[ $(panes) == "0 1 2 " ]]'
 key F4; settle
-check "F4：t_order 回到 ①，WHERE、ORDER、LIMIT 原样（页码回到第 1 页）" eval '[[ $(title1) == *" t_order ─"* ]] && [[ $(wh) == "id < 50" && $(qbar) == *"ORDER amount"* && $(qbar) == *"LIMIT 500"* && $(qbar) == *"PAGE 1/"* ]] || { echo "  $(title1)"; echo "  $(wh) | $(qbar)"; false; }'
+check "F4：t_order 回到 ①，WHERE、ORDER、LIMIT 原样，从第 1 页开始" eval '[[ $(t1) == "1:t_user │ 2:t_order" ]] && [[ $(wh) == "id < 50" && $(qbar) == *"ORDER amount"* && $(qbar) == *"LIMIT 500"* && $(qbar) == *"PAGE 1/"* ]] || { echo "  $(tabbar 1) | $(wh) | $(qbar)"; false; }'
 key F4; sleep 0.4
-check "列表空了：再按 F4 什么都不做（表还是这一张，没有多开）" eval 'tabs_are 1 "1:t_order*" && ! screen_has "没有"'
+check "列表空了：再按 F4 什么都不做（不多开 tab）、不弹 toast" eval 'tabs_are 1 "1:t_user- │ 2:t_order*" && ! screen_has "没有"'
 
-# 连按往前翻：关两张，F4 先开最近关的
-begin; two_tabs
+# 连按往前翻
+begin; two_tabs; e2e_keys C-p; sleep 0.3; e2e_type "@t_sku"; sleep 0.3; e2e_keys C-t; sleep 0.8
+check "（准备）① 里 t_user、t_order、t_sku" eval '[[ $(t1) == "1:t_user │ 2:t_order │ 3:t_sku" ]]'
 key x; key x
-check "（准备）t_order、t_user 先后关掉，① 是引导页" eval 'e2e_plain | grep -q "打开表"'
+check "（准备）先关 t_sku、再关 t_order：只剩 t_user" eval 'tabs_are 1 "1:t_user*"'
 key F4; settle
-check "F4：先开最近关的 t_order" eval 'tabs_are 1 "1:t_order*"'
+check "F4：先开最近关的 t_order" eval '[[ $(t1) == "1:t_user │ 2:t_order" ]]'
 key F4; settle
-check "再 F4：往前翻，t_user 也回来，同一个 pane 里两个 tab（t_order 在前）" eval 'tabs_are 1 "1:t_order │ 2:t_user*" || tabs_are 1 "1:t_order- │ 2:t_user*"'
+check "再 F4：往前翻，t_sku 也回来" eval '[[ $(t1) == "1:t_user │ 2:t_order │ 3:t_sku" ]] && tabs_are 1 "1:t_user │ 2:t_order- │ 3:t_sku*" || { tabbar 1; false; }'
 
-# 这张表在 pane 里已经开着：只切过去
-key x; key F4 2>/dev/null
-tab_now=$(tabbar 1); open_table t_order
-check "（准备）t_order 又手工打开了" eval 'tabs_are 1 "1:t_order*" || tabs_are 1 "1:t_order- │ 2:t_user │ 3:t_order*" || true'
-echo "  tabs: $(tabbar 1)"
+# 这张表在这个 pane 里已经开着：只切过去，不多开
+key x; open_table t_sku; settle
+key F4; settle
+check "t_sku 关掉后又手工打开；F4 的最近一条是 t_sku：只切过去，tab 数不变" eval '[[ $(t1) == "1:t_user │ 2:t_order │ 3:t_sku" ]] && [[ $(tabbar 1) == *"3:t_sku"* ]]' || tabbar 1
 
 # 整个 pane 关掉：里面的 tab 不记
-begin; open_table t_order; settle
+begin; two_tabs; settle
 e2e_keys Space; e2e_type x; sleep 0.5
-check "SPC x 关掉 ① 整个 pane" eval '[[ $(panes) == "0 1 " ]]'
+check "SPC x 关掉 ① 整个 pane（t_user、t_order 一起）" eval '[[ $(panes) == "0 1 " ]] && tabs_are 1 "1:console_1*"'
 key F4; sleep 0.4
-check "pane.close 里的 t_order 没有记下：F4 什么都不做" eval '[[ $(panes) == "0 1 " ]] && tabs_are 1 "1:console_1*"'
+check "整个 pane 关掉时里面的 tab 不记：F4 什么都不做" eval '[[ $(panes) == "0 1 " ]] && tabs_are 1 "1:console_1*"'
 
 # 原来的 pane 没了：开在当前 pane
-begin; e2e_keys Space; e2e_type %; sleep 0.5      # ① 分成 ① ③（新 pane 在右）
-open_table t_user; settle
+begin; open_table t_order; settle
 key x
-e2e_keys Space; e2e_type x; sleep 0.5               # 关掉这个 pane
-check "（准备）t_user 在新 pane 里打开又关掉，新 pane 也关了：回到 3 个 pane" eval '[[ $(panes) == "0 1 2 " ]]'
-key C-l
+check "（准备）t_order 是 ① 唯一的 tab：x 关掉后 pane 也没了，剩树和 console" eval '[[ $(panes) == "0 1 " ]] && tabs_are 1 "1:console_1*"'
 key F4; settle
-check "原 pane 没了：F4 开在当前焦点的 pane（② 的 tab 栏多了 t_user）" eval 'tabbar 2 | grep -q "t_user"' || { tabbar 2; e2e_plain | head -3; }
+check "原 pane 没了：F4 开在当前 pane（console 所在的）里，t_order 是当前 tab" eval 'tabs_are 1 "1:console_1- │ 2:t_order*"'
 
-# console：回到原来的文件
+# console：回到原来的文件、文字还在
 begin; key C-l; key i; paste "select 42 as marker"; key Escape
 e2e_type ":"; sleep 0.2; e2e_type q; key Enter; sleep 0.6
-check "（准备）:q 关掉 console_1" eval '! tabbar 2 | grep -q console_1'
+check "（准备）:q 关掉 console_1，它所在的 pane 没了" eval '[[ $(panes) == "0 1 " ]] && ! e2e_plain | grep -q "select 42 as marker"'
 key F4; sleep 1
-check "F4：console_1 回来，文字还在，用原来的连接" eval 'tabs_are 2 "1:console_1*" && [[ $(cline 1) == "select 42 as marker" ]] || { tabbar 2; cline 1; false; }'
+check "F4：console_1 回来，文字还在" eval 'tabbar 1 | grep -q "console_1" && e2e_plain | grep -q "select 42 as marker"'
 
 e2e_done

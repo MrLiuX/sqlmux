@@ -67,6 +67,26 @@ fresh; e2e_type "repl"; sleep 0.5
 check "PG 没有 replace into（MySQL 才有）" eval '! has "replace into" 2>/dev/null'
 fresh; e2e_type "on dup"; sleep 0.5
 check "PG 没有 on duplicate key update" eval '! has "on duplicate key update" 2>/dev/null'
+# ---- 审查补的：输入的大小写保留；和输入完全相同的候选排第一；多词关键字不重复前面的词；DO / KEY / FOR 后面的 UPDATE 不是表名位置
+fresh; e2e_type " b"; key Escape; key 0; key i; e2e_type "AND"; sleep 0.5; key Enter
+check "大写：AND| b ↵：光标移到空格后（4），文字仍是 AND b（没有改成小写）" eval '[[ $(line 1) == "AND b" && $(cc) == 1:4 ]]'
+fresh; e2e_type "SELECT"; sleep 0.5; key Enter
+check "打完 SELECT ↵：得到 \"SELECT \"（大小写保留，补一个空格）" eval '[[ $(line 1) == "SELECT" && $(cc) == 1:7 ]]'
+fresh; e2e_type "select 1 where x is NULL"; sleep 0.5; key Enter
+check "NULL ↵：不改成 null，也没有补空格（值），console 换行" eval '[[ $(line 1) == "select 1 where x is NULL" && $(cc) == 2:0 ]]'
+fresh; e2e_type "update t_order set"; sleep 0.5; key Enter
+check "update t_order set ↵：得到 set + 空格（完全相同的候选排第一，不会换成别的表名）" eval '[[ $(line 1) == "update t_order set" && $(cc) == 1:19 ]]'
+fresh; e2e_type "alter table t rename to"; sleep 0.5; key Enter
+check "alter table t rename to ↵：得到 rename to + 空格" eval '[[ $(line 1) == "alter table t rename to" && $(cc) == 1:24 ]]'
+fresh; e2e_type "insert in"; sleep 0.5
+for _ in 1 2 3; do key Down; done; key Enter
+check "insert in，↓ 三次选中 insert into ↵：只有一个 insert into（不重复 insert）" eval '[[ $(line 1) == "insert into" && $(cc) == 1:12 ]] || { echo "  [$(line 1)] $(cc) cands: $(names)"; false; }'
+fresh; e2e_type "values (1) on conflict (id) do update set"; sleep 0.5; key Enter
+check "PG：do update set ↵：补空格（do 后面的 update 不当成表名的位置）" eval '[[ $(line 1) == "values (1) on conflict (id) do update set" && $(cc) == 1:42 ]] || { echo "  $(line 1) $(cc)"; false; }'
+fresh; e2e_type "full"; sleep 0.5
+check "PG：full 有 full join" has "full join"
+fresh; e2e_type "ifn"; sleep 0.5
+check "PG：没有 ifnull（MySQL 才有）" eval '! has ifnull 2>/dev/null'
 key Escape; key Escape
 
 # ---- WHERE：打完整个 and ↵ → "and "，不执行、没有报错（用户验收时的复现）
@@ -86,6 +106,8 @@ key /; clear_in; e2e_type "note is null"; sleep 0.5
 check "WHERE：打完整个 null，列表里是 null" has null
 key Enter; settle
 check "打完 null ↵：文字不变，照常执行（不补空格）" eval 'mode_is NORMAL && [[ $(where_in) == "note is null" ]]'
+key /; clear_in; e2e_type "status = 'done"; sleep 0.5; key Enter; settle
+check "WHERE：status = 'done（右引号是自动配对补的，光标后就是它）↵：不算接受，照常执行查询，回到表格" eval 'mode_is NORMAL && [[ $(where_in) == "status = '"'"'done'"'"'" ]]'
 key /; clear_in; e2e_type " b"; key Escape; key 0; key i; e2e_type "and"; sleep 0.5
 check "WHERE：and| b：光标在 and 后、后面是空格，弹出 and" has and
 key Enter; sleep 0.5
@@ -111,6 +133,12 @@ fresh; e2e_type "on"; sleep 0.5
 check "MySQL：on 有 on duplicate key update，没有 on conflict" eval 'has "on duplicate key update" && ! has "on conflict" 2>/dev/null'
 fresh; e2e_type "retur"; sleep 0.5
 check "MySQL：retur 没有 returning" eval '! has returning 2>/dev/null'
+fresh; e2e_type "ifn"; sleep 0.5
+check "MySQL：有 ifnull" has ifnull
+fresh; e2e_type "full"; sleep 0.5
+check "MySQL：没有 full join（PG 才有）" eval '! has "full join" 2>/dev/null'
+fresh; e2e_type "insert into t_log values (1) on duplicate key update st"; sleep 0.8
+check "MySQL：on duplicate key update 之后的 st：不是只有表名（UPDATE 前面是 KEY，不是表名的位置）" eval '! [[ $(names) == "t_order|t_sku|t_user|" ]]' 
 fresh; e2e_type "des"; sleep 0.5
 check "MySQL：des 有 describe" has describe
 fresh; e2e_type "repl"; sleep 0.5; key Enter
