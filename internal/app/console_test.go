@@ -216,9 +216,10 @@ func soloSession() *Session {
 // says so and the rest starts (§11).
 func TestConsoleUnreadable(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	// a directory where the file goes
 	if err := os.MkdirAll(config.ConsolePath(1), 0o700); err != nil {
 		t.Fatal(err)
-	} // a directory where the file goes
+	}
 	s := soloSession()
 	if p := s.Windows[0].Root.B.Pane; len(p.Tabs) != 0 || !strings.HasPrefix(s.warning, "读取失败：") {
 		t.Fatalf("tabs %v, warning %q", p.Tabs, s.warning)

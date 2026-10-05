@@ -224,9 +224,10 @@ func TestLayoutRestoreGaps(t *testing.T) {
 
 	t.Run("console file unreadable", func(t *testing.T) {
 		t.Setenv("XDG_DATA_HOME", t.TempDir())
+		// a file that does not read
 		if err := os.MkdirAll(config.ConsolePath(1), 0o755); err != nil {
 			t.Fatal(err)
-		} // a file that does not read
+		}
 		r := Restore(layoutSpecs, &config.Layout{Version: 1, Sessions: []config.LayoutSession{
 			{Name: "1", Connection: "doraemon"},
 			{Name: "2", Connection: "doraemon", Windows: []config.LayoutWindow{{Name: "w", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{console(1, "")}}}}}},

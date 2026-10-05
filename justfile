@@ -22,9 +22,9 @@ run *args:
 test:
     go test ./...
 
-# the tests that need the databases of `just db-up`
+# the tests that need the databases of `just db-up` (in the main workspace only: AGENTS.md)
 test-integration:
-    go test -tags integration ./... || { echo "if the databases are not up: just db-up" >&2; exit 1; }
+    go test -tags integration ./...
 
 # end-to-end scripts in tmux, all of them or the named ones (just e2e f0.1 f0.2); one build for all
 e2e *scripts:
