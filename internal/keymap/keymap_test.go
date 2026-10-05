@@ -501,3 +501,74 @@ func TestMapNext(t *testing.T) {
 		t.Error("past what it binds: nothing")
 	}
 }
+
+// vim = false lays default-novim.toml over the defaults: the arrow keys in
+// the grid and the tree, PgUp, PgDn and Delete in the grid, ↵ unbound in a
+// console and C-e running it; with vim on none of it is there (§6.9, F6.6b).
+func TestNoVimLayer(t *testing.T) {
+	novim := func(toml string) *Map {
+		t.Helper()
+		cfg := config.Default()
+		cfg.Vim = false
+		var err error
+		if cfg.Leader, cfg.Bindings, err = config.ParseKeys(toml); err != nil {
+			t.Fatal(err)
+		}
+		m, ps := New(cfg)
+		if len(ps) > 0 {
+			t.Fatalf("problems: %v", ps)
+		}
+		return m
+	}
+	plainConsole := Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}
+	off, on := mustLoad(t, ""), novim("")
+	for _, c := range []struct {
+		ctx     Context
+		in      string
+		off, on []string
+	}{
+		{grid, "<Down>", []string{"keys <Down>"}, []string{"grid.down"}},
+		{grid, "<Right>", []string{"keys <Right>"}, []string{"grid.right"}},
+		{grid, "<PageDown>", []string{"keys <PageDown>"}, []string{"grid.page.next"}},
+		{grid, "<PageUp>", []string{"keys <PageUp>"}, []string{"grid.page.prev"}},
+		{grid, "<Del>", []string{"keys <Del>"}, []string{"grid.row.delete"}},
+		{grid, "j", []string{"grid.down"}, []string{"grid.down"}}, // the letters stay
+		{tree, "<Up>", []string{"keys <Up>"}, []string{"tree.up"}},
+		{tree, "<Left>", []string{"keys <Left>"}, []string{"tree.collapse"}},
+		{plainConsole, "<C-e>", []string{"keys <C-e>"}, []string{"console.run"}},
+		{plainConsole, "<CR>", []string{"keys <CR>"}, []string{"keys <CR>"}},
+		{console, "<CR>", []string{"console.run"}, []string{"keys <CR>"}},
+	} {
+		if got, _ := press(t, NewResolver(off), c.ctx, c.in); !reflect.DeepEqual(actions(got), c.off) {
+			t.Errorf("vim on, %v %q: got %v, want %v", c.ctx.Focus, c.in, actions(got), c.off)
+		}
+		if got, _ := press(t, NewResolver(on), c.ctx, c.in); !reflect.DeepEqual(actions(got), c.on) {
+			t.Errorf("vim off, %v %q: got %v, want %v", c.ctx.Focus, c.in, actions(got), c.on)
+		}
+	}
+	// one of them rebound is an ordinary remap, no conflict; the export has them as defaults
+	m := novim("[keys.grid]\n\"<PageDown>\" = \"grid.bottom\"\n")
+	if got, _ := press(t, NewResolver(m), grid, "<PageDown>"); !reflect.DeepEqual(actions(got), []string{"grid.bottom"}) {
+		t.Errorf("rebound: %v", actions(got))
+	}
+	if toml := on.TOML(map[string]string{}); !strings.Contains(toml, "# \"<Down>\" = \"grid.down\"") || !strings.Contains(toml, "# \"<C-e>\" = \"console.run\"") {
+		t.Errorf("the export has them as defaults:\n%s", toml)
+	}
+}
+
+// The layer may use PgUp, PgDn and Delete, which default.toml may not
+// (§6.9, §6.2); the rest is as portable as the defaults.
+func TestNoVimLayerIsPortable(t *testing.T) {
+	_, bs, err := config.ParseKeys(noVimTOML)
+	if err != nil {
+		t.Fatal(err)
+	}
+	named := regexp.MustCompile(`^<(Up|Down|Left|Right|PageUp|PageDown|Del|CR|C-e)>$`)
+	for _, b := range bs {
+		for _, k := range (&Map{}).expand([]Key{Key(b.Key)}) {
+			if !named.MatchString(string(k)) {
+				t.Errorf("[%s] %s is not portable", b.Table, b.Key)
+			}
+		}
+	}
+}

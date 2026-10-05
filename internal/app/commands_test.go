@@ -649,9 +649,9 @@ func TestPlainConsole(t *testing.T) {
 	if win.Focus != 2 {
 		t.Error("C-l does not move it back")
 	}
-	feed(t, a, "ab<C-a>X<C-e>Y")
-	if got := c.ed.Lines()[1]; got != "gt xabXY"[:0]+"Xgt xabY" && got != "Xgt xabY" {
-		t.Errorf("C-a, C-e: %q", got)
+	feed(t, a, "ab<C-a>X")
+	if got := c.ed.Lines()[1]; got != "Xgt xab" {
+		t.Errorf("C-a: %q", got)
 	}
 }
 
@@ -659,15 +659,16 @@ func TestPlainConsole(t *testing.T) {
 // statement at the cursor; it is replaced by what is typed (§6.9).
 func TestPlainConsoleSelectionRuns(t *testing.T) {
 	d := &execDB{res: map[string]db.Result{"select 1": rows(1), "select 2": rows(1)}}
-	a, c := inRun(t, d, "")
-	a.plain = true
+	a, c := inConsole(t, "vim = false", "")
+	a.sess.Conns[0].Main = db.NewWorker(d)
+	c.schema = ""
 	feed(t, a, "select 1;<CR>select 2;")
 	feed(t, a, "<C-a>")
 	shiftArrow(a, tea.KeyRight, 9)
 	if got := c.ed.SelectedText(); got != "select 2;" {
 		t.Fatalf("selected %q", got)
 	}
-	deliver(a, a.run("console.run", 0))
+	press(t, a, "<C-e>") // vim = false: C-e runs a console (default-novim.toml)
 	if len(d.ran) != 1 || !strings.HasPrefix(d.ran[0], "select 2") || c.ed.HasSelection() {
 		t.Errorf("a selection: ran %q, still selected %v", d.ran, c.ed.HasSelection())
 	}
@@ -701,7 +702,11 @@ func TestPlainWhere(t *testing.T) {
 	if tab.where.Text != "id = 1" {
 		t.Fatalf("where %q", tab.where.Text)
 	}
-	feed(t, a, "<C-a>x<Esc>")
+	feed(t, a, "<C-a>x<C-e>y")
+	if tab.where.Text != "xid = 1y" {
+		t.Fatalf("C-a, C-e: %q", tab.where.Text)
+	}
+	feed(t, a, "<Esc>")
 	if tab.where.Text != "" || tab.typing != "" { // what was not run goes, as the vim's second esc
 		t.Errorf("esc leaves: %q, typing %q", tab.where.Text, tab.typing)
 	}

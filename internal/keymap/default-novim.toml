@@ -1,0 +1,24 @@
+# The keys vim = false adds over default.toml (tech-design §6.9): the grid
+# and the tree take the arrow keys, the grid PgUp / PgDn and Delete, and a
+# console runs on C-e as its ↵ is a new line. The letters stay: they are no
+# text in a grid or a tree. Unlike default.toml this file may use PgUp, PgDn
+# and Delete: they are what someone who does not use vim has to hand (§6.2).
+
+[keys.grid]
+"<Left>" = "grid.left"
+"<Down>" = "grid.down"
+"<Up>" = "grid.up"
+"<Right>" = "grid.right"
+"<PageDown>" = "grid.page.next"
+"<PageUp>" = "grid.page.prev"
+"<Del>" = "grid.row.delete"
+
+[keys.tree]
+"<Down>" = "tree.down"
+"<Up>" = "tree.up"
+"<Right>" = "tree.expand"
+"<Left>" = "tree.collapse"
+
+[keys.console]
+"<CR>" = "" # a new line, the editor's
+"<C-e>" = "console.run"

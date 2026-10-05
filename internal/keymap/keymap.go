@@ -16,6 +16,11 @@ import (
 //go:embed default.toml
 var defaultTOML string
 
+// noVimTOML is what vim = false adds over it (§6.9).
+//
+//go:embed default-novim.toml
+var noVimTOML string
+
 // tables is every [keys.*] / [map.*] table a config may use (§6.4, §6.6),
 // in resolution priority order for the export. which-key is no scope: keys
 // pressed over it resolve as without it (§6.5).
@@ -75,6 +80,15 @@ func New(user *config.Config) (*Map, []Problem) {
 	// on expanded sequences, so a user's "<Space>s" rebinds the default "<Leader>s".
 	if ps := m.apply(def); len(ps) > 0 {
 		panic(fmt.Sprint("default.toml: ", ps))
+	}
+	if !user.Vim { // the same defaults, for the export and the check, with the arrow keys on
+		_, nv, err := config.ParseKeys(noVimTOML)
+		if err != nil {
+			panic("default-novim.toml: " + err.Error())
+		}
+		if ps := m.apply(nv); len(ps) > 0 {
+			panic(fmt.Sprint("default-novim.toml: ", ps))
+		}
 	}
 	m.defaults = map[string][]Binding{}
 	for t, bs := range m.tables {
