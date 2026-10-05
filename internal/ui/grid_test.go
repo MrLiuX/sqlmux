@@ -125,7 +125,8 @@ func TestGridColors(t *testing.T) {
 		t.Error("an unfocused grid shows the blurred cursor")
 	}
 	head := strings.Split(f.String(), "\n")[0]
-	keyX := len([]rune(head[:strings.Index(head, "* id")]))
+	before, _, _ := strings.Cut(head, "* id")
+	keyX := len([]rune(before))
 	if f.Buf.CellAt(keyX, 0).Style.Fg != th.Error || f.Buf.CellAt(keyX+2, 0).Style.Fg != th.Func {
 		t.Error("the key icon keeps its own color, the name stays func")
 	}
@@ -159,7 +160,8 @@ func TestGridColorsByType(t *testing.T) {
 	g.Draw(f, f.Bounds())
 	row := strings.Split(f.String(), "\n")[2] // under the header and its rule
 	for s, want := range map[string]color.Color{"689": th.Number, "goal": th.String, "2026-09-21 10:00:00": th.Time} {
-		x := Width(row[:strings.Index(row, s)])
+		before, _, _ := strings.Cut(row, s)
+		x := Width(before)
 		if fg := f.Buf.CellAt(x, 2).Style.Fg; fg != want {
 			t.Errorf("%q: %v, want %v", s, fg, want)
 		}

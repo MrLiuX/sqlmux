@@ -223,7 +223,8 @@ func TestStatusPendingKeys(t *testing.T) {
 func TestStatusPendingKeepsPlace(t *testing.T) {
 	cp := func(a *App) int {
 		row := statusRow(a)
-		return ui.Width(row[:strings.Index(row, ui.NerdIcons.Search.Text)])
+		before, _, _ := strings.Cut(row, ui.NerdIcons.Search.Text)
+		return ui.Width(before)
 	}
 	idle := cp(sized(160, 45, "nerd"))
 	for _, in := range []string{"<Space>", "g", "5", "12"} {

@@ -405,7 +405,10 @@ func TestTreeWorkspace(t *testing.T) {
 	feed(t, a, "<C-p>@t_user<CR><C-p>@t_sku<C-t>")
 	dataOf(data).shown.applied = "id > 1"
 	a.win().focus(0)
-	workspace := func() string { return treeTexts(a)[strings.Index(treeTexts(a), "▾ 工作区"):] }
+	workspace := func() string {
+		_, ws, _ := strings.Cut(treeTexts(a), "▾ 工作区")
+		return "▾ 工作区" + ws
+	}
 	if ws := workspace(); ws != "▾ 工作区\n  ▾ data\n    ▾ pane-1\n          t_user\n          t_sku\n    ▾ pane-2\n          console_1" {
 		t.Fatalf("workspace:\n%s", ws)
 	}

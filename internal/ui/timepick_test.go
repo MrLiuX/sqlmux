@@ -120,7 +120,8 @@ func TestTimePickDraw(t *testing.T) {
 	if !strings.Contains(lines[2], "2026 - 09 - 20   02 : 49 : 23") || strings.Count(lines[1], "▴") != 6 || strings.Count(lines[3], "▾") != 6 || !strings.Contains(lines[4], "◷ 现在   ∅ NULL") {
 		t.Fatalf("box:\n%s", f.String())
 	}
-	x := Width(lines[2][:strings.Index(lines[2], "09")])
+	before, _, _ := strings.Cut(lines[2], "09")
+	x := Width(before)
 	if f.Buf.CellAt(x, 2).Style.Bg != TokyonightStorm.Select || f.Buf.CellAt(x-5, 2).Style.Bg == TokyonightStorm.Select {
 		t.Error("the month is the current part, alone")
 	}

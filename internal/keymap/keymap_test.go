@@ -428,7 +428,7 @@ func TestDefaultsArePortable(t *testing.T) {
 					switch sub := ctrl.FindStringSubmatch(s); {
 					case len([]rune(s)) == 1 || named.MatchString(s):
 					case !vim && layer.MatchString(s):
-					case sub != nil && sub[1] != "i" && sub[1] != "m":
+					case len(sub) > 1 && sub[1] != "i" && sub[1] != "m":
 						if sub[1] == "h" && table != "keys.normal" {
 							t.Errorf("[%s] %s: C-h is Backspace in some terminals, NORMAL only", table, String(b.Keys))
 						}

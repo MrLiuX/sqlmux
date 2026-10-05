@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -196,7 +197,7 @@ func teaKey(k keymap.Key) tea.KeyPressMsg {
 	if s := string(k); len(s) == 5 && s[:3] == "<C-" {
 		return tea.KeyPressMsg{Code: rune(s[3]), Mod: tea.ModCtrl}
 	}
-	r := []rune(keymap.Text(k))[0]
+	r, _ := utf8.DecodeRuneInString(keymap.Text(k))
 	return tea.KeyPressMsg{Code: r, Text: string(r)}
 }
 
