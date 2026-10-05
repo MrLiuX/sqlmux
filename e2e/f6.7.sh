@@ -13,7 +13,7 @@ q() { psql "$E2E_DB" -At -c "$1"; }
 q "create table t_del (id int primary key, v text); insert into t_del select g, 'r' || g from generate_series(1, 5) g; create table t_tmp (id int); create table t_tmp2 (id int)" >/dev/null
 mkdir -p "$D/on" "$D/off"
 (umask 077; for d in on off; do printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$E2E_DB" >"$D/$d/connections.toml"; done)
-printf 'confirm_dangerous = false\n' >"$D/off/config.toml"
+printf 'confirm_dangerous = true\n' >"$D/on/config.toml"; printf 'confirm_dangerous = false\n' >"$D/off/config.toml"
 paste() { t set-buffer -b e2e -- "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 done_run() { wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 0.5; }
 asked() { e2e_plain | grep -q "危险语句"; }
