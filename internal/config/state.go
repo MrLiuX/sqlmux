@@ -122,6 +122,10 @@ func save(data []byte, t int) error {
 	return nil
 }
 
+// beforeRename is the test that kills a write between the temp file and the
+// rename, hooked here; nothing in the program.
+var beforeRename = func() {}
+
 // writeFile writes path whole through a file renamed into place, so a
 // crash leaves the old one; the directories it makes and the file are the
 // user's only.
@@ -142,5 +146,6 @@ func writeFile(path string, data []byte) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
+	beforeRename()
 	return os.Rename(tmp.Name(), path)
 }
