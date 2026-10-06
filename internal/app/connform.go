@@ -226,7 +226,7 @@ func (a *App) saveConnForm() tea.Cmd {
 			c.PasswordCmd = cmd
 		case strings.Contains(pw, "${"): // dial would take it for a variable (§13)
 			return a.fail(fieldPassword, i18n.T("没有钥匙串工具：password 里的 ${ 会被当成环境变量"))
-		default: // AppendConnection makes the file 0600 (§13)
+		default: // plaintext, the user's call (§13): a file AppendConnection makes is 0600, one there is keeps its permissions
 			c.Password = pw
 			toast = a.showToast(i18n.T("没有钥匙串工具，密码以明文存进了 connections.toml"), toastTTL)
 		}
