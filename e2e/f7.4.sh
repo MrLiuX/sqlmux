@@ -15,9 +15,10 @@ frows() { local g y; g=($(box)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++));
 form_open() { e2e_plain | grep -q "┌─ 新建连接"; }
 field_y() { local g; g=($(box)); echo $(( g[1] + 1 + $1 )); }              # N：0 name 1 engine 2 host 3 port 4 user 5 password 6 database 7 read_only 8 高级（展开后 9 dsn 10 password_cmd）
 # on_field N：焦点在第 N 个字段上：输入框有终端光标；engine（1）、高级（8）是开关，光标隐藏；read_only（7）的值是 select 底
+ro_x() { e2e_find "[" "$(field_y 7)" | cut -d" " -f1; }                       # read_only 的 [ ] 开关的列（标签列的宽度会随字段名变）
 on_field() { local g; g=($(box)); case $1 in
   1|8) [[ $(e2e_flag cursor_flag) == 0 ]] || { echo "  cursor visible on a switch ($1)"; false; } ;;
-  7) style_has $((g[0] + 16)) "$(field_y 7)" bg=#364a82 ;;
+  7) style_has "$(ro_x)" "$(field_y 7)" bg=#364a82 ;;
   *) [[ $(( $(e2e_flag cursor_y) + 1 )) == $(field_y "$1") ]] || { echo "  cursor on row $(( $(e2e_flag cursor_y) + 1 )), field $1 is on $(field_y "$1")"; false; } ;;
   esac; }
 fsep() { local g y; g=($(box)); for ((y = g[1] + 1; y < g[1] + g[3]; y++)); do [[ $(e2e_text $((g[0] + 1)) $((g[0] + 3)) $y) == "───" ]] && { echo "$y"; return; }; done; }
@@ -133,7 +134,7 @@ pal ">conn.new"; key Enter; e2e_type zzz; key C-c
 check "C-c 等同 esc" eval '! form_open && running && [[ $(md5 -q "$(CT)") == "$sum" ]]'
 rm "$(CT)"
 pal ">conn.new"; key Enter; e2e_type fresh2; key Tab; key Tab; e2e_type "$PG_HOST"; key Tab; clr; e2e_type "$PG_PORT"; key Tab; e2e_type "$PG_USER"; key Tab; key Tab; e2e_type "$PG_DB"
-g=($(box)); e2e_click $((g[0] + 16)) "$(field_y 7)"; sleep 0.3
+g=($(box)); e2e_click "$(ro_x)" "$(field_y 7)"; sleep 0.3
 check "单击 read_only 的值：切成 [x]，焦点到它上面" eval '[[ $(frows | sed -n 8p) == "read_only [x]" ]] && on_field 7'
 x=$(e2e_find "保存" $(( g[1] + g[3] - 2 )) | cut -d' ' -f1); e2e_click "$x" $(( g[1] + g[3] - 2 )); sleep 0.5
 check "单击底栏的「保存」：connections.toml 不存在就新建，权限 0600，里面只有这一条；密码没填：不写 password_cmd，钥匙串里没有 sqlmux-fresh2" eval '! form_open && f=$(CT) && [[ -f $f && $(stat -f %Lp "$f") == 600 && $(grep -c "^\[\[connection\]\]" "$f") == 1 ]] && grep -q "name = \"fresh2\"" "$f" && grep -q "read_only = true" "$f" && ! grep -q password_cmd "$f" && [[ ! -e "$E2E_TMP/keychain/sqlmux-fresh2" ]]'

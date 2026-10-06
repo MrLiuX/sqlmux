@@ -22,10 +22,13 @@ ui() { e2e_start -C "$DIR" "$1"; wait_for 5 flag_is alternate_on 1; sleep 0.3; }
 conns_of() { psql "$SQLMUX_TEST_PG" -Atc "select count(*) from pg_stat_activity where datname = 'postgres' and application_name = '${1:-sqlmux}'"; }
 
 # ---- 启动失败：终端打印错误，退出码 1，不进入界面（§14「启动时找不到连接」）
-rm -rf "$DIR"; cli
-check "没有 connections.toml：错误写明文件路径" failed "$DIR/connections.toml"
-conns 600 '# nothing here'; cli
-check "文件里没有 [[connection]]：错误写明文件路径" failed "$DIR/connections.toml"
+# M7 F7.4：没有连接时照常进界面，空树一行提示、表单自动打开（不再报错退出）
+rm -rf "$DIR"; mkdir -p "$DIR"; E2E_NOCONN=1 ui "$E2E_BIN"; sleep 1
+check "没有 connections.toml：进界面（不退出），表单「新建连接」自动打开" eval 'running && e2e_plain | grep -q "┌─ 新建连接"'
+e2e_stop
+conns 600 '# nothing here'; E2E_NOCONN=1 ui "$E2E_BIN"; sleep 1
+check "文件里没有 [[connection]]（只有注释）：同样进界面、表单打开" eval 'running && e2e_plain | grep -q "┌─ 新建连接"'
+e2e_stop
 conns 600 "$(conn a "$SQLMUX_TEST_PG")" "$(conn b "$SQLMUX_TEST_PG")"; cli nosuch
 check "sqlmux <名字> 找不到：列出已有的连接名" failed 'a, b'
 conns 600 "$(conn t "$DSN" 'password = "wrong"')"; cli

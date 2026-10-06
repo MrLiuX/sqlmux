@@ -49,6 +49,8 @@ between() { tree | awk -v a="$1" -v b="$2" '$0 == b { f = 0 } f { print } $0 == 
 # ---- 树（§7.8、§8.4）：Tables 下按名字排，分区子表不列；行数量级；视图在 Views 下
 start
 n=$(psql_n "select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where c.relkind in ('r','p','v','m','f') and not c.relispartition and n.nspname not in ('pg_catalog', 'information_schema') and n.nspname !~ '^pg_toast'")
+# F7.4: the first row ends with the ＋ button (an icon); the filter count sits one cell left of it
+ends_count() { [[ $(e2e_text 1 32 2 | noicon | sed 's/ *│ *$//; s/ *$//') == *" $1" ]]; }
 check "第一行显示 $n tables（所有 schema 的表和视图，F1.12）" text_is 4 14 2 " $n tables "
 check "public 的 Tables：按名字排，行数量级按 §7.8（t_order 6.0k、t_order_item 400），分区子表不列" eval 'w=$(want r,p,f public); [[ $(between "Tables ($(grep -c . <<<"$w"))" "Views (2)") == "$w" && $w == *"t_order 6.0k"* && $w == *"t_order_item 400"* && $w != *t_event_20* ]] || { echo "  tree: $(tree | tr "\n" ",")"; echo "  want: $(tr "\n" "," <<<"$w")"; false; }'
 key C-h; for ((i = 0; i < 12; i++)); do [[ $(e2e_text 2 31 $(item_y "Views")) == *Views* ]] && cursor_on "Views (2)" >/dev/null && break; key j; done; key Enter; key C-l
@@ -72,10 +74,10 @@ e2e_move 80 20; sleep 0.2
 key 5 j; typ /
 check "/：进入 INSERT" mode_is INSERT
 typ ord
-check "输入 ord：过滤行显示 <图标> ord 和 dim 色的 4/${n}，终端光标在文字后面" eval 'text_is 3 7 2 "$(e2e_text 3 3 2) ord" && text_ends 1 32 2 " 4/$n │" && at_c=$(e2e_find 4/$n 2) && style_has $at_c 2 fg=$DIM && flag_is cursor_flag 1 && [[ $(e2e_flag cursor_x) == 7 && $(e2e_flag cursor_y) == 1 ]]'
+check "输入 ord：过滤行显示 <图标> ord 和 dim 色的 4/${n}，终端光标在文字后面" eval 'text_is 3 7 2 "$(e2e_text 3 3 2) ord" && ends_count "4/$n" && at_c=$(e2e_find 4/$n 2) && style_has $at_c 2 fg=$DIM && flag_is cursor_flag 1 && [[ $(e2e_flag cursor_x) == 7 && $(e2e_flag cursor_y) == 1 ]]'
 check "只剩匹配的表和视图及其上级，按树的顺序（不按分数），工作区隐藏" eval '[[ $(tree | tr "\n" ",") == "doraemon,public,Tables (6),t_order 6.0k,t_order_item 400,Views (2),mv_order_by_status,v_paid_order," ]] || { echo "  $(tree | tr "\n" ",")"; false; }'
 key Enter
-check "↵：回到 NORMAL，保留过滤，光标在第一个匹配 t_order 上" eval 'mode_is NORMAL && text_ends 1 32 2 " 4/$n │" && cursor_on t_order'
+check "↵：回到 NORMAL，保留过滤，光标在第一个匹配 t_order 上" eval 'mode_is NORMAL && ends_count "4/$n" && cursor_on t_order'
 key j; typ /; key Escape
 check "esc：清空过滤、回到 NORMAL，光标仍在 t_order_item" eval 'mode_is NORMAL && text_is 4 14 2 " $n tables " && cursor_on t_order_item'
 typ /sku; key C-c
