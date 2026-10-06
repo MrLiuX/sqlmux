@@ -73,7 +73,7 @@
 - [ ] 表单重做：字段 name / engine / host / port / user / password / database / read_only，折叠的「高级」里是 dsn 和 password_cmd；每行「Nerd Font 图标 + 字段名 + 输入框」，图标清单见 §7.8 / §7.7，ascii 模式有替代字符；样式照 §7.8；保存时拼 dsn，文件格式不变。
 - [ ] 没有 connections.toml 或没有连接时照常进界面：空树一行提示，自动打开表单；保存第一个连接后连上并展开；`esc` 关掉表单也能用。`sqlmux <名字>` 找不到照旧报错退出。
 - [ ] 侧栏第一行右端 `＋` 按钮打开表单；空树那一行可点击。
-- [ ] 细节（engine 切换时 port 的默认值怎么跟、「高级」展开时上面字段怎么变灰、sslmode 要不要给选项）开工前 worker 提议。
+- [x] 细节（worker 2026-10-06 提议，已定，写进 §7.8 / §7.7 / §14）：`config.ErrNoConnections`，`main.go` 没给连接名、没 `--layout` 时遇到它就 `app.OpenEmpty()`；零连接的 session 里 `a.conn()` 返回 nil，需要连接的命令在入口 toast，加一个「零连接下每条命令都跑一遍不 panic」的测试；保存第一个连接后连上、展开、建 console_1；「高级」dsn 非空时 host / port / user / database 变灰，password 不灰；port 预填并跟 engine 直到用户改过；dsn 用 `net/url` 拼，不做 sslmode 选项；ascii 图标 tag `#` host `@` port `:` user `~` database `=` advanced `+` link `&`；`last.toml` 在零连接时忽略；不加占位提示字。F7.3 让 e2e f5.1 的表单 13 项失效，连同 F7.4 的重做一起由 tester 改。
 
 **验收**
 - [ ] golden：表单（postgres、mysql 两种 engine，一个字段出错，高级展开）、空树加提示行、侧栏 `＋`。
