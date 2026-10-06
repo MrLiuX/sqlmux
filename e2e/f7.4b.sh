@@ -86,10 +86,10 @@ key BTab; key BTab; key BTab; sleep 0.2
 check "高级里 dsn 非空：S-Tab 从 dsn 往回，经过 高级、read_only，跳过变灰的 database / user / port / host，落在 password（password 不变灰）" on_field 5
 key Escape; sleep 0.3
 
-# ---- 没有钥匙串工具时明文回退：原来就存在的 0644 文件也改成 0600
+# ---- 没有钥匙串工具时明文回退：F7.5 起不 chmod 已有的文件（权限不变），新建的文件仍是 0600
 newconn n644; chmod 644 "$D/n644/connections.toml"
 start -P /bin -C "$D/n644"; pal ">conn.new"; key Enter; fill plain2 "$PG_HOST" "$PG_PORT" "$PG_USER" "$PG_PW" "$PG_DB"; key Enter; sleep 1.5
-check "没有钥匙串工具：写明文，原来 0644 的文件改成 0600" eval '! form_open && [[ $(stat -f %Lp "$(CT)") == 600 ]] && grep -q "password = \"$PG_PW\"" "$(CT)"'
+check "没有钥匙串工具：写明文，原来 0644 的文件权限不变（程序不 chmod）" eval '! form_open && [[ $(stat -f %Lp "$(CT)") == 644 ]] && grep -q "password = \"$PG_PW\"" "$(CT)"'
 e2e_stop
 
 # ---- 零连接：没有文件、空文件、只有注释、connection = []：都进界面、空树一行提示、表单自动打开；esc 之后能用
