@@ -53,7 +53,7 @@
 - **涉及**：`internal/config`（`${VAR}` 展开、写 password_cmd）、`internal/app`（表单的密码字段）、`internal/ui`（输入框的掩码画法）
 
 **开发**（§13「凭据」的三条新内容）
-- [ ] `dsn`、`password` 里的 `${VAR}` 用 `os.Expand` 展开，只认 `${}`，没设置报错；启动时的连接报错退出，其他连接标失败、toast（同 `password_env`）。
+- [ ] `dsn`、`password` 里的 `${VAR}` 在建连前展开（正则，不用 `os.Expand`），只认 `${}`，没设置报错；启动时的连接报错退出，其他连接标失败、toast（同 `password_env`）。
 - [ ] 表单加 `password` 字段，输入画 `*`（`ui.Input` 加一个掩码开关，光标位置照常）；保存时按平台存进钥匙串并写 `password_cmd`，没有钥匙串工具时写明文 + 0600 + toast。dsn 里带了密码（`user:pass@`）照旧交给驱动，不拆。
   - 细节（worker 提议，已定）：展开用正则 `\$\{([^}]+)\}` + `os.LookupEnv`，不用 `os.Expand`（它连 `$VAR` 一起展开），不做 `${X:-默认}`；变量没设置或为空都报错；在 `dial` 里 `Secret()` 之前展开，启动连接的错误照旧打印退出。掩码在 `ui.FormField` 上（`Mask`），按字素画 `*`。`config.StorePassword` 按平台包装 `security` / `secret-tool`，名字里的 `'` 转义；macOS 的 `security -w <密码>` 会短暂出现在进程参数里，`ponytail:` 标出。密码留空什么都不存。**钥匙串工具在但执行失败**（锁着、被拒）：不保存、不降级成明文，错误（stderr 第一行）写在表单的错误行，表单留着让用户重试或清掉密码（决策者定）。
 - [ ] README 的配置一节写清四种来源、`${VAR}`、钥匙串（决策者改 README）。
@@ -73,7 +73,7 @@
 - [ ] 表单重做：字段 name / engine / host / port / user / password / database / read_only，折叠的「高级」里是 dsn 和 password_cmd；每行「Nerd Font 图标 + 字段名 + 输入框」，图标清单见 §7.8 / §7.7，ascii 模式有替代字符；样式照 §7.8；保存时拼 dsn，文件格式不变。
 - [ ] 没有 connections.toml 或没有连接时照常进界面：空树一行提示，自动打开表单；保存第一个连接后连上并展开；`esc` 关掉表单也能用。`sqlmux <名字>` 找不到照旧报错退出。
 - [ ] 侧栏第一行右端 `＋` 按钮打开表单；空树那一行可点击。
-- [x] 细节（worker 2026-10-06 提议，已定，写进 §7.8 / §7.7 / §14）：`config.ErrNoConnections`，`main.go` 没给连接名、没 `--layout` 时遇到它就 `app.OpenEmpty()`；零连接的 session 里 `a.conn()` 返回 nil，需要连接的命令在入口 toast，加一个「零连接下每条命令都跑一遍不 panic」的测试；保存第一个连接后连上、展开、建 console_1；「高级」dsn 非空时 host / port / user / database 变灰，password 不灰；port 预填并跟 engine 直到用户改过；dsn 用 `net/url` 拼，不做 sslmode 选项；ascii 图标 tag `#` host `@` port `:` user `~` database `=` advanced `+` link `&`；`last.toml` 在零连接时忽略；不加占位提示字。F7.3 让 e2e f5.1 的表单 13 项失效，连同 F7.4 的重做一起由 tester 改。
+- [x] 细节（worker 2026-10-06 提议，已定，写进 §7.8 / §7.7 / §14）：`config.NoConnections(err)`（不导出的错误类型加判断函数，不用哨兵：报错带路径、运行时翻译，哨兵拼不出来），`main.go` 没给连接名、没 `--layout` 时遇到它就 `app.OpenEmpty()`；零连接的 session 里 `a.conn()` 返回 nil，需要连接的命令在入口 toast，加一个「零连接下每条命令都跑一遍不 panic」的测试；保存第一个连接后连上、展开、建 console_1；「高级」dsn 非空时 host / port / user / database 变灰，password 不灰；port 预填并跟 engine 直到用户改过；dsn 用 `net/url` 拼，不做 sslmode 选项；ascii 图标 tag `#` host `@` port `:` user `~` database `=` advanced `+` link `&`；`last.toml` 在零连接时忽略；不加占位提示字。F7.3 让 e2e f5.1 的表单 13 项失效，连同 F7.4 的重做一起由 tester 改。
 
 **验收**
 - [ ] golden：表单（postgres、mysql 两种 engine，一个字段出错，高级展开）、空树加提示行、侧栏 `＋`。
