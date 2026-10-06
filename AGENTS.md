@@ -60,7 +60,7 @@ sqlmux/
 
 凭记忆拿不准的数据库行为，比如驱动的取消语义、类型的文本格式、information_schema 在不同版本间的差异，不要猜。写一个最小的集成测试，在 `docker compose` 起的 PG / MySQL 上跑一遍，以结果为准。
 
-**集成测试环境**：`docker compose` 只在主工作区（`/Users/ctw/proj/sqlmux`）起一份，由 worker 负责 `docker compose up -d postgres`，M5 F5.4 起再加 `docker compose up -d mysql`（2026-09-29 机器内存吃紧时停掉过，空转也占 400MB 以上，M5 之前不起）。其他 worktree（e2e / review / verify）不要执行 `up`：compose 按目录名取项目名，会再起一套容器抢同一个端口；加 `-p sqlmux` 也不行，seed 的挂载路径不同会让它重建主工作区的容器。其他 worktree 直接用 `SQLMUX_TEST_PG` 连 PG、用 `SQLMUX_TEST_MYSQL='sqlmux:sqlmux@tcp(localhost:53306)/sqlmux'` 连 MySQL，只读的测试共用 `sqlmux` 库没有问题。要锁表、写库或者其他会影响别人的测试，在同一个实例上自己建一个库（如 `sqlmux_e2e_<pid>`），用 `testdata/seed/pg.sql` 或 `mysql.sql` 导入，只在这个库上操作，退出时 drop 掉；不要在共用的 `sqlmux` 库上加锁或写数据。seed 只在数据卷为空时导入一次，改了 `testdata/seed/*.sql` 要 `docker compose up -d -V` 才会生效，worker 改完 seed 要通知 reviewer 和 tester。
+**集成测试环境**：`docker compose` 只在主工作区（`/Users/ctw/proj/sqlmux`）起一份，由 worker 负责 `just db-up`（M7 起；等于 `docker compose up -d postgres mysql`）（2026-09-29 机器内存吃紧时停掉过，空转也占 400MB 以上，M5 之前不起）。其他 worktree（e2e / review / verify）不要执行 `up`：compose 按目录名取项目名，会再起一套容器抢同一个端口；加 `-p sqlmux` 也不行，seed 的挂载路径不同会让它重建主工作区的容器。其他 worktree 直接用 `SQLMUX_TEST_PG` 连 PG、用 `SQLMUX_TEST_MYSQL='sqlmux:sqlmux@tcp(localhost:53306)/sqlmux'` 连 MySQL，只读的测试共用 `sqlmux` 库没有问题。要锁表、写库或者其他会影响别人的测试，在同一个实例上自己建一个库（如 `sqlmux_e2e_<pid>`），用 `testdata/seed/pg.sql` 或 `mysql.sql` 导入，只在这个库上操作，退出时 drop 掉；不要在共用的 `sqlmux` 库上加锁或写数据。seed 只在数据卷为空时导入一次，改了 `testdata/seed/*.sql` 要 `docker compose up -d -V` 才会生效，worker 改完 seed 要通知 reviewer 和 tester。
 
 驱动或依赖本身已经提供的能力，直接用，不要重写。例如 PG 的标识符加引号，用 `pgx.Identifier{...}.Sanitize()`。
 
@@ -178,9 +178,7 @@ sqlmux/
   - 不改、不提交 `specs/` 和 `AGENTS.md`。`git status` 里这两处的改动是决策者的，留着不动。
   - 不要对整个工作区执行 stash、checkout 或 reset。所有 worktree 共用同一个 stash 栈。需要把工作暂时放到一边时，只处理自己的代码路径，例如 `git stash push -u -m "<唯一标签>" -- internal/ cmd/`，或者提交一个临时的 WIP commit。
 - **每个 commit 自己保证测试通过**（按批审查后，没有人逐个 commit 替你把关）：
-  - `go vet ./...`、`go test ./...` 通过，`gofmt -l .` 输出为空，`go mod tidy` 之后没有改动；
-  - **M7 F7.1 起**：`golangci-lint run ./...` 零报告（`just lint`），用仓库里的 `.golangci.yml`；要屏蔽某条报告，用带理由的 `//nolint:<linter> // 为什么`，不改配置放宽规则（放宽规则是设计变更，提给决策者和 reviewer）。装的是 golangci-lint v2（v1 不支持 Go 1.26）；
-  - 涉及数据库的，`go test -tags integration ./...` 通过；
+  - **`just check` 全绿**（M7 起，它跑 vet、单测、集成测试、lint、gofmt、tidy，任一失败即停；`just --list` 看全部入口）。lint 用仓库里的 `.golangci.yml`、golangci-lint v2.14.0（`just lint` 版本不对会给安装命令）；要屏蔽某条报告，用带理由的 `//nolint:<linter> // 为什么`，不改配置放宽规则（放宽规则是设计变更，提给决策者和 reviewer）；
   - e2e 只跑和这次改动相关的脚本（合入 `e2e` 分支之后）。**全量 e2e 每个审查节点跑一次**；修复 commit 也只跑相关的脚本，tester 在批次上会跑全量，里程碑最后还有一次完整回归（M1 复盘：全量一轮约 20 分钟，每个 commit 都跑，一天等了 217 分钟）；
   - **送审和全量 e2e 同时进行**（用户：提速，但首要保证质量）：上面的检查和相关的 e2e 都通过后就送审，全量 e2e 同时在后台跑。送审消息里写明全量还在跑，并列出预期的失败。跑完只有出现清单外的失败时，才再给 reviewer 发一条，算这一轮的补充，不另开一轮。跑到一半合进了 `e2e` 分支的，不重跑，除非新脚本覆盖的正是这一批；
   - 跑 e2e 用一次阻塞的命令等它结束再读结果，或者放到后台等完成通知，不要 `sleep` 轮询：每次轮询都要把整个上下文重读一遍；
@@ -217,8 +215,8 @@ sqlmux/
 - **不在主工作区操作**：在单独的 worktree 中测试，用 `git worktree add /Users/ctw/proj/sqlmux-e2e -b e2e` 创建。测试之前，先在 worktree 里执行 `git merge <sha>`。
 - **只改 `e2e/` 目录**（e2e 脚本），提交到 `e2e` 分支。worker 会定期把 `e2e` 分支合并进 `main`。
 - **测试分三层**：
-  1. `go vet ./... && go test ./...`（含 golden）；
-  2. 涉及数据库的 feature：按「集成测试环境」连主工作区的 PG，跑 `go test -tags integration ./...`；
+  1. `just test`（含 golden）；
+  2. 涉及数据库的 feature：按「集成测试环境」连主工作区的 PG / MySQL，跑 `just test-integration`；
   3. 界面行为：用 tmux 做黑盒测试。
 - **e2e 只测真实终端才能验证的行为**：终端模式、SGR 鼠标、resize、字素宽度、时序（连按、超时、取消）、配置加载，以及真实数据库上的端到端流程。布局、颜色、位置交给渲染 golden（worker 写）。M0 每次改 UI 都要重写几十条 e2e 断言，F0.13 一次就是 33 条。
   - 已有的 e2e 保留。UI 改动让纯布局的 e2e 断言失效、而 golden 已经覆盖时，删掉这些断言，不重写；golden 没覆盖的，在退回里请 worker 补 golden 场景。
@@ -264,6 +262,6 @@ sqlmux/
 
 ## 其他约定
 
-- **编辑器行为以 nvim 为准**：修改编辑器时，先往 `internal/editor/testdata/cases.txt` 里加用例，再用 `go generate ./internal/editor` 调用 nvim 生成期望结果，最后才改实现（技术方案 §15）。
+- **编辑器行为以 nvim 为准**：修改编辑器时，先往 `internal/editor/testdata/cases.txt` 里加用例，再用 `just generate` 调用 nvim 生成期望结果，最后才改实现（技术方案 §15）。
 - **默认键位**：只能用任何终端都能区分的键（技术方案 §6.2），有单测检查。
 - **键位文字**：界面上出现的键位文字一律从 keymap 读取，不能写死（技术方案 §6.7）。
