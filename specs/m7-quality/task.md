@@ -1,6 +1,6 @@
 # M7 工程质量 · 任务清单
 
-- **状态**：todo。节点 1（F7.1、F7.2）2026-10-06 passed（5b76c68，全量 e2e 88 个脚本 2207 项全过，期望值没改）；CI 在 GitHub 上的第一次运行等推送。F7.3、F7.4 的细节照常开工前由 worker 提议。用户验收 M5 + M6 和 M7 开发并行：验收版是 1489851 编的，M7 的改动不影响它。
+- **状态**：**开发完成，等用户验收**（2026-10-06）。节点 1（F7.1、F7.2）passed（5b76c68）；节点 2（F7.3、F7.4）passed（491ea8b；e2e 090e2ed，全量 89 个脚本 2230 项全过）。只剩「CI 在 GitHub 上跑过一次绿的」等推送后确认。验收和 M5、M6 一起，通过后打 tag `m7`。F7.3、F7.4 的细节照常开工前由 worker 提议。用户验收 M5 + M6 和 M7 开发并行：验收版是 1489851 编的，M7 的改动不影响它。
 - **目标**：用 golangci-lint 守住代码质量和规范，每个 commit、每次审查都先过 lint；仓库有 CI；常规操作统一走 `just`；连接凭据不再需要明文落盘（F7.3）；没有连接也能启动，用表单新建（F7.4）。
 - **范围**：tech-design §4（新增文件）、§15「静态检查」「CI」「常规操作走 just」；AGENTS.md 的 worker 和 reviewer 规则。
 - **依赖**：M6 F6.1–F6.7 全部 passed（lint 的修改会碰到所有包，不和 M6 的修复撞车）。
@@ -45,7 +45,7 @@
 **验收**
 - [x] `just --list` 列出全部入口，每个都能跑；`just check` 在干净仓库上全绿；`just e2e f0.1 f0.2` 只编译一次。
 
-## F7.3 凭据：环境变量展开、表单里的密码走钥匙串 · 状态：todo
+## F7.3 凭据：环境变量展开、表单里的密码走钥匙串 · 状态：passed（491ea8b；e2e 090e2ed）
 
 用户 2026-10-05 提出：密码明文放在 connections.toml 里不放心；DataGrip 输入密码只显示 `*`。现状：已有 `password_cmd` / `password_env` / 明文 `password` / pgpass 四种来源，明文且文件可被其他用户读时 toast 警告；表单没有密码字段，只能填 dsn 和 password_cmd。别的项目：lazysql 把带密码的 URL 明文写在配置里；pgtui、pgcli 用 keyring 存进系统钥匙串；psql / usql 靠 `PGPASSWORD` 和 `~/.pgpass`；DBeaver 用固定密钥加密（形同明文）；DataGrip 存进 IDE 的密码库（系统钥匙串或 KeePass），输入框打 `*`。
 
@@ -53,16 +53,16 @@
 - **涉及**：`internal/config`（`${VAR}` 展开、写 password_cmd）、`internal/app`（表单的密码字段）、`internal/ui`（输入框的掩码画法）
 
 **开发**（§13「凭据」的三条新内容）
-- [ ] `dsn`、`password` 里的 `${VAR}` 在建连前展开（正则，不用 `os.Expand`），只认 `${}`，没设置报错；启动时的连接报错退出，其他连接标失败、toast（同 `password_env`）。
-- [ ] 表单加 `password` 字段，输入画 `*`（`ui.Input` 加一个掩码开关，光标位置照常）；保存时按平台存进钥匙串并写 `password_cmd`，没有钥匙串工具时写明文 + 0600 + toast。dsn 里带了密码（`user:pass@`）照旧交给驱动，不拆。
+- [x] `dsn`、`password` 里的 `${VAR}` 在建连前展开（正则，不用 `os.Expand`），只认 `${}`，没设置报错；启动时的连接报错退出，其他连接标失败、toast（同 `password_env`）。
+- [x] 表单加 `password` 字段，输入画 `*`（`ui.Input` 加一个掩码开关，光标位置照常）；保存时按平台存进钥匙串并写 `password_cmd`，没有钥匙串工具时写明文 + 0600 + toast。dsn 里带了密码（`user:pass@`）照旧交给驱动，不拆。
   - 细节（worker 提议，已定）：展开用正则 `\$\{([^}]+)\}` + `os.LookupEnv`，不用 `os.Expand`（它连 `$VAR` 一起展开），不做 `${X:-默认}`；变量没设置或为空都报错；在 `dial` 里 `Secret()` 之前展开，启动连接的错误照旧打印退出。掩码在 `ui.FormField` 上（`Mask`），按字素画 `*`。`config.StorePassword` 按平台包装 `security` / `secret-tool`，名字里的 `'` 转义；macOS 的 `security -w <密码>` 会短暂出现在进程参数里，`ponytail:` 标出。密码留空什么都不存。**钥匙串工具在但执行失败**（锁着、被拒）：不保存、不降级成明文，错误（stderr 第一行）写在表单的错误行，表单留着让用户重试或清掉密码（决策者定）。
-- [ ] README 的配置一节写清四种来源、`${VAR}`、钥匙串（决策者改 README）。
+- [x] README 的配置一节写清四种来源、`${VAR}`、钥匙串（决策者改 README）。
 
 **验收**
-- [ ] 单测：`${VAR}` 展开、`$VAR` 不展开、缺变量报错带变量名；表单保存后 connections.toml 里没有明文密码、有 password_cmd（用假的 `security` / `secret-tool` 放在 PATH 前面，e2e 的做法）；两者都没有时写明文并有 toast。
-- [ ] e2e：表单里输入密码显示 `*`；保存后能连上（假钥匙串命令返回密码）；`dsn = "${X}"` 启动时 X 没设置的报错文字。
+- [x] 单测：`${VAR}` 展开、`$VAR` 不展开、缺变量报错带变量名；表单保存后 connections.toml 里没有明文密码、有 password_cmd（用假的 `security` / `secret-tool` 放在 PATH 前面，e2e 的做法）；两者都没有时写明文并有 toast。
+- [x] e2e：表单里输入密码显示 `*`；保存后能连上（假钥匙串命令返回密码）；`dsn = "${X}"` 启动时 X 没设置的报错文字。
 
-## F7.4 新建连接表单重做：分字段、无连接时启动、侧栏 ＋ 按钮 · 状态：todo
+## F7.4 新建连接表单重做：分字段、无连接时启动、侧栏 ＋ 按钮 · 状态：passed（491ea8b；e2e 090e2ed）
 
 用户 2026-10-05 提出：没有配置连接时启动直接给表单；表单按 host / port / user / password / database 分字段填，持久化到 connections.toml；界面上加一个新建连接的按钮；表单居中、好看点。
 
@@ -70,12 +70,12 @@
 - **涉及**：`internal/app`（表单、启动时没有连接的工作区、侧栏按钮）、`internal/ui`（表单的绘制：分段开关、折叠的「高级」、按钮）、`internal/config`（拼 dsn）、`cmd/sqlmux`（没有连接不再退出）
 
 **开发**（§7.8「新建连接表单」「新建连接的入口」，§14「启动时找不到连接」）
-- [ ] 表单重做：字段 name / engine / host / port / user / password / database / read_only，折叠的「高级」里是 dsn 和 password_cmd；每行「Nerd Font 图标 + 字段名 + 输入框」，图标清单见 §7.8 / §7.7，ascii 模式有替代字符；样式照 §7.8；保存时拼 dsn，文件格式不变。
-- [ ] 没有 connections.toml 或没有连接时照常进界面：空树一行提示，自动打开表单；保存第一个连接后连上并展开；`esc` 关掉表单也能用。`sqlmux <名字>` 找不到照旧报错退出。
-- [ ] 侧栏第一行右端 `＋` 按钮打开表单；空树那一行可点击。
+- [x] 表单重做：字段 name / engine / host / port / user / password / database / read_only，折叠的「高级」里是 dsn 和 password_cmd；每行「Nerd Font 图标 + 字段名 + 输入框」，图标清单见 §7.8 / §7.7，ascii 模式有替代字符；样式照 §7.8；保存时拼 dsn，文件格式不变。
+- [x] 没有 connections.toml 或没有连接时照常进界面：空树一行提示，自动打开表单；保存第一个连接后连上并展开；`esc` 关掉表单也能用。`sqlmux <名字>` 找不到照旧报错退出。
+- [x] 侧栏第一行右端 `＋` 按钮打开表单；空树那一行可点击。
 - [x] 细节（worker 2026-10-06 提议，已定，写进 §7.8 / §7.7 / §14）：`config.NoConnections(err)`（不导出的错误类型加判断函数，不用哨兵：报错带路径、运行时翻译，哨兵拼不出来），`main.go` 没给连接名、没 `--layout` 时遇到它就 `app.OpenEmpty()`；零连接的 session 里 `a.conn()` 返回 nil，需要连接的命令在入口 toast，加一个「零连接下每条命令都跑一遍不 panic」的测试；保存第一个连接后连上、展开、建 console_1；「高级」dsn 非空时 host / port / user / database 变灰，password 不灰；port 预填并跟 engine 直到用户改过；dsn 用 `net/url` 拼，不做 sslmode 选项；ascii 图标 tag `#` host `@` port `:` user `~` database `=` advanced `+` link `&`；`last.toml` 在零连接时忽略；不加占位提示字。F7.3 让 e2e f5.1 的表单 13 项失效，连同 F7.4 的重做一起由 tester 改。
 
 **验收**
-- [ ] golden：表单（postgres、mysql 两种 engine，一个字段出错，高级展开）、空树加提示行、侧栏 `＋`。
-- [ ] 单测：拼 dsn（PG / MySQL、带特殊字符的 user 和 database 要转义）、校验、engine 切换 port 跟随。
-- [ ] e2e：`XDG_CONFIG_HOME` 指向空目录启动，界面出来、表单打开；填好保存，connections.toml 里多出一条、树里连上并展开、能打开表；点 `＋` 再开一次表单，`esc` 关掉。
+- [x] golden：表单（postgres、mysql 两种 engine，一个字段出错，高级展开）、空树加提示行、侧栏 `＋`。
+- [x] 单测：拼 dsn（PG / MySQL、带特殊字符的 user 和 database 要转义）、校验、engine 切换 port 跟随。
+- [x] e2e：`XDG_CONFIG_HOME` 指向空目录启动，界面出来、表单打开；填好保存，connections.toml 里多出一条、树里连上并展开、能打开表；点 `＋` 再开一次表单，`esc` 关掉。
