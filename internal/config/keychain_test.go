@@ -7,67 +7,129 @@ import (
 	"testing"
 )
 
-// fakeTool puts a script called name first on PATH (the real keychain is
-// never touched); it sees the directory of its notes as $FAKE.
-func fakeTool(t *testing.T, name, script string) (notes string) {
+// hostPath is the PATH the tests were started with, where the few tools a
+// fake keychain tool needs come from.
+var hostPath = os.Getenv("PATH")
+
+// isolated makes PATH a directory of its own with the named tools linked in
+// and returns it: /usr/bin/security is not on it, so no test can reach the
+// real keychain, whatever hostOS says. A tool the machine lacks skips the
+// test. hostOS is put back when the test ends.
+func isolated(t *testing.T, tools ...string) (bin string) {
 	t.Helper()
-	bin, notes := t.TempDir(), t.TempDir()
+	old := hostOS
+	t.Cleanup(func() { hostOS = old })
+	bin = t.TempDir()
+	for _, tool := range tools {
+		var path string
+		for _, dir := range filepath.SplitList(hostPath) {
+			if p := filepath.Join(dir, tool); fileExists(p) {
+				path = p
+				break
+			}
+		}
+		if path == "" {
+			t.Skipf("no %s here", tool)
+		}
+		if err := os.Symlink(path, filepath.Join(bin, tool)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin)
+	return bin
+}
+
+func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }
+
+// fakeTool is a script called name in bin; it sees the directory it keeps
+// its notes in as $FAKE.
+func fakeTool(t *testing.T, bin, name, script string) {
+	t.Helper()
+	notes := t.TempDir()
 	if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"+script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", bin+":/usr/bin:/bin")
 	t.Setenv("FAKE", notes)
-	return notes
 }
 
+// The fake security keeps a password under its -s and answers find with it,
+// in hex when a byte is not printable, as the real one does; the fake
+// secret-tool keeps it under the last argument of the attributes.
+const (
+	fakeSecurity = `cmd=$1; svc=; pw=
+while [ $# -gt 0 ]; do case $1 in -s) svc=$2 ;; -w) pw=$2 ;; esac; shift; done
+case $cmd in
+add-generic-password) printf %s "$pw" >"$FAKE/svc-$svc" ;;
+find-generic-password)
+	[ -f "$FAKE/svc-$svc" ] || exit 44
+	if LC_ALL=C grep -q '[^ -~]' "$FAKE/svc-$svc"; then od -An -tx1 "$FAKE/svc-$svc" | tr -d ' \n'; else cat "$FAKE/svc-$svc"; fi ;;
+esac
+`
+	fakeSecretTool = `cmd=$1; for a; do last=$a; done
+case $cmd in
+store) cat >"$FAKE/svc-$last" ;;
+lookup) [ -f "$FAKE/svc-$last" ] && cat "$FAKE/svc-$last" ;;
+esac
+`
+)
+
 // The password goes in with the tool of the system, and the password_cmd
-// that comes back reads it out, a name with a quote and a space included
-// (§13).
+// that comes back reads it out as it was, a name with a quote and a space
+// and a password that is not ASCII included (§13): the real security would
+// write that in hex, so the command ends in xxd.
 func TestStorePassword(t *testing.T) {
-	const name, pw = "my 'db'", `p@ss w'rd $x`
-	for _, c := range []struct{ os, tool, script, wantArgs string }{
-		{"darwin", "security", `echo "$@" >"$FAKE/args"
-case $1 in
-add-generic-password) while [ $# -gt 0 ]; do [ "$1" = -w ] && printf %s "$2" >"$FAKE/pw"; shift; done ;;
-find-generic-password) cat "$FAKE/pw" ;;
-esac
-`, "add-generic-password -U -a sqlmux -s sqlmux-my 'db' -w "},
-		{"linux", "secret-tool", `echo "$@" >"$FAKE/args"
-case $1 in
-store) cat >"$FAKE/pw" ;;
-lookup) cat "$FAKE/pw" ;;
-esac
-`, "store --label sqlmux-my 'db' sqlmux my 'db'"},
-	} {
-		hostOS = c.os
-		notes := fakeTool(t, c.tool, c.script)
-		cmd, stored, err := StorePassword(name, pw)
-		if err != nil || !stored {
-			t.Fatalf("%s: stored %v, err %v", c.os, stored, err)
-		}
-		if args, _ := os.ReadFile(filepath.Join(notes, "args")); !strings.HasPrefix(string(args), c.wantArgs) {
-			t.Errorf("%s: the tool was called with %q", c.os, args)
-		}
-		if got, err := (Connection{PasswordCmd: cmd}).Secret(); err != nil || got != pw {
-			t.Errorf("%s: %q reads %q, %v", c.os, cmd, got, err)
+	const name = "my 'db'"
+	for _, c := range []struct{ os, tool, script string }{{"darwin", "security", fakeSecurity}, {"linux", "secret-tool", fakeSecretTool}} {
+		for _, pw := range []string{`p@ss w'rd $x`, "密码123", "pässwörd", "tab\there"} {
+			bin := isolated(t, "sh", "cat", "grep", "od", "tr", "xxd")
+			hostOS = c.os
+			fakeTool(t, bin, c.tool, c.script)
+			cmd, stored, err := StorePassword(name, pw)
+			if err != nil || !stored {
+				t.Fatalf("%s %q: stored %v, err %v", c.os, pw, stored, err)
+			}
+			if want := c.os == "darwin" && !printable(pw); strings.Contains(cmd, "xxd") != want {
+				t.Errorf("%s %q: %q", c.os, pw, cmd)
+			}
+			if got, err := (Connection{PasswordCmd: cmd}).Secret(); err != nil || got != pw {
+				t.Errorf("%s: %q reads %q, %v", c.os, cmd, got, err)
+			}
 		}
 	}
-	hostOS = "linux"
+}
+
+// Another name is another entry: the one stored is not read back by a
+// connection of a name that was not.
+func TestStorePasswordByName(t *testing.T) {
+	bin := isolated(t, "sh", "cat", "grep", "od", "tr")
+	hostOS = "darwin"
+	fakeTool(t, bin, "security", fakeSecurity)
+	cmd, _, err := StorePassword("a", "one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, _, _ := StorePassword("b", "two")
+	if got, _ := (Connection{PasswordCmd: cmd}).Secret(); got != "one" {
+		t.Errorf("a: %q", got)
+	}
+	if got, _ := (Connection{PasswordCmd: other}).Secret(); got != "two" {
+		t.Errorf("b: %q", got)
+	}
 }
 
 // No tool is no keychain, not an error; one that fails is the error, its
 // first line of complaint said.
 func TestStorePasswordNoToolOrFailing(t *testing.T) {
-	t.Cleanup(func() { hostOS = "linux" })
 	for _, goos := range []string{"darwin", "linux"} {
+		isolated(t)
 		hostOS = goos
-		t.Setenv("PATH", t.TempDir())
 		if cmd, stored, err := StorePassword("x", "pw"); cmd != "" || stored || err != nil {
 			t.Errorf("%s with no tool: %q %v %v", goos, cmd, stored, err)
 		}
 	}
+	bin := isolated(t)
 	hostOS = "darwin"
-	fakeTool(t, "security", "echo 'keychain is locked' >&2\necho second >&2\nexit 1\n")
+	fakeTool(t, bin, "security", "echo 'keychain is locked' >&2\necho second >&2\nexit 1\n")
 	if _, stored, err := StorePassword("x", "pw"); stored || err == nil || err.Error() != "security: keychain is locked" {
 		t.Errorf("failing: %v %v", stored, err)
 	}
@@ -96,6 +158,9 @@ func TestExpanded(t *testing.T) {
 		if c, err := src.Expanded(); err != nil || c.Password != "${NOT_SET_ANYWHERE}" {
 			t.Errorf("%+v: %q %v", src, c.Password, err)
 		}
+	}
+	if c, err := (Connection{DSN: "x${}y"}).Expanded(); err != nil || c.DSN != "x${}y" { // no name: not a reference
+		t.Errorf("an empty ${}: %+v %v", c, err)
 	}
 	if c, err := (Connection{DSN: "postgres://u:p$w@h/db"}).Expanded(); err != nil || c.DSN != "postgres://u:p$w@h/db" {
 		t.Errorf("a $ alone: %+v %v", c, err)

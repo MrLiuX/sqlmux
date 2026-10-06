@@ -44,10 +44,16 @@ func init() {
 		"palette.command": {Title: i18n.N("命令面板：命令"), Run: do(func(a *App, _ Args) { a.openPalette(">") })}, // as if > was typed; bind : to it for the command scope (§6.8)
 		"theme.switch":    {Title: i18n.N("切换主题…"), Run: do(func(a *App, _ Args) { a.openThemeDrop() })},
 		"layout.save":     {Title: i18n.N("保存布局为…"), Run: do(func(a *App, _ Args) { a.askLayoutName() })},
-		"layout.open":     {Title: i18n.N("打开布局"), Run: do(func(a *App, _ Args) { a.openLayoutDrop() })},
-		"palette.window":  {Title: i18n.N("命令面板：窗口"), Run: do(func(a *App, _ Args) { a.openPalette("&") })},
-		"palette.tab":     {Title: i18n.N("命令面板：Tab"), Run: do(func(a *App, _ Args) { a.openPalette("#") })},
-		"palette.sql":     {Title: i18n.N("快速 SQL"), Run: do(func(a *App, _ Args) { a.openPalette(";") })}, // ; as if ; was typed (§12)
+		"layout.open": {Title: i18n.N("打开布局"), Run: func(a *App, _ Args) tea.Cmd {
+			if len(a.sess.Conns) == 0 { // a layout is of connections (F7.4)
+				return a.noConnection()
+			}
+			a.openLayoutDrop()
+			return nil
+		}},
+		"palette.window": {Title: i18n.N("命令面板：窗口"), Run: do(func(a *App, _ Args) { a.openPalette("&") })},
+		"palette.tab":    {Title: i18n.N("命令面板：Tab"), Run: do(func(a *App, _ Args) { a.openPalette("#") })},
+		"palette.sql":    {Title: i18n.N("快速 SQL"), Run: do(func(a *App, _ Args) { a.openPalette(";") })}, // ; as if ; was typed (§12)
 		// Keys inside the palette. Like every overlay's own actions they are
 		// Local, which the palette does not list (§12); bound elsewhere in
 		// config, they do nothing.
@@ -138,10 +144,11 @@ func init() {
 			}
 		})},
 		"console.new": {Title: i18n.N("新建 console"), Run: func(a *App, _ Args) tea.Cmd {
-			if a.conn() == nil {
+			c := a.conn()
+			if c == nil {
 				return a.noConnection()
 			}
-			cmd, _ := a.newConsole(a.conn())
+			cmd, _ := a.newConsole(c)
 			return cmd
 		}},
 		// "console.run <line>" is a click on a ▶ (§11「执行」).
@@ -150,7 +157,10 @@ func init() {
 		"console.conn":   {Title: i18n.N("切换连接…"), Run: do(func(a *App, _ Args) { a.openConsoleDrop(dropConsoleConn) })},
 		"console.tx":     {Run: do(func(a *App, _ Args) { a.openConsoleDrop(dropTx) })}, // a click on Tx: 自动 ▾; the palette has tx.mode (§7.8)
 		// The current connection's transaction (§5, F5.3).
-		"tx.mode": {Title: i18n.N("手动提交事务"), Run: func(a *App, _ Args) tea.Cmd { return a.setTxMode(a.conn(), a.conn() == nil || !a.conn().Manual) },
+		"tx.mode": {Title: i18n.N("手动提交事务"), Run: func(a *App, _ Args) tea.Cmd {
+			c := a.conn()
+			return a.setTxMode(c, c == nil || !c.Manual)
+		},
 			On: func(a *App) bool { c := a.conn(); return c != nil && c.Manual }},
 		"tx.commit":   {Title: i18n.N("提交"), Run: func(a *App, _ Args) tea.Cmd { return a.endTx(a.conn(), "commit") }},
 		"tx.rollback": {Title: i18n.N("回滚"), Run: func(a *App, _ Args) tea.Cmd { return a.endTx(a.conn(), "rollback") }},

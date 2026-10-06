@@ -30,6 +30,7 @@ const (
 	KindCell                     // a grid cell: focus its pane, then run Action (grid.goto r c)
 	KindRowNo                    // a grid row number: as KindCell, to that row in the current column
 	KindText                     // a console's text: a click puts the cursor there, a drag selects (§11)
+	KindSegment                  // a segment of a form's switch (Pane: its field, I: the segment)
 )
 
 // Target is what a click on a hit region resolves to. Targets compare with

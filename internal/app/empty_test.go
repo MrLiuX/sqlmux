@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"os"
 	"testing"
 
@@ -29,25 +28,19 @@ func emptyApp(t *testing.T) *App {
 	return a
 }
 
-// panics is the commands that panic when run from each of the tree and the
-// panes, with the message, as the connected App of the tests or the empty one.
-func panics(t *testing.T, empty bool) map[string]string {
-	t.Helper()
-	out := map[string]string{}
+// With no connection every command is safe to run, from the tree and from
+// each pane, and the screen still draws: a command that needs a connection
+// says so (F7.4).
+func TestNoConnectionRunsEverything(t *testing.T) {
 	for id := range actions {
 		for _, focus := range []int{0, 1, 2} {
-			var a *App
-			if empty {
-				a = emptyApp(t)
-				a.form = nil
-			} else {
-				a = sized(160, 45, "nerd")
-			}
+			a := emptyApp(t)
+			a.form = nil
 			a.win().focus(focus)
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
-						out[fmt.Sprintf("%s from pane %d", id, focus)] = fmt.Sprint(r)
+						t.Errorf("%s from pane %d: %v", id, focus, r)
 					}
 				}()
 				a.run(id, 0)
@@ -55,7 +48,6 @@ func panics(t *testing.T, empty bool) map[string]string {
 			}()
 		}
 	}
-	return out
 }
 
 // Keys of every sort, typed in the tree and in each pane, do no harm either.
@@ -80,23 +72,12 @@ func TestNoConnectionKeys(t *testing.T) {
 	}
 }
 
-// With no connection every command is as safe to run as it is with one, from
-// the tree and from each pane, and the screen still draws: a command that
-// needs a connection says so (F7.4).
-func TestNoConnectionRunsEverything(t *testing.T) {
-	base := panics(t, false)
-	for k, v := range panics(t, true) {
-		if _, ok := base[k]; !ok {
-			t.Errorf("%s: %s", k, v)
-		}
-	}
-}
-
 // The start opens the form over a tree of one line saying what to do; esc
 // closes it, the line and the ＋ in the sidebar's first row open it again,
 // and saving the first connection connects it, names the session by it and
 // opens console_1 beside the empty pane (F7.4).
 func TestNoConnectionStart(t *testing.T) {
+	keychain(t, "none")
 	a := emptyApp(t)
 	if a.form == nil || len(a.sess.Conns) != 0 || a.conn() != nil {
 		t.Fatalf("form %v, conns %d", a.form, len(a.sess.Conns))
@@ -107,12 +88,13 @@ func TestNoConnectionStart(t *testing.T) {
 		t.Fatal("esc leaves the form open")
 	}
 	t.Run("tree", func(t *testing.T) { golden.RequireEqual(t, a.render().String()) })
-	click(a, find(t, a, ui.Target{Kind: ui.KindButton, Pane: 0, Action: "conn.new"}).Min)
+	sb := a.sidebarRect()
+	click(a, uv.Pos(sb.Max.X-3, sb.Min.Y+1)) // the ＋, by its place
 	if a.form == nil {
 		t.Error("the ＋ does not open the form")
 	}
 	feed(t, a, "<Esc>")
-	click(a, uv.Pos(a.sidebarRect().Min.X+3, a.sidebarRect().Min.Y+3))
+	click(a, uv.Pos(a.sidebarRect().Min.X+3, a.sidebarRect().Min.Y+3)) // the empty tree's line
 	if a.form == nil {
 		t.Error("the line does not open the form")
 	}

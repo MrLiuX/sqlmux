@@ -517,24 +517,21 @@ func (a *App) statusLine() ui.StatusLine {
 		at := fmt.Sprintf(" %s,%d ", g.Number(gs.row), gs.col+1)
 		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: at, Style: bar(th.FgMuted)}}, Drop: dropCursor})
 	}
-	c := a.conn() // its name too: two often differ by the database alone (§7.8)
-	if c == nil { // a start with no connection (F7.4)
-		c = &Conn{}
-	} else {
+	if c := a.conn(); c != nil { // its name too: two often differ by the database alone (§7.8); none at a start with no connection (F7.4)
 		s.Right = append(s.Right, ui.Segment{Runs: iconRuns(ic.Conn, conn, " "+c.Spec.Name+" · "+c.Addr+" "), Drop: dropConn})
-	}
-	switch c.tx { // Main's transaction, one a console began in the auto mode too (§7.8)
-	case 'T':
-		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: i18n.T(" 事务中 "), Style: bar(th.Warn)}}})
-	case 'E':
-		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: i18n.T(" 事务出错 "), Style: bar(th.Error)}}})
-	}
-	if c.busy > 0 { // a click cancels it, as C-c does (§8.3)
-		busy := " busy "
-		if k := a.keys.Hint("cancel", "global"); k != "" {
-			busy += "· " + i18n.T("%s 取消 ", k)
+		switch c.tx { // Main's transaction, one a console began in the auto mode too (§7.8)
+		case 'T':
+			s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: i18n.T(" 事务中 "), Style: bar(th.Warn)}}})
+		case 'E':
+			s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: i18n.T(" 事务出错 "), Style: bar(th.Error)}}})
 		}
-		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: busy, Style: bar(th.Warn)}}, Action: "cancel"})
+		if c.busy > 0 { // a click cancels it, as C-c does (§8.3)
+			busy := " busy "
+			if k := a.keys.Hint("cancel", "global"); k != "" {
+				busy += "· " + i18n.T("%s 取消 ", k)
+			}
+			s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: busy, Style: bar(th.Warn)}}, Action: "cancel"})
+		}
 	}
 	if a.plain { // no modes to name (§6.9)
 		return s

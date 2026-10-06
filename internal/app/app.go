@@ -373,6 +373,10 @@ func (a *App) click(p uv.Position) tea.Cmd {
 	case ui.KindBackdrop: // outside an overlay: close it; outside a confirm box: no
 		a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.confirm, a.keyHelp, a.sessList = false, false, nil, nil, nil, nil, nil, nil
 		a.res.Reset()
+	case ui.KindSegment:
+		if a.form != nil {
+			a.formSegment(t.Pane, t.I)
+		}
 	case ui.KindRow:
 		switch tab, c := a.typingTab(), a.completing(); {
 		case tab != nil && tab.cell != nil: // an option applies at once (§10.2)

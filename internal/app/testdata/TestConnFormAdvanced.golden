@@ -22,7 +22,7 @@
 │        Views (0)            │ │                │      database                                           │                                                 │
 │ ▾  工作区                   │ │                │     read_only [ ]                                       │                                                 │
 │   ▾  data                   │ │                │          高级 ▾                                         │                                                 │
-│        pane-1               │ │                │           dsn mysql://u@h/d                             │                                                 │
+│        pane-1               │ │                │           dsn postgres://u@h/d                          │                                                 │
 │     ▾  pane-2               │ │                │  password_cmd printf pw                                 │                                                 │
 │            console_1        │ │                │                                                          │                                                 │
 │                              │ │                │──────────────────────────────────────────────────────────│                                                 │
