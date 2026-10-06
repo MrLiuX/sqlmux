@@ -162,7 +162,7 @@ check "ro 的表格上 ↵ 编辑：toast「ro 是只读连接」" eval 'toast_i
 
 # ---- 表单：engine 用空格切成 mysql
 CT=$E2E_TMP/config/sqlmux/connections.toml
-pal ">conn.new"; key Enter; e2e_type m2; key Tab; key Space; key Tab; e2e_type "$MY_DSN"; key Enter
+pal ">conn.new"; key Enter; form_dsn m2 "$MY_DSN" "" mysql
 check "新建连接 engine 切成 mysql：追加的一段是 engine = \"mysql\"，树里多出 m2（mysql 图标、未连接）" eval 'grep -q "^engine = \"mysql\"" <(tail -5 "$CT") && [[ $(e2e_text 1 32 "$(trow m2)") == *"▸ $MYSQL_ICON m2 "* ]]'
 y=$(trow m2); e2e_click "$(e2e_find m2 "$y" | cut -d' ' -f1)" "$y"; wait_for 6 eval '[[ $(e2e_text 1 32 "$(trow m2)") == *"▾ "* ]]'
 check "单击 m2：连上并展开" eval '[[ $(e2e_text 1 32 "$(trow m2)") == *"▾ $MYSQL_ICON m2 "* ]]'
