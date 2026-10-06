@@ -17,7 +17,7 @@ A terminal database client organized the way tmux is: sessions, windows, panes a
 
 ## Build
 
-Requires Go 1.26+.
+Requires Go 1.26+. With [just](https://github.com/casey/just) installed, `just build` puts the binary in `bin/`; `just --list` shows the other recipes (tests, lint, e2e, the sample databases). Without it:
 
 ```sh
 go build -o bin/sqlmux ./cmd/sqlmux
@@ -28,7 +28,7 @@ go build -o bin/sqlmux ./cmd/sqlmux
 Start the bundled PostgreSQL with sample data:
 
 ```sh
-docker compose up -d --wait postgres
+just db-up            # or: docker compose up -d --wait postgres
 ```
 
 Add a connection to `~/.config/sqlmux/connections.toml`:
