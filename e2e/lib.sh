@@ -51,7 +51,35 @@ e2e_start() {
   mkdir -p "$E2E_TMP"/{config/sqlmux,state,data,bin}
   printf '#!/bin/sh\ncat >"%s/clipboard"\n' "$E2E_TMP" >"$E2E_TMP/bin/pbcopy"
   printf '#!/bin/sh\ncat "%s/clipboard" 2>/dev/null\n' "$E2E_TMP" >"$E2E_TMP/bin/pbpaste"; chmod +x "$E2E_TMP"/bin/*
-  (umask 077; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$SQLMUX_TEST_PG" >"$E2E_TMP/config/sqlmux/connections.toml")
+  # F7.3: the form stores a password with security (macOS) or secret-tool, and password_cmd reads it back. Fakes in front of
+  # PATH keep every run off the real keychain; they keep the secrets in $E2E_TMP/keychain/<service>, one file each.
+  mkdir -p "$E2E_TMP/keychain"
+  cat >"$E2E_TMP/bin/security" <<'SH'
+#!/bin/sh
+# security add-generic-password -U -a sqlmux -s SERVICE -w PASSWORD   |   security find-generic-password -a sqlmux -s SERVICE -w
+op=$1; shift; svc=; pw=
+while [ $# -gt 0 ]; do case $1 in -s) svc=$2; shift ;; -w) [ $# -gt 1 ] && pw=$2; shift ;; esac; shift; done
+d="$E2E_DIR/keychain"; mkdir -p "$d"
+[ -f "$E2E_DIR/keychain.fail" ] && { cat "$E2E_DIR/keychain.fail" >&2; exit 1; }   # a locked keychain: the file holds what the tool complains about
+case $op in
+  add-generic-password) printf '%s' "$pw" >"$d/$svc" ;;
+  find-generic-password) [ -f "$d/$svc" ] && cat "$d/$svc" && echo || { echo "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain." >&2; exit 44; } ;;
+  *) exit 1 ;;
+esac
+SH
+  cat >"$E2E_TMP/bin/secret-tool" <<'SH'
+#!/bin/sh
+# secret-tool store --label SERVICE sqlmux NAME (password on stdin)   |   secret-tool lookup sqlmux NAME
+op=$1; shift; d="$E2E_DIR/keychain"; mkdir -p "$d"
+[ -f "$E2E_DIR/keychain.fail" ] && { cat "$E2E_DIR/keychain.fail" >&2; exit 1; }
+case $op in
+  store) shift 2; name=$2; cat >"$d/sqlmux-$name" ;;
+  lookup) [ -f "$d/sqlmux-$2" ] && cat "$d/sqlmux-$2" || exit 1 ;;
+  *) exit 1 ;;
+esac
+SH
+  chmod +x "$E2E_TMP/bin/security" "$E2E_TMP/bin/secret-tool"
+  [[ -n $E2E_NOCONN ]] || (umask 077; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$SQLMUX_TEST_PG" >"$E2E_TMP/config/sqlmux/connections.toml")
   [[ -n $conf ]] && cp "$conf" "$E2E_TMP/config/sqlmux/config.toml"
   [[ -n $keymaps ]] && cp "$keymaps" "$E2E_TMP/config/sqlmux/keymaps.toml"
   [[ -n $confdir ]] && cp -Rp "$confdir"/. "$E2E_TMP/config/sqlmux/"
