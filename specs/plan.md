@@ -13,6 +13,10 @@
 | M6 配置 | [m6-config/task.md](m6-config/task.md) | 键位配置收尾、主题、持久化、界面中英文切换、布局文件（保存与恢复工作现场）、可以关掉 vim 模式 | 完成（F6.1–F6.7 passed，完整回归在 be5f6f3 上全过，2026-10-06）；等用户和 M5 一起验收，通过后打 tag `m6` |
 | M7 工程质量 | [m7-quality/task.md](m7-quality/task.md) | golangci-lint 与 CI、justfile、凭据不落明文、分字段的新建连接表单与无连接启动（用户 2026-10-05 提出） | F7.1–F7.4 passed（491ea8b）；用户 10-07 追加 F7.5（明文密码不警告、不改权限），做完和 M5、M6 一起验收 |
 
+## M7 之后（用户 2026-10-07 定）
+
+暂时没有下一个里程碑。M5–M7 验收通过、打 tag 之后，发布一个可用版（tag `v0.1.0`，和 `m7` 同一个 commit；`go install` 能装，GoReleaser / Homebrew 等用户要再说），用户实际用一段时间，照 `/Users/ctw/proj/sqlmux-verify/WALKTHROUGH.md` 把全部功能走一遍，攒一份 todo 清单；决策者把清单整理成下一个里程碑（M8）的任务，确认后开工。期间 worker、reviewer、tester 空闲，不写代码。
+
 ## 任务文件的格式
 
 每个 `task.md` 开头写清五项：目标、范围（PRD 编号与 tech-design 章节）、依赖、完成标准、**审查节点**。之后每个 feature 一节：
