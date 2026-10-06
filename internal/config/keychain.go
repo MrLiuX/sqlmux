@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -19,38 +18,29 @@ var hostOS = runtime.GOOS
 // process list for a moment; it has no stdin form, only a tty prompt
 func StorePassword(name, pw string) (cmd string, stored bool, err error) {
 	service := "sqlmux-" + name
-	var store *exec.Cmd
+	tool, args, stdin := "secret-tool", []string{"store", "--label", service, "sqlmux", name}, strings.NewReader(pw)
+	cmd = "secret-tool lookup sqlmux " + shellQuote(name)
 	if hostOS == "darwin" {
-		path, found := tool("security")
-		if !found {
-			return "", false, nil
-		}
-		store = exec.Command(path, "add-generic-password", "-U", "-a", "sqlmux", "-s", service, "-w", pw)
+		tool, args, stdin = "security", []string{"add-generic-password", "-U", "-a", "sqlmux", "-s", service, "-w", pw}, nil
 		cmd = "security find-generic-password -a sqlmux -s " + shellQuote(service) + " -w"
-	} else {
-		path, found := tool("secret-tool")
-		if !found {
-			return "", false, nil
-		}
-		store = exec.Command(path, "store", "--label", service, "sqlmux", name)
-		store.Stdin = strings.NewReader(pw)
-		cmd = "secret-tool lookup sqlmux " + shellQuote(name)
+	}
+	path, lookErr := exec.LookPath(tool)
+	if lookErr != nil {
+		return "", false, nil //nolint:nilerr // no such tool is no keychain, not a failure
+	}
+	store := exec.Command(path, args...)
+	if stdin != nil {
+		store.Stdin = stdin
 	}
 	if out, runErr := store.CombinedOutput(); runErr != nil {
 		why, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
 		if why == "" {
 			why = runErr.Error()
 		}
-		return "", false, fmt.Errorf("%s: %s", filepath.Base(store.Path), why)
+		return "", false, fmt.Errorf("%s: %s", tool, why)
 	}
 	return cmd, true, nil
 }
 
 // shellQuote is s as one word of an sh command line.
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
-
-// tool is where the command name is on PATH.
-func tool(name string) (path string, found bool) {
-	path, err := exec.LookPath(name)
-	return path, err == nil
-}

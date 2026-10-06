@@ -165,8 +165,9 @@ func AppendConnection(c Connection) error {
 var envRef = regexp.MustCompile(`\$\{([^}]+)\}`)
 
 // Expanded is c with every ${NAME} in dsn and password replaced by the
-// environment variable's value (§13). A variable not set, or empty, is an
-// error naming it, the rest of c as it is.
+// environment variable's value (§13), password only when it is the source
+// of the password. A variable not set, or empty, is an error naming it, the
+// rest of c as it is.
 // ponytail: only ${NAME}; $NAME is left alone (a password or DSN may hold
 // a $), and there is no ${NAME:-default}
 func (c Connection) Expanded() (Connection, error) {
@@ -180,7 +181,10 @@ func (c Connection) Expanded() (Connection, error) {
 			return v
 		})
 	}
-	c.DSN, c.Password = expand(c.DSN), expand(c.Password)
+	c.DSN = expand(c.DSN)
+	if c.PasswordCmd == "" && c.PasswordEnv == "" { // else password is not the source: Secret() never reads it
+		c.Password = expand(c.Password)
+	}
 	return c, err
 }
 

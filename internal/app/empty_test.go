@@ -141,3 +141,21 @@ func TestNoConnectionSavesNothing(t *testing.T) {
 		t.Errorf("layout.save: %v, toast %q", err, a.toast)
 	}
 }
+
+// The palette's quick SQL needs a connection: typed, run, edited or sent to
+// the result area with none, it says so (F7.4).
+func TestNoConnectionQuickSQL(t *testing.T) {
+	for _, keys := range []string{"<C-p>;", "<C-p>;select 1", "<C-p>;select 1<CR>", "<C-p>;select 1<C-e>", "<C-p>;select 1<C-t>", "<C-p>;select 1<Tab>"} {
+		a := emptyApp(t)
+		a.form = nil
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("%s: %v", keys, r)
+				}
+			}()
+			feed(t, a, keys)
+			a.View()
+		}()
+	}
+}

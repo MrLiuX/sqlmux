@@ -361,7 +361,7 @@ func (a *App) drawSidebar(f *ui.Frame, r uv.Rectangle) {
 		Pane: win.Tree.ID,
 	}
 	if len(a.sess.Conns) == 0 {
-		t.Empty = i18n.T("还没有连接，按 ＋ 新建")
+		t.Empty = i18n.T("还没有连接，按 %s 新建", a.icons.RowAdd.Text)
 	}
 	t.Cursor, t.Top = a.treeAt(ns)
 	for _, n := range ns {

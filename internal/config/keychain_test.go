@@ -91,6 +91,12 @@ func TestExpanded(t *testing.T) {
 	if _, err := (Connection{DSN: "${NOT_SET_ANYWHERE}"}).Expanded(); err == nil || !strings.HasPrefix(err.Error(), "${NOT_SET_ANYWHERE}") {
 		t.Errorf("names the variable: %v", err)
 	}
+	for _, src := range []Connection{{PasswordCmd: "x"}, {PasswordEnv: "X"}} { // password is not the source: left alone
+		src.DSN, src.Password = "x", "${NOT_SET_ANYWHERE}"
+		if c, err := src.Expanded(); err != nil || c.Password != "${NOT_SET_ANYWHERE}" {
+			t.Errorf("%+v: %q %v", src, c.Password, err)
+		}
+	}
 	if c, err := (Connection{DSN: "postgres://u:p$w@h/db"}).Expanded(); err != nil || c.DSN != "postgres://u:p$w@h/db" {
 		t.Errorf("a $ alone: %+v %v", c, err)
 	}

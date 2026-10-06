@@ -183,3 +183,47 @@ func TestComposeDSN(t *testing.T) {
 		}
 	}
 }
+
+// A host with a port in it is told so, an IPv6 one may have its brackets;
+// without a keychain tool a password holding ${ is not saved, dial would take
+// it for a variable (§13).
+func TestConnFormHostAndPlainPassword(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	keychain(t, "none")
+	a, _ := withSessions()
+	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab>db.internal:5433<Tab><Tab>u<Tab>pa${ss}<Tab>d<CR>")
+	if a.form == nil || a.form.sel != fieldHost || a.form.err != "host 里不要带端口，端口在下面" {
+		t.Fatalf("host with a port: %+v", a.form)
+	}
+	feed(t, a, "<C-u>[::1]<CR>")
+	if a.form == nil || a.form.sel != fieldPassword || connections() != "" {
+		t.Fatalf("a ${ in a plain password: %+v\n%s", a.form, connections())
+	}
+	feed(t, a, "<C-u>plain<CR>")
+	if a.form != nil || !strings.Contains(connections(), `dsn = "postgres://u@[::1]:5432/d?sslmode=prefer"`) {
+		t.Errorf("saved: %v\n%s", a.form, connections())
+	}
+}
+
+// The first connection gives a console to every window made before it.
+func TestNoConnectionFirstConsoles(t *testing.T) {
+	a := emptyApp(t)
+	a.form = nil
+	feed(t, a, "<Space>c<Space>c") // two more windows, the consoles none
+	a.run("conn.new", 0)
+	feed(t, a, "play<Tab><Tab>h<Tab><Tab>u<Tab><Tab>d<CR>")
+	if len(a.sess.Windows) != 3 {
+		t.Fatalf("%d windows", len(a.sess.Windows))
+	}
+	seen := map[string]bool{}
+	for _, w := range a.sess.Windows {
+		c := consoleOf(w.pane(2))
+		if c == nil || c.conn != a.sess.start {
+			t.Fatalf("a window without its console: %+v", c)
+		}
+		seen[c.key()] = true
+	}
+	if len(seen) != 3 {
+		t.Errorf("consoles %v", seen)
+	}
+}

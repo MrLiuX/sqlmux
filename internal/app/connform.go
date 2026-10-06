@@ -188,7 +188,7 @@ func (a *App) saveConnForm() tea.Cmd {
 	for _, conn := range a.sess.Conns {
 		names = append(names, conn.Spec.Name)
 	}
-	if field, problem := c.Check(names); problem != "" && field != "dsn" {
+	if field, problem := c.Check(names); problem != "" { // the dsn is "-" here: composed or typed below
 		return a.fail(slices.Index(connFields, field), problem)
 	}
 	if f.dsnGiven() {
@@ -199,10 +199,14 @@ func (a *App) saveConnForm() tea.Cmd {
 				return a.fail(i, i18n.T("缺少 %s", connFields[i]))
 			}
 		}
+		host := strings.Trim(text(fieldHost), "[]") // an IPv6 address may be written with them
+		if strings.Contains(host, ":") && net.ParseIP(host) == nil {
+			return a.fail(fieldHost, i18n.T("host 里不要带端口，端口在下面"))
+		}
 		if p, err := strconv.Atoi(text(fieldPort)); err != nil || p < 1 || p > 65535 {
 			return a.fail(fieldPort, i18n.T("port 要是 1–65535 的数字"))
 		}
-		c.DSN = composeDSN(c.Engine, text(fieldHost), text(fieldPort), text(fieldUser), text(fieldDatabase))
+		c.DSN = composeDSN(c.Engine, host, text(fieldPort), text(fieldUser), text(fieldDatabase))
 	}
 	var toast tea.Cmd
 	if pw := fs[fieldPassword].Input.Text; pw != "" {
@@ -215,6 +219,8 @@ func (a *App) saveConnForm() tea.Cmd {
 			return a.fail(fieldPassword, err.Error())
 		case stored:
 			c.PasswordCmd = cmd
+		case strings.Contains(pw, "${"): // dial would take it for a variable (§13)
+			return a.fail(fieldPassword, i18n.T("没有钥匙串工具：password 里的 ${ 会被当成环境变量"))
 		default: // connections.toml is 0600 (§13)
 			c.Password = pw
 			toast = a.showToast(i18n.T("没有钥匙串工具，密码以明文存进了 connections.toml"), toastTTL)
@@ -242,7 +248,7 @@ func (a *App) startFirst(conn *Conn) tea.Cmd {
 	s := a.sess
 	s.start, s.last, s.Name = conn, conn, conn.Spec.Name
 	cmds := []tea.Cmd{a.connect(conn)}
-	for _, w := range s.Windows {
+	for _, w := range s.Windows { // each window made meanwhile had none either
 		if p := w.pane(2); p != nil && len(p.Tabs) == 0 {
 			cons, err := openConsole(conn, a.freeConsole())
 			if err != nil {
@@ -251,7 +257,6 @@ func (a *App) startFirst(conn *Conn) tea.Cmd {
 			}
 			putTab(p, Tab{Name: cons.key(), Console: cons}, false)
 			cmds = append(cmds, a.keepConsole(cons))
-			break
 		}
 	}
 	return tea.Batch(cmds...)

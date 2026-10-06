@@ -66,6 +66,9 @@ func (q *quickSQL) last() string {
 // connection's history.
 func (a *App) runQuick(sql string) tea.Cmd {
 	p := a.palette
+	if p.conn == nil { // a start with no connection (F7.4)
+		return a.noConnection()
+	}
 	if p.quick == nil {
 		p.quick = &quickSQL{}
 	}
@@ -231,6 +234,9 @@ func (a *App) quickEdit() tea.Cmd {
 	if scope != sqlScope || strings.TrimSpace(sql) == "" {
 		return nil
 	}
+	if a.palette.conn == nil {
+		return a.noConnection()
+	}
 	kept, ok := a.newConsole(a.palette.conn)
 	if !ok { // its file can't be read: the palette stays, the SQL in it
 		return kept
@@ -267,7 +273,7 @@ func (a *App) completeSQL() tea.Cmd {
 	p.comp = nil
 	scope, sql := a.paletteScope()
 	pos := p.input.Pos - len(scopes[scope].prefix) // none while the cursor is in the ; itself
-	if scope != sqlScope || pos < 0 {
+	if scope != sqlScope || pos < 0 || p.conn == nil {
 		return nil
 	}
 	if p.asked == nil {
