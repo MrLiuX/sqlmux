@@ -115,6 +115,77 @@ key Enter; sleep 0.4
 check "↵ 保存：表单关掉；原来的内容一字不差留在前面（注释、末尾没换行的最后一行补了换行）" eval '! form_open && n=$(wc -c < "$D/orig.toml") && cmp -s <(head -c $n "$(CT)") "$D/orig.toml" && [[ $(tail -c +$((n + 1)) "$(CT)" | head -c 1 | xxd -p) == 0a ]]'
 check "追加的一段：name = extra、engine、dsn（填的）、password_cmd（填的，带引号），权限 0600" eval 'a=$(tail -c +$(( $(wc -c < "$D/orig.toml") + 1 )) "$(CT)"); [[ $a == *"[[connection]]"* && $a == *"name = \"extra\""* && $a == *"engine = \"postgres\""* && $a == *"dsn = \"$DSN2\""* && $a == *password_cmd*"echo "*"$PW"* && $(stat -f %Lp "$(CT)") == 600 ]] || { echo "$a"; false; }'
 check "树里多出 extra：未连接（▸），保存没去连（libpq 的连接数还是 0）" eval 'y=$(nrow extra); [[ -n $y && $(e2e_text 1 32 "$y") == *"▸"* && $(psql "$SQLMUX_TEST_PG" -At -c "select count(*) from pg_stat_activity where application_name = '"'$APP2'"' and pid <> pg_backend_pid()") == 2 ]]'
+cp -p "$(CT)" "$D/saved.toml"
 e2e_stop
+
+# ---- 保存出来的 connections.toml 照常读：单击 extra 才连（password_cmd 带引号读回来），连上后展开
+mkdir -p "$D/c2"; cp -p "$D/saved.toml" "$D/c2/connections.toml"
+start -C "$D/c2"
+check "改过的 connections.toml 启动时照常读：树里 doraemon 之后是 extra" eval '[[ -n $(nrow extra) ]] && (( $(nrow doraemon) < $(nrow extra) ))'
+y=$(nrow extra); e2e_click "$(e2e_find extra "$y" | cut -d' ' -f1)" "$y"; wait_for 8 eval '[[ $(psql "$SQLMUX_TEST_PG" -At -c "select count(*) from pg_stat_activity where application_name = '"'$APP2'"'") == 4 ]]'
+check "单击 extra：用读回来的 password_cmd（带引号）连上，展开" eval '[[ $(e2e_text 1 32 "$(nrow extra)") == *"▾"* ]]'
+
+# ---- esc / C-c 取消不写文件；单击开关和底栏的按钮；文件不存在时新建 0600
+sum=$(md5 -q "$(CT)")
+pal ">conn.new"; key Enter; e2e_type zzz; key Escape
+check "esc：表单关掉，什么都没写" eval '! form_open && [[ $(md5 -q "$(CT)") == "$sum" ]]'
+pal ">conn.new"; key Enter; e2e_type zzz; key C-c
+check "C-c 等同 esc" eval '! form_open && running && [[ $(md5 -q "$(CT)") == "$sum" ]]'
+rm "$(CT)"
+pal ">conn.new"; key Enter; e2e_type fresh2; key Tab; key Tab; e2e_type "$PG_HOST"; key Tab; clr; e2e_type "$PG_PORT"; key Tab; e2e_type "$PG_USER"; key Tab; key Tab; e2e_type "$PG_DB"
+g=($(box)); e2e_click $((g[0] + 16)) "$(field_y 7)"; sleep 0.3
+check "单击 read_only 的值：切成 [x]，焦点到它上面" eval '[[ $(frows | sed -n 8p) == "read_only [x]" ]] && on_field 7'
+x=$(e2e_find "保存" $(( g[1] + g[3] - 2 )) | cut -d' ' -f1); e2e_click "$x" $(( g[1] + g[3] - 2 )); sleep 0.5
+check "单击底栏的「保存」：connections.toml 不存在就新建，权限 0600，里面只有这一条；密码没填：不写 password_cmd，钥匙串里没有 sqlmux-fresh2" eval '! form_open && f=$(CT) && [[ -f $f && $(stat -f %Lp "$f") == 600 && $(grep -c "^\[\[connection\]\]" "$f") == 1 ]] && grep -q "name = \"fresh2\"" "$f" && grep -q "read_only = true" "$f" && ! grep -q password_cmd "$f" && [[ ! -e "$E2E_TMP/keychain/sqlmux-fresh2" ]]'
+e2e_stop
+
+# ---- 表单开着时 C-p：面板盖在上面并接管按键；表单里 C-s 保存表单，不保存背后表格的修改（自建库）
+e2e_own_db || { echo "e2e: could not create the private database" >&2; exit 1; }
+mkdir -p "$D/own"; (umask 077; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$E2E_DB" >"$D/own/connections.toml")
+start -C "$D/own"
+open_table t_user; key l; key Enter; e2e_type x; key Enter                  # ① t_user 第 1 行的 name 改一格，没保存
+pal ">conn.new"; key Enter; key C-p; e2e_type '>x'; sleep 0.3
+check "表单开着时 C-p：面板盖在上面，输入进了面板" eval 'palette_open && input_is ">x"'
+key Escape
+check "esc 关掉面板，表单还在，name 还是空的" eval '! palette_open && form_open && [[ $(frows | sed -n 1p) == name ]]'
+fill cs "$PG_HOST" "$PG_PORT" "$PG_USER" "$PG_PW" "$PG_DB"; key C-s; sleep 1
+check "表单里 C-s：保存的是表单（cs 写进 connections.toml），背后 t_user 的修改没保存（库里还是 user_1）" eval '! form_open && grep -q "name = \"cs\"" "$(CT)" && [[ $(psql "$E2E_DB" -At -c "select name from t_user where id = 1") == user_1 ]]'
+printf '\n[[connection]]\nname = "ext"\nengine = "postgres"\ndsn = "%s"\n' "$SQLMUX_TEST_PG" >>"$(CT)"; sum=$(md5 -q "$(CT)")
+pal ">conn.new"; key Enter; fill ext "$PG_HOST" "$PG_PORT" "$PG_USER" "" "$PG_DB"; key Enter
+check "打开之后有人往 connections.toml 里加了 ext：表单里再用 ext 这个名字，报错、不写入" eval 'form_open && [[ -n $(ferr) && $(md5 -q "$(CT)") == "$sum" ]] || { echo "  error row: $(ferr)"; false; }'
+key Escape
+
+# ---- connections.toml 用内联数组 connection = [{…}]：追加会写坏它，表单报错、原文件不变
+mkdir -p "$D/inl"; (umask 077; printf 'connection = [{ name = "doraemon", engine = "postgres", dsn = "%s" }]\n' "$SQLMUX_TEST_PG" >"$D/inl/connections.toml")
+start -C "$D/inl"; sum=$(md5 -q "$(CT)")
+check "（准备）内联数组写法照常启动" eval 'running && ! form_open && [[ -n $(nrow doraemon) ]]'
+pal ">conn.new"; key Enter; fill inl "$PG_HOST" "$PG_PORT" "$PG_USER" "" "$PG_DB"; key Enter
+check "↵：表单报错、不关，connections.toml 一字没变" eval 'form_open && [[ -n $(ferr) && $(md5 -q "$(CT)") == "$sum" ]] && style_has $(( $(box | cut -d" " -f1) + 2 )) $(( $(fsep) - 1 )) fg=$ERROR || { echo "  error row: $(ferr)"; false; }'
+key Escape
+
+# ---- 没有钥匙串工具：密码写明文 + 0600 + toast；钥匙串工具报错：不保存、不降级，错误写在表单的错误行
+mkdir -p "$D/nokey"; (umask 077; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$SQLMUX_TEST_PG" >"$D/nokey/connections.toml")
+start -P /bin -C "$D/nokey"; pal ">conn.new"; key Enter
+fill plain "$PG_HOST" "$PG_PORT" "$PG_USER" "$PG_PW" "$PG_DB"; key Enter; sleep 1.5
+check "没有 security / secret-tool（PATH 里只有 /bin）：保存成功，密码写成明文 password，权限 0600，不写 password_cmd，有 toast" eval '! form_open && f=$(CT) && [[ $(stat -f %Lp "$f") == 600 ]] && grep -q "password = \"$PG_PW\"" "$f" && ! grep -q "password_cmd.*plain" "$f" && [[ -n $(toast_row | tr -d " ") ]]'
+echo "  toast: $(toast_row | sed 's/^ *//')"
+e2e_stop
+mkdir -p "$D/lock"; (umask 077; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$SQLMUX_TEST_PG" >"$D/lock/connections.toml")
+start -C "$D/lock"; printf 'keychain is locked\nsecond line\n' >"$E2E_TMP/keychain.fail"; sum=$(md5 -q "$(CT)")
+pal ">conn.new"; key Enter; fill locked "$PG_HOST" "$PG_PORT" "$PG_USER" "$PG_PW" "$PG_DB"; key Enter; sleep 1
+check "钥匙串工具在但执行失败（锁着）：表单不关，错误行写工具的第一行「…keychain is locked」，connections.toml 不变，不降级成明文" eval 'form_open && ferr | grep -q "keychain is locked" && ! ferr | grep -q "second line" && [[ $(md5 -q "$(CT)") == "$sum" ]] && ! grep -qE "^password *=" "$(CT)"'
+rm -f "$E2E_TMP/keychain.fail"; key Enter; sleep 2
+check "清掉锁再 ↵：保存成功" eval '! form_open && grep -q "name = \"locked\"" "$(CT)" && [[ $(cat "$E2E_TMP/keychain/sqlmux-locked") == "$PG_PW" ]]'
+e2e_stop
+
+# ---- dsn 里的 ${VAR}：启动时没设置报错（带变量名），设置了就连得上；$VAR 不展开
+mkdir -p "$D/env"; (umask 077; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "${E2E_F74_DSN}"\n' >"$D/env/connections.toml")
+e2e_start -C "$D/env" "$E2E_BIN"; sleep 1.5
+check "dsn = \"\${E2E_F74_DSN}\" 而 E2E_F74_DSN 没设置：启动报错退出码 1，说出变量名" eval 'screen_has "[e2e-exit 1]" && screen_has "E2E_F74_DSN"'
+e2e_stop
+e2e_start -C "$D/env" "E2E_F74_DSN='$SQLMUX_TEST_PG' $E2E_BIN"; wait_for 6 flag_is alternate_on 1; sleep 2
+check "设置了就连上：树里有 Tables" eval 'e2e_plain | head -14 | grep -q Tables'
+e2e_stop
+
 
 e2e_done

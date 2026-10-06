@@ -259,4 +259,11 @@ settled() { [[ $(bar) != *busy* && $(cnt) != "…" ]]; }
 clear_in() { local i; for ((i = 0; i < 80; i++)); do e2e_keys BSpace; done; sleep 0.2; }
 hy() { echo $(( $(grid_y) - 1 )); }                                     # the grid's header row
 
+# form_dsn NAME DSN [PASSWORD_CMD [mysql]]: with the new-connection form open and the focus on name (M7 F7.4), fill name and
+# engine, open 高级, type the dsn (and the password_cmd), ↵ to save. The scripts that only need a connection added use this.
+form_dsn() { local i; e2e_type "$1"; sleep 0.2
+  if [[ $4 == mysql ]]; then e2e_keys Tab; sleep 0.2; e2e_keys Space; sleep 0.2; e2e_keys BTab; sleep 0.2; fi
+  for i in 1 2 3 4 5 6 7 8; do e2e_keys Tab; sleep 0.15; done; e2e_keys Space; sleep 0.2; e2e_keys Tab; sleep 0.2; e2e_type "$2"
+  if [[ -n $3 ]]; then e2e_keys Tab; sleep 0.2; e2e_type "$3"; fi
+  sleep 0.2; e2e_keys Enter; sleep 0.4; }
 e2e_done() { echo "== $E2E_PASS passed, $E2E_FAIL failed"; e2e_stop; ((E2E_FAIL == 0)); }
