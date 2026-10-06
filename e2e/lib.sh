@@ -57,13 +57,14 @@ e2e_start() {
   cat >"$E2E_TMP/bin/security" <<'SH'
 #!/bin/sh
 # security add-generic-password -U -a sqlmux -s SERVICE -w PASSWORD   |   security find-generic-password -a sqlmux -s SERVICE -w
+# (like the real one: a password with a byte outside 0x20–0x7e comes back as hex, which password_cmd turns back with xxd -r -p)
 op=$1; shift; svc=; pw=
 while [ $# -gt 0 ]; do case $1 in -s) svc=$2; shift ;; -w) [ $# -gt 1 ] && pw=$2; shift ;; esac; shift; done
 d="$E2E_DIR/keychain"; mkdir -p "$d"
 [ -f "$E2E_DIR/keychain.fail" ] && { cat "$E2E_DIR/keychain.fail" >&2; exit 1; }   # a locked keychain: the file holds what the tool complains about
 case $op in
   add-generic-password) printf '%s' "$pw" >"$d/$svc" ;;
-  find-generic-password) [ -f "$d/$svc" ] && cat "$d/$svc" && echo || { echo "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain." >&2; exit 44; } ;;
+  find-generic-password) [ -f "$d/$svc" ] && { if LC_ALL=C grep -q '[^ -~]' "$d/$svc"; then xxd -p <"$d/$svc" | tr -d '\n'; else cat "$d/$svc"; fi; echo; } || { echo "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain." >&2; exit 44; } ;;
   *) exit 1 ;;
 esac
 SH
