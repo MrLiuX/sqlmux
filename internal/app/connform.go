@@ -18,10 +18,9 @@ import (
 // connForm is the open new connection form (§7.8「新建连接表单」): its
 // fields in the order below, the one with the keys, why ↵ did not save.
 type connForm struct {
-	fields      []ui.FormField
-	sel         int
-	err         string
-	portTouched bool // typed in: the engine no longer sets it
+	fields []ui.FormField
+	sel    int
+	err    string
 }
 
 // The form's fields, in order; the last two are in the 高级 fold.
@@ -109,17 +108,13 @@ func (a *App) formKey(k keymap.Key) {
 	fd := &f.fields[f.sel]
 	switch fd.Kind {
 	case ui.FormInput:
-		was := fd.Input.Text
 		editInput(&fd.Input, k)
-		if f.sel == fieldPort && fd.Input.Text != was {
-			f.portTouched = true
-		}
 	case ui.FormSegments:
 		switch k {
 		case "<Space>", "<Right>":
-			a.formSwitch(1)
+			a.formSegment(f.sel, (fd.On+1)%len(fd.Choices))
 		case "<Left>":
-			a.formSwitch(-1)
+			a.formSegment(f.sel, (fd.On+len(fd.Choices)-1)%len(fd.Choices))
 		}
 	case ui.FormCheck, ui.FormFold:
 		if k == "<Space>" {
@@ -128,20 +123,25 @@ func (a *App) formKey(k keymap.Key) {
 	}
 }
 
-// formSwitch takes the engine's next (1) or previous (-1) value; the port
-// goes with it, while it is the default one.
-func (a *App) formSwitch(d int) {
+// formSegment makes segment seg of field i, the engine, the one on; the port
+// goes with it while it is empty or the engine's default.
+func (a *App) formSegment(i, seg int) {
 	f := a.form
-	fd := &f.fields[fieldEngine]
-	fd.On = (fd.On + d + len(fd.Choices)) % len(fd.Choices)
-	if !f.portTouched {
-		p := defaultPort[fd.Choices[fd.On]]
-		f.fields[fieldPort].Input = ui.Input{Text: p, Pos: len(p)}
+	f.clearErr()
+	f.sel = i
+	fd := &f.fields[i]
+	if i == fieldEngine && seg != fd.On {
+		port := &f.fields[fieldPort].Input
+		if port.Text == "" || port.Text == defaultPort[fd.Choices[fd.On]] {
+			p := defaultPort[fd.Choices[seg]]
+			*port = ui.Input{Text: p, Pos: len(p)}
+		}
 	}
+	fd.On = seg
 }
 
-// formClick is a click on field i: the keys go to it; a switch also goes
-// on to its next value.
+// formClick is a click on field i: the keys go to it; a check and the fold
+// also turn over (a segment is picked by formSegment).
 func (a *App) formClick(i int) {
 	f := a.form
 	if f.skipped(i) {
@@ -149,7 +149,7 @@ func (a *App) formClick(i int) {
 	}
 	f.clearErr()
 	f.sel = i
-	if f.fields[i].Kind != ui.FormInput {
+	if k := f.fields[i].Kind; k == ui.FormCheck || k == ui.FormFold {
 		a.formKey("<Space>")
 	}
 }
@@ -203,10 +203,15 @@ func (a *App) saveConnForm() tea.Cmd {
 		if strings.Contains(host, ":") && net.ParseIP(host) == nil {
 			return a.fail(fieldHost, i18n.T("host 里不要带端口，端口在下面"))
 		}
-		if p, err := strconv.Atoi(text(fieldPort)); err != nil || p < 1 || p > 65535 {
+		p, err := strconv.Atoi(text(fieldPort))
+		if err != nil || p < 1 || p > 65535 {
 			return a.fail(fieldPort, i18n.T("port 要是 1–65535 的数字"))
 		}
-		c.DSN = composeDSN(c.Engine, host, text(fieldPort), text(fieldUser), text(fieldDatabase))
+		c.DSN = composeDSN(c.Engine, host, strconv.Itoa(p), text(fieldUser), text(fieldDatabase)) // +5432 is 5432
+	}
+	if err := config.CheckAppend(c); err != nil { // before a password goes into the keychain for it
+		f.err = err.Error()
+		return nil
 	}
 	var toast tea.Cmd
 	if pw := fs[fieldPassword].Input.Text; pw != "" {
@@ -221,7 +226,7 @@ func (a *App) saveConnForm() tea.Cmd {
 			c.PasswordCmd = cmd
 		case strings.Contains(pw, "${"): // dial would take it for a variable (§13)
 			return a.fail(fieldPassword, i18n.T("没有钥匙串工具：password 里的 ${ 会被当成环境变量"))
-		default: // connections.toml is 0600 (§13)
+		default: // AppendConnection makes the file 0600 (§13)
 			c.Password = pw
 			toast = a.showToast(i18n.T("没有钥匙串工具，密码以明文存进了 connections.toml"), toastTTL)
 		}

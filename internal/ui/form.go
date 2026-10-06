@@ -72,9 +72,7 @@ func (fm Form) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 	x0, x1 := box.Min.X+2, box.Max.X-2
 	iconW, labelW := 0, 0
 	for _, fd := range fm.Fields {
-		if !fd.Hidden {
-			iconW, labelW = max(iconW, Width(fd.Icon.Text)), max(labelW, Width(fd.Label))
-		}
+		iconW, labelW = max(iconW, Width(fd.Icon.Text)), max(labelW, Width(fd.Label)) // the hidden ones too: nothing shifts as the fold opens
 	}
 	y := box.Min.Y + 1
 	for i, fd := range fm.Fields {
@@ -119,6 +117,7 @@ func (fm Form) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 				if j > 0 {
 					x = f.Text(x, y, r.Max.X, "│", dim)
 				}
+				f.Region(uv.Rect(x, y, Width(ch)+2, 1), Target{Kind: KindSegment, Pane: i, I: j})
 				x = f.Text(x, y, r.Max.X, " "+ch+" ", st)
 			}
 		case FormCheck:

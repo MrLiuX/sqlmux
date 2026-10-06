@@ -23,6 +23,9 @@ func StorePassword(name, pw string) (cmd string, stored bool, err error) {
 	if hostOS == "darwin" {
 		tool, args, stdin = "security", []string{"add-generic-password", "-U", "-a", "sqlmux", "-s", service, "-w", pw}, nil
 		cmd = "security find-generic-password -a sqlmux -s " + shellQuote(service) + " -w"
+		if !printable(pw) { // security -w then writes the whole password in hex (keychain_find.c)
+			cmd += " | xxd -r -p"
+		}
 	}
 	path, lookErr := exec.LookPath(tool)
 	if lookErr != nil {
@@ -44,3 +47,13 @@ func StorePassword(name, pw string) (cmd string, stored bool, err error) {
 
 // shellQuote is s as one word of an sh command line.
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+
+// printable is whether every byte of s is one of 0x20–0x7e.
+func printable(s string) bool {
+	for _, b := range []byte(s) {
+		if b < 0x20 || b > 0x7e {
+			return false
+		}
+	}
+	return true
+}

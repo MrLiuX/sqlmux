@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -119,43 +118,66 @@ func (c Connection) Check(names []string) (field, problem string) {
 	return "", ""
 }
 
-// AppendConnection adds c at the end of connections.toml, made 0600 if
-// there is none (§14): its text written after what is there, never the
-// file encoded again, so the user's comments stay. What the file would be
-// is read first: one it would break (its connections an inline array, a
-// name taken since it was read) is left as it is, the error said.
-// ponytail: called in Update, the file read and written as the UI waits; a
-// Cmd if a slow disk ever shows it
-func AppendConnection(c Connection) error {
+// appendText is the text AppendConnection writes for c, a blank line
+// before it, a newline first if the file lacks one. What the file would be
+// is parsed first: one it would break (its connections an inline array, a
+// name taken since it was read) is the error.
+func appendText(c Connection) (string, error) {
 	var b strings.Builder
 	enc := toml.NewEncoder(&b)
 	enc.Indent = ""
 	if err := enc.Encode(struct {
 		Connection []Connection `toml:"connection"`
 	}{[]Connection{c}}); err != nil {
-		return err
+		return "", err
 	}
-	if err := os.MkdirAll(Dir(), 0o700); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(connectionsPath(), os.O_RDWR|os.O_APPEND|os.O_CREATE, 0o600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	old, err := io.ReadAll(f)
-	if err != nil {
-		return err
+	old, err := os.ReadFile(connectionsPath())
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", err
 	}
 	text := b.String()
-	if len(old) > 0 { // a blank line before it, a newline first if the file lacks one
+	if len(old) > 0 {
 		if old[len(old)-1] != '\n' {
 			text = "\n" + text
 		}
 		text = "\n" + text
 	}
 	if _, err := parseConnections(connectionsPath(), string(old)+text); err != nil {
+		return "", err
+	}
+	return text, nil
+}
+
+// CheckAppend is the error AppendConnection would give for c, nothing
+// written: asked before a password goes into the keychain for it (F7.3).
+func CheckAppend(c Connection) error {
+	_, err := appendText(c)
+	return err
+}
+
+// AppendConnection adds c at the end of connections.toml, made 0600 if
+// there is none, and when c holds a plain password also if there was one
+// (§13, §14): its text written after what is there, never the file encoded
+// again, so the user's comments stay.
+// ponytail: called in Update, the file read and written as the UI waits; a
+// Cmd if a slow disk ever shows it
+func AppendConnection(c Connection) error {
+	text, err := appendText(c)
+	if err != nil {
 		return err
+	}
+	if err := os.MkdirAll(Dir(), 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(connectionsPath(), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if c.Password != "" {
+		if err := f.Chmod(0o600); err != nil {
+			return err
+		}
 	}
 	_, err = f.WriteString(text)
 	return err
