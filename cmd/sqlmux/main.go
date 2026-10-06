@@ -56,7 +56,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	sess, restored, err := startSession(name, *layout, l, &warning)
+	sess, restored, err := startSession(name, *layout, l)
 	if err != nil {
 		return err
 	}
@@ -80,30 +80,28 @@ func run(args []string) error {
 // default one over connection name, or, with no connections.toml or none in
 // it and none asked for, an empty one with the form open (§14「启动时找不到
 // 连接」).
-func startSession(name, layout string, l *config.Layout, warning *string) (*app.Session, *app.Restored, error) {
+func startSession(name, layout string, l *config.Layout) (*app.Session, *app.Restored, error) {
 	if l != nil {
-		conns, _, w, err := config.LoadConnections("")
+		conns, _, err := config.LoadConnections("")
 		switch {
 		case config.NoConnections(err) && layout == "": // last.toml of connections gone: none to restore
 			return app.OpenEmpty(), nil, nil
 		case err != nil:
 			return nil, nil, err
 		}
-		*warning = app.JoinNotes(*warning, w)
 		restored := app.Restore(conns, l)
 		if err := restored.DialStart(context.Background()); err != nil {
 			return nil, nil, err
 		}
 		return restored.Sessions[0], restored, nil
 	}
-	sess, w, err := open(name)
+	sess, err := open(name)
 	switch {
 	case config.NoConnections(err) && name == "":
 		return app.OpenEmpty(), nil, nil
 	case err != nil:
 		return nil, nil, err
 	}
-	*warning = app.JoinNotes(*warning, w)
 	return sess, nil, nil
 }
 
@@ -131,16 +129,16 @@ func startLayout(name, layout string, warning *string) (*config.Layout, error) {
 
 // open is a session over connections.toml, connected to connection
 // name, or the first one when name is "" (§5).
-func open(name string) (*app.Session, string, error) {
-	conns, start, warning, err := config.LoadConnections(name)
+func open(name string) (*app.Session, error) {
+	conns, start, err := config.LoadConnections(name)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	sess, err := app.Open(context.Background(), conns, start)
 	if err != nil {
-		return nil, "", fmt.Errorf("%s: %w", conns[start].Name, err)
+		return nil, fmt.Errorf("%s: %w", conns[start].Name, err)
 	}
-	return sess, warning, nil
+	return sess, nil
 }
 
 // keysCmd is `sqlmux keys [--format md|toml] [--check]` (§6.7).

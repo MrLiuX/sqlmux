@@ -8,17 +8,14 @@ import (
 )
 
 // connectionsFile writes connections.toml under a fresh XDG_CONFIG_HOME.
-func connectionsFile(t *testing.T, body string, perm os.FileMode) string {
+func connectionsFile(t *testing.T, body string) string {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	path := filepath.Join(Dir(), "connections.toml")
 	if err := os.MkdirAll(Dir(), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(body), perm); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(path, perm); err != nil { // past the umask
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return path
@@ -39,35 +36,23 @@ password = "pw"
 
 // Every connection comes, the one named the start, else the first (§5).
 func TestLoadConnectionsByName(t *testing.T) {
-	connectionsFile(t, twoConns, 0o600)
+	connectionsFile(t, twoConns)
 	for name, want := range map[string]int{"": 0, "b": 1} {
-		cs, start, warn, err := LoadConnections(name)
-		if err != nil || len(cs) != 2 || cs[1].Name != "b" || start != want || warn != "" {
-			t.Errorf("LoadConnections(%q) = %d of %d %q %v, want %d", name, start, len(cs), warn, err, want)
+		cs, start, err := LoadConnections(name)
+		if err != nil || len(cs) != 2 || cs[1].Name != "b" || start != want {
+			t.Errorf("LoadConnections(%q) = %d of %d %v, want %d", name, start, len(cs), err, want)
 		}
 	}
-	_, _, _, err := LoadConnections("x")
+	_, _, err := LoadConnections("x")
 	if err == nil || !strings.Contains(err.Error(), `没有名为 "x" 的连接，已有：a, b`) {
 		t.Errorf("an unknown name: %v", err)
-	}
-}
-
-// A plain password in a file group or others can read warns (§13).
-func TestLoadConnectionWarnsOnReadablePassword(t *testing.T) {
-	connectionsFile(t, twoConns, 0o644)
-	if _, _, warn, _ := LoadConnections("a"); !strings.Contains(warn, "明文密码") {
-		t.Errorf("0644 with a password: warning %q", warn)
-	}
-	connectionsFile(t, strings.ReplaceAll(twoConns, `password = "pw"`, ""), 0o644)
-	if _, _, warn, _ := LoadConnections("a"); warn != "" {
-		t.Errorf("0644 without a password: warning %q", warn)
 	}
 }
 
 func TestLoadConnectionErrors(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	path := filepath.Join(Dir(), "connections.toml")
-	if _, _, _, err := LoadConnections(""); err == nil || !strings.Contains(err.Error(), path) {
+	if _, _, err := LoadConnections(""); err == nil || !strings.Contains(err.Error(), path) {
 		t.Errorf("no file: %v, want the path %s", err, path)
 	}
 	for body, want := range map[string]string{
@@ -80,8 +65,8 @@ func TestLoadConnectionErrors(t *testing.T) {
 		"[[connection]]\nname = \"..\"\nengine = \"postgres\"\ndsn = \"x\"\n":           `第 1 个连接：name = ".."：不能含 / 或 \，也不能以 . 开头`,
 		twoConns + "[[connection]]\nname = \"a\"\nengine = \"postgres\"\ndsn = \"x\"\n": `第 3 个连接：name = "a" 重复了`,
 	} {
-		path := connectionsFile(t, body, 0o600)
-		if _, _, _, err := LoadConnections(""); err == nil || !strings.Contains(err.Error(), path+": "+want) {
+		path := connectionsFile(t, body)
+		if _, _, err := LoadConnections(""); err == nil || !strings.Contains(err.Error(), path+": "+want) {
 			t.Errorf("%q: %v, want %q", body, err, want)
 		}
 	}
@@ -115,7 +100,7 @@ func TestSecret(t *testing.T) {
 // text after the user's, comments and all; none there, the file is made
 // the user's only (§14).
 func TestAppendConnection(t *testing.T) {
-	path := connectionsFile(t, "# mine\n[[connection]]\nname = \"a\" # the first\nengine = \"postgres\"\ndsn = \"x\"", 0o600)
+	path := connectionsFile(t, "# mine\n[[connection]]\nname = \"a\" # the first\nengine = \"postgres\"\ndsn = \"x\"")
 	if err := AppendConnection(Connection{Name: "b", Engine: "postgres", DSN: "postgres://localhost/b", ReadOnly: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +109,7 @@ func TestAppendConnection(t *testing.T) {
 	if string(data) != want {
 		t.Errorf("file:\n%s", data)
 	}
-	if cs, _, _, err := LoadConnections("b"); err != nil || len(cs) != 2 || !cs[1].ReadOnly {
+	if cs, _, err := LoadConnections("b"); err != nil || len(cs) != 2 || !cs[1].ReadOnly {
 		t.Errorf("loaded back: %+v %v", cs, err)
 	}
 	os.Remove(path)
@@ -137,7 +122,7 @@ func TestAppendConnection(t *testing.T) {
 	// connections in an inline array: a [[connection]] after it would break
 	// the file, the next start exiting; it stays as it is
 	inline := "connection = [{ name = \"a\", engine = \"postgres\", dsn = \"x\" }]\n"
-	path = connectionsFile(t, inline, 0o600)
+	path = connectionsFile(t, inline)
 	if err := AppendConnection(Connection{Name: "b", Engine: "postgres", DSN: "y"}); err == nil {
 		t.Error("appended to an inline array")
 	}
@@ -163,7 +148,7 @@ func TestNoConnections(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		_, _, _, err := LoadConnections("")
+		_, _, err := LoadConnections("")
 		if err == nil || NoConnections(err) != file.none {
 			t.Errorf("%q: %v", file.text, err)
 		}

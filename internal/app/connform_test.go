@@ -260,7 +260,8 @@ func TestConnFormKeychainAfterCheck(t *testing.T) {
 	}
 }
 
-// A plain password makes the file 0600, one that was 0644 too (§13).
+// A plain password changes no permissions of a file the user has: 0644 stays
+// (§13); a file the form makes is 0600.
 func TestConnFormPlainPasswordMode(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
@@ -277,7 +278,7 @@ func TestConnFormPlainPasswordMode(t *testing.T) {
 	}
 	a, _ := withSessions()
 	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<CR>")
-	if info, err := os.Stat(path); err != nil || a.form != nil || info.Mode().Perm() != 0o600 {
+	if info, err := os.Stat(path); err != nil || a.form != nil || info.Mode().Perm() != 0o644 {
 		t.Errorf("mode %v, %v, form %v", info.Mode(), err, a.form)
 	}
 }

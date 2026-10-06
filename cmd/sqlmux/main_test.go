@@ -110,7 +110,7 @@ func TestKeysTOMLReference(t *testing.T) {
 // Startup errors name the file to fix (§14).
 func TestOpenWithoutConnections(t *testing.T) {
 	writeConfig(t, "config.toml", "")
-	_, _, err := open("")
+	_, err := open("")
 	if err == nil || !strings.Contains(err.Error(), filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "sqlmux", "connections.toml")) {
 		t.Fatalf("no connections.toml: %v", err)
 	}
@@ -187,19 +187,18 @@ func TestStartSessionWithoutConnections(t *testing.T) {
 		if file != "" {
 			writeConfig(t, "connections.toml", file)
 		}
-		var warning string
-		sess, restored, err := startSession("", "", nil, &warning)
+		sess, restored, err := startSession("", "", nil)
 		if err != nil || sess == nil || restored != nil || len(sess.Conns) != 0 {
 			t.Fatalf("%q: %v %v %v", file, sess, restored, err)
 		}
 		l := &config.Layout{Version: 1, Sessions: []config.LayoutSession{{Name: "s", Connection: "c"}}}
-		if sess, _, err := startSession("", "", l, &warning); err != nil || sess == nil || len(sess.Conns) != 0 {
+		if sess, _, err := startSession("", "", l); err != nil || sess == nil || len(sess.Conns) != 0 {
 			t.Errorf("%q with a last.toml: %v %v", file, sess, err)
 		}
-		if _, _, err := startSession("play", "", nil, &warning); err == nil || !strings.Contains(err.Error(), path) && !strings.Contains(err.Error(), "里面没有") {
+		if _, _, err := startSession("play", "", nil); err == nil || !strings.Contains(err.Error(), path) && !strings.Contains(err.Error(), "里面没有") {
 			t.Errorf("%q, a connection asked for: %v", file, err)
 		}
-		if _, _, err := startSession("", "mine", l, &warning); err == nil {
+		if _, _, err := startSession("", "mine", l); err == nil {
 			t.Errorf("%q, a --layout: no error", file)
 		}
 	}

@@ -45,19 +45,17 @@ func NoConnections(err error) bool {
 
 // LoadConnections reads every connection in connections.toml, and which
 // of them is connection name, or the first one when name is "" (§5).
-// warning is set when the file holds a plain password that group or others
-// can read (§13).
-func LoadConnections(name string) (conns []Connection, start int, warning string, err error) {
+func LoadConnections(name string) (conns []Connection, start int, err error) {
 	path := connectionsPath()
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, 0, "", noConnections(fmt.Sprintf(i18n.T("找不到 %s"), path))
+		return nil, 0, noConnections(fmt.Sprintf(i18n.T("找不到 %s"), path))
 	}
 	if err != nil {
-		return nil, 0, "", err
+		return nil, 0, err
 	}
 	if conns, err = parseConnections(path, string(data)); err != nil {
-		return nil, 0, "", err
+		return nil, 0, err
 	}
 	var names []string
 	for _, c := range conns {
@@ -65,14 +63,10 @@ func LoadConnections(name string) (conns []Connection, start int, warning string
 	}
 	if name != "" {
 		if start = slices.Index(names, name); start < 0 {
-			return nil, 0, "", fmt.Errorf(i18n.T("%s: 没有名为 %q 的连接，已有：%s"), path, name, strings.Join(names, ", "))
+			return nil, 0, fmt.Errorf(i18n.T("%s: 没有名为 %q 的连接，已有：%s"), path, name, strings.Join(names, ", "))
 		}
 	}
-	plain := slices.ContainsFunc(conns, func(c Connection) bool { return c.Password != "" })
-	if info, err := os.Stat(path); err == nil && plain && info.Mode().Perm()&0o044 != 0 {
-		warning = i18n.T("connections.toml 里有明文密码，且其他用户可读，建议 chmod 600")
-	}
-	return conns, start, warning, nil
+	return conns, start, nil
 }
 
 // parseConnections is the connections text, the file at path, holds, each
@@ -156,9 +150,9 @@ func CheckAppend(c Connection) error {
 }
 
 // AppendConnection adds c at the end of connections.toml, made 0600 if
-// there is none, and when c holds a plain password also if there was one
-// (§13, §14): its text written after what is there, never the file encoded
-// again, so the user's comments stay.
+// there is none; the permissions of one there is are the user's (§13, §14):
+// its text written after what is there, never the file encoded again, so the
+// user's comments stay.
 // ponytail: called in Update, the file read and written as the UI waits; a
 // Cmd if a slow disk ever shows it
 func AppendConnection(c Connection) error {
@@ -174,11 +168,6 @@ func AppendConnection(c Connection) error {
 		return err
 	}
 	defer f.Close()
-	if c.Password != "" {
-		if err := f.Chmod(0o600); err != nil {
-			return err
-		}
-	}
 	_, err = f.WriteString(text)
 	return err
 }

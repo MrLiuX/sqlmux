@@ -59,7 +59,7 @@ func TestOpenPasswordSources(t *testing.T) {
 			if c.env != "" {
 				t.Setenv(c.env, c.val)
 			}
-			sess, _, err := open(name)
+			sess, err := open(name)
 			if (err != nil) != c.fails {
 				t.Fatalf("error %v, want one: %v", err, c.fails)
 			}
@@ -74,7 +74,7 @@ func TestOpenPasswordSources(t *testing.T) {
 func TestOpenWrongPassword(t *testing.T) {
 	dsn, _ := testDB(t)
 	writeConnection(t, "test", dsn, "password = \"wrong\"\n")
-	_, _, err := open("")
+	_, err := open("")
 	if err == nil || !strings.HasPrefix(err.Error(), "test: ") || !strings.Contains(err.Error(), "password authentication failed") {
 		t.Fatalf("wrong password: %v", err)
 	}
