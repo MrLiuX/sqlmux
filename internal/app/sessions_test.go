@@ -130,8 +130,8 @@ func TestNewSessionFails(t *testing.T) {
 func TestConnForm(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	a, report := withSessions()
-	feed(t, a, "<C-p>conn.new<CR><Tab><Space><Tab>mysql://localhost/x<Tab>printf pw<Tab> <CR>")
-	if a.form == nil || a.form.sel != 0 || a.form.err != "缺少 name" || a.form.fields[4].On != 1 {
+	feed(t, a, "<C-p>conn.new<CR><Tab><Space><Tab>mysql://localhost/x<Tab><Tab>printf pw<Tab> <CR>")
+	if a.form == nil || a.form.sel != 0 || a.form.err != "缺少 name" || a.form.fields[fieldReadOnly].On != 1 {
 		t.Fatalf("no name: %+v", a.form)
 	}
 	feed(t, a, "doraemon<CR>")

@@ -24,12 +24,13 @@ const (
 	fieldName = iota
 	fieldEngine
 	fieldDSN
+	fieldPassword
 	fieldPasswordCmd
 	fieldReadOnly
 )
 
 // connFields are the form's fields by the toml keys they write (§14).
-var connFields = []string{fieldName: "name", fieldEngine: "engine", fieldDSN: "dsn", fieldPasswordCmd: "password_cmd", fieldReadOnly: "read_only"}
+var connFields = []string{fieldName: "name", fieldEngine: "engine", fieldDSN: "dsn", fieldPassword: "password", fieldPasswordCmd: "password_cmd", fieldReadOnly: "read_only"}
 
 // openConnForm is conn.new: the form, empty, on name.
 func (a *App) openConnForm() {
@@ -37,6 +38,7 @@ func (a *App) openConnForm() {
 	for i, name := range connFields {
 		fs[i].Label = name
 	}
+	fs[fieldPassword].Mask = true
 	fs[fieldEngine].Choices = []string{"postgres", "mysql"}
 	fs[fieldReadOnly].Choices = []string{"false", "true"}
 	a.form = &connForm{fields: fs}
@@ -87,6 +89,24 @@ func (a *App) saveConnForm() tea.Cmd {
 		a.form.err, a.form.sel = problem, slices.Index(connFields, field)
 		return nil
 	}
+	var toast tea.Cmd
+	if pw := fs[fieldPassword].Input.Text; pw != "" {
+		if c.PasswordCmd != "" { // two sources: which one is wanted is not for us to say
+			a.form.err, a.form.sel = i18n.T("password 和 password_cmd 填一个就够了"), fieldPassword
+			return nil
+		}
+		cmd, stored, err := config.StorePassword(c.Name, pw)
+		switch {
+		case err != nil: // not a keychain without a tool: a locked one the user can unlock and ↵ again
+			a.form.err = err.Error()
+			return nil
+		case stored:
+			c.PasswordCmd = cmd
+		default: // connections.toml is 0600 (§13)
+			c.Password = pw
+			toast = a.showToast(i18n.T("没有钥匙串工具，密码以明文存进了 connections.toml"), toastTTL)
+		}
+	}
 	if err := config.AppendConnection(c); err != nil {
 		a.form.err = err.Error()
 		return nil
@@ -95,7 +115,7 @@ func (a *App) saveConnForm() tea.Cmd {
 		s.Conns = append(s.Conns, newConn(c))
 	}
 	a.form = nil
-	return nil
+	return toast
 }
 
 func (a *App) formView() ui.Form {

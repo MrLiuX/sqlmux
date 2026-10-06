@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -145,6 +146,29 @@ func AppendConnection(c Connection) error {
 	}
 	_, err = f.WriteString(text)
 	return err
+}
+
+// envRef is a ${NAME} in dsn or password.
+var envRef = regexp.MustCompile(`\$\{([^}]+)\}`)
+
+// Expanded is c with every ${NAME} in dsn and password replaced by the
+// environment variable's value (§13). A variable not set, or empty, is an
+// error naming it, the rest of c as it is.
+// ponytail: only ${NAME}; $NAME is left alone (a password or DSN may hold
+// a $), and there is no ${NAME:-default}
+func (c Connection) Expanded() (Connection, error) {
+	var err error
+	expand := func(s string) string {
+		return envRef.ReplaceAllStringFunc(s, func(ref string) string {
+			v := os.Getenv(ref[2 : len(ref)-1])
+			if v == "" && err == nil {
+				err = fmt.Errorf(i18n.T("%s：这个环境变量没有设置"), ref)
+			}
+			return v
+		})
+	}
+	c.DSN, c.Password = expand(c.DSN), expand(c.Password)
+	return c, err
 }
 
 // Secret is the password from the first source set: password_cmd,

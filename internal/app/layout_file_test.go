@@ -574,6 +574,19 @@ func TestDialStartFails(t *testing.T) {
 	}
 }
 
+// A ${NAME} in the DSN is dialed as the variable's value, one not set is
+// the error, the connection's name first (§13, F7.3).
+func TestDialExpandsDSN(t *testing.T) {
+	spec := config.Connection{Name: "far", Engine: "postgres", DSN: "${SQLMUX_TEST_FAR_DSN}"}
+	if _, err := dial(context.Background(), spec); err == nil || err.Error() != "${SQLMUX_TEST_FAR_DSN}：这个环境变量没有设置" {
+		t.Errorf("not set: %v", err)
+	}
+	t.Setenv("SQLMUX_TEST_FAR_DSN", "postgres://u@127.0.0.1:1/db?connect_timeout=1")
+	if _, err := dial(context.Background(), spec); err == nil || !strings.Contains(err.Error(), "127.0.0.1:1") {
+		t.Errorf("set: %v", err)
+	}
+}
+
 // A tab dropped leaves the one before it or the one that was current
 // before showing (T-01).
 func TestDropTab(t *testing.T) {

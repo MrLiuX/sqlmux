@@ -426,6 +426,10 @@ var secrets sync.Map
 
 // dial connects spec's Main and then its Meta (§8.2).
 func dial(ctx context.Context, spec config.Connection) (dialed, error) {
+	spec, err := spec.Expanded()
+	if err != nil {
+		return dialed{}, err
+	}
 	pw, cached := secrets.Load(spec.Name)
 	if !cached {
 		s, err := spec.Secret()

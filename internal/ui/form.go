@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // FormField is a row of a form (§7.8「新建连接表单」): a line input, or a
@@ -13,6 +14,7 @@ type FormField struct {
 	Input   Input
 	Choices []string
 	On      int
+	Mask    bool // the input is drawn as * (a password)
 }
 
 // Form is a box of fields over the screen: Sel is the field with the keys,
@@ -52,6 +54,9 @@ func (fm Form) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 		f.Region(uv.Rect(box.Min.X+1, y, box.Dx()-2, 1), Target{Kind: KindRow, I: i})
 		f.Text(x0, y, x1, fd.Label, dim)
 		r := uv.Rect(x0+labelW+2, y, max(x1-x0-labelW-2, 0), 1)
+		if fd.Mask {
+			fd.Input = fd.Input.masked()
+		}
 		switch {
 		case fd.Choices == nil && i == fm.Sel:
 			cursor = fd.Input.Draw(f, r, bg)
@@ -70,4 +75,17 @@ func (fm Form) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 	f.Text(box.Min.X+1, y+1, box.Max.X-1, strings.Repeat("─", box.Dx()-2), uv.Style{Fg: th.Sep, Bg: th.PaneBg})
 	hintRow(f, x0, y+2, x1, fm.Hints, dim, Target{Kind: KindButton})
 	return cursor
+}
+
+// masked is in with a * for each of its graphemes, the cursor after as many
+// as it was.
+func (in Input) masked() Input {
+	count := func(s string) (n int) {
+		for ; s != ""; n++ {
+			gr, _ := ansi.FirstGraphemeCluster(s, ansi.GraphemeWidth)
+			s = s[len(gr):]
+		}
+		return n
+	}
+	return Input{Text: strings.Repeat("*", count(in.Text)), Pos: count(in.Text[:in.Pos])}
 }
