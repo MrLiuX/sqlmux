@@ -176,3 +176,31 @@ func TestRunArguments(t *testing.T) {
 		t.Errorf("two connections: %v", err)
 	}
 }
+
+// With no connections.toml, or none in it, the program starts with an empty
+// session, also when last.toml is there; a connection asked for, or a
+// --layout, is still an error naming the file (§14「启动时找不到连接」).
+func TestStartSessionWithoutConnections(t *testing.T) {
+	writeConfig(t, "config.toml", "")
+	path := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "sqlmux", "connections.toml")
+	for _, file := range []string{"", "# nothing yet\n"} {
+		if file != "" {
+			writeConfig(t, "connections.toml", file)
+		}
+		var warning string
+		sess, restored, err := startSession("", "", nil, &warning)
+		if err != nil || sess == nil || restored != nil || len(sess.Conns) != 0 {
+			t.Fatalf("%q: %v %v %v", file, sess, restored, err)
+		}
+		l := &config.Layout{Version: 1, Sessions: []config.LayoutSession{{Name: "s", Connection: "c"}}}
+		if sess, _, err := startSession("", "", l, &warning); err != nil || sess == nil || len(sess.Conns) != 0 {
+			t.Errorf("%q with a last.toml: %v %v", file, sess, err)
+		}
+		if _, _, err := startSession("play", "", nil, &warning); err == nil || !strings.Contains(err.Error(), path) && !strings.Contains(err.Error(), "里面没有") {
+			t.Errorf("%q, a connection asked for: %v", file, err)
+		}
+		if _, _, err := startSession("", "mine", l, &warning); err == nil {
+			t.Errorf("%q, a --layout: no error", file)
+		}
+	}
+}

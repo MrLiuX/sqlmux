@@ -40,6 +40,7 @@ type Tree struct {
 	Icons       *Icons
 	Hints       []Hint
 	Pane        int
+	Empty       string // the one line of a tree with no connection, a click on it is the ＋ (F7.4)
 }
 
 // TreeRows is how many nodes a sidebar of inner height h lists.
@@ -61,15 +62,23 @@ func (t Tree) Draw(f *Frame, in uv.Rectangle) uv.Position {
 	if t.Icons.Labeled {
 		x = f.Text(x, y, right, "/ ", uv.Style{Fg: th.Fg, Bg: th.PaneBg})
 	}
+	add := t.Icons.RowAdd // at the right end of the row: the form for a new connection (F7.4)
+	addX := right - Width(add.Text)
+	addSt := add.On(info)
+	if f.Region(uv.Rect(addX, y, Width(add.Text), 1), Target{Kind: KindButton, Pane: t.Pane, Action: "conn.new"}) {
+		addSt.Bg = th.Select
+	}
+	f.Text(addX, y, right, add.Text, addSt)
+	hdr := addX - 1 // the header row ends before the button
 	if t.Filtering || t.Filter.Text != "" {
 		count := fmt.Sprintf("%d/%d", t.Matches, t.Total)
-		cx := right - Width(count)
-		f.Text(cx, y, right, count, dim)
+		cx := hdr - Width(count)
+		f.Text(cx, y, hdr, count, dim)
 		if c := t.Filter.Draw(f, uv.Rect(x, y, max(cx-1-x, 0), 1), uv.Style{Fg: th.Fg, Bg: th.PaneBg}); t.Filtering {
 			cursor = c
 		}
 	} else {
-		f.Text(x, y, right, fmt.Sprintf("%d tables", t.Total), dim)
+		f.Text(x, y, hdr, fmt.Sprintf("%d tables", t.Total), dim)
 	}
 
 	sep := func(y int) {
@@ -77,6 +86,15 @@ func (t Tree) Draw(f *Frame, in uv.Rectangle) uv.Position {
 	}
 	sep(y + 1)
 	list := uv.Rect(in.Min.X, y+2, in.Dx(), TreeRows(in.Dy()))
+	if t.Empty != "" && list.Dy() > 0 {
+		line := uv.Rect(list.Min.X, list.Min.Y, list.Dx(), 1)
+		st := dim
+		if f.Region(line, Target{Kind: KindButton, Pane: t.Pane, Action: "conn.new"}) {
+			st.Bg = th.Row
+		}
+		f.Fill(line, uv.Style{Bg: st.Bg})
+		f.Text(list.Min.X+1, line.Min.Y, in.Max.X-1, t.Empty, st)
+	}
 	for i := t.Top; i < min(t.Top+list.Dy(), len(t.Nodes)); i++ {
 		n, row := t.Nodes[i], list.Min.Y+i-t.Top
 		line := uv.Rect(list.Min.X, row, list.Dx(), 1)

@@ -145,3 +145,27 @@ func TestAppendConnection(t *testing.T) {
 		t.Errorf("written: %s", data)
 	}
 }
+
+// No file and no connection in it are the one case the program starts
+// without a connection (F7.4); a file that does not read is an error.
+func TestNoConnections(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	for _, file := range []struct {
+		text string
+		none bool
+	}{{"", true}, {"# empty\n", true}, {"[[connection]\n", false}, {"[[connection]]\nname = \"x\"\n", false}} {
+		if file.text != "" {
+			if err := os.MkdirAll(filepath.Join(dir, "sqlmux"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "sqlmux", "connections.toml"), []byte(file.text), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		_, _, _, err := LoadConnections("")
+		if err == nil || NoConnections(err) != file.none {
+			t.Errorf("%q: %v", file.text, err)
+		}
+	}
+}

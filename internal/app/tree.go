@@ -240,6 +240,9 @@ func (s *Session) opened(id string, def bool) bool {
 // Update, or group the tables by schema up front, if catalogs that big turn up.
 func (a *App) treeNodes() (ns []node, matches int) {
 	s, ic, th := a.sess, a.icons, a.theme
+	if len(s.Conns) == 0 { // a start with no connection: the one line of drawSidebar (F7.4)
+		return nil, 0
+	}
 	filter := a.win().tree.filter.Text
 	filtering := filter != ""
 	pos := map[string][]int{} // what the filter kept, by table node ID
@@ -487,6 +490,9 @@ func (a *App) refreshTree() tea.Cmd {
 		return a.treeFold(n, true)
 	}
 	c := a.conn()
+	if c == nil {
+		return a.noConnection()
+	}
 	if c.State != connReady { // a layout's other session, still connecting (F6.5)
 		return a.showToast(i18n.T("连接还没连上"), toastTTL)
 	}

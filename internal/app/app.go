@@ -113,6 +113,9 @@ func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, 
 		mouse: uv.Pos(-1, -1), warning: JoinNotes(warning, sess.warning), state: st,
 	}
 	a.plainConsoles()
+	if len(sess.Conns) == 0 { // a start with no connection (F7.4)
+		a.openConnForm()
+	}
 	return a
 }
 
@@ -149,7 +152,9 @@ func (a *App) Init() tea.Cmd {
 	if a.restored { // a layout's: its connections now, its consoles as it had them (F6.5)
 		cmds = append(cmds, a.connectsNow()...)
 	} else {
-		cmds = append(cmds, a.loadCatalog(a.sess.last))
+		if a.sess.last != nil { // none at a start with no connection (F7.4)
+			cmds = append(cmds, a.loadCatalog(a.sess.last))
+		}
 		for _, t := range a.sess.consoles() { // console_1, where it last ran (§11)
 			cmds = append(cmds, a.restoreConsole(t))
 		}

@@ -1,5 +1,5 @@
 ┌─ ⓪  doraemon ─────── SPC b ─┐ ┌─ ① ───────────────────────────────┐ ┌─ ②   doraemon  ▶ run  ↵ ─┐
-│  15 tables                  │ │                                   │ │▶  1 delete from t_log;    │
+│  15 tables                 │ │                                   │ │▶  1 delete from t_log;    │
 │──────────────────────────────│ │                                   │ │▶  2 select 1;             │
 │ ▾  doraemon                 │ │                                   │ │▶  3 drop table if exists a│
 │   ▸  agentable              │ │                                   │ │                           │

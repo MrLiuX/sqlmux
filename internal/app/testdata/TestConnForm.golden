@@ -1,5 +1,5 @@
 ┌─ ⓪  doraemon ─────── SPC b ─┐ ┌─ ① ────────────────────────────────────────────────────────────────┐ ┌─ ②  conso…  doraemon · doraemon.public ▾  ▶ run  ↵ ─┐
-│  15 tables                  │ │                                                                    │ │   1                                                  │
+│  15 tables                 │ │                                                                    │ │   1                                                  │
 │──────────────────────────────│ │                                                                    │ │                                                      │
 │ ▾  doraemon                 │ │                                                                    │ │                                                      │
 │   ▸  agentable              │ │                                                                    │ │                                                      │
@@ -13,20 +13,20 @@
 │       ▸  schema_migrations  │ │                                                                    │ │                                                      │
 │       ▸  t_order       1.2m │ │                                                                    │ │                                                      │
 │       ▸  t_order_item  3.4m │ │                                                                    │ │                                                      │
-│       ▸  t_payment     410k │ │                                                                    │ │                                                      │
-│       ▸  t_refund       12k │ │      ┌─ 新建连接 ───────────────────────────────────────────────────────────────────┐                                       │
-│       ▸  t_sku         8.1k │ │      │ name          doraemon                                                       │                                       │
-│       ▸  t_user         38k │ │      │ engine        mysql                                                          │                                       │
-│       ▸  t_user_address 52k │ │      │ dsn           mysql://localhost/x                                            │                                       │
-│       ▸  t_user_profile 38k │ │      │ password                                                                     │                                       │
-│        Views (0)            │ │      │ password_cmd  printf pw                                                      │                                       │
-│ ▾  工作区                   │ │      │ read_only     true                                                           │                                       │
-│   ▾  data                   │ │      │ name = "doraemon" 重复了                                                     │                                       │
-│        pane-1               │ │      │──────────────────────────────────────────────────────────────────────────────│                                       │
-│     ▾  pane-2               │ │      │ Tab 下一项 · ↵ 保存 · esc 取消                                               │                                       │
-│            console_1        │ │      └──────────────────────────────────────────────────────────────────────────────┘                                       │
-│                              │ │                                                                    │ │                                                      │
-│                              │ │                                                                    │ │                                                      │
+│       ▸  t_payment     410k │ │                ┌─ 新建连接 ───────────────────────────────────────────────┐                                                 │
+│       ▸  t_refund       12k │ │                │       name doraemon                                     │                                                 │
+│       ▸  t_sku         8.1k │ │                │     engine  postgres │ mysql                            │                                                 │
+│       ▸  t_user         38k │ │                │       host db.example                                   │                                                 │
+│       ▸  t_user_address 52k │ │                │       port 3307                                         │                                                 │
+│       ▸  t_user_profile 38k │ │                │       user app                                          │                                                 │
+│        Views (0)            │ │                │   password                                              │                                                 │
+│ ▾  工作区                   │ │                │   database shop                                         │                                                 │
+│   ▾  data                   │ │                │  read_only [x]                                          │                                                 │
+│        pane-1               │ │                │       高级 ▸                                            │                                                 │
+│     ▾  pane-2               │ │                │ name = "doraemon" 重复了                                 │                                                 │
+│            console_1        │ │                │──────────────────────────────────────────────────────────│                                                 │
+│                              │ │                │ [ 保存 ] [ 取消 ]         Tab 下一项 · ↵ 保存 · esc 取消 │                                                 │
+│                              │ │                └──────────────────────────────────────────────────────────┘                                                 │
 │                              │ │                                                                    │ │                                                      │
 │                              │ │                                                                    │ │                                                      │
 │                              │ │                                                                    │ │                                                      │

@@ -22,10 +22,16 @@ import (
 // layoutOf is every session as a Layout: the windows with their split
 // trees and panes, a table's request, a console's file, connection and
 // schema. The result area, a landing tab, results and what is not saved are
-// left out.
+// left out, and so is a session of no connection (F7.4).
 func (a *App) layoutOf() *config.Layout {
-	l := &config.Layout{Version: config.LayoutVersion, Active: slices.Index(a.sessions, a.sess)}
+	l := &config.Layout{Version: config.LayoutVersion}
 	for _, s := range a.sessions {
+		if s.start == nil {
+			continue
+		}
+		if s == a.sess {
+			l.Active = len(l.Sessions)
+		}
 		ls := config.LayoutSession{Name: s.Name, Connection: s.start.Spec.Name, Active: s.Active}
 		for _, w := range s.Windows {
 			ls.Windows = append(ls.Windows, windowLayout(w))
@@ -387,8 +393,8 @@ func (a *App) SaveLayoutOnExit(path string) { a.lastPath = path }
 // ponytail: a program killed does not write; the layout is the one of the
 // last quit.
 func (a *App) saveLast() {
-	if a.lastPath != "" {
-		_ = config.SaveLayout(a.lastPath, a.layoutOf())
+	if l := a.layoutOf(); a.lastPath != "" && len(l.Sessions) > 0 {
+		_ = config.SaveLayout(a.lastPath, l)
 	}
 }
 
@@ -411,7 +417,11 @@ func (a *App) layoutNameKey(k keymap.Key) tea.Cmd {
 	if err := config.CheckLayoutName(name); err != nil {
 		return a.showToast(err.Error(), toastTTL)
 	}
-	if err := config.SaveLayout(config.LayoutPath(name), a.layoutOf()); err != nil {
+	l := a.layoutOf()
+	if len(l.Sessions) == 0 { // a start with no connection has nothing to save (F7.4)
+		return a.noConnection()
+	}
+	if err := config.SaveLayout(config.LayoutPath(name), l); err != nil {
 		return a.showToast(err.Error(), toastTTL)
 	}
 	return a.showToast(i18n.T("已保存布局 %s", name), toastTTL)

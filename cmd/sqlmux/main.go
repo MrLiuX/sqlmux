@@ -56,25 +56,9 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	var sess *app.Session
-	var restored *app.Restored
-	if l != nil {
-		conns, _, w, err := config.LoadConnections("")
-		if err != nil {
-			return err
-		}
-		warning = app.JoinNotes(warning, w)
-		restored = app.Restore(conns, l)
-		if err := restored.DialStart(context.Background()); err != nil {
-			return err
-		}
-		sess = restored.Sessions[0]
-	} else {
-		var w string
-		if sess, w, err = open(name); err != nil {
-			return err
-		}
-		warning = app.JoinNotes(warning, w)
+	sess, restored, err := startSession(name, *layout, l, &warning)
+	if err != nil {
+		return err
 	}
 	st, err := config.LoadState()
 	if err != nil { // the broken file is kept aside; start empty (§14)
@@ -90,6 +74,37 @@ func run(args []string) error {
 	defer a.Close()
 	_, err = tea.NewProgram(a).Run()
 	return err
+}
+
+// startSession is the session the program starts with: over the layout l, the
+// default one over connection name, or, with no connections.toml or none in
+// it and none asked for, an empty one with the form open (§14「启动时找不到
+// 连接」).
+func startSession(name, layout string, l *config.Layout, warning *string) (*app.Session, *app.Restored, error) {
+	if l != nil {
+		conns, _, w, err := config.LoadConnections("")
+		switch {
+		case config.NoConnections(err) && layout == "": // last.toml of connections gone: none to restore
+			return app.OpenEmpty(), nil, nil
+		case err != nil:
+			return nil, nil, err
+		}
+		*warning = app.JoinNotes(*warning, w)
+		restored := app.Restore(conns, l)
+		if err := restored.DialStart(context.Background()); err != nil {
+			return nil, nil, err
+		}
+		return restored.Sessions[0], restored, nil
+	}
+	sess, w, err := open(name)
+	switch {
+	case config.NoConnections(err) && name == "":
+		return app.OpenEmpty(), nil, nil
+	case err != nil:
+		return nil, nil, err
+	}
+	*warning = app.JoinNotes(*warning, w)
+	return sess, nil, nil
 }
 
 // startLayout is the layout the program starts from, nil for the default

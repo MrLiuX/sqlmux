@@ -256,11 +256,11 @@ func (a *App) conn() *Conn {
 
 // inTx reports whether c's Main is in a transaction, as far as its last
 // request tells.
-func (c *Conn) inTx() bool { return c.tx != 0 && c.tx != 'I' }
+func (c *Conn) inTx() bool { return c != nil && c.tx != 0 && c.tx != 'I' }
 
 // cancel cancels what c's Main and Meta are running (§8.3).
 func (c *Conn) cancel() {
-	if c.State != connReady {
+	if c == nil || c.State != connReady {
 		return
 	}
 	c.Meta.Cancel()
@@ -293,10 +293,12 @@ func newSession(name string, conns []*Conn, start *Conn, n int) *Session {
 func (s *Session) newWindow(conn *Conn, n int) (w *Window, warning string) {
 	data := &Pane{ID: 1, Prev: -1}
 	console := &Pane{ID: 2, Prev: -1}
-	if cons, err := openConsole(conn, n); err != nil {
-		warning = err.Error()
-	} else {
-		console.Tabs = []Tab{{Name: fmt.Sprintf("console_%d", n), Console: cons}}
+	if conn != nil { // a console is a connection's: none yet at a start with none (F7.4)
+		if cons, err := openConsole(conn, n); err != nil {
+			warning = err.Error()
+		} else {
+			console.Tabs = []Tab{{Name: fmt.Sprintf("console_%d", n), Console: cons}}
+		}
 	}
 	s.winID++
 	w = &Window{
@@ -336,7 +338,10 @@ func (a *App) addWindow() tea.Cmd {
 	if warning != "" {
 		return a.showToast(warning, toastTTL)
 	}
-	return a.keepConsole(consoleOf(w.Root.B.Pane))
+	if c := consoleOf(w.Root.B.Pane); c != nil { // none at a start with no connection (F7.4)
+		return a.keepConsole(c)
+	}
+	return nil
 }
 
 // cycleWindow is SPC n (d 1) and SPC p (d -1): the next or previous
@@ -395,6 +400,16 @@ func (a *App) closeWindow() tea.Cmd {
 		s.prevWin = 0
 		return nil
 	})
+}
+
+// OpenEmpty is the session of a start with no connection: the default
+// layout with no console, a console being a connection's, the connection
+// form open as the App begins (§14「启动时找不到连接」).
+func OpenEmpty() *Session {
+	s := &Session{Name: "sqlmux", open: map[string]bool{}}
+	w, _ := s.newWindow(nil, 1)
+	s.Windows = []*Window{w}
+	return s
 }
 
 // Open is a session over specs, start the connection it connects now

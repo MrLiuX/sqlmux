@@ -18,11 +18,20 @@ var txOpen = i18n.N("当前连接有未提交的事务，先提交或回滚")
 // setTxMode puts c in the manual transaction mode, or back in the auto one
 // except with a transaction going on, which nothing would end then (§5).
 func (a *App) setTxMode(c *Conn, manual bool) tea.Cmd {
+	if c == nil {
+		return a.noConnection()
+	}
 	if !manual && c.inTx() {
 		return a.showToast(i18n.T(txOpen), toastTTL)
 	}
 	c.Manual = manual
 	return nil
+}
+
+// noConnection is the toast of a command that needs a connection when there
+// is none (F7.4).
+func (a *App) noConnection() tea.Cmd {
+	return a.showToast(i18n.T("还没有连接，先新建一个"), toastTTL)
 }
 
 // txDone answers endTx.

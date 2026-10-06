@@ -31,6 +31,19 @@ type Connection struct {
 // connectionsPath is connections.toml (§14).
 func connectionsPath() string { return filepath.Join(Dir(), "connections.toml") }
 
+// noConnections is connections.toml having none: no file, or none in it.
+// The program starts all the same, with the form open, unless a connection
+// was asked for (§14「启动时找不到连接」).
+type noConnections string
+
+func (e noConnections) Error() string { return string(e) }
+
+// NoConnections reports whether err is that.
+func NoConnections(err error) bool {
+	var e noConnections
+	return errors.As(err, &e)
+}
+
 // LoadConnections reads every connection in connections.toml, and which
 // of them is connection name, or the first one when name is "" (§5).
 // warning is set when the file holds a plain password that group or others
@@ -39,7 +52,7 @@ func LoadConnections(name string) (conns []Connection, start int, warning string
 	path := connectionsPath()
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, 0, "", fmt.Errorf(i18n.T("找不到 %s"), path)
+		return nil, 0, "", noConnections(fmt.Sprintf(i18n.T("找不到 %s"), path))
 	}
 	if err != nil {
 		return nil, 0, "", err
@@ -73,7 +86,7 @@ func parseConnections(path, text string) ([]Connection, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	if len(file.Connection) == 0 {
-		return nil, fmt.Errorf(i18n.T("%s: 里面没有 [[connection]]"), path)
+		return nil, noConnections(fmt.Sprintf(i18n.T("%s: 里面没有 [[connection]]"), path))
 	}
 	var names []string
 	for i, c := range file.Connection {

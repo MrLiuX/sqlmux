@@ -106,6 +106,9 @@ type sessionDialed struct {
 // is (F5.1).
 func (a *App) dialSession() tea.Cmd {
 	a.sessList = nil
+	if a.conn() == nil {
+		return a.noConnection()
+	}
 	spec := a.conn().Spec
 	return tea.Batch(a.showToast(i18n.T("正在连接 %s…", spec.Name), toastTTL), func() tea.Msg {
 		d, err := dial(context.Background(), spec)

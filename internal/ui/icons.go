@@ -45,6 +45,11 @@ type Icons struct {
 	Result, Pin, Export, Log Icon // the result area's (§11)
 	Close                    Icon
 	Star, History            Icon // a WHERE's favorites and history (§9.7)
+	// The connection form's rows (F7.4); it also has Postgres, MySQL, Key,
+	// Lock and Console
+	Tag, Host, Port, User Icon
+	Database              Icon
+	Advanced, Link        Icon
 	// Labeled sets (ascii) say nothing by themselves, so the words beside
 	// the icons stay: pane types in titles, C-p, the filter's / (§7.7).
 	Labeled bool
@@ -84,6 +89,13 @@ var NerdIcons = &Icons{
 	Log:         Icon{Text: "\uf0f6"}, // nf-fa-file_text_o
 	Star:        Icon{Text: "\uf005"}, // nf-fa-star
 	History:     Icon{Text: "\uf1da"}, // nf-fa-history
+	Tag:         Icon{Text: "\uf02b"}, // nf-fa-tag
+	Host:        Icon{Text: "\uf233"}, // nf-fa-server
+	Port:        Icon{Text: "\uf1e6"}, // nf-fa-plug
+	User:        Icon{Text: "\uf007"}, // nf-fa-user
+	Database:    Icon{Text: "\uf1c0"}, // nf-fa-database
+	Advanced:    Icon{Text: "\uf013"}, // nf-fa-cog
+	Link:        Icon{Text: "\uf0c1"}, // nf-fa-link
 }
 
 var ASCIIIcons = &Icons{
@@ -117,6 +129,13 @@ var ASCIIIcons = &Icons{
 	Log:         Icon{Text: "L"},
 	Star:        Icon{Text: "*"},
 	History:     Icon{Text: "h"},
+	Tag:         Icon{Text: "#"},
+	Host:        Icon{Text: "@"},
+	Port:        Icon{Text: ":"},
+	User:        Icon{Text: "~"},
+	Database:    Icon{Text: "="},
+	Advanced:    Icon{Text: "+"},
+	Link:        Icon{Text: "&"},
 	Labeled:     true,
 }
 
@@ -160,5 +179,7 @@ func (ic *Icons) byName() map[string]*Icon {
 		"sort_asc": &ic.SortAsc, "sort_desc": &ic.SortDesc, "view": &ic.View, "column": &ic.Column, "lock": &ic.Lock,
 		"result": &ic.Result, "pin": &ic.Pin, "export": &ic.Export, "close": &ic.Close,
 		"pane": &ic.Pane, "log": &ic.Log, "star": &ic.Star, "history": &ic.History,
+		"tag": &ic.Tag, "host": &ic.Host, "port": &ic.Port, "user": &ic.User, "database": &ic.Database,
+		"advanced": &ic.Advanced, "link": &ic.Link,
 	}
 }

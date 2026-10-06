@@ -360,6 +360,9 @@ func (a *App) drawSidebar(f *ui.Frame, r uv.Rectangle) {
 		),
 		Pane: win.Tree.ID,
 	}
+	if len(a.sess.Conns) == 0 {
+		t.Empty = i18n.T("还没有连接，按 ＋ 新建")
+	}
 	t.Cursor, t.Top = a.treeAt(ns)
 	for _, n := range ns {
 		t.Nodes = append(t.Nodes, n.TreeNode)
@@ -515,7 +518,11 @@ func (a *App) statusLine() ui.StatusLine {
 		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: at, Style: bar(th.FgMuted)}}, Drop: dropCursor})
 	}
 	c := a.conn() // its name too: two often differ by the database alone (§7.8)
-	s.Right = append(s.Right, ui.Segment{Runs: iconRuns(ic.Conn, conn, " "+c.Spec.Name+" · "+c.Addr+" "), Drop: dropConn})
+	if c == nil { // a start with no connection (F7.4)
+		c = &Conn{}
+	} else {
+		s.Right = append(s.Right, ui.Segment{Runs: iconRuns(ic.Conn, conn, " "+c.Spec.Name+" · "+c.Addr+" "), Drop: dropConn})
+	}
 	switch c.tx { // Main's transaction, one a console began in the auto mode too (§7.8)
 	case 'T':
 		s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: i18n.T(" 事务中 "), Style: bar(th.Warn)}}})

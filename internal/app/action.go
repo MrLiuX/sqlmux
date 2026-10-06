@@ -89,7 +89,7 @@ func init() {
 			} else if a.mode() != keymap.Normal || inWhere(a) { // in any input C-c is esc, as in vim (§6.8), in a WHERE's NORMAL too (F3.39)
 				return a.press(keymap.Esc)
 			}
-			if c := a.conn(); c.busy > 0 { // a query or a save of the current connection is running: cancel it (§8.3, §10.3)
+			if c := a.conn(); c != nil && c.busy > 0 { // a query or a save of the current connection is running: cancel it (§8.3, §10.3)
 				c.cancel()
 				return nil
 			}
@@ -137,15 +137,21 @@ func init() {
 				a.palette.into = p
 			}
 		})},
-		"console.new": {Title: i18n.N("新建 console"), Run: func(a *App, _ Args) tea.Cmd { cmd, _ := a.newConsole(a.conn()); return cmd }},
+		"console.new": {Title: i18n.N("新建 console"), Run: func(a *App, _ Args) tea.Cmd {
+			if a.conn() == nil {
+				return a.noConnection()
+			}
+			cmd, _ := a.newConsole(a.conn())
+			return cmd
+		}},
 		// "console.run <line>" is a click on a ▶ (§11「执行」).
 		"console.run":    {Title: i18n.N("执行"), Run: func(a *App, args Args) tea.Cmd { return a.consoleRun(args.Arg) }},
 		"console.schema": {Title: i18n.N("切换 schema"), Run: do(func(a *App, _ Args) { a.openConsoleDrop(dropSchema) })},
 		"console.conn":   {Title: i18n.N("切换连接…"), Run: do(func(a *App, _ Args) { a.openConsoleDrop(dropConsoleConn) })},
 		"console.tx":     {Run: do(func(a *App, _ Args) { a.openConsoleDrop(dropTx) })}, // a click on Tx: 自动 ▾; the palette has tx.mode (§7.8)
 		// The current connection's transaction (§5, F5.3).
-		"tx.mode": {Title: i18n.N("手动提交事务"), Run: func(a *App, _ Args) tea.Cmd { return a.setTxMode(a.conn(), !a.conn().Manual) },
-			On: func(a *App) bool { return a.conn().Manual }},
+		"tx.mode": {Title: i18n.N("手动提交事务"), Run: func(a *App, _ Args) tea.Cmd { return a.setTxMode(a.conn(), a.conn() == nil || !a.conn().Manual) },
+			On: func(a *App) bool { c := a.conn(); return c != nil && c.Manual }},
 		"tx.commit":   {Title: i18n.N("提交"), Run: func(a *App, _ Args) tea.Cmd { return a.endTx(a.conn(), "commit") }},
 		"tx.rollback": {Title: i18n.N("回滚"), Run: func(a *App, _ Args) tea.Cmd { return a.endTx(a.conn(), "rollback") }},
 		// The result area's (§11).

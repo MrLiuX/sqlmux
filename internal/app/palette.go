@@ -164,6 +164,9 @@ func (a *App) paletteItems() []paletteItem {
 	// schemas, then the other connections connected (§12)
 	cur := a.palette.conn
 	for _, c := range append([]*Conn{cur}, slices.DeleteFunc(slices.Clone(a.sess.Conns), func(c *Conn) bool { return c == cur })...) {
+		if c == nil { // a start with no connection (F7.4)
+			continue
+		}
 		for _, here := range []bool{true, false} {
 			for _, t := range c.Tables {
 				if (c == cur && t.Schema == c.Schema) == here {
@@ -182,8 +185,10 @@ func (a *App) paletteItems() []paletteItem {
 	for _, id := range ids {
 		items = append(items, paletteItem{itemCommand, id, a.icons.Command, i18n.T(actions[id].Title), id})
 	}
-	for _, sql := range a.state.SQL[cur.Spec.Name] {
-		items = append(items, paletteItem{itemSQL, sql, a.icons.Console, sql, ""})
+	if cur != nil {
+		for _, sql := range a.state.SQL[cur.Spec.Name] {
+			items = append(items, paletteItem{itemSQL, sql, a.icons.Console, sql, ""})
+		}
 	}
 	recent := func(it paletteItem) int {
 		if i := slices.Index(a.state.Recent, it.recent()); i >= 0 {

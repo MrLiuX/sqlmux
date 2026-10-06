@@ -526,7 +526,7 @@ func TestTreeFilter(t *testing.T) {
 		t.Fatalf("typing: mode %v\n%s", a.mode(), treeTexts(a))
 	}
 	f := a.render()
-	if row := strings.Split(f.String(), "\n")[1]; !strings.Contains(row, " tor") || !strings.Contains(row, " 2/15 │") {
+	if row := strings.Split(f.String(), "\n")[1]; !strings.Contains(row, " tor") || !strings.Contains(row, " 2/15 "+a.icons.RowAdd.Text+" │") {
 		t.Errorf("filter row %q", row)
 	}
 	if f.Cursor == nil || f.Cursor.Y != 1 {
