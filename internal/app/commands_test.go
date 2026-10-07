@@ -88,10 +88,9 @@ func TestFocusNext(t *testing.T) {
 	}
 }
 
-// console.format lays out every statement, as one undo step, the cursor at
-// the start of the statement it was in, in bytes whatever comes before
-// it; with the statements no more as many, where gq puts it; not in
-// INSERT (F5.16).
+// console.format lays out every statement, as one undo step, the cursor
+// where it was, line and column, clamped when the text got shorter; not in
+// INSERT (F5.16, F8.3).
 func TestConsoleFormatAll(t *testing.T) {
 	a, c := inConsole(t, "", "")
 	format := func() {
@@ -103,33 +102,27 @@ func TestConsoleFormatAll(t *testing.T) {
 		a.Update(cmd())
 	}
 	a.consoleDid(c, c.ed.Load("select 1;\nselect a,b from t;"))
-	feed(t, a, "j")
+	feed(t, a, "jfb")
 	format()
-	if got := text(c); got != "select\n  1;\n\nselect\n  a,\n  b\nfrom\n  t;" || c.ed.Cursor() != (editor.Pos{Line: 3, Col: 0}) {
-		t.Fatalf("%q, cursor %v", got, c.ed.Cursor())
+	if got := text(c); got != "select\n  1;\n\nselect\n  a,\n  b\nfrom\n  t;" || c.ed.Cursor() != (editor.Pos{Line: 1, Col: 3}) {
+		t.Fatalf("both statements, cursor kept (line 1, the column clamped to the ;): %q, cursor %v", got, c.ed.Cursor())
 	}
 	if feed(t, a, "u"); text(c) != "select 1;\nselect a,b from t;" {
 		t.Errorf("u: %q", text(c))
 	}
-	for _, w := range []struct {
-		in   string
-		want editor.Pos
-	}{
-		{"\tselect 1;", editor.Pos{Line: 0, Col: 1}},
-		{"/* 中文 */ select 1;", editor.Pos{Line: 0, Col: 13}},
-	} {
-		a.consoleDid(c, c.ed.Load(w.in))
-		format()
-		if c.ed.Cursor() != w.want {
-			t.Errorf("%q: cursor %v, want %v", w.in, c.ed.Cursor(), w.want)
-		}
+	a.consoleDid(c, c.ed.Load("select 1;\n\n\n\nselect 2 from t;"))
+	feed(t, a, "G$")
+	a.formatPrg = "printf 'select 1;\\nselect 2'" // fewer lines than the cursor's; the last statement's ; is not part of it
+	format()
+	if got := c.ed.Cursor(); got != (editor.Pos{Line: 1, Col: 8}) {
+		t.Errorf("past the end: cursor %v, want the last line, the nearest character", got)
 	}
-	a.formatPrg = "printf 'select 1;\\nselect 2;\\nselect 3;'" // one more statement than went in
-	a.consoleDid(c, c.ed.Load("select 1;\nselect 2;"))
-	feed(t, a, "j")
+	a.formatPrg = ""
+	a.consoleDid(c, c.ed.Load("select 1;\n\n\nselect 2;"))
+	feed(t, a, "3G")
 	format()
 	if got := c.ed.Cursor(); got != (editor.Pos{Line: 2, Col: 0}) {
-		t.Errorf("a different count: cursor %v, want where gq puts it", got)
+		t.Errorf("a line that is there still: cursor %v", got)
 	}
 	feed(t, a, "i")
 	if a.run("console.format", 0) != nil {

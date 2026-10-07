@@ -22,9 +22,7 @@ type formatDone struct {
 	from, to editor.Pos
 	text     string
 	err      error
-	// console.format's: the cursor goes to the start of the statement it
-	// was in, the at-th of n; at is -1 for gq's
-	at, n int
+	whole    bool // console.format's: the cursor stays where it is (F8.3)
 }
 
 // consoleFormat lays out what gq covered in console t (§9.5): a selection
@@ -63,16 +61,12 @@ func (a *App) consoleFormat(t *consoleTab, f editor.FormatSpan, whole bool) tea.
 	if from >= to {
 		return nil
 	}
-	at := -1
-	if whole {
-		at = sqlkit.StmtAt(text, stmts, offsetOf(lines, t.ed.Cursor()))
-	}
 	sql, ver := text[from:to], t.ver
 	prg, opts := a.formatPrg, sqlkit.Options{KeywordCase: a.keywordCase, TabWidth: a.tabWidth}
 	start, end := posOf(lines, from), posOf(lines, to)
 	return func() tea.Msg {
 		out, err := format(sql, d, prg, opts)
-		return formatDone{t, ver, start, end, out, err, at, len(stmts)}
+		return formatDone{t, ver, start, end, out, err, whole}
 	}
 }
 
@@ -124,13 +118,10 @@ func (a *App) gotFormat(m formatDone) tea.Cmd {
 	case m.err != nil:
 		return a.showToast(i18n.T("格式化失败：%s", m.err.Error()), toastTTL)
 	}
+	cur := m.t.ed.Cursor()
 	eff := m.t.ed.Replace(m.from, m.to, m.text)
-	if m.at >= 0 {
-		lines := m.t.ed.Lines()
-		// the statements are as many as before, but for what the formatter did to them
-		if stmts := sqlkit.Statements(strings.Join(lines, "\n"), m.t.conn.eng.Dialect()); len(stmts) == m.n {
-			m.t.ed.Goto(posOf(lines, stmts[m.at].Start))
-		}
+	if m.whole {
+		m.t.ed.Goto(cur) // as it is, or the nearest character when the text got shorter
 	}
 	return a.consoleDid(m.t, eff)
 }
