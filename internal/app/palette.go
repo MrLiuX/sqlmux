@@ -599,9 +599,10 @@ func (a *App) paletteDo(it paletteItem) tea.Cmd {
 // paletteEnter is ↵ in the palette: with quick SQL's candidates up it
 // takes the selected one and does no more (§9.7).
 func (a *App) paletteEnter() tea.Cmd {
-	if a.palette.comp != nil {
+	if c := a.palette.comp; c != nil && c.sel >= 0 {
 		return a.acceptCompletion()
 	}
+	a.palette.comp = nil // with nothing selected the list is not in the way (F8.17)
 	return a.paletteRun(a.palette.sel, false)
 }
 

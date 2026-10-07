@@ -27,7 +27,7 @@ import (
 // typed (§9.7, §12).
 type completion struct {
 	items []candidate
-	sel   int // the first as it opens: ↵ takes it (§9.7)
+	sel   int // the first as it opens: ↵ takes it; -1 when nothing is typed and it came up on its own, ↵ then is the input's (§9.7, F8.17)
 	start int // where the text it replaces starts in the input
 }
 
@@ -86,7 +86,14 @@ func (a *App) complete(t *dataTab) {
 		groups = [][]candidate{cols, kws}
 	}
 	t.comp = ranked(in.Text, in.Pos, pattern, w.Start, groups...)
+	if t.comp != nil && pattern == "" {
+		t.comp.sel = noSelection
+	}
 }
+
+// noSelection is the sel of a list that has no item selected yet: Tab, C-n or
+// ↓ select the first, S-Tab, C-p or ↑ the last (F8.17, nvim's noselect).
+const noSelection = -1
 
 // ranked is the candidates of groups that pattern matches, group by group
 // and best first within each (§9.7), completing what starts at start in the
@@ -457,7 +464,11 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 	if c.Prefix == "" && !manual && !resolved {
 		return nil, cmds
 	}
-	return ranked(sql, pos, c.Prefix, c.Start, groups...), cmds
+	comp := ranked(sql, pos, c.Prefix, c.Start, groups...)
+	if comp != nil && c.Prefix == "" && !manual && c.Kind != sqlkit.CompInsertCols { // came up on its own with nothing typed; (↵ adds all the columns of an INSERT's, F5.13)
+		comp.sel = noSelection
+	}
+	return comp, cmds
 }
 
 // completing is the candidate list that is up, if any: the palette's quick
@@ -480,9 +491,16 @@ func (a *App) completing() *completion {
 // whether or not the text changes (§9.7, M8 F8.1). A console's change is
 // saved as typing is (cmd).
 func (a *App) acceptCompletion() tea.Cmd {
+	if c := a.completing(); c == nil || c.sel < 0 {
+		return nil
+	}
 	if p := a.palette; p != nil {
+		space := p.comp.items[p.comp.sel].space
 		p.comp.accept(&p.input)
 		p.comp = nil
+		if space { // the next word may be a column: its list comes up at once (F8.17)
+			return a.completeSQL()
+		}
 		return nil
 	}
 	if t := a.focusedConsole(); t != nil {
@@ -492,12 +510,17 @@ func (a *App) acceptCompletion() tea.Cmd {
 	return nil
 }
 
-// whereAccept is accept in the WHERE's vim, as typing it would (F3.39).
+// whereAccept is accept in the WHERE's vim, as typing it would (F3.39); a
+// word with its space after it has the next list come up (F8.17).
 func (a *App) whereAccept(t *dataTab) {
 	c, in := t.comp, t.where
 	t.comp = nil
+	space := c.items[c.sel].space
 	c.plan(in.Text, in.Pos).put(t.ed)
 	t.syncWhere()
+	if space {
+		a.complete(t)
+	}
 }
 
 // accepted is what taking a candidate does: ins goes in place of the text
@@ -552,7 +575,14 @@ func (c *completion) accept(in *ui.Input) {
 // move moves the selection by d, around the ends (§9.7).
 func (c *completion) move(d int) {
 	n := len(c.items)
-	c.sel = ((c.sel+d)%n + n) % n
+	switch {
+	case c.sel >= 0:
+		c.sel = ((c.sel+d)%n + n) % n
+	case d > 0: // nothing selected: the first, or the last going up
+		c.sel = 0
+	default:
+		c.sel = n - 1
+	}
 }
 
 // startWhere gives the keys to t's WHERE input, its vim in INSERT at the
@@ -579,10 +609,11 @@ func (t *dataTab) syncWhere() {
 // and esc leaves INSERT, the list closing with it, as a console's.
 func (a *App) whereKey(t *dataTab, k keymap.Key) tea.Cmd {
 	if m := t.ed.Mode(); k == "<CR>" && (m == editor.Insert || m == editor.Replace) {
-		if t.comp != nil {
+		if t.comp != nil && t.comp.sel >= 0 {
 			a.whereAccept(t)
 			return nil
 		}
+		t.comp = nil // a list with nothing selected is not in the way (F8.17)
 		return a.runWhere(t)
 	}
 	if k == keymap.Esc && t.ed.Plain() { // there is no mode to leave: the list, else the input (§6.9)

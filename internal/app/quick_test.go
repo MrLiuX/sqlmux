@@ -268,6 +268,23 @@ func TestQuickSQLCompletion(t *testing.T) {
 	if !strings.HasSuffix(a.palette.input.Text, " select ") {
 		t.Errorf("↵ takes the first: %q", a.palette.input.Text)
 	}
+	c = a.palette.comp
+	if c == nil || c.sel != -1 {
+		t.Fatalf("select's list comes up at once, nothing selected: %+v", c)
+	}
+	first := c.items[0].label
+	if feed(t, a, "<Tab><CR>"); a.palette.comp != nil || !strings.HasSuffix(a.palette.input.Text, " "+first+" ") || a.palette.quick != nil { // Tab selects the first, ↵ takes it
+		t.Errorf("Tab ↵: %q, %+v", a.palette.input.Text, a.palette.quick)
+	}
+	a.palette.input = ui.Input{Text: ";select * from t_order select", Pos: len(";select * from t_order select")}
+	feed(t, a, " ")
+	if a.palette.comp == nil || a.palette.comp.sel != -1 {
+		t.Fatalf("a space typed: %+v", a.palette.comp)
+	}
+	if feed(t, a, "<CR>"); a.palette.quick == nil || a.palette.comp != nil { // nothing selected: ↵ is the palette's, it runs
+		t.Errorf("↵ with nothing selected: %+v", a.palette.quick)
+	}
+	a.palette.quick = nil
 	if feed(t, a, "<Tab>"); strings.HasPrefix(a.palette.input.Text, ";") {
 		t.Errorf("Tab with the list closed switches scopes: %q", a.palette.input.Text)
 	}

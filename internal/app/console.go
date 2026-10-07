@@ -155,7 +155,7 @@ func vimSel(ed *editor.Editor) (s ui.Sel) {
 func (a *App) consoleKey(p *Pane, t *consoleTab, k keymap.Key) tea.Cmd {
 	a.consoleView(p, t)
 	switch {
-	case t.comp != nil && k == "<CR>":
+	case t.comp != nil && t.comp.sel >= 0 && k == "<CR>": // nothing selected: ↵ is the editor's (F8.17)
 		return a.consoleAccept(t)
 	case t.comp == nil && k == "<C-n>" && t.ed.Mode() == editor.Insert:
 		// ponytail: C-n is fixed here, not in the keymap: [keys.console] is
@@ -198,7 +198,11 @@ func (a *App) consoleComplete(t *consoleTab, manual bool) tea.Cmd {
 func (a *App) consoleAccept(t *consoleTab) tea.Cmd {
 	c, cur := t.comp, t.ed.Cursor()
 	t.comp = nil
-	return a.consoleDid(t, c.plan(t.ed.Lines()[cur.Line], cur.Col).put(t.ed))
+	cmd := a.consoleDid(t, c.plan(t.ed.Lines()[cur.Line], cur.Col).put(t.ed))
+	if c.items[c.sel].space { // the next word may be a column: its list comes up at once (F8.17)
+		cmd = tea.Batch(cmd, a.consoleComplete(t, false))
+	}
+	return cmd
 }
 
 // vimCmds are what any vim's eff asks of the app: the clipboard gets

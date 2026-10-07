@@ -1036,3 +1036,82 @@ func TestConsoleClickCandidate(t *testing.T) {
 		t.Errorf("clicked: %q", text(c))
 	}
 }
+
+// A list that comes up on its own with nothing typed has no item selected:
+// ↵ is the editor's, Tab, C-n and ↓ select the first, S-Tab, C-p and ↑ the
+// last; a letter typed selects the first as ever; a word accepted with its
+// space has the next list come up at once; C-n's list and an INSERT's all
+// columns are selected from the start (§9.7, F8.17).
+func TestConsoleNoSelectList(t *testing.T) {
+	a, c := inConsole(t, "", "")
+	table, cols, _ := ordersTable(0)
+	for i, tb := range a.sess.Conns[0].Tables {
+		if tb.Name == "t_order" {
+			a.sess.Conns[0].Tables[i] = table
+		}
+	}
+	a.sess.Conns[0].cols[idOf(table)] = cols
+	first, last := cols.Cols[0].Name, cols.Cols[len(cols.Cols)-1].Name
+	const q = "<Esc>ggdGiselect * from t_order where"
+	feed(t, a, q+"<CR>")
+	if text(c) != "select * from t_order where " || c.comp == nil || c.comp.sel != -1 || len(c.comp.items) != len(cols.Cols) {
+		t.Fatalf("where↵: %q, list %+v", text(c), c.comp)
+	}
+	if feed(t, a, "<CR>"); text(c) != "select * from t_order where \n" || c.comp != nil {
+		t.Errorf("↵ with nothing selected: %q, list %v", text(c), c.comp != nil)
+	}
+	for keys, want := range map[string]string{
+		"<Tab><CR>": first, "<C-n><CR>": first, "<Down><CR>": first,
+		"<S-Tab><CR>": last, "<C-p><CR>": last, "<Up><CR>": last,
+		"<Tab><Tab><CR>": cols.Cols[1].Name, "<S-Tab><S-Tab><CR>": cols.Cols[len(cols.Cols)-2].Name,
+	} {
+		feed(t, a, q+"<CR>"+keys)
+		if text(c) != "select * from t_order where "+want+" " {
+			t.Errorf("%s: %q, want %s", keys, text(c), want)
+		}
+	}
+	feed(t, a, q+"<CR>p<CR>") // a letter selects the first, ↵ takes it
+	if text(c) != "select * from t_order where paid " {
+		t.Errorf("a letter: %q", text(c))
+	}
+	feed(t, a, "<Esc>ggdGiselect * from t_order <C-n>")
+	if c.comp == nil || c.comp.sel != 0 {
+		t.Errorf("C-n's list: %+v", c.comp)
+	}
+	feed(t, a, "<Esc>ggdGiinsert into t_order (")
+	if c.comp == nil || c.comp.sel != 0 || len(c.comp.items) < 2 {
+		t.Errorf("an INSERT's columns: %+v", c.comp)
+	}
+}
+
+// The list with nothing selected has no row in the select color; Tab gives
+// the first one (F8.17).
+func TestConsoleNoSelectListDraws(t *testing.T) {
+	a, _ := inConsole(t, "", "")
+	table, cols, _ := ordersTable(0)
+	for i, tb := range a.sess.Conns[0].Tables {
+		if tb.Name == "t_order" {
+			a.sess.Conns[0].Tables[i] = table
+		}
+	}
+	a.sess.Conns[0].cols[idOf(table)] = cols
+	feed(t, a, "iselect * from t_order where<CR>")
+	selected := func() []int {
+		f := a.render()
+		var rows []int
+		for i := range cols.Cols {
+			r := find(t, a, ui.Target{Kind: ui.KindRow, I: i})
+			if f.Buf.CellAt(r.Min.X+1, r.Min.Y).Style.Bg == a.theme.Select {
+				rows = append(rows, i)
+			}
+		}
+		return rows
+	}
+	if got := selected(); len(got) != 0 {
+		t.Errorf("rows in the select color with nothing selected: %v", got)
+	}
+	feed(t, a, "<Tab>")
+	if got := selected(); len(got) != 1 || got[0] != 0 {
+		t.Errorf("after Tab: %v", got)
+	}
+}
