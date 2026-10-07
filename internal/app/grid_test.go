@@ -72,9 +72,11 @@ func TestGoldenTable160x45(t *testing.T) {
 	golden.RequireEqual(t, a.render().String())
 }
 
-// In the default layout ① is some 63 columns: the query bar's count gives
-// way first; a save's note goes before the buttons and then the chips,
-// from the right, and cut in its middle past that (§7.8「查询条」).
+// In the default layout ① is 61 columns: the query bar's count gives way
+// first; a save's note goes before the buttons and then the chips, from the
+// right, and cut in its middle past that; with 6000 rows (PAGE 1/60) and
+// changes to save, transpose, auto refresh and + − give way and the save
+// group stays after COLS, PAGE and LIMIT (§7.8「查询条」, F8.9).
 func TestGoldenQueryBarNarrow(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	tab := loadOrders(t, a, 60)
@@ -90,6 +92,12 @@ func TestGoldenQueryBarNarrow(t *testing.T) {
 		tab.note = n
 		rows = append(rows, row())
 	}
+	tab.note = ui.Note{}
+	tab.count, tab.counted = 6000, countDone
+	tab.edits = map[editKey]edit{{"1", "note"}: {val: db.Val{S: "x"}}, {"2", "note"}: {val: db.Val{S: "y"}}, {"3", "note"}: {val: db.Val{S: "z"}}}
+	rows = append(rows, row())
+	tab.note = ui.Note{Head: "已保存 1 行 · 3ms"}
+	rows = append(rows, row())
 	golden.RequireEqual(t, strings.Join(rows, "\n")+"\n")
 }
 
@@ -495,5 +503,29 @@ func TestFullWidthReachesEveryGrid(t *testing.T) {
 	}
 	if v := b.quickView(&quickSQL{res: r}); v.Grid.FullWidth != 8 {
 		t.Errorf("quick SQL's: %d", v.Grid.FullWidth)
+	}
+}
+
+// The query bar's second row gives way in the order of §7.8: transpose, auto
+// refresh and stop, + −, COLS, PAGE, LIMIT, save and refresh, ORDER (F8.9).
+func TestQueryBarGivesWayInOrder(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	tab := loadOrders(t, a, 3)
+	q := a.queryBar(a.focused(), tab)
+	stay := map[string]int{}
+	for _, c := range q.Chips {
+		stay[c.Label] = c.Stay
+	}
+	for _, g := range q.Buttons {
+		stay[g.Buttons[0].Action] = g.Stay
+	}
+	names := []string{"grid.transpose", "grid.refresh.auto", "grid.row.add", "COLS", "PAGE", "LIMIT", "save", "ORDER"}
+	if len(stay) != len(names) {
+		t.Errorf("stays %v, for %v", stay, names)
+	}
+	for i := 1; i < len(names); i++ {
+		if stay[names[i-1]] >= stay[names[i]] {
+			t.Errorf("%s (%d) is not before %s (%d)", names[i-1], stay[names[i-1]], names[i], stay[names[i]])
+		}
 	}
 }
