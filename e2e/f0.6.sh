@@ -105,6 +105,6 @@ check "leader = <C-a>：浮层标题为 C-a，内容不变" eval 'shown C-a && [
 # ---- which-key 不是作用域（§6.4）：[keys.whichkey] 是未知的表
 printf '[keys.whichkey]\n"a" = "b"\n' >| "$CFG/keymaps.toml"; mkdir -p "$CFG/x/sqlmux"; cp "$CFG/keymaps.toml" "$CFG/x/sqlmux/"
 err=$(XDG_CONFIG_HOME="$CFG/x" "$E2E_BIN" keys --check 2>&1); rc=$?
-check "[keys.whichkey]：--check 报「没有这个表」、退出码 1" eval '[[ $rc == 1 && $err == *"[keys.whichkey] a: 没有这个表"* ]] || { echo "  rc=$rc: $err"; false; }'
+check "[keys.whichkey]：--check 报 no such table（英文，读 config 之前的错误）、退出码 1" eval '[[ $rc == 1 && $err == *"[keys.whichkey] a: no such table"* ]] || { echo "  rc=$rc: $err"; false; }'
 
 e2e_done

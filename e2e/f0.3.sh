@@ -20,7 +20,7 @@ count_rows() { grep -cF -- "$1" <<<"$OUT"; }
 conf ''
 run
 check "keys：退出码 0、stderr 为空" eval 'rc_is 0 && [[ -z $ERR ]]'
-check "keys：markdown 表头" out_has $'| 作用域 | 键 | 操作 |\n|---|---|---|'
+check "keys：markdown 表头" out_has $'| Scope | Key | Action |\n|---|---|---|'
 check "keys：行数与 default.toml 的绑定数一致" eval '(( $(grep -c "^| [a-z]" <<<"$OUT") == $(grep -cE "^[\"'"'"']" "$E2E_ROOT/internal/keymap/default.toml") ))'
 check "keys：§6.8 抽查（C-p / SPC s / SPC \" / 表格 ↵ / console ↵ / result P；gq 是编辑器的操作符，不在 keymap 里，b8bf335）" eval 'out_has "| global | \`C-p\` | palette.open |" && out_has "| normal | \`SPC s\` | session.list |" && out_has "| normal | \`SPC \"\` | pane.split.below |" && out_has "| grid | \`↵\` | grid.edit |" && out_has "| console | \`↵\` | console.run |" && out_has "| result | \`P\` | result.pin |"'
 check "默认键位只用 §6.2 允许的键（无 Alt、C-S-、C-数字、C-i/m/[、F 键、Home/End/PgUp/PgDn）" eval '! grep -E "\`[^\`]*(M-|A-|C-S-|C-[0-9]|C-i|C-m|C-\[|F[0-9]|Home|End|PageUp|PageDown)[^\`]*\`" <<<"$OUT"'
@@ -44,18 +44,18 @@ check "toml 往返：自定义序列 <C-w>v" roundtrip '[keys.normal]\n"<C-w>v" 
 
 # ---- 冲突检测（§6.7）：非零退出，指出作用域和键
 conf '[keys.normal]\n"<C-x>" = "a"\n"<c-x>" = "b"\n'; run --check
-check "规范化后相同的键 → 退出码 1，[keys.normal] <c-x>" eval 'rc_is 1 && err_has "[keys.normal] <c-x>: 与 \"<C-x>\" 是同一个键"'
+check "规范化后相同的键 → 退出码 1，[keys.normal] <c-x>" eval 'rc_is 1 && err_has "[keys.normal] <c-x>: is the same key as \"<C-x>\""'
 conf '[keys.normal]\n"<Leader>s" = "a"\n"<Space>s" = "b"\n'; run --check
-check "<Leader>s 与 <Space>s 是同一个键 → 退出码 1" eval 'rc_is 1 && err_has "[keys.normal] <Space>s: 与 \"<Leader>s\" 是同一个键"'
+check "<Leader>s 与 <Space>s 是同一个键 → 退出码 1" eval 'rc_is 1 && err_has "[keys.normal] <Space>s: is the same key as \"<Leader>s\""'
 conf '[keys.normal]\n"<C-x>" = "a"\n"<C-x>" = "b"\n'; run --check
 check "字面重复的键 → 退出码 1，指出 keys.normal.<C-x>" eval 'rc_is 1 && err_has "keys.normal.\"<C-x>\""'
 conf '[keys.normal]\n"g" = "x"\n'; run --check
-check "单键是已有序列的前缀 → 退出码 1，给出警告" eval 'rc_is 1 && err_has "[keys.normal] g: 是 gt 的前缀"'
-conf '[keys.foo]\n"a" = "b"\n'; run --check; check "未知的表 → 退出码 1" eval 'rc_is 1 && err_has "[keys.foo] a: 没有这个表"'
-conf '[keys.normal]\n"<C-foo>" = "b"\n'; run --check; check "写错的键名 → 退出码 1" eval 'rc_is 1 && err_has "[keys.normal] <C-foo>: 键位写法不对"'
-conf 'icons = "ascii"\n'; run --check; check "keymaps.toml 里写了别的顶层键（F5.9）→ 退出码 1，只能写 [keys] 和 [map.*]" eval 'rc_is 1 && err_has "keymaps.toml: icons" && err_has "这里只能写 [keys] 和 [map.*]"'
+check "单键是已有序列的前缀 → 退出码 1，给出警告" eval 'rc_is 1 && err_has "[keys.normal] g: is a prefix of gt"'
+conf '[keys.foo]\n"a" = "b"\n'; run --check; check "未知的表 → 退出码 1" eval 'rc_is 1 && err_has "[keys.foo] a: no such table"'
+conf '[keys.normal]\n"<C-foo>" = "b"\n'; run --check; check "写错的键名 → 退出码 1" eval 'rc_is 1 && err_has "[keys.normal] <C-foo>: invalid key"'
+conf 'icons = "ascii"\n'; run --check; check "keymaps.toml 里写了别的顶层键（F5.9）→ 退出码 1，只能写 [keys] 和 [map.*]" eval 'rc_is 1 && err_has "keymaps.toml: icons" && err_has "only [keys] and [map.*] go here"'
 conf ''; printf '[keys.normal]\n"<C-b>" = "tree.toggle"\n' >| "$CFG/sqlmux/config.toml"; run --check; rm "$CFG/sqlmux/config.toml"
-check "config.toml 里还写着 [keys]（F5.9）→ --check 退出码 1，提示写进 keymaps.toml" eval 'rc_is 1 && err_has "config.toml: [keys] / [map] 要写在 keymaps.toml 里"'
+check "config.toml 里还写着 [keys]（F5.9）→ --check 退出码 1，提示写进 keymaps.toml" eval 'rc_is 1 && err_has "config.toml: [keys] / [map] belong in keymaps.toml"'
 
 # ---- 上一轮修过的三处（reviewer 要求回归）
 conf '[keys.normal]\n"<Space>s" = "x.y"\n'; run
