@@ -21,7 +21,7 @@ import (
 // Completion (§9.7): columns and keywords with a word starting as the one typed does,
 // an enum's values where one goes. The first is selected as the list opens,
 // Tab and S-Tab move around the ends, ↵ takes the selected one and runs
-// when that changes nothing; esc closes the list before the input.
+// nothing; esc closes the list before the input.
 func TestWhereCompletion(t *testing.T) {
 	a, tab, _ := withRecorder(t)
 	feed(t, a, "/a")
@@ -43,10 +43,10 @@ func TestWhereCompletion(t *testing.T) {
 		t.Fatalf("sta: %+v", tab.comp)
 	}
 	feed(t, a, "<CR>")
-	if tab.where.Text != "status" || tab.comp != nil || tab.applied != "" {
+	if tab.where.Text != "status " || tab.comp != nil || tab.applied != "" {
 		t.Fatalf("↵ takes status: %q applied %q", tab.where.Text, tab.applied)
 	}
-	feed(t, a, " = ")
+	feed(t, a, "= ")
 	var labels []string
 	for _, c := range tab.comp.items {
 		labels = append(labels, c.label)
@@ -71,8 +71,12 @@ func TestWhereCompletion(t *testing.T) {
 		t.Fatalf("nu: only null starts with n, not is null: %+v", tab.comp)
 	}
 	feed(t, a, "ll<CR>")
+	if tab.applied != "" || tab.where.Text != "status = 'running' and paid is not null" || tab.comp != nil {
+		t.Errorf("↵ takes null, a value that takes no space, and does no more: %q, applied %q", tab.where.Text, tab.applied)
+	}
+	feed(t, a, "<CR>")
 	if tab.applied != "status = 'running' and paid is not null" || tab.typing != "" {
-		t.Errorf("↵ that changes nothing runs: %q", tab.applied)
+		t.Errorf("↵ with the list closed runs: %q", tab.applied)
 	}
 	feed(t, a, "/ i<Esc>")
 	if tab.comp != nil || tab.typing != "where" {
@@ -81,6 +85,20 @@ func TestWhereCompletion(t *testing.T) {
 	feed(t, a, "<Esc>")
 	if tab.typing != "" {
 		t.Error("the second esc leaves the input")
+	}
+}
+
+// A WHERE's ↵ with the candidates up only takes the selected one, though
+// what is typed is all of it: it is not run till the list is gone (§9.7, F8.1).
+func TestWhereEnterOnlyAccepts(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	feed(t, a, "/id<CR>")
+	if tab.where.Text != "id " || tab.applied != "" || tab.typing != "where" || tab.comp != nil {
+		t.Fatalf("id: %q, applied %q, typing %q", tab.where.Text, tab.applied, tab.typing)
+	}
+	feed(t, a, "> 5<CR>")
+	if tab.applied != "id > 5" {
+		t.Errorf("a second ↵ runs: %q", tab.applied)
 	}
 }
 
@@ -195,19 +213,18 @@ func TestAutoPairs(t *testing.T) {
 func TestAcceptIgnoresCase(t *testing.T) {
 	c := &completion{items: []candidate{{label: "null", insert: "null"}}, start: 4}
 	in := ui.Input{Text: "a = NULL", Pos: 8}
-	if c.accept(&in) || in.Text != "a = NULL" {
+	if c.accept(&in); in.Text != "a = NULL" {
 		t.Errorf("NULL: changed to %q", in.Text)
 	}
 	in = ui.Input{Text: "a = nu", Pos: 6}
-	if !c.accept(&in) || in.Text != "a = null" || in.Pos != 8 {
+	if c.accept(&in); in.Text != "a = null" || in.Pos != 8 {
 		t.Errorf("nu: %q at %d", in.Text, in.Pos)
 	}
 }
 
 // A keyword takes a space as it is taken, or the cursor goes past the
-// whitespace that is there, in a space or a tab: ↵ runs only when neither
-// the text nor the cursor moves, and what is typed stays in its case; the
-// closing quote that is there already moves nothing (§9.7). The words of a
+// whitespace that is there, in a space or a tab, and what is typed stays in
+// its case; the closing quote that is there already is not put in again (§9.7). The words of a
 // keyword written before the cursor are not put in twice.
 func TestAcceptKeywordSpace(t *testing.T) {
 	kw := func(s string) candidate { return candidate{insert: s, note: "关键字", kw: true, space: true} }
@@ -219,29 +236,28 @@ func TestAcceptKeywordSpace(t *testing.T) {
 		cd         candidate
 		want       string
 		wantPos    int
-		changed    bool
 	}{
-		{"selec", 5, 0, kw("select"), "select ", 7, true},
-		{"a = 1 an", 8, 6, kw("and"), "a = 1 and ", 10, true},
-		{"a = 1 and", 9, 6, kw("and"), "a = 1 and ", 10, true},
-		{"a = 1 and b", 9, 6, kw("and"), "a = 1 and b", 10, true}, // past the space
-		{"a = 1 and\tb", 9, 6, kw("and"), "a = 1 and\tb", 10, true},
-		{"a = 1 AND b", 9, 6, kw("and"), "a = 1 AND b", 10, true}, // typed case kept
-		{"SELECT", 6, 0, kw("select"), "SELECT ", 7, true},
-		{"insert into", 11, 7, kw("insert into"), "insert into ", 12, true},
-		{"insert in", 9, 7, kw("insert into"), "insert into ", 12, true},
-		{"x rename to", 11, 9, kw("rename to"), "x rename to ", 12, true},
-		{"x REPLACE in", 12, 10, kw("replace into"), "x replace into ", 15, true}, // partly typed: the candidate's
-		{"a = nul", 7, 4, val, "a = null", 8, true},
-		{"a = null", 8, 4, val, "a = null", 8, false},
-		{"a = NULL", 8, 4, val, "a = NULL", 8, false},
-		{"s = 'done", 9, 4, quoted, "s = 'done'", 10, true},
-		{"s = 'done'", 9, 4, quoted, "s = 'done'", 9, false}, // the quote autopairs put there
+		{"selec", 5, 0, kw("select"), "select ", 7},
+		{"a = 1 an", 8, 6, kw("and"), "a = 1 and ", 10},
+		{"a = 1 and", 9, 6, kw("and"), "a = 1 and ", 10},
+		{"a = 1 and b", 9, 6, kw("and"), "a = 1 and b", 10}, // past the space
+		{"a = 1 and\tb", 9, 6, kw("and"), "a = 1 and\tb", 10},
+		{"a = 1 AND b", 9, 6, kw("and"), "a = 1 AND b", 10}, // typed case kept
+		{"SELECT", 6, 0, kw("select"), "SELECT ", 7},
+		{"insert into", 11, 7, kw("insert into"), "insert into ", 12},
+		{"insert in", 9, 7, kw("insert into"), "insert into ", 12},
+		{"x rename to", 11, 9, kw("rename to"), "x rename to ", 12},
+		{"x REPLACE in", 12, 10, kw("replace into"), "x replace into ", 15}, // partly typed: the candidate's
+		{"a = nul", 7, 4, val, "a = null", 8},
+		{"a = null", 8, 4, val, "a = null", 8},
+		{"a = NULL", 8, 4, val, "a = NULL", 8},
+		{"s = 'done", 9, 4, quoted, "s = 'done'", 10},
+		{"s = 'done'", 9, 4, quoted, "s = 'done'", 10}, // the quote autopairs put there: ↵ takes the value all the same
 	} {
 		in := ui.Input{Text: c.text, Pos: c.pos}
 		cp := &completion{items: []candidate{c.cd}, start: c.start}
-		if got := cp.accept(&in); got != c.changed || in.Text != c.want || in.Pos != c.wantPos {
-			t.Errorf("%q at %d: %v %q at %d", c.text, c.pos, got, in.Text, in.Pos)
+		if cp.accept(&in); in.Text != c.want || in.Pos != c.wantPos {
+			t.Errorf("%q at %d: %q at %d", c.text, c.pos, in.Text, in.Pos)
 		}
 	}
 }

@@ -464,11 +464,40 @@ func TestConsoleInsertColumns(t *testing.T) {
 	}
 }
 
+// With the candidates up ↵ only takes the selected one, though the text
+// does not change; a word takes a space, a function or a value or an
+// INSERT's column does not (§9.7, F8.1).
+func TestConsoleEnterOnlyAccepts(t *testing.T) {
+	a, c := inConsole(t, "", "")
+	table, cols, _ := ordersTable(0)
+	for i, tb := range a.sess.Conns[0].Tables {
+		if tb.Name == "t_order" {
+			a.sess.Conns[0].Tables[i] = table
+		}
+	}
+	a.sess.Conns[0].cols[idOf(table)] = cols
+	for _, c2 := range []struct{ keys, want string }{
+		{"iselect * from t_order where id<CR>", "select * from t_order where id "}, // a column: the next word follows
+		{"<Esc>ggdGiselect count<CR>", "select count"},                             // a function: a ( follows
+		{"<Esc>ggdGiselect * from t_order where paid is not null<CR>", "select * from t_order where paid is not null"},
+		{"<Esc>ggdGiinsert into t_order(id<CR>", "insert into t_order(id)"}, // a list's item: , or ) follows
+	} {
+		feed(t, a, c2.keys)
+		if text(c) != c2.want || c.comp != nil {
+			t.Errorf("%q: %q, list %v", c2.keys, text(c), c.comp != nil)
+		}
+	}
+	feed(t, a, "<Esc>ggdGiselect * from t_order where id<CR><CR>")
+	if text(c) != "select * from t_order where id \n" {
+		t.Errorf("a second ↵ is the newline: %q", text(c))
+	}
+}
+
 // In a console the candidates follow the cursor's place (§9.7): tables
 // after FROM; an alias's columns right after its ., fetched once and
 // completed again as they come; CTE names among the tables; C-n with
 // nothing typed. ↵ takes one as typing it would, part of the INSERT's undo
-// step, and is a newline when that changes nothing; esc closes the list
+// step, and nothing else (TestConsoleEnterOnlyAccepts); esc closes the list
 // and leaves INSERT, as nvim-cmp; a character not of a name closes it.
 func TestConsoleCompletion(t *testing.T) {
 	a, c := inConsole(t, "", "")
@@ -483,10 +512,10 @@ func TestConsoleCompletion(t *testing.T) {
 		t.Fatalf("after from: %+v, overlay %q", c.comp, a.context().Overlay)
 	}
 	feed(t, a, "<CR>")
-	if text(c) != "select * from t_order" || c.comp != nil || c.ed.Mode() != editor.Insert {
+	if text(c) != "select * from t_order " || c.comp != nil || c.ed.Mode() != editor.Insert {
 		t.Fatalf("↵ takes t_order: %q in %v", text(c), c.ed.Mode())
 	}
-	feed(t, a, " o where o.")
+	feed(t, a, "o where o.")
 	if !c.asked[idOf(table)] || c.comp != nil {
 		t.Fatalf("o.: asked %v, list %+v", c.asked, c.comp)
 	}
@@ -495,12 +524,12 @@ func TestConsoleCompletion(t *testing.T) {
 		t.Fatalf("the columns in: %+v", c.comp)
 	}
 	feed(t, a, "st<CR>")
-	if text(c) != "select * from t_order o where o.status" {
+	if text(c) != "select * from t_order o where o.status " {
 		t.Fatalf("o.st ↵: %q", text(c))
 	}
-	feed(t, a, "s<CR>")
-	if text(c) != "select * from t_order o where o.statuss\n" {
-		t.Fatalf("no candidate: ↵ is a newline: %q", text(c))
+	feed(t, a, "9<CR>")
+	if text(c) != "select * from t_order o where o.status 9\n" {
+		t.Fatalf("no list: ↵ is a newline: %q", text(c))
 	}
 	feed(t, a, "<Esc>u")
 	if text(c) != "" {

@@ -385,8 +385,7 @@ func (a *App) click(p uv.Position) tea.Cmd {
 			}
 		case c != nil:
 			c.sel = t.I
-			_, cmd := a.acceptCompletion()
-			return cmd
+			return a.acceptCompletion()
 		case a.palette != nil:
 			return a.paletteRun(t.I, false)
 		case a.sessList != nil: // a row: there, then ↵ (§7.8)

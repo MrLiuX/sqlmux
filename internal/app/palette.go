@@ -597,12 +597,10 @@ func (a *App) paletteDo(it paletteItem) tea.Cmd {
 }
 
 // paletteEnter is ↵ in the palette: with quick SQL's candidates up it
-// takes the selected one, and runs only when that changes nothing (§9.7).
+// takes the selected one and does no more (§9.7).
 func (a *App) paletteEnter() tea.Cmd {
 	if a.palette.comp != nil {
-		if changed, _ := a.acceptCompletion(); changed {
-			return nil
-		}
+		return a.acceptCompletion()
 	}
 	return a.paletteRun(a.palette.sel, false)
 }

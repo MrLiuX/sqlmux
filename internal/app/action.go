@@ -211,7 +211,7 @@ func init() {
 		"dropdown.close":  {Title: i18n.N("关闭下拉框"), Local: true, Run: when(inDrop, func(a *App) tea.Cmd { a.drop = nil; return nil })},
 		"complete.up":     {Title: i18n.N("上一个候选"), Local: true, Run: when(inComplete, func(a *App) tea.Cmd { a.completing().move(-1); return nil })},
 		"complete.down":   {Title: i18n.N("下一个候选"), Local: true, Run: when(inComplete, func(a *App) tea.Cmd { a.completing().move(1); return nil })},
-		"complete.accept": {Run: when(inComplete, func(a *App) tea.Cmd { _, cmd := a.acceptCompletion(); return cmd })},
+		"complete.accept": {Run: when(inComplete, func(a *App) tea.Cmd { return a.acceptCompletion() })},
 		"where.up":        {Title: i18n.N("上移"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { a.histMove(a.typingTab(), -1); return nil })},
 		"where.down":      {Title: i18n.N("下移"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { a.histMove(a.typingTab(), 1); return nil })},
 		"where.apply":     {Title: i18n.N("执行 WHERE"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { t := a.typingTab(); return a.histApply(t, t.hist.sel) })},

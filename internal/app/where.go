@@ -35,7 +35,7 @@ type candidate struct {
 	label, insert, note string
 	pos                 []int
 	kw                  bool // a keyword, not by what the list says of it
-	space               bool // a keyword that takes a space after it (§9.7)
+	space               bool // a word, not a value, a function or a list's item, so the next word comes after a space (§9.7)
 }
 
 // whereKeywords are what a condition is made of besides columns (§9.7).
@@ -73,7 +73,7 @@ func (a *App) complete(t *dataTab) {
 		}
 		var cols, kws []candidate
 		for _, c := range t.cols.Cols {
-			cols = append(cols, candidate{label: c.Name, insert: c.Name, note: c.Type})
+			cols = append(cols, candidate{label: c.Name, insert: c.Name, note: c.Type, space: true})
 		}
 		for _, k := range whereKeywords {
 			if k != "ilike" || t.conn.eng.Dialect() == sqlkit.PG { // PG's alone
@@ -348,7 +348,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 			cmds = append(cmds, a.fetchCols(conn, t))
 		}
 		for _, col := range cs.Cols {
-			out = append(out, candidate{label: col.Name, insert: col.Name, note: col.Type + " · " + t.Name})
+			out = append(out, candidate{label: col.Name, insert: col.Name, note: col.Type + " · " + t.Name, space: true})
 		}
 		return out
 	}
@@ -359,7 +359,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 				if t.View() {
 					note = i18n.T("视图")
 				}
-				out = append(out, candidate{label: t.Name, insert: t.Name, note: note})
+				out = append(out, candidate{label: t.Name, insert: t.Name, note: note, space: true})
 			}
 		}
 		return out
@@ -367,7 +367,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 	var ctes []candidate
 	isCTE := map[string]bool{}
 	for _, n := range c.CTEs {
-		ctes, isCTE[strings.ToLower(n)] = append(ctes, candidate{label: n, insert: n, note: "CTE"}), true
+		ctes, isCTE[strings.ToLower(n)] = append(ctes, candidate{label: n, insert: n, note: "CTE", space: true}), true
 	}
 	var groups [][]candidate
 	resolved := false
@@ -469,49 +469,42 @@ func (a *App) completing() *completion {
 }
 
 // acceptCompletion puts the selected candidate in place of what it
-// completes, closes the list, and reports whether the text or the cursor
-// changed: ↵ runs as usual when neither did (§9.7, VS Code's acceptSuggestionOnEnter
-// smart). A console's change is saved as typing is (cmd).
-func (a *App) acceptCompletion() (changed bool, cmd tea.Cmd) {
+// completes and closes the list. ↵ with the list up only ever does this,
+// whether or not the text changes (§9.7, M8 F8.1). A console's change is
+// saved as typing is (cmd).
+func (a *App) acceptCompletion() tea.Cmd {
 	if p := a.palette; p != nil {
-		changed = p.comp.accept(&p.input)
+		p.comp.accept(&p.input)
 		p.comp = nil
-		return changed, nil
+		return nil
 	}
 	if t := a.focusedConsole(); t != nil {
 		return a.consoleAccept(t)
 	}
-	return a.whereAccept(a.typingTab()), nil
+	a.whereAccept(a.typingTab())
+	return nil
 }
 
 // whereAccept is accept in the WHERE's vim, as typing it would (F3.39).
-func (a *App) whereAccept(t *dataTab) bool {
+func (a *App) whereAccept(t *dataTab) {
 	c, in := t.comp, t.where
 	t.comp = nil
-	p := c.plan(in.Text, in.Pos)
-	if !p.changed {
-		return false
-	}
-	p.put(t.ed)
+	c.plan(in.Text, in.Pos).put(t.ed)
 	t.syncWhere()
-	return true
 }
 
 // accepted is what taking a candidate does: ins goes in place of the text
-// from start to the cursor, and drop bytes after the cursor go. changed
-// says ↵ is taken, not run: the text or the cursor moves.
+// from start to the cursor, and drop bytes after the cursor go.
 type accepted struct {
 	start, drop int
 	ins         string
-	changed     bool
 }
 
 // plan is what taking the selected candidate does to text with the cursor at
 // pos (§9.7): what is typed in the candidate's case stays as it is, a word
-// like NULL is not made null; a keyword gets a space after it, or the
-// cursor moves past the whitespace that is there, which is a change though
-// the text is the same. The closing quote after the cursor, autopairs'
-// or typed, goes when the insert has its own (§7.9): that alone is none.
+// like NULL is not made null; a word gets a space after it, or the cursor
+// moves past the whitespace that is there. The closing quote after the
+// cursor, autopairs' or typed, goes when the insert has its own (§7.9).
 func (c *completion) plan(text string, pos int) accepted {
 	cd := c.items[c.sel]
 	p := accepted{start: c.startOf(text, cd), ins: cd.insert}
@@ -522,15 +515,13 @@ func (c *completion) plan(text string, pos int) accepted {
 	if n := len(p.ins); n > 0 && strings.ContainsRune("'\"`", rune(p.ins[n-1])) && strings.HasPrefix(after, p.ins[n-1:]) {
 		p.drop = 1
 	}
-	moved := false
 	if cd.space {
 		if after != "" && (after[0] == ' ' || after[0] == '\t') {
-			p.ins, p.drop, moved = p.ins+after[:1], 1, true
+			p.ins, p.drop = p.ins+after[:1], 1
 		} else {
 			p.ins += " "
 		}
 	}
-	p.changed = moved || text[:p.start]+p.ins+text[pos+p.drop:] != text
 	return p
 }
 
@@ -543,15 +534,10 @@ func (p accepted) put(e *editor.Editor) editor.Effect {
 	return eff
 }
 
-// accept takes the selected candidate into in, and reports whether that
-// changed it.
-func (c *completion) accept(in *ui.Input) bool {
+// accept takes the selected candidate into in.
+func (c *completion) accept(in *ui.Input) {
 	p := c.plan(in.Text, in.Pos)
-	if !p.changed {
-		return false
-	}
 	in.Text, in.Pos = in.Text[:p.start]+p.ins+in.Text[in.Pos+p.drop:], p.start+len(p.ins)
-	return true
 }
 
 // move moves the selection by d, around the ends (§9.7).
@@ -580,11 +566,12 @@ func (t *dataTab) syncWhere() {
 }
 
 // whereKey gives key k to the WHERE's vim (F3.39): in INSERT ↵ takes the
-// selected candidate, or runs the WHERE when that changes nothing (§9.7),
+// selected candidate when the list is up, else runs the WHERE (§9.7),
 // and esc leaves INSERT, the list closing with it, as a console's.
 func (a *App) whereKey(t *dataTab, k keymap.Key) tea.Cmd {
 	if m := t.ed.Mode(); k == "<CR>" && (m == editor.Insert || m == editor.Replace) {
-		if t.comp != nil && a.whereAccept(t) {
+		if t.comp != nil {
+			a.whereAccept(t)
 			return nil
 		}
 		return a.runWhere(t)

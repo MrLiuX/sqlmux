@@ -195,7 +195,7 @@ func TestQuickSQLHistory(t *testing.T) {
 
 // The word typed completes from the columns of the tables named, fetched
 // once, then the tree's schema's tables and keywords, each starting as the
-// word does; ↵ takes the selected one and runs when that changes nothing,
+// word does; ↵ takes the selected one and does no more,
 // Tab moves while the list is up and switches scopes when it isn't, esc
 // closes the list first (§12「补全」, §9.7).
 func TestQuickSQLCompletion(t *testing.T) {
@@ -219,10 +219,10 @@ func TestQuickSQLCompletion(t *testing.T) {
 		t.Fatalf("after the columns: %+v", c)
 	}
 	feed(t, a, "<CR>")
-	if a.palette.input.Text != ";select * from t_order where status" || a.palette.comp != nil || a.palette.quick != nil {
+	if a.palette.input.Text != ";select * from t_order where status " || a.palette.comp != nil || a.palette.quick != nil {
 		t.Fatalf("↵ takes the first: %q", a.palette.input.Text)
 	}
-	feed(t, a, " = 1 and mt_t")
+	feed(t, a, "= 1 and mt_t")
 	if c := a.palette.comp; c == nil || c.items[0].label != "mt_task" || c.items[0].note != "表" {
 		t.Fatalf("a table: %+v", c)
 	}
@@ -253,15 +253,18 @@ func TestQuickSQLCompletion(t *testing.T) {
 	if c := a.palette.comp; c == nil || c.items[0].label != "t_order" {
 		t.Fatalf("tord still finds t_order: %+v", c)
 	}
-	feed(t, a, "<CR><BS>r")
+	feed(t, a, "<CR><BS><BS>r")
 	if c := a.palette.comp; c == nil || c.items[0].label != "t_order" {
 		t.Fatalf("t_order typed out: %+v", c)
 	}
-	if feed(t, a, "<CR>"); a.palette.quick == nil || a.palette.quick.running != "select * from t_order" {
-		t.Fatalf("↵ that changes nothing runs: %+v", a.palette.quick)
+	if feed(t, a, "<CR>"); a.palette.quick != nil || a.palette.input.Text != ";select * from t_order " {
+		t.Fatalf("↵ takes t_order and does no more: %q, %+v", a.palette.input.Text, a.palette.quick)
+	}
+	if feed(t, a, "<CR>"); a.palette.quick == nil || a.palette.quick.running != "select * from t_order " {
+		t.Fatalf("↵ with the list closed runs: %+v", a.palette.quick)
 	}
 	a.palette.quick = nil
-	feed(t, a, " selec<CR>")
+	feed(t, a, "selec<CR>")
 	if !strings.HasSuffix(a.palette.input.Text, " select ") {
 		t.Errorf("↵ takes the first: %q", a.palette.input.Text)
 	}
@@ -335,7 +338,7 @@ func TestQuickSQLWrite(t *testing.T) {
 	rec := &recDB{}
 	a.sess.Conns[0].Meta = db.NewWorker(rec)
 	for _, sql := range []string{"delete from t_order", "with x as (delete from t_order returning *) select * from x"} {
-		feed(t, a, "<C-p>;"+sql+"<CR>")
+		feed(t, a, "<C-p>;"+sql+"<Esc><CR>") // Esc closes the list ↵ would take
 		r := a.paletteView().Result
 		sent := slices.ContainsFunc(rec.sqls, func(s string) bool { return strings.Contains(s, "delete") }) // columns completion asked for aside
 		if a.sess.Conns[0].busy != 0 || sent || r == nil || r.Title != "只读" || r.Err != "写语句不在这里执行 · C-e 在 console 中打开" || !r.Warn {
@@ -410,7 +413,7 @@ func TestQuickSQLEdit(t *testing.T) {
 	if err := config.WriteConsole(config.ConsolePath(2), "select 1\n"); err != nil {
 		t.Fatal(err)
 	}
-	feed(t, a, "<C-p>;delete from t_order<CR><C-e>")
+	feed(t, a, "<C-p>;delete from t_order<Esc><CR><C-e>")
 	c := consoleOf(a.focused())
 	if a.palette != nil || c == nil || a.focused().Object() != "console_2" || text(c) != "select 1\n\ndelete from t_order" {
 		t.Fatalf("C-e: palette %v, %v", a.palette, a.focused().Object())

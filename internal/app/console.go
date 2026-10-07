@@ -153,16 +153,13 @@ func vimSel(ed *editor.Editor) (s ui.Sel) {
 }
 
 // consoleKey gives key k to the editor of console t, in pane p. With the
-// candidates up, ↵ takes the selected one, and is the editor's when that
-// changes nothing; esc closes them and leaves INSERT, as nvim-cmp (§9.7).
+// candidates up, ↵ takes the selected one and does no more; esc closes them and leaves INSERT, as nvim-cmp (§9.7).
 // In INSERT a character typed completes; C-n does with nothing typed.
 func (a *App) consoleKey(p *Pane, t *consoleTab, k keymap.Key) tea.Cmd {
 	a.consoleView(p, t)
 	switch {
 	case t.comp != nil && k == "<CR>":
-		if ok, cmd := a.consoleAccept(t); ok {
-			return cmd
-		}
+		return a.consoleAccept(t)
 	case t.comp == nil && k == "<C-n>" && t.ed.Mode() == editor.Insert:
 		// ponytail: C-n is fixed here, not in the keymap: [keys.console] is
 		// NORMAL's; add a console INSERT scope when it has to be remappable
@@ -200,16 +197,11 @@ func (a *App) consoleComplete(t *consoleTab, manual bool) tea.Cmd {
 }
 
 // consoleAccept puts console t's selected candidate in place of the word
-// it completes, as typing it would, and closes the list. ok is false when
-// that changes nothing, the case aside (§9.7).
-func (a *App) consoleAccept(t *consoleTab) (ok bool, cmd tea.Cmd) {
+// it completes, as typing it would, and closes the list (§9.7).
+func (a *App) consoleAccept(t *consoleTab) tea.Cmd {
 	c, cur := t.comp, t.ed.Cursor()
 	t.comp = nil
-	p := c.plan(t.ed.Lines()[cur.Line], cur.Col)
-	if !p.changed {
-		return false, nil
-	}
-	return true, a.consoleDid(t, p.put(t.ed))
+	return a.consoleDid(t, c.plan(t.ed.Lines()[cur.Line], cur.Col).put(t.ed))
 }
 
 // vimCmds are what any vim's eff asks of the app: the clipboard gets
