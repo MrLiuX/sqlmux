@@ -46,13 +46,17 @@ check "Am：首字符不分大小写，仍出现 amount" eval '[[ $(names) == *a
 edit; typ STA
 check "STA：补全整串不分大小写（不用 smartcase，docs ab3c0b8），出现 status" eval '[[ $(names) == *status* ]] || { echo "  $(names)"; false; }'
 
-# ---- 智能回车：接受之后文字不变时照常执行；列表没弹出时照常执行
+# ---- 回车（F8.1）：列表开着 ↵ 只接受（文字不变也算），再按一次才执行；列表没弹出时照常执行
 edit; typ "status is not null"
 check "输入 status is not null：列表开着，选中的就是 null" sel_is null
+key Enter; sleep 0.5
+check "↵：文字不变也算接受，不执行（F8.1），仍在 INSERT、列表关了" eval 'mode_is INSERT && [[ $(where_in) == "status is not null" && -z $(pop) ]]'
 key Enter; wait_for 8 settled
-check "↵：文字不变，直接执行（NORMAL，6000 行）" eval 'mode_is NORMAL && [[ $(where_in) == "status is not null" && $(cnt) == 6000 ]]'
-edit; typ "status is not NULL"; key Enter; wait_for 8 settled
-check "NULL 和候选 null 只差大小写：也算文字不变，直接执行，不改成小写" eval 'mode_is NORMAL && [[ $(where_in) == "status is not NULL" && $(cnt) == 6000 ]]'
+check "再 ↵（列表已关）：执行（NORMAL，6000 行）" eval 'mode_is NORMAL && [[ $(where_in) == "status is not null" && $(cnt) == 6000 ]]'
+edit; typ "status is not NULL"; key Enter; sleep 0.5
+check "NULL 和候选 null 只差大小写：也是接受，不改成小写，不执行" eval 'mode_is INSERT && [[ $(where_in) == "status is not NULL" && -z $(pop) ]]'
+key Enter; wait_for 8 settled
+check "再 ↵：执行，仍是大写 NULL" eval 'mode_is NORMAL && [[ $(where_in) == "status is not NULL" && $(cnt) == 6000 ]]'
 pal ";select 42 as x"; sleep 0.3
 check "快速 SQL 输入 select 42 as x：x 没有 x 开头的候选，列表不弹" eval '[[ -z $(boxN 2) ]]'
 key Enter; wait_for 8 eval 'e2e_plain | grep -q " 只读"'

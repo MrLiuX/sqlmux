@@ -50,7 +50,7 @@ check "t_o|ur 按 C-n：只按 t_o 过滤（t_order 在，t_user 不在）" eval
 fresh; e2e_type "select * from t_user where name = 'ab"; key C-n; sleep 0.5
 check "未闭合的字符串里按 C-n：不弹" eval '[[ -z $(pop) ]]'
 fresh; e2e_type "select * from "; key Escape; key 2; key a; e2e_type t_o; sleep 0.5; key Enter; key Escape
-check "2a 输入 t_o、接受 t_order、esc：接受的文字随次数重复" eval '[[ $(line 1) == "select * from t_ordert_order" ]] || { echo "  $(line 1)"; false; }'
+check "2a 输入 t_o、接受 t_order、esc：接受的文字随次数重复" eval '[[ $(line 1) == "select * from t_order t_order" ]] || { echo "  $(line 1)"; false; }'
 
 # ---- 粘贴不弹补全（§11「粘贴」）
 fresh; paste "select * from t_o"

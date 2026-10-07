@@ -32,9 +32,9 @@ start -S "$ST"; open_table t_order
 edit; typ sta
 check "输入 sta：输入框下方从前缀所在列弹出列表，status 在列，右侧注释是类型；仍是 INSERT" eval 'g=($(pop)); [[ ${g[0]} == 42 && ${g[1]} == 3 && $(items | head -1) == "status order_status|1" ]] && mode_is INSERT || { echo "  [$(pop)] $(items | tr "\n" ,)"; false; }'
 key Enter
-check "↵ 接受已选中的第一项（F1.14）：输入框是 status（不补空格），列表关闭" eval '[[ $(where_in) == status && -z $(pop) ]] && flag_is cursor_x 47'
+check "↵ 接受已选中的第一项（F1.14）：输入框是 status + 一个空格（F8.1：列名后接下一个词），列表关闭" eval '[[ $(where_in) == status && -z $(pop) ]] && flag_is cursor_x 48'
 clear_in; typ "id > 0 and "
-check "前缀为空（刚敲了空格）：不弹" eval '[[ -z $(pop) ]]'
+check "and 之后刚敲了空格：弹出列名（F8.4），第一项是 id" eval '[[ $(items | head -1) == "id "* ]] || { items; false; }'
 typ n
 check "列名一组在前（note），关键字在后（not、null），注释「关键字」；首字符必须是 n（F1.14：没有 amount、is null）" eval 'i=$(items | cut -d"|" -f1); [[ $(tr "\n" , <<<"$i") == "note text,not 关键字,null 关键字," ]] || { echo "  $(tr "\n" , <<<"$i")"; false; }'
 clear_in; typ stat; key Escape; key Enter; wait_for 8 settled
