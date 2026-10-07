@@ -258,7 +258,7 @@
   - **块的边界**：从 `[[connection]]` 行到下一个以 `[` 开头的行或文件末尾；块上面紧挨着的连续 `#` 行算它的（删除一起删，改值不动）。改值只动 `key = value` 单行，缺的键加在最后一个键行后，清空的删行；块里有多行值、点号键、内联表这类写法时拒绝保存，表单里说「connections.toml 里这一项写法太特别，请手工改」。
   - **`dsn` 写法的连接**（决策者选了小的做法）：host / port / user / database 从 dsn 拆出来只读显示（灰），只能改 `dsn` 一栏和 password / read_only / name；不做「改字段写回 dsn 对应段」（`ponytail:` 标上限：用户要时再做）。新建仍照 F7.4 拼 dsn。
   - **改名**：state.json 里 `recent`、`tables` 的键、`consoles` 的 `conn` 跟着改；layouts/*.toml 和 last.toml 里的 `connection = "旧名"` 不改（恢复时本来就报「没有叫 X 的连接」并跳过），§14 提一句。名字不能和别的连接重复。
-  - **钥匙串**：只认我们自己模板的 `password_cmd`（`security find-generic-password -a sqlmux -s …` / `secret-tool lookup sqlmux <name>`），删除时用命令里的服务名删，用户自己写的不碰；改名不改 password_cmd（指着旧服务名照样能用）；表单里 password 非空就按当前名字存一条新的、换掉 password_cmd、旧的我们的项先删，留空 = 不改密码。
+  - **钥匙串**：只认我们自己模板的 `password_cmd`（`security find-generic-password -a sqlmux -s …` / `secret-tool lookup sqlmux <name>`），删除时用命令里的服务名删，用户自己写的不碰；改名时我们的项跟着搬到新名字（见下面第 2 条）；表单里 password 非空就按当前名字存一条新的、换掉 password_cmd，旧项在文件写成功后才删（第 3 条的顺序），留空 = 不改密码。
   - **正在用**：有任何 tab 挂在它上面或它是某 session 的启动连接就拒绝删除；只是连着没 tab 的可以删，内存里留到退出。改了已连上的 toast「下次连接时生效」，各 session 的 Spec 换成新读出来的。
   - **界面**：`ui.ConnManager`，宽 100、左 26 列列表、右边复用 `ui.Form` 的字段绘制（拆出来共用，不另写）；新作用域 `[keys.conns]`：`conns.up` / `conns.down` / `conns.form`（`Tab` / `l` / `→` 进表单）/ `conns.delete`（`x`）/ `conns.close`；表单里 `esc` 回列表、再 `esc` 关；F7.4 的独立表单删掉，零连接启动也开这个浮层并选中「＋ 新建」；F7.4 的 golden 重生成。
   - `internal/config` 加 `UpdateConnection(old, new)` / `DeleteConnection(name)`，单测含「块在文件末尾没有换行」。
