@@ -397,7 +397,8 @@ func (a *App) click(p uv.Position) tea.Cmd {
 		case a.form != nil:
 			a.formClick(t.I)
 		case tab != nil && tab.hist != nil:
-			return a.histApply(tab, t.I)
+			es, _ := a.histEntries(tab)
+			return a.histApply(tab, histRow(es, t.I))
 		case a.drop != nil:
 			return a.dropPick(t.I)
 		case a.cols != nil: // a column's row: show or hide it (Q-04)

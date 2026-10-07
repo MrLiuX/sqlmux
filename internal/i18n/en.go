@@ -150,6 +150,7 @@ var en = map[string]string{
 	"%s 在 console 中打开": "%s opens it in a console",
 	"… 行":              "… rows",
 	"会话":               "Session",
+	"应用":               "Apply",
 	"关闭":               "Close",
 	"写语句不在这里执行":        "A statement that writes is not run here",
 	"切换":               "Switch",
