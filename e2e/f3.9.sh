@@ -7,7 +7,7 @@ e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")
 trap 'e2e_stop; rm -rf "$D"' EXIT
-line() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }
+line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
 lines() { local i; for ((i = 1; i <= $1; i++)); do line $i; done | tr '\n' '|'; }   # 前 N 行，用 | 连起来
 paste() { t set-buffer -b e2e "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 SQL="select id,status from t_order where id<3"
@@ -19,7 +19,7 @@ key g; key q
 check "gq 是操作符（b8bf335）：只按 gq 时在等移动，缓冲区不变" eval '[[ $(lines 2) == "$SQL||" ]]'
 key q; wait_for 3 eval '[[ -n $(line 2) ]]'
 check "gqq：用内置的 sql-formatter 把当前语句排成多行（关键字默认小写）" eval '[[ $(lines 7) == "select|  id,|  status|from|  t_order|where|  id < 3|" ]] || { echo "  $(lines 7)"; false; }'
-check "gq 之后光标在格式化文字的最后一行的第一个非空白字符（同 vim）" eval '[[ $(e2e_flag cursor_y) == 7 && $(e2e_flag cursor_x) == 112 ]]'
+check "gq 之后光标在格式化文字的最后一行的第一个非空白字符（同 vim）" eval '[[ $(e2e_flag cursor_y) == 7 && $(e2e_flag cursor_x) == 105 ]]'
 key u
 check "整次格式化是一个撤销步：u 一次恢复原文" eval '[[ $(lines 2) == "$SQL||" ]] || { echo "  $(lines 2)"; false; }'
 setsql $'select 1;\nselect  a,b from t;\nselect 3'

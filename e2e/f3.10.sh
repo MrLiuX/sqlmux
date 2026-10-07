@@ -11,7 +11,7 @@ items() { local g y; g=($(pop)); [[ -n ${g[0]} ]] || return 0
   for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed 's/^ *//; s/ *$//'; done; }
 names() { items | awk '{ print $1 }' | tr '\n' ' '; }
 has() { [[ " $(names) " == *" $1 "* ]] || { echo "  candidates: $(names)"; false; }; }
-line() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }
+line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
 mode() { bar | awk '{ print $NF }'; }
 fresh() { key Escape; key Escape; key g g; key d G; key i; }                      # 清空 console，进 INSERT
 
@@ -50,7 +50,7 @@ check "t_o|ur 按 C-n：只按 t_o 过滤（t_order 在，t_user 不在）" eval
 fresh; e2e_type "select * from t_user where name = 'ab"; key C-n; sleep 0.5
 check "未闭合的字符串里按 C-n：不弹" eval '[[ -z $(pop) ]]'
 fresh; e2e_type "select * from "; key Escape; key 2; key a; e2e_type t_o; sleep 0.5; key Enter; key Escape
-check "2a 输入 t_o、接受 t_order、esc：接受的文字随次数重复" eval '[[ $(line 1) == "select * from t_ordert_order" ]] || { echo "  $(line 1)"; false; }'
+check "2a 输入 t_o、接受 t_order、esc：接受的文字随次数重复" eval '[[ $(line 1) == "select * from t_order t_order" ]] || { echo "  $(line 1)"; false; }'
 
 # ---- 粘贴不弹补全（§11「粘贴」）
 fresh; paste "select * from t_o"

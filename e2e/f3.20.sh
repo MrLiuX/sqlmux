@@ -117,7 +117,7 @@ run() { key Enter; wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 0.3; }
 SOLO= start -C "$D/own"; key C-l
 setsql $'select 1;\n\nselect id,\n  nosuch_a from t_order\nwhere id < 3;'
 key G; run
-check "console 执行出错：② 底部的错误栏 [42703]，下一行「位置：第 4 行第 3 列」（换算成文件里的行列）" eval 'errbar_is 2 "[42703] column \"nosuch_a\" does not exist ×" && [[ $(errbar 2 | sed -n 2p) == "位置：第 4 行第 3 列" ]] && style_has 107 $(errbar_y 2) fg=$ERROR || { errbar 2; false; }'
+check "console 执行出错：② 底部的错误栏 [42703]，下一行「位置：第 4 行第 3 列」（换算成文件里的行列）" eval 'errbar_is 2 "[42703] column \"nosuch_a\" does not exist ×" && [[ $(errbar 2 | sed -n 2p) == "位置：第 4 行第 3 列" ]] && style_has 100 $(errbar_y 2) fg=$ERROR || { errbar 2; false; }'
 setsql 'select 1; select nosuch_b;'; key '$'; run
 check "同一行的第二条语句：列号从行首算（第 1 行第 18 列）" eval '[[ $(errbar 2 | sed -n 2p) == "位置：第 1 行第 18 列" ]] || { errbar 2; false; }'
 setsql $'-- 注释\nselect  \'中文\', nosuch_c'; key j; run
@@ -134,7 +134,7 @@ setsql 'select nosuch_d'; run; setsql 'select 1 as ok'; run
 check "下一次开始执行就清掉上一次的：成功之后没有错误栏" eval '[[ -z $(errbar 2) ]]'
 # 光标在最后一行时出错：错误栏让 console 变矮，光标所在行仍然可见
 setsql "$(for i in $(seq 29); do echo "select $i;"; done; echo 'select nosuch_e;')"; key G; run
-check "30 行、光标在第 30 行出错：错误栏上面一行就是第 30 行（视图跟着变矮）" eval '[[ $(e2e_text 106 160 $(( $(errbar_y 2) - 1 ))) == *"30 select nosuch_e"* ]] || { e2e_text 106 160 $(( $(errbar_y 2) - 1 )); false; }'
+check "30 行、光标在第 30 行出错：错误栏上面一行就是第 30 行（视图跟着变矮）" eval '[[ $(e2e_text 99 160 $(( $(errbar_y 2) - 1 ))) == *"30 select nosuch_e"* ]] || { e2e_text 99 160 $(( $(errbar_y 2) - 1 )); false; }'
 
 # ---- 结果区 R 重跑出错：错误显示在来源 console 的 tab 上；来源 console 关了只记日志
 setsql 'select id, note from t_order where id < 3'; run

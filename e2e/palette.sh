@@ -44,7 +44,8 @@ modified() { [[ $(pfoot) == *"已修改，↵ 重新执行" ]]; }
 input() { local g; g=($(pbox)); e2e_text $((g[0] + 3)) $((g[0] + g[2] - 2)) $((g[1] + 2)) | sed 's/^ *//; s/ *$//'; }
 clear_all() { local i; for ((i = 0; i < 120; i++)); do e2e_keys BSpace; done; sleep 0.3; }
 # sql TEXT：在已打开的面板里清空输入、输入 ;TEXT、↵，等结果回来
-sql() { clear_all; e2e_type ";$1"; sleep 0.4; e2e_keys Enter; wait_for 8 eval '[[ -n $(title) && $(title) != "… 行"* ]]'; sleep 0.2; }
+# F8.1：补全列表开着时 ↵ 只接受，所以执行前先 esc 关掉列表（输入不变）
+sql() { clear_all; e2e_type ";$1"; sleep 0.4; [[ -n $(pop) ]] && { e2e_keys Escape; sleep 0.2; }; e2e_keys Enter; wait_for 8 eval '[[ -n $(title) && $(title) != "… 行"* ]]'; sleep 0.2; }
 pop() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5 }' | sed -n 2p; }   # 补全列表：面板之后的第二个浮层
 items() { local g y; g=($(pop)); [[ -n ${g[0]} ]] || return 0
   for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | tr -s ' ' | sed 's/^ //; s/ $//'; done; }

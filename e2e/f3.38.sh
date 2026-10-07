@@ -7,7 +7,7 @@ e2e_build || exit 1
 
 paste() { t set-buffer -b e2e -- "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 setsql() { key Escape; key g g; key d G; key i; paste "$1"; key Escape; key g g; key 0; }   # console 的内容换成 SQL，光标回到第 1 行行首
-line() { e2e_text 111 159 $((1 + $1)) | sed 's/ *$//'; }                         # 第 N 行的文字（② console 从 x 111 起）
+line() { e2e_text 104 159 $((1 + $1)) | sed 's/ *$//'; }                         # 第 N 行的文字（② console 从 x 111 起）
 set_clip() { printf '%s' "$1" >"$E2E_TMP/clipboard"; }
 clip_is() { local want=$1; wait_for 3 eval '[[ "$(clip; echo .)" == "$want." ]]' || { echo "  clip: [$(clip)], want [$want]"; false; }; }   # TEXT：剪贴板里是 TEXT（pbcopy 负载高时晚一点才写完）
 
@@ -51,7 +51,7 @@ key u; key u
 setsql "select nosuch"; key Enter; wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 1.5
 mtime() { stat -f %Fm "$E2E_TMP/data/sqlmux/consoles/console_1.sql"; }   # F5.11 起不按连接分目录；文件不在时没有输出（check 里要求非空）
 rm -f "$E2E_TMP/clipboard"; m0=$(mtime); e2e_type '"+p'; sleep 1.5
-check "剪贴板为空时 \"+p：文字不变，红 ▶ 还在，console 文件没有重写" eval '[[ -n $m0 && $(line 1) == "select nosuch" && $(mtime) == "$m0" ]] && style_has 106 2 fg=#f7768e'
+check "剪贴板为空时 \"+p：文字不变，红 ▶ 还在，console 文件没有重写" eval '[[ -n $m0 && $(line 1) == "select nosuch" && $(mtime) == "$m0" ]] && style_has 99 2 fg=#f7768e'
 
 # ---- "+p 的内容晚到、编辑器已经离开 NORMAL 时不贴（pbpaste 慢 1.5 秒）
 printf '#!/bin/sh\nsleep 1.5\ncat "%s/clipboard"\n' "$E2E_TMP" >"$E2E_TMP/bin/pbpaste"; set_clip "LATE"
@@ -63,7 +63,7 @@ key Escape
 key C-h; key C-p; e2e_type "@t_order"; sleep 0.3; key Enter; wait_for 8 settled
 key /; e2e_type "id < 5"; key Enter; wait_for 8 settled
 key /; key Escape; e2e_type '"add'; sleep 0.3
-wq() { e2e_text 42 101 2 | sed 's/ *▾.*//; s/ *$//'; }                                    # ① 的 WHERE 输入框（默认布局，① 70 列）
+wq() { e2e_text 42 95 2 | sed -E 's/ {2,}(([^ ]+) ){0,2}▾ *$//; s/ *$//'; }              # ① 的 WHERE 输入框（默认布局，① 63 列；右端是 [icon] [key] ▾）
 check "WHERE 的 NORMAL 下 \"add：不清空条件，还在 WHERE 里" eval '[[ $(wq) == "id < 5" && $(bar) == *"-- editing WHERE --"* ]] || { echo "  [$(wq)]"; false; }'
 key Escape
 

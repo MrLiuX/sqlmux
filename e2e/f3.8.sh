@@ -28,7 +28,7 @@ start -C "$D/own"
 key C-l
 setsql "select id, status from t_order where id <= 3 order by id"
 run
-check "第一次执行：底部出现全宽的结果区 ③（40% 高），①、② 在上面" eval 'geom_is 3 "34 27 127 18" && geom_is 2 "105 1 56 26" && geom_is 1 "34 1 70 26"'
+check "第一次执行：底部出现全宽的结果区 ③（40% 高），①、② 在上面" eval 'geom_is 3 "34 27 127 18" && geom_is 2 "98 1 63 26" && geom_is 1 "34 1 63 26"'
 check "焦点留在 console，结果区切到这次的结果 tab" eval 'focus_is 2 && rtabs_are "1:日志 │ 2:console_1 #1*"'
 check "标题 ③ console_1 #1，右边 3 行 · <耗时>" eval '[[ $(rtitle) =~ ^┌─\ ③\ console_1\ \#1\ ─+\ 3\ 行\ ·\ [0-9]+ms\  ]] || { echo "  $(rtitle)"; false; }'
 check "结果与 psql 一致" eval '[[ $(rrow 3) == *" 1 │ running"* && $(rrow 4) == *" 2 │ done"* && $(rrow 5) == *" 3 │ failed"* ]] || { echo "  $(rrow 3)"; false; }'
@@ -59,19 +59,19 @@ setsql $'select 11 as x;\nselect nosuch from t_log;\ninsert into t_log(logged_at
 key V; key G; run
 check "第二条出错：切到日志，第一条照常出 tab（#7）" eval '[[ $(rtabs) == "1:日志* │ 2:console_1 #2 │ 3:console_1 #7" ]] || { echo "  ③ tabs: $(rtabs)"; false; }'
 check "日志里是 error 色的 ERROR: <Message>" eval 'y=$(for i in $(seq 1 14); do [[ $(rrow $i) == *"ERROR: column \"nosuch\" does not exist"* ]] && echo $i; done | tail -1); [[ -n $y ]] && x=$(e2e_find ERROR: $((27 + y)) | cut -d" " -f1) && style_has $x $((27 + y)) fg=$ERROR'
-check "出错语句（第 2 行）的 ▶ 是 error 色，别的 ▶ 照旧" eval 'style_has 106 3 fg=$ERROR && style_has 106 2 fg=$FOCUS && style_has 106 4 fg=$FOCUS'
+check "出错语句（第 2 行）的 ▶ 是 error 色，别的 ▶ 照旧" eval 'style_has 99 3 fg=$ERROR && style_has 99 2 fg=$FOCUS && style_has 99 4 fg=$FOCUS'
 check "第三条没有执行" eval '[[ $(psql_n "select count(*) from t_log where msg = '"'e2e'"'") == 0 ]]'
 key g g; run
-check "再执行（不改缓冲区）第 1 条：开始时先清掉旧的红 ▶（2c36829）" style_has 106 3 fg=$FOCUS
+check "再执行（不改缓冲区）第 1 条：开始时先清掉旧的红 ▶（2c36829）" style_has 99 3 fg=$FOCUS
 key j; run
-check "再执行出错的第 2 条：又标红" style_has 106 3 fg=$ERROR
+check "再执行出错的第 2 条：又标红" style_has 99 3 fg=$ERROR
 key G; key A; e2e_type " "; key Escape
-check "缓冲区一改，红色 ▶ 就恢复" style_has 106 3 fg=$FOCUS
+check "缓冲区一改，红色 ▶ 就恢复" style_has 99 3 fg=$FOCUS
 psql "$E2E_DB" -q -c "create table t_gone (i int)"
 setsql "select * from t_gone"; run
 psql "$E2E_DB" -q -c "drop table t_gone"; key A; e2e_type " "; key Escape
 key C-j; key R; done_run; key C-k
-check "改过文字之后重跑、出错：不崩，日志记错误，▶ 不标红（出错的已不是屏幕上这段文字）" eval 'running && [[ $(logs | tail -1) == *"ERROR: relation \"t_gone\" does not exist"* ]] && style_has 106 2 fg=$FOCUS || { logs | tail -2; false; }'
+check "改过文字之后重跑、出错：不崩，日志记错误，▶ 不标红（出错的已不是屏幕上这段文字）" eval 'running && [[ $(logs | tail -1) == *"ERROR: relation \"t_gone\" does not exist"* ]] && style_has 99 2 fg=$FOCUS || { logs | tail -2; false; }'
 psql "$E2E_DB" -q -c "create function e2e_hint() returns int language plpgsql as \$\$ begin raise exception 'bad' using detail = 'the detail', hint = 'the hint'; end \$\$"
 setsql "select e2e_hint()"
 run
@@ -111,14 +111,14 @@ check "执行中在 VISUAL 下按 C-c：等同 esc，回到 NORMAL，查询照�
 key d; key C-c
 check "按了 d 在等后续按键时 C-c：只清掉待输入，查询照跑" eval '[[ $(pending) == · && $(bar) == *busy* ]]'
 key C-c; wait_for 3 eval '[[ $(bar) != *busy* ]]'
-check "C-c：取消，toast「查询已取消」，切到日志记「已取消」，▶ 不变红" eval 'toast_is "查询已取消" && [[ $(rtabs) == "1:日志*"* && $(logs | tail -1) == *"select pg_sleep(8)  已取消"* ]] && style_has 106 2 fg=$FOCUS'
+check "C-c：取消，toast「查询已取消」，切到日志记「已取消」，▶ 不变红" eval 'toast_is "查询已取消" && [[ $(rtabs) == "1:日志*"* && $(logs | tail -1) == *"select pg_sleep(8)  已取消"* ]] && style_has 99 2 fg=$FOCUS'
 setsql "select 42 as answer"
 run
 check "取消之后 Main 照常能用" eval '[[ $(rtitle) == *" 1 行 · "* && $(rrow 3) == *42* ]]'
 
 # ---- 执行的单位（§11「执行」）：gutter 的 ▶、块选区；重跑用当时的 SQL
 setsql $'select 1 as one;\nselect 2 as two;\nselect 3 as three;'
-e2e_click 106 3; done_run
+e2e_click 99 3; done_run
 check "点第 2 行的 ▶：执行那一条，光标不动（还在第 1 行）" eval '[[ $(rrow 1) == *" two"* && $(e2e_flag cursor_y) == 1 ]] || { echo "  $(rrow 1)"; false; }'
 key j; key l; key C-v; key j; key l; run
 check "块选区（第 2、3 行各两列）：执行覆盖到的整行，两条各出一个 tab" eval '[[ $(rtabs) == *"#"*"* │ "*"#"*"·2" ]] && [[ $(rrow 1) == *" two"* ]] || { echo "  $(rtabs) / $(rrow 1)"; false; }'
@@ -146,7 +146,7 @@ check "i / ↵ 不做事（只读）" eval '[[ $(bar) == *" NORMAL " ]]'
 before=$(rtabs); key x
 check "x 关闭当前结果 tab" eval '[[ $(rtabs) != "$before" && $(rtabs) != *"#"*"answer"* ]]'
 key Space; e2e_type x; sleep 0.3
-check "SPC x 关掉结果区：①、② 占回全高" eval '[[ -z $(geom 3) ]] && geom_is 2 "105 1 56 44"'
+check "SPC x 关掉结果区：①、② 占回全高" eval '[[ -z $(geom 3) ]] && geom_is 2 "98 1 63 44"'
 key C-l; run
 check "再执行：结果区重新出现" eval 'geom_is 3 "34 27 127 18" && [[ $(rtabs) == *"*" ]]'
 setsql "select pg_sleep(2), 'late' as w"

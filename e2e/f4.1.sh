@@ -82,7 +82,7 @@ e2e_keys C-e; sleep 0.5
 check "C-e：面板关掉，① 的引导 tab 换成 console_2（console_1 开在 ②），焦点在 ①" eval 'closed && focus_is 1 && tabs_are 1 "1:console_2*"'
 check "console_2.sql 原来的两行后面空一行，接着这条 SQL；光标在 SQL 那一行行首、NORMAL" eval '[[ $(cline 1 1) == "select 1;" && $(cline 1 2) == "-- old" && -z $(cline 1 3) && $(cline 1 4) == "delete from t_log" ]] && [[ $(ccur 1) == 4,1 ]] && mode_is NORMAL || { for i in 1 2 3 4; do echo "  $i: $(cline 1 $i)"; done; false; }'
 key u
-check "u 一次撤掉整个追加" eval '[[ $(cline 1 1) == "select 1;" && $(cline 1 2) == "-- old" && -z $(e2e_text 35 102 4 | tr -d " ") ]]'
+check "u 一次撤掉整个追加" eval '[[ $(cline 1 1) == "select 1;" && $(cline 1 2) == "-- old" && -z $(e2e_text 35 95 4 | tr -d " ") ]]'
 key C-r
 pal '\;'; e2e_keys C-e; sleep 0.3
 check "; 后面为空时 C-e 不做事：面板还开着" eval 'is_open && [[ $(input) == ";" ]]'
@@ -141,7 +141,7 @@ check "输入 agent_v：补全列表开着（树在 agentable，补全用它的�
 e2e_keys C-e; sleep 0.5
 check "焦点在树上时 C-e：开到最近聚焦过的 ②，新开 tab console_3（当前不是引导 tab，不替换），焦点在 ②" eval 'closed && focus_is 2 && tabs_are 2 "1:console_1- │ 2:console_3*"'
 check "取的是输入框里的文字（delete from agent_v，不是上次执行的 select 2 as y）；新文件只有这一行，光标在 1,1" eval '[[ $(cline 2 1) == "delete from agent_v" && -z $(cline 2 2) ]] && [[ $(ccur 2) == 1,1 ]] || { cline 2 1; ccur 2; false; }'
-check "console_3 取当前连接（树光标所在的 d）和它的 Schema agentable" eval 'text_has 105 160 1 " d · sqlmux_e2e_$$.agentable ▾"'
+check "console_3 取当前连接（树光标所在的 d）和它的 Schema agentable" eval 'text_has 98 160 1 " d · sqlmux_e2e_$$.agentable ▾"'
 pal; sql "select 3 as z"; e2e_keys C-e; sleep 0.5
 check "console_4.sql 读不出来：toast「读取失败」，面板不关，SQL 还在输入框里" eval 'screen_has "读取失败" && screen_has "console_4.sql" && is_open && [[ $(input) == ";select 3 as z" ]]'
 rmdir "$CD/console_4.sql"

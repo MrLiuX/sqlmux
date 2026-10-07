@@ -7,8 +7,8 @@ e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; rm -rf "$D"' EXIT
 mkdir -p "$D/c"; printf 'vim = false\n' >"$D/c/config.toml"
-cl() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }
-cx() { echo $(( $(e2e_flag cursor_x) - 110 )); }                                # 光标前面的字符数（第一列 111）
+cl() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
+cx() { echo $(( $(e2e_flag cursor_x) - 103 )); }                                # 光标前面的字符数（第一列 111）
 cy() { e2e_flag cursor_y; }
 sel_bg() { [[ $(e2e_style "$1" "$2") == *"bg=#2d3f76"* ]]; }
 
@@ -45,9 +45,9 @@ start -C "$D/c"; key C-l
 e2e_type "one"; key Enter; e2e_type "two"; key Enter; e2e_type "three"; key Up; key Up; key C-a
 key S-Down; key S-Down; sleep 0.3
 key Tab; sleep 0.3
-check "有选区：Tab 给选中的行缩进（第 1、2 行前面各多 2 个空格），第 3 行不动，选区还在" eval '[[ $(cl 1) == "  one" && $(cl 2) == "  two" && $(cl 3) == "three" ]] && sel_bg 113 2 || { echo "  [$(cl 1)] [$(cl 2)] [$(cl 3)]"; false; }'
+check "有选区：Tab 给选中的行缩进（第 1、2 行前面各多 2 个空格），第 3 行不动，选区还在" eval '[[ $(cl 1) == "  one" && $(cl 2) == "  two" && $(cl 3) == "three" ]] && sel_bg 106 2 || { echo "  [$(cl 1)] [$(cl 2)] [$(cl 3)]"; false; }'
 key BTab; sleep 0.3
-check "S-Tab 反缩进：回到 one / two，选区还在" eval '[[ $(cl 1) == "one" && $(cl 2) == "two" ]] && sel_bg 111 2 || { echo "  [$(cl 1)] [$(cl 2)]"; false; }'
+check "S-Tab 反缩进：回到 one / two，选区还在" eval '[[ $(cl 1) == "one" && $(cl 2) == "two" ]] && sel_bg 104 2 || { echo "  [$(cl 1)] [$(cl 2)]"; false; }'
 
 # ---- 打开括号 / 引号把选区包起来
 key Down; key Down; key C-a; for i in 1 2 3 4 5; do key S-Right; done
@@ -71,6 +71,6 @@ key /; e2e_type "id < 5"; sleep 0.3
 e2e_drag 43 2 47 2; sleep 0.3
 check "WHERE 里鼠标拖动选择：选区用 visual 底" eval 'sel_bg 44 2 && sel_bg 46 2'
 e2e_type "9"; sleep 0.3
-check "再输入替换选区" eval '[[ $(e2e_text 36 103 2 | sed "s/ *▾.*//; s/^ *WHERE *//; s/ *$//") != "id < 5" ]]'
+check "再输入替换选区" eval '[[ $(e2e_text 36 95 2 | sed "s/ *▾.*//; s/^ *WHERE *//; s/ *$//") != "id < 5" ]]'
 
 e2e_done

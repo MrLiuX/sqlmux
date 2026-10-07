@@ -11,8 +11,8 @@ items() { local g y; g=($(pop)); [[ -n ${g[0]} ]] || return 0
   for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed 's/^ *//; s/ *$//'; done; }
 names() { items | sed 's/  .*//' | tr '\n' '|'; }          # 候选名（可能带空格），以 | 分隔
 has() { [[ "|$(names)" == *"|$1|"* ]] || { echo "  candidates: $(names)"; false; }; }
-line() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }
-cc() { echo "$(e2e_flag cursor_y):$(( $(e2e_flag cursor_x) - 110 ))"; }      # 光标所在行（0 起）和它前面的字符数（第一行）
+line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
+cc() { echo "$(e2e_flag cursor_y):$(( $(e2e_flag cursor_x) - 103 ))"; }      # 光标所在行（0 起）和它前面的字符数（第一行）
 fresh() { key Escape; key Escape; key g g; key d G; key i; }
 settle() { wait_for 8 settled; }
 
@@ -28,9 +28,9 @@ check "console：wher ↵ → where + 空格（前面 27 个字符），没有�
 fresh; e2e_type "select * from t_user u wher"; sleep 0.5; key Enter; e2e_type "u.i"; sleep 0.5
 check "补空格之后接着打：where u.i 弹出列 id（列不补空格的前提）" has id
 key Enter
-check "接受列名 id：不补空格（光标就在 id 后）" eval '[[ $(line 1) == "select * from t_user u where u.id" ]] && [[ $(cc) == 1:33 ]]'
+check "接受列名 id：补一个空格，光标在空格后（F8.1：列名后面接的是下一个词）" eval '[[ $(line 1) == "select * from t_user u where u.id" ]] && [[ $(cc) == 1:34 ]]'
 fresh; e2e_type "select * from t_us"; sleep 0.5; key Enter
-check "接受表名 t_user：不补空格" eval '[[ $(line 1) == "select * from t_user" ]]'
+check "接受表名 t_user：补一个空格，光标在空格后（F8.1）" eval '[[ $(line 1) == "select * from t_user" && $(cc) == 1:21 ]]'
 fresh; e2e_type "select * from t_user where id is nul"; sleep 0.5; key Enter
 check "接受值 null：不补空格，没有换行" eval '[[ $(line 1) == "select * from t_user where id is null" && $(line 2) == "" ]]'
 fresh; e2e_type "select coun"; sleep 0.5; key Enter
@@ -73,7 +73,9 @@ check "大写：AND| b ↵：光标移到空格后（4），文字仍是 AND b�
 fresh; e2e_type "SELECT"; sleep 0.5; key Enter
 check "打完 SELECT ↵：得到 \"SELECT \"（大小写保留，补一个空格）" eval '[[ $(line 1) == "SELECT" && $(cc) == 1:7 ]]'
 fresh; e2e_type "select 1 where x is NULL"; sleep 0.5; key Enter
-check "NULL ↵：不改成 null，也没有补空格（值），console 换行" eval '[[ $(line 1) == "select 1 where x is NULL" && $(cc) == 2:0 ]]'
+check "NULL ↵：不改成 null，也没有补空格（值），不换行（F8.1：列表开着 ↵ 只接受）" eval '[[ $(line 1) == "select 1 where x is NULL" && $(line 2) == "" && $(cc) == 1:24 && -z $(pop) ]]'
+key Enter
+check "再按一次 ↵（列表已关）：换行" eval '[[ $(line 1) == "select 1 where x is NULL" && $(cc) == 2:0 ]]'
 fresh; e2e_type "update t_order set"; sleep 0.5; key Enter
 check "update t_order set ↵：得到 set + 空格（完全相同的候选排第一，不会换成别的表名）" eval '[[ $(line 1) == "update t_order set" && $(cc) == 1:19 ]]'
 fresh; e2e_type "alter table t rename to"; sleep 0.5; key Enter
@@ -104,10 +106,14 @@ key Enter; settle
 check "再 ↵：文字没变，照常执行" eval 'mode_is NORMAL && [[ $(where_in) == "note is null" ]]'
 key /; clear_in; e2e_type "note is null"; sleep 0.5
 check "WHERE：打完整个 null，列表里是 null" has null
+key Enter; sleep 0.5
+check "打完 null ↵：文字不变也算接受，不执行（F8.1），还在 WHERE 的 INSERT" eval 'mode_is INSERT && [[ $(where_in) == "note is null" && -z $(pop) ]]'
 key Enter; settle
-check "打完 null ↵：文字不变，照常执行（不补空格）" eval 'mode_is NORMAL && [[ $(where_in) == "note is null" ]]'
-key /; clear_in; e2e_type "status = 'done"; sleep 0.5; key Enter; settle
-check "WHERE：status = 'done（右引号是自动配对补的，光标后就是它）↵：不算接受，照常执行查询，回到表格" eval 'mode_is NORMAL && [[ $(where_in) == "status = '"'"'done'"'"'" ]]'
+check "再 ↵：执行" eval 'mode_is NORMAL && [[ $(where_in) == "note is null" ]]'
+key /; clear_in; e2e_type "status = 'done"; sleep 0.5; key Enter; sleep 0.5
+check "WHERE：status = 'done（右引号是自动配对补的）↵：只接受、不执行（F8.1 去掉了跨过右引号照常执行的例外）" eval 'mode_is INSERT && [[ $(where_in) == "status = '"'"'done'"'"'" && -z $(pop) ]]'
+key Enter; settle
+check "再 ↵：执行查询，回到表格" eval 'mode_is NORMAL && [[ $(where_in) == "status = '"'"'done'"'"'" ]]'
 key /; clear_in; e2e_type " b"; key Escape; key 0; key i; e2e_type "and"; sleep 0.5
 check "WHERE：and| b：光标在 and 后、后面是空格，弹出 and" has and
 key Enter; sleep 0.5

@@ -10,8 +10,8 @@ typ() { e2e_type "$1"; sleep 0.3; }
 paste() { t set-buffer -b e2e "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 wcur() { echo $(( $(e2e_flag cursor_x) - 41 )); }                              # WHERE 输入框里光标前有几个字符（SOLO 布局，文字从 x 42 起；cursor_x 从 0 起）
 where_is() { [[ $(where_in) == "$1" && $(wcur) == "$2" ]] || { echo "  WHERE '$(where_in)' cursor $(wcur), want '$1' cursor $2"; false; }; }
-line() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }                       # console 第 N 行（默认布局）
-ccur() { echo $(( $(e2e_flag cursor_x) - 110 )); }                              # console 里光标前有几个字符
+line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }                       # console 第 N 行（默认布局）
+ccur() { echo $(( $(e2e_flag cursor_x) - 103 )); }                              # console 里光标前有几个字符
 mode() { bar | awk '{ print $NF }'; }
 
 # ---- WHERE（SOLO：① 独占右侧）
@@ -51,7 +51,7 @@ check "REPLACE 模式不配对" eval '[[ $(line 1) == "(" ]] || { echo "  $(line
 key u; key g g; key d G; key 3; key o; typ "("; key Escape
 check "3o( 再 esc：每一行各配一对" eval '[[ $(line 2) == "()" && $(line 3) == "()" && $(line 4) == "()" ]] || { echo "  $(line 2) / $(line 3) / $(line 4)"; false; }'
 key :; typ "s/a/("
-check ": 命令行不配对" eval '[[ $(e2e_text 105 160 42) == "│:s/a/("*  && $(e2e_text 105 160 42) != *"()"* ]]'
+check ": 命令行不配对" eval '[[ $(e2e_text 98 160 42) == "│:s/a/("*  && $(e2e_text 98 160 42) != *"()"* ]]'
 key Escape
 
 # ---- autopairs = false：哪里都不配对

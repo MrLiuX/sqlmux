@@ -15,7 +15,7 @@ trap 'e2e_stop; rm -rf "$D"' EXIT
 conf() { rm -rf "$D"/*; printf "$1" > "$D/config.toml"; [[ -n $2 ]] && { mkdir -p "$D/themes"; printf "$2" > "$D/themes/x.toml"; }; true; }
 fails() { e2e_start -C "$D" "$E2E_BIN"; wait_for 3 screen_has '[e2e-exit 1]' || return 1; screen_has "$1" || { echo "  error lacks '$1':"; e2e_plain | grep sqlmux: | sed 's/^/    /'; false; }; }
 NF_CONSOLE=$(printf '\xef\x92\x89')   # U+F489
-ICON=110 ICON_ASCII=112               # ② console title icon column: nerd ┌─ ② <icon> …; ascii ┌─ ⟨2⟩ <icon> … (⟨2⟩ is 3 wide, F0.16)
+ICON=103 ICON_ASCII=105               # ② console title icon column: nerd ┌─ ② <icon> …; ascii ┌─ ⟨2⟩ <icon> … (⟨2⟩ is 3 wide, F0.16)
 # cell NAME N — "X Y" of column NAME's value on data row N (-1: the header): text starts under the header name,
 # numbers end under its last letter (right-aligned)
 cell() { local hy=$(( $(grid_y) - 1 )) c; c=$(e2e_find "$1" $hy | tr ' ' '\n' | awk '$1 > 34 { print; exit }')   # ① only: the sidebar has names too
@@ -51,7 +51,7 @@ check "nerd: console icon is U+F489" text_is $ICON $ICON 1 "$NF_CONSOLE"
 conf 'icons = "ascii"\n'; SOLO= start -C "$D"
 check "ascii: console icon is >" text_is $ICON_ASCII $ICON_ASCII 1 ">"
 conf 'theme = "x"\n' '[icon]\nconsole = { text = "C", fg = "#ff0000" }\n'; SOLO= start -C "$D"
-check "[icon] console text+fg: red C, rest of the title unchanged" eval 'text_is $ICON $ICON 1 C && style_has $ICON 1 fg=#ff0000 && style_has 108 1 fg=#565f89   # ② (F5.3: at 160 the Tx control leaves no room for console_1)'
+check "[icon] console text+fg: red C, rest of the title unchanged" eval 'text_is $ICON $ICON 1 C && style_has $ICON 1 fg=#ff0000 && style_has 101 1 fg=#565f89   # ② (F5.3: at 160 the Tx control leaves no room for console_1)'
 conf 'theme = "x"\n' '[icon]\nconsole = { fg = "#00ff00" }\n'; SOLO= start -C "$D"
 check "[icon] fg only: same glyph, new color" eval 'text_is $ICON $ICON 1 "$NF_CONSOLE" && style_has $ICON 1 fg=#00ff00'
 conf 'theme = "x"\nicons = "ascii"\n' '[icon]\nconsole = { text = "C", fg = "#ff0000" }\n'; SOLO= start -C "$D"

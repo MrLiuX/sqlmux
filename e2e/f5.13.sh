@@ -12,8 +12,8 @@ paste() { t set-buffer -b e2e "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4;
 names() { items | sed 's/  .*//' | tr '\n' '|'; }
 names_are() { [[ $(names) == "$1" ]] || { echo "  candidates: '$(names)', want '$1'"; false; }; }
 none() { [[ -z $(pop) ]] || { echo "  popup: $(names)"; false; }; }
-line() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }
-cc() { echo $(( $(e2e_flag cursor_x) - 110 )); }
+line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
+cc() { echo $(( $(e2e_flag cursor_x) - 103 )); }
 fresh() { key Escape; key Escape; key g g; key d G; key i; }
 sel1() { [[ $(e2e_style $(( $(pop | cut -d' ' -f1) + 2 )) $(( $(pop | cut -d' ' -f2) + 1 )))  == *bg=#364a82* ]]; }   # 第一项是选中的
 

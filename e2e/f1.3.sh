@@ -34,7 +34,7 @@ key g g;         check "gg → 1,5" pos_is 1,5
 key 0
 
 # ---- 横向（§7.6「视图跟随光标」）：光标出了视图，视图滚到光标所在的列完整可见；往回移动时视图不跳回
-check "准备：160 宽时最后一列 deleted_at 只露出一截" eval '[[ $(header) == *"│ deleted_" && $(header) != *"deleted_at"* ]] || { echo "  $(header)"; false; }'
+check "准备：160 宽时最后一列 deleted_at 放不下（F8.5：短列不收缩，deleted_at 整列在视图右边）" eval '[[ $(header) != *"deleted_at"* && $(header) == *"created_at"* ]] || { echo "  $(header)"; false; }'
 key '$'
 check "\$：到最后一列（1,10），视图横向滚动，deleted_at 完整可见，id 滚出视图" eval 'pos_is 1,10 && [[ $(header) == *"deleted_at"* && $(header) != *" id "* ]] || { echo "  $(header)"; false; }'
 h0=$(header); key h
@@ -48,12 +48,12 @@ key 0
 # ---- 转置 T（G-05、§7.6）：光标不变；表头是记录的行号，第一列是字段名；j/k 字段、h/l 记录；列宽不收缩
 key 3 j; key 5 l; key T
 check "T：光标仍是 4,6，状态栏不变" pos_is 4,6
-check "转置后表头是记录的行号，当前记录（4）为 focus 色" eval 'h=$(header); [[ $h == *"│ 1 "*"│ 4 "* ]] && c=$(e2e_find " 4 " $(hy) | tr " " "\n" | awk "\$1 > 34 { print; exit }") && style_has $((${c%% *} + 1)) $(hy) fg=$FOCUS'
+check "转置后表头是记录的行号，当前记录（4）为 focus 色" eval 'h=$(header); [[ $h == *"│ 4 "* ]] && c=$(e2e_find " 4 " $(hy) | tr " " "\n" | awk "\$1 > 34 { print; exit }") && style_has $((${c%% *} + 1)) $(hy) fg=$FOCUS'
 check "第一列是字段名（func 色），主键 id 带钥匙图标" eval '[[ $(e2e_text 36 50 $(row_y 1)) == "$(printf "\xef\x82\x84") id"* && $(e2e_text 35 50 $(row_y 5)) == *" paid "* ]] && style_has 38 $(row_y 1) fg=$FUNC'
 key j; check "j：下一个字段 → 4,7" pos_is 4,7
 key l; check "l：下一条记录 → 5,7" pos_is 5,7
 rec_widths() { local c p w=; for c in $(e2e_find ┼ "$(grid_y)"); do [[ -n $p ]] && w+="$((c - p)) "; p=$c; done; echo "$w"; }
-check "列宽不按比例收缩：每条记录一列，取期望宽度（时间值 22 列 + 两侧留白 + 竖线），放不下就横向滚动" eval 'w=$(rec_widths); [[ $w == "25 25 25 "* && $(tr " " "\n" <<<"$w" | sort -u | grep -c .) == 1 ]] || { echo "  record column widths: $w"; false; }'
+check "列宽不按比例收缩：每条记录一列，取本记录里最宽的值（meta 的 JSON 28 列 + 两侧留白 + 竖线 = 31；F8.5 审查改成「最宽的值」之前是 p90，时间值 22 列 = 25），放不下就横向滚动" eval 'w=$(rec_widths); [[ $w == "3"[0-9]" "* && $(tr " " "\n" <<<"$w" | sort -u | grep -c .) == 1 ]] || { echo "  record column widths: $w"; false; }'
 key 5 0 l
 check "50l：横向滚动到第 55 条记录，它的行号在表头里可见" eval 'pos_is 55,7 && [[ $(header) == *"│ 55 "* && $(header) != *"│ 1 "* ]]'
 key T

@@ -70,12 +70,14 @@ e2e_keys Escape; sleep 0.3
 check "esc 先关补全列表，面板还在" eval 'is_open && [[ -z $(pop) ]]'
 e2e_type a; sleep 0.5; e2e_keys Enter; sleep 0.3
 check "sta：status 已选中，↵ 接受，不执行（F1.14）" eval '[[ $(input) == ";select st from t_order where status" && -z $(title) ]]'
-e2e_type " = 'done' and m"; sleep 0.5
+e2e_type "= 'done' and m"; sleep 0.5
 check "输入 m：列 meta → 物化视图 mv_order_by_status（F3.10 起标「视图」）→ 关键字，首字符都是 m（F1.14）" eval '[[ $(items | head -1) == "meta "*"· t_order" && $(items | sed -n 2p) == "mv_order_by_status 视图" && $(items | sed -n 3p) == *" 关键字" ]] || { items; false; }'
 e2e_keys BSpace; e2e_type paid; sleep 0.5
 check "输入完整的 paid：列表开着，选中的就是 paid" eval '[[ $(items | head -1) == "paid "* ]] || { items; false; }'
+e2e_keys Enter; sleep 0.4
+check "文字不变也算接受：↵ 不执行（F8.1），列表关了" eval '[[ -z $(pop) && -z $(title) ]]'
 e2e_keys Enter; wait_for 8 eval '[[ -n $(title) ]]'
-check "接受之后文字不变：↵ 直接执行（输入不变，结果区是数据库的报错）" eval '[[ $(input) == ";select st from t_order where status = '"'done'"' and paid" && $(line1) == ERROR:* ]] || { echo "  $(input) / $(line1)"; false; }'
+check "再 ↵：执行（输入不变，结果区是数据库的报错）" eval '[[ $(input) == ";select st from t_order where status = '"'done'"' and paid" && $(line1) == ERROR:* ]] || { echo "  $(input) / $(line1)"; false; }'
 
 # ---- 树停在 agentable（F1.12：光标所在节点的 schema）：同一事务里 SET LOCAL search_path，agent 能直接找到，补全也换成 agentable 的表
 e2e_keys Escape; sleep 0.3; key C-h; key g g; key j; sleep 0.3                   # 光标移到 agentable 节点

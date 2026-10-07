@@ -8,8 +8,8 @@ e2e_build || exit 1
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); DD=$D/data; CF=$DD/sqlmux/consoles/console_1.sql   # F5.11 起不按连接分目录
 trap 'e2e_stop; rm -rf "$D"' EXIT
 KEYWORD=#bb9af7 NUMBER=#ff9e64 STR=#9ece6a COMMENT=#565f89 FUNC=#7aa2f7 FG=#c0caf5 DIM=#565f89 FOCUS=#9ece6a ROW=#292e42 PANE_BG=#24283b
-line() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }                         # 第 N 行的文字
-cur() { echo "$(( $(e2e_flag cursor_y) )),$(( $(e2e_flag cursor_x) - 109 ))"; }     # 光标在第几行、第几个字符（都从 1 起）
+line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }                         # 第 N 行的文字
+cur() { echo "$(( $(e2e_flag cursor_y) )),$(( $(e2e_flag cursor_x) - 102 ))"; }     # 光标在第几行、第几个字符（都从 1 起）
 cur_is() { [[ $(cur) == "$1" ]] || { echo "  cursor $(cur), want $1"; false; }; }
 mode() { bar | awk '{ print $NF }'; }
 info() { bar | grep -oE '[0-9]+ (字符|行)( × [0-9]+ 列)? · ↵ run'; }            # VISUAL 的附加信息
@@ -28,12 +28,12 @@ typ "select count(*), 'a' from t where id > 10"; e2e_keys '\;'; typ " -- n"; key
 typ "select 2 as b"; key Escape
 
 # ---- 高亮、▶、语句范围（§7.3、§9.2）
-check "关键字 keyword、函数 func、字符串 sql_string、数字 number、注释 comment、其余 fg" eval 'style_has 111 2 fg=$KEYWORD && style_has 118 2 fg=$FUNC && style_has 128 2 fg=$STR && style_has 150 2 fg=$NUMBER && style_has 154 2 fg=$COMMENT && style_has 137 2 fg=$FG'
-check "每条语句的第一行有 focus 色的 ▶，别的行没有" eval '[[ $(e2e_text 106 106 2) == ▶ && $(e2e_text 106 106 3) == ▶ && $(e2e_text 106 106 4) == " " ]] && style_has 106 2 fg=$FOCUS'
-check "行号 dim，光标行 fg" eval 'style_has 109 2 fg=$DIM && style_has 109 3 fg=$FG'
-check "光标所在的语句（第 2 行）是 row 底，另一条不是" eval 'style_has 115 3 bg=$ROW && style_has 115 2 bg=$PANE_BG'
+check "关键字 keyword、函数 func、字符串 sql_string、数字 number、注释 comment、其余 fg" eval 'style_has 104 2 fg=$KEYWORD && style_has 111 2 fg=$FUNC && style_has 121 2 fg=$STR && style_has 143 2 fg=$NUMBER && style_has 147 2 fg=$COMMENT && style_has 130 2 fg=$FG'
+check "每条语句的第一行有 focus 色的 ▶，别的行没有" eval '[[ $(e2e_text 99 99 2) == ▶ && $(e2e_text 99 99 3) == ▶ && $(e2e_text 99 99 4) == " " ]] && style_has 99 2 fg=$FOCUS'
+check "行号 dim，光标行 fg" eval 'style_has 102 2 fg=$DIM && style_has 102 3 fg=$FG'
+check "光标所在的语句（第 2 行）是 row 底，另一条不是" eval 'style_has 108 3 bg=$ROW && style_has 108 2 bg=$PANE_BG'
 key k
-check "光标移到第 1 行：row 底跟着换到第 1 条" eval 'style_has 115 2 bg=$ROW && style_has 115 3 bg=$PANE_BG'
+check "光标移到第 1 行：row 底跟着换到第 1 条" eval 'style_has 108 2 bg=$ROW && style_has 108 3 bg=$PANE_BG'
 
 # ---- 按键：f<Space> 给编辑器，; 重复，: 是编辑器的命令行（§6.4、§6.8）
 key 0; key f
@@ -47,7 +47,7 @@ check "2d：待输入一块显示 2d（showcmd）" eval '[[ $(pending) == 2d ]] 
 key Escape
 key G; key o; typ "select 3"; key Escape
 key gg; key 0; key :
-check ":：COMMAND，命令行在内容区最后一行（tab 栏上方）" eval '[[ $(mode) == COMMAND && $(e2e_text 105 160 42) == "│:"* ]]'
+check ":：COMMAND，命令行在内容区最后一行（tab 栏上方）" eval '[[ $(mode) == COMMAND && $(e2e_text 98 160 42) == "│:"* ]]'
 typ 3; key Enter
 check ":3 跳到第 3 行，回到 NORMAL" eval 'cur_is 3,1 && [[ $(mode) == NORMAL ]]'
 key R
@@ -64,13 +64,13 @@ check "C-v jj lll：V-BLOCK，3 行 × 4 列 · ↵ run" eval '[[ $(mode) == V-B
 key Escape
 
 # ---- 鼠标（§11、F3.6）
-e2e_click 115 3; sleep 0.3
+e2e_click 108 3; sleep 0.3
 check "单击文字：光标到那里（第 2 行第 5 个字符），仍是 NORMAL" eval 'cur_is 2,5 && [[ $(mode) == NORMAL ]]'
-key i; e2e_click 113 2; sleep 0.3
+key i; e2e_click 106 2; sleep 0.3
 check "INSERT 下单击：光标移过去，仍是 INSERT" eval 'cur_is 1,3 && [[ $(mode) == INSERT ]]'
-key Escape; key v; key l; e2e_click 112 4; sleep 0.3
+key Escape; key v; key l; e2e_click 105 4; sleep 0.3
 check "VISUAL 下单击：回到 NORMAL" eval 'cur_is 3,2 && [[ $(mode) == NORMAL ]]'
-e2e_drag 111 2 116 2; sleep 0.3
+e2e_drag 104 2 109 2; sleep 0.3
 check "在文字上拖动：从按下处进入字符 VISUAL，选中 6 个字符" eval '[[ $(mode) == VISUAL && $(info) == "6 字符 · ↵ run" ]] || { echo "  $(bar)"; false; }'
 key Escape
 
@@ -98,11 +98,11 @@ key x; key :; typ w; key Enter
 check ":w 立刻写盘" eval '[[ $(head -1 "$CF") == "electcount(*), '"'a'"' from t where id > 10; -- n" ]] || { echo "  file: $(head -1 "$CF")"; false; }'
 key u; key C-s; sleep 0.3
 chmod 500 "$(dirname "$CF")"; key x; key :; typ q; key Enter
-check "写不进文件时 :q 不关 tab，toast「保存失败：…」" eval 'e2e_text 1 160 44 | grep -q "保存失败：.*console_1.sql.*permission denied" && [[ $(e2e_text 105 160 1) == *"②"*"▶ run"* ]]'   # 长 toast 盖住了下边框，e2e_panes 认不出 pane，看标题行
+check "写不进文件时 :q 不关 tab，toast「保存失败：…」" eval 'e2e_text 1 160 44 | grep -q "保存失败：.*console_1.sql.*permission denied" && [[ $(e2e_text 98 160 1) == *"②"*"▶ run"* ]]'   # 长 toast 盖住了下边框，e2e_panes 认不出 pane，看标题行
 key :; typ qa; key Enter
 check "写不进文件时 :qa 也不退出" eval 'running && e2e_text 1 160 44 | grep -q "保存失败："'
 key Space; e2e_type x; sleep 0.3
-check "写不进文件时 SPC x 也不关 pane" eval '[[ $(e2e_text 105 160 1) == *"②"*"▶ run"* ]]'
+check "写不进文件时 SPC x 也不关 pane" eval '[[ $(e2e_text 98 160 1) == *"②"*"▶ run"* ]]'
 chmod 700 "$(dirname "$CF")"; key u
 key :; typ q; key Enter
 check ":q 关掉 console_1：不确认，② 随最后一个 tab 关掉，文件还在" eval '[[ $(e2e_text 1 160 1) != *console* && $(e2e_find ┐ 1) == "32 160" && -f $CF ]] && ! screen_has 丢弃'
@@ -129,7 +129,7 @@ check "u 一次撤掉外部编辑器的改动" eval '[[ $(line 2) == "select 2 a
 # ---- console 文件读不出来（cd4729f）：照常启动，这个 console 不打开，toast「读取失败：…」，不拿空内容覆盖它
 mkdir -p "$D/bad-data/sqlmux/consoles/console_1.sql"                # 是个目录
 start -D "$D/bad-data"
-check "console_1.sql 是个目录：照常启动，toast「读取失败：…is a directory」，② 没有 console（显示引导页）" eval 'running && e2e_text 1 160 44 | grep -q "读取失败：.*console_1.sql.*is a directory" && [[ $(e2e_text 105 160 1) != *console* ]] && e2e_plain | cut -c105-160 | grep -q 新建'
+check "console_1.sql 是个目录：照常启动，toast「读取失败：…is a directory」，② 没有 console（显示引导页）" eval 'running && e2e_text 1 160 44 | grep -q "读取失败：.*console_1.sql.*is a directory" && [[ $(e2e_text 98 160 1) != *console* ]] && e2e_plain | cut -c105-160 | grep -q 新建'
 check "那个目录原样留着" test -d "$D/bad-data/sqlmux/consoles/console_1.sql"
 
 # ---- 用户映射展开的按键（§6.6）：展开出来的空格和 x 不能凑成 SPC x 关掉 pane（审查时的真 bug）
@@ -149,9 +149,9 @@ check "3i 粘贴 ab 再 esc：插入重复三遍" eval '[[ $(line 1) == "abababe
 
 # ---- 鼠标与撤销步、操作符（§11，审查时定）
 key g g; key d G; key i; paste "$(seq -f 'select %g;' 60)"; key Escape; key g g; key 0
-top_line() { e2e_text 107 109 2 | tr -d ' '; }
+top_line() { e2e_text 100 102 2 | tr -d ' '; }
 key i; typ Q; e2e_wheel 130 20 down; sleep 0.3; typ W; key Escape; key u; key g g
-check "INSERT 下滚轮把光标带走：之前输入的 Q 和之后的 W 是两个撤销步（u 只撤掉 W）" eval '[[ $(line 1) == "Qselect 1;" && $(e2e_plain | cut -c111-160 | grep -c W) == 0 ]] || { echo "  line 1: $(line 1)"; false; }'
+check "INSERT 下滚轮把光标带走：之前输入的 Q 和之后的 W 是两个撤销步（u 只撤掉 W）" eval '[[ $(line 1) == "Qselect 1;" && $(e2e_plain | cut -c104-160 | grep -c W) == 0 ]] || { echo "  line 1: $(line 1)"; false; }'
 key g g; key d; e2e_wheel 130 20 down; sleep 0.3
 check "按了 d 再滚轮：操作符取消，视图不滚" eval '[[ $(top_line) == 1 && $(pending) == · ]] || { echo "  top $(top_line), pending $(pending)"; false; }'
 key j
