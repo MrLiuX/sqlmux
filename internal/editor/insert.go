@@ -26,14 +26,24 @@ func (e *Editor) startInsert(m Mode, c cmd) {
 }
 
 // openLine is o (below 1) and O: a new line with the indent of the
-// cursor's, in INSERT on it.
+// cursor's, in INSERT on it; none after a statement's end, which for O is
+// the line above (M8 F8.2).
 func (e *Editor) openLine(below int, c cmd) {
 	indent := e.indentOf(e.line())
+	if above := e.cur.Line - 1 + below; above >= 0 && endsStatement(e.lines[above]) {
+		indent = ""
+	}
 	e.insertLines(e.cur.Line+below, indent)
 	e.cur = Pos{e.cur.Line + below, len(indent)}
 	e.startInsert(Insert, c)
 	e.ins.ai = true
 }
+
+// endsStatement is whether l, its trailing blanks aside, ends in a ;: the
+// next line starts a statement, in the first column (M8 F8.2; nvim's SQL
+// indent has no such rule). ponytail: a ; in a trailing -- comment counts
+// too, and a comment is not looked into.
+func endsStatement(l string) bool { return strings.HasSuffix(strings.TrimRight(l, " \t"), ";") }
 
 // indentOf is the indent autoindent gives the line after l: as wide as
 // l's, in spaces ('expandtab').
@@ -229,6 +239,9 @@ func (e *Editor) newline() {
 	l, c := e.line(), e.cur.Col
 	before, after := l[:c], strings.TrimLeft(l[c:], " \t")
 	indent := e.indentOf(before)
+	if endsStatement(before) {
+		indent = ""
+	}
 	if e.ins.ai {
 		before = strings.TrimRight(before, " \t")
 	}
