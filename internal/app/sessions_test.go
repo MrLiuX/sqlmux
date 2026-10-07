@@ -376,3 +376,30 @@ func TestSessionRenameCommand(t *testing.T) {
 		t.Errorf("esc: %q", report.Name)
 	}
 }
+
+// session.close closes the session attached wherever it is run, asking
+// first as x on its row does; the one before it, or after, is attached;
+// the only one is quitting (F8.12).
+func TestSessionCloseCommand(t *testing.T) {
+	a, report := withSessions()
+	doraemon := a.sess
+	a.attach(report)
+	a.run("session.close", 0)
+	if len(a.sessions) != 1 || a.sess != doraemon || a.sessList != nil {
+		t.Fatalf("closed: %d sessions, attached %q", len(a.sessions), a.sess.Name)
+	}
+	if !quits(a.run("session.close", 0)) {
+		t.Error("the only session closing is quitting")
+	}
+
+	a, report = withSessions()
+	a.attach(report)
+	a.sess.Conns[0].tx = 'T' // a transaction would go: asked first
+	if a.run("session.close", 0); a.confirm == nil || len(a.sessions) != 2 {
+		t.Fatalf("not asked: %d sessions", len(a.sessions))
+	}
+	feed(t, a, "y")
+	if len(a.sessions) != 1 || a.sess.Name != "doraemon" {
+		t.Errorf("confirmed: %d sessions", len(a.sessions))
+	}
+}
