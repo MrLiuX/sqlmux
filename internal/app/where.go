@@ -87,7 +87,7 @@ func (a *App) complete(t *dataTab) {
 		groups = [][]candidate{cols, kws}
 	}
 	t.comp = ranked(in.Text, in.Pos, pattern, w.Start, groups...)
-	if t.comp != nil && pattern == "" {
+	if t.comp != nil && pattern == "" && w.Column == "" { // a column's values are what is asked for after its operator: the first is picked (F8.17)
 		t.comp.sel = noSelection
 	}
 }
