@@ -33,7 +33,7 @@ check "新建的 window 取最小的没用过的序号：data-3（原来的 data
 
 # ---- session.rename
 cmd session.rename
-check "session.rename：状态栏变成输入框「session 名：doraemon」" eval '[[ $(bar) == *"session 名：doraemon"* ]]'
+check "session.rename：状态栏变成输入框「session 名：doraemon」" eval '[[ $(bar) == *"session 名：doraemon"* ]] && mode_is INSERT'
 clr; e2e_type "work"; key Enter; sleep 0.4
 check "改成 work：状态栏上的 session 名是 work" eval '[[ $(sname) == work ]] && mode_is NORMAL'
 cmd session.new; sleep 2
@@ -43,12 +43,16 @@ check "改成已有的 session 名 work：toast「已有同名 session」，输�
 key Escape
 check "esc 放弃：名字还是 1" eval '[[ $(sname) == 1 ]]'
 
+cmd layout.save
+check "layout.save 的输入也只占状态栏左边，右边照常画 INSERT 模式块（同 window.rename）" eval 'mode_is INSERT'
+key Escape
+
 # ---- console.rename：改的是文件名
 mkdir -p "$D/c"
 SOLO= start -C "$D/c" -D "$D/data" -S "$D/state"; key C-l; key i; e2e_type "select 1 as marker"; key Escape; sleep 1.5
 check "（准备）console_1.sql 在 consoles 目录里，内容是 select 1 as marker" eval '[[ "$(cat "$CD/console_1.sql")" == "select 1 as marker" ]]'
 cmd console.rename
-check "console.rename：状态栏变成输入框，原来的名字 console_1 在里面" eval '[[ $(bar) == *"console 名：console_1"* ]]'
+check "console.rename：状态栏变成输入框，原来的名字 console_1 在里面" eval '[[ $(bar) == *"console 名：console_1"* ]] && mode_is INSERT'
 clr; e2e_type "myquery"; key Enter; sleep 1.2
 check "改成 myquery：文件改名（myquery.sql 有、console_1.sql 没有，内容在）" eval '[[ -f "$CD/myquery.sql" && ! -e "$CD/console_1.sql" && "$(cat "$CD/myquery.sql")" == "select 1 as marker" ]]'
 check "tab 栏是 1:myquery，pane 标题里是 myq…（标题放不下截短）" eval 'tabbar 2 | grep -q "1:myquery" && e2e_plain | head -1 | grep -q "myq"'
@@ -61,6 +65,8 @@ cmd console.new; sleep 0.8; cmd console.rename; clr; e2e_type "myquery"; key Ent
 check "改成已有的 console 名（myquery）：toast「已有同名 console」，输入框留着" eval 'toast_text | grep -q "已有同名 console" && [[ $(bar) == *"console 名："* ]]'
 clr; e2e_type "a/b"; key Enter; sleep 0.4
 check "名字里有 /：被拒绝（输入框留着，文件没有多出来）" eval '[[ $(bar) == *"console 名："* ]] && [[ ! -e "$CD/a" ]] && ! ls "$CD" | grep -q "^a"'
+clr; e2e_type "MyQuery"; key Enter; sleep 0.4
+check "改成和另一个打开着的 console 只差大小写的名字（MyQuery 对 myquery）：被拒绝（大小写不敏感的文件系统上是同一个文件）" eval 'toast_text | grep -q "已有同名 console" && [[ $(bar) == *"console 名："* ]] && [[ ! -e "$CD/MyQuery.sql" || -e "$CD/myquery.sql" ]]'
 clr; e2e_type ".hidden"; key Enter; sleep 0.4
 check "以 . 开头：被拒绝" eval '[[ $(bar) == *"console 名："* ]] && ! ls -a "$CD" | grep -q "^\\.hidden"'
 key Escape

@@ -79,9 +79,8 @@ key Escape; key Escape; sleep 0.3
 check "esc 先关下拉；再 esc 回表格（输入框恢复成生效的条件）" eval '! editing && [[ $(e2e_text 36 95 2) == *"id < 5"* ]]'
 
 # ---- 表格：方向键移动、↵ 编辑、C-s 保存；PgDn / PgUp 翻页；Delete 标记 / 取消删除
-# 200 宽：F8.9 起 160 宽的 ① 只有 63 列，查询条的按钮（保存和它的修改数）整组让位，看不到计数
-start -x 200 -C "$D/c"; open_table t_order; wait_for 8 settled
-qb() { e2e_text 36 115 3; }
+# F8.9：160 宽的 ① 只有 63 列，查询条里保存 / 刷新组排在 COLS、PAGE、LIMIT 之后才让位，所以修改数还看得到
+start -C "$D/c"; open_table t_order; wait_for 8 settled
 key Down; key Right; key Right; key Right; key Enter; sleep 0.3; e2e_type 77.5; key Enter; sleep 0.3
 key C-s; wait_for 8 eval '[[ $(psql "$E2E_DB" -At -c "select amount from t_order where id = 2") == 77.50 ]]'
 check "方向键 ↓ → → → 移到第 2 行 amount，↵ 编辑、输入 77.5、↵ 提交、C-s 保存：库里 id = 2 的 amount 是 77.50" eval '[[ $(psql "$E2E_DB" -At -c "select amount from t_order where id = 2") == 77.50 ]]'
@@ -89,7 +88,7 @@ key PageDown; wait_for 8 settled; sleep 0.4
 check "PgDn：下一页（PAGE 2/…）" eval '[[ $(qb) == *"PAGE 2/"* ]]'
 key PageUp; wait_for 8 settled; sleep 0.4
 check "PgUp：上一页（PAGE 1/…）" eval '[[ $(qb) == *"PAGE 1/"* ]]'
-pend() { qb | sed -E 's/.*COLS [0-9]+\/[0-9]+//; s/[^0-9]+/ /g; s/^ +//; s/ +$//'; }   # 查询条上保存按钮的修改数（图标之后的数字）
+pend() { qb | sed -E 's/.*PAGE [^ ]+ *(COLS [0-9]+\/[0-9]+)?//; s/[^0-9]+/ /g; s/^ +//; s/ +$//'; }   # F8.9：COLS 先让位，数字在 PAGE（和 COLS）之后   # 查询条上保存按钮的修改数（图标之后的数字）
 key Delete; sleep 0.3
 check "Delete：标记删除这一行，保存按钮上计数 1" eval '[[ $(pend) == 1 ]] || { echo "  [$(qb)]"; false; }'
 key Delete; sleep 0.3

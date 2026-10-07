@@ -12,8 +12,7 @@ printf 'timeoutlen = 2500\n' >|"$D/config.toml"
 opened() { screen_has "命令面板"; }   # 等下一个键的时候会弹出 which-key 小框，不是命令面板
 
 SOLO= start -K "$D/k.toml" -c "$D/config.toml"; sleep 0.5
-check "启动时 keymaps.toml 的提示（F6.1）：[keys.landing] t 是 tc 的前缀" eval 'screen_has "[keys.landing] t" && screen_has "tc 的前缀"'
-key Enter; sleep 0.3   # 关掉提示（它会吃掉第一个键）
+check "启动时没有 keymaps.toml 的提示浮层（F8.15：t 和 tc 并存是 vim 的正常用法，不再警告）" eval '! screen_has "keymaps.toml 有" && ! screen_has "前缀"'
 check "（准备）焦点在 ①（空 pane，用引导页的键）" focus_is 1
 # t 单独：等 timeoutlen（这里 2.5 秒）
 key t; sleep 0.8

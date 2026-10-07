@@ -50,7 +50,7 @@ check "<Leader>s 与 <Space>s 是同一个键 → 退出码 1" eval 'rc_is 1 && 
 conf '[keys.normal]\n"<C-x>" = "a"\n"<C-x>" = "b"\n'; run --check
 check "字面重复的键 → 退出码 1，指出 keys.normal.<C-x>" eval 'rc_is 1 && err_has "keys.normal.\"<C-x>\""'
 conf '[keys.normal]\n"g" = "x"\n'; run --check
-check "单键是已有序列的前缀 → 退出码 1，给出警告" eval 'rc_is 1 && err_has "[keys.normal] g: is a prefix of gt"'
+check "单键是已有序列的前缀（g 和 gt）→ 退出码 0、不警告（F8.15 起这是 vim 的正常用法）" eval 'rc_is 0 && [[ -z $ERR ]]'
 conf '[keys.foo]\n"a" = "b"\n'; run --check; check "未知的表 → 退出码 1" eval 'rc_is 1 && err_has "[keys.foo] a: no such table"'
 conf '[keys.normal]\n"<C-foo>" = "b"\n'; run --check; check "写错的键名 → 退出码 1" eval 'rc_is 1 && err_has "[keys.normal] <C-foo>: invalid key"'
 conf 'icons = "ascii"\n'; run --check; check "keymaps.toml 里写了别的顶层键（F5.9）→ 退出码 1，只能写 [keys] 和 [map.*]" eval 'rc_is 1 && err_has "keymaps.toml: icons" && err_has "only [keys] and [map.*] go here"'
