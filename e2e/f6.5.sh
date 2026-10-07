@@ -89,7 +89,7 @@ e2e_stop
 
 # ---- 连接名和 --layout 一起给：报错退出
 startl --layout a doraemon; sleep 0.5
-check "--layout a 加连接名：退出码 1，提示「连接名和 --layout 只能给一个」" eval 'screen_has "[e2e-exit 1]" && screen_has "连接名和 --layout 只能给一个"'
+check "--layout a 加连接名：退出码 1，提示 give a connection name or --layout, not both（英文，F7.6）" eval 'screen_has "[e2e-exit 1]" && screen_has "give a connection name or --layout, not both"'
 e2e_stop
 startl doraemon --layout a; sleep 0.5
 check "连接名在前、--layout 在后：同样退出码 1（flag 包在连接名处停止解析，给的是用法提示）" eval 'screen_has "[e2e-exit 1]"'
