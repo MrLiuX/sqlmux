@@ -1059,7 +1059,7 @@ MySQL 的 schema 就是 database（M5 F5.4 定，同 DataGrip）：树里 MySQL 
 - **弹出时机**：列名 / 关键字模式在输入标识符字符时弹出，前缀为空不弹（刚敲了空格）；取值模式到了取值位置就弹，前缀可以为空，所以输入 `status = ` 就直接列出枚举值。
 - **候选**：列名（附类型）在前；关键字在后：and、or、not、is null、is not null、in、like、ilike、between、true、false、null；取值模式下枚举值带引号（`'done'`）、按 enumsortorder 排，布尔值为 true / false。先按组，组内按 fzf 分数。
 - **接受**：用候选替换光标前的前缀，取值模式下替换半截值（`'d` → `'done'`）。**M8 F8.1 起**（用户：打完 `id` 按 `↵` 还换了行 / WHERE 里直接执行了）：列表开着时 `↵` 一律只接受，不执行、不换行，就算文字没变也一样，上面那条「跨过右引号算文字没变、照常执行」的例外作废；补空格按「后面自然接什么」：关键字、表名、列名补一个空格（光标后已是空白就只移过去），值、函数、枚举值、INSERT 列清单里的列不补。
-- **空前缀的列名补全**（M8 F8.4）：光标前一个词是 `select`、`where`、`and`、`or`、`on`、`set`、`having`、`by`，或者在 select / set / order by 列表的 `,` 后面，且语句里找得到表（`from` / `update` / `delete from` / `insert into` / `join`，含别名）时，打了空格就弹出这些表的列，前缀为空、不含「全部列」项；找不到表不弹。WHERE 输入框为空或在 `and` / `or` 后面时同样。先看 lazysql `components/sql_completer.go`。
+- **空前缀的列名补全**（M8 F8.4）：光标前一个词是 `select`、`where`、`and`、`or`、`on`、`set`、`having`、`by`，或者在 select / set / order by 列表的 `,` 后面，且语句里找得到表（`from` / `update` / `delete from` / `insert into` / `join`，含别名）时，打了空格就弹出这些表的列（光标紧跟空白才弹，`a,` 不弹），前缀为空、不含「全部列」项，多表的排法同打了字母之后、不另加 `表.列` 候选；找不到表不弹；`by` / `on` / `set` 只看前一个词。WHERE 输入框在 `and ` / `or ` 后面时同样，空输入框不弹（删空再 `↵` 是清除过滤）。lazysql 的 completer 前缀为空直接返回 nil，没有可借的。
 - **列表组件** `ui.Complete`：画在输入框下方、光标所在列，最多 8 行；每行是候选（匹配字符高亮）加右侧 dim 注释（列的类型、「关键字」、「值」）。不复用下拉框，因为补全没有过滤框。键位在 `[keys.complete]`：`Tab` / `C-n` / `↓` 下一项，`S-Tab` / `C-p` / `↑` 上一项。`↵` 和 `esc` 不绑，交给输入框按上面的规则处理：绑在 complete 作用域里的键会被这个作用域吃掉，没法在「没选过」时交回输入框去执行。鼠标：悬停即选中，点击即接受。
 
 **INSERT 的列**（M5 F5.13，用户验收时要求：`insert into t_log(` 之后要能看到有哪些列，也能一下全加上）：
