@@ -48,7 +48,7 @@ begin; e2e_keys Space; e2e_type '"'; sleep 0.6
 check "（准备）① 分成上 ① 和下 ②（新 pane，焦点在它），console 变成 ③（编号按位置）" eval '[[ $(panes | tr " " "\n" | sort | tr "\n" " ") == "0 1 2 3 " ]] && g1=($(geom 1)) && g2=($(geom 2)) && g3=($(geom 3)) && (( g2[1] > g1[1] && g3[0] > g1[0] )) && focus_is 2'
 check "F2：下 ② → 树 → 上 ① → console ③ → 下 ②（树 → 左上 → 右 → 左下，按中心的角度顺时针：树 270°、① 315°、③ 90°、② 225°）" eval '[[ $(orbit 4) == "0 1 3 2 " ]] || { echo "  $(orbit 0)"; false; }'
 
-# ---- console.format：第一条语句开头到最后一条结尾之间格式化，外面的注释、空行不动；一次 u 撤回；光标回到原语句开头；INSERT 下不做
+# ---- console.format：第一条语句开头到最后一条结尾之间格式化，外面的注释、空行不动；一次 u 撤回；光标留在原处（F8.3）；INSERT 下不做
 begin; key C-l; key i
 paste $'-- head\nselect 1,2 from t_user where id=1 order by id;\n\nselect 2\n-- tail'
 key Escape; key g g; key 0; key j; key 0
@@ -56,11 +56,11 @@ check "（准备）NORMAL，光标在第一条语句里（第 2 行）" eval '[[
 key F6; sleep 1.5
 check "F6：第一行的注释还在原处，语句拆成多行（select / from / where / order by 各占行）" eval '[[ $(cline 1) == "-- head" && $(cline 2) == "select" ]] && clines 14 | grep -qx "from" && clines 14 | grep -qx "where" && clines 14 | grep -qx "order by"'
 check "语句之间的空行、最后一条语句照格式化；末尾的注释 -- tail 还是最后一行" eval 'n=$(clines 20 | grep -c .); [[ $(clines 20 | grep -v "^ *$" | tail -1) == "-- tail" ]] && clines 20 | grep -qx "select" '
-check "光标回到原来那条语句（第一条）的开头：第 2 行行首" eval '[[ $(cy) == 2 && $(( $(e2e_flag cursor_x) - 110 )) == 0 ]] || { echo "  cursor $(cy):$(( $(e2e_flag cursor_x) - 110 ))"; false; }'
+check "光标留在原处（F8.3）：第 2 行行首" eval '[[ $(cy) == 2 && $(( $(e2e_flag cursor_x) - 110 )) == 0 ]] || { echo "  cursor $(cy):$(( $(e2e_flag cursor_x) - 110 ))"; false; }'
 key u
 check "u 一次撤回：回到格式化之前的五行（-- head、长语句、空行、select 2、-- tail）" eval '[[ $(cline 1) == "-- head" && $(cline 2) == "select 1,2 from t_user where id=1 order by id;" && $(cline 4) == "select 2" && $(cline 5) == "-- tail" ]] || { clines 6; false; }'
-key j; key j; key 0; key F6; sleep 1.5
-check "光标在第二条语句里时 F6：光标落在第二条语句的开头（行首的 select）" eval 'l=$(( $(cy) )); [[ $(cline $l) == "select" && $(clines 30 | grep -c "^select$") == 2 && $(( $(e2e_flag cursor_x) - 110 )) == 0 && $l -gt 8 ]] || { echo "  cursor $(cy)"; clines 20; false; }'
+key j; key j; key 0; c0="$(cy):$(( $(e2e_flag cursor_x) - 110 ))"; key F6; sleep 1.5
+check "光标在第二条语句里时 F6：两条语句都格式化，光标留在原来的行号和列号（F8.3，不再移到语句开头）" eval '[[ $(clines 30 | grep -c "^select$") == 2 && "$(cy):$(( $(e2e_flag cursor_x) - 110 ))" == "$c0" ]] || { echo "  cursor $(cy):$(( $(e2e_flag cursor_x) - 110 )) want $c0"; clines 20; false; }'
 key u; key i; key F6; sleep 1
 check "INSERT 下 F6：不做事，文字不变" eval '[[ $(cline 2) == "select 1,2 from t_user where id=1 order by id;" ]]'
 key Escape
