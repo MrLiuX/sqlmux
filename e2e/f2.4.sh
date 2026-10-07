@@ -23,7 +23,7 @@ opt_sel() { local g x; g=($(tbox)); for x in $(seq $((g[0] + 1)) $((g[0] + g[2] 
 input() { e2e_text $(col_x created_at) $(( $(col_x created_at) + 24 )) $(row_y 1) | sed 's/ *▾.*//; s/ *$//'; }   # 第 1 行 created_at 输入框的文字
 orig=$(psql_n "select created_at from t_order where id = 1")
 
-start -C "$D/own"; open_table t_order; wait_for 8 settled
+start -x 200 -C "$D/own"; open_table t_order; wait_for 8 settled
 goto created_at 1; key Enter
 check "timestamptz 列进入编辑：出现分段（年 月 日 时 分 秒，和文字一致），当前段是年" eval '[[ $(segs) == "2026 - 09 - 01 00 : 01 : 00" && $(input) == "$orig" && $(cur_seg) == 2026 ]] || { echo "  [$(segs)] [$(input)] [$(cur_seg)] want $orig"; false; }'
 
@@ -109,7 +109,7 @@ check "再 S-Tab：绕到最后一项 DEFAULT" eval '[[ $(opt_sel) == DEFAULT ]]
 key Escape
 
 # ---- 矮终端：放不下整个时间浮层时整个不画，键盘照样能加减
-start -y 11 -C "$D/own"; open_table t_order; wait_for 8 settled                 # 上下都放不下 6 行高的浮层
+start -x 200 -y 11 -C "$D/own"; open_table t_order; wait_for 8 settled                 # 上下都放不下 6 行高的浮层
 cx=$(col_x created_at); goto created_at 1; key Enter
 check "11 行高、编辑第 1 行的 created_at：上下都放不下，时间浮层不画" eval 'mode_is INSERT && [[ -z $(tbox) ]]'
 v0=$(e2e_text $cx $((cx + 24)) $(row_y 1) | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8}\+00')   # 前面的用例保存过这一格，原值不一定是 09 月

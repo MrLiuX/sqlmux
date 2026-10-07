@@ -130,9 +130,9 @@ wait_for 5 eval '[[ $(toast_row) != *正在执行* ]]'; e2e_keys Space; e2e_type
 check "SPC x 关它所在的 pane：同样不关" eval 'toast_is "正在执行，结束后再关闭" && tabs_are 2 "1:console_1*"'
 wait_for 5 eval '[[ $(toast_row) != *正在执行* ]]'; e2e_keys Space; e2e_type c; sleep 0.5; e2e_keys Space; e2e_type p; sleep 0.4
 pal ">window.close"; key Enter
-check "window.close 关它所在的 window：同样不关" eval 'toast_is "正在执行，结束后再关闭" && [[ $(bar) == *" 0: data*  1: data "* ]]'
+check "window.close 关它所在的 window：同样不关" eval 'toast_is "正在执行，结束后再关闭" && [[ $(bar) == *" 0: data*  1: data-2 "* ]]'
 e2e_unlock; done_run; e2e_keys Space; e2e_type n; sleep 0.4; pal ">window.close"; key Enter
-check "执行回来之后：关掉多出来的 window 不用确认（不在事务里）" eval '[[ $(bar) == *" 0: data* "* && $(bar) != *"1: data"* ]]'
+check "执行回来之后：关掉多出来的 window 不用确认（不在事务里）" eval '[[ $(bar) == *" 0: data* "* && $(bar) != *"1: data-2"* ]]'
 key C-l; key C-l
 
 # ---- 自动模式下自己 begin：也算事务中，保存走 SAVEPOINT、不提交

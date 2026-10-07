@@ -40,13 +40,13 @@ check "SPC j：输入框里是 &，只有 window 0（「0: data」，类型「�
 key Escape
 e2e_keys Space; e2e_type c; sleep 0.8
 leader j
-check "新建 window 1 之后：&  列出 0: data 和 1: data，按编号" eval '[[ $(names) == "0: data,1: data," ]]'
+check "新建 window 1 之后：&  列出 0: data 和 1: data-2，按编号" eval '[[ $(names) == "0: data,1: data-2," ]]'
 key Up; key Enter; sleep 0.4
-check "窗口范围里选 0: data ↵：切到 window 0" eval 'closed && [[ $(wins) == "0: data*  1: data" ]]'
+check "窗口范围里选 0: data ↵：切到 window 0" eval 'closed && [[ $(wins) == "0: data*  1: data-2" ]]'
 
 # ---- 别的 window 里的 tab 也列；引导页不列；console、日志、结果 tab 都列
 leader k
-check "Tab 列表有 window 1 里的 console_2（位置 1: data），没有引导页；window 0 的 t_user、t_order、console_1 都在" eval 'n=$(names); [[ $n == *console_2* && $n == *t_user* && $n == *t_order* && $n == *console_1* ]] && list | grep -q "^console_2  doraemon › 1: data › pane-2  Tab|" && ! list | grep -qi "引导\|landing\|新 tab" || { echo "  $(names)"; list; false; }'
+check "Tab 列表有 window 1 里的 console_2（位置 1: data-2），没有引导页；window 0 的 t_user、t_order、console_1 都在" eval 'n=$(names); [[ $n == *console_2* && $n == *t_user* && $n == *t_order* && $n == *console_1* ]] && list | grep -q "^console_2  doraemon › 1: data-2 › pane-2  Tab|" && ! list | grep -qi "引导\|landing\|新 tab" || { echo "  $(names)"; list; false; }'
 key Escape
 key C-l; key i; e2e_type "select 1"; key Escape; key Enter; wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 0.8
 leader k
@@ -58,7 +58,7 @@ e2e_stop; start -K "$D/keymaps.toml"; two_tabs
 e2e_keys Space; e2e_type c; sleep 0.8; e2e_keys Space; e2e_type p; sleep 0.5
 leader j; key Down; key Enter; sleep 0.5
 leader j
-check "刚在窗口范围里选过 window 1：再打开，顺序仍是 0: data、1: data（不按最近用过的重排）" eval '[[ $(names) == "0: data,1: data," ]]'
+check "刚在窗口范围里选过 window 1：再打开，顺序仍是 0: data、1: data-2-2（不按最近用过的重排）" eval '[[ $(names) == "0: data,1: data-2," ]]'
 key Escape
 key C-h; sleep 0.3
 leader k

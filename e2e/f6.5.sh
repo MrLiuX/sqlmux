@@ -11,7 +11,7 @@ mkdir -p "$D/cfg" "$D/st" "$D/data"
 (umask 077; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$SQLMUX_TEST_PG" >"$D/cfg/connections.toml")
 paste() { t set-buffer -b e2e -- "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 wins() { bar | sed -E 's/^ [^▾]*▾  //; s/ {3,}.*//'; }
-wh() { e2e_text 36 103 2 | sed 's/ *▾.*//; s/^ *WHERE *//; s/ *$//'; }
+wh() { e2e_text 36 95 2 | sed -E 's/ {2,}(([^ ]+) ){0,2}▾ *$//; s/^ *WHERE *//; s/ *$//'; }
 cline() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
 toast_text() { e2e_text 1 "$(e2e_flag pane_width)" $(( $(H) - 1 )); }
 # startl ARGS…：带命令行参数启动（配置、state、数据目录都用 $D 里的，重启时沿用）
@@ -27,7 +27,7 @@ startl; two_tabs; key /; clear_in; e2e_type "id < 50"; key Enter; wait_for 8 set
 key C-l; key i; paste "select 99 as marker"; key Escape
 e2e_keys Space; e2e_type c; sleep 0.6; e2e_keys Space; e2e_type p; sleep 0.5
 SNA=$(snap)
-check "（准备）状态 A：两个 window，① 里 t_user / t_order（WHERE id < 50），② console_1" eval '[[ $(wins) == "0: data*  1: data" && $(wh) == "id < 50" ]] || { echo "  $SNA"; false; }'
+check "（准备）状态 A：两个 window，① 里 t_user / t_order（WHERE id < 50），② console_1" eval '[[ $(wins) == "0: data*  1: data-2" && $(wh) == "id < 50" ]] || { echo "  $SNA"; false; }'
 save_layout a
 check "layout.save：状态栏输入布局名，↵ 写 layouts/a.toml，toast「已保存布局 a」" eval 'toast_text | grep -q "已保存布局 a" && [[ -f "$E2E_TMP/config/sqlmux/layouts/a.toml" ]]'
 check "文件是 TOML：version = 1，两个 [[session.window]]，表 tab 有 where，console 有 n" eval 'f="$E2E_TMP/config/sqlmux/layouts/a.toml"; grep -q "^version = 1" "$f" && [[ $(grep -c "\[\[session.window\]\]" "$f") == 2 ]] && grep -q "where = \"id < 50\"" "$f" && grep -q "kind = \"console\"" "$f"'
@@ -67,7 +67,7 @@ startl --layout b
 check "--layout b：状态 B" eval '[[ $(snap) == "$SNB" ]] || { echo "  got  $(snap)"; echo "  want $SNB"; false; }'
 e2e_stop
 startl --layout "$D/cfg/layouts/a.toml"
-check "--layout 绝对路径：同样打开 a" eval '[[ $(wins) == "0: data*  1: data" ]]'
+check "--layout 绝对路径：同样打开 a" eval '[[ $(wins) == "0: data*  1: data-2" ]]'
 e2e_stop
 
 # ---- layout.open：从默认布局里打开命名布局和 last
@@ -77,7 +77,7 @@ e2e_keys C-p; sleep 0.3; e2e_type ">打开布局"; sleep 0.5; key Enter; sleep 0
 check "layout.open：下拉框（过滤框、分隔线、然后是列表）列出 last、a、b" eval 'b=($(e2e_panes | awk "\$1 == \"-\" { print \$2, \$3, \$4, \$5; exit }")); t=""; for ((y = b[1] + 1; y < b[1] + b[3] - 1; y++)); do t+=$(e2e_text $((b[0] + 2)) $((b[0] + b[2] - 3)) $y | sed "s/ *$//")","; done; [[ $t == *a,* && $t == *b,* && $t == *last* ]] || { echo "  $t"; false; }'
 for ((i = 2; i < 6; i++)); do [[ $(e2e_text $((b[0] + 2)) $((b[0] + b[2] - 3)) $((b[1] + 1 + i)) | sed "s/ *$//") == a ]] && { for ((j = 2; j < i; j++)); do key Down; done; break; }; done
 key Enter; sleep 2
-check "选中 a：替换现有的全部 session，变成状态 A" eval 'wait_for 6 eval "[[ \$(wins) == \"0: data*  1: data\" ]]"; [[ $(snap) == "$SNA" ]] || { echo "  got  $(snap)"; false; }'
+check "选中 a：替换现有的全部 session，变成状态 A" eval 'wait_for 6 eval "[[ \$(wins) == \"0: data*  1: data-2\" ]]"; [[ $(snap) == "$SNA" ]] || { echo "  got  $(snap)"; false; }'
 e2e_stop
 
 # ---- 布局里的表被删掉：其余照常恢复，toast 一条

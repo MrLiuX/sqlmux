@@ -16,7 +16,7 @@ mkdir -p "$D/c"; (umask 077; printf '# my connections, keep this comment\n[[conn
 conns() { psql "$SQLMUX_TEST_PG" -At -c "select count(*) from pg_stat_activity where application_name = '${1:-$APP}'"; }
 sname() { bar | sed 's/^ //; s/ ▾.*//'; }                                    # 状态栏 session 块里的名字
 sname_is() { [[ $(sname) == "$1" ]] || { echo "  session block: '$(sname)', want '$1'"; false; }; }
-wins() { bar | sed -E 's/^ [^▾]*▾  //; s/ {3,}.*//'; }                      # 状态栏的 window 列表：0: data*  1: data
+wins() { bar | sed -E 's/^ [^▾]*▾  //; s/ {3,}.*//'; }                      # 状态栏的 window 列表：0: data*  1: data-2
 box() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5; exit }'; }      # 浮层（session 列表 / 表单）的 X Y W H
 slist_open() { e2e_plain | grep -q "┌─ session"; }
 # srows：session 列表的每一行「文字|选中 0/1」，3 个以上的空格压成两个；window 行前面缩进两格
@@ -59,17 +59,17 @@ check "单击 1 那一行：attach 1、列表关掉；它的界面原样：① t
 
 # ---- l / h：session 下面是它的 window；停在 window 上 ↵ 还切到这个 window
 key Space; e2e_type c; sleep 0.5
-check "（准备）SPC c：1 有两个 window，当前是新的那个" eval '[[ $(wins) == "0: data  1: data*" ]]'
+check "（准备）SPC c：1 有两个 window，当前是新的那个" eval '[[ $(wins) == "0: data  1: data-2*" ]]'
 sl; key k; key Enter; sl; key j; key l
-check "l：展开 1，下面一级是它的两个 window（缩进）" rows_are "doraemon  1 windows|0;1  2 windows|1;  0: data|0;  1: data|0;"
+check "l：展开 1，下面一级是它的两个 window（缩进）" rows_are "doraemon  1 windows|0;1  2 windows|1;  0: data|0;  1: data-2|0;"
 key j; key h
 check "window 行上 h：回到它的 session 行并收起" rows_are "doraemon  1 windows|0;1  2 windows|1;"
 key l; key k; key l
-check "两个都展开：每个 session 都标出它自己的当前 window（focus 色）：doraemon 的 0、1 的 1" eval 'rows_are "doraemon  1 windows|1;  0: data|0;1  2 windows|0;  0: data|0;  1: data|0;" && g=($(box)) && style_has $((g[0] + 4)) $((g[1] + 2)) fg=$FOCUS && style_has $((g[0] + 4)) $((g[1] + 5)) fg=$FOCUS && ! style_has $((g[0] + 4)) $((g[1] + 4)) fg=$FOCUS >/dev/null'
+check "两个都展开：每个 session 都标出它自己的当前 window（focus 色）：doraemon 的 0、1 的 1" eval 'rows_are "doraemon  1 windows|1;  0: data|0;1  2 windows|0;  0: data|0;  1: data-2|0;" && g=($(box)) && style_has $((g[0] + 4)) $((g[1] + 2)) fg=$FOCUS && style_has $((g[0] + 4)) $((g[1] + 5)) fg=$FOCUS && ! style_has $((g[0] + 4)) $((g[1] + 4)) fg=$FOCUS >/dev/null'
 key j; key j; key j; key Enter
-check "停在 1 的 window 0 上 ↵：attach 1 并切到 window 0" eval '! slist_open && sname_is 1 && [[ $(wins) == "0: data*  1: data" ]]'
+check "停在 1 的 window 0 上 ↵：attach 1 并切到 window 0" eval '! slist_open && sname_is 1 && [[ $(wins) == "0: data*  1: data-2" ]]'
 e2e_keys Space; e2e_type l; sleep 0.4
-check "之后 SPC l 回得去：回到 1 原来的 window 1" eval '[[ $(wins) == "0: data  1: data*" ]]'
+check "之后 SPC l 回得去：回到 1 原来的 window 1" eval '[[ $(wins) == "0: data  1: data-2*" ]]'
 
 # ---- $ 原地重命名
 sl; e2e_type '$'; sleep 0.3
@@ -83,7 +83,7 @@ check "esc：放弃，名字不变，列表还开着" eval 'slist_open && rows_a
 e2e_type '$'; clr; e2e_type work; key Enter
 check "改成 work（k 进了输入框，不是上移）：这一行和状态栏的 session 块都变成 work" eval 'rows_are "doraemon  1 windows|0;work  2 windows|1;" && sname_is work'
 key l; key j; e2e_type '$'; sleep 0.3
-check "window 行上 \$：不做事" eval 'mode_is COMMAND && rows_are "doraemon  1 windows|0;work  2 windows|0;  0: data|1;  1: data|0;"'
+check "window 行上 \$：不做事" eval 'mode_is COMMAND && rows_are "doraemon  1 windows|0;work  2 windows|0;  0: data|1;  1: data-2|0;"'
 key h; key Escape
 
 # ---- 面板的会话范围（§12）

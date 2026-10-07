@@ -183,7 +183,7 @@ opts_box() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5; exit }'; }
 opts() { local g y; g=($(opts_box)); [[ -n ${g[0]} ]] || return 0
   for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | tr -s ' ' | sed 's/^ //; s/ $//'; done | tr '\n' /; }
 picked() { local g y; g=($(opts_box)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do style_has $((g[0] + g[2] - 2)) $y bg=#364a82 >/dev/null && e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | tr -s ' ' | sed 's/^ //; s/ $//'; done; }
-start -x 200 -C "$D/b"
+start -x 240 -C "$D/b"
 open_own t_types
 check "值照服务端原文显示：double 1500000、float(10,2) 1.50、year 0000、zerofill 007、bit 显示成数字 5、enum a\\b、latin1 café、gbk 中文" eval '[[ $(cell c_double 1) == 1500000 && $(cell c_float 1) == 1.50 && $(cell c_year 1) == 0000 && $(cell c_zerofill 1) == 007 && $(cell c_bit 1) == 5 && $(cell c_enum 1) == "a\\b" && $(cell c_latin1 1) == café && $(cell c_gbk 1) == 中文 ]] || { for c in c_double c_float c_year c_zerofill c_bit c_enum c_latin1 c_gbk; do printf "%s=%s " $c "$(cell $c 1)"; done; echo; false; }'
 goto c_double 1; key Enter; e2e_type 1500001; key Enter

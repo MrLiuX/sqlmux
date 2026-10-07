@@ -79,7 +79,9 @@ key Escape; key Escape; sleep 0.3
 check "esc 先关下拉；再 esc 回表格（输入框恢复成生效的条件）" eval '! editing && [[ $(e2e_text 36 95 2) == *"id < 5"* ]]'
 
 # ---- 表格：方向键移动、↵ 编辑、C-s 保存；PgDn / PgUp 翻页；Delete 标记 / 取消删除
-start -C "$D/c"; open_table t_order; wait_for 8 settled
+# 200 宽：F8.9 起 160 宽的 ① 只有 63 列，查询条的按钮（保存和它的修改数）整组让位，看不到计数
+start -x 200 -C "$D/c"; open_table t_order; wait_for 8 settled
+qb() { e2e_text 36 115 3; }
 key Down; key Right; key Right; key Right; key Enter; sleep 0.3; e2e_type 77.5; key Enter; sleep 0.3
 key C-s; wait_for 8 eval '[[ $(psql "$E2E_DB" -At -c "select amount from t_order where id = 2") == 77.50 ]]'
 check "方向键 ↓ → → → 移到第 2 行 amount，↵ 编辑、输入 77.5、↵ 提交、C-s 保存：库里 id = 2 的 amount 是 77.50" eval '[[ $(psql "$E2E_DB" -At -c "select amount from t_order where id = 2") == 77.50 ]]'
@@ -105,7 +107,7 @@ check "↑ 往上移了一行" eval '[[ $(tsel) != *Views* ]]'
 
 # ---- 鼠标拖动选择（console）
 start -C "$D/c"; key C-l; e2e_type "select 111\;"; key Enter; e2e_type "select 222\;"; sleep 0.3
-e2e_drag 104 2 107 2; sleep 0.3
+e2e_drag 111 2 114 2; sleep 0.3
 check "鼠标在 console 里拖动：选区用 visual 底" eval 'sel_bg 111 2 && sel_bg 113 2 && ! sel_bg 110 2'
 e2e_type "7"; sleep 0.3
 check "再输入替换选区：select 7" eval '[[ $(cl 1) == "select 7" || $(cl 1) == "select 7;" ]] || { echo "  [$(cl 1)] [$(cl 2)]"; false; }'

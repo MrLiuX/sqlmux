@@ -90,9 +90,9 @@ check "最后一个 window 里最后一个空 pane：再按 F3 什么都不做" 
 
 # 两个 window：window 1 的空 pane 关掉，再关最后的 console，window 跟着关
 begin; e2e_keys Space; e2e_type c; sleep 0.6
-check "（准备）SPC c：window 1，① 引导页、② console_2，焦点在 ①" eval '[[ $(wins) == "0: data  1: data*" && $(panes) == "0 1 2 " ]] && focus_is 1'
+check "（准备）SPC c：window 1，① 引导页、② console_2，焦点在 ①" eval '[[ $(wins) == "0: data  1: data-2*" && $(panes) == "0 1 2 " ]] && focus_is 1'
 key F3
-check "按下时 pane 本来就空、有别的 pane：F3 关掉这个 pane" eval '[[ $(panes) == "0 1 " && $(wins) == "0: data  1: data*" ]]'
+check "按下时 pane 本来就空、有别的 pane：F3 关掉这个 pane" eval '[[ $(panes) == "0 1 " && $(wins) == "0: data  1: data-2*" ]]'
 key F3
 check "pane 里的最后一个 tab 关了、它是 window 里唯一的 pane：连 window 一起关，回到 window 0" eval '[[ $(wins) == "0: data*" ]] && [[ $(panes) == "0 1 2 " ]]'
 
@@ -108,7 +108,7 @@ check "再 F3、y：tab 关了，pane 空了跟着关" eval '[[ $(panes) == "0 1
 # ---- tab.reopen：只记逐个关掉的 tab，恢复 WHERE / ORDER / LIMIT；连按往前翻；原 pane 没了开在当前 pane；console 回到原来的文件
 # （tab.close 关到空 pane 时 pane 也跟着关，所以用「① 里还有别的 tab」的布局测「原 pane 还在」）
 qbar() { e2e_text 36 103 3; }
-wh() { e2e_text 36 103 2 | sed 's/ *▾.*//; s/^ *WHERE *//; s/ *$//'; }
+wh() { e2e_text 36 95 2 | sed -E 's/ {2,}(([^ ]+) ){0,2}▾ *$//; s/^ *WHERE *//; s/ *$//'; }
 t1() { tabbar 1 | sed 's/-//g; s/\*//g'; }
 begin
 key F4; sleep 0.4
