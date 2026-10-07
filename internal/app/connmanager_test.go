@@ -482,16 +482,23 @@ func TestConnManagerListKeys(t *testing.T) {
 // The list takes the height of the form, not the connections': a long one
 // scrolls with the selection, and every row is reached (F8.16).
 func TestConnManagerLongList(t *testing.T) {
+	for _, w := range []int{160, 80} { // at 80 the keys sit under the buttons: a row more
+		longList(t, w)
+	}
+}
+
+func longList(t *testing.T, width int) {
+	t.Helper()
 	a := managed(t)
 	for i := range 30 {
 		a.sess.Conns = append(a.sess.Conns, newConn(config.Connection{Name: fmt.Sprintf("extra_%d", i), Engine: "postgres", DSN: "postgres://h/x"}))
 	}
-	a.Update(tea.WindowSizeMsg{Width: 160, Height: 24})
+	a.Update(tea.WindowSizeMsg{Width: width, Height: 24})
 	a.run("conn.manage", 0)
 	if !hasHit(a, ui.Target{Kind: ui.KindConn, I: 0}) || hasHit(a, ui.Target{Kind: ui.KindConn, I: 25}) {
 		t.Fatal("the first rows show, the last do not")
 	}
-	rows := a.managerView().ListRows()
+	rows := a.managerView().ListRows(a.w)
 	feed(t, a, strings.Repeat("j", 25))
 	if !hasHit(a, ui.Target{Kind: ui.KindConn, I: 25}) || hasHit(a, ui.Target{Kind: ui.KindConn, I: 25 - rows}) {
 		t.Errorf("scrolled to the selection: rows %d", rows)

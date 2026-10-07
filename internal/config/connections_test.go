@@ -181,4 +181,14 @@ func TestCheckAppendUnwritable(t *testing.T) {
 	if err := CheckAppend(c); err != nil {
 		t.Errorf("no file yet: %v", err)
 	}
+	if os.Geteuid() == 0 {
+		return
+	}
+	if err := os.Chmod(filepath.Dir(path), 0o500); err != nil { // no file yet, and none can be made
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(filepath.Dir(path), 0o700) })
+	if CheckAppend(c) == nil {
+		t.Error("a directory no file can be made in")
+	}
 }

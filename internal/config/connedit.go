@@ -300,13 +300,21 @@ func writableConnections() (path string, perm os.FileMode, err error) {
 	if fi.Mode().Perm()&0o200 == 0 {
 		return "", 0, fmt.Errorf(i18n.T("%s 不可写"), path)
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+"-*")
+	return path, fi.Mode().Perm(), probeDir(filepath.Dir(path))
+}
+
+// probeDir is the error of making a file in dir, made first when there is
+// none: nothing is left of it.
+func probeDir(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, "probe-*")
 	if err != nil {
-		return "", 0, err
+		return err
 	}
 	_ = tmp.Close()
-	_ = os.Remove(tmp.Name())
-	return path, fi.Mode().Perm(), nil
+	return os.Remove(tmp.Name())
 }
 
 // rewriteConnections writes the text of connections.toml in place.

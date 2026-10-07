@@ -43,6 +43,33 @@ type Form struct {
 	Hints        []Hint
 }
 
+// buttons are the buttons' words and what they run.
+func (fm Form) buttons() []struct{ text, action string } {
+	bs := []struct{ text, action string }{{fm.Save, "form.save"}, {fm.Cancel, "form.cancel"}}
+	if fm.Delete != "" {
+		bs = append(bs, struct{ text, action string }{fm.Delete, "conns.delete"})
+	}
+	return bs
+}
+
+// keysBelow is whether, in a form width wide, the keys do not fit beside the
+// buttons and go on a row of their own under them (§7.8, F8.16).
+func (fm Form) keysBelow(width int) bool {
+	used := 0
+	for _, b := range fm.buttons() {
+		used += Width(b.text) + 5 // [ text ] and a space
+	}
+	return len(fm.Hints) > 0 && width-2-used < hintRowWidth(fm.Hints)
+}
+
+// heightIn is the form's rows in a form width wide.
+func (fm Form) heightIn(width int) int {
+	if fm.keysBelow(width) {
+		return fm.height() + 1
+	}
+	return fm.height()
+}
+
 // rows is how many fields show.
 func (fm Form) rows() int {
 	n := 0
@@ -133,11 +160,7 @@ func (fm Form) drawIn(f *Frame, area uv.Rectangle, focus bool) uv.Position {
 	f.Text(x0, y, x1, fm.Err, uv.Style{Fg: th.Error, Bg: th.PaneBg})
 	f.Text(area.Min.X, y+1, area.Max.X, strings.Repeat("─", area.Dx()), uv.Style{Fg: th.Sep, Bg: th.PaneBg})
 	x, y := x0, y+2
-	buttons := []struct{ text, action string }{{fm.Save, "form.save"}, {fm.Cancel, "form.cancel"}}
-	if fm.Delete != "" {
-		buttons = append(buttons, struct{ text, action string }{fm.Delete, "conns.delete"})
-	}
-	for _, b := range buttons {
+	for _, b := range fm.buttons() {
 		st := bg
 		if f.Region(uv.Rect(x, y, Width(b.text)+4, 1), Target{Kind: KindButton, Action: b.action}) {
 			st.Bg = th.Select
@@ -148,7 +171,9 @@ func (fm Form) drawIn(f *Frame, area uv.Rectangle, focus bool) uv.Position {
 		x = f.Text(x, y, x1, " "+b.text+" ", st)
 		x = f.Text(x, y, x1, "]", edge) + 1
 	}
-	if hx := x1 - hintRowWidth(fm.Hints); hx >= x {
+	if hx := x1 - hintRowWidth(fm.Hints); fm.keysBelow(area.Dx()) {
+		hintRow(f, max(hx, x0), y+1, x1, fm.Hints, dim, Target{Kind: KindButton})
+	} else if len(fm.Hints) > 0 {
 		hintRow(f, hx, y, x1, fm.Hints, dim, Target{Kind: KindButton})
 	}
 	return cursor

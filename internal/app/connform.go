@@ -284,7 +284,7 @@ func (a *App) connsMove(d int) {
 // keepConnInSight scrolls the list to its selection.
 func (a *App) keepConnInSight() {
 	f := a.form
-	f.top = max(min(f.top, f.cur), f.cur-a.managerView().ListRows()+1, 0)
+	f.top = max(min(f.top, f.cur), f.cur-a.managerView().ListRows(a.w)+1, 0)
 }
 
 // connInUse is whether a session has a tab on the connection called name, a

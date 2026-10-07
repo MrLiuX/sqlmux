@@ -150,6 +150,8 @@ func CheckAppend(c Connection) error {
 		_ = f.Close()
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
+	} else if err := probeDir(Dir()); err != nil { // none yet: it is made there
+		return err
 	}
 	_, err := appendText(c)
 	return err

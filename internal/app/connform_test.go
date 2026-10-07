@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 
 	"sqlmux/internal/config"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/ui"
 )
 
@@ -484,19 +486,40 @@ func TestConnFormUnwritableFile(t *testing.T) {
 	}
 }
 
-// At 80×24 the form's buttons and the keys under it are both on the screen
-// (F7.4).
-func TestConnFormHintsAt80x24(t *testing.T) {
-	a := managed(t)
-	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	a.run("conn.new", 0)
-	row := ""
-	for _, l := range strings.Split(a.render().String(), "\n") {
-		if strings.Contains(l, "[ 保存 ]") {
-			row = l
+// The form's buttons and the keys under it show whole at 80×24, in either
+// language, for a new connection and for one to edit, which has a button
+// more: the keys beside the buttons when they fit, on the row under them,
+// right-aligned, when they do not (F7.4, F8.16).
+func TestConnFormHints(t *testing.T) {
+	for _, lang := range []string{"zh", "en"} {
+		for _, w := range []int{160, 80} {
+			for _, edit := range []bool{false, true} {
+				i18n.Set(lang)
+				a := managed(t)
+				a.Update(tea.WindowSizeMsg{Width: w, Height: 24})
+				a.run("conn.new", 0)
+				if edit {
+					a.run("conn.manage", 0)
+				}
+				var hints []string
+				for _, h := range a.formView().Hints {
+					hints = append(hints, h.Key+" "+h.Label)
+				}
+				keys := strings.Join(hints, " · ")
+				lines := strings.Split(a.render().String(), "\n")
+				at := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "[ "+a.formView().Save+" ]") })
+				i18n.Set("zh")
+				switch {
+				case at < 0:
+					t.Errorf("%s %d edit %v: no buttons", lang, w, edit)
+				case w == 160 && (!strings.Contains(lines[at], keys) || strings.Contains(lines[at+1], keys)):
+					t.Errorf("%s %d edit %v: the keys are not beside the buttons: %q", lang, w, edit, lines[at])
+				case w == 80 && (strings.Contains(lines[at], keys) || !strings.Contains(lines[at+1], keys)):
+					t.Errorf("%s %d edit %v: the keys are not under the buttons: %q / %q", lang, w, edit, lines[at], lines[at+1])
+				case w == 80 && !strings.HasPrefix(lines[at+1][strings.Index(lines[at+1], keys)+len(keys):], " │"):
+					t.Errorf("%s %d edit %v: the keys are not right-aligned: %q", lang, w, edit, lines[at+1])
+				}
+			}
 		}
-	}
-	if !strings.Contains(row, "[ 取消 ]") || !strings.Contains(row, "Tab 下一项 · ↵ 保存 · esc 取消") {
-		t.Errorf("the buttons' row: %q", row)
 	}
 }

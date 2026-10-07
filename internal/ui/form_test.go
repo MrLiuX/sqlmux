@@ -56,7 +56,7 @@ func TestConnManagerScrolls(t *testing.T) {
 			t.Errorf("sel %d top %d: shows %s %v, hides %s %v", c.sel, c.top, c.shows, strings.Contains(out, c.shows), c.hidden, !strings.Contains(out, c.hidden))
 		}
 	}
-	if m.ListRows() != 3+5-2 {
-		t.Errorf("rows %d", m.ListRows())
+	if m.ListRows(80) != 3+5-2 {
+		t.Errorf("rows %d", m.ListRows(80))
 	}
 }
