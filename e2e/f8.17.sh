@@ -82,6 +82,8 @@ check "C-n 手动唤起：列出该位置的候选，第一项已选中（只有
 fresh; e2e_type "insert into t_log("; sleep 1
 check "insert into t_log(：弹出「全部列」，已选中（↵ 一下全加上）" eval '[[ -n $(pop) && -n $(sel) ]] && items | head -1 | grep -q "全部 2 列" || { echo "  $(items | tr "\n" "|")  sel=$(sel)"; false; }'
 
+# 取值位置的枚举 / 布尔值列表照旧预选第一项（docs 1f41f01）：WHERE 里测（console 本来就没有取值补全），见最后一段
+
 # ---- 其他触发词同样不预选：select、and、order by
 fresh; e2e_type "select * from t_log where msg = 'a' and "; sleep 1
 check "and ␠：弹出列名，无选中项" eval 'names_are "$LOG" && nosel'
@@ -110,6 +112,10 @@ check "输入框是「id > 5 and 」" eval '[[ $(where_in) == "id > 5 and" ]] ||
 key Enter; settle; sleep 0.5
 check "没有选中项时 ↵：不接受列名，执行（and↵↵），列表关掉，错误栏报错" eval '[[ -z $(pop) && $(where_in) == "id > 5 and" && -n $(errbar 1 | head -1) ]] || { echo "  [$(where_in)] pop=[$(pop)] err=[$(errbar 1 | head -1)]"; false; }'
 check "（执行时去掉了尾部空白：输入框里没有多出列名）" eval '! where_in | grep -q "and [a-z]"'
+key Escape; key Escape; key /; clear_in; e2e_type "status = "; sleep 0.8
+check "WHERE：status = 弹出枚举值，第一项 pending 已选中，↵ 接受它" eval 'sel_is pending'
+key Enter; sleep 0.4
+check "（接受后输入框里是 status = 'pending'）" eval '[[ $(where_in) == "status = '"'pending'"'" ]] || { echo "  [$(where_in)]"; false; }'
 key Escape; key Escape; key /; clear_in; e2e_type "id > 5 and"; sleep 0.6; key Enter; sleep 0.8; key Tab; sleep 0.3
 check "WHERE：and↵ 后 Tab 选第一列 id" eval 'sel_is id'
 key Enter; sleep 0.4
