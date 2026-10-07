@@ -489,6 +489,9 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 		}
 	case key != nil:
 		order.Value, order.Icon = strings.Join(key, ","), ic.SortAsc
+		if s.desc {
+			order.Icon = ic.SortDesc
+		}
 	}
 	pages := "?"
 	if n, ok := t.pages(); ok {

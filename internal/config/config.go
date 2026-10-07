@@ -42,7 +42,10 @@ type Config struct {
 	// GridFullWidth is the width up to which a column of the grid is never
 	// squeezed (`[grid] full_width`, §7.6).
 	GridFullWidth int
-	theme         string // the name Parse read; Load finds the theme, as it touches the disk
+	// GridDesc is `[grid] order = "desc"` and GridTranspose `[grid]
+	// transpose`: what a table opened anew starts with (§14).
+	GridDesc, GridTranspose bool
+	theme                   string // the name Parse read; Load finds the theme, as it touches the disk
 
 	// Leader and Bindings are keymaps.toml's raw [keys] and [map.*]
 	// entries; the keymap package gives them meaning.
@@ -126,7 +129,9 @@ func Parse(data string) (*Config, error) {
 			MaxRows *int `toml:"max_rows"`
 		} `toml:"console"`
 		Grid struct {
-			FullWidth *int `toml:"full_width"`
+			FullWidth *int    `toml:"full_width"`
+			Order     *string `toml:"order"`
+			Transpose *bool   `toml:"transpose"`
 		} `toml:"grid"`
 		Keys any `toml:"keys"`
 		Map  any `toml:"map"`
@@ -198,6 +203,15 @@ func Parse(data string) (*Config, error) {
 			return nil, fmt.Errorf("[grid] full_width = %d: must be greater than 0", *n)
 		}
 		c.GridFullWidth = *n
+	}
+	if o := raw.Grid.Order; o != nil {
+		if *o != "asc" && *o != "desc" {
+			return nil, fmt.Errorf(`[grid] order = %q: must be "asc" or "desc"`, *o)
+		}
+		c.GridDesc = *o == "desc"
+	}
+	if raw.Grid.Transpose != nil {
+		c.GridTranspose = *raw.Grid.Transpose
 	}
 	return c, nil
 }

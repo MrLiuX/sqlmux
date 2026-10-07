@@ -58,6 +58,25 @@ L = "5l"
 }
 
 // Keys belong in keymaps.toml, and only keys (F5.9).
+// [grid] order and transpose are what a table opened anew starts with
+// (F8.8); order is "asc" or "desc".
+func TestGridNewTableDefaults(t *testing.T) {
+	if c, err := Parse(""); err != nil || c.GridDesc || c.GridTranspose {
+		t.Errorf("default: %+v %v", c, err)
+	}
+	if c, err := Parse("[grid]\norder = \"desc\"\ntranspose = true"); err != nil || !c.GridDesc || !c.GridTranspose {
+		t.Errorf("desc, transpose: %+v %v", c, err)
+	}
+	if c, err := Parse("[grid]\norder = \"asc\""); err != nil || c.GridDesc {
+		t.Errorf("asc: %+v %v", c, err)
+	}
+	for _, s := range []string{"[grid]\norder = \"down\"", "[grid]\ntranspose = \"yes\""} {
+		if _, err := Parse(s); err == nil {
+			t.Errorf("%q: expected an error", s)
+		}
+	}
+}
+
 func TestGridFullWidthDefault(t *testing.T) {
 	if c, err := Parse(""); err != nil || c.GridFullWidth != 20 {
 		t.Errorf("default: %d %v", c.GridFullWidth, err)

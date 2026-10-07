@@ -599,3 +599,38 @@ func TestAutoRefresh(t *testing.T) {
 		t.Error("a closed tab ticks on")
 	}
 }
+
+// `[grid] order = "desc"` and `transpose = true` are what a table opened
+// anew starts with: its default order, the row identity, goes down, the
+// chip says so, the first column picked sorts down too; the toggle turns
+// the default the other way (§14, F8.8).
+func TestNewTableDefaults(t *testing.T) {
+	a := sizedWith(160, 45, userConfig(t, "[grid]\norder = \"desc\"\ntranspose = true", ""))
+	table, cols, page := ordersTable(5)
+	rec := &recDB{}
+	conn := a.sess.Conns[0]
+	conn.Meta = db.NewWorker(rec)
+	conn.cols[idOf(table)] = cols
+	sql := lastSQL(t, rec, a.openTable(conn, table))
+	tab := dataOf(a.focused())
+	if !tab.transpose || tab.order != "" || !tab.desc || !strings.Contains(sql, `order by "id" desc limit`) {
+		t.Fatalf("a new tab: transpose %v, order %q, desc %v, %s", tab.transpose, tab.order, tab.desc, sql)
+	}
+	a.Update(pageMsg{tab: tab, seq: tab.seq, cols: cols, page: page})
+	if !strings.Contains(a.render().String(), " ORDER id "+ui.NerdIcons.SortDesc.Text+" ") {
+		t.Errorf("the chip says down")
+	}
+	if sql := lastSQL(t, rec, a.run("grid.order.toggle", 0)); tab.order != "id" || tab.desc || !strings.Contains(sql, `order by "id" asc limit`) {
+		t.Errorf("toggle: order %q desc %v, %s", tab.order, tab.desc, sql)
+	}
+	answer(a, tab)
+	a.run("grid.order", 0)
+	feed(t, a, "status<CR>")
+	if tab.order != "status" || !tab.desc {
+		t.Errorf("a column picked: %q desc %v", tab.order, tab.desc)
+	}
+	a.run("grid.transpose", 0)
+	if tab.transpose {
+		t.Error("T turns it back")
+	}
+}

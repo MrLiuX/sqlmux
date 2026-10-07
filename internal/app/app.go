@@ -41,7 +41,9 @@ type App struct {
 	maxRows      int     // a console run keeps of each result (§11)
 	resultHeight float64 // the share the result area first takes
 	fullWidth    int     // the grid's columns up to this wide are not squeezed (§7.6)
-	keywordCase  string  // gq's (§9.5)
+	newDesc      bool    // a table opened anew sorts descending, and shows transposed (§14)
+	newTurned    bool
+	keywordCase  string // gq's (§9.5)
 	formatPrg    string
 	autoPairs    bool // a console's INSERT, a WHERE and the quick SQL (§7.9)
 	// confirmDangerous asks before a run that would delete or drop, and a
@@ -108,7 +110,7 @@ var whichKeyDelay = 400 * time.Millisecond
 // not "", shows as a toast on start.
 func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, warning string) *App {
 	a := &App{
-		theme: cfg.Theme, icons: cfg.Icons, baseIcons: cfg.BaseIcons, plain: !cfg.Vim, themeName: cfg.ThemeName, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, resultHeight: cfg.ResultHeight, fullWidth: cfg.GridFullWidth,
+		theme: cfg.Theme, icons: cfg.Icons, baseIcons: cfg.BaseIcons, plain: !cfg.Vim, themeName: cfg.ThemeName, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, resultHeight: cfg.ResultHeight, fullWidth: cfg.GridFullWidth, newDesc: cfg.GridDesc, newTurned: cfg.GridTranspose,
 		keywordCase: cfg.KeywordCase, formatPrg: cfg.FormatPrg, autoPairs: cfg.AutoPairs, confirmDangerous: cfg.ConfirmDangerous,
 		keys: keys, res: keymap.NewResolver(keys), sess: sess, sessions: []*Session{sess},
 		mouse: uv.Pos(-1, -1), warning: JoinNotes(warning, sess.warning), state: st,

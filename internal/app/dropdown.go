@@ -256,11 +256,11 @@ func (a *App) dropPick(i int) tea.Cmd {
 	case dropOrder:
 		switch {
 		case at == 0: // 默认: by the row identity
-			t.order, t.desc = "", false
+			t.order, t.desc = "", a.newDesc
 		case item == t.order, t.order == "" && len(t.cols.Key()) > 0 && t.cols.Key()[0] == item: // the column the chip shows first: the other way (§7.8)
 			return a.toggleOrder(t)
 		default:
-			t.order, t.desc = item, false
+			t.order, t.desc = item, a.newDesc
 		}
 	case dropLimit:
 		t.limit, _ = strconv.Atoi(item)
@@ -271,13 +271,14 @@ func (a *App) dropPick(i int) tea.Cmd {
 }
 
 // toggleOrder turns t's ORDER the other way, from the first page (§7.8):
-// sorted by default, its row identity's first column goes descending.
+// sorted by default, its row identity's first column goes the other way
+// than the default does.
 func (a *App) toggleOrder(t *dataTab) tea.Cmd {
 	switch key := t.cols.Key(); {
 	case t.order != "":
 		t.desc = !t.desc
 	case key != nil:
-		t.order, t.desc = key[0], true
+		t.order, t.desc = key[0], !t.desc
 	default: // nothing to turn: the chip shows no direction
 		return nil
 	}

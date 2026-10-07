@@ -520,7 +520,12 @@ func (a *App) openTableAs(p *Pane, c *Conn, t db.Table, r *request) tea.Cmd {
 	// the same, the status bar telling the focused one's (§7.8). Add the
 	// connection, t_order [seed], if that confuses.
 	tab := Tab{Name: t.Name, Data: newDataTab(c, t)}
-	if r != nil {
+	tab.Data.transpose = a.newTurned
+	if r == nil {
+		first := tab.Data.request
+		first.desc = a.newDesc
+		tab.Data.setRequest(first)
+	} else {
 		tab.Data.setRequest(*r)
 	}
 	putTab(p, tab, landing)
