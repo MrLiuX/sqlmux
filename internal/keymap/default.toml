@@ -184,6 +184,7 @@ leader = "<Space>"
 "<Right>" = "conns.form"
 "<CR>" = "conns.form"
 "x" = "conns.delete"
+"<C-s>" = "form.save" # the form's own, saved from the list too, not the global save of the table behind
 "<Esc>" = "conns.close"
 
 [keys.form] # the connection form (§7.8); space flips a switch, the form's own

@@ -1,9 +1,12 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -13,13 +16,18 @@ import (
 
 // A connection is edited, or deleted, in the lines of connections.toml: the
 // file is never encoded again, so what the user wrote around it, comments,
-// blank lines, other blocks, stays byte for byte (F8.16). A block runs from
-// its [[connection]] line to the next line that opens a table, or the end;
-// the comment lines right above it, no blank between, go with it.
+// blank lines, other blocks, stays byte for byte (F8.16). A block is its
+// [[connection]] line, the keys under it up to the last one, and the blank
+// lines after that; the comment lines right above the header, no blank
+// between, go with it. A comment on a paragraph of its own, below a blank
+// line, is the user's, whichever block it follows.
 
 var (
 	connHeader = regexp.MustCompile(`^\s*\[\[\s*connection\s*\]\]`)
-	tableHead  = regexp.MustCompile(`^\s*\[`)
+	// tableHead is a line that is a table's header and nothing else: not the
+	// first line of an array written over several lines ([1, 2],).
+	tableHead = regexp.MustCompile(`^\s*\[\[?\s*[^\[\]=,]+?\s*\]\]?\s*(#.*)?$`)
+	keyLine   = regexp.MustCompile(`^(\s*)([A-Za-z0-9_-]+)\s*=`)
 )
 
 // connFields are the keys of a connection, in the order they are written.
@@ -43,9 +51,31 @@ func (c Connection) field(key string) any {
 	return c.ReadOnly
 }
 
+// with is c with its key taken from from.
+func (c Connection) with(key string, from Connection) Connection {
+	switch key {
+	case "name":
+		c.Name = from.Name
+	case "engine":
+		c.Engine = from.Engine
+	case "dsn":
+		c.DSN = from.DSN
+	case "password_cmd":
+		c.PasswordCmd = from.PasswordCmd
+	case "password_env":
+		c.PasswordEnv = from.PasswordEnv
+	case "password":
+		c.Password = from.Password
+	default:
+		c.ReadOnly = from.ReadOnly
+	}
+	return c
+}
+
 // connBlock is a block's lines in a file split into them: start the first of
-// its comments, head its [[connection]], end past its last line.
-type connBlock struct{ start, head, end int }
+// its comments, head its [[connection]], last its last line with a key or a
+// value on it, end past the blank lines after that.
+type connBlock struct{ start, head, last, end int }
 
 // splitLines is text in its lines, each with the line break it had.
 func splitLines(text string) []string {
@@ -60,24 +90,29 @@ func splitLines(text string) []string {
 	return lines
 }
 
+func isComment(line string) bool { return strings.HasPrefix(strings.TrimSpace(line), "#") }
+
 func connBlocks(lines []string) []connBlock {
 	var bs []connBlock
 	for i, l := range lines {
-		switch {
-		case connHeader.MatchString(l):
-			start := i
-			for start > 0 && strings.HasPrefix(strings.TrimSpace(lines[start-1]), "#") && (len(bs) == 0 || start-1 > bs[len(bs)-1].head) {
-				start--
-			}
-			if n := len(bs); n > 0 {
-				bs[n-1].end = min(bs[n-1].end, start)
-			}
-			bs = append(bs, connBlock{start, i, len(lines)})
-		case tableHead.MatchString(l): // another table ends the block before it
-			if n := len(bs); n > 0 {
-				bs[n-1].end = min(bs[n-1].end, i)
+		if !connHeader.MatchString(l) {
+			continue
+		}
+		b := connBlock{start: i, head: i, last: i}
+		for b.start > 0 && isComment(lines[b.start-1]) {
+			b.start--
+		}
+		next := i + 1
+		for ; next < len(lines) && !tableHead.MatchString(strings.TrimRight(lines[next], "\r\n")); next++ {
+			if s := strings.TrimSpace(lines[next]); s != "" && !isComment(s) {
+				b.last = next
 			}
 		}
+		b.end = b.last + 1
+		for b.end < next && strings.TrimSpace(lines[b.end]) == "" {
+			b.end++
+		}
+		bs = append(bs, b)
 	}
 	return bs
 }
@@ -95,97 +130,160 @@ func findConnection(lines []string, name string) (connBlock, Connection, error) 
 	return connBlock{}, Connection{}, fmt.Errorf(i18n.T("%s 里没有叫 %s 的连接"), connectionsPath(), name)
 }
 
-// keyLine is the line of the key in lines[from:to], -1 for none; an error
-// when its value goes over lines or is written in a way edited line by line
-// would break (a quoted or dotted key, an inline table, a multi-line string).
-var keyLine = regexp.MustCompile(`^\s*([A-Za-z0-9_-]+)\s*=\s*(.*)$`)
-
-func lineOfKey(lines []string, from, to int, key string) (int, error) {
-	for i := from; i < to; i++ {
-		m := keyLine.FindStringSubmatch(strings.TrimRight(lines[i], "\r\n"))
-		if len(m) == 0 || m[1] != key {
-			continue
-		}
-		if v := strings.TrimSpace(m[2]); strings.HasPrefix(v, `"""`) || strings.HasPrefix(v, "'''") || strings.HasPrefix(v, "[") || strings.HasPrefix(v, "{") {
-			return -1, fmt.Errorf(i18n.T("%s 的 %s 写得太特别，请手工改"), connectionsPath(), key)
-		}
-		return i, nil
+// ReadConnection is the connection called name as connections.toml says it
+// now: the panel reads it again where it shows it, the file being the
+// user's too (F8.16).
+func ReadConnection(name string) (Connection, error) {
+	data, err := os.ReadFile(connectionsPath())
+	if err != nil {
+		return Connection{}, err
 	}
-	return -1, nil
+	_, c, err := findConnection(splitLines(string(data)), name)
+	return c, err
+}
+
+// errOdd is an edit this way of editing cannot make: the text it would give
+// does not read back as asked (a key in quotes, a value over several lines).
+func errOdd() error {
+	return fmt.Errorf(i18n.T("%s 里这一项写法太特别，请手工改"), connectionsPath())
+}
+
+// lineOfKey is the line of key in lines[from:to], of any key when key is
+// "", -1 for none.
+func lineOfKey(lines []string, from, to int, key string) int {
+	for i := from; i < to; i++ {
+		if m := keyLine.FindStringSubmatch(strings.TrimRight(lines[i], "\r\n")); len(m) > 0 && (key == "" || m[2] == key) {
+			return i
+		}
+	}
+	return -1
+}
+
+// indentOf is the white space the key on line starts with.
+func indentOf(line string) string {
+	return keyLine.FindStringSubmatch(strings.TrimRight(line, "\r\n"))[1]
 }
 
 // tomlLine is `key = value` for v, as TOML writes it.
 func tomlLine(key string, v any) (string, error) {
 	var b strings.Builder
-	enc := toml.NewEncoder(&b)
-	if err := enc.Encode(map[string]any{key: v}); err != nil {
+	if err := toml.NewEncoder(&b).Encode(map[string]any{key: v}); err != nil {
 		return "", err
 	}
-	return b.String(), nil
+	return strings.TrimSuffix(b.String(), "\n"), nil
 }
 
-// UpdateConnection makes the connection called old what c says, in its
-// block only: a key changed is its line rewritten, a key new is added after
-// the block's last key, one now empty is its line taken out; the rest of the
-// file, and the file's permissions, are the user's (§14, F8.16).
+// lineEnd is the line break line has, "" for the file's last without one.
+func lineEnd(line string) string {
+	if strings.HasSuffix(line, "\r\n") {
+		return "\r\n"
+	}
+	if strings.HasSuffix(line, "\n") {
+		return "\n"
+	}
+	return ""
+}
+
+// editedText is connections.toml as it would be with connection old, which
+// the caller read as was, made c: a key that differs between the two is
+// written in the block's lines as it is on disk now, so a key the user
+// changed there meanwhile stays; one new goes after the block's last, one
+// now empty is taken out. got is what the new text says the block is.
 // ponytail: a comment at the end of a rewritten line goes with the line.
-func UpdateConnection(old string, c Connection) error {
+func editedText(old string, was, c Connection) (text string, got Connection, err error) {
 	path := connectionsPath()
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return "", Connection{}, err
 	}
 	lines := splitLines(string(data))
-	b, was, err := findConnection(lines, old)
+	b, want, err := findConnection(lines, old)
 	if err != nil {
-		return err
+		return "", Connection{}, err
 	}
 	nl := "\n"
-	if strings.HasSuffix(lines[b.head], "\r\n") {
+	if lineEnd(lines[b.head]) == "\r\n" {
 		nl = "\r\n"
 	}
 	for _, key := range connFields {
-		have, want := was.field(key), c.field(key)
-		if have == want {
+		have, to := was.field(key), c.field(key)
+		if have == to {
 			continue
 		}
-		at, err := lineOfKey(lines, b.head+1, b.end, key)
-		if err != nil {
-			return err
-		}
-		switch zero := want == "" || want == false; {
+		want = want.with(key, c)
+		at := lineOfKey(lines, b.head+1, b.last+1, key)
+		zero := to == "" || to == false
+		switch line, err := tomlLine(key, to); {
+		case err != nil:
+			return "", Connection{}, err
 		case zero && at >= 0: // cleared: its line goes
-			lines = append(lines[:at], lines[at+1:]...)
-			b.end--
+			lines = slices.Delete(lines, at, at+1)
+			b.last--
 		case zero:
+		case at >= 0: // keeps the indent and the break the line had
+			lines[at] = indentOf(lines[at]) + line + lineEnd(lines[at])
 		default:
-			text, err := tomlLine(key, want)
-			if err != nil {
-				return err
+			indent := ""
+			if k := lineOfKey(lines, b.head+1, b.last+1, ""); k >= 0 {
+				indent = indentOf(lines[k])
 			}
-			text = strings.TrimSuffix(text, "\n") + nl
-			if at >= 0 {
-				lines[at] = text
-				break
+			if lineEnd(lines[b.last]) == "" { // the file's last line has no break yet
+				lines[b.last] += nl
 			}
-			last := b.head // after the block's last key line
-			for i := b.head + 1; i < b.end; i++ {
-				if keyLine.MatchString(strings.TrimRight(lines[i], "\r\n")) {
-					last = i
-				}
-			}
-			if !strings.HasSuffix(lines[last], "\n") { // the file's last line has no break yet
-				lines[last] += nl
-			}
-			lines = append(lines[:last+1], append([]string{text}, lines[last+1:]...)...)
-			b.end++
+			lines = slices.Insert(lines, b.last+1, indent+line+nl)
+			b.last++
 		}
 	}
-	out := strings.Join(lines, "")
-	if _, err := parseConnections(path, out); err != nil {
+	text = strings.Join(lines, "")
+	conns, err := parseConnections(path, text)
+	var perr toml.ParseError
+	if errors.As(err, &perr) { // the old text read: this edit broke it
+		return "", Connection{}, errOdd()
+	}
+	if err != nil {
+		return "", Connection{}, err
+	}
+	i := slices.IndexFunc(conns, func(o Connection) bool { return o.Name == c.Name })
+	if i < 0 || conns[i] != want {
+		return "", Connection{}, errOdd()
+	}
+	return text, conns[i], nil
+}
+
+// CheckUpdate is the error UpdateConnection would give, nothing written:
+// asked before a password goes into the keychain for it (F8.16).
+func CheckUpdate(old string, was, c Connection) error {
+	_, _, err := editedText(old, was, c)
+	return err
+}
+
+// UpdateConnection makes the connection called old, which the caller read
+// as was, what c says, in its block of connections.toml only (§14, F8.16),
+// and returns the block as the file now says it. The file is written
+// through a temporary one, renamed over it with its permissions: a
+// failure keeps what the user wrote, and a link stays a link.
+func UpdateConnection(old string, was, c Connection) (Connection, error) {
+	text, got, err := editedText(old, was, c)
+	if err != nil {
+		return Connection{}, err
+	}
+	return got, rewriteConnections(text)
+}
+
+// rewriteConnections writes the text of connections.toml in place.
+func rewriteConnections(text string) error {
+	path, err := filepath.EvalSymlinks(connectionsPath())
+	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(out), 0o600) // an existing file keeps its permissions
+	fi, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if fi.Mode().Perm()&0o200 == 0 {
+		return fmt.Errorf(i18n.T("%s 不可写"), path)
+	}
+	return writeFileMode(path, []byte(text), fi.Mode().Perm())
 }
 
 // DeleteConnection takes the block of the connection called name out of
@@ -193,8 +291,7 @@ func UpdateConnection(old string, c Connection) error {
 // lines after it, which are its own (F8.16). The last one may go: the
 // program then starts with the form (§14).
 func DeleteConnection(name string) error {
-	path := connectionsPath()
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(connectionsPath())
 	if err != nil {
 		return err
 	}
@@ -203,5 +300,9 @@ func DeleteConnection(name string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(strings.Join(append(lines[:b.start], lines[b.end:]...), "")), 0o600)
+	text := strings.Join(slices.Delete(lines, b.start, b.end), "")
+	if _, err := parseConnections(connectionsPath(), text); err != nil && !NoConnections(err) { // [connection.opts] left without its [[connection]]
+		return err
+	}
+	return rewriteConnections(text)
 }

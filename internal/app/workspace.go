@@ -189,8 +189,11 @@ const (
 // Conn is one connection of connections.toml as a session has it (§5):
 // its Main and Meta once connected, its catalog and what is cached of it.
 type Conn struct {
-	Spec       config.Connection
-	eng        db.Engine // Spec.Engine's
+	Spec config.Connection
+	// eng and readOnly are Spec.Engine's and Spec.ReadOnly as the connection
+	// was dialed: an edit of the spec meanwhile is for the next dial (F8.16).
+	eng        db.Engine
+	readOnly   bool
 	State      connState
 	Main, Meta *db.Worker // §8.2; nil till connected
 	Addr       string     // shown in the status bar, e.g. ctw@localhost:5432
@@ -221,7 +224,15 @@ type Conn struct {
 }
 
 func newConn(spec config.Connection) *Conn {
-	return &Conn{Spec: spec, eng: engines[spec.Engine], cols: map[tableID]db.Columns{}, colsAsked: map[tableID]bool{}, ddl: map[tableID]ddlText{}}
+	c := &Conn{cols: map[tableID]db.Columns{}, colsAsked: map[tableID]bool{}, ddl: map[tableID]ddlText{}}
+	c.setSpec(spec)
+	return c
+}
+
+// setSpec makes spec what the connection is, for the dial after the one it
+// may be in.
+func (c *Conn) setSpec(spec config.Connection) {
+	c.Spec, c.eng, c.readOnly = spec, engines[spec.Engine], spec.ReadOnly
 }
 
 // engines are the engines connections.toml names (§8.1).

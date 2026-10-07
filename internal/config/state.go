@@ -26,8 +26,10 @@ type State struct {
 
 // RenameConnection makes what the state keeps by the connection called old
 // kept by to: the table picks and table keys that start with its name, its
-// quick SQL, the consoles that run on it (F8.16). The layout files are the
-// user's, and say the old name still.
+// quick SQL, the consoles that run on it (F8.16). Data under the new name
+// from a connection of that name since deleted is written over by the
+// renamed one's, a pick in both once. The layout files are the user's, and
+// say the old name still.
 func (s *State) RenameConnection(old, to string) {
 	prefix := old + "/"
 	for i, r := range s.Recent {
@@ -35,6 +37,8 @@ func (s *State) RenameConnection(old, to string) {
 			s.Recent[i].ID = to + "/" + id
 		}
 	}
+	seen := map[Recent]bool{}
+	s.Recent = slices.DeleteFunc(s.Recent, func(r Recent) bool { dup := seen[r]; seen[r] = true; return dup })
 	for k, v := range s.Tables {
 		if rest, ok := strings.CutPrefix(k, prefix); ok {
 			delete(s.Tables, k)
@@ -158,7 +162,10 @@ var beforeRename = func() {}
 // writeFile writes path whole through a file renamed into place, so a
 // crash leaves the old one; the directories it makes and the file are the
 // user's only.
-func writeFile(path string, data []byte) error {
+func writeFile(path string, data []byte) error { return writeFileMode(path, data, 0o600) }
+
+// writeFileMode is writeFile with the file made perm.
+func writeFileMode(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -169,6 +176,10 @@ func writeFile(path string, data []byte) error {
 	}
 	defer os.Remove(tmp.Name()) // gone once renamed
 	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
 		tmp.Close()
 		return err
 	}

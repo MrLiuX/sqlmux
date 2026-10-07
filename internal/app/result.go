@@ -211,7 +211,7 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 	if conn.State != connReady { // a layout's console, its connection not up yet (F6.5)
 		return a.showToast(i18n.T("连接还没连上"), toastTTL)
 	}
-	if conn.Spec.ReadOnly {
+	if conn.readOnly {
 		if i := slices.IndexFunc(stmts, func(s sqlkit.Stmt) bool { return sqlkit.BreaksReadOnly(sql[s.Start:s.End], d) }); i >= 0 {
 			p := a.showResult(a.win())
 			a.log(&run{name: name, win: a.win()}, sql[stmts[i].Start:stmts[i].End], i18n.T("%s 是只读连接，整次都没有执行", conn.Spec.Name), true)

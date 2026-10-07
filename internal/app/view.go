@@ -246,7 +246,7 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 			b.Hints = append(b.Hints, commit, rollback)
 		}
 		name := c.conn.Spec.Name
-		if c.conn.Spec.ReadOnly {
+		if c.conn.readOnly {
 			name += " " + a.icons.Lock.Text
 		}
 		b.Hints = append(b.Hints, ui.Hint{Label: name, Action: "console.conn", Color: th.Info, Prio: 1, Group: 1})

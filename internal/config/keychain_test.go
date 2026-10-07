@@ -60,7 +60,7 @@ const (
 while [ $# -gt 0 ]; do case $1 in -s) svc=$2 ;; -w) pw=$2 ;; esac; shift; done
 case $cmd in
 add-generic-password) printf %s "$pw" >"$FAKE/svc-$svc" ;;
-delete-generic-password) [ -f "$FAKE/svc-$svc" ] && rm -f "$FAKE/svc-$svc" ;;
+delete-generic-password) [ -f "$FAKE/svc-$svc" ] || exit 44; rm -f "$FAKE/svc-$svc" ;;
 find-generic-password)
 	[ -f "$FAKE/svc-$svc" ] || exit 44
 	if LC_ALL=C grep -q '[^ -~]' "$FAKE/svc-$svc"; then od -An -tx1 "$FAKE/svc-$svc" | tr -d ' \n'; else cat "$FAKE/svc-$svc"; fi ;;
@@ -201,5 +201,106 @@ func TestDeletePassword(t *testing.T) {
 	isolated(t, "sh")
 	if gone, err := DeletePassword("security find-generic-password -a sqlmux -s 'sqlmux-a' -w"); gone || err != nil {
 		t.Errorf("no tool: %v %v", gone, err)
+	}
+}
+
+// Only the command StorePassword wrote is ours: anything else a shell would
+// run, an item of the user's own under -a sqlmux, another way of quoting,
+// goes nowhere near the tool, and the service is read as it was quoted
+// (F8.16).
+func TestDeletePasswordMatchesOnlyWhatWeWrote(t *testing.T) {
+	bin := isolated(t, "sh", "cat", "grep", "od", "tr", "rm")
+	hostOS = "darwin"
+	fakeTool(t, bin, "security", "echo \"$*\" >>\"$FAKE/log\"\n"+fakeSecurity)
+	calls := func(cmd string) string {
+		_ = os.Remove(filepath.Join(os.Getenv("FAKE"), "log"))
+		if _, err := DeletePassword(cmd); err != nil {
+			t.Errorf("%q: %v", cmd, err)
+		}
+		log, _ := os.ReadFile(filepath.Join(os.Getenv("FAKE"), "log"))
+		return strings.TrimSpace(string(log))
+	}
+	for cmd, want := range map[string]string{
+		"security find-generic-password -a sqlmux -s 'sqlmux-x' -w":                  "delete-generic-password -a sqlmux -s sqlmux-x",
+		"security find-generic-password -a sqlmux -s 'sqlmux-x' -w | xxd -r -p":      "delete-generic-password -a sqlmux -s sqlmux-x",
+		"security find-generic-password -a sqlmux -s 'sqlmux-it'\\''s 库 x' -w":       "delete-generic-password -a sqlmux -s sqlmux-it's 库 x",
+		"security find-generic-password -a sqlmux -s 'sqlmux-x' -w; rm -rf ~":        "",
+		"security find-generic-password -a sqlmux -s 'sqlmux-x' -w\n":                "",
+		"security find-generic-password -a sqlmux -s 'sqlmux-x' -w | xxd -r -p | tr": "",
+		"security find-generic-password -a other -s 'sqlmux-x' -w":                   "",
+		"security  find-generic-password -a sqlmux -s 'sqlmux-x' -w":                 "",
+		" security find-generic-password -a sqlmux -s 'sqlmux-x' -w":                 "",
+		"echo; security find-generic-password -a sqlmux -s 'sqlmux-x' -w":            "",
+		"security find-generic-password -a sqlmux -s \"sqlmux-x\" -w":                "",
+		"security find-generic-password -a sqlmux -s sqlmux-x -w":                    "",
+		"security find-generic-password -a sqlmux -s 'my-own-item' -w":               "", // the user's, under the same account
+		"security find-generic-password -a sqlmux -s 'sqlmux-a' 'b' -w":              "",
+	} {
+		if got := calls(cmd); got != want {
+			t.Errorf("%q: calls %q, want %q", cmd, got, want)
+		}
+	}
+	hostOS = "linux"
+	fakeTool(t, bin, "secret-tool", "echo \"$*\" >>\"$FAKE/log\"\n"+fakeSecretTool)
+	for cmd, want := range map[string]string{
+		"secret-tool lookup sqlmux 'x'":                 "clear sqlmux x",
+		"secret-tool lookup sqlmux 'it'\\''s'":          "clear sqlmux it's",
+		"secret-tool lookup sqlmux 'x'; rm -rf ~":       "",
+		"secret-tool lookup service sqlmux account 'x'": "",
+		"echo; secret-tool lookup sqlmux 'x'":           "",
+		"secret-tool lookup sqlmux x":                   "",
+	} {
+		if got := calls(cmd); got != want {
+			t.Errorf("%q: calls %q, want %q", cmd, got, want)
+		}
+	}
+}
+
+// An item that is not there is not a failure to delete; one the tool
+// refuses to is (F8.16).
+func TestDeletePasswordNotFound(t *testing.T) {
+	bin := isolated(t, "sh", "cat", "grep", "od", "tr", "rm")
+	hostOS = "darwin"
+	fakeTool(t, bin, "security", fakeSecurity)
+	if gone, err := DeletePassword("security find-generic-password -a sqlmux -s 'sqlmux-none' -w"); gone || err != nil {
+		t.Errorf("not there: %v %v", gone, err)
+	}
+	fakeTool(t, bin, "security", "echo 'keychain is locked' >&2\nexit 1\n")
+	if _, err := DeletePassword("security find-generic-password -a sqlmux -s 'sqlmux-a' -w"); err == nil || err.Error() != "security: keychain is locked" {
+		t.Errorf("failing: %v", err)
+	}
+}
+
+// Two commands read one item when they name the same service: a password
+// that is not printable makes the command longer, not the item another
+// (F8.16).
+func TestSamePassword(t *testing.T) {
+	hostOS = "darwin"
+	plain, hex := KeychainCmd("a", "pw"), KeychainCmd("a", "pä")
+	if plain == hex || !SamePassword(plain, hex) {
+		t.Errorf("the same item, two commands: %q %q", plain, hex)
+	}
+	if SamePassword(plain, KeychainCmd("b", "pw")) || SamePassword("pass show a", "pass show a") || SamePassword(plain, "pass show a") {
+		t.Error("another item, or not ours")
+	}
+	hostOS = "linux"
+	if !SamePassword(KeychainCmd("a", "x"), KeychainCmd("a", "y")) || SamePassword(KeychainCmd("a", "x"), plain) {
+		t.Error("secret-tool: a name is an item; a tool's items are not another's")
+	}
+}
+
+// KeychainCmd is what StorePassword answers, known before anything is
+// stored.
+func TestKeychainCmdIsWhatStoreWrites(t *testing.T) {
+	for _, c := range []struct{ os, tool, script string }{{"darwin", "security", fakeSecurity}, {"linux", "secret-tool", fakeSecretTool}} {
+		bin := isolated(t, "sh", "cat", "grep", "od", "tr", "rm")
+		hostOS = c.os
+		fakeTool(t, bin, c.tool, c.script)
+		for _, pw := range []string{"pw", "pä"} {
+			cmd, _, err := StorePassword("my 'db'", pw)
+			if err != nil || cmd != KeychainCmd("my 'db'", pw) {
+				t.Errorf("%s %q: %q %v, want %q", c.os, pw, cmd, err, KeychainCmd("my 'db'", pw))
+			}
+		}
 	}
 }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -21,13 +22,8 @@ var hostOS = runtime.GOOS
 func StorePassword(name, pw string) (cmd string, stored bool, err error) {
 	service := "sqlmux-" + name
 	tool, args, stdin := "secret-tool", []string{"store", "--label", service, "sqlmux", name}, strings.NewReader(pw)
-	cmd = "secret-tool lookup sqlmux " + shellQuote(name)
 	if hostOS == "darwin" {
 		tool, args, stdin = "security", []string{"add-generic-password", "-U", "-a", "sqlmux", "-s", service, "-w", pw}, nil
-		cmd = "security find-generic-password -a sqlmux -s " + shellQuote(service) + " -w"
-		if !printable(pw) { // security -w then writes the whole password in hex (keychain_find.c)
-			cmd += " | xxd -r -p"
-		}
 	}
 	path, lookErr := exec.LookPath(tool)
 	if lookErr != nil {
@@ -44,45 +40,94 @@ func StorePassword(name, pw string) (cmd string, stored bool, err error) {
 		}
 		return "", false, fmt.Errorf("%s: %s", tool, why)
 	}
-	return cmd, true, nil
+	return KeychainCmd(name, pw), true, nil
 }
 
-// keychainCmds are the two password_cmd StorePassword writes, the service
-// or the name quoted for sh in the one group.
-var keychainCmds = []struct {
-	cmd    *regexp.Regexp
-	tool   string
-	delete func(name string) []string
-}{
-	{regexp.MustCompile(`^security find-generic-password -a sqlmux -s '((?:[^']|'\\'')*)' -w( \| xxd -r -p)?$`), "security",
+// KeychainCmd is the password_cmd StorePassword returns for name and pw:
+// what the file would say, known before anything is stored (F8.16).
+func KeychainCmd(name, pw string) string {
+	if hostOS != "darwin" {
+		return "secret-tool lookup sqlmux " + shellQuote(name)
+	}
+	cmd := "security find-generic-password -a sqlmux -s " + shellQuote("sqlmux-"+name) + " -w"
+	if !printable(pw) { // security -w then writes the whole password in hex (keychain_find.c)
+		cmd += " | xxd -r -p"
+	}
+	return cmd
+}
+
+// keychainTool is a keychain tool and the password_cmd of its that
+// StorePassword writes.
+type keychainTool struct {
+	cmd      *regexp.Regexp
+	tool     string
+	clear    func(item string) []string
+	notFound int // the exit code of the tool for an item that is not there
+}
+
+// keychainTools are the two password_cmd StorePassword writes, the service
+// (sqlmux- and the name) or the name quoted for sh in the one group, so an
+// item of the user's own, even under -a sqlmux, does not match.
+var keychainTools = []keychainTool{
+	{regexp.MustCompile(`^security find-generic-password -a sqlmux -s '(sqlmux-(?:[^']|'\\'')*)' -w( \| xxd -r -p)?$`), "security",
 		func(service string) []string {
 			return []string{"delete-generic-password", "-a", "sqlmux", "-s", service}
-		}},
+		}, 44},
 	{regexp.MustCompile(`^secret-tool lookup sqlmux '((?:[^']|'\\'')*)'$`), "secret-tool",
-		func(name string) []string { return []string{"clear", "sqlmux", name} }},
+		func(name string) []string { return []string{"clear", "sqlmux", name} }, -1},
+}
+
+// keychainItem is the item passwordCmd reads, when that is a command
+// StorePassword wrote: the tool, and what it calls the item by.
+func keychainItem(passwordCmd string) (k *keychainTool, item string) {
+	for i := range keychainTools {
+		if m := keychainTools[i].cmd.FindStringSubmatch(passwordCmd); m != nil {
+			return &keychainTools[i], strings.ReplaceAll(m[1], `'\''`, "'")
+		}
+	}
+	return nil, ""
+}
+
+// OwnPassword is whether passwordCmd is a command StorePassword wrote.
+func OwnPassword(passwordCmd string) bool {
+	k, _ := keychainItem(passwordCmd)
+	return k != nil
+}
+
+// SamePassword is whether two password_cmd read one item, both being
+// commands StorePassword wrote: not the same text, a password that is not
+// printable making the command longer (F8.16).
+func SamePassword(a, b string) bool {
+	ka, ia := keychainItem(a)
+	kb, ib := keychainItem(b)
+	return ka != nil && ka == kb && ia == ib
 }
 
 // DeletePassword takes out of the keychain the item passwordCmd reads, when
 // that is the command StorePassword wrote; a command of the user's own is not
 // touched, nor a keychain without its tool (F8.16). stored says an item was
-// asked to go; err is the tool's complaint.
+// asked to go, one that was not there is not an error; err is the tool's
+// complaint.
 func DeletePassword(passwordCmd string) (stored bool, err error) {
-	for _, k := range keychainCmds {
-		m := k.cmd.FindStringSubmatch(passwordCmd)
-		if m == nil {
-			continue
-		}
-		path, lookErr := exec.LookPath(k.tool)
-		if lookErr != nil {
-			return false, nil //nolint:nilerr // no such tool is no keychain
-		}
-		if out, runErr := exec.Command(path, k.delete(strings.ReplaceAll(m[1], `'\''`, "'"))...).CombinedOutput(); runErr != nil {
-			why, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
-			return false, fmt.Errorf("%s: %s", k.tool, cmp.Or(why, runErr.Error()))
-		}
-		return true, nil
+	k, item := keychainItem(passwordCmd)
+	if k == nil {
+		return false, nil
 	}
-	return false, nil
+	tool := k.tool
+	path, lookErr := exec.LookPath(tool)
+	if lookErr != nil {
+		return false, nil //nolint:nilerr // no such tool is no keychain
+	}
+	out, runErr := exec.Command(path, k.clear(item)...).CombinedOutput()
+	var exit *exec.ExitError
+	if errors.As(runErr, &exit) && exit.ExitCode() == k.notFound {
+		return false, nil
+	}
+	if runErr != nil {
+		why, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
+		return false, fmt.Errorf("%s: %s", tool, cmp.Or(why, runErr.Error()))
+	}
+	return true, nil
 }
 
 // shellQuote is s as one word of an sh command line.

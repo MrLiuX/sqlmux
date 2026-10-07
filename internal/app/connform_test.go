@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -16,36 +17,68 @@ import (
 )
 
 // keychain puts a fake security and secret-tool first on PATH: what they
-// are given they keep in $FAKE/pw, or they refuse with "locked". PATH is
-// bare with none: the tests never reach the real keychain.
+// are given they keep in $FAKE, the last password in $FAKE/pw, each item in
+// its own file (kcItem), every call in $FAKE/log; or they refuse with
+// "locked". PATH holds nothing else a script needs, and is bare with none:
+// the tests never reach the real keychain.
 func keychain(t *testing.T, mode string) (pw string) {
 	t.Helper()
 	bin, notes := t.TempDir(), t.TempDir()
-	if cat, err := exec.LookPath("cat"); err == nil && mode != "none" { // the fake secret-tool reads its stdin with it
-		if err := os.Symlink(cat, filepath.Join(bin, "cat")); err != nil {
-			t.Fatal(err)
+	if mode != "none" { // the fakes, and the sh -c a password_cmd runs in
+		for _, tool := range []string{"cat", "rm", "sh"} {
+			if path, err := exec.LookPath(tool); err == nil {
+				if err := os.Symlink(path, filepath.Join(bin, tool)); err != nil {
+					t.Fatal(err)
+				}
+			}
 		}
 	}
 	t.Setenv("PATH", bin)
 	t.Setenv("FAKE", notes)
 	if mode != "none" {
-		script := "#!/bin/bash\n"
-		if mode == "locked" {
-			script += "echo locked >&2; exit 1\n"
-		} else {
-			script += `case $1 in
-add-generic-password) while [ $# -gt 0 ]; do [ "$1" = -w ] && printf %s "$2" >"$FAKE/pw"; shift; done ;;
-store) cat >"$FAKE/pw" ;;
+		scripts := map[string]string{
+			"security": `cmd=$1; svc=; pw=
+while [ $# -gt 0 ]; do case $1 in -s) svc=$2 ;; -w) pw=$2 ;; esac; shift; done
+case $cmd in
+add-generic-password) printf %s "$pw" >"$FAKE/svc-$svc"; printf %s "$pw" >"$FAKE/pw" ;;
+find-generic-password) [ -f "$FAKE/svc-$svc" ] || exit 44; cat "$FAKE/svc-$svc" ;;
+delete-generic-password) [ -f "$FAKE/svc-$svc" ] || exit 44; rm -f "$FAKE/svc-$svc" ;;
 esac
-`
-		}
-		for _, name := range []string{"security", "secret-tool"} {
-			if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o755); err != nil {
+`,
+			"secret-tool": `cmd=$1; for a; do last=$a; done
+case $cmd in
+store) cat >"$FAKE/svc-$last"; cp "$FAKE/svc-$last" "$FAKE/pw" ;;
+lookup) [ -f "$FAKE/svc-$last" ] || exit 1; cat "$FAKE/svc-$last" ;;
+clear) rm -f "$FAKE/svc-$last" ;;
+esac
+`}
+		for name, script := range scripts {
+			if mode == "locked" {
+				script = "echo locked >&2; exit 1\n"
+			}
+			if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/bash\necho \"$*\" >>\"$FAKE/log\"\n"+script), 0o755); err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
 	return filepath.Join(notes, "pw")
+}
+
+// kcItem is the password the fake keychain keeps for connection name, and
+// whether it keeps one; the item's own name is the tool's of this system.
+func kcItem(name string) (string, bool) {
+	file := "svc-" + name
+	if runtime.GOOS == "darwin" {
+		file = "svc-sqlmux-" + name
+	}
+	b, err := os.ReadFile(filepath.Join(os.Getenv("FAKE"), file))
+	return string(b), err == nil
+}
+
+// kcLog is what the fake keychain was asked, a call a line.
+func kcLog() []string {
+	b, _ := os.ReadFile(filepath.Join(os.Getenv("FAKE"), "log"))
+	return strings.Split(strings.TrimSpace(string(b)), "\n")
 }
 
 func connections() string {
