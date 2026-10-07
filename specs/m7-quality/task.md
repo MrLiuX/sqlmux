@@ -1,6 +1,6 @@
 # M7 工程质量 · 任务清单
 
-- **状态**：**开发中**（2026-10-07 用户追加 F7.6：默认英文）。节点 1（F7.1、F7.2）passed（5b76c68）；节点 2（F7.3、F7.4）passed（491ea8b；e2e 090e2ed，全量 89 个脚本 2230 项全过）。节点 3（F7.5）passed（99781fc；e2e 915067f，全量 90 个脚本 2260 项全过）。节点 4（F7.6）todo。和 M5、M6 一起验收，通过后打 tag `m7`。CI 在 GitHub 上的第一次运行等推送。F7.3、F7.4 的细节照常开工前由 worker 提议。用户验收 M5 + M6 和 M7 开发并行：验收版是 1489851 编的，M7 的改动不影响它。
+- **状态**：**开发完成**（2026-10-07）。节点 1（F7.1、F7.2）passed（5b76c68）；节点 2（F7.3、F7.4）passed（491ea8b；e2e 090e2ed，全量 89 个脚本 2230 项全过）。节点 3（F7.5）passed（99781fc；e2e 915067f，全量 90 个脚本 2260 项全过）。节点 4（F7.6）passed（ec4aaad；e2e 2bdfac5，全量 92 个脚本 2264 项全过）。和 M5、M6 一起验收，通过后打 tag `m7`。CI 在 GitHub 上的第一次运行等推送。F7.3、F7.4 的细节照常开工前由 worker 提议。用户验收 M5 + M6 和 M7 开发并行：验收版是 1489851 编的，M7 的改动不影响它。
 - **目标**：用 golangci-lint 守住代码质量和规范，每个 commit、每次审查都先过 lint；仓库有 CI；常规操作统一走 `just`；连接凭据不再需要明文落盘（F7.3）；没有连接也能启动，用表单新建（F7.4）。
 - **范围**：tech-design §4（新增文件）、§15「静态检查」「CI」「常规操作走 just」；AGENTS.md 的 worker 和 reviewer 规则。
 - **依赖**：M6 F6.1–F6.7 全部 passed（lint 的修改会碰到所有包，不和 M6 的修复撞车）。
@@ -98,7 +98,7 @@
 - [x] 单测：0644 的文件带明文密码加载后没有警告；F7.3 的明文兜底后文件权限不变。
 - [x] e2e：f7.3 里「明文 + 0600」那项改成权限不变；启动时没有 chmod 的 toast。
 
-## F7.6 默认语言改成英文 · 状态：todo
+## F7.6 默认语言改成英文 · 状态：passed（ec4aaad；e2e 2bdfac5）
 
 用户 2026-10-07 定：开源面向英语用户，界面默认英文，`language = "zh"` 才是中文；配置目录里的注释也全改英文（用户自己 `~/.config/sqlmux/` 里的文件由决策者改，程序生成的 `sqlmux keys --format toml` 跟着语言）。
 
@@ -106,12 +106,12 @@
 - **涉及**：`internal/i18n`（未 `Set` 时的语言）、`internal/config`（默认值、解析错误的文字）、`cmd/sqlmux`（用法、flag 说明）、golden
 
 **开发**（§14「界面语言」）
-- [ ] `language` 默认 `en`。`i18n` 没 `Set` 之前就是英文，`Set("zh")` 才切中文；config 读完之后的文字和 `sqlmux keys` 的输出照旧跟着语言，所以不带配置时都是英文。
-- [ ] 读 config 之前显示的文字直接用英文写，不走 `T`：`sqlmux` 的用法、flag 说明和错误、config.toml / keymaps.toml 的解析错误。扫描测试的允许名单去掉这几项（只剩数据库错误前缀之类真正的例外）。
-- [ ] `T` 的 key 仍是中文（§14，决策者定：改英文 key 动 300 多处且不改行为，不值）。
-- [ ] 已有的测试和 golden 一个字不动（worker 提议，已定：app / config / editor / keymap 的 TestMain 里 `i18n.Set("zh")`，和 e2e 的 lib.sh 补 `language = "zh"` 是同一个做法；原来「golden 按默认语言重生成」要改 126 个测试的期望，不值）；`TestGoldenEnglish` 保留，仍是英文 golden。默认语言本身由新增的单测盖（见验收）。
-- [ ] 送审前先把 `e2e` 分支合进来再跑全量：tester 已在 `lib.sh` 里给每个脚本的 config.toml 补 `language = "zh"`（同 `confirm_dangerous` 的写法）。
+- [x] `language` 默认 `en`。`i18n` 没 `Set` 之前就是英文，`Set("zh")` 才切中文；config 读完之后的文字和 `sqlmux keys` 的输出照旧跟着语言，所以不带配置时都是英文。
+- [x] 读 config 之前显示的文字直接用英文写，不走 `T`：`sqlmux` 的用法、flag 说明和错误、config.toml / keymaps.toml 的解析错误。扫描测试的允许名单去掉这几项（只剩数据库错误前缀之类真正的例外）。
+- [x] `T` 的 key 仍是中文（§14，决策者定：改英文 key 动 300 多处且不改行为，不值）。
+- [x] 已有的测试和 golden 一个字不动（worker 提议，已定：app / config / editor / keymap 的 TestMain 里 `i18n.Set("zh")`，和 e2e 的 lib.sh 补 `language = "zh"` 是同一个做法；原来「golden 按默认语言重生成」要改 126 个测试的期望，不值）；`TestGoldenEnglish` 保留，仍是英文 golden。默认语言本身由新增的单测盖（见验收）。
+- [x] 送审前先把 `e2e` 分支合进来再跑全量：tester 已在 `lib.sh` 里给每个脚本的 config.toml 补 `language = "zh"`（同 `confirm_dangerous` 的写法）。
 
 **验收**
-- [ ] 单测：不写 `language` 得英文；`language = "zh"` 得中文；`language = "xx"` 的启动错误是英文；`sqlmux keys --format toml` 不带配置时分组注释和操作说明是英文。
-- [ ] e2e：f6.4 改成「不写 `language` 启动，toast、日志、面板都是英文；`language = "zh"` 时是中文」；其余脚本靠 `lib.sh` 补的 `language = "zh"`，已有断言不动。
+- [x] 单测：不写 `language` 得英文；`language = "zh"` 得中文；`language = "xx"` 的启动错误是英文；`sqlmux keys --format toml` 不带配置时分组注释和操作说明是英文。
+- [x] e2e：f6.4 改成「不写 `language` 启动，toast、日志、面板都是英文；`language = "zh"` 时是中文」；其余脚本靠 `lib.sh` 补的 `language = "zh"`，已有断言不动。

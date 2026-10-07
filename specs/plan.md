@@ -11,9 +11,9 @@
 | M4 命令面板 | [m4-palette/task.md](m4-palette/task.md) | 快速 SQL 接上 M3、DDL 预览、面板里 tab 的层级 | 完成（用户 2026-10-02 验收，tag `m4`）；验收意见排进 M5 的 F5.5–F5.9 |
 | M5 工作现场 | [m5-workspace/task.md](m5-workspace/task.md) | 一个 session 多个连接、多 session / window、只读与事务模式、MySQL；先做 M4 验收意见 F5.5–F5.9 | F5.1–F5.11 passed（2026-10-03）；验收中，F5.12–F5.19 passed（2026-10-05，完整回归在 d156ec7 上全过）；开发全部完成，和 M6 一起验收后打 tag `m5`；M5 不单独验收，和 M6 一起（用户 10-05 定），节点 5 通过后直接开工 M6 |
 | M6 配置 | [m6-config/task.md](m6-config/task.md) | 键位配置收尾、主题、持久化、界面中英文切换、布局文件（保存与恢复工作现场）、可以关掉 vim 模式 | 完成（F6.1–F6.7 passed，完整回归在 be5f6f3 上全过，2026-10-06）；等用户和 M5 一起验收，通过后打 tag `m6` |
-| M7 工程质量 | [m7-quality/task.md](m7-quality/task.md) | golangci-lint 与 CI、justfile、凭据不落明文、分字段的新建连接表单与无连接启动（用户 2026-10-05 提出） | F7.1–F7.5 passed（99781fc，2026-10-07）；F7.6 默认英文（用户 2026-10-07 追加，节点 4）开发中；和 M5、M6 一起验收，通过后打 tag `m7`、`v0.1.0`，CI 首次运行等推送 |
+| M7 工程质量 | [m7-quality/task.md](m7-quality/task.md) | golangci-lint 与 CI、justfile、凭据不落明文、分字段的新建连接表单与无连接启动（用户 2026-10-05 提出） | F7.1–F7.5 passed（99781fc，2026-10-07）；F7.6 默认英文 passed（ec4aaad，2026-10-07）；和 M5、M6 一起验收，通过后打 tag `m7`、`v0.1.0`，CI 首次运行等推送 |
 
-| M8 第一轮使用反馈 | [m8-feedback/task.md](m8-feedback/task.md) | 用户照 WALKTHROUGH 走完 M5–M7 后的 20 条意见：补全和格式化的 bug、列宽、边框样式、默认排序、window / session / console 改名、连接的修改与删除 | todo（2026-10-07 整理；M7 F7.6 之后开工） |
+| M8 第一轮使用反馈 | [m8-feedback/task.md](m8-feedback/task.md) | 用户照 WALKTHROUGH 走完 M5–M7 后的 20 条意见：补全和格式化的 bug、列宽、边框样式、默认排序、window / session / console 改名、连接的修改与删除 | 开发中（2026-10-07 整理，F7.6 之后开工） |
 
 ## 发布（用户 2026-10-07 定）
 
