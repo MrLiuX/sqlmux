@@ -181,7 +181,7 @@
 **开发**（§5、§6.8、§11）
 - [ ] 新 window 的默认名：第一个 `data`，之后 `data-2`、`data-3`……取同一 session 里最小的没用过的序号。`window.rename` 改成同 session 里已有的名字时 toast 拒绝、输入框留着。
 - [ ] `session.rename`「重命名 session…」：在任何地方可用（面板、可绑键），用状态栏的单行输入（同 `window.rename`）；名字和已有 session 重复时拒绝。session 列表里的 `$` 照旧。
-- [ ] `console.rename`「重命名 console…」：同上。console 的名字就是文件名：`consoles/<名字>.sql`，默认 `console_<n>`，改名就是改文件名（目标已存在时拒绝；名字规则同连接名：不含 `/`、`\`，不以 `.` 开头）；tab、pane 标题、工作区树、面板都显示新名字；state.json 的 `consoles` 键和布局文件里的 console 项改成记名字（`n` 改成 `name`，读到旧的 `n` 当 `console_<n>`，不写迁移代码）。改名后另一个 session 正开着同名文件的情况不会出现（打开时就互斥，§11）。
+- [ ] `console.rename`「重命名 console…」：同上；焦点不在 console 上时什么都不做、不 toast（审查时定，同其他只对 console 起作用的命令）。console 的名字就是文件名：`consoles/<名字>.sql`，默认 `console_<n>`，改名就是改文件名（目标已存在时拒绝；名字规则同连接名：不含 `/`、`\`，不以 `.` 开头）；tab、pane 标题、工作区树、面板都显示新名字；state.json 的 `consoles` 键和布局文件里的 console 项改成记名字（`n` 改成 `name`，读到旧的 `n` 当 `console_<n>`，不写迁移代码）。改名后另一个 session 正开着同名文件的情况不会出现（打开时就互斥，§11）。
 
 **验收**
 - [ ] 单测：连开三个 window 得 `data`、`data-2`、`data-3`；重命名成已有名字被拒绝；console 改名后文件改名、state.json 键改名、布局文件写 `name`，旧布局的 `n` 能读。
@@ -222,7 +222,7 @@
 
 **开发**（§9.6「WHERE 的 `C-r` 历史 / 收藏下拉」、§7.8 查询条）
 - [ ] 列表顺序改成历史在前、收藏在后，两组之间画一行 `sep` 色的横线（两组都非空时才画）；图标照旧，不画组标题。
-- [ ] WHERE 行右端的 `▾` 前面加 `history` 图标和打开下拉的键（从 keymap 读 `where.history` 在 `input` 作用域的键，默认 `C-r`），`dim` 色，如 `󰋚 C-r ▾`；放不下时只留 `▾`。
+- [ ] WHERE 行右端的 `▾` 前面加 `history` 图标和打开下拉的键（从 keymap 读 `where.history` 在 `input` 作用域的键，默认 `C-r`），`dim` 色，如 `󰋚 C-r ▾`；输入框留得下 16 列才显示，放不下时只留 `▾`；键位文字那一段也能点开下拉（worker 定，审查时接受）。
 - [ ] 下拉底部一行提示：移动 · 应用 · 收藏 / 取消收藏 · 关闭，键位从 keymap 读（同面板底栏的做法）；已有的话只核对顺序。
 
 **验收**
