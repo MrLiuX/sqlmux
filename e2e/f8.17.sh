@@ -58,6 +58,14 @@ done
 key Tab; sleep 0.3
 check "选中之后照常循环：最后一项再往下回到第一项" eval 'sel_is logged_at'
 
+# ---- 鼠标：悬停选中（没有选中项时也一样），点击接受
+item_y() { local g y; g=($(pop)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do [[ $(e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y) == "$1"* ]] && { echo $y; return; }; done; }
+fresh; e2e_type "select * from t_log wher"; sleep 0.6; key Enter; sleep 0.8
+g=($(pop)); e2e_move $((g[0] + 3)) "$(item_y msg)"; sleep 0.4
+check "没有选中项时鼠标悬停在 msg 上：选中它" eval 'sel_is msg'
+e2e_click $((g[0] + 3)) "$(item_y msg)"; sleep 0.5
+check "点击：接受 msg（补一个空格），列表关掉" eval '[[ $(line 1) == "select * from t_log where msg" && -z $(pop) ]] || { echo "  [$(line 1)] $(names)"; false; }'
+
 # ---- esc 关掉之后不再自己弹，再打空格才弹
 fresh; e2e_type "select * from t_log wher"; sleep 0.6; key Enter; sleep 0.8; key Escape; sleep 0.3
 check "esc：列表关掉，回到 NORMAL" eval 'none && mode_is NORMAL'
