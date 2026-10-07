@@ -34,7 +34,7 @@ key g g;         check "gg → 1,5" pos_is 1,5
 key 0
 
 # ---- 横向（§7.6「视图跟随光标」）：光标出了视图，视图滚到光标所在的列完整可见；往回移动时视图不跳回
-check "准备：160 宽时最后一列 deleted_at 只露出一截" eval '[[ $(header) == *"│ deleted_" && $(header) != *"deleted_at"* ]] || { echo "  $(header)"; false; }'
+check "准备：160 宽时最后一列 deleted_at 只露出一截" eval '[[ $(header) == *"│ del"* && $(header) != *"deleted_at"* ]] || { echo "  $(header)"; false; }'
 key '$'
 check "\$：到最后一列（1,10），视图横向滚动，deleted_at 完整可见，id 滚出视图" eval 'pos_is 1,10 && [[ $(header) == *"deleted_at"* && $(header) != *" id "* ]] || { echo "  $(header)"; false; }'
 h0=$(header); key h

@@ -65,8 +65,8 @@ start -x 80 -y 24; open_table t_order
 HY=$(( $(sepy) - 1 ))
 check "80 宽：竖线与 ┼ 逐行对齐" aligned
 check "80 宽：每行都是 80 列，data 右边框在原位" eval '[[ $(e2e_widths | sed "/^0$/d" | sort -u) == 80 ]] && [[ $(e2e_find ┐ 1) == "24 80" ]]'
-check "80 宽：放不下的 meta 从右边裁掉，只露出一截，后面的列不画" eval 'text_has 26 80 $HY "│ meta" && ! text_has 26 80 $HY "raw" >/dev/null'
-check "80 宽：列宽不小于表头（user_id / status / amount / paid 完整）" text_has 26 80 $HY "│ user_id │ status │ amount │ paid │"
+check "80 宽：放不下的 meta 从右边裁掉，只露出一截（F8.5：前面的短列不收缩，所以只剩一个字），后面的列不画" eval 'text_has 26 80 $HY "│ m" && ! text_has 26 80 $HY "meta" >/dev/null && ! text_has 26 80 $HY "raw" >/dev/null'
+check "80 宽：列宽不小于表头，短值也完整（F8.5：user_id / status（running 7 列）/ amount / paid（<null>））" eval 'text_has 26 80 $HY "│ user_id │ status  │ amount │ paid   │" && text_has 26 80 $(( HY + 2 )) "running"'
 
 # ---- ascii 图标：钥匙为 *
 printf 'icons = "ascii"\n' >| "$CFG/config.toml"; start -c "$CFG/config.toml"; open_table t_order

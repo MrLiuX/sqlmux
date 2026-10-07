@@ -47,10 +47,10 @@ check "↵ 打开 agentable.agent：焦点到 ①，行数和 psql 一致" eval 
 
 # ---- 树当前的 schema：光标所在节点所属的 schema，快速 SQL 按它设 search_path
 key C-h; goto "Tables \(3\)"
-pal ";select count(*) from agent"; key Enter
+pal ";select count(*) from agent"; sleep 0.5; key Escape; key Enter   # F8.1：列表开着 ↵ 只接受，先 esc 关列表
 check "光标在 agentable 下：快速 SQL 的 select count(*) from agent 能找到表" eval 'wait_for 8 eval "e2e_plain | grep -q \"1 行 · .* · 只读\""'
 key Escape; goto "Tables \(6\)"
-pal ";select count(*) from agent"; key Enter
+pal ";select count(*) from agent"; sleep 0.5; key Escape; key Enter   # F8.1：列表开着 ↵ 只接受，先 esc 关列表
 check "光标回到 public 下：同一句找不到 agent（relation does not exist）" eval 'wait_for 8 eval "e2e_plain | grep -q \"relation \\\"agent\\\" does not exist\""'
 key Escape
 

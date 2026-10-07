@@ -102,7 +102,7 @@ e2e_click $x $y; sleep 0.3
 check "点击 ▶ run：先让 console 获得焦点" focus_is 2
 e2e_keys i; t set-buffer -b e2e "$(seq -f 'select %g;' 60)"; t paste-buffer -p -b e2e -t t; sleep 0.4; e2e_keys Escape; sleep 0.2
 e2e_keys g g; sleep 0.2; e2e_click 60 10; sleep 0.3
-top_line() { e2e_text 107 109 2 | tr -d ' '; }   # ② 可见的第一行的行号
+top_line() { e2e_text 100 102 2 | tr -d ' '; }   # ② 可见的第一行的行号
 e2e_wheel 130 20 down; sleep 0.3
 check "焦点在 ① 时指针在 ② 上滚一格：② 前进 3 行（第 1 行 → 第 4 行），焦点不变" eval '[[ $(top_line) == 4 ]] && focus_is 1 || { echo "  top line: $(top_line)"; false; }'
 
