@@ -263,3 +263,25 @@ func TestReadOnlyUnlocks(t *testing.T) {
 		}
 	}
 }
+
+// What sqlkit.Literal writes is read back as it was, the nasty ones too
+// (F8.7).
+func TestLiteralRoundTrip(t *testing.T) {
+	c, err := Connect(context.Background(), OwnDB(t), "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	ctx := context.Background()
+	if _, err := c.Query(ctx, "create table t_lit (s text)"); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{"done", "it's", `a\b'c\`, `\`, `\'`, "two\nlines", "中文 ' \"", "''"} {
+		if _, err := c.Query(ctx, "insert into t_lit values ("+sqlkit.Literal(s, sqlkit.PG)+")"); err != nil {
+			t.Fatalf("%q: %v", s, err)
+		}
+		if r, err := c.Query(ctx, "select s from t_lit order by ctid desc limit 1"); err != nil || r.Rows[0][0].S != s {
+			t.Errorf("%q came back %v, %v", s, r.Rows, err)
+		}
+	}
+}
