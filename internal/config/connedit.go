@@ -22,11 +22,14 @@ import (
 // between, go with it. A comment on a paragraph of its own, below a blank
 // line, is the user's, whichever block it follows.
 
+const tomlKey = `(?:[A-Za-z0-9_-]+|"[^"]*"|'[^']*')`
+
 var (
 	connHeader = regexp.MustCompile(`^\s*\[\[\s*connection\s*\]\]`)
-	// tableHead is a line that is a table's header and nothing else: not the
-	// first line of an array written over several lines ([1, 2],).
-	tableHead = regexp.MustCompile(`^\s*\[\[?\s*[^\[\]=,]+?\s*\]\]?\s*(#.*)?$`)
+	// tableHead is a line that is a table's header and nothing else, its name
+	// a TOML key, dotted or in quotes: not the first line of an array written
+	// over several lines ([1, 2],).
+	tableHead = regexp.MustCompile(`^\s*\[\[?\s*` + tomlKey + `(?:\s*\.\s*` + tomlKey + `)*\s*\]\]?\s*(?:#.*)?$`)
 	keyLine   = regexp.MustCompile(`^(\s*)([A-Za-z0-9_-]+)\s*=`)
 )
 
@@ -127,6 +130,12 @@ func findConnection(lines []string, name string) (connBlock, Connection, error) 
 			return b, f.Connection[0], nil
 		}
 	}
+	var f struct {
+		Connection []Connection `toml:"connection"`
+	}
+	if _, err := toml.Decode(strings.Join(lines, ""), &f); err == nil && slices.ContainsFunc(f.Connection, func(c Connection) bool { return c.Name == name }) {
+		return connBlock{}, Connection{}, errOdd() // there, in lines no block of ours holds whole (a # or a [x] inside a value of lines)
+	}
 	return connBlock{}, Connection{}, fmt.Errorf(i18n.T("%s 里没有叫 %s 的连接"), connectionsPath(), name)
 }
 
@@ -196,6 +205,9 @@ func editedText(old string, was, c Connection) (text string, got Connection, err
 	if err != nil {
 		return "", Connection{}, err
 	}
+	if _, err := toml.Decode(string(data), &map[string]any{}); err != nil { // not ours to say it is odd
+		return "", Connection{}, fmt.Errorf("%s: %w", path, err)
+	}
 	lines := splitLines(string(data))
 	b, want, err := findConnection(lines, old)
 	if err != nil {
@@ -250,9 +262,13 @@ func editedText(old string, was, c Connection) (text string, got Connection, err
 	return text, conns[i], nil
 }
 
-// CheckUpdate is the error UpdateConnection would give, nothing written:
-// asked before a password goes into the keychain for it (F8.16).
+// CheckUpdate is the error UpdateConnection would give, nothing written, a
+// file that cannot be replaced included: asked before a password goes into
+// the keychain for it (F8.16).
 func CheckUpdate(old string, was, c Connection) error {
+	if _, _, err := writableConnections(); err != nil {
+		return err
+	}
 	_, _, err := editedText(old, was, c)
 	return err
 }
@@ -270,20 +286,36 @@ func UpdateConnection(old string, was, c Connection) (Connection, error) {
 	return got, rewriteConnections(text)
 }
 
-// rewriteConnections writes the text of connections.toml in place.
-func rewriteConnections(text string) error {
-	path, err := filepath.EvalSymlinks(connectionsPath())
-	if err != nil {
-		return err
+// writableConnections is the file connections.toml is, behind its links,
+// and its permissions, when it can be replaced: it is not read-only, and a
+// file can be made beside it.
+func writableConnections() (path string, perm os.FileMode, err error) {
+	if path, err = filepath.EvalSymlinks(connectionsPath()); err != nil {
+		return "", 0, err
 	}
 	fi, err := os.Stat(path)
 	if err != nil {
-		return err
+		return "", 0, err
 	}
 	if fi.Mode().Perm()&0o200 == 0 {
-		return fmt.Errorf(i18n.T("%s 不可写"), path)
+		return "", 0, fmt.Errorf(i18n.T("%s 不可写"), path)
 	}
-	return writeFileMode(path, []byte(text), fi.Mode().Perm())
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+"-*")
+	if err != nil {
+		return "", 0, err
+	}
+	_ = tmp.Close()
+	_ = os.Remove(tmp.Name())
+	return path, fi.Mode().Perm(), nil
+}
+
+// rewriteConnections writes the text of connections.toml in place.
+func rewriteConnections(text string) error {
+	path, perm, err := writableConnections()
+	if err != nil {
+		return err
+	}
+	return writeFileMode(path, []byte(text), perm)
 }
 
 // DeleteConnection takes the block of the connection called name out of

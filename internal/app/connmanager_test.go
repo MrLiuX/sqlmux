@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -149,8 +150,8 @@ func TestConnManagerEdit(t *testing.T) {
 	if a.sess.Conns[0].Spec.Name != "pg" || a.state.Tables["pg/public.t"] == nil || a.state.Consoles["console_1"].Conn != "pg" {
 		t.Errorf("the state follows: %v %v", a.state.Tables, a.state.Consoles)
 	}
-	if a.toast != "下次连接时生效" {
-		t.Errorf("connected: toast %q", a.toast)
+	if a.toast != "" {
+		t.Errorf("a name is the tree's at once: toast %q", a.toast)
 	}
 
 	feed(t, a, "<Esc><Esc>")
@@ -197,11 +198,11 @@ func TestGoldenConnManager(t *testing.T) {
 	golden.RequireEqual(t, a.render().String())
 }
 
-// withOwnPassword makes the password of second an item of the fake keychain,
+// withOwnPassword makes the password of second, pw1, an item of the fake keychain,
 // as the form does: the command in the file and in the session.
-func withOwnPassword(t *testing.T, a *App, pw string) {
+func withOwnPassword(t *testing.T, a *App) {
 	t.Helper()
-	cmd, stored, err := config.StorePassword("second", pw)
+	cmd, stored, err := config.StorePassword("second", "pw1")
 	if err != nil || !stored {
 		t.Fatalf("stored %v, %v", stored, err)
 	}
@@ -242,7 +243,7 @@ func hasHit(a *App, want ui.Target) bool {
 func TestConnManagerRenameMovesPassword(t *testing.T) {
 	a := managed(t)
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	withOwnPassword(t, a, "pw1")
+	withOwnPassword(t, a)
 	_ = os.Remove(filepath.Join(os.Getenv("FAKE"), "log")) // the setup's calls
 	a.state.Tables = map[string]*config.TableState{"second/public.t": {}}
 	secrets.Store("second", "cached")
@@ -281,7 +282,7 @@ func TestConnManagerRenameMovesPassword(t *testing.T) {
 // taken out after (F8.16).
 func TestConnManagerRetypedPassword(t *testing.T) {
 	a := managed(t)
-	withOwnPassword(t, a, "pw1")
+	withOwnPassword(t, a)
 	a.run("conn.manage", 0)
 	feed(t, a, "j<Tab>")
 	a.form.fields[fieldPassword].Input = ui.Input{Text: "pw2", Pos: 3}
@@ -510,7 +511,7 @@ func TestConnManagerLongList(t *testing.T) {
 // to it, the password kept for the name (F8.16).
 func TestConnManagerDeleteTakesWhatIsItsOwn(t *testing.T) {
 	a := managed(t)
-	withOwnPassword(t, a, "pw1")
+	withOwnPassword(t, a)
 	second := a.sess.Conns[1]
 	a.sess.last = second
 	a.sess.closed = []closedTab{{conn: second}, {conn: a.sess.Conns[0]}}
@@ -600,5 +601,277 @@ func TestSplitDSN(t *testing.T) {
 		if host, port, user, base := splitDSN(c.engine, c.dsn); host != c.host || port != c.port || user != c.user || base != c.base {
 			t.Errorf("%s %q: %q %q %q %q", c.engine, c.dsn, host, port, user, base)
 		}
+	}
+}
+
+// setSecondCmd makes second's password_cmd cmd, in the file and the session.
+func setSecondCmd(t *testing.T, a *App, cmd string) {
+	t.Helper()
+	was, err := config.ReadConnection("second")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := was
+	c.PasswordCmd = cmd
+	if _, err := config.UpdateConnection("second", was, c); err != nil {
+		t.Fatal(err)
+	}
+	a.sess.Conns[1].setSpec(c)
+}
+
+// editSecond opens the manager on second's form with a typed password and
+// then keys.
+func editSecond(t *testing.T, a *App, pw, keys string) {
+	t.Helper()
+	a.run("conn.manage", 0)
+	feed(t, a, "j<Tab>"+keys)
+	if pw != "" {
+		a.form.fields[fieldPassword].Input = ui.Input{Text: pw, Pos: len(pw)}
+	}
+	feed(t, a, "<C-s>")
+}
+
+// A file that cannot be replaced is found out before the keychain is
+// touched: the item the file names keeps its password, a rename makes no new
+// item (F8.16).
+func TestConnManagerUnwritableFileLeavesKeychain(t *testing.T) {
+	for label, keys := range map[string]string{"retyped": "", "renamed": "<C-u>third"} {
+		a := managed(t)
+		withOwnPassword(t, a)
+		if err := os.Chmod(filepath.Join(config.Dir(), "connections.toml"), 0o444); err != nil {
+			t.Fatal(err)
+		}
+		pw := ""
+		if keys == "" {
+			pw = "pw2"
+		}
+		editSecond(t, a, pw, keys)
+		if old, ok := kcItem("second"); !ok || old != "pw1" || a.form.err == "" {
+			t.Errorf("%s: the old item %q %v, err %q", label, old, ok, a.form.err)
+		}
+		if _, ok := kcItem("third"); ok {
+			t.Errorf("%s: an item for the new name", label)
+		}
+	}
+}
+
+// With password_cmd emptied there is one source, the password typed; left
+// as it is, the typed one replaces it; a command of the user's is not
+// meddled with (F8.16).
+func TestConnManagerPasswordSources(t *testing.T) {
+	a := managed(t)
+	setSecondCmd(t, a, "pass show second")
+	editSecond(t, a, "pw", "")
+	if got, _ := config.ReadConnection("second"); a.form.err != "" || got.PasswordCmd != config.KeychainCmd("second", "pw") {
+		t.Errorf("a typed password beside the user's command: err %q, cmd %q", a.form.err, got.PasswordCmd)
+	}
+
+	a = managed(t)
+	setSecondCmd(t, a, "pass show second")
+	a.run("conn.manage", 0)
+	feed(t, a, "j<Tab>")
+	a.form.fields[fieldPasswordCmd].Input = ui.Input{}
+	a.form.fields[fieldPassword].Input = ui.Input{Text: "pw", Pos: 2}
+	feed(t, a, "<C-s>")
+	if got, _ := config.ReadConnection("second"); a.form.err != "" || got.PasswordCmd != config.KeychainCmd("second", "pw") {
+		t.Errorf("the command emptied, a password typed: err %q, cmd %q", a.form.err, got.PasswordCmd)
+	}
+
+	a = managed(t)
+	setSecondCmd(t, a, "pass show second")
+	editSecond(t, a, "", "<C-u>third")
+	if got, _ := config.ReadConnection("third"); a.form.err != "" || got.PasswordCmd != "pass show second" || len(kcLog()) > 1 {
+		t.Errorf("renamed with the user's command: err %q, cmd %q, keychain %q", a.form.err, got.PasswordCmd, kcLog())
+	}
+
+	a = managed(t)
+	withOwnPassword(t, a)
+	a.run("conn.manage", 0)
+	feed(t, a, "j<Tab><C-u>third")
+	a.form.fields[fieldPasswordCmd].Input = ui.Input{Text: "pass show third"}
+	feed(t, a, "<C-s>")
+	if got, _ := config.ReadConnection("third"); a.form.err != "" || got.PasswordCmd != "pass show third" {
+		t.Errorf("renamed with another command typed: err %q, cmd %q", a.form.err, got.PasswordCmd)
+	}
+}
+
+// A save of one that is no rename asks nothing of the keychain (F8.16).
+func TestConnManagerNoRenameNoKeychain(t *testing.T) {
+	a := managed(t)
+	withOwnPassword(t, a)
+	_ = os.Remove(filepath.Join(os.Getenv("FAKE"), "log"))
+	a.run("conn.manage", 0)
+	feed(t, a, "j<Tab>")
+	a.form.fields[fieldReadOnly].On = 0
+	feed(t, a, "<C-s>")
+	if a.form.err != "" || strings.Join(kcLog(), "") != "" {
+		t.Errorf("err %q; the keychain was asked %q", a.form.err, kcLog())
+	}
+}
+
+// A rename of a connection whose item is not in the keychain is refused, and
+// says what to do; a password typed then goes under the new name (F8.16).
+func TestConnManagerRenameMissingItem(t *testing.T) {
+	a := managed(t)
+	withOwnPassword(t, a)
+	_ = os.Remove(filepath.Join(os.Getenv("FAKE"), map[bool]string{true: "svc-sqlmux-second", false: "svc-second"}[runtime.GOOS == "darwin"]))
+	before := connections()
+	editSecond(t, a, "", "<C-u>third")
+	want := "钥匙串里读不到 second 的密码：在 password 里重填，或清空 password_cmd 再保存"
+	if a.form.err != want || !a.form.fields[fieldPassword].Bad || connections() != before {
+		t.Errorf("err %q, bad %v, file changed %v", a.form.err, a.form.fields[fieldPassword].Bad, connections() != before)
+	}
+	if _, ok := kcItem("third"); ok || len(kcCalled("add-generic-password", "store")) != 1 { // only withOwnPassword's
+		t.Error("stored for the new name")
+	}
+	a.form.fields[fieldPassword].Input = ui.Input{Text: "pw9", Pos: 3}
+	feed(t, a, "<C-s>")
+	if pw, ok := kcItem("third"); !ok || pw != "pw9" || a.form.err != "" {
+		t.Errorf("a password typed: %q %v, err %q", pw, ok, a.form.err)
+	}
+}
+
+// The keychain command is in what the file is asked before anything is
+// stored, and the password_env a keychain password's file would have is
+// cleared with it (F8.16).
+func TestConnManagerKeychainPassword(t *testing.T) {
+	a := managed(t)
+	file := strings.Replace(managerFile, `dsn = "u:p@tcp(m:3306)/s"`, "dsn = \"u:p@tcp(m:3306)/s\"\n\"password_cmd\" = \"pass show x\"", 1)
+	if err := os.WriteFile(filepath.Join(config.Dir(), "connections.toml"), []byte(file), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	editSecond(t, a, "pw", "")
+	if len(kcCalled("add-generic-password", "store")) != 0 || connections() != file || a.form.err == "" {
+		t.Errorf("stored before the file was known to take it: %q, err %q", kcLog(), a.form.err)
+	}
+
+	a = managed(t)
+	was, _ := config.ReadConnection("second")
+	c := was
+	c.PasswordEnv = "SECOND_PW"
+	if _, err := config.UpdateConnection("second", was, c); err != nil {
+		t.Fatal(err)
+	}
+	editSecond(t, a, "pw", "")
+	if got, _ := config.ReadConnection("second"); got.PasswordEnv != "" || got.PasswordCmd != config.KeychainCmd("second", "pw") {
+		t.Errorf("the file says %+v", got)
+	}
+}
+
+// With no tool for this system's keychain, a rename whose password could be
+// read leaves it where it is: not in the file in plaintext (F8.16).
+func TestConnManagerRenameWithoutTool(t *testing.T) {
+	a := managed(t)
+	host, other := "secret-tool", "security"
+	file, cmd := "svc-sqlmux-second", "security find-generic-password -a sqlmux -s 'sqlmux-second' -w"
+	if runtime.GOOS == "darwin" {
+		host, other = other, host
+		file, cmd = "svc-second", "secret-tool lookup sqlmux 'second'"
+	}
+	_ = other
+	if err := os.WriteFile(filepath.Join(os.Getenv("FAKE"), file), []byte("pw1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	setSecondCmd(t, a, cmd)
+	if err := os.Remove(filepath.Join(os.Getenv("PATH"), host)); err != nil {
+		t.Fatal(err)
+	}
+	editSecond(t, a, "", "<C-u>third")
+	got, err := config.ReadConnection("third")
+	if err != nil || got.Password != "" || got.PasswordCmd != cmd {
+		t.Errorf("the file says %+v, %v; form err %q", got, err, a.form.err)
+	}
+}
+
+// A refusal of the keychain to delete says so, whether it is the old item
+// after a rename or a deleted connection's (F8.16).
+func TestConnManagerKeychainDeleteFails(t *testing.T) {
+	a := managedWith(t, "locked")
+	setSecondCmd(t, a, config.KeychainCmd("second", "pw"))
+	a.run("conn.manage", 0)
+	feed(t, a, "j<Tab>")
+	a.form.fields[fieldPasswordCmd].Input = ui.Input{Text: "pass show second"}
+	feed(t, a, "<C-s>")
+	if a.toast == "" {
+		t.Error("the old item left behind is not said")
+	}
+
+	a = managedWith(t, "locked")
+	setSecondCmd(t, a, config.KeychainCmd("second", "pw"))
+	a.run("conn.manage", 0)
+	feed(t, a, "jxy")
+	if len(a.sess.Conns) != 1 || a.toast == "" {
+		t.Errorf("deleted %v, toast %q", len(a.sess.Conns) == 1, a.toast)
+	}
+}
+
+// A connected connection told to take the edit at its next dial is told
+// when something but its name changed (F8.16).
+func TestConnManagerToastOnlyForWhatWaits(t *testing.T) {
+	a := managed(t)
+	a.sess.Conns[0].State = connReady
+	a.run("conn.manage", 0)
+	feed(t, a, "<C-s>")
+	if a.toast != "" {
+		t.Errorf("nothing changed: %q", a.toast)
+	}
+	feed(t, a, "<Tab><C-u>renamed<C-s>")
+	if a.toast != "" || a.sess.Conns[0].Spec.Name != "renamed" {
+		t.Errorf("only renamed: toast %q", a.toast)
+	}
+}
+
+// A connected or connecting connection that is edited dials as the edit says
+// once dialed again, the engine and the lock with the rest; the tree's lock
+// is the dial's; a console on a connection keeps it in use (F8.16).
+func TestConnManagerDialAfterEdit(t *testing.T) {
+	a := managed(t)
+	second := a.sess.Conns[1]
+	second.State = connReady
+	a.run("conn.manage", 0)
+	feed(t, a, "j<Tab>")
+	a.formSegment(fieldEngine, 0)
+	a.form.fields[fieldDSN].Input = ui.Input{Text: "postgres://u@m/s"}
+	feed(t, a, "<C-s>")
+	second.State = connFailed
+	a.connect(second)
+	if second.eng != engines["postgres"] {
+		t.Errorf("dialed as postgres: engine %T", second.eng)
+	}
+
+	a = managed(t)
+	a.sess.Conns[0].Spec.ReadOnly = true // the file's, not the dial's
+	ns, _ := a.treeNodes()
+	for _, n := range ns {
+		if n.kind == nodeConn && n.conn == a.sess.Conns[0] && n.Aside != "" {
+			t.Errorf("a lock %q before the dial", n.Aside)
+		}
+	}
+
+	a = managed(t)
+	consoleOf(a.win().pane(2)).conn = a.sess.Conns[1]
+	if !a.connInUse("second") {
+		t.Error("a console on it")
+	}
+}
+
+// The cancel button closes the manager whoever has the keys; the delete
+// button of the form asks, and the list has the keys after (F8.16).
+func TestConnManagerButtons(t *testing.T) {
+	a := managed(t)
+	a.run("conn.manage", 0)
+	click(a, find(t, a, ui.Target{Kind: ui.KindButton, Action: "form.cancel"}).Min)
+	if a.form != nil {
+		t.Error("cancel with the list focused did not close")
+	}
+	a.run("conn.manage", 0)
+	feed(t, a, "j<Tab>")
+	click(a, find(t, a, ui.Target{Kind: ui.KindButton, Action: "conns.delete"}).Min)
+	if a.confirm == nil {
+		t.Fatal("not asked")
+	}
+	feed(t, a, "y")
+	if len(a.sess.Conns) != 1 || a.form == nil || !a.form.list {
+		t.Errorf("after: %d connections, list focus %v", len(a.sess.Conns), a.form != nil && a.form.list)
 	}
 }

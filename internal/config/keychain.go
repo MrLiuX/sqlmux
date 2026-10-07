@@ -100,34 +100,33 @@ func OwnPassword(passwordCmd string) bool {
 func SamePassword(a, b string) bool {
 	ka, ia := keychainItem(a)
 	kb, ib := keychainItem(b)
-	return ka != nil && ka == kb && ia == ib
+	return ka != nil && ka == kb && strings.EqualFold(ia, ib) // a name is one whatever its case (F8.16)
 }
 
 // DeletePassword takes out of the keychain the item passwordCmd reads, when
 // that is the command StorePassword wrote; a command of the user's own is not
-// touched, nor a keychain without its tool (F8.16). stored says an item was
-// asked to go, one that was not there is not an error; err is the tool's
-// complaint.
-func DeletePassword(passwordCmd string) (stored bool, err error) {
+// touched, nor a keychain without its tool (F8.16). An item that was not
+// there is not an error; err is the tool's complaint.
+func DeletePassword(passwordCmd string) error {
 	k, item := keychainItem(passwordCmd)
 	if k == nil {
-		return false, nil
+		return nil
 	}
 	tool := k.tool
 	path, lookErr := exec.LookPath(tool)
 	if lookErr != nil {
-		return false, nil //nolint:nilerr // no such tool is no keychain
+		return nil //nolint:nilerr // no such tool is no keychain
 	}
 	out, runErr := exec.Command(path, k.clear(item)...).CombinedOutput()
 	var exit *exec.ExitError
 	if errors.As(runErr, &exit) && exit.ExitCode() == k.notFound {
-		return false, nil
+		return nil
 	}
 	if runErr != nil {
 		why, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
-		return false, fmt.Errorf("%s: %s", tool, cmp.Or(why, runErr.Error()))
+		return fmt.Errorf("%s: %s", tool, cmp.Or(why, runErr.Error()))
 	}
-	return true, nil
+	return nil
 }
 
 // shellQuote is s as one word of an sh command line.

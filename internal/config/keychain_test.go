@@ -185,8 +185,8 @@ func TestDeletePassword(t *testing.T) {
 		if got, _ := (Connection{PasswordCmd: cmd}).Secret(); got != "pw" {
 			t.Fatalf("%s: stored %q", c.os, got)
 		}
-		if gone, err := DeletePassword(cmd); !gone || err != nil {
-			t.Fatalf("%s: gone %v, %v", c.os, gone, err)
+		if err := DeletePassword(cmd); err != nil {
+			t.Fatalf("%s: %v", c.os, err)
 		}
 		if got, _ := (Connection{PasswordCmd: cmd}).Secret(); got != "" {
 			t.Errorf("%s: still there: %q", c.os, got)
@@ -194,13 +194,13 @@ func TestDeletePassword(t *testing.T) {
 		if got, _ := (Connection{PasswordCmd: other}).Secret(); got != "pw2" {
 			t.Errorf("%s: another's went too: %q", c.os, got)
 		}
-		if gone, err := DeletePassword("pass show db"); gone || err != nil {
-			t.Errorf("%s: a command of the user's: %v %v", c.os, gone, err)
+		if err := DeletePassword("pass show db"); err != nil {
+			t.Errorf("%s: a command of the user's: %v", c.os, err)
 		}
 	}
 	isolated(t, "sh")
-	if gone, err := DeletePassword("security find-generic-password -a sqlmux -s 'sqlmux-a' -w"); gone || err != nil {
-		t.Errorf("no tool: %v %v", gone, err)
+	if err := DeletePassword("security find-generic-password -a sqlmux -s 'sqlmux-a' -w"); err != nil {
+		t.Errorf("no tool: %v", err)
 	}
 }
 
@@ -214,7 +214,7 @@ func TestDeletePasswordMatchesOnlyWhatWeWrote(t *testing.T) {
 	fakeTool(t, bin, "security", "echo \"$*\" >>\"$FAKE/log\"\n"+fakeSecurity)
 	calls := func(cmd string) string {
 		_ = os.Remove(filepath.Join(os.Getenv("FAKE"), "log"))
-		if _, err := DeletePassword(cmd); err != nil {
+		if err := DeletePassword(cmd); err != nil {
 			t.Errorf("%q: %v", cmd, err)
 		}
 		log, _ := os.ReadFile(filepath.Join(os.Getenv("FAKE"), "log"))
@@ -262,11 +262,11 @@ func TestDeletePasswordNotFound(t *testing.T) {
 	bin := isolated(t, "sh", "cat", "grep", "od", "tr", "rm")
 	hostOS = "darwin"
 	fakeTool(t, bin, "security", fakeSecurity)
-	if gone, err := DeletePassword("security find-generic-password -a sqlmux -s 'sqlmux-none' -w"); gone || err != nil {
-		t.Errorf("not there: %v %v", gone, err)
+	if err := DeletePassword("security find-generic-password -a sqlmux -s 'sqlmux-none' -w"); err != nil {
+		t.Errorf("not there: %v", err)
 	}
 	fakeTool(t, bin, "security", "echo 'keychain is locked' >&2\nexit 1\n")
-	if _, err := DeletePassword("security find-generic-password -a sqlmux -s 'sqlmux-a' -w"); err == nil || err.Error() != "security: keychain is locked" {
+	if err := DeletePassword("security find-generic-password -a sqlmux -s 'sqlmux-a' -w"); err == nil || err.Error() != "security: keychain is locked" {
 		t.Errorf("failing: %v", err)
 	}
 }
@@ -282,6 +282,9 @@ func TestSamePassword(t *testing.T) {
 	}
 	if SamePassword(plain, KeychainCmd("b", "pw")) || SamePassword("pass show a", "pass show a") || SamePassword(plain, "pass show a") {
 		t.Error("another item, or not ours")
+	}
+	if !SamePassword(KeychainCmd("Db", "x"), KeychainCmd("db", "x")) {
+		t.Error("a name in another case is the item a keychain finds by its service")
 	}
 	hostOS = "linux"
 	if !SamePassword(KeychainCmd("a", "x"), KeychainCmd("a", "y")) || SamePassword(KeychainCmd("a", "x"), plain) {

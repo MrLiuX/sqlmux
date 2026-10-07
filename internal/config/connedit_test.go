@@ -352,3 +352,114 @@ func TestConnectionsWrite(t *testing.T) {
 		t.Errorf("a read-only file, a delete: %v", err)
 	}
 }
+
+// The file can be replaced is part of the check before anything is
+// stored: a read-only file, or a directory a file cannot be made in, is
+// refused by CheckUpdate as UpdateConnection would (F8.16).
+func TestCheckUpdateWritable(t *testing.T) {
+	was, to := connA("postgres://h/a", false), connA("postgres://h/b", false)
+	path := connectionsFile(t, oneConn)
+	if err := CheckUpdate("a", was, to); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckUpdate("a", was, to); err == nil {
+		t.Error("a read-only file")
+	}
+	path = connectionsFile(t, oneConn)
+	if os.Geteuid() == 0 {
+		return // root makes files anywhere
+	}
+	if err := os.Chmod(filepath.Dir(path), 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(filepath.Dir(path), 0o700) })
+	if err := CheckUpdate("a", was, to); err == nil {
+		t.Error("a directory no file can be made in")
+	}
+}
+
+// A table header is a TOML key, dotted or in quotes, and nothing else on the
+// line but a comment: a quoted name with a comma or an = is another table,
+// which a deletion leaves; the lines of an array are no header (F8.16).
+func TestConnectionBlockEndsAtTables(t *testing.T) {
+	for _, rest := range []string{"\n[\"x,y\"]\nk = 1\n\n['a=b'.c]\nk = 2\n", "\n['a=b'.c]\nk = 2\n\n[\"x,y\"]\nk = 1\n"} {
+		connectionsFile(t, oneConn+"\n[[connection]]\nname = \"b\"\nengine = \"mysql\"\ndsn = \"u@tcp(h:3306)/b\"\n"+rest)
+		if err := DeleteConnection("b"); err != nil {
+			t.Fatal(err)
+		}
+		if got, want := readFile(t, connectionsPath()), oneConn+rest; got != want {
+			t.Errorf("tables after the block:\n%s", got)
+		}
+	}
+	array := oneConn + "m = [\n  [1, 2],\n  [3, 4]\n]\nn = [\n  [\"a\"], [\"b\"]\n]\n"
+	connectionsFile(t, array+"\n[x]\nk = 1\n")
+	if _, err := UpdateConnection("a", connA("postgres://h/a", false), connA("postgres://h/a", true)); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := readFile(t, connectionsPath()), array+"read_only = true\n\n[x]\nk = 1\n"; got != want {
+		t.Errorf("the array's lines are the block's:\n%s", got)
+	}
+}
+
+// A value over lines with a # line, a [x] or a [[connection]] in it is no
+// block we can find whole: it is said to be written in a way to edit by
+// hand, not that the connection is not there (F8.16).
+func TestConnectionInAValueOfLines(t *testing.T) {
+	head := "[[connection]]\nname = \"a\"\nengine = \"postgres\"\ndsn = \"postgres://h/a\"\n"
+	for label, body := range map[string]string{
+		"a closing line that starts with #": head + "note = \"\"\"\nabc\n#tail\"\"\"\n",
+		"a table":                           head + "note = '''\n[x]\n'''\n",
+		"a block":                           head + "note = '''\n[[connection]]\nx\n'''\n",
+	} {
+		path := connectionsFile(t, body)
+		if _, err := ReadConnection("a"); err == nil || err.Error() != errOdd().Error() {
+			t.Errorf("%s, read: %v", label, err)
+		}
+		if _, err := UpdateConnection("a", connA("postgres://h/a", false), connA("postgres://h/a", true)); err == nil || err.Error() != errOdd().Error() {
+			t.Errorf("%s, update: %v", label, err)
+		}
+		if err := DeleteConnection("a"); err == nil || err.Error() != errOdd().Error() || readFile(t, path) != body {
+			t.Errorf("%s, delete: %v", label, err)
+		}
+	}
+	connectionsFile(t, oneConn)
+	if _, err := ReadConnection("none"); err == nil || err.Error() == errOdd().Error() {
+		t.Errorf("a connection not there: %v", err)
+	}
+}
+
+// A file that does not read as it is says so itself, not that the edit was
+// too odd (F8.16).
+func TestUpdateConnectionOfAFileThatDoesNotRead(t *testing.T) {
+	body := oneConn + "\n[other]\nx = = 1\n"
+	path := connectionsFile(t, body)
+	_, err := UpdateConnection("a", connA("postgres://h/a", false), connA("postgres://h/a", true))
+	if err == nil || err.Error() == errOdd().Error() || !strings.Contains(err.Error(), path) || readFile(t, path) != body {
+		t.Errorf("%v", err)
+	}
+}
+
+// Several keys changed in one save: a cleared one goes and a new one goes
+// after the block's last line, with the next block a blank line away or
+// right below; two new ones keep the order they are written in (F8.16).
+func TestUpdateConnectionClearsAndAdds(t *testing.T) {
+	for label, next := range map[string]string{"a blank between": "\n", "no blank": ""} {
+		body := oneConn + "password_cmd = \"pass show a\"\n" + next + "[[connection]]\nname = \"b\"\nengine = \"mysql\"\ndsn = \"u@tcp(h:3306)/b\"\n"
+		connectionsFile(t, body)
+		was := connA("postgres://h/a", false)
+		was.PasswordCmd = "pass show a"
+		to := connA("postgres://h/a", true)
+		to.Password = "plain"
+		if _, err := UpdateConnection("a", was, to); err != nil {
+			t.Errorf("%s: %v", label, err)
+			continue
+		}
+		want := oneConn + "password = \"plain\"\nread_only = true\n" + next + "[[connection]]\nname = \"b\"\nengine = \"mysql\"\ndsn = \"u@tcp(h:3306)/b\"\n"
+		if got := readFile(t, connectionsPath()); got != want {
+			t.Errorf("%s:\n%s", label, got)
+		}
+	}
+}

@@ -326,7 +326,7 @@ func (a *App) deleteConn() tea.Cmd {
 			return a.showToast(err.Error(), toastTTL)
 		}
 		var toast tea.Cmd
-		if _, err := config.DeletePassword(c.PasswordCmd); err != nil {
+		if err := config.DeletePassword(c.PasswordCmd); err != nil {
 			toast = a.showToast(err.Error(), toastTTL)
 		}
 		secrets.Delete(c.Name) // a connection of the name made next asks again
@@ -374,14 +374,14 @@ func (a *App) saveEditedConn() tea.Cmd {
 		// its item is named after it: the password goes to one under the new name
 		var err error
 		if pw, err = (config.Connection{PasswordCmd: was.PasswordCmd}).Secret(); err != nil {
-			return a.fail(fieldPassword, err.Error())
+			return a.fail(fieldPassword, i18n.T("钥匙串里读不到 %s 的密码：在 password 里重填，或清空 password_cmd 再保存", was.Name))
 		}
 		typed = false
 	}
-	if typed && pw != "" && c.PasswordCmd != was.PasswordCmd { // two sources: which one is wanted is not for us to say
+	if typed && pw != "" && c.PasswordCmd != "" && c.PasswordCmd != was.PasswordCmd { // two sources: which one is wanted is not for us to say
 		return a.fail(fieldPassword, i18n.T("password 和 password_cmd 填一个就够了"))
 	}
-	if pw != "" { // asked of the file as the keychain would have it, before anything is stored
+	if pw != "" { // the one place that has the keychain's command and clears the other sources; asked of the file before anything is stored
 		c.PasswordCmd, c.PasswordEnv, c.Password = config.KeychainCmd(c.Name, pw), "", ""
 	}
 	if err := config.CheckUpdate(was.Name, was, c); err != nil {
@@ -389,39 +389,36 @@ func (a *App) saveEditedConn() tea.Cmd {
 		return nil
 	}
 	var toast tea.Cmd
-	stored := false
 	if pw != "" {
-		cmd, ok, err := config.StorePassword(c.Name, pw)
+		_, ok, err := config.StorePassword(c.Name, pw)
 		switch {
 		case err != nil:
 			return a.fail(fieldPassword, err.Error())
 		case ok:
-			stored, c.PasswordCmd = true, cmd
 		case !typed: // no keychain tool now: the password stays where it was
 			c.PasswordCmd, c.PasswordEnv, c.Password = was.PasswordCmd, was.PasswordEnv, was.Password
 		case strings.Contains(pw, "${"):
 			return a.fail(fieldPassword, i18n.T("没有钥匙串工具：password 里的 ${ 会被当成环境变量"))
 		default: // the file is read password_cmd first: the plaintext would never be used beside one
-			c.PasswordCmd, c.PasswordEnv, c.Password = "", "", pw
+			c.PasswordCmd, c.Password = "", pw
 			toast = a.showToast(i18n.T("没有钥匙串工具，密码以明文存进了 connections.toml"), toastTTL)
 		}
 	}
 	saved, err := config.UpdateConnection(was.Name, was, c)
-	if err != nil {
-		if stored && !config.SamePassword(c.PasswordCmd, was.PasswordCmd) { // the item this made is no one's
-			_, _ = config.DeletePassword(c.PasswordCmd)
-		}
+	if err != nil { // ponytail: past the check a write can still fail (a full disk, the file changed meanwhile), leaving the item stored; take it out then if it comes up
 		f.err = err.Error()
 		return nil
 	}
 	if !config.SamePassword(was.PasswordCmd, saved.PasswordCmd) { // the old item, of a name or a source left, is no one's now
-		if _, err := config.DeletePassword(was.PasswordCmd); err != nil {
+		if err := config.DeletePassword(was.PasswordCmd); err != nil {
 			toast = tea.Batch(toast, a.showToast(err.Error(), toastTTL))
 		}
 	}
 	secrets.Delete(was.Name) // a changed password, or a name's, is asked for again
 	secrets.Delete(saved.Name)
-	connected := false
+	rest := saved // the name is the tree's at once, it is no news
+	rest.Name = was.Name
+	changed, told := rest != was, false
 	for _, s := range a.sessions {
 		for _, conn := range s.Conns {
 			if conn.Spec.Name != was.Name {
@@ -431,7 +428,7 @@ func (a *App) saveEditedConn() tea.Cmd {
 				conn.setSpec(saved)
 			} else { // dialed, or being: its engine and lock are the dial's
 				conn.Spec = saved
-				connected = true
+				told = changed
 			}
 		}
 	}
@@ -439,7 +436,7 @@ func (a *App) saveEditedConn() tea.Cmd {
 		a.state.RenameConnection(was.Name, saved.Name)
 		toast = tea.Batch(toast, a.saveState())
 	}
-	if connected {
+	if told {
 		toast = tea.Batch(toast, a.showToast(i18n.T("下次连接时生效"), toastTTL))
 	}
 	a.selectConn(f.cur)
