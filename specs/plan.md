@@ -17,7 +17,7 @@
 
 ## 发布（用户 2026-10-07 定）
 
-M5–M7 验收通过、打 tag 之后，发布一个可用版（tag `v0.1.0`，和 `m7` 同一个 commit；`go install` 能装，GoReleaser / Homebrew 等用户要再说）。用户 2026-10-07 照 `/Users/ctw/proj/sqlmux-verify/WALKTHROUGH.md` 走完一遍后给了 20 条意见，整理成 M8；M5–M7 的 tag 和 `v0.1.0` 是在 F7.6 之后就打、还是等 M8 一起，等用户定。
+M5–M7 验收通过、打 tag 之后，发布一个可用版（tag `v0.1.0`，和 `m7` 同一个 commit；`go install` 能装，GoReleaser / Homebrew 等用户要再说）。用户 2026-10-07 照 `/Users/ctw/proj/sqlmux-verify/WALKTHROUGH.md` 走完一遍后给了 20 条意见，整理成 M8；M5–M8 的 tag 和 `v0.1.0` 等 M8 验收通过后一起打（用户 2026-10-07 定）。
 
 ## 任务文件的格式
 
