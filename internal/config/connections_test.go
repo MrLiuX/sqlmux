@@ -5,7 +5,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"sqlmux/internal/i18n"
 )
+
+// connections_test.go and keychain_test.go read the Chinese texts: the
+// language they run in is not the default, English (F7.6).
+func init() { i18n.Set("zh") }
 
 // connectionsFile writes connections.toml under a fresh XDG_CONFIG_HOME.
 func connectionsFile(t *testing.T, body string) string {

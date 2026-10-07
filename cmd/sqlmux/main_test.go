@@ -9,20 +9,15 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode"
 
 	"sqlmux/internal/app"
 	"sqlmux/internal/config"
-	"sqlmux/internal/i18n"
 )
-
-// The tests read the Chinese texts: the language they run in is not the
-// default, English (F7.6).
-func init() { i18n.Set("zh") }
 
 // writeConfig makes a config dir of the test's own with file name in it.
 func writeConfig(t *testing.T, name, toml string) {
 	t.Helper()
-	t.Cleanup(func() { i18n.Set("zh") }) // run and keysCmd set the language the config says
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("XDG_DATA_HOME", t.TempDir()) // open() reads the consoles there
@@ -60,25 +55,21 @@ func TestKeysCheck(t *testing.T) {
 // `sqlmux keys` says its headings in the language of config.toml, English
 // when it does not say (§14, F7.6).
 func TestKeysFollowLanguage(t *testing.T) {
-	defer i18n.Set("zh")
-	for lang, want := range map[string]string{"zh": "| 作用域 | 键 | 操作 |", "en": "| Scope | Key | Action |", "unwritten": "| Scope | Key | Action |"} {
-		writeConfig(t, "config.toml", "language = \""+lang+"\"\n")
-		if lang == "unwritten" {
-			writeConfig(t, "config.toml", "# no language here\n")
-		}
+	for toml, want := range map[string]string{"language = \"zh\"\n": "| 作用域 | 键 | 操作 |", "language = \"en\"\n": "| Scope | Key | Action |", "": "| Scope | Key | Action |"} {
+		writeConfig(t, "config.toml", toml)
 		var out, errb bytes.Buffer
 		if code := keysCmd(nil, &out, &errb); code != 0 || !strings.Contains(out.String(), want) {
-			t.Errorf("language = %s: exit %d, output %.60q", lang, code, out.String())
+			t.Errorf("config.toml %q: exit %d, output %.60q", toml, code, out.String())
 		}
 	}
 }
 
-// With no language written the reference TOML's comments are English too.
+// With no language written the reference TOML, its group comments and the
+// action titles, is English all through.
 func TestKeysTOMLDefaultEnglish(t *testing.T) {
-	defer i18n.Set("zh")
-	writeConfig(t, "config.toml", "# no language here\n")
+	writeConfig(t, "config.toml", "")
 	var out, errb bytes.Buffer
-	if code := keysCmd([]string{"--format", "toml"}, &out, &errb); code != 0 || !strings.Contains(out.String(), "# While the palette is open\n[keys.palette]") {
+	if code := keysCmd([]string{"--format", "toml"}, &out, &errb); code != 0 || strings.ContainsFunc(out.String(), func(r rune) bool { return unicode.Is(unicode.Han, r) }) {
 		t.Errorf("exit %d, output %.200q", code, out.String())
 	}
 }
@@ -200,12 +191,12 @@ func TestRunArguments(t *testing.T) {
 // session, also when last.toml is there; a connection asked for, or a
 // --layout, is still an error naming the file (§14「启动时找不到连接」).
 func TestStartSessionWithoutConnections(t *testing.T) {
-	writeConfig(t, "config.toml", "")
-	path := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "sqlmux", "connections.toml")
 	for _, file := range []string{"", "# nothing yet\n"} {
+		writeConfig(t, "config.toml", "")
 		if file != "" {
 			writeConfig(t, "connections.toml", file)
 		}
+		path := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "sqlmux", "connections.toml")
 		sess, restored, err := startSession("", "", nil)
 		if err != nil || sess == nil || restored != nil || len(sess.Conns) != 0 {
 			t.Fatalf("%q: %v %v %v", file, sess, restored, err)
@@ -214,7 +205,7 @@ func TestStartSessionWithoutConnections(t *testing.T) {
 		if sess, _, err := startSession("", "", l); err != nil || sess == nil || len(sess.Conns) != 0 {
 			t.Errorf("%q with a last.toml: %v %v", file, sess, err)
 		}
-		if _, _, err := startSession("play", "", nil); err == nil || !strings.Contains(err.Error(), path) && !strings.Contains(err.Error(), "里面没有") {
+		if _, _, err := startSession("play", "", nil); err == nil || !strings.Contains(err.Error(), path) {
 			t.Errorf("%q, a connection asked for: %v", file, err)
 		}
 		if _, _, err := startSession("", "mine", l); err == nil {

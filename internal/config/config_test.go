@@ -8,13 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"sqlmux/internal/i18n"
 	"sqlmux/internal/ui"
 )
-
-// The tests below read the Chinese texts: the language they run in is not the
-// default, English (F7.6).
-func init() { i18n.Set("zh") }
 
 func TestParse(t *testing.T) {
 	c, err := Parse(`
