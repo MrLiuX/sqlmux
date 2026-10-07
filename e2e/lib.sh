@@ -84,12 +84,15 @@ SH
   [[ -n $conf ]] && cp "$conf" "$E2E_TMP/config/sqlmux/config.toml"
   [[ -n $keymaps ]] && cp "$keymaps" "$E2E_TMP/config/sqlmux/keymaps.toml"
   [[ -n $confdir ]] && cp -Rp "$confdir"/. "$E2E_TMP/config/sqlmux/"
+  # Top-level keys the scripts rely on go in FRONT of the script's own config.toml: a key appended after a [table] header
+  # would land inside that table.
+  prepend_cfg() { local f="$E2E_TMP/config/sqlmux/config.toml" t="$E2E_TMP/config.tmp"; { printf '%s\n' "$1"; cat "$f" 2>/dev/null; } >|"$t"; mv "$t" "$f"; }
   # F6.7: statements without a WHERE ask first by default. The older scripts run such statements on purpose, so they get
   # confirm_dangerous = false unless a script's own config.toml says otherwise (f6.7 turns it on).
-  grep -qs '^confirm_dangerous' "$E2E_TMP/config/sqlmux/config.toml" || printf '\nconfirm_dangerous = false\n' >>"$E2E_TMP/config/sqlmux/config.toml"
+  grep -qs '^confirm_dangerous' "$E2E_TMP/config/sqlmux/config.toml" || prepend_cfg 'confirm_dangerous = false'
   # F7.6: the default language is English. The scripts' assertions are in Chinese, so they get language = "zh" unless a
   # script's own config.toml sets one; E2E_NOLANG=1 skips it (f6.4 tests the default language itself).
-  [[ -n $E2E_NOLANG ]] || grep -qs '^language' "$E2E_TMP/config/sqlmux/config.toml" || printf '\nlanguage = "zh"\n' >>"$E2E_TMP/config/sqlmux/config.toml"
+  [[ -n $E2E_NOLANG ]] || grep -qs '^language' "$E2E_TMP/config/sqlmux/config.toml" || prepend_cfg 'language = "zh"'
   t -f /dev/null set -s extended-keys "$keys" \; new-session -d -s t -x "$w" -y "$h" \
     -e XDG_CONFIG_HOME="$E2E_TMP/config" -e XDG_STATE_HOME="${state:-$E2E_TMP/state}" \
     -e XDG_DATA_HOME="${data:-$E2E_TMP/data}" -e E2E_PATH="${path:-$E2E_TMP/bin:$PATH}" -e COLORTERM=truecolor -e HISTFILE=/dev/null -e E2E_DIR="$E2E_TMP" \
