@@ -109,7 +109,7 @@
 - [ ] `language` 默认 `en`。`i18n` 没 `Set` 之前就是英文，`Set("zh")` 才切中文；config 读完之后的文字和 `sqlmux keys` 的输出照旧跟着语言，所以不带配置时都是英文。
 - [ ] 读 config 之前显示的文字直接用英文写，不走 `T`：`sqlmux` 的用法、flag 说明和错误、config.toml / keymaps.toml 的解析错误。扫描测试的允许名单去掉这几项（只剩数据库错误前缀之类真正的例外）。
 - [ ] `T` 的 key 仍是中文（§14，决策者定：改英文 key 动 300 多处且不改行为，不值）。
-- [ ] golden 按默认语言重生成，diff 里只有文字变；`TestGoldenEnglish` 的四张改成 `language = "zh"` 的同一组画面（名字相应改），证明切回中文仍可用。
+- [ ] 已有的测试和 golden 一个字不动（worker 提议，已定：app / config / editor / keymap 的 TestMain 里 `i18n.Set("zh")`，和 e2e 的 lib.sh 补 `language = "zh"` 是同一个做法；原来「golden 按默认语言重生成」要改 126 个测试的期望，不值）；`TestGoldenEnglish` 保留，仍是英文 golden。默认语言本身由新增的单测盖（见验收）。
 - [ ] 送审前先把 `e2e` 分支合进来再跑全量：tester 已在 `lib.sh` 里给每个脚本的 config.toml 补 `language = "zh"`（同 `confirm_dangerous` 的写法）。
 
 **验收**
