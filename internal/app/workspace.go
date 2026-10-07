@@ -306,7 +306,7 @@ func (s *Session) newWindow(conn *Conn, n int) (w *Window, warning string) {
 		Name:     "data",
 		TreeOpen: true,
 		Tree:     &Pane{ID: 0},
-		Root:     &Node{Split: Horiz, Ratio: 5.0 / 9, A: leaf(data), B: leaf(console)},
+		Root:     &Node{Split: Horiz, Ratio: 0.5, A: leaf(data), B: leaf(console)},
 		lastID:   2,
 	}
 	w.focus(1)

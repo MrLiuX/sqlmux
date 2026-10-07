@@ -1,24 +1,24 @@
-┌─ ⟨0⟩ @ doraemon ─────┐ ┌─ ⟨1⟩ ──────────────────────┐ ┌─ ⟨2⟩ > console · c… ─┐
-│ ? / 15 tables      + │ │                            │ │   1                  │
-│──────────────────────│ │                            │ │                      │
-│ ▾ pg doraemon        │ │                            │ │                      │
-│   ▸ # agentable      │ │                            │ │                      │
-│   ▾ # public         │ │                            │ │                      │
-│     ▾ + Tables (14)  │ │                            │ │                      │
-│       ▸ + agent  124 │ │                            │ │                      │
-│       ▸ + agent_ver… │ │                            │ │                      │
-│       ▸ + goal    57 │ │                            │ │                      │
-│       ▸ + mt_task    │ │      + 打开表 t            │ │                      │
-│       ▸ + mt_task_l… │ │      > 新建 console c      │ │                      │
-│       ▸ + schema_mi… │ │                            │ │                      │
-│       ▸ + t_order    │ │                            │ │                      │
-│       ▸ + t_order_i… │ │                            │ │                      │
-│       ▸ + t_payment  │ │                            │ │                      │
-│       ▸ + t_refund   │ │                            │ │                      │
-│       ▸ + t_sku 8.1k │ │                            │ │                      │
-│       ▸ + t_user 38k │ │                            │ │                      │
-│       ▸ + t_user_ad… │ │                            │ │                      │
-│──────────────────────│ │                            │ │                      │
-│ j/k move · ↵ open    │ │ +                          │ │ 1:> console_1* │ +   │
-└──────────────────────┘ └────────────────────────────┘ └──────────────────────┘
+┌─ ⟨0⟩ @ doraemon ─────┐ ┌─ ⟨1⟩ ───────────────────┐ ┌─ ⟨2⟩ > console · cons… ─┐
+│ ? / 15 tables      + │ │                         │ │   1                     │
+│──────────────────────│ │                         │ │                         │
+│ ▾ pg doraemon        │ │                         │ │                         │
+│   ▸ # agentable      │ │                         │ │                         │
+│   ▾ # public         │ │                         │ │                         │
+│     ▾ + Tables (14)  │ │                         │ │                         │
+│       ▸ + agent  124 │ │                         │ │                         │
+│       ▸ + agent_ver… │ │                         │ │                         │
+│       ▸ + goal    57 │ │                         │ │                         │
+│       ▸ + mt_task    │ │    + 打开表 t           │ │                         │
+│       ▸ + mt_task_l… │ │    > 新建 console c     │ │                         │
+│       ▸ + schema_mi… │ │                         │ │                         │
+│       ▸ + t_order    │ │                         │ │                         │
+│       ▸ + t_order_i… │ │                         │ │                         │
+│       ▸ + t_payment  │ │                         │ │                         │
+│       ▸ + t_refund   │ │                         │ │                         │
+│       ▸ + t_sku 8.1k │ │                         │ │                         │
+│       ▸ + t_user 38k │ │                         │ │                         │
+│       ▸ + t_user_ad… │ │                         │ │                         │
+│──────────────────────│ │                         │ │                         │
+│ j/k move · ↵ open    │ │ +                       │ │ 1:> console_1* │ +      │
+└──────────────────────┘ └─────────────────────────┘ └─────────────────────────┘
  doraemon ▾  0: data*     ~ C-p  kb ·    @ doraemon · pg@localhost:5432  NORMAL 

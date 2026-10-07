@@ -220,7 +220,7 @@ func TestGridCancelAndError(t *testing.T) {
 	a.fetch(tab, false)
 	a.Update(pageMsg{tab: tab, seq: tab.seq, err: errors.New("permission denied for table t_order")})
 	f := a.render()
-	if st := styleOf(t, f, "permission denied"); st.Fg != a.theme.Error || st.Bg != a.theme.ErrorBg || !strings.Contains(f.String(), "note 1") {
+	if st := styleOf(t, f, "permission denied"); st.Fg != a.theme.Error || st.Bg != a.theme.ErrorBg || !strings.Contains(f.String(), "running") {
 		t.Errorf("error bar: %+v", st)
 	}
 	if !strings.Contains(statusRow(a), " 1,1 ") {
