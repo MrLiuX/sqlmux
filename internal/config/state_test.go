@@ -198,3 +198,27 @@ id = 2
 		t.Error("none to move is no error")
 	}
 }
+
+// A connection renamed carries its picks, table histories, quick SQL and the
+// consoles that run on it with it; another's stay (F8.16).
+func TestStateRenameConnection(t *testing.T) {
+	s := &State{
+		Recent:   []Recent{{"table", "play/public.t"}, {"table", "playground/public.t"}, {"command", "play/x"}},
+		Tables:   map[string]*TableState{"play/public.t": {}, "playground/public.t": {}},
+		SQL:      map[string][]string{"play": {"select 1"}, "other": {"select 2"}},
+		Consoles: map[string]ConsoleState{"console_1": {Conn: "play"}, "console_2": {Conn: "other"}},
+	}
+	s.RenameConnection("play", "dev")
+	if s.Recent[0].ID != "dev/public.t" || s.Recent[1].ID != "playground/public.t" || s.Recent[2].ID != "play/x" {
+		t.Errorf("recent %+v", s.Recent)
+	}
+	if _, ok := s.Tables["dev/public.t"]; !ok || s.Tables["play/public.t"] != nil || s.Tables["playground/public.t"] == nil {
+		t.Errorf("tables %v", s.Tables)
+	}
+	if s.SQL["dev"][0] != "select 1" || s.SQL["play"] != nil || s.SQL["other"][0] != "select 2" {
+		t.Errorf("sql %v", s.SQL)
+	}
+	if s.Consoles["console_1"].Conn != "dev" || s.Consoles["console_2"].Conn != "other" {
+		t.Errorf("consoles %v", s.Consoles)
+	}
+}

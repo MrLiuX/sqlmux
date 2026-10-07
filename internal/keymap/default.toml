@@ -174,7 +174,19 @@ leader = "<Space>"
 "$" = "sessions.rename"
 "<Esc>" = "sessions.close"
 
-[keys.form] # the new connection form (§7.8); space flips a switch, the form's own
+[keys.conns] # the connection manager's list has the keys (§7.8, F8.16); the form has [keys.form]
+"j" = "conns.down"
+"<Down>" = "conns.down"
+"k" = "conns.up"
+"<Up>" = "conns.up"
+"<Tab>" = "conns.form"
+"l" = "conns.form"
+"<Right>" = "conns.form"
+"<CR>" = "conns.form"
+"x" = "conns.delete"
+"<Esc>" = "conns.close"
+
+[keys.form] # the connection form (§7.8); space flips a switch, the form's own
 "<Tab>" = "form.next"
 "<S-Tab>" = "form.prev"
 "<CR>" = "form.save"

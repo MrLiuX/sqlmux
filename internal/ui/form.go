@@ -40,47 +40,64 @@ type Form struct {
 	Sel          int
 	Err          string
 	Save, Cancel string // the buttons' words
+	Delete       string // a third button's word, when a connection there already is can go (F8.16); "" for none
 	Hints        []Hint
 }
 
 // formWidth is the form's width, as far as the screen allows (§7.8).
 const formWidth = 60
 
+// rows is how many fields show.
+func (fm Form) rows() int {
+	n := 0
+	for _, fd := range fm.Fields {
+		if !fd.Hidden {
+			n++
+		}
+	}
+	return n
+}
+
+// height is the form's rows, its border in: fields, error, rule, buttons.
+func (fm Form) height() int { return fm.rows() + 5 }
+
 // Draw dims what is behind (§7.5), paints the form centered and returns
 // where the selected input has its cursor, else (-1, -1).
 func (fm Form) Draw(f *Frame, screen uv.Rectangle) uv.Position {
-	th := f.Theme
-	rows := 0
-	for _, fd := range fm.Fields {
-		if !fd.Hidden {
-			rows++
-		}
-	}
-	w, h := min(formWidth, screen.Dx()-4), rows+5 // border, fields, error, rule, buttons, border
+	w, h := min(formWidth, screen.Dx()-4), fm.height()
 	box := uv.Rect(screen.Min.X+(screen.Dx()-w)/2, screen.Min.Y+max(screen.Dy()-h, 0)/2, w, h)
-	cursor := uv.Pos(-1, -1)
 	f.Dim()
 	f.Region(f.Bounds(), Target{}) // no click goes past it
 	if box.Dx() < 8 || box.Dy() > screen.Dy() {
-		return cursor
+		return uv.Pos(-1, -1)
 	}
-	bg, dim := uv.Style{Fg: th.Fg, Bg: th.PaneBg}, uv.Style{Fg: th.Dim, Bg: th.PaneBg}
-	f.Fill(box, bg)
+	th := f.Theme
+	f.Fill(box, uv.Style{Fg: th.Fg, Bg: th.PaneBg})
 	border := f.Border.Style(uv.Style{Fg: th.Focus, Bg: th.PaneBg})
 	border.Draw(f.Buf, box)
 	f.Text(box.Min.X+2, box.Min.Y, box.Max.X-1, " "+fm.Title+" ", uv.Style{Fg: th.Focus, Bg: th.PaneBg, Attrs: uv.AttrBold})
-	x0, x1 := box.Min.X+2, box.Max.X-2
+	return fm.drawIn(f, uv.Rect(box.Min.X+1, box.Min.Y+1, box.Dx()-2, box.Dy()-2), true)
+}
+
+// drawIn paints the fields, the error, the rule and the buttons inside in,
+// the border's inner area, the field Sel having the keys when focus; it
+// returns where its input has the cursor, else (-1, -1).
+func (fm Form) drawIn(f *Frame, area uv.Rectangle, focus bool) uv.Position {
+	th := f.Theme
+	cursor := uv.Pos(-1, -1)
+	bg, dim := uv.Style{Fg: th.Fg, Bg: th.PaneBg}, uv.Style{Fg: th.Dim, Bg: th.PaneBg}
+	x0, x1 := area.Min.X+1, area.Max.X-1
 	iconW, labelW := 0, 0
 	for _, fd := range fm.Fields {
 		iconW, labelW = max(iconW, Width(fd.Icon.Text)), max(labelW, Width(fd.Label)) // the hidden ones too: nothing shifts as the fold opens
 	}
-	y := box.Min.Y + 1
+	y := area.Min.Y
 	for i, fd := range fm.Fields {
 		if fd.Hidden {
 			continue
 		}
-		f.Region(uv.Rect(box.Min.X+1, y, box.Dx()-2, 1), Target{Kind: KindRow, I: i})
-		sel := i == fm.Sel
+		f.Region(uv.Rect(area.Min.X, y, area.Dx(), 1), Target{Kind: KindRow, I: i})
+		sel := focus && i == fm.Sel
 		name, icon := dim, dim
 		if sel {
 			name, icon = bg, bg
@@ -121,11 +138,11 @@ func (fm Form) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 				x = f.Text(x, y, r.Max.X, " "+ch+" ", st)
 			}
 		case FormCheck:
-			box := "[ ]"
+			mark := "[ ]"
 			if fd.On == 1 {
-				box = "[x]"
+				mark = "[x]"
 			}
-			f.Text(r.Min.X, y, r.Max.X, box, in)
+			f.Text(r.Min.X, y, r.Max.X, mark, in)
 		case FormFold:
 			mark := "▸"
 			if fd.On == 1 {
@@ -136,9 +153,13 @@ func (fm Form) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 		y++
 	}
 	f.Text(x0, y, x1, fm.Err, uv.Style{Fg: th.Error, Bg: th.PaneBg})
-	f.Text(box.Min.X+1, y+1, box.Max.X-1, strings.Repeat("─", box.Dx()-2), uv.Style{Fg: th.Sep, Bg: th.PaneBg})
+	f.Text(area.Min.X, y+1, area.Max.X, strings.Repeat("─", area.Dx()), uv.Style{Fg: th.Sep, Bg: th.PaneBg})
 	x, y := x0, y+2
-	for _, b := range []struct{ text, action string }{{fm.Save, "form.save"}, {fm.Cancel, "form.cancel"}} {
+	buttons := []struct{ text, action string }{{fm.Save, "form.save"}, {fm.Cancel, "form.cancel"}}
+	if fm.Delete != "" {
+		buttons = append(buttons, struct{ text, action string }{fm.Delete, "conns.delete"})
+	}
+	for _, b := range buttons {
 		st := bg
 		if f.Region(uv.Rect(x, y, Width(b.text)+4, 1), Target{Kind: KindButton, Action: b.action}) {
 			st.Bg = th.Select

@@ -250,6 +250,7 @@ func init() {
 		}},
 		"session.list": {Title: i18n.N("session 列表"), Run: do(func(a *App, _ Args) { a.openSessions() })},
 		"conn.new":     {Title: i18n.N("新建连接…"), Run: do(func(a *App, _ Args) { a.openConnForm() })},
+		"conn.manage":  {Title: i18n.N("管理连接…"), Run: do(func(a *App, _ Args) { a.openConnManager() })},
 		"window.new":   {Title: i18n.N("新建 window"), Run: func(a *App, _ Args) tea.Cmd { return a.addWindow() }},
 		"window.next":  {Title: i18n.N("下一个 window"), Run: do(func(a *App, _ Args) { a.cycleWindow(1) })},
 		"window.prev":  {Title: i18n.N("上一个 window"), Run: do(func(a *App, _ Args) { a.cycleWindow(-1) })},
@@ -267,7 +268,13 @@ func init() {
 		"form.next":   {Title: i18n.N("下一项"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formMove(1); return nil })},
 		"form.prev":   {Title: i18n.N("上一项"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formMove(-1); return nil })},
 		"form.save":   {Title: i18n.N("保存"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { return a.saveConnForm() })},
-		"form.cancel": {Title: i18n.N("取消"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.form = nil; return nil })},
+		"form.cancel": {Title: i18n.N("取消"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formCancel(); return nil })},
+		// the connection manager's list (F8.16)
+		"conns.down":   {Title: i18n.N("下移"), Local: true, Run: when(inConns, func(a *App) tea.Cmd { a.connsMove(1); return nil })},
+		"conns.up":     {Title: i18n.N("上移"), Local: true, Run: when(inConns, func(a *App) tea.Cmd { a.connsMove(-1); return nil })},
+		"conns.form":   {Title: i18n.N("编辑"), Local: true, Run: when(inConns, func(a *App) tea.Cmd { a.form.list = false; return nil })},
+		"conns.delete": {Title: i18n.N("删除连接"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { return a.deleteConn() })},
+		"conns.close":  {Title: i18n.N("关闭"), Local: true, Run: when(inConns, func(a *App) tea.Cmd { a.form = nil; return nil })},
 		// the session list's (§7.8)
 		"sessions.new":      {Title: i18n.N("新建 session"), Local: true, Run: when(inSessions, func(a *App) tea.Cmd { return a.dialSession() })},
 		"sessions.down":     {Title: i18n.N("下移"), Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsMove(1); return nil })},
@@ -484,6 +491,7 @@ func onCell(f func(*dataTab)) func(*App, Args) tea.Cmd {
 func inPalette(a *App) bool  { return a.palette != nil }
 func inSessions(a *App) bool { return a.sessList != nil }
 func inForm(a *App) bool     { return a.form != nil }
+func inConns(a *App) bool    { return a.form != nil && a.form.list }
 func inConfirm(a *App) bool  { return a.confirm != nil }
 func inDrop(a *App) bool     { return a.drop != nil }
 func inCols(a *App) bool     { return a.cols != nil }

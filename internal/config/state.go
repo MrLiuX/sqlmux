@@ -24,6 +24,35 @@ type State struct {
 	Consoles map[string]ConsoleState `json:"consoles,omitempty"` // by file name: "console_1" (§11)
 }
 
+// RenameConnection makes what the state keeps by the connection called old
+// kept by to: the table picks and table keys that start with its name, its
+// quick SQL, the consoles that run on it (F8.16). The layout files are the
+// user's, and say the old name still.
+func (s *State) RenameConnection(old, to string) {
+	prefix := old + "/"
+	for i, r := range s.Recent {
+		if id, ok := strings.CutPrefix(r.ID, prefix); ok && r.Kind == "table" {
+			s.Recent[i].ID = to + "/" + id
+		}
+	}
+	for k, v := range s.Tables {
+		if rest, ok := strings.CutPrefix(k, prefix); ok {
+			delete(s.Tables, k)
+			s.Tables[to+"/"+rest] = v
+		}
+	}
+	if sql, ok := s.SQL[old]; ok {
+		delete(s.SQL, old)
+		s.SQL[to] = sql
+	}
+	for k, c := range s.Consoles {
+		if c.Conn == old {
+			c.Conn = to
+			s.Consoles[k] = c
+		}
+	}
+}
+
 // ConsoleState is where a console runs: its connection, by name, and its
 // schema (§8.6).
 type ConsoleState struct {

@@ -12,22 +12,22 @@
 │       ▸  mt_task_log    96k │ │                                                             │ │                                                             │
 │       ▸  schema_migrations  │ │                                                             │ │                                                             │
 │       ▸  t_order       1.2m │ │                                                             │ │                                                             │
-│       ▸  t_order_item  3.4m │ │                ┌─ 新建连接 ───────────────────────────────────────────────┐                                                 │
-│       ▸  t_payment     410k │ │                │          name play                                      │                                                 │
-│       ▸  t_refund       12k │ │                │        engine  postgres │ mysql                         │                                                 │
-│       ▸  t_sku         8.1k │ │                │          host                                           │                                                 │
-│       ▸  t_user         38k │ │                │          port 5432                                      │                                                 │
-│       ▸  t_user_address 52k │ │                │          user                                           │                                                 │
-│       ▸  t_user_profile 38k │ │                │      password                                           │                                                 │
-│        Views (0)            │ │                │      database                                           │                                                 │
-│ ▾  工作区                   │ │                │     read_only [ ]                                       │                                                 │
-│   ▾  data                   │ │                │          高级 ▾                                         │                                                 │
-│        pane-1               │ │                │           dsn postgres://u@h/d                          │                                                 │
-│     ▾  pane-2               │ │                │  password_cmd printf pw                                 │                                                 │
-│            console_1        │ │                │                                                          │                                                 │
-│                              │ │                │──────────────────────────────────────────────────────────│                                                 │
-│                              │ │                │ [ 保存 ] [ 取消 ]         Tab 下一项 · ↵ 保存 · esc 取消 │                                                 │
-│                              │ │                └──────────────────────────────────────────────────────────┘                                                 │
+│       ▸  t_order_item  3.4m┌─ 连接 ───────────────────────────────────────────────────────────────────────────────────────────┐                             │
+│       ▸  t_payment     410k│  doraemon               │          name play                                                   │                             │
+│       ▸  t_refund       12k│  新建                   │        engine  postgres │ mysql                                      │                             │
+│       ▸  t_sku         8.1k│                          │          host                                                        │                             │
+│       ▸  t_user         38k│                          │          port 5432                                                   │                             │
+│       ▸  t_user_address 52k│                          │          user                                                        │                             │
+│       ▸  t_user_profile 38k│                          │      password                                                        │                             │
+│        Views (0)           │                          │      database                                                        │                             │
+│ ▾  工作区                  │                          │     read_only [ ]                                                    │                             │
+│   ▾  data                  │                          │          高级 ▾                                                      │                             │
+│        pane-1              │                          │           dsn postgres://u@h/d                                       │                             │
+│     ▾  pane-2              │                          │  password_cmd printf pw                                              │                             │
+│            console_1       │                          │                                                                       │                             │
+│                             │                          │───────────────────────────────────────────────────────────────────────│                             │
+│                             │                          │ [ 保存 ] [ 取消 ]                      Tab 下一项 · ↵ 保存 · esc 取消 │                             │
+│                             └──────────────────────────────────────────────────────────────────────────────────────────────────┘                             │
 │                              │ │                                                             │ │                                                             │
 │                              │ │                                                             │ │                                                             │
 │                              │ │                                                             │ │                                                             │

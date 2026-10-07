@@ -172,7 +172,7 @@ func (a *App) render() *ui.Frame {
 		}
 	}
 	if a.form != nil {
-		if c := a.formView().Draw(f, a.window()); c.X >= 0 {
+		if c := a.managerView().Draw(f, a.window()); c.X >= 0 {
 			f.Cursor = &c
 		}
 	}

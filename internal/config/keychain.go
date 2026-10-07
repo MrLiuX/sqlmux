@@ -1,8 +1,10 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 )
@@ -43,6 +45,44 @@ func StorePassword(name, pw string) (cmd string, stored bool, err error) {
 		return "", false, fmt.Errorf("%s: %s", tool, why)
 	}
 	return cmd, true, nil
+}
+
+// keychainCmds are the two password_cmd StorePassword writes, the service
+// or the name quoted for sh in the one group.
+var keychainCmds = []struct {
+	cmd    *regexp.Regexp
+	tool   string
+	delete func(name string) []string
+}{
+	{regexp.MustCompile(`^security find-generic-password -a sqlmux -s '((?:[^']|'\\'')*)' -w( \| xxd -r -p)?$`), "security",
+		func(service string) []string {
+			return []string{"delete-generic-password", "-a", "sqlmux", "-s", service}
+		}},
+	{regexp.MustCompile(`^secret-tool lookup sqlmux '((?:[^']|'\\'')*)'$`), "secret-tool",
+		func(name string) []string { return []string{"clear", "sqlmux", name} }},
+}
+
+// DeletePassword takes out of the keychain the item passwordCmd reads, when
+// that is the command StorePassword wrote; a command of the user's own is not
+// touched, nor a keychain without its tool (F8.16). stored says an item was
+// asked to go; err is the tool's complaint.
+func DeletePassword(passwordCmd string) (stored bool, err error) {
+	for _, k := range keychainCmds {
+		m := k.cmd.FindStringSubmatch(passwordCmd)
+		if m == nil {
+			continue
+		}
+		path, lookErr := exec.LookPath(k.tool)
+		if lookErr != nil {
+			return false, nil //nolint:nilerr // no such tool is no keychain
+		}
+		if out, runErr := exec.Command(path, k.delete(strings.ReplaceAll(m[1], `'\''`, "'"))...).CombinedOutput(); runErr != nil {
+			why, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
+			return false, fmt.Errorf("%s: %s", k.tool, cmp.Or(why, runErr.Error()))
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 // shellQuote is s as one word of an sh command line.

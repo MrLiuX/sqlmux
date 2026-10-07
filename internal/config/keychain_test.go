@@ -60,6 +60,7 @@ const (
 while [ $# -gt 0 ]; do case $1 in -s) svc=$2 ;; -w) pw=$2 ;; esac; shift; done
 case $cmd in
 add-generic-password) printf %s "$pw" >"$FAKE/svc-$svc" ;;
+delete-generic-password) [ -f "$FAKE/svc-$svc" ] && rm -f "$FAKE/svc-$svc" ;;
 find-generic-password)
 	[ -f "$FAKE/svc-$svc" ] || exit 44
 	if LC_ALL=C grep -q '[^ -~]' "$FAKE/svc-$svc"; then od -An -tx1 "$FAKE/svc-$svc" | tr -d ' \n'; else cat "$FAKE/svc-$svc"; fi ;;
@@ -68,6 +69,7 @@ esac
 	fakeSecretTool = `cmd=$1; for a; do last=$a; done
 case $cmd in
 store) cat >"$FAKE/svc-$last" ;;
+clear) rm -f "$FAKE/svc-$last" ;;
 lookup) [ -f "$FAKE/svc-$last" ] && cat "$FAKE/svc-$last" ;;
 esac
 `
@@ -164,5 +166,40 @@ func TestExpanded(t *testing.T) {
 	}
 	if c, err := (Connection{DSN: "postgres://u:p$w@h/db"}).Expanded(); err != nil || c.DSN != "postgres://u:p$w@h/db" {
 		t.Errorf("a $ alone: %+v %v", c, err)
+	}
+}
+
+// What StorePassword wrote is taken out again by the command alone, a name
+// with a quote included; a command of the user's own, and a keychain with no
+// tool, are left alone (F8.16).
+func TestDeletePassword(t *testing.T) {
+	for _, c := range []struct{ os, tool, script string }{{"darwin", "security", fakeSecurity}, {"linux", "secret-tool", fakeSecretTool}} {
+		bin := isolated(t, "sh", "cat", "grep", "od", "tr", "xxd", "rm")
+		hostOS = c.os
+		fakeTool(t, bin, c.tool, c.script)
+		cmd, _, err := StorePassword("my 'db'", "pw")
+		if err != nil {
+			t.Fatal(err)
+		}
+		other, _, _ := StorePassword("other", "pw2")
+		if got, _ := (Connection{PasswordCmd: cmd}).Secret(); got != "pw" {
+			t.Fatalf("%s: stored %q", c.os, got)
+		}
+		if gone, err := DeletePassword(cmd); !gone || err != nil {
+			t.Fatalf("%s: gone %v, %v", c.os, gone, err)
+		}
+		if got, _ := (Connection{PasswordCmd: cmd}).Secret(); got != "" {
+			t.Errorf("%s: still there: %q", c.os, got)
+		}
+		if got, _ := (Connection{PasswordCmd: other}).Secret(); got != "pw2" {
+			t.Errorf("%s: another's went too: %q", c.os, got)
+		}
+		if gone, err := DeletePassword("pass show db"); gone || err != nil {
+			t.Errorf("%s: a command of the user's: %v %v", c.os, gone, err)
+		}
+	}
+	isolated(t, "sh")
+	if gone, err := DeletePassword("security find-generic-password -a sqlmux -s 'sqlmux-a' -w"); gone || err != nil {
+		t.Errorf("no tool: %v %v", gone, err)
 	}
 }

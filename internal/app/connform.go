@@ -3,6 +3,7 @@ package app
 import (
 	"net"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -15,12 +16,16 @@ import (
 	"sqlmux/internal/ui"
 )
 
-// connForm is the open new connection form (§7.8「新建连接表单」): its
-// fields in the order below, the one with the keys, why ↵ did not save.
+// connForm is the open connection manager (§7.8「连接管理」): the list of
+// connections on its left, and the form of the selected one on its right:
+// its fields in the order below, the one with the keys, why ↵ did not save.
 type connForm struct {
 	fields []ui.FormField
 	sel    int
 	err    string
+	cur    int                // the list's selected row: a connection, or len(specs) for the one that makes a new one
+	list   bool               // the list has the keys, not the form
+	was    *config.Connection // the connection the form edits, as it was; nil for a new one
 }
 
 // The form's fields, in order; the last two are in the 高级 fold.
@@ -46,8 +51,17 @@ var connFields = []string{fieldName: "name", fieldEngine: "engine", fieldHost: "
 // defaultPort is the port of an engine's server.
 var defaultPort = map[string]string{"postgres": "5432", "mysql": "3306"}
 
-// openConnForm is conn.new: the form, empty but for the port, on name.
-func (a *App) openConnForm() {
+// specs are the connections the session has, as connections.toml says them.
+func (a *App) specs() []config.Connection {
+	out := make([]config.Connection, len(a.sess.Conns))
+	for i, c := range a.sess.Conns {
+		out[i] = c.Spec
+	}
+	return out
+}
+
+// blankFields is a form's rows, empty but for the port.
+func blankFields() []ui.FormField {
 	fs := make([]ui.FormField, len(connFields))
 	for i, name := range connFields {
 		fs[i].Label = name
@@ -58,7 +72,70 @@ func (a *App) openConnForm() {
 	fs[fieldAdvanced].Kind = ui.FormFold
 	fs[fieldPassword].Mask = true
 	fs[fieldPort].Input = ui.Input{Text: defaultPort["postgres"], Pos: len(defaultPort["postgres"])}
-	a.form = &connForm{fields: fs}
+	return fs
+}
+
+// openConnForm is conn.new: the manager on its last row, a new connection,
+// the form having the keys on name.
+func (a *App) openConnForm() {
+	a.form = &connForm{fields: blankFields(), cur: len(a.sess.Conns)}
+}
+
+// openConnManager is conn.manage: the manager on the connection in use, the
+// list having the keys (F8.16).
+func (a *App) openConnManager() {
+	a.form = &connForm{list: true}
+	cur := slices.Index(a.sess.Conns, a.conn())
+	a.selectConn(max(cur, 0))
+}
+
+// selectConn selects row i of the list and fills the form from it: for a
+// connection that is there its values, the dsn written in the fold, which is
+// open, so the host, port, user and database, split from it for the eye, are
+// dim and not to edit (F8.16).
+// ponytail: edited in the dsn only; a form that rewrites parts of a dsn is
+// what a dsn with its own parameters (?sslmode=…) does not survive.
+func (a *App) selectConn(i int) {
+	f, specs := a.form, a.specs()
+	f.cur, f.err, f.sel = i, "", 0
+	if i >= len(specs) {
+		f.fields, f.was = blankFields(), nil
+		return
+	}
+	c := specs[i]
+	f.was, f.fields = &c, blankFields()
+	text := func(field int, s string) { f.fields[field].Input = ui.Input{Text: s, Pos: len(s)} }
+	text(fieldName, c.Name)
+	f.fields[fieldEngine].On = slices.Index(f.fields[fieldEngine].Choices, c.Engine)
+	host, port, user, database := splitDSN(c.Engine, c.DSN)
+	text(fieldHost, host)
+	text(fieldPort, port)
+	text(fieldUser, user)
+	text(fieldDatabase, database)
+	f.fields[fieldReadOnly].On = map[bool]int{false: 0, true: 1}[c.ReadOnly]
+	f.fields[fieldAdvanced].On = 1
+	text(fieldDSN, c.DSN)
+	text(fieldPasswordCmd, c.PasswordCmd)
+}
+
+// mysqlDSN is the go-sql-driver's `user:password@tcp(host:port)/database?…`.
+var mysqlDSN = regexp.MustCompile(`^(?:([^:@/]*)(?::[^@]*)?@)?tcp\(([^)]*)\)/([^?]*)`)
+
+// splitDSN is the host, port, user and database a dsn says, as far as it
+// says them in a form it knows: a URL, or MySQL's; "" for what it cannot read.
+func splitDSN(engine, dsn string) (host, port, user, database string) {
+	if engine == "mysql" {
+		if m := mysqlDSN.FindStringSubmatch(dsn); m != nil {
+			host, port, _ = net.SplitHostPort(m[2])
+			return host, port, m[1], m[3]
+		}
+		return
+	}
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return
+	}
+	return u.Hostname(), u.Port(), u.User.Username(), strings.TrimPrefix(u.Path, "/")
 }
 
 // advanced is whether the fold is open; dsnGiven whether a dsn is typed in
@@ -147,6 +224,7 @@ func (a *App) formClick(i int) {
 	if f.skipped(i) {
 		return
 	}
+	f.list = false
 	f.clearErr()
 	f.sel = i
 	if k := f.fields[i].Kind; k == ui.FormCheck || k == ui.FormFold {
@@ -171,6 +249,152 @@ func composeDSN(engine, host, port, user, database string) string {
 	return u.String()
 }
 
+// formCancel is esc in the form: on a connection that is there it goes back
+// to the list; the form of a new one closes the manager (F8.16).
+func (a *App) formCancel() {
+	if f := a.form; f.was != nil && !f.list {
+		f.list = true
+		return
+	}
+	a.form = nil
+}
+
+// connsMove moves the list's selection by d, the form following; it stops at
+// the ends.
+func (a *App) connsMove(d int) {
+	if i := a.form.cur + d; i >= 0 && i <= len(a.sess.Conns) {
+		a.selectConn(i)
+	}
+}
+
+// connInUse is whether a session has a tab on the connection called name, or
+// started with it: its tabs would lose it (F8.16).
+func (a *App) connInUse(name string) bool {
+	on := func(c *Conn) bool { return c != nil && c.Spec.Name == name }
+	for _, s := range a.sessions {
+		if on(s.start) {
+			return true
+		}
+		for _, p := range s.panes() {
+			for _, tb := range p.Tabs {
+				switch {
+				case tb.Data != nil && on(tb.Data.conn), tb.Console != nil && (on(tb.Console.conn) || on(tb.Console.want)):
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// deleteConn is x on the list, or the form's delete: asked first; the block
+// goes from connections.toml, its password from the keychain when it is the
+// one this program put there, the connection from every session (F8.16).
+func (a *App) deleteConn() tea.Cmd {
+	f := a.form
+	if f.was == nil {
+		return nil
+	}
+	c := *f.was
+	if a.connInUse(c.Name) {
+		return a.showToast(i18n.T("先关掉用它的 tab"), toastTTL)
+	}
+	a.confirm = &confirmBox{text: i18n.T("删除连接 %s？", c.Name), yes: i18n.T("删除"), then: func() tea.Cmd {
+		if err := config.DeleteConnection(c.Name); err != nil {
+			return a.showToast(err.Error(), toastTTL)
+		}
+		var toast tea.Cmd
+		if _, err := config.DeletePassword(c.PasswordCmd); err != nil {
+			toast = a.showToast(err.Error(), toastTTL)
+		}
+		for _, s := range a.sessions {
+			s.Conns = slices.DeleteFunc(s.Conns, func(o *Conn) bool { return o.Spec.Name == c.Name })
+			if s.last != nil && s.last.Spec.Name == c.Name {
+				s.last = s.start
+			}
+		}
+		if a.form != nil {
+			a.selectConn(min(a.form.cur, len(a.sess.Conns)))
+			a.form.list = true
+		}
+		return toast
+	}}
+	return nil
+}
+
+// saveEditedConn is ↵ on the form of a connection that is there: what
+// changed is rewritten in its block of connections.toml, nothing else of the
+// file; a password typed goes into the keychain, the old item out of it; the
+// sessions' connections take the new values, those connected when they
+// connect again (F8.16).
+func (a *App) saveEditedConn() tea.Cmd {
+	f := a.form
+	fs, was := f.fields, *f.was
+	text := func(i int) string { return strings.TrimSpace(fs[i].Input.Text) }
+	c := was
+	c.Name, c.Engine, c.DSN = text(fieldName), fs[fieldEngine].Choices[fs[fieldEngine].On], text(fieldDSN)
+	c.PasswordCmd, c.ReadOnly = text(fieldPasswordCmd), fs[fieldReadOnly].On == 1
+	var names []string
+	for _, s := range a.specs() {
+		if s.Name != was.Name {
+			names = append(names, s.Name)
+		}
+	}
+	if field, problem := c.Check(names); problem != "" {
+		return a.fail(slices.Index(connFields, field), problem)
+	}
+	var toast tea.Cmd
+	oldCmd := ""
+	if pw := fs[fieldPassword].Input.Text; pw != "" {
+		if c.PasswordCmd != was.PasswordCmd { // two sources: which one is wanted is not for us to say
+			return a.fail(fieldPassword, i18n.T("password 和 password_cmd 填一个就够了"))
+		}
+		cmd, stored, err := config.StorePassword(c.Name, pw)
+		switch {
+		case err != nil:
+			return a.fail(fieldPassword, err.Error())
+		case stored:
+			oldCmd, c.PasswordCmd, c.PasswordEnv, c.Password = was.PasswordCmd, cmd, "", ""
+		case strings.Contains(pw, "${"):
+			return a.fail(fieldPassword, i18n.T("没有钥匙串工具：password 里的 ${ 会被当成环境变量"))
+		default:
+			c.Password = pw
+			toast = a.showToast(i18n.T("没有钥匙串工具，密码以明文存进了 connections.toml"), toastTTL)
+		}
+	}
+	if err := config.UpdateConnection(was.Name, c); err != nil {
+		f.err = err.Error()
+		return nil
+	}
+	if oldCmd != "" && oldCmd != c.PasswordCmd { // the old item, of another name, is no one's now
+		_, _ = config.DeletePassword(oldCmd)
+	}
+	connected := false
+	for _, s := range a.sessions {
+		for _, conn := range s.Conns {
+			if conn.Spec.Name != was.Name {
+				continue
+			}
+			conn.Spec = c
+			if conn.State != connReady {
+				conn.eng = engines[c.Engine]
+			} else {
+				connected = true
+			}
+		}
+	}
+	if c.Name != was.Name {
+		a.state.RenameConnection(was.Name, c.Name)
+		toast = tea.Batch(toast, a.saveState())
+	}
+	if connected {
+		toast = tea.Batch(toast, a.showToast(i18n.T("下次连接时生效"), toastTTL))
+	}
+	cur := f.cur
+	a.selectConn(cur)
+	return toast
+}
+
 // saveConnForm is ↵: the connection, checked as connections.toml is when
 // read, goes at its end and into every session's tree, not connected; one
 // that doesn't check says why, its field getting the keys (§7.8). The first
@@ -178,6 +402,9 @@ func composeDSN(engine, host, port, user, database string) string {
 // (F7.4).
 func (a *App) saveConnForm() tea.Cmd {
 	f := a.form
+	if f.was != nil {
+		return a.saveEditedConn()
+	}
 	fs := f.fields
 	text := func(i int) string { return strings.TrimSpace(fs[i].Input.Text) }
 	c := config.Connection{Name: text(fieldName), Engine: fs[fieldEngine].Choices[fs[fieldEngine].On], DSN: "-", ReadOnly: fs[fieldReadOnly].On == 1}
@@ -267,12 +494,32 @@ func (a *App) startFirst(conn *Conn) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+// managerView is the manager as it is drawn: the connections in the
+// session's order, then the row that makes a new one, and the form (F8.16).
+func (a *App) managerView() ui.ConnManager {
+	ic, f := a.icons, a.form
+	m := ui.ConnManager{Title: i18n.T("连接"), Sel: f.cur, ListFocus: f.list, Form: a.formView()}
+	for _, c := range a.specs() {
+		row := ui.ConnRow{Icon: ic.Engine(c.Engine), Name: c.Name}
+		if c.ReadOnly {
+			row.Lock = ic.Lock
+		}
+		m.Rows = append(m.Rows, row)
+	}
+	m.Rows = append(m.Rows, ui.ConnRow{Icon: ic.RowAdd, Name: i18n.T("新建")})
+	return m
+}
+
 // formView is the form as it is drawn: each row's icon, the rows of the
 // closed fold hidden, those that take no part dim.
 func (a *App) formView() ui.Form {
 	f := a.form
 	fields := slices.Clone(f.fields)
 	ic := a.icons
+	title, del := i18n.T("新建连接"), ""
+	if f.was != nil {
+		title, del = i18n.T("修改连接"), i18n.T("删除")
+	}
 	icons := []ui.Icon{fieldName: ic.Tag, fieldEngine: ic.Engine(fields[fieldEngine].Choices[fields[fieldEngine].On]), fieldHost: ic.Host,
 		fieldPort: ic.Port, fieldUser: ic.User, fieldPassword: ic.Key, fieldDatabase: ic.Database, fieldReadOnly: ic.Lock,
 		fieldAdvanced: ic.Advanced, fieldDSN: ic.Link, fieldPasswordCmd: ic.Console}
@@ -281,7 +528,7 @@ func (a *App) formView() ui.Form {
 		fields[i].Hidden = (i == fieldDSN || i == fieldPasswordCmd) && !f.advanced()
 		fields[i].Dim = f.skipped(i) && !fields[i].Hidden
 	}
-	return ui.Form{Title: i18n.T("新建连接"), Fields: fields, Sel: f.sel, Err: f.err, Save: i18n.T("保存"), Cancel: i18n.T("取消"), Hints: bound(
+	return ui.Form{Title: title, Fields: fields, Sel: f.sel, Err: f.err, Save: i18n.T("保存"), Cancel: i18n.T("取消"), Delete: del, Hints: bound(
 		ui.Hint{Key: a.keys.Hint("form.next", "form"), Label: i18n.T("下一项"), Action: "form.next"},
 		ui.Hint{Key: a.keys.Hint("form.save", "form"), Label: i18n.T("保存"), Action: "form.save"},
 		ui.Hint{Key: a.keys.Hint("form.cancel", "form"), Label: i18n.T("取消"), Action: "form.cancel"},
