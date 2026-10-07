@@ -23,11 +23,13 @@ autopairs = false
 confirm_dangerous = false
 [console]
 max_rows = 50
+[grid]
+full_width = 12
 `)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Icons != ui.ASCIIIcons || c.Timeoutlen != 300 || c.TabWidth != 4 || c.ResultHeight != 0.3 || c.MaxRows != 50 || c.KeywordCase != "upper" || c.FormatPrg != "pg_format -" || c.AutoPairs || c.ConfirmDangerous {
+	if c.Icons != ui.ASCIIIcons || c.Timeoutlen != 300 || c.TabWidth != 4 || c.ResultHeight != 0.3 || c.MaxRows != 50 || c.GridFullWidth != 12 || c.KeywordCase != "upper" || c.FormatPrg != "pg_format -" || c.AutoPairs || c.ConfirmDangerous {
 		t.Fatalf("got %+v", c)
 	}
 }
@@ -56,6 +58,12 @@ L = "5l"
 }
 
 // Keys belong in keymaps.toml, and only keys (F5.9).
+func TestGridFullWidthDefault(t *testing.T) {
+	if c, err := Parse(""); err != nil || c.GridFullWidth != 20 {
+		t.Errorf("default: %d %v", c.GridFullWidth, err)
+	}
+}
+
 func TestParseErrors(t *testing.T) {
 	for _, s := range []string{
 		`icons = "emoji"`,
@@ -66,6 +74,7 @@ func TestParseErrors(t *testing.T) {
 		`autopairs = "yes"`,
 		`confirm_dangerous = "no"`,
 		"[console]\nmax_rows = 0",
+		"[grid]\nfull_width = 0",
 		"[keys]\nleader = \"<C-a>\"",
 		"[map.normal]\nJ = \"5j\"",
 		"[keys.normal\n",
