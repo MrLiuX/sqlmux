@@ -10,6 +10,8 @@ pop() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5 }' | tail -1; }
 items() { local g y; g=($(pop)); [[ -n ${g[0]} ]] || return 0
   for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed 's/^ *//; s/ *$//'; done; }
 names() { items | sed 's/  .*//' | tr '\n' '|'; }
+sel() { local g y; g=($(pop)); [[ -n ${g[0]} ]] || return 0   # the selected row's text, empty when none is
+  for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do style_has $((g[0] + g[2] - 2)) $y bg=$SELECT >/dev/null && e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y; done; }
 names_are() { [[ $(names) == "$1" ]] || { echo "  candidates: '$(names)', want '$1'"; false; }; }
 has() { [[ "|$(names)" == *"|$1|"* ]] || { echo "  candidates: $(names)"; false; }; }
 none() { [[ -z $(pop) ]] || { echo "  popup: $(names)"; false; }; }
@@ -17,6 +19,7 @@ line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
 cc() { echo "$(e2e_flag cursor_y):$(( $(e2e_flag cursor_x) - 103 ))"; }
 fresh() { key Escape; key Escape; key g g; key d G; key i; }
 settle() { wait_for 8 settled; }
+SELECT=#364a82
 EVT="id|occurred_at|kind|"      # t_event 的列（按表里的顺序）
 
 start; key C-l; key i
@@ -92,9 +95,9 @@ check "where (ki|)：自动配对的 ) 在光标后，候选有 kind" has kind
 key Enter; sleep 0.4
 check "↵ 接受 kind：光标后紧跟 ) 不补空格 → (kind)，没有 (kind )" eval '[[ $(line 1) == "select * from t_event where (kind)" ]] || { echo "  [$(line 1)]"; false; }'
 fresh; e2e_type "select * from t_event wher"; sleep 0.8; key Enter; sleep 0.8
-check "↵ 接受关键字 where（补出一个空格）：这个空格不触发列名列表" none
+check "↵ 接受关键字 where（补出一个空格）：F8.17 起这个空格也弹列名，列表没有选中项" eval 'names_are "$EVT" && [[ -z $(sel) ]]'
 key Enter; sleep 0.4
-check "再 ↵：换行（where↵↵ 想换行不会插进一个列名）" eval '[[ $(line 1) == "select * from t_event where" && -z $(line 2) && $(cc) == 2:0 ]] || { echo "  [$(line 1)] [$(line 2)] $(cc)"; false; }'
+check "再 ↵（没有选中项，是编辑器的）：关掉列表、换行（where↵↵ 想换行不会插进一个列名）" eval '[[ $(line 1) == "select * from t_event where" && -z $(line 2) && $(cc) == 2:0 ]] || { echo "  [$(line 1)] [$(line 2)] $(cc)"; false; }'
 fresh; paste "select  from t_event"; key Escape; key 0; key e; key a; e2e_type " distinct"; sleep 0.3; e2e_type " "; sleep 1
 check "select distinct ␠（语句里有 from t_event）：弹出列（distinct 也是触发词）" eval 'has id && has kind'
 key Escape; key Escape

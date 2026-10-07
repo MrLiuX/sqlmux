@@ -38,7 +38,7 @@ key Escape
 leader j
 check "SPC j：输入框里是 &，只有 window 0（「0: data」，类型「窗口」，选中）" eval 'input_is "&" && [[ $(list | cut -d"|" -f1 | sed "s/  */ /g") == "0: data doraemon 窗口" && $(sel) == "0: data" ]] || { list; false; }'
 key Escape
-e2e_keys Space; e2e_type c; sleep 0.8
+e2e_keys Space; e2e_type c; sleep 0.8; e2e_keys Space; e2e_type %; sleep 0.4; key c; key C-h   # F8.18: the new window is one empty pane; split it and c a console_2 as before
 leader j
 check "新建 window 1 之后：&  列出 0: data 和 1: data-2，按编号" eval '[[ $(names) == "0: data,1: data-2," ]]'
 key Up; key Enter; sleep 0.4

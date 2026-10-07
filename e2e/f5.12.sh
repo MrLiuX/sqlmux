@@ -24,7 +24,7 @@ check "console 输入 selec：弹出 select" has select
 key Enter
 check "↵ 接受：select + 一个空格，光标在空格后（前面 7 个字符），列表关了，仍在 INSERT" eval '[[ $(line 1) == "select" && $(cc) == 1:7 && -z $(pop) ]] && mode_is INSERT'
 fresh; e2e_type "select 1 from t_user wher"; sleep 0.5; key Enter
-check "console：wher ↵ → where + 空格（前面 27 个字符），没有换行" eval '[[ $(line 1) == "select 1 from t_user where" && $(cc) == 1:27 && $(line 2) == "" ]]'
+check "console：wher ↵ → where + 空格（前面 27 个字符），没有换行（F8.17：接着弹出列名列表，没有选中项，盖住第 2 行，用光标行判断）" eval '[[ $(line 1) == "select 1 from t_user where" && $(cc) == 1:27 ]]'
 fresh; e2e_type "select * from t_user u wher"; sleep 0.5; key Enter; e2e_type "u.i"; sleep 0.5
 check "补空格之后接着打：where u.i 弹出列 id（列不补空格的前提）" has id
 key Enter

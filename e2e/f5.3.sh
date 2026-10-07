@@ -156,7 +156,7 @@ e2e_type ':q'; key Enter; sleep 0.3; key y; wait_for 5 eval '[[ $(idle_tx) == 0 
 check "y：关掉 console 并回滚：没有 idle in transaction，库里 id 2 还是 2.99，表格重取" eval '[[ $(idle_tx) == 0 && $(amount 2) == 2.99 && -z $(txstate) && $(tabbar 1) != *console* ]] && e2e_plain | grep -E "│ +2 │ +2 │" | grep -q "2.99"'
 
 # ---- 关 window：里面的 console 是这个连接上最后一个时同样确认
-e2e_keys Space; e2e_type c; sleep 0.5; key C-l; setsql "begin"; run; setsql "delete from t_log"; run
+e2e_keys Space; e2e_type c; sleep 0.5; key c; setsql "begin"; run; setsql "delete from t_log"; run   # F8.18：新 window 是空 pane，c 在引导页上新建 console
 check "（准备）新 window 的 console 里 begin、delete from t_log：事务中" eval 'txstate_is 事务中 $WARN'
 pal ">window.close"; key Enter; sleep 0.3
 check "window.close：确认框「rw 有未提交的事务，关闭会回滚。」" eval '[[ $(box) == "rw 有未提交的事务，关闭会回滚。" ]] || { echo "  $(box)"; false; }'
