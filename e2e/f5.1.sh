@@ -24,6 +24,7 @@ srows() { local g; slist_open || return 0; g=($(box))
   e2e_rows $((g[0] + 2)) $((g[0] + g[2] - 2)) $((g[1] + 1)) $((g[1] + g[3] - 2)) $((g[0] + 2)) | awk -F'|' '{ sub(/ +$/, "", $1); gsub(/   +/, "  ", $1); print $1 "|" ($2 == "#364a82" ? 1 : 0) }'; }
 rows_are() { local got; got=$(srows | tr '\n' ';'); [[ $got == "$1" ]] || { echo "  rows: '$got'"; echo "  want  '$1'"; false; }; }
 sl() { e2e_keys Space; e2e_type s; sleep 0.4; }                             # SPC s
+layout() { e2e_keys Space; e2e_type %; sleep 0.4; key c; }   # F8.18 起新 session 只有一个空 pane：分一个出来、c 新建 console，回到旧的默认布局
 new_session() { key n; wait_for 6 eval '[[ $(sname) == "$1" ]]'; sleep 0.5; }   # NAME：列表里按 n，等它 attach
 clr() { local i; for ((i = 0; i < 30; i++)); do e2e_keys BSpace; done; sleep 0.2; }
 title1() { e2e_plain | head -1; }
@@ -43,7 +44,10 @@ key n
 check "n：列表关掉，toast「正在连接 doraemon…」" eval '! slist_open && toast_is "正在连接 doraemon…"'
 wait_for 6 eval '[[ $(sname) == 1 ]]'; sleep 0.5
 check "连上之后 attach 新 session：名字 1（最小的没用过的数字），一个 window 0: data*" eval 'sname_is 1 && [[ $(wins) == "0: data*" ]]'
-check "新 session 是默认布局：侧栏、① 引导页、② console_2（n 遍历所有 session，console_1 在 doraemon 里）" eval '[[ $(e2e_panes | awk "\$1 != \"-\" { print \$1 }" | tr "\n" " ") == "0 1 2 " ]] && tabs_are 2 "1:console_2*" && e2e_plain | grep -q "打开表"'
+check "新 session 只有侧栏和一个空 pane ①（引导页），没有 console（F8.18）" eval '[[ $(e2e_panes | awk "\$1 != \"-\" { print \$1 }" | tr "\n" " ") == "0 1 " ]] && [[ $(tabbar 1) != *console* ]] && e2e_plain | grep -q "打开表"'
+layout
+check "（准备）分出 ②、c 新建 console（n 遍历所有 session，console_1 在 doraemon 里，所以是 console_2），焦点在 ②" eval '[[ $(e2e_panes | awk "\$1 != \"-\" { print \$1 }" | tr "\n" " ") == "0 1 2 " ]] && tabs_are 2 "1:console_2*" && focus_is 2'
+key C-h
 check "新 session 连上当前连接并展开（侧栏有 Tables (6)），它有自己的一套连接：库里多了两条" eval 'e2e_plain | head -12 | grep -q "Tables (6)" && [[ $(conns) == 4 ]]'
 
 # ---- 两个 session 来回切：各自的界面不变
@@ -111,7 +115,7 @@ key k; key x
 check "x 关掉当前的、排第一的 doraemon：attach 它的下一个 2" eval 'slist_open && sname_is 2 && rows_are "2  1 windows|1;1  1 windows|0;"'
 
 # ---- 有未保存的修改先确认；关之前把 console 写盘
-key Escape; open_table t_user; key l; key Enter; e2e_type x; key Enter   # 2 的 ① t_user 改一格
+key Escape; layout; key C-h; open_table t_user; key l; key Enter; e2e_type x; key Enter   # 2 的 ① t_user 改一格
 key C-l; key i; e2e_type "select 42"; key Escape; cf=$(tabbar 2 | sed 's/^1://; s/\*$//')   # 2 的 ② console 写一句
 sl; e2e_type x; sleep 0.4
 check "x 关掉有修改的 2：确认框「2 里有 1 处修改未保存，关闭会丢弃。」y 关闭" eval 'e2e_plain | grep -q "│ *2 里有 1 处修改未保存，关闭会丢弃。" && e2e_plain | grep -q "y 关闭   n 取消"'
@@ -130,7 +134,7 @@ mkdir -p "$D/own"; (umask 077; printf '[[connection]]\nname = "doraemon"\nengine
 start -C "$D/own"; key C-l; setsql "select count(*) from t_order"
 e2e_lock t_order; key Enter; sleep 0.5
 check "（准备）doraemon 的 console 在等锁：状态栏 busy" eval '[[ $(bar) == *busy* ]]'
-sl; new_session 1
+sl; new_session 1; layout; key C-h
 check "新 session 1 不忙：busy 跟着当前连接，1 用的是自己的连接" eval 'sname_is 1 && [[ $(bar) != *busy* ]]'
 e2e_unlock; sleep 1.5
 check "doraemon 的查询回来了：1 的界面不动（没有结果区、焦点还在 ①）" eval '[[ $(e2e_panes | awk "\$1 != \"-\" { print \$1 }" | tr "\n" " ") == "0 1 2 " ]] && focus_is 1 && sname_is 1'
@@ -149,7 +153,7 @@ key Escape
 
 # ---- 关掉有查询、取数在跑的 session：不另确认，存活的 session 里没有任何提示或变化
 before=$(panes)
-sl; new_session 1; key C-l; setsql "select count(*) from t_order"
+sl; new_session 1; layout; setsql "select count(*) from t_order"
 e2e_lock t_order; key Enter; key C-h; pal "@t_order"; key Enter; sleep 0.5               # ② 的查询、① 的取数都在等锁
 check "（准备）1 里 console 和表格都在等锁：busy" eval 'sname_is 1 && [[ $(bar) == *busy* ]]'
 sl; e2e_type x; sleep 0.6

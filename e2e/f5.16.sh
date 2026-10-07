@@ -69,7 +69,7 @@ key Escape
 begin
 check "（准备）一个 session doraemon" eval '[[ $(sname) == doraemon ]]'
 key F5; wait_for 8 eval '[[ $(sname) == 1 ]]'; sleep 0.5
-check "F5 session.new：新 session 1，一个 window 0: data*，默认布局，连着当前连接（侧栏有 Tables (6)）" eval '[[ $(sname) == 1 && $(wins) == "0: data*" && $(panes) == "0 1 2 " ]] && e2e_plain | head -12 | grep -q "Tables (6)"'
+check "F5 session.new：新 session 1，一个 window 0: data*，一个空 pane（F8.18），连着当前连接（侧栏有 Tables (6)）" eval '[[ $(sname) == 1 && $(wins) == "0: data*" && $(panes) == "0 1 " ]] && e2e_plain | head -12 | grep -q "Tables (6)"'
 
 # ---- tab.quit：关 tab；pane 空了关 pane；window 里只剩这个空 pane 就关 window；最后一个 window 不关
 begin; key C-l; key C-l 2>/dev/null; key C-h
@@ -88,9 +88,14 @@ check "只剩 console 这一个 pane、window 是 session 里最后一个：F3 �
 key F3
 check "最后一个 window 里最后一个空 pane：再按 F3 什么都不做" eval '[[ $(panes) == "0 1 " && $(wins) == "0: data*" ]] && running'
 
-# 两个 window：window 1 的空 pane 关掉，再关最后的 console，window 跟着关
+# 两个 window：F8.18 起新 window 只有一个空 pane，F3 连 window 一起关
 begin; e2e_keys Space; e2e_type c; sleep 0.6
-check "（准备）SPC c：window 1，① 引导页、② console_2，焦点在 ①" eval '[[ $(wins) == "0: data  1: data-2*" && $(panes) == "0 1 2 " ]] && focus_is 1'
+check "（准备）SPC c：window 1，只有一个空 pane ①（引导页），焦点在 ①" eval '[[ $(wins) == "0: data  1: data-2*" && $(panes) == "0 1 " ]] && focus_is 1'
+key F3
+check "它是 window 里唯一的 pane、pane 本来就空：F3 连 window 一起关，回到 window 0" eval '[[ $(wins) == "0: data*" ]] && [[ $(panes) == "0 1 2 " ]]'
+# window 里有别的 pane：空 pane 关掉，再关最后的 console，window 跟着关
+e2e_keys Space; e2e_type c; sleep 0.6; e2e_keys Space; e2e_type %; sleep 0.4; key c; key C-h
+check "（准备）window 1 分出 ②、c 新建 console_2，焦点回到空的 ①" eval '[[ $(wins) == "0: data  1: data-2*" && $(panes) == "0 1 2 " ]] && focus_is 1 && tabs_are 2 "1:console_2*"'
 key F3
 check "按下时 pane 本来就空、有别的 pane：F3 关掉这个 pane" eval '[[ $(panes) == "0 1 " && $(wins) == "0: data  1: data-2*" ]]'
 key F3

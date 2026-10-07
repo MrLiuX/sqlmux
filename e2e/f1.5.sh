@@ -42,18 +42,18 @@ check "esc 关掉列表之后 ↵ 直接执行查询（stat 不是列：错误�
 
 # ---- 补全：取值模式（枚举、布尔；§9.7）
 edit; typ "status = "
-check "status = ：直接列出枚举值，按 enumsortorder（pending queued running done failed），注释「值」" eval '[[ $(names) == "pending queued running done failed " && $(items | head -1) == "pending 值|1" ]] || { echo "  $(items | tr "\n" ,)"; false; }'
+check "status = ：直接列出枚举值，按 enumsortorder（pending queued running done failed），注释「值」；前缀为空、自己弹出的，不预选（F8.17）" eval '[[ $(names) == "pending queued running done failed " && $(items | head -1) == "pending 值|0" && -z $(picked) ]] || { echo "  $(items | tr "\n" ,)"; false; }'
 key C-n
-check "弹出时 pending 已选中，第一次 C-n 就移到 queued（F1.14）" eval '[[ $(picked) == "queued 值" ]] || { echo "  selected: $(picked)"; false; }'
+check "没选中时第一次 C-n 选中第一项 pending（F8.17）" eval '[[ $(picked) == "pending 值" ]] || { echo "  selected: $(picked)"; false; }'
 i0=$(picked_i); key Down; i1=$(picked_i); key Up; i2=$(picked_i); key C-n; i3=$(picked_i); key C-p; i4=$(picked_i)
 check "↓ / ↑ / C-n / C-p 各移一项" eval '(( i1 == i0 + 1 && i2 == i0 && i3 == i0 + 1 && i4 == i0 )) || { echo "  $i0 $i1 $i2 $i3 $i4"; false; }'
-key C-p
 key Enter
 check "明确选中之后 ↵ 是接受：插入带引号的 'pending'，仍在输入" eval '[[ $(where_in) == "status = '"'pending'"'" ]] && mode_is INSERT || { echo "  $(where_in)"; false; }'
 clear_in; typ "status = "; key C-p
-check "第一项上 C-p：绕到最后一项 failed（F1.14）" eval '[[ $(picked) == "failed 值" ]] || { echo "  selected: $(picked)"; false; }'
-clear_in; typ "status = "; key Enter
-check "status = 直接 ↵：接受已选中的 pending" eval '[[ $(where_in) == "status = '"'pending'"'" ]] || { echo "  $(where_in)"; false; }'
+check "没选中时 C-p：选中最后一项 failed（F8.17）" eval '[[ $(picked) == "failed 值" ]] || { echo "  selected: $(picked)"; false; }'
+clear_in; typ "status = "; key Enter; wait_for 8 settled
+check "status = 直接 ↵：列表没有选中项，不接受，↵ 是输入框的：执行 status =（F8.17）" eval '[[ -z $(pop) ]] && mode_is NORMAL && [[ $(errbar 1 | head -1) == *"syntax error"* ]] || { echo "  $(errbar 1 | head -1)"; false; }'
+edit
 clear_in; typ "status = 'd"; key Tab; key Enter
 check "status = 'd 再 Tab ↵：替换半截值成 'done'" eval '[[ $(where_in) == "status = '"'done'"'" ]] || { echo "  $(where_in)"; false; }'
 clear_in; typ "status in ('done', "
@@ -87,20 +87,20 @@ key go; typ amount; key Enter; wait_for 8 settled   # ORDER amount ↑
 run "id < 50"
 edit; key C-r
 hist() { items | cut -d'|' -f1 | sed -E '/^─/d; /^C-p/d; s/ [0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$//' | tr '\n' ,; }   # 去掉右侧的时间、F8.14 的分隔线和底部提示行
-check "C-r：打开历史下拉，状态栏 COMMAND；不画组标题，每项前面是 history 图标（F3.31），新的在前（id < 50、status = 'done'、id < 50，最早的是出错的 stat），底部有一行提示（F8.14）" eval 'mode_is COMMAND && [[ $(hist) == "id < 50,status = '"'done'"',id < 50,stat," && $(icons) == "$HIST$HIST$HIST$HIST" && $(items | tail -1) == "C-p/C-n 移动"* ]] || { echo "  $(items | tr "\n" ,)"; false; }'
+check "C-r：打开历史下拉，状态栏 COMMAND；不画组标题，每项前面是 history 图标（F3.31），新的在前（id < 50、status = 'done'、id < 50，之前是执行 status = 的出错记录（F8.17）、最早的是出错的 stat），底部有一行提示（F8.14）" eval 'mode_is COMMAND && [[ $(hist) == "id < 50,status = '"'done'"',id < 50,status =,stat," && $(icons) == "$HIST$HIST$HIST$HIST$HIST" && $(items | tail -1) == "C-p/C-n 移动"* ]] || { echo "  $(items | tr "\n" ,)"; false; }'
 check "历史项右侧是时间 MM-DD HH:MM" eval 'items | sed -n 1p | grep -qE " [0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}\|"'
 check "空的 WHERE 不记" eval '! items | grep -q "^ *[0-9][0-9]-"'
 check "打开时选中第一项" eval '[[ $(picked) == "id < 50 "* ]]'
 key C-f
-check "C-f：收藏这一项，排在历史后面（F8.14：历史在上），中间一行分隔线，star 图标，右侧是和默认不同的 ORDER / LIMIT（amount ↑ · 500）" eval '[[ $(hist) == "id < 50,status = '"'done'"',id < 50,stat,id < 50 amount ↑ · 500," && $(icons) == "$HIST$HIST$HIST$HIST$STAR" && $(items | grep -c "^───") == 1 ]] || { echo "  $(items | tr "\n" ,)"; false; }'
+check "C-f：收藏这一项，排在历史后面（F8.14：历史在上），中间一行分隔线，star 图标，右侧是和默认不同的 ORDER / LIMIT（amount ↑ · 500）" eval '[[ $(hist) == "id < 50,status = '"'done'"',id < 50,status =,stat,id < 50 amount ↑ · 500," && $(icons) == "$HIST$HIST$HIST$HIST$HIST$STAR" && $(items | grep -c "^───") == 1 ]] || { echo "  $(items | tr "\n" ,)"; false; }'
 key Escape
 check "esc 关闭，输入框的文字保留（空）" eval '[[ -z $(pop) && -z $(where_in) ]] && mode_is INSERT'
 typ sta; key C-r
-check "输入框里已有 sta 时打开：不按它过滤，收藏和历史全列出（F3.31）" eval '[[ $(hist) == "id < 50,status = '"'done'"',id < 50,stat,id < 50 amount ↑ · 500," ]] || { echo "  $(items | tr "\n" ,)"; false; }'
+check "输入框里已有 sta 时打开：不按它过滤，收藏和历史全列出（F3.31）" eval '[[ $(hist) == "id < 50,status = '"'done'"',id < 50,status =,stat,id < 50 amount ↑ · 500," ]] || { echo "  $(items | tr "\n" ,)"; false; }'
 key Tab; t1=$(picked); key Down; t2=$(picked); key BTab; t3=$(picked); key Up; t4=$(picked); key Up; t5=$(picked)
 check "Tab / ↓ 下一项，S-Tab / ↑ 上一项，到头绕回（F3.31）" eval '[[ $t1 == "status = "* && $t2 == "id < 50 "[0-9]* && $t3 == "status = "* && $t4 == "id < 50 "[0-9]* && $t5 == "id < 50 amount"* ]] || { echo "  $t1 / $t2 / $t3 / $t4 / $t5"; false; }'
 key BSpace
-check "开始输入之后才过滤：退格成 st，只剩 status = 'done' 和 stat" eval '[[ $(hist) == "status = '"'done'"',stat," ]] || { echo "  $(items | tr "\n" ,)"; false; }'
+check "开始输入之后才过滤：退格成 st，只剩 status = 'done'、status = 和 stat" eval '[[ $(hist) == "status = '"'done'"',status =,stat," ]] || { echo "  $(items | tr "\n" ,)"; false; }'
 key Enter; wait_for 8 settled
 check "↵ 应用：WHERE、ORDER、LIMIT 都换成这一项的（status = 'done'、id ↑、500），从第 1 页开始" eval '[[ $(where_in) == "status = '"'done'"'" ]] && qb_has "ORDER id $ASC" && qb_has "LIMIT 500" && qb_has "PAGE 1/3" && mode_is NORMAL'
 run "id < 50"; run "status = 'done'"   # 后一条和刚应用的那项内容相同（status = 'done'、id ↑、500）

@@ -25,24 +25,26 @@ tsel() { local y; for y in $(seq 3 43); do [[ $(e2e_style 4 "$y") == *bg=#364a82
 tree_to() { local i; key G; for ((i = 0; i < 40; i++)); do [[ $(tsel) == *" $1 "* ]] && return; key k; done; }
 trow() { local y; for y in $(seq 3 43); do [[ $(e2e_text 1 32 "$y") == *" $1 "* ]] && { echo "$y"; return; }; done; }   # 侧栏里 NAME 的第一行
 
-# ---- SPC c 新建：默认布局，放在最后并切过去
+mk() { leader c; leader %; key c; }                                         # 新 window：F8.18 起只有一个空 pane，分一个出来再 c 新建 console（旧的默认布局）
+
+# ---- SPC c 新建：一个空 pane（F8.18），放在最后并切过去
 start; open_table t_order
 leader c
 check "SPC c：新 window 叫 data-2（F8.11），放在最后并切过去" wins_are "0: data  1: data-2*"
-check "新 window 是默认布局：侧栏、① 引导页、② console_2（取最小没用过的 n），焦点在 ①" eval 'panes_are "0 1 2 " && tabs_are 2 "1:console_2*" && e2e_plain | grep -q "打开表" && focus_is 1'
+check "新 window 只有侧栏和一个空 pane ①（引导页），没有 console，焦点在 ①（F8.18）" eval 'panes_are "0 1 " && [[ $(tabbar 1) != *console* ]] && e2e_plain | grep -q "打开表" && focus_is 1'
 
 # ---- 各 window 的布局、结果区互不影响
-leader %
-check "（准备）window 1 里分割 ①：侧栏和三个 pane" panes_are "0 1 2 3 "
+leader %; key c
+check "（准备）window 1 里分割 ①，新 pane 里 c 新建 console_2：侧栏和两个 pane，② 是 console_2" eval 'panes_are "0 1 2 " && tabs_are 2 "1:console_2*"'
 leader p
 check "SPC p：回到 window 0，它的布局原样：① t_order、② console_1，没有结果区" eval 'wins_are "0: data*  1: data-2" && panes_are "0 1 2 " && [[ $(title1) == *" t_order ─"* ]] && tabs_are 2 "1:console_1*"'
 key C-l; setsql "select 1 as x"; key Enter; wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 0.3
 check "window 0 的 console 执行：结果区 ③ 出现在 window 0 底部" eval 'panes_are "0 1 2 3 " && g=($(geom 3)) && (( g[1] > 20 && g[2] > 120 ))'
 leader n
-check "SPC n：window 1 原样（引导页、新分出来的 pane、console_2），没有 window 0 的结果区" eval 'wins_are "0: data  1: data-2*" && panes_are "0 1 2 3 " && tabs_are 3 "1:console_2*" && ! e2e_plain | grep -q "select 1 as x"'
+check "SPC n：window 1 原样（引导页、新分出来的 pane 里的 console_2），没有 window 0 的结果区" eval 'wins_are "0: data  1: data-2*" && panes_are "0 1 2 " && tabs_are 2 "1:console_2*" && ! e2e_plain | grep -q "select 1 as x"'
 
 # ---- SPC n / SPC p 到头绕回，SPC l 回到上一个用过的
-leader c
+mk
 check "（准备）第三个 window" wins_are "0: data  1: data-2  2: data-3*"
 leader n
 check "SPC n 在最后一个上：绕回 window 0" wins_are "0: data*  1: data-2  2: data-3"
@@ -108,7 +110,7 @@ check "（准备）report 里焦点到树上，光标在最后一个 window（2:
 key Enter
 check "window 节点上 ↵：切到 window 2" wins_are "0: data  1: report  2: data-3*"
 key C-h; key C-h; key C-h; tree_to console_2; key Enter
-check "report 的 console_2 tab 节点 ↵：先切到 report，再聚焦 console_2 所在的 ③" eval 'wins_are "0: data  1: report*  2: data-3" && focus_is 3'
+check "report 的 console_2 tab 节点 ↵：先切到 report，再聚焦 console_2 所在的 ②" eval 'wins_are "0: data  1: report*  2: data-3" && focus_is 2'
 
 # ---- 树的展开状态按 window 的稳定 ID 记：关掉前面的 window 之后，折叠的还是原来那个（不按下标错到后一个上）
 key C-h; key C-h; key C-h; tree_to report; key h
@@ -123,7 +125,7 @@ cmd window.close
 check "window.close：它的 console 写了盘，切到上一个用过的 report" eval 'wins_are "0: report*" && grep -q "select 7" "$E2E_TMP/data/sqlmux/consoles/$cf.sql"'
 leader l
 check "上一个用过的已经关了：SPC l 不做事" wins_are "0: report*"
-leader c; leader c; c2=$(con2); leader c                                     # report、1、2、3，2 的 console 记作 c2
+mk; mk; c2=$(con2); mk                                     # report、1、2、3，2 的 console 记作 c2
 leader p; leader p; e2e_click $(( $(e2e_find "3: data" "$(H)" | cut -d' ' -f1) + 2 )) "$(H)"; sleep 0.4
 check "（准备）从 1 点状态栏到 3" wins_are "0: report  1: data  2: data-2  3: data-3*"
 cmd window.close
@@ -132,7 +134,7 @@ cmd window.close
 check "再关 1（上一个用过的已经没了）：切到它前面的 report" wins_are "0: report*  1: data-2"
 cmd window.close
 check "再关排第一的 report：切到它后面那个（原来的 2）" eval 'wins_are "0: data-2*" && [[ $(con2) == "$c2" ]]'
-leader c; open_table t_user; key l; key Enter; e2e_type x; key Enter              # 新 window 里 t_user 改一格
+mk; open_table t_user; key l; key Enter; e2e_type x; key Enter              # 新 window 里 t_user 改一格
 leader p; e2e_type ':'; sleep 0.3; e2e_type qa; key Enter
 check "退出时统计所有 window 的修改：「有 1 处修改未保存，退出会丢弃。」" eval '[[ $(box) == "有 1 处修改未保存，退出会丢弃。" ]] || { echo "  $(box)"; false; }'
 key n; leader n; cmd window.close
