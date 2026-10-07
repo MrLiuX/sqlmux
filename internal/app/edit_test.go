@@ -150,12 +150,12 @@ func TestEditEndsFirst(t *testing.T) {
 	tab := loadOrders(t, a, 3)
 	p := a.focused()
 	feed(t, a, "lix")
-	c := find(t, a, ui.Target{Kind: ui.KindCell, Pane: p.ID, Action: "grid.goto 2 6"}) // clear of the options
+	c := find(t, a, ui.Target{Kind: ui.KindCell, Pane: p.ID, Action: "grid.goto 2 5"}) // clear of the options
 	click(a, c.Min)
-	if tab.cell != nil || tab.row != 2 || tab.col != 6 || editsOf(tab) != "1/status=x" {
+	if tab.cell != nil || tab.row != 2 || tab.col != 5 || editsOf(tab) != "1/status=x" {
 		t.Fatalf("click on a cell: cell %+v at %d,%d, %q", tab.cell, tab.row, tab.col, editsOf(tab))
 	}
-	feed(t, a, "hiy") // note: text
+	feed(t, a, "iy") // note: text
 	a.Update(tea.MouseWheelMsg{X: c.Min.X, Y: c.Min.Y, Button: tea.MouseWheelDown})
 	if tab.cell != nil || len(tab.edits) != 2 {
 		t.Fatalf("wheel: %q", editsOf(tab))

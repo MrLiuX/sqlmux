@@ -29,7 +29,8 @@ func (q Query) from(e Engine) string {
 }
 
 // Page reads one page of a table (§8.5): every column, sorted by Order and
-// then the row identity so pages are stable (unordered with neither). It
+// then the row identity so pages are stable (unordered with neither); with
+// no Order the row identity sorts, Desc turning it. It
 // asks for one row more than Limit to tell whether a next page exists, even
 // before the count is in. One statement only: PG's extended protocol and a
 // MySQL connection without multiStatements refuse more, whatever Where
@@ -44,7 +45,11 @@ func Page(ctx context.Context, c Conn, e Engine, q Query) (r Result, next bool, 
 		order = append(order, e.Quote(q.Order)+dir)
 	}
 	for _, k := range q.Key {
-		if k != q.Order {
+		switch {
+		case k == q.Order:
+		case q.Order == "" && q.Desc: // the row identity is what sorts: the other way
+			order = append(order, e.Quote(k)+" desc")
+		default:
 			order = append(order, e.Quote(k))
 		}
 	}

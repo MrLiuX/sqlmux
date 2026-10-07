@@ -28,6 +28,14 @@ func TestPage(t *testing.T) {
 	if err != nil || r.Rows[1][0].S != "1" || r.Rows[1][1].S != "2" || r.Rows[2][0].S != "2" {
 		t.Errorf("composite key order: %v %v", r.Rows, err)
 	}
+	// no Order, Desc: the row identity sorts, every column of it the other way
+	desc := db.Query{Schema: "public", Table: "t_order", Key: []string{"id"}, Desc: true, Limit: 2}
+	if r, _, err = db.Page(ctx, c, pg, desc); err != nil || r.Rows[0][0].S != "6000" || r.Rows[1][0].S != "5999" {
+		t.Errorf("default order, down: %v %v", r.Rows, err)
+	}
+	if r, _, err = db.Page(ctx, c, pg, db.Query{Schema: "public", Table: "t_order_item", Key: []string{"order_id", "line_no"}, Desc: true, Limit: 2}); err != nil || r.Rows[0][0].S == "1" { // the first order is last now
+		t.Errorf("composite key, down: %v %v", r.Rows, err)
+	}
 	// no key: no order, still paged; names needing quotes are quoted
 	if r, next, err = db.Page(ctx, c, pg, db.Query{Schema: "public", Table: "t_log", Limit: 2}); err != nil || len(r.Rows) != 2 || !next {
 		t.Errorf("t_log: %d rows, next %v, %v", len(r.Rows), next, err)

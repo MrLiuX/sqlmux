@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"os"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -12,6 +13,8 @@ import (
 
 	"sqlmux/internal/db"
 	"sqlmux/internal/editor"
+	"sqlmux/internal/i18n"
+	"sqlmux/internal/sqlkit"
 	"sqlmux/internal/ui"
 )
 
@@ -112,6 +115,67 @@ func (a *App) yankGrid(row bool) tea.Cmd {
 		flash.cell[1], text = gs.col, cells[gs.col]
 	}
 	return tea.Batch(clipCopy(text), a.flashYank(flash))
+}
+
+// yankInsert is yi on the focused table's row (§7.6, F8.7): an INSERT of
+// every column the page has, but the server's own (generated), as it shows,
+// changes in, to the clipboard, flashing. A DEFAULT cell is left out. A
+// number is bare, anything else a string literal, NULL as it is; the
+// keywords follow keyword_case, preserve being lower.
+func (a *App) yankInsert() tea.Cmd {
+	p := a.focused()
+	gs, _, _, ok := a.gridOf(p)
+	if !ok {
+		return nil
+	}
+	tab := p.tab()
+	if tab.Data == nil {
+		if tab.Result != nil {
+			return a.showToast(i18n.T("只有表里的行能复制为 INSERT"), toastTTL)
+		}
+		return nil
+	}
+	t := tab.Data
+	sr, key, ok := t.cursor()
+	if !ok {
+		return nil
+	}
+	eng := t.conn.eng
+	var names, vals []string
+	for _, pc := range t.page.Cols {
+		col := t.column(pc.Name)
+		v, set := t.value(sr, key, pc.Name)
+		if col.Generated || !set {
+			continue
+		}
+		names = append(names, eng.Quote(pc.Name))
+		switch {
+		case v.Null:
+			vals = append(vals, a.keyword("null"))
+		case (col.Fixed || colType(col.Type) == ui.ColNumber) && number.MatchString(v.S):
+			vals = append(vals, v.S)
+		default:
+			vals = append(vals, sqlkit.Literal(v.S, eng.Dialect()))
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	text := a.keyword("insert into") + " " + eng.Quote(t.table.Schema, t.table.Name) + " (" + strings.Join(names, ", ") + ") " + a.keyword("values") + " (" + strings.Join(vals, ", ") + ");"
+	return tea.Batch(clipCopy(text), a.flashYank(yankFlash{pane: p.ID, cell: [2]int{gs.row, -1}}))
+}
+
+// number is what a numeric column's value may be, written bare: no NaN,
+// Infinity or hex, which a literal in quotes says better.
+var number = regexp.MustCompile(`^-?\d+(\.\d+)?([eE][+-]?\d+)?$`)
+
+// keyword is a SQL keyword as keyword_case writes it (§9.5): preserve has
+// nothing to preserve here, so it is lower.
+func (a *App) keyword(k string) string {
+	if a.keywordCase == "upper" {
+		return strings.ToUpper(k)
+	}
+	return k
 }
 
 // tsv is one row of tab separated values, quoted where a value needs it

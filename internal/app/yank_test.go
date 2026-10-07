@@ -145,3 +145,36 @@ func TestYankResult(t *testing.T) {
 		t.Errorf("p: %d tabs", len(res.Tabs))
 	}
 }
+
+// yi copies the row as one INSERT of every column but a generated one, as
+// it shows, changes in: a number bare, NULL as it is, the rest a literal;
+// the keywords in keyword_case's case; the row flashes. A result's row has
+// no table: a toast, nothing copied (F8.7).
+func TestYankInsert(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	tab.cols.Cols[6].Generated = true // created_at
+	feed(t, a, "jlli9<Esc>")          // row 2's amount
+	want := "insert into \"public\".\"t_order\" (\"id\", \"status\", \"amount\", \"paid\", \"meta\", \"note\") values (2, 'done', 9, 't', '{\"n\": 2, \"tags\": [\"a\", \"b\"]}', 'line one\nline two\tafter tab \x1b[31mred');"
+	if cmd := keys(t, a, "yi"); !clipped(cmd, want) || a.flash == nil || a.flash.cell != [2]int{1, -1} {
+		t.Fatalf("yi: flash %+v", a.flash)
+	}
+	a.keywordCase = "upper"
+	want = "INSERT INTO \"public\".\"t_order\" (\"id\", \"status\", \"amount\", \"paid\", \"meta\", \"note\") VALUES (3, 'failed', 3.99, 't', '{\"n\": 3, \"tags\": [\"a\", \"b\"]}', NULL);"
+	if cmd := keys(t, a, "jyi"); !clipped(cmd, want) {
+		t.Errorf("row 3, upper case, a NULL")
+	}
+	a.keywordCase = "preserve"
+	tab.page.Rows[2][1] = db.Val{S: "it's"}
+	if cmd := keys(t, a, "yi"); !clipped(cmd, "insert into \"public\".\"t_order\" (\"id\", \"status\", \"amount\", \"paid\", \"meta\", \"note\") values (3, 'it''s', 3.99, 't', '{\"n\": 3, \"tags\": [\"a\", \"b\"]}', null);") {
+		t.Errorf("preserve is lower, a quote doubled")
+	}
+
+	r := db.Result{Cols: []db.Col{{Name: "a"}}, Rows: [][]db.Val{{{S: "x"}}}}
+	b, _ := inRun(t, &execDB{res: map[string]db.Result{"select 1": r}}, "select 1;")
+	press(t, b, "<CR>")
+	b.win().focus(b.win().Result.ID)
+	if cmd := keys(t, b, "yi"); cmd == nil || clipped(cmd, "") || b.toast != "只有表里的行能复制为 INSERT" {
+		t.Errorf("a result: toast %q", b.toast)
+	}
+}

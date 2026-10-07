@@ -55,12 +55,32 @@ type Frame struct {
 	Mouse  uv.Position // pointer, for hover styles; (-1,-1) when unknown
 	Theme  *Theme
 	Cursor *uv.Position // the terminal cursor, while an input has focus
+	Border uv.Border    // the characters every box is drawn with (§7.1, F8.10)
 }
 
 func NewFrame(w, h int, th *Theme) *Frame {
 	buf := uv.NewScreenBuffer(max(w, 0), max(h, 0))
 	buf.Method = ansi.GraphemeWidth
-	return &Frame{Buf: buf, Mouse: uv.Pos(-1, -1), Theme: th}
+	return &Frame{Buf: buf, Mouse: uv.Pos(-1, -1), Theme: th, Border: uv.NormalBorder()}
+}
+
+// BorderOf is the box characters `border` names (§14): single, rounded,
+// double, bold, or hidden, which is blanks: the titles show, the lines don't.
+// ok is false for any other name.
+func BorderOf(name string) (b uv.Border, ok bool) {
+	switch name {
+	case "single":
+		return uv.NormalBorder(), true
+	case "rounded":
+		return uv.RoundedBorder(), true
+	case "double":
+		return uv.DoubleBorder(), true
+	case "bold":
+		return uv.ThickBorder(), true
+	case "hidden":
+		return uv.HiddenBorder(), true
+	}
+	return b, false
 }
 
 func (f *Frame) Bounds() uv.Rectangle { return f.Buf.Bounds() }

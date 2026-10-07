@@ -1,30 +1,30 @@
-┌─ ⓪  doraemon ─────── SPC b ─┐ ┌─ ① ───────────────────────────────┐ ┌─ ②   doraemon  ▶ run  ↵ ─┐
-│  15 tables                 │ │                                   │ │▶  1 delete from t_log;    │
-│──────────────────────────────│ │                                   │ │▶  2 select 1;             │
-│ ▾  doraemon                 │ │                                   │ │▶  3 drop table if exists a│
-│   ▸  agentable              │ │                                   │ │                           │
-│   ▾  public                 │ │                                   │ │                           │
-│     ▾  Tables (14)          │ │                                   │ │                           │
-│       ▸  agent          124 │ │                                   │ │                           │
-│       ▸  agent_version  530 │ │                                   │ │                           │
-│       ▸  goal            57 │ │                                   │ │                           │
-│       ▸  mt_task        812 │ │                                   │ │                           │
-│       ▸  mt_task_log    96k┌─────────────────────────────────────┐│ │                           │
-│       ▸  schema_migrations │ 这次执行有 2 条危险语句：           ││ │                           │
-│       ▸  t_order       1.2m│   delete from t_log                 ││ │                           │
-│       ▸  t_order_item  3.4m│   drop table if exists archive_2024 ││ │                           │
-│       ▸  t_payment     410k│                                     ││ │                           │
-│       ▸  t_refund       12k│                    y 执行   n 取消  ││ │                           │
-│       ▸  t_sku         8.1k└─────────────────────────────────────┘│ │                           │
-│       ▸  t_user         38k │ │                                   │ │                           │
-│       ▸  t_user_address 52k │ │                                   │ │                           │
-│       ▸  t_user_profile 38k │ │                                   │ │                           │
-│        Views (0)            │ │                                   │ │                           │
-│ ▾  工作区                   │ │                                   │ │                           │
-│   ▾  data                   │ │                                   │ │                           │
-│        pane-1               │ │                                   │ │                           │
-│     ▾  pane-2               │ │                                   │ │                           │
-│──────────────────────────────│ │                                   │ │                           │
-│ j/k move · ↵ open            │ │ +                                 │ │ 1: console_1* │ +  gt/gT │
-└──────────────────────────────┘ └───────────────────────────────────┘ └───────────────────────────┘
+┌─ ⓪  doraemon ─────── SPC b ─┐ ┌─ ① ───────────────────────────┐ ┌─ ②  co…  doraemon  ▶ run  ↵ ─┐
+│  15 tables                 │ │                               │ │▶  1 delete from t_log;        │
+│──────────────────────────────│ │                               │ │▶  2 select 1;                 │
+│ ▾  doraemon                 │ │                               │ │▶  3 drop table if exists archi│
+│   ▸  agentable              │ │                               │ │                               │
+│   ▾  public                 │ │                               │ │                               │
+│     ▾  Tables (14)          │ │                               │ │                               │
+│       ▸  agent          124 │ │                               │ │                               │
+│       ▸  agent_version  530 │ │                               │ │                               │
+│       ▸  goal            57 │ │                               │ │                               │
+│       ▸  mt_task        812 │ │                               │ │                               │
+│       ▸  mt_task_log    96k┌─────────────────────────────────────┐                              │
+│       ▸  schema_migrations │ 这次执行有 2 条危险语句：           │                              │
+│       ▸  t_order       1.2m│   delete from t_log                 │                              │
+│       ▸  t_order_item  3.4m│   drop table if exists archive_2024 │                              │
+│       ▸  t_payment     410k│                                     │                              │
+│       ▸  t_refund       12k│                    y 执行   n 取消  │                              │
+│       ▸  t_sku         8.1k└─────────────────────────────────────┘                              │
+│       ▸  t_user         38k │ │                               │ │                               │
+│       ▸  t_user_address 52k │ │                               │ │                               │
+│       ▸  t_user_profile 38k │ │                               │ │                               │
+│        Views (0)            │ │                               │ │                               │
+│ ▾  工作区                   │ │                               │ │                               │
+│   ▾  data                   │ │                               │ │                               │
+│        pane-1               │ │                               │ │                               │
+│     ▾  pane-2               │ │                               │ │                               │
+│──────────────────────────────│ │                               │ │                               │
+│ j/k move · ↵ open            │ │ +                             │ │ 1: console_1* │ +      gt/gT │
+└──────────────────────────────┘ └───────────────────────────────┘ └───────────────────────────────┘
  doraemon ▾  0: data*                                ·     doraemon · pg@localhost:5432  COMMAND 

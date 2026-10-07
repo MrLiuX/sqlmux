@@ -45,6 +45,7 @@ type Grid struct {
 	Row, Col  int // the current cell; Row -1 for none: a table only to look at, nothing in it to click
 	Top, Left int // the first record and field shown
 	Transpose bool
+	FullWidth int // a column wishing no more than this many columns is never squeezed (§7.6, F8.5)
 	Focused   bool
 	Key       Icon // for primary key headers
 	Pane      int
@@ -184,8 +185,9 @@ func (v view) labelWidth() int {
 }
 
 // widths sizes each screen column (§7.6): the larger of its header and the
-// 90th percentile of its values, at most maxColWidth; squeezed in proportion
-// when they don't fit in room, but never below the header. What still
+// 90th percentile of its values, at most maxColWidth; when they don't fit in
+// room the ones wishing more than FullWidth are squeezed in proportion, never
+// below the header nor FullWidth, and the others stay whole. What still
 // doesn't fit scrolls. Turned, records are not squeezed: a page of them
 // never fits, and squeezed to their numbers they would show nothing.
 func (v view) widths(room int) []int {
@@ -208,8 +210,17 @@ func (v view) widths(room int) []int {
 		total += ws[c]
 	}
 	if total > room && total > 0 && !v.g.Transpose {
+		full, wide := v.g.FullWidth, 0
+		for _, w := range ws {
+			if w > full {
+				wide += w
+			}
+		}
+		avail := room - (total - wide) // what the wide ones share
 		for c := range ws {
-			ws[c] = max(ws[c]*room/total, heads[c])
+			if ws[c] > full {
+				ws[c] = max(ws[c]*avail/wide, heads[c], full)
+			}
 		}
 	}
 	return ws

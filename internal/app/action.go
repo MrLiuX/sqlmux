@@ -338,14 +338,15 @@ func init() {
 		"grid.last": {Title: i18n.N("最后一列"), Run: do(func(a *App, _ Args) {
 			a.gridMove(func(r, _, _, cols int) (int, int) { return r, cols - 1 })
 		})},
-		"grid.transpose":  {Title: i18n.N("转置"), Run: do(func(a *App, _ Args) { a.gridTranspose() })},
-		"grid.edit":       {Title: i18n.N("编辑单元格"), Run: func(a *App, _ Args) tea.Cmd { return a.editCell(nil) }},
-		"grid.revert":     {Title: i18n.N("撤回这一格的修改"), Run: do(func(a *App, _ Args) { a.revertCell() })},
-		"grid.row.add":    {Title: i18n.N("新增一行"), Run: func(a *App, _ Args) tea.Cmd { return a.addRow() }},
-		"grid.yank":       {Title: i18n.N("复制单元格"), Run: func(a *App, _ Args) tea.Cmd { return a.yankGrid(false) }},
-		"grid.yank.row":   {Title: i18n.N("复制整行"), Run: func(a *App, _ Args) tea.Cmd { return a.yankGrid(true) }},
-		"grid.paste":      {Title: i18n.N("粘贴成新行"), Run: func(a *App, _ Args) tea.Cmd { return a.pasteRow() }},
-		"grid.row.delete": {Title: i18n.N("标记 / 取消删除这一行"), Run: func(a *App, _ Args) tea.Cmd { return a.deleteRow() }},
+		"grid.transpose":   {Title: i18n.N("转置"), Run: do(func(a *App, _ Args) { a.gridTranspose() })},
+		"grid.edit":        {Title: i18n.N("编辑单元格"), Run: func(a *App, _ Args) tea.Cmd { return a.editCell(nil) }},
+		"grid.revert":      {Title: i18n.N("撤回这一格的修改"), Run: do(func(a *App, _ Args) { a.revertCell() })},
+		"grid.row.add":     {Title: i18n.N("新增一行"), Run: func(a *App, _ Args) tea.Cmd { return a.addRow() }},
+		"grid.yank":        {Title: i18n.N("复制单元格"), Run: func(a *App, _ Args) tea.Cmd { return a.yankGrid(false) }},
+		"grid.yank.row":    {Title: i18n.N("复制整行"), Run: func(a *App, _ Args) tea.Cmd { return a.yankGrid(true) }},
+		"grid.yank.insert": {Title: i18n.N("复制为 INSERT"), Run: func(a *App, _ Args) tea.Cmd { return a.yankInsert() }},
+		"grid.paste":       {Title: i18n.N("粘贴成新行"), Run: func(a *App, _ Args) tea.Cmd { return a.pasteRow() }},
+		"grid.row.delete":  {Title: i18n.N("标记 / 取消删除这一行"), Run: func(a *App, _ Args) tea.Cmd { return a.deleteRow() }},
 		"result.toggle": {Title: i18n.N("显示 / 隐藏结果区"), Run: do(func(a *App, _ Args) { a.toggleResult() }),
 			On: func(a *App) bool { return a.win().Result != nil && !a.win().resultHidden }},
 		"grid.refresh.auto": {Title: i18n.N("自动刷新"), Run: do(func(a *App, _ Args) { a.openDrop(dropAuto) })},
@@ -426,14 +427,6 @@ func init() {
 		"pane.resize.down":  {Title: i18n.N("向下调整大小"), Run: do(func(a *App, args Args) { a.resizePane(Vert, 1, args.Count) })},
 		"pane.resize.up":    {Title: i18n.N("向上调整大小"), Run: do(func(a *App, args Args) { a.resizePane(Vert, -1, args.Count) })},
 		"pane.resize.right": {Title: i18n.N("向右调整大小"), Run: do(func(a *App, args Args) { a.resizePane(Horiz, 1, args.Count) })},
-	}
-	// Built by later features but titled already: which-key names the ones
-	// default.toml binds, the palette lists them all (§6.8); running them
-	// does nothing yet.
-	for id, title := range map[string]string{
-		"grid.yank.insert": i18n.N("复制为 INSERT"),
-	} {
-		actions[id] = Action{Title: title}
 	}
 	actions["quicksql.edit"] = Action{Title: i18n.N("在 console 里编辑"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { return a.quickEdit() })}
 }

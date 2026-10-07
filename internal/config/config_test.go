@@ -23,11 +23,13 @@ autopairs = false
 confirm_dangerous = false
 [console]
 max_rows = 50
+[grid]
+full_width = 12
 `)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Icons != ui.ASCIIIcons || c.Timeoutlen != 300 || c.TabWidth != 4 || c.ResultHeight != 0.3 || c.MaxRows != 50 || c.KeywordCase != "upper" || c.FormatPrg != "pg_format -" || c.AutoPairs || c.ConfirmDangerous {
+	if c.Icons != ui.ASCIIIcons || c.Timeoutlen != 300 || c.TabWidth != 4 || c.ResultHeight != 0.3 || c.MaxRows != 50 || c.GridFullWidth != 12 || c.KeywordCase != "upper" || c.FormatPrg != "pg_format -" || c.AutoPairs || c.ConfirmDangerous {
 		t.Fatalf("got %+v", c)
 	}
 }
@@ -56,6 +58,47 @@ L = "5l"
 }
 
 // Keys belong in keymaps.toml, and only keys (F5.9).
+// [grid] order and transpose are what a table opened anew starts with
+// (F8.8); order is "asc" or "desc".
+func TestGridNewTableDefaults(t *testing.T) {
+	if c, err := Parse(""); err != nil || c.GridDesc || c.GridTranspose {
+		t.Errorf("default: %+v %v", c, err)
+	}
+	if c, err := Parse("[grid]\norder = \"desc\"\ntranspose = true"); err != nil || !c.GridDesc || !c.GridTranspose {
+		t.Errorf("desc, transpose: %+v %v", c, err)
+	}
+	if c, err := Parse("[grid]\norder = \"asc\""); err != nil || c.GridDesc {
+		t.Errorf("asc: %+v %v", c, err)
+	}
+	for _, s := range []string{"[grid]\norder = \"down\"", "[grid]\ntranspose = \"yes\""} {
+		if _, err := Parse(s); err == nil {
+			t.Errorf("%q: expected an error", s)
+		}
+	}
+}
+
+// border names the boxes' lines; another name is an error that lists them
+// (F8.10).
+func TestBorder(t *testing.T) {
+	if c, err := Parse(""); err != nil || c.Border != "single" {
+		t.Errorf("default: %q %v", c.Border, err)
+	}
+	for _, b := range []string{"single", "rounded", "double", "bold", "hidden"} {
+		if c, err := Parse(`border = "` + b + `"`); err != nil || c.Border != b {
+			t.Errorf("%s: %v", b, err)
+		}
+	}
+	if _, err := Parse(`border = "dotted"`); err == nil || err.Error() != `border = "dotted": must be "single", "rounded", "double", "bold" or "hidden"` {
+		t.Errorf("dotted: %v", err)
+	}
+}
+
+func TestGridFullWidthDefault(t *testing.T) {
+	if c, err := Parse(""); err != nil || c.GridFullWidth != 20 {
+		t.Errorf("default: %d %v", c.GridFullWidth, err)
+	}
+}
+
 func TestParseErrors(t *testing.T) {
 	for _, s := range []string{
 		`icons = "emoji"`,
@@ -66,6 +109,7 @@ func TestParseErrors(t *testing.T) {
 		`autopairs = "yes"`,
 		`confirm_dangerous = "no"`,
 		"[console]\nmax_rows = 0",
+		"[grid]\nfull_width = 0",
 		"[keys]\nleader = \"<C-a>\"",
 		"[map.normal]\nJ = \"5j\"",
 		"[keys.normal\n",

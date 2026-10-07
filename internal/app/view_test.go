@@ -87,7 +87,7 @@ func TestSmallSizes(t *testing.T) {
 // schema; its name, cut, the rest (no "console" beside its icon, §7.7).
 func TestConsoleTitleAt160(t *testing.T) {
 	top := strings.Split(twoPanes(160, 45).render().String(), "\n")[0]
-	for _, want := range []string{"② " + ui.NerdIcons.Console.Text + " conso…  doraemon · doraemon.public ▾  ▶ run  ↵ ─┐"} {
+	for _, want := range []string{"② " + ui.NerdIcons.Console.Text + " c…  Tx: 自动 ▾ doraemon · doraemon.public ▾  ▶ run  ↵ ─┐"} {
 		if !strings.Contains(top, want) {
 			t.Errorf("top row lacks %q: %q", want, top)
 		}
@@ -95,7 +95,7 @@ func TestConsoleTitleAt160(t *testing.T) {
 }
 
 // §7.8: sidebar 32 cols (24 below 100), then a 1-col gap; data and the
-// console share the rest at 5 : 4, a 1-col gap between them (§5).
+// console share the rest at 1 : 1, a 1-col gap between them (§5, F8.9).
 func TestLayoutSizes(t *testing.T) {
 	for _, c := range []struct{ w, side int }{{160, 32}, {100, 32}, {99, 24}, {80, 24}} {
 		r := sized(c.w, 45, "nerd").layout()
@@ -103,8 +103,8 @@ func TestLayoutSizes(t *testing.T) {
 		if len(r) != 3 || side.Min.X != 0 || side.Dx() != c.side || data.Min.X != side.Max.X+1 || cons.Min.X != data.Max.X+1 || cons.Max.X != c.w {
 			t.Errorf("w=%d: %v; want the sidebar %d wide, then data and the console to the edge", c.w, r, c.side)
 		}
-		if d := data.Dx()*4 - cons.Dx()*5; d < -5 || d > 5 {
-			t.Errorf("w=%d: data %d, console %d wide, not 5 : 4", c.w, data.Dx(), cons.Dx())
+		if d := data.Dx() - cons.Dx(); d < -1 || d > 1 {
+			t.Errorf("w=%d: data %d, console %d wide, not even", c.w, data.Dx(), cons.Dx())
 		}
 		if side.Dy() != 44 || data.Dy() != 44 || cons.Dy() != 44 {
 			t.Errorf("w=%d: panes must fill every row above the status bar", c.w)
@@ -294,10 +294,10 @@ table = { fg = "#a9dc76" }
 	if bg := f.Buf.CellAt(80, a.h-1).Style.Bg; bg != th.Bar || th.Bar == th.Row {
 		t.Errorf("status bar %v, want bar %v whatever row is", bg, th.Bar)
 	}
-	if st := cell(0, " C conso"); st.Fg != th.Dim {
+	if st := cell(0, " C c…"); st.Fg != th.Dim {
 		t.Fatal("the title around the icon keeps its color")
 	}
-	if st := cell(0, "C conso"); st.Fg != ic.Console.Fg {
+	if st := cell(0, "C c…"); st.Fg != ic.Console.Fg {
 		t.Errorf("console icon %v, want %v", st.Fg, ic.Console.Fg)
 	}
 	if st := cell(7, ui.NerdIcons.Table.Text); st.Fg != ic.Table.Fg { // the first table, under doraemon, public and Tables
@@ -325,6 +325,36 @@ func TestGoldenMixedTabs160x45(t *testing.T) {
 		icon, _ := a.tabIcon(p.tab())
 		if a.paneScope() != c.scope || strings.Contains(top, "▶ run") != c.run || icon.Text != "" && !strings.Contains(top, icon.Text+" "+p.Object()) {
 			t.Errorf("%s to %s: scope %s, title %q", c.keys, p.Object(), a.paneScope(), top)
+		}
+	}
+}
+
+// `border` changes the lines of every box, the sidebar, the panes, the
+// result area and the overlays alike, never the layout: hidden has the
+// titles still (§7.1, F8.10).
+func TestGoldenBorders(t *testing.T) {
+	for _, b := range []string{"rounded", "bold", "double", "hidden"} {
+		t.Run(b, func(t *testing.T) {
+			a := sizedWith(160, 45, userConfig(t, `border = "`+b+`"`, ""))
+			loadOrders(t, a, 30)
+			feed(t, a, "<C-p>")
+			golden.RequireEqual(t, a.render().String())
+		})
+	}
+}
+
+// The default layout's data and console are as wide as each other, give or
+// take a column, with the sidebar open or folded to its thin bar (F8.9).
+func TestDefaultLayoutEven(t *testing.T) {
+	for _, open := range []bool{true, false} {
+		a := sized(160, 45, "nerd")
+		a.win().TreeOpen = open
+		r := a.layout()
+		if d := r[1].Dx() - r[2].Dx(); d < -1 || d > 1 || r[2].Max.X != 160 {
+			t.Errorf("sidebar open %v: data %d, console %d wide", open, r[1].Dx(), r[2].Dx())
+		}
+		if !open {
+			golden.RequireEqual(t, a.render().String())
 		}
 	}
 }

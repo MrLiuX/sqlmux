@@ -141,7 +141,7 @@ func (a *App) quickView(q *quickSQL) *ui.PaletteResult {
 	r := &ui.PaletteResult{
 		Title: strings.Join(append(title, i18n.T("只读")), " · "),
 		Err:   q.err,
-		Grid:  ui.Grid{Rows: q.res.Rows, Row: -1, Col: -1, Top: q.top, Left: q.left, Key: a.icons.Key},
+		Grid:  ui.Grid{Rows: q.res.Rows, Row: -1, Col: -1, Top: q.top, Left: q.left, FullWidth: a.fullWidth, Key: a.icons.Key},
 	}
 	for _, c := range q.res.Cols {
 		r.Grid.Cols = append(r.Grid.Cols, ui.GridCol{Name: c.Name, Type: colType(c.Type)})

@@ -383,7 +383,7 @@ func gridRect(r uv.Rectangle, t *dataTab) uv.Rectangle {
 // catalog said of them.
 func (a *App) grid(p *Pane, t *dataTab) ui.Grid {
 	g := ui.Grid{
-		Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose, First: t.shown.pageNo * t.shown.limit,
+		Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose, FullWidth: a.fullWidth, First: t.shown.pageNo * t.shown.limit,
 		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID,
 	}
 	shown := t.shownCols()
@@ -489,6 +489,9 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 		}
 	case key != nil:
 		order.Value, order.Icon = strings.Join(key, ","), ic.SortAsc
+		if s.desc {
+			order.Icon = ic.SortDesc
+		}
 	}
 	pages := "?"
 	if n, ok := t.pages(); ok {
@@ -655,7 +658,7 @@ func (a *App) gridOf(p *Pane) (s *gridState, g ui.Grid, area uv.Rectangle, ok bo
 // resultGrid is result tab t as pane p draws it: every column, read only (§11).
 func (a *App) resultGrid(p *Pane, t *resultTab) ui.Grid {
 	g := ui.Grid{
-		Rows: t.page.Rows, Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose,
+		Rows: t.page.Rows, Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose, FullWidth: a.fullWidth,
 		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Yank: a.gridFlash(p),
 	}
 	for _, c := range t.page.Cols {

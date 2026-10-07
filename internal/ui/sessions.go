@@ -46,7 +46,7 @@ func (l SessionList) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 	f.Region(box, Target{}) // inside, a click is not outside
 	bg := uv.Style{Fg: th.Fg, Bg: th.PaneBg}
 	f.Fill(box, bg)
-	border := uv.NormalBorder().Style(uv.Style{Fg: th.Focus, Bg: th.PaneBg})
+	border := f.Border.Style(uv.Style{Fg: th.Focus, Bg: th.PaneBg})
 	border.Draw(f.Buf, box)
 	f.Text(box.Min.X+2, box.Min.Y, box.Max.X-1, " session ", uv.Style{Fg: th.Focus, Bg: th.PaneBg, Attrs: uv.AttrBold})
 	x1 := box.Max.X - 2

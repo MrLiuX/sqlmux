@@ -348,6 +348,7 @@ var en = map[string]string{
 
 	// Elsewhere
 	"keymaps.toml 有 %d 处问题：": "keymaps.toml has %d problem(s):",
+	"只有表里的行能复制为 INSERT":      "Only a table's rows copy as INSERT",
 	"知道了":                    "Got it",
 	"；":                      "; ",
 }

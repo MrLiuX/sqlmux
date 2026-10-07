@@ -24,6 +24,7 @@ type Config struct {
 	BaseIcons  *ui.Icons // what `icons` chose, a theme's [icon] not on it: a theme switched to goes on this
 	ThemeName  string    // the theme in use: `theme`, or tokyonight-storm
 	Language   string    // `language = "en" | "zh"` (§14「界面语言」)
+	Border     string    // `border = "single" | "rounded" | "double" | "bold" | "hidden"`: the boxes' lines (§7.1)
 	Vim        bool      // `vim = false`: console and WHERE are plain editors, the grid and tree get arrow keys too (§6.9)
 	Timeoutlen int       // ms to wait on an ambiguous key sequence
 	TabWidth   int       // the console's indent, and the formatter's (§14)
@@ -39,7 +40,13 @@ type Config struct {
 	// ConfirmDangerous asks before a run of a DELETE or UPDATE with no WHERE,
 	// a DROP, a TRUNCATE, and a save that deletes rows (§13).
 	ConfirmDangerous bool
-	theme            string // the name Parse read; Load finds the theme, as it touches the disk
+	// GridFullWidth is the width up to which a column of the grid is never
+	// squeezed (`[grid] full_width`, §7.6).
+	GridFullWidth int
+	// GridDesc is `[grid] order = "desc"` and GridTranspose `[grid]
+	// transpose`: what a table opened anew starts with (§14).
+	GridDesc, GridTranspose bool
+	theme                   string // the name Parse read; Load finds the theme, as it touches the disk
 
 	// Leader and Bindings are keymaps.toml's raw [keys] and [map.*]
 	// entries; the keymap package gives them meaning.
@@ -55,7 +62,7 @@ type Binding struct {
 }
 
 func Default() *Config {
-	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "en", Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 1000, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true}
+	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "en", Border: "single", Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 1000, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true, GridFullWidth: 20}
 }
 
 // Dir is $XDG_CONFIG_HOME/sqlmux, falling back to ~/.config/sqlmux on every
@@ -111,6 +118,7 @@ func Parse(data string) (*Config, error) {
 		Theme      *string  `toml:"theme"`
 		Icons      *string  `toml:"icons"`
 		Language   *string  `toml:"language"`
+		Border     *string  `toml:"border"`
 		Vim        *bool    `toml:"vim"`
 		Timeoutlen *int     `toml:"timeoutlen"`
 		TabWidth   *int     `toml:"tab_width"`
@@ -122,6 +130,11 @@ func Parse(data string) (*Config, error) {
 		Console    struct {
 			MaxRows *int `toml:"max_rows"`
 		} `toml:"console"`
+		Grid struct {
+			FullWidth *int    `toml:"full_width"`
+			Order     *string `toml:"order"`
+			Transpose *bool   `toml:"transpose"`
+		} `toml:"grid"`
 		Keys any `toml:"keys"`
 		Map  any `toml:"map"`
 	}{}
@@ -143,6 +156,12 @@ func Parse(data string) (*Config, error) {
 			return nil, fmt.Errorf(`language = %q: must be "en" or "zh"`, *raw.Language)
 		}
 		c.Language = *raw.Language
+	}
+	if raw.Border != nil {
+		if _, ok := ui.BorderOf(*raw.Border); !ok {
+			return nil, fmt.Errorf(`border = %q: must be "single", "rounded", "double", "bold" or "hidden"`, *raw.Border)
+		}
+		c.Border = *raw.Border
 	}
 	if raw.Vim != nil {
 		c.Vim = *raw.Vim
@@ -186,6 +205,21 @@ func Parse(data string) (*Config, error) {
 			return nil, fmt.Errorf("[console] max_rows = %d: must be greater than 0", *n)
 		}
 		c.MaxRows = *n
+	}
+	if n := raw.Grid.FullWidth; n != nil {
+		if *n <= 0 {
+			return nil, fmt.Errorf("[grid] full_width = %d: must be greater than 0", *n)
+		}
+		c.GridFullWidth = *n
+	}
+	if o := raw.Grid.Order; o != nil {
+		if *o != "asc" && *o != "desc" {
+			return nil, fmt.Errorf(`[grid] order = %q: must be "asc" or "desc"`, *o)
+		}
+		c.GridDesc = *o == "desc"
+	}
+	if raw.Grid.Transpose != nil {
+		c.GridTranspose = *raw.Grid.Transpose
 	}
 	return c, nil
 }

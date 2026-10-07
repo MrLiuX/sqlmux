@@ -220,7 +220,7 @@ func TestGridCancelAndError(t *testing.T) {
 	a.fetch(tab, false)
 	a.Update(pageMsg{tab: tab, seq: tab.seq, err: errors.New("permission denied for table t_order")})
 	f := a.render()
-	if st := styleOf(t, f, "permission denied"); st.Fg != a.theme.Error || st.Bg != a.theme.ErrorBg || !strings.Contains(f.String(), "note 1") {
+	if st := styleOf(t, f, "permission denied"); st.Fg != a.theme.Error || st.Bg != a.theme.ErrorBg || !strings.Contains(f.String(), "running") {
 		t.Errorf("error bar: %+v", st)
 	}
 	if !strings.Contains(statusRow(a), " 1,1 ") {
@@ -455,5 +455,24 @@ func TestGridLine(t *testing.T) {
 	}
 	if feed(t, a, "T3G"); tab.col != 2 || tab.pageNo != 1 {
 		t.Errorf("transposed 3G: field %d, page %d", tab.col, tab.pageNo)
+	}
+}
+
+// Tab and S-Tab move a cell right and left in NORMAL, on any row (F8.6);
+// an edit's own keep their meaning (TestNewRowTab).
+func TestGridTab(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	tab := loadOrders(t, a, 3)
+	feed(t, a, "<Tab><Tab>")
+	if tab.row != 0 || tab.col != 2 {
+		t.Errorf("Tab Tab: %d,%d", tab.row, tab.col)
+	}
+	feed(t, a, "<S-Tab>")
+	if tab.col != 1 {
+		t.Errorf("S-Tab: col %d", tab.col)
+	}
+	feed(t, a, "o<Esc><S-Tab><Tab><Tab>") // the added row, not editing
+	if tab.cell != nil || tab.col != 2 {
+		t.Errorf("on an added row: cell %+v, col %d", tab.cell, tab.col)
 	}
 }

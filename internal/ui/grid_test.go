@@ -149,6 +149,41 @@ func TestGridWidths(t *testing.T) {
 	}
 }
 
+// What is no wider than FullWidth is never squeezed: only the wider
+// columns give way to fit the room, to FullWidth at most, and what still
+// does not fit scrolls (§7.6, F8.5).
+func TestGridWidthsFull(t *testing.T) {
+	grid := func(full int, widths ...int) view {
+		g := Grid{FullWidth: full}
+		row := make([]string, len(widths))
+		for i, w := range widths {
+			g.Cols = append(g.Cols, GridCol{Name: "c"})
+			row[i] = strings.Repeat("x", w)
+		}
+		g.Rows = vals(row)
+		return g.view()
+	}
+	for _, c := range []struct {
+		name string
+		v    view
+		room int
+		want []int
+	}{
+		{"all short, room enough", grid(20, 6, 8, 19), 100, []int{6, 8, 19}},
+		{"all short, no room: they scroll", grid(20, 6, 8, 19), 10, []int{6, 8, 19}},
+		{"one long, the short ones whole", grid(20, 6, 8, 40), 34, []int{6, 8, 20}}, // 40 takes the 20 left
+		{"one long, a little room", grid(20, 6, 8, 40), 30, []int{6, 8, 20}},        // not below FullWidth
+		{"one long, more room", grid(20, 6, 8, 40), 44, []int{6, 8, 30}},
+		{"all long, in proportion", grid(20, 40, 30, 40), 60, []int{21, 20, 21}}, // 110 → 60: 21.8, 16.4, 21.8, the middle held at 20
+		{"all long, below FullWidth no more", grid(20, 40, 30, 40), 30, []int{20, 20, 20}},
+		{"FullWidth 0 squeezes all, as before", grid(0, 6, 8, 40), 27, []int{3, 4, 20}},
+	} {
+		if got := c.v.widths(c.room); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 // Values take their column type's color (§7.6).
 func TestGridColorsByType(t *testing.T) {
 	th := TokyonightStorm
