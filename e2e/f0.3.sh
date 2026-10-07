@@ -98,7 +98,7 @@ check "80 宽：两项都放得下（整项省略的规则由 golden 覆盖）" 
 tuic 'icons = "emoji"\n'
 check "icons = \"emoji\"：启动报错、退出码 1" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "config.toml: icons = \"emoji\"" && flag_is alternate_on 0'
 tuic 'timeoutlen = 0\n'; check "timeoutlen = 0：启动报错" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "timeoutlen = 0"'
-tuic 'not toml\n'; check "TOML 语法错误：启动报错并给出行号" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "line 1"'
+tuic 'not toml\n'; check "TOML 语法错误：启动报错并给出行号（lib.sh 在前面补了两行，所以是第 3 行）" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "line 3"'
 tui 'not toml\n'; check "keymaps.toml 的 TOML 语法错误：同样报错，指出 keymaps.toml" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "keymaps.toml" && screen_has "line 1"'
 # F5.9：config.toml 里还写着键位或映射时启动报错，提示挪到 keymaps.toml
 tuic '[keys.normal]\n"<C-b>" = "tree.toggle"\n'; check "config.toml 里有 [keys.normal]：启动报错，提示挪到 keymaps.toml" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "keymaps.toml" && flag_is alternate_on 0'
