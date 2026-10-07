@@ -56,7 +56,7 @@ e2e_start() {
   mkdir -p "$E2E_TMP/keychain"
   cat >"$E2E_TMP/bin/security" <<'SH'
 #!/bin/sh
-# security add-generic-password -U -a sqlmux -s SERVICE -w PASSWORD   |   security find-generic-password -a sqlmux -s SERVICE -w
+# security add-generic-password -U -a sqlmux -s SERVICE -w PASSWORD   |   security find-generic-password -a sqlmux -s SERVICE -w   |   security delete-generic-password -a sqlmux -s SERVICE
 # (like the real one: a password with a byte outside 0x20–0x7e comes back as hex, which password_cmd turns back with xxd -r -p)
 op=$1; shift; svc=; pw=
 while [ $# -gt 0 ]; do case $1 in -s) svc=$2; shift ;; -w) [ $# -gt 1 ] && pw=$2; shift ;; esac; shift; done
@@ -64,18 +64,20 @@ d="$E2E_DIR/keychain"; mkdir -p "$d"
 [ -f "$E2E_DIR/keychain.fail" ] && { cat "$E2E_DIR/keychain.fail" >&2; exit 1; }   # a locked keychain: the file holds what the tool complains about
 case $op in
   add-generic-password) printf '%s' "$pw" >"$d/$svc" ;;
+  delete-generic-password) [ -f "$d/$svc" ] && rm -f "$d/$svc" || { echo "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain." >&2; exit 44; } ;;
   find-generic-password) [ -f "$d/$svc" ] && { if LC_ALL=C grep -q '[^ -~]' "$d/$svc"; then xxd -p <"$d/$svc" | tr -d '\n'; else cat "$d/$svc"; fi; echo; } || { echo "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain." >&2; exit 44; } ;;
   *) exit 1 ;;
 esac
 SH
   cat >"$E2E_TMP/bin/secret-tool" <<'SH'
 #!/bin/sh
-# secret-tool store --label SERVICE sqlmux NAME (password on stdin)   |   secret-tool lookup sqlmux NAME
+# secret-tool store --label SERVICE sqlmux NAME (password on stdin)   |   secret-tool lookup sqlmux NAME   |   secret-tool clear sqlmux NAME
 op=$1; shift; d="$E2E_DIR/keychain"; mkdir -p "$d"
 [ -f "$E2E_DIR/keychain.fail" ] && { cat "$E2E_DIR/keychain.fail" >&2; exit 1; }
 case $op in
   store) shift 2; name=$2; cat >"$d/sqlmux-$name" ;;
   lookup) [ -f "$d/sqlmux-$2" ] && cat "$d/sqlmux-$2" || exit 1 ;;
+  clear) [ -f "$d/sqlmux-$2" ] && rm -f "$d/sqlmux-$2" || exit 1 ;;
   *) exit 1 ;;
 esac
 SH
