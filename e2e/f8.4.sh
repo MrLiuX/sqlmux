@@ -14,6 +14,7 @@ names_are() { [[ $(names) == "$1" ]] || { echo "  candidates: '$(names)', want '
 has() { [[ "|$(names)" == *"|$1|"* ]] || { echo "  candidates: $(names)"; false; }; }
 none() { [[ -z $(pop) ]] || { echo "  popup: $(names)"; false; }; }
 line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
+cc() { echo "$(e2e_flag cursor_y):$(( $(e2e_flag cursor_x) - 103 ))"; }
 fresh() { key Escape; key Escape; key g g; key d G; key i; }
 settle() { wait_for 8 settled; }
 EVT="id|occurred_at|kind|"      # t_event 的列（按表里的顺序）
@@ -63,6 +64,45 @@ check "逗号后面没有空格（a,）：不弹（免得打 a,b 闪一下）" n
 fresh; e2e_type "select * from t_event where kind = "; sleep 0.8
 check "kind = ␠（取值位置，不是列名位置）：不弹列名" eval '! has occurred_at'
 
+# ---- 审查补充：只有打字才弹，不改文字的键（i a A o、方向键）不弹；C-n 手动唤起列出该位置的全部候选
+fresh; e2e_type "delete from t_event where "; sleep 1; key Escape; sleep 0.3
+check "（准备）esc 关掉列表，NORMAL，光标在行末" eval 'none && mode_is NORMAL'
+key A; sleep 0.7
+check "A 进 INSERT（光标紧跟空白）：不弹" none
+key Escape; key i; sleep 0.7
+check "i 进 INSERT：不弹" none
+key Escape; key a; sleep 0.7
+check "a 进 INSERT：不弹" none
+key Left; key Right; sleep 0.7
+check "INSERT 下方向键：不弹" none
+key Escape; key o; sleep 0.7
+check "o 开新行进 INSERT：不弹" none
+fresh; e2e_type "select "; sleep 0.6; key C-n; sleep 0.8
+check "select ␠（没有 from）C-n：手动唤起，列出表（不因 F8.4 只给列而少掉）" eval 'has t_event && has t_log'
+key Up; sleep 0.4
+check "…列表往回绕到最后：是关键字（注释「关键字」）" eval 'items | grep -q "关键字"'
+fresh; e2e_type "select * from t_event where "; sleep 0.8; key Escape; key A; key C-n; sleep 0.8
+check "where ␠ C-n：列在前（id、occurred_at、kind），后面是表名" eval '[[ $(names) == "id|occurred_at|kind|"* ]]'
+key Up; sleep 0.4
+check "…往回绕到最后：关键字也在（注释「关键字」）" eval 'items | grep -q "关键字"'
+
+# ---- 审查补充：接受时右边已经有 ) , ; . 就不补空格；↵ 接受关键字补出来的空格不触发列名
+fresh; e2e_type "select * from t_event where (ki"; sleep 0.8
+check "where (ki|)：自动配对的 ) 在光标后，候选有 kind" has kind
+key Enter; sleep 0.4
+check "↵ 接受 kind：光标后紧跟 ) 不补空格 → (kind)，没有 (kind )" eval '[[ $(line 1) == "select * from t_event where (kind)" ]] || { echo "  [$(line 1)]"; false; }'
+fresh; e2e_type "select * from t_event wher"; sleep 0.8; key Enter; sleep 0.8
+check "↵ 接受关键字 where（补出一个空格）：这个空格不触发列名列表" none
+key Enter; sleep 0.4
+check "再 ↵：换行（where↵↵ 想换行不会插进一个列名）" eval '[[ $(line 1) == "select * from t_event where" && -z $(line 2) && $(cc) == 2:0 ]] || { echo "  [$(line 1)] [$(line 2)] $(cc)"; false; }'
+fresh; paste "select  from t_event"; key Escape; key 0; key e; key a; e2e_type " distinct"; sleep 0.3; e2e_type " "; sleep 1
+check "select distinct ␠（语句里有 from t_event）：弹出列（distinct 也是触发词）" eval 'has id && has kind'
+key Escape; key Escape
+
+# ---- 快速 SQL 共用同一套
+start; e2e_keys C-p; sleep 0.4; e2e_type ";select * from t_event where "; sleep 1
+check "快速 SQL：;select * from t_event where ␠ 同样弹出列" eval 'has id && has kind'
+key Escape; key Escape; key Escape; sleep 0.3
 # ---- WHERE 输入框
 e2e_stop; SOLO=1 start; open_table t_order; settle
 key /; clear_in; sleep 0.4

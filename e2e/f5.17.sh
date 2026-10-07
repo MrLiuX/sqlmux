@@ -41,7 +41,7 @@ csi x $SUPER
 check "没绑的 <D-x>：INSERT 下不输入 x，文字还是 abc，没有放大" eval '[[ $(cline 1) == "abc" ]] && shown'
 key Escape; key C-h
 key /; clear_in; e2e_type "id > 0"
-check "WHERE 的 INSERT：四个键都执行，输入框里还是 id > 0，没有多出字符" eval 'mode_is INSERT && all_keys && [[ $(e2e_text 36 95 2 | sed "s/ *▾.*//; s/^ *WHERE *//; s/ *\$//") == "id > 0" ]] || { echo "  WHERE: $(e2e_text 36 95 2)"; false; }'
+check "WHERE 的 INSERT：四个键都执行，输入框里还是 id > 0，没有多出字符" eval 'mode_is INSERT && all_keys && [[ $(e2e_text 36 95 2 | sed -E "s/ {2,}(([^ ]+) ){0,2}▾ *\$//; s/^ *WHERE *//; s/ *\$//") == "id > 0" ]] || { echo "  WHERE: $(e2e_text 36 95 2)"; false; }'
 key Escape
 
 # ---- 焦点在树上：绑成 tree.toggle（收起 / 展开）

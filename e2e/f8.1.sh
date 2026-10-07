@@ -16,6 +16,7 @@ cc() { echo "$(e2e_flag cursor_y):$(( $(e2e_flag cursor_x) - 103 ))"; }      # �
 fresh() { key Escape; key Escape; key g g; key d G; key i; }
 settle() { wait_for 8 settled; }
 
+D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); ST=$D/state; SJ=$ST/sqlmux/state.json; trap 'e2e_stop; rm -rf "$D"' EXIT
 start; key C-l; key i
 
 # ---- console：用户的原话 —— delete from t_event where id ↵
@@ -48,7 +49,7 @@ check "再 ↵：换行" eval '[[ $(cc) == 2:0 ]]'
 key Escape; key Escape
 
 # ---- WHERE：同样，↵ 接受，再 ↵ 才执行
-e2e_stop; SOLO=1 start; open_table t_order; settle
+e2e_stop; SOLO=1 start -S "$ST"; open_table t_order; settle
 key /; clear_in; e2e_type "paid"; sleep 0.6
 check "WHERE 输入 paid：列表开着，有 paid" has paid
 key Enter; sleep 0.8
@@ -56,6 +57,7 @@ check "↵：只接受 paid（补一个空格），不执行，还在 WHERE 的 
 check "没有报错（没发出半截的 WHERE）" eval '! screen_has "ERROR"'
 key Enter; settle
 check "再 ↵：执行，回到表格（NORMAL），WHERE 还是 paid" eval 'mode_is NORMAL && [[ $(where_in) == paid ]] && settled'
+check "记进历史的是去掉首尾空白的 paid（不是 paid + 空格，F8.1 审查）" eval 'h=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))[\"tables\"][\"doraemon/public.t_order\"][\"history\"][0][\"where\"] + \"|\")" "$SJ"); [[ $h == "paid|" ]] || { echo "  history[0]: [$h]"; false; }'
 check "结果是 paid 为 true 的行（行数少于 6000）" eval '[[ $(cnt) -lt 6000 && $(cnt) -gt 0 ]]'
 key /; clear_in; e2e_type "status = 'don"; sleep 0.6; key Enter; sleep 0.6
 check "WHERE 取值：status = 'don ↵ 接受 'done'，不补空格，不执行" eval 'mode_is INSERT && [[ $(where_in) == "status = '"'done'"'" && -z $(pop) ]]'

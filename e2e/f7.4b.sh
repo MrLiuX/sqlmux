@@ -10,8 +10,8 @@ D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; rm -rf "
 ERROR=#f7768e
 read -r PG_USER PG_PW PG_HOST PG_PORT PG_DB < <(python3 -c 'import sys, urllib.parse as u; p = u.urlsplit(sys.argv[1]); print(p.username, p.password, p.hostname, p.port, p.path[1:])' "$SQLMUX_TEST_PG")
 box() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5; exit }'; }
-frows() { local g y; g=($(box)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) "$y" | noicon | sed 's/^ *//; s/ *$//'; done; }   # 每行前面有字段的图标，noicon 去掉
-form_open() { e2e_plain | grep -q "┌─ 新建连接"; }
+frows() { local g y; g=($(box)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 28)) $((g[0] + g[2] - 2)) "$y" | noicon | sed 's/^ *//; s/ *$//'; done; }   # 每行前面有字段的图标，noicon 去掉
+form_open() { e2e_plain | grep -q "┌─ 连接"; }
 field_y() { local g; g=($(box)); echo $(( g[1] + 1 + $1 )); }              # N：0 name 1 engine 2 host 3 port 4 user 5 password 6 database 7 read_only 8 高级（展开后 9 dsn 10 password_cmd）
 # on_field N：焦点在第 N 个字段上：输入框有终端光标；engine（1）、高级（8）是开关，光标隐藏；read_only（7）的值是 select 底
 ro_x() { e2e_find "[" "$(field_y 7)" | cut -d" " -f1; }                       # read_only 的 [ ] 开关的列（标签列的宽度会随字段名变）
@@ -20,9 +20,9 @@ on_field() { local g; g=($(box)); case $1 in
   7) style_has "$(ro_x)" "$(field_y 7)" bg=#364a82 ;;
   *) [[ $(( $(e2e_flag cursor_y) + 1 )) == $(field_y "$1") ]] || { echo "  cursor on row $(( $(e2e_flag cursor_y) + 1 )), field $1 is on $(field_y "$1")"; false; } ;;
   esac; }
-fsep() { local g y; g=($(box)); for ((y = g[1] + 1; y < g[1] + g[3]; y++)); do [[ $(e2e_text $((g[0] + 1)) $((g[0] + 3)) $y) == "───" ]] && { echo "$y"; return; }; done; }
-ferr() { local g; g=($(box)); e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $(( $(fsep) - 1 )) | sed 's/ *$//'; }   # 分隔线上面那一行：校验的原因
-ferr_is() { local g; g=($(box)); [[ $(ferr) == "$1" ]] && style_has $((g[0] + 2)) $(( $(fsep) - 1 )) fg=$ERROR || { echo "  error row: '$(ferr)', want '$1'"; false; }; }
+fsep() { local g y; g=($(box)); for ((y = g[1] + 1; y < g[1] + g[3]; y++)); do [[ $(e2e_text $((g[0] + 28)) $((g[0] + 30)) $y) == "───" ]] && { echo "$y"; return; }; done; }
+ferr() { local g; g=($(box)); e2e_text $((g[0] + 28)) $((g[0] + g[2] - 2)) $(( $(fsep) - 1 )) | sed 's/^ *//; s/ *$//'; }   # 分隔线上面那一行（F8.16：在右半边，前面空一格）：校验的原因
+ferr_is() { local g; g=($(box)); [[ $(ferr) == "$1" ]] && style_has $((g[0] + 29)) $(( $(fsep) - 1 )) fg=$ERROR || { echo "  error row: '$(ferr)', want '$1'"; false; }; }
 clr() { local i; for ((i = 0; i < 40; i++)); do e2e_keys BSpace; done; sleep 0.2; }
 # fill NAME HOST PORT USER PW DB：焦点在 name 上，一路 Tab 填下去（port 先清掉预填的）
 fill() { e2e_type "$1"; key Tab; key Tab; e2e_type "$2"; key Tab; clr; e2e_type "$3"; key Tab; e2e_type "$4"; key Tab; e2e_type "$5"; key Tab; e2e_type "$6"; sleep 0.3; }
@@ -32,7 +32,7 @@ toast_row() { e2e_text 1 "$(e2e_flag pane_width)" $(( $(H) - 1 )); }
 
 # ---- 没有连接时启动：界面出来、空树一行提示、表单自动打开
 E2E_NOCONN=1 e2e_start "$E2E_BIN"; wait_for 6 flag_is alternate_on 1; sleep 1.5
-frows_raw() { local g y; g=($(box)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) "$y" | sed 's/^ *//; s/ *$//'; done; }   # 图标不去掉（ascii 模式看替代字符）
+frows_raw() { local g y; g=($(box)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 28)) $((g[0] + g[2] - 2)) "$y" | sed 's/^ *//; s/ *$//'; done; }   # 图标不去掉（ascii 模式看替代字符）
 
 newconn() { mkdir -p "$D/$1"; (umask 077; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$SQLMUX_TEST_PG" >"$D/$1/connections.toml"); }
 toast_text() { toast_row | sed 's/^[^┘]*└*[─ ]*//; s/ *┘.*//; s/^ *//'; }

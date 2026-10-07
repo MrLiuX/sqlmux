@@ -50,7 +50,7 @@ check "<Leader>s 与 <Space>s 是同一个键 → 退出码 1" eval 'rc_is 1 && 
 conf '[keys.normal]\n"<C-x>" = "a"\n"<C-x>" = "b"\n'; run --check
 check "字面重复的键 → 退出码 1，指出 keys.normal.<C-x>" eval 'rc_is 1 && err_has "keys.normal.\"<C-x>\""'
 conf '[keys.normal]\n"g" = "x"\n'; run --check
-check "单键是已有序列的前缀 → 退出码 1，给出警告" eval 'rc_is 1 && err_has "[keys.normal] g: is a prefix of gt"'
+check "单键是已有序列的前缀（g 和 gt）→ 退出码 0、不警告（F8.15 起这是 vim 的正常用法）" eval 'rc_is 0 && [[ -z $ERR ]]'
 conf '[keys.foo]\n"a" = "b"\n'; run --check; check "未知的表 → 退出码 1" eval 'rc_is 1 && err_has "[keys.foo] a: no such table"'
 conf '[keys.normal]\n"<C-foo>" = "b"\n'; run --check; check "写错的键名 → 退出码 1" eval 'rc_is 1 && err_has "[keys.normal] <C-foo>: invalid key"'
 conf 'icons = "ascii"\n'; run --check; check "keymaps.toml 里写了别的顶层键（F5.9）→ 退出码 1，只能写 [keys] 和 [map.*]" eval 'rc_is 1 && err_has "keymaps.toml: icons" && err_has "only [keys] and [map.*] go here"'
@@ -98,7 +98,7 @@ check "80 宽：两项都放得下（整项省略的规则由 golden 覆盖）" 
 tuic 'icons = "emoji"\n'
 check "icons = \"emoji\"：启动报错、退出码 1" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "config.toml: icons = \"emoji\"" && flag_is alternate_on 0'
 tuic 'timeoutlen = 0\n'; check "timeoutlen = 0：启动报错" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "timeoutlen = 0"'
-tuic 'not toml\n'; check "TOML 语法错误：启动报错并给出行号" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "line 1"'
+tuic 'not toml\n'; check "TOML 语法错误：启动报错并给出行号（lib.sh 在前面补了两行，所以是第 3 行）" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "line 3"'
 tui 'not toml\n'; check "keymaps.toml 的 TOML 语法错误：同样报错，指出 keymaps.toml" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "keymaps.toml" && screen_has "line 1"'
 # F5.9：config.toml 里还写着键位或映射时启动报错，提示挪到 keymaps.toml
 tuic '[keys.normal]\n"<C-b>" = "tree.toggle"\n'; check "config.toml 里有 [keys.normal]：启动报错，提示挪到 keymaps.toml" eval 'wait_for 3 screen_has "[e2e-exit 1]" && screen_has "keymaps.toml" && flag_is alternate_on 0'
