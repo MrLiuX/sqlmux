@@ -27,8 +27,9 @@ import (
 // typed (§9.7, §12).
 type completion struct {
 	items []candidate
-	sel   int // the first as it opens: ↵ takes it; -1 when nothing is typed and it came up on its own, ↵ then is the input's (§9.7, F8.17)
-	start int // where the text it replaces starts in the input
+	sel   int  // the first as it opens: ↵ takes it; -1 when nothing is typed and it came up on its own, ↵ then is the input's (§9.7, F8.17)
+	start int  // where the text it replaces starts in the input
+	moved bool // the user moved the selection: a list made again for columns that came keeps the pick
 }
 
 type candidate struct {
@@ -574,15 +575,19 @@ func (c *completion) accept(in *ui.Input) {
 
 // move moves the selection by d, around the ends (§9.7).
 func (c *completion) move(d int) {
-	n := len(c.items)
+	c.sel, c.moved = step(c.sel, d, len(c.items)), true
+}
+
+// step is sel moved by d in a list of n, around the ends; with none
+// selected (sel < 0), down selects the first and up the last (§9.7, §10.2).
+func step(sel, d, n int) int {
 	switch {
-	case c.sel >= 0:
-		c.sel = ((c.sel+d)%n + n) % n
-	case d > 0: // nothing selected: the first, or the last going up
-		c.sel = 0
-	default:
-		c.sel = n - 1
+	case sel >= 0:
+		return ((sel+d)%n + n) % n
+	case d > 0:
+		return 0
 	}
+	return n - 1
 }
 
 // startWhere gives the keys to t's WHERE input, its vim in INSERT at the
@@ -613,7 +618,6 @@ func (a *App) whereKey(t *dataTab, k keymap.Key) tea.Cmd {
 			a.whereAccept(t)
 			return nil
 		}
-		t.comp = nil // a list with nothing selected is not in the way (F8.17)
 		return a.runWhere(t)
 	}
 	if k == keymap.Esc && t.ed.Plain() { // there is no mode to leave: the list, else the input (§6.9)

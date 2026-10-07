@@ -293,11 +293,16 @@ func (c *Conn) dropCols() {
 // file kept (§11). A file that cannot be read leaves that pane with no tab
 // too: opened empty, the autosave would write over it.
 func newSession(name string, conns []*Conn, start *Conn, console string) *Session {
-	s := &Session{Name: name, Conns: conns, start: start, last: start, open: map[string]bool{}}
+	s := bareSession(name, conns, start)
 	var w *Window
 	w, s.warning = s.newWindow(start, console)
 	s.Windows = []*Window{w}
 	return s
+}
+
+// bareSession is a session with no window yet, start its connection in use.
+func bareSession(name string, conns []*Conn, start *Conn) *Session {
+	return &Session{Name: name, Conns: conns, start: start, last: start, open: map[string]bool{}}
 }
 
 // freeWindowName is the name a new window gets: data, else data-2, data-3…

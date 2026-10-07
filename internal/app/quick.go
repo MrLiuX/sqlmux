@@ -304,11 +304,17 @@ func (a *App) gotCols(m colsMsg) tea.Cmd {
 		return nil
 	}
 	m.conn.cols[idOf(m.table)] = m.cols
+	old := a.completing()
+	var cmd tea.Cmd
 	if a.palette != nil {
-		return a.completeSQL()
+		cmd = a.completeSQL()
+	} else if t := a.focusedConsole(); t != nil && t.wait != nil && t.wait.at == t.ed.Cursor() && t.wait.ver == t.ver {
+		cmd = a.consoleComplete(t, t.wait.manual) // in INSERT only
 	}
-	if t := a.focusedConsole(); t != nil && t.wait != nil && t.wait.at == t.ed.Cursor() && t.wait.ver == t.ver {
-		return a.consoleComplete(t, t.wait.manual) // in INSERT only
+	if now := a.completing(); old != nil && now != nil && old.moved { // what was picked stays picked when its candidate is still there
+		if i := slices.IndexFunc(now.items, func(c candidate) bool { return c.label == old.items[old.sel].label }); i >= 0 {
+			now.sel = i
+		}
 	}
-	return nil
+	return cmd
 }

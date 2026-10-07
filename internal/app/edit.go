@@ -280,14 +280,8 @@ func (t *dataTab) options() []option {
 func (t *dataTab) moveOption(d int) {
 	c := t.cell
 	n := len(t.options())
-	switch {
-	case c.folded || n == 0:
-	case c.sel < 0 && d > 0:
-		c.sel = 0
-	case c.sel < 0:
-		c.sel = n - 1
-	default:
-		c.sel = ((c.sel+d)%n + n) % n
+	if !c.folded && n > 0 {
+		c.sel = step(c.sel, d, n)
 	}
 }
 

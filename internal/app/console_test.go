@@ -493,7 +493,7 @@ func TestConsoleEnterOnlyAccepts(t *testing.T) {
 	if text(c) != "select * from t_order where id \n" {
 		t.Errorf("a second ↵ is the newline: %q", text(c))
 	}
-	feed(t, a, "<Esc>ggdGiselect * from t_order where<CR><CR>") // the space ↵ made does not open the list again
+	feed(t, a, "<Esc>ggdGiselect * from t_order where<CR><CR>") // the first ↵ takes where and its space, a list opens with nothing selected: the second ↵ is the newline
 	if text(c) != "select * from t_order where \n" || c.comp != nil {
 		t.Errorf("where↵↵: %q", text(c))
 	}
@@ -1044,13 +1044,7 @@ func TestConsoleClickCandidate(t *testing.T) {
 // columns are selected from the start (§9.7, F8.17).
 func TestConsoleNoSelectList(t *testing.T) {
 	a, c := inConsole(t, "", "")
-	table, cols, _ := ordersTable(0)
-	for i, tb := range a.sess.Conns[0].Tables {
-		if tb.Name == "t_order" {
-			a.sess.Conns[0].Tables[i] = table
-		}
-	}
-	a.sess.Conns[0].cols[idOf(table)] = cols
+	cols := ordersCatalog(a)
 	first, last := cols.Cols[0].Name, cols.Cols[len(cols.Cols)-1].Name
 	const q = "<Esc>ggdGiselect * from t_order where"
 	feed(t, a, q+"<CR>")
@@ -1088,13 +1082,7 @@ func TestConsoleNoSelectList(t *testing.T) {
 // the first one (F8.17).
 func TestConsoleNoSelectListDraws(t *testing.T) {
 	a, _ := inConsole(t, "", "")
-	table, cols, _ := ordersTable(0)
-	for i, tb := range a.sess.Conns[0].Tables {
-		if tb.Name == "t_order" {
-			a.sess.Conns[0].Tables[i] = table
-		}
-	}
-	a.sess.Conns[0].cols[idOf(table)] = cols
+	cols := ordersCatalog(a)
 	feed(t, a, "iselect * from t_order where<CR>")
 	selected := func() []int {
 		f := a.render()
@@ -1113,5 +1101,65 @@ func TestConsoleNoSelectListDraws(t *testing.T) {
 	feed(t, a, "<Tab>")
 	if got := selected(); len(got) != 1 || got[0] != 0 {
 		t.Errorf("after Tab: %v", got)
+	}
+}
+
+// ordersCatalog gives the session's t_order the columns of ordersTable.
+func ordersCatalog(a *App) db.Columns {
+	table, cols, _ := ordersTable(0)
+	for i, tb := range a.sess.Conns[0].Tables {
+		if tb.Name == "t_order" {
+			a.sess.Conns[0].Tables[i] = table
+		}
+	}
+	a.sess.Conns[0].cols[idOf(table)] = cols
+	return cols
+}
+
+// The list with nothing selected, as it shows under the word (F8.17).
+func TestGoldenConsoleNoSelect160x45(t *testing.T) {
+	a, _ := inConsole(t, "", "")
+	ordersCatalog(a)
+	feed(t, a, "iselect * from t_order where<CR>")
+	golden.RequireEqual(t, a.render().String())
+}
+
+// A complete.accept the user bound, pressed with nothing selected, does
+// nothing; once a row is selected it takes it (F8.17).
+func TestAcceptKeyWithNothingSelected(t *testing.T) {
+	a, c := inConsole(t, "", "[keys.complete]\n\"<C-y>\" = \"complete.accept\"\n")
+	cols := ordersCatalog(a)
+	feed(t, a, "iselect * from t_order where<CR><C-y>")
+	if c.comp == nil || c.comp.sel != -1 || text(c) != "select * from t_order where " {
+		t.Fatalf("nothing selected: %q, list %+v", text(c), c.comp)
+	}
+	if feed(t, a, "<Tab><C-y>"); text(c) != "select * from t_order where "+cols.Cols[0].Name+" " || c.comp != nil {
+		t.Errorf("after Tab: %q", text(c))
+	}
+}
+
+// What was picked stays picked when the columns of another table come in and
+// the list is made again: ↵ still takes it (F8.17).
+func TestAsyncColumnsKeepThePick(t *testing.T) {
+	a, c := inConsole(t, "", "")
+	ordersCatalog(a)
+	var other db.Table
+	for _, tb := range a.sess.Conns[0].Tables {
+		if tb.Name != "t_order" && tb.Schema == "public" {
+			other = tb
+			break
+		}
+	}
+	feed(t, a, "iselect * from t_order a join "+other.Name+" b on <Tab>")
+	if c.comp == nil || c.comp.sel != 0 {
+		t.Fatalf("the pick: %+v", c.comp)
+	}
+	pick := c.comp.items[0].label
+	a.Update(colsMsg{a.sess.Conns[0], other, db.Columns{Cols: []db.Column{{Name: "zz_x", Type: "int"}}}, nil})
+	if c.comp == nil || c.comp.sel < 0 || c.comp.items[c.comp.sel].label != pick {
+		t.Fatalf("after the columns came: %+v", c.comp)
+	}
+	if feed(t, a, "<CR>"); !strings.HasSuffix(text(c), " on "+pick+" ") {
+		t.Errorf("↵ took %q", text(c))
 	}
 }
