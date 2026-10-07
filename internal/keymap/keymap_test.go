@@ -171,8 +171,8 @@ func TestPurePrefixWaits(t *testing.T) {
 
 func TestAmbiguousNodeTimesOut(t *testing.T) {
 	m, ps := load(t, "[keys.normal]\ng = \"my.g\"")
-	if len(ps) != 1 || ps[0].Table != "keys.normal" || ps[0].Key != "g" {
-		t.Fatalf("expected one prefix warning on g, got %v", ps)
+	if len(ps) != 0 {
+		t.Fatalf("g is the prefix of gt: no warning, got %v", ps)
 	}
 	r := NewResolver(m)
 	out, wait := press(t, r, grid, "g")
@@ -199,7 +199,10 @@ func TestAmbiguousNodeTimesOut(t *testing.T) {
 // nvim does, esc too, so t needs no timeout to run; one that continues one is that
 // sequence; a pause runs t (F8.15, §6.5).
 func TestBoundPrefixRunsWhenTheNextKeyDoesNotContinue(t *testing.T) {
-	m, _ := load(t, "[keys.normal]\nt = \"my.t\"\ntc = \"my.tc\"\ntt = \"my.tt\"")
+	m, ps := load(t, "[keys.normal]\nt = \"my.t\"\ntc = \"my.tc\"\ntt = \"my.tt\"")
+	if len(ps) != 0 { // vim's ordinary case: no notice at start, nothing for keys --check
+		t.Fatalf("a key and a sequence it starts: %v", ps)
+	}
 	for _, c := range []struct {
 		keys string
 		want []string

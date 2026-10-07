@@ -22,7 +22,7 @@ import (
 // between, go with it. A comment on a paragraph of its own, below a blank
 // line, is the user's, whichever block it follows.
 
-const tomlKey = `(?:[A-Za-z0-9_-]+|"[^"]*"|'[^']*')`
+const tomlKey = `(?:[A-Za-z0-9_-]+|"(?:[^"\\]|\\.)*"|'[^']*')`
 
 var (
 	connHeader = regexp.MustCompile(`^\s*\[\[\s*connection\s*\]\]`)

@@ -42,8 +42,7 @@ func (a *App) keyHelpKey(k keymap.Key) tea.Cmd {
 		case n.Key != k:
 		// ponytail: a key bound in one table and a prefix in a higher one
 		// (xx in [map.grid.normal], x in [keys.grid]) goes down; its own
-		// binding then fires only if typed. ambiguities() checks one
-		// table, and the defaults have none
+		// binding then fires only if typed; the defaults have none
 		case n.Action == "" && n.RHS == nil: // a prefix of longer ones
 			h.prefix, h.top = append(slices.Clone(h.prefix), k), 0
 			return nil

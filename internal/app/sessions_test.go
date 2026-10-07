@@ -412,3 +412,28 @@ func TestSessionCloseCommand(t *testing.T) {
 		t.Errorf("confirmed: %d sessions", len(a.sessions))
 	}
 }
+
+// The names asked in the status bar, layout.save, session.rename and
+// console.rename, take the left of it as window.rename does: the mode block
+// stays at the right, INSERT, the input not over it, on a narrow bar too
+// (§7.8, F8.11).
+func TestAskNameKeepsModeBlock(t *testing.T) {
+	for _, w := range []int{160, 50} {
+		for _, cmd := range []string{"layout.save", "session.rename", "console.rename"} {
+			a, _ := inConsole(t, "", "")
+			a.Update(tea.WindowSizeMsg{Width: w, Height: 20})
+			a.run(cmd, 0)
+			if a.askName == nil {
+				t.Fatalf("%s: not asking", cmd)
+			}
+			feed(t, a, "x")
+			row := statusRow(a)
+			if !strings.HasSuffix(row, " INSERT ") || !strings.Contains(row, a.askName.label+a.askName.in.Text) {
+				t.Errorf("%s at %d: %q", cmd, w, row)
+			}
+			if c := a.render().Cursor; c == nil || c.X >= ui.Width(row)-ui.Width(" INSERT ") || c.Y != a.h-1 {
+				t.Errorf("%s at %d: the cursor %v is not in the left", cmd, w, c)
+			}
+		}
+	}
+}

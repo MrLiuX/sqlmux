@@ -43,7 +43,8 @@ type StatusLine struct {
 // F1.4's "-- editing WHERE --", e.g. relative to the info's own width.
 const minInfo = 12
 
-func (s StatusLine) Draw(f *Frame, r uv.Rectangle) {
+// Draw paints the bar in r and returns the column its right group starts at.
+func (s StatusLine) Draw(f *Frame, r uv.Rectangle) (rightX int) {
 	th := f.Theme
 	f.Fill(r, uv.Style{Bg: th.Bar})
 	left, right := dropToFit(s.Left, s.Right, r.Dx())
@@ -62,9 +63,11 @@ func (s StatusLine) Draw(f *Frame, r uv.Rectangle) {
 		info := " " + Truncate(s.Info, spare-2) + " "
 		f.Text(rx-Width(info), r.Min.Y, rx, info, uv.Style{Fg: th.Dim, Bg: th.Bar})
 	}
+	rightX = r.Max.X - segsWidth(right)
 	for _, seg := range right {
 		rx = drawSegment(f, rx, r.Min.Y, r.Max.X, seg)
 	}
+	return rightX
 }
 
 // dropToFit removes droppable segments until both groups fit in w: lowest

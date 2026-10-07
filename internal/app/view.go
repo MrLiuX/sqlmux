@@ -105,7 +105,7 @@ func (a *App) render() *ui.Frame {
 		}
 	}
 	y := a.h - 1
-	a.statusLine().Draw(f, uv.Rect(0, y, a.w, 1))
+	rightX := a.statusLine().Draw(f, uv.Rect(0, y, a.w, 1))
 	if a.paneNumbers { // over the status bar's buttons too: a click there only closes them (§5)
 		a.drawPaneNumbers(f, rects)
 	}
@@ -119,10 +119,9 @@ func (a *App) render() *ui.Frame {
 			}
 		}
 	}
-	if n := a.askName; n != nil { // over the status bar's left: n.label ("layout name: ", "session name: "…) and the name typed (F6.5, F8.11)
-		f.Fill(uv.Rect(0, y, a.w, 1), uv.Style{Fg: th.Fg, Bg: th.Border})
-		f.Text(1, y, a.w, n.label, uv.Style{Fg: th.Warn, Bg: th.Border})
-		c := n.in.Draw(f, uv.Rect(1+ui.Width(n.label), y, max(a.w-ui.Width(n.label)-2, 1), 1), uv.Style{Fg: th.Fg, Bg: th.Border})
+	if n := a.askName; n != nil { // the input over the status bar's left, past n.label ("layout name: "…), the mode block still its own (F6.5, F8.11)
+		x := 1 + ui.Width(n.label)
+		c := n.in.Draw(f, uv.Rect(x, y, max(rightX-1-x, 1), 1), uv.Style{Fg: th.Fg, Bg: th.Border})
 		f.Cursor = &c
 	}
 	if a.keyHelp != nil {
@@ -486,6 +485,13 @@ func (a *App) statusLine() ui.StatusLine {
 			seg = ui.Segment{Runs: []ui.Run{{Text: fmt.Sprintf(" %d: %s* ", i, w.Name), Style: cur}}, Action: seg.Action}
 		}
 		s.Left = append(s.Left, seg)
+	}
+
+	if n := a.askName; n != nil { // a name typed in the place of the session and the windows: render puts the input over it
+		s.Left = []ui.Segment{{Runs: []ui.Run{
+			{Text: " " + n.label, Style: uv.Style{Fg: th.Warn, Bg: th.Border}},
+			{Text: n.in.Text + "  ", Style: uv.Style{Fg: th.Fg, Bg: th.Border}},
+		}}}
 	}
 
 	pending := ui.Run{Text: "·", Style: bar(th.Dim)}

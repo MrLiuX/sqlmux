@@ -385,7 +385,7 @@ func TestCheckUpdateWritable(t *testing.T) {
 // line but a comment: a quoted name with a comma or an = is another table,
 // which a deletion leaves; the lines of an array are no header (F8.16).
 func TestConnectionBlockEndsAtTables(t *testing.T) {
-	for _, rest := range []string{"\n[\"x,y\"]\nk = 1\n\n['a=b'.c]\nk = 2\n", "\n['a=b'.c]\nk = 2\n\n[\"x,y\"]\nk = 1\n"} {
+	for _, rest := range []string{"\n[\"x,y\"]\nk = 1\n\n['a=b'.c]\nk = 2\n", "\n['a=b'.c]\nk = 2\n\n[\"x,y\"]\nk = 1\n", "\n[\"a\\\"b\"]\nk = 1\n"} {
 		connectionsFile(t, oneConn+"\n[[connection]]\nname = \"b\"\nengine = \"mysql\"\ndsn = \"u@tcp(h:3306)/b\"\n"+rest)
 		if err := DeleteConnection("b"); err != nil {
 			t.Fatal(err)
