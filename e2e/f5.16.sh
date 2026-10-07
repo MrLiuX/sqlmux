@@ -19,7 +19,7 @@ begin() { e2e_stop; start -K "$D/keymaps.toml" "$@"; }
 
 paste() { t set-buffer -b e2e -- "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 settle() { wait_for 8 settled; }
-cline() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }                     # console 的第 N 行（默认布局，② 在右边）
+cline() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }                     # console 的第 N 行（默认布局，② 在右边）
 clines() { local i; for ((i = 1; i <= $1; i++)); do cline $i; done; }
 cy() { echo $(( $(e2e_flag cursor_y) )); }
 sname() { bar | sed 's/^ //; s/ ▾.*//'; }
@@ -56,11 +56,11 @@ check "（准备）NORMAL，光标在第一条语句里（第 2 行）" eval '[[
 key F6; sleep 1.5
 check "F6：第一行的注释还在原处，语句拆成多行（select / from / where / order by 各占行）" eval '[[ $(cline 1) == "-- head" && $(cline 2) == "select" ]] && clines 14 | grep -qx "from" && clines 14 | grep -qx "where" && clines 14 | grep -qx "order by"'
 check "语句之间的空行、最后一条语句照格式化；末尾的注释 -- tail 还是最后一行" eval 'n=$(clines 20 | grep -c .); [[ $(clines 20 | grep -v "^ *$" | tail -1) == "-- tail" ]] && clines 20 | grep -qx "select" '
-check "光标留在原处（F8.3）：第 2 行行首" eval '[[ $(cy) == 2 && $(( $(e2e_flag cursor_x) - 110 )) == 0 ]] || { echo "  cursor $(cy):$(( $(e2e_flag cursor_x) - 110 ))"; false; }'
+check "光标留在原处（F8.3）：第 2 行行首" eval '[[ $(cy) == 2 && $(( $(e2e_flag cursor_x) - 103 )) == 0 ]] || { echo "  cursor $(cy):$(( $(e2e_flag cursor_x) - 103 ))"; false; }'
 key u
 check "u 一次撤回：回到格式化之前的五行（-- head、长语句、空行、select 2、-- tail）" eval '[[ $(cline 1) == "-- head" && $(cline 2) == "select 1,2 from t_user where id=1 order by id;" && $(cline 4) == "select 2" && $(cline 5) == "-- tail" ]] || { clines 6; false; }'
-key j; key j; key 0; c0="$(cy):$(( $(e2e_flag cursor_x) - 110 ))"; key F6; sleep 1.5
-check "光标在第二条语句里时 F6：两条语句都格式化，光标留在原来的行号和列号（F8.3，不再移到语句开头）" eval '[[ $(clines 30 | grep -c "^select$") == 2 && "$(cy):$(( $(e2e_flag cursor_x) - 110 ))" == "$c0" ]] || { echo "  cursor $(cy):$(( $(e2e_flag cursor_x) - 110 )) want $c0"; clines 20; false; }'
+key j; key j; key 0; c0="$(cy):$(( $(e2e_flag cursor_x) - 103 ))"; key F6; sleep 1.5
+check "光标在第二条语句里时 F6：两条语句都格式化，光标留在原来的行号和列号（F8.3，不再移到语句开头）" eval '[[ $(clines 30 | grep -c "^select$") == 2 && "$(cy):$(( $(e2e_flag cursor_x) - 103 ))" == "$c0" ]] || { echo "  cursor $(cy):$(( $(e2e_flag cursor_x) - 103 )) want $c0"; clines 20; false; }'
 key u; key i; key F6; sleep 1
 check "INSERT 下 F6：不做事，文字不变" eval '[[ $(cline 2) == "select 1,2 from t_user where id=1 order by id;" ]]'
 key Escape

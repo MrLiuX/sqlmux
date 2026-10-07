@@ -7,9 +7,9 @@ e2e_build || exit 1
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; rm -rf "$D"' EXIT
 printf '[keys.global]\n"<F6>" = "console.format"\n' >"$D/keymaps.toml"
 paste() { local s=$1; [[ $s == *\; ]] && s="${s%;}\;"; t set-buffer -b e2e -- "$s"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }   # 结尾的 ; 要写成 \;
-cline() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }
+cline() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
 clines() { local i; for ((i = 1; i <= $1; i++)); do cline $i; done; }
-cur() { echo "$(e2e_flag cursor_y):$(( $(e2e_flag cursor_x) - 110 ))"; }
+cur() { echo "$(e2e_flag cursor_y):$(( $(e2e_flag cursor_x) - 103 ))"; }
 
 start -K "$D/keymaps.toml"; key C-l; key i
 paste $'select id,status from t_order where id=1;\ndelete from t_log where id=1;'

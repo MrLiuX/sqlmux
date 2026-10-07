@@ -8,7 +8,7 @@ e2e_build || exit 1
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); DD=$D/data; CF=$DD/sqlmux/consoles/console_1.sql   # F5.11 起不按连接分目录
 trap 'e2e_stop; rm -rf "$D"' EXIT
 KEYWORD=#bb9af7 NUMBER=#ff9e64 STR=#9ece6a COMMENT=#565f89 FUNC=#7aa2f7 FG=#c0caf5 DIM=#565f89 FOCUS=#9ece6a ROW=#292e42 PANE_BG=#24283b
-line() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }                         # 第 N 行的文字
+line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }                         # 第 N 行的文字
 cur() { echo "$(( $(e2e_flag cursor_y) )),$(( $(e2e_flag cursor_x) - 109 ))"; }     # 光标在第几行、第几个字符（都从 1 起）
 cur_is() { [[ $(cur) == "$1" ]] || { echo "  cursor $(cur), want $1"; false; }; }
 mode() { bar | awk '{ print $NF }'; }

@@ -12,7 +12,7 @@ mkdir -p "$D/cfg" "$D/st" "$D/data"
 paste() { t set-buffer -b e2e -- "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 wins() { bar | sed -E 's/^ [^▾]*▾  //; s/ {3,}.*//'; }
 wh() { e2e_text 36 103 2 | sed 's/ *▾.*//; s/^ *WHERE *//; s/ *$//'; }
-cline() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }
+cline() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
 toast_text() { e2e_text 1 "$(e2e_flag pane_width)" $(( $(H) - 1 )); }
 # startl ARGS…：带命令行参数启动（配置、state、数据目录都用 $D 里的，重启时沿用）
 startl() { e2e_start -C "${CFG:-$D/cfg}" -S "$D/st" -D "$D/data" "$E2E_BIN $*"; wait_for 6 eval 'flag_is alternate_on 1 || exited'; sleep 1.5; }

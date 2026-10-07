@@ -5,8 +5,8 @@
 e2e_build || exit 1
 
 paste() { local s=$1; [[ $s == *\; ]] && s="${s%;}\\;"; t set-buffer -b e2e -- "$s"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }   # 结尾的 ; 要写成 \;，否则 tmux 当命令分隔符吃掉
-line() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }
-cc() { echo "$(e2e_flag cursor_y):$(( $(e2e_flag cursor_x) - 110 ))"; }
+line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
+cc() { echo "$(e2e_flag cursor_y):$(( $(e2e_flag cursor_x) - 103 ))"; }
 fresh() { key Escape; key Escape; key g g; key d G; key i; }
 
 start; key C-l; key i

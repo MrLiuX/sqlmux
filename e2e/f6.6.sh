@@ -11,7 +11,7 @@ D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; rm -rf "
 e2e_own_db || { echo "e2e: could not create the private database" >&2; exit 1; }
 mkdir -p "$D/c"; printf 'vim = false\n' >"$D/c/config.toml"
 (umask 077; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$E2E_DB" >"$D/c/connections.toml")
-cl() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }                         # console 的第 N 行
+cl() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }                         # console 的第 N 行
 VISUAL_BG=#2d3f76
 modeless() { [[ $(bar) != *NORMAL* && $(bar) != *INSERT* && $(bar) != *VISUAL* && $(bar) != *COMMAND* ]]; }
 sel_bg() { [[ $(e2e_style "$1" "$2") == *"bg=$VISUAL_BG"* ]]; }

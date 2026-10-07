@@ -7,7 +7,7 @@ e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")
 trap 'e2e_stop; rm -rf "$D"' EXIT
-line() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }
+line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
 lines() { local i; for ((i = 1; i <= $1; i++)); do line $i; done | tr '\n' '|'; }   # 前 N 行，用 | 连起来
 paste() { t set-buffer -b e2e "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 SQL="select id,status from t_order where id<3"

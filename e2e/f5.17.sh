@@ -23,7 +23,7 @@ shown() { [[ $(panes_n) -ge 3 ]]; }
 hidden() { [[ $(panes_n) == 1 ]]; }
 panes_n() { e2e_panes | awk '$1 != "-"' | grep -c .; }
 paste() { t set-buffer -b e2e -- "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
-cline() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }
+cline() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
 
 # trial KEYDESC CHAR MOD：按两次，第一次放大（只剩一个 pane）、第二次恢复；返回是否都对
 trial() { csi "$2" "$3"; hidden || { echo "  $1 第一次：没有放大"; return 1; }; csi "$2" "$3"; shown || { echo "  $1 第二次：没有恢复"; return 1; }; }

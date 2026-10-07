@@ -10,8 +10,8 @@ typ() { e2e_type "$1"; sleep 0.3; }
 paste() { t set-buffer -b e2e "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 wcur() { echo $(( $(e2e_flag cursor_x) - 41 )); }                              # WHERE 输入框里光标前有几个字符（SOLO 布局，文字从 x 42 起；cursor_x 从 0 起）
 where_is() { [[ $(where_in) == "$1" && $(wcur) == "$2" ]] || { echo "  WHERE '$(where_in)' cursor $(wcur), want '$1' cursor $2"; false; }; }
-line() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }                       # console 第 N 行（默认布局）
-ccur() { echo $(( $(e2e_flag cursor_x) - 110 )); }                              # console 里光标前有几个字符
+line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }                       # console 第 N 行（默认布局）
+ccur() { echo $(( $(e2e_flag cursor_x) - 103 )); }                              # console 里光标前有几个字符
 mode() { bar | awk '{ print $NF }'; }
 
 # ---- WHERE（SOLO：① 独占右侧）

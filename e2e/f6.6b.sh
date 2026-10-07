@@ -7,8 +7,8 @@ e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; rm -rf "$D"' EXIT
 mkdir -p "$D/c"; printf 'vim = false\n' >"$D/c/config.toml"
-cl() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }
-cx() { echo $(( $(e2e_flag cursor_x) - 110 )); }                                # 光标前面的字符数（第一列 111）
+cl() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
+cx() { echo $(( $(e2e_flag cursor_x) - 103 )); }                                # 光标前面的字符数（第一列 111）
 cy() { e2e_flag cursor_y; }
 sel_bg() { [[ $(e2e_style "$1" "$2") == *"bg=#2d3f76"* ]]; }
 

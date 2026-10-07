@@ -13,7 +13,7 @@ names() { items | sed 's/  .*//' | tr '\n' '|'; }
 names_are() { [[ $(names) == "$1" ]] || { echo "  candidates: '$(names)', want '$1'"; false; }; }
 has() { [[ "|$(names)" == *"|$1|"* ]] || { echo "  candidates: $(names)"; false; }; }
 none() { [[ -z $(pop) ]] || { echo "  popup: $(names)"; false; }; }
-line() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }
+line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
 fresh() { key Escape; key Escape; key g g; key d G; key i; }
 settle() { wait_for 8 settled; }
 EVT="id|occurred_at|kind|"      # t_event 的列（按表里的顺序）

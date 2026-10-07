@@ -11,7 +11,7 @@ items() { local g y; g=($(pop)); [[ -n ${g[0]} ]] || return 0
   for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed 's/^ *//; s/ *$//'; done; }
 names() { items | awk '{ print $1 }' | tr '\n' ' '; }
 has() { [[ " $(names) " == *" $1 "* ]] || { echo "  candidates: $(names)"; false; }; }
-line() { e2e_text 111 159 $(($1 + 1)) | sed 's/ *$//'; }
+line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
 mode() { bar | awk '{ print $NF }'; }
 fresh() { key Escape; key Escape; key g g; key d G; key i; }                      # 清空 console，进 INSERT
 

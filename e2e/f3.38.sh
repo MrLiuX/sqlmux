@@ -7,7 +7,7 @@ e2e_build || exit 1
 
 paste() { t set-buffer -b e2e -- "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 setsql() { key Escape; key g g; key d G; key i; paste "$1"; key Escape; key g g; key 0; }   # console 的内容换成 SQL，光标回到第 1 行行首
-line() { e2e_text 111 159 $((1 + $1)) | sed 's/ *$//'; }                         # 第 N 行的文字（② console 从 x 111 起）
+line() { e2e_text 104 159 $((1 + $1)) | sed 's/ *$//'; }                         # 第 N 行的文字（② console 从 x 111 起）
 set_clip() { printf '%s' "$1" >"$E2E_TMP/clipboard"; }
 clip_is() { local want=$1; wait_for 3 eval '[[ "$(clip; echo .)" == "$want." ]]' || { echo "  clip: [$(clip)], want [$want]"; false; }; }   # TEXT：剪贴板里是 TEXT（pbcopy 负载高时晚一点才写完）
 
