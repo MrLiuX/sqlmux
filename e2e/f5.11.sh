@@ -40,7 +40,7 @@ paste() { t set-buffer -b e2e "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4;
 setsql() { key Escape; key g g; key d G; key i; paste "$1"; key Escape; key g g; }    # ② console 的内容换成 SQL
 done_run() { wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 0.3; }
 run() { key Enter; done_run; }
-ctitle() { e2e_text 105 160 1; }                                                     # ② 的标题
+ctitle() { e2e_text 98 160 1; }                                                     # ② 的标题
 on() { [[ $(ctitle) == *" $1 · $DB.$2 ▾"* ]] || { echo "  ② title: '$(ctitle)', want $1 · $DB.$2"; false; }; }   # CONN SCHEMA
 on1() { [[ $(e2e_text 34 103 1) == *" $1 · $DB.$2 ▾"* ]] || { echo "  ① title: '$(e2e_text 34 103 1)', want $1 · $DB.$2"; false; }; }
 psql_n() { psql "$E2E_DB" -At -c "$1"; }

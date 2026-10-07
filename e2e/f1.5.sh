@@ -19,7 +19,7 @@ items() { local g y; g=($(pop)); [[ -n ${g[0]} ]] || return 0
   for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do
     printf '%s|%s\n' "$(e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | noicon | tr -s ' ' | sed 's/^ //; s/ $//')" "$(style_has $((g[0] + g[2] - 2)) $y bg=$SELECT >/dev/null && echo 1 || echo 0)"; done; }   # 选中看行尾的留白；图标去掉
 # icons：历史下拉每一项前面的图标（F3.31：收藏 star U+F005、历史 history U+F1DA），连成一串
-icons() { local g y; g=($(pop)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | python3 -c 'import sys; print(sys.stdin.read().strip()[:1], end="")'; done; }
+icons() { local g y; g=($(pop)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | python3 -c 'import sys; c = sys.stdin.read().strip()[:1]; print(c if c in "\uf005\uf1da" else "", end="")'; done; }   # 分隔线和底部提示行没有图标，不输出
 STAR=$(printf '\xef\x80\x85') HIST=$(printf '\xef\x87\x9a')
 names() { items | cut -d'|' -f1 | awk '{ print $1 }' | tr '\n' ' '; }
 picked() { items | awk -F'|' '$2 == 1 { print $1 }'; }
@@ -86,19 +86,19 @@ run "status = 'done'"
 key go; typ amount; key Enter; wait_for 8 settled   # ORDER amount ↑
 run "id < 50"
 edit; key C-r
-hist() { items | cut -d'|' -f1 | sed -E 's/ [0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$//' | tr '\n' ,; }   # 去掉右侧的时间
-check "C-r：打开历史下拉，状态栏 COMMAND；不画组标题，每项前面是 history 图标（F3.31），新的在前（id < 50、status = 'done'、id < 50，最早的是出错的 stat）" eval 'mode_is COMMAND && [[ $(hist) == "id < 50,status = '"'done'"',id < 50,stat," && $(icons) == "$HIST$HIST$HIST$HIST" ]] || { echo "  $(items | tr "\n" ,)"; false; }'
+hist() { items | cut -d'|' -f1 | sed -E '/^─/d; /^C-p/d; s/ [0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$//' | tr '\n' ,; }   # 去掉右侧的时间、F8.14 的分隔线和底部提示行
+check "C-r：打开历史下拉，状态栏 COMMAND；不画组标题，每项前面是 history 图标（F3.31），新的在前（id < 50、status = 'done'、id < 50，最早的是出错的 stat），底部有一行提示（F8.14）" eval 'mode_is COMMAND && [[ $(hist) == "id < 50,status = '"'done'"',id < 50,stat," && $(icons) == "$HIST$HIST$HIST$HIST" && $(items | tail -1) == "C-p/C-n 移动"* ]] || { echo "  $(items | tr "\n" ,)"; false; }'
 check "历史项右侧是时间 MM-DD HH:MM" eval 'items | sed -n 1p | grep -qE " [0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}\|"'
 check "空的 WHERE 不记" eval '! items | grep -q "^ *[0-9][0-9]-"'
 check "打开时选中第一项" eval '[[ $(picked) == "id < 50 "* ]]'
 key C-f
-check "C-f：收藏这一项，排在最前、star 图标，右侧是和默认不同的 ORDER / LIMIT（amount ↑ · 500）" eval '[[ $(items | head -1 | cut -d"|" -f1) == "id < 50 amount ↑ · 500" && $(icons) == "$STAR$HIST"* ]] || { echo "  $(items | tr "\n" ,)"; false; }'
+check "C-f：收藏这一项，排在历史后面（F8.14：历史在上），中间一行分隔线，star 图标，右侧是和默认不同的 ORDER / LIMIT（amount ↑ · 500）" eval '[[ $(hist) == "id < 50,status = '"'done'"',id < 50,stat,id < 50 amount ↑ · 500," && $(icons) == "$HIST$HIST$HIST$HIST$STAR" && $(items | grep -c "^───") == 1 ]] || { echo "  $(items | tr "\n" ,)"; false; }'
 key Escape
 check "esc 关闭，输入框的文字保留（空）" eval '[[ -z $(pop) && -z $(where_in) ]] && mode_is INSERT'
 typ sta; key C-r
-check "输入框里已有 sta 时打开：不按它过滤，收藏和历史全列出（F3.31）" eval '[[ $(hist) == "id < 50 amount ↑ · 500,id < 50,status = '"'done'"',id < 50,stat," ]] || { echo "  $(items | tr "\n" ,)"; false; }'
+check "输入框里已有 sta 时打开：不按它过滤，收藏和历史全列出（F3.31）" eval '[[ $(hist) == "id < 50,status = '"'done'"',id < 50,stat,id < 50 amount ↑ · 500," ]] || { echo "  $(items | tr "\n" ,)"; false; }'
 key Tab; t1=$(picked); key Down; t2=$(picked); key BTab; t3=$(picked); key Up; t4=$(picked); key Up; t5=$(picked)
-check "Tab / ↓ 下一项，S-Tab / ↑ 上一项，到头绕回（F3.31）" eval '[[ $t1 == "id < 50 "[0-9]* && $t2 == "status = "* && $t3 == "id < 50 "[0-9]* && $t4 == "id < 50 amount"* && $t5 == "stat "* ]] || { echo "  $t1 / $t2 / $t3 / $t4 / $t5"; false; }'
+check "Tab / ↓ 下一项，S-Tab / ↑ 上一项，到头绕回（F3.31）" eval '[[ $t1 == "status = "* && $t2 == "id < 50 "[0-9]* && $t3 == "status = "* && $t4 == "id < 50 "[0-9]* && $t5 == "id < 50 amount"* ]] || { echo "  $t1 / $t2 / $t3 / $t4 / $t5"; false; }'
 key BSpace
 check "开始输入之后才过滤：退格成 st，只剩 status = 'done' 和 stat" eval '[[ $(hist) == "status = '"'done'"',stat," ]] || { echo "  $(items | tr "\n" ,)"; false; }'
 key Enter; wait_for 8 settled
@@ -120,8 +120,8 @@ pal ""
 check "重启后命令面板的最近使用仍在最前（t_order）" eval '[[ $(list | head -1 | cut -d" " -f1) == t_order ]] || { echo "  $(list | head -3 | tr "\n" ,)"; cat "$SJ"; false; }'
 key Enter; wait_for 8 settled
 edit; key C-r
-check "重启后收藏仍在" eval '[[ $(items | head -1 | cut -d"|" -f1) == "id < 50 amount ↑ · 500" && $(icons) == "$STAR"* ]] || { echo "  $(items | tr "\n" ,)"; false; }'
-key C-f
+check "重启后收藏仍在（在历史后面）" eval '[[ $(hist) == *"id < 50 amount ↑ · 500," && $(icons) == *"$STAR" ]] || { echo "  $(items | tr "\n" ,)"; false; }'
+key Up; key C-f   # 选中在第一项（历史），往上绕到最后一项（收藏）
 check "C-f 取消收藏：没有 star 图标的项了" eval '[[ $(icons) != *"$STAR"* && -n $(icons) ]]'
 key Escape; key Escape
 

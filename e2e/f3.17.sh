@@ -18,8 +18,8 @@ SOLO=1 start -C "$D/c"; open_table t_order
 key '?'
 check "表格里按 ?：打开键位帮助，上边框是 ?，模式 COMMAND" eval '[[ -n $(box) && $(help | head -1) == *"─ ? ─"* && $(mode) == COMMAND ]]'
 check "列出 hjkl、g / y 前缀和它们的名字" eval 'has "h +→ 左移" && has "l +→ 右移" && has "g +→ …" && has "R +→ 刷新"'
-check "用户映射 L → 5l 在组 [map.grid.normal] 下，排在 [keys.grid] 之前" eval 'under "[map.grid.normal]" "L   → 5l" && [[ $(help | grep -n "^\[" | head -2 | cut -d: -f2 | tr "\n" " ") == "[map.grid.normal] [keys.grid] " ]]'
-check "normal、global 的键各在自己的组里（[keys.normal] 的 C-h，[keys.global] 的 C-p）" eval 'under "[keys.normal]" "C-h → " && under "[keys.global]" "C-p → 命令面板"'
+check "用户映射 L → 5l 在组 [map.grid.normal] 下，排在 [keys.grid] 之前" eval 'under "[map.grid.normal]" "L     → 5l" && [[ $(help | grep -n "^\[" | head -2 | cut -d: -f2 | tr "\n" " ") == "[map.grid.normal] [keys.grid] " ]]'
+check "normal、global 的键各在自己的组里（[keys.normal] 的 C-h，[keys.global] 的 C-p）" eval 'under "[keys.normal]" "C-h   → " && under "[keys.global]" "C-p   → 命令面板"'
 key g
 check "按 g：进入 g 这一层，列出 go / gl 和用户加的 gz" eval '[[ $(help | head -1) == *"─ g ─"* ]] && has "o → ORDER" && has "l → LIMIT" && under "[keys.grid]" "z → 第一行"'
 key BSpace
@@ -60,15 +60,15 @@ check "树上 ?：打开键位帮助" eval '[[ -n $(box) && $(help | head -1) ==
 key Escape; key C-l; key C-l
 # console：NORMAL 下 ? 打开帮助；INSERT 下照常输入；VISUAL 下、操作符后面的 ? 仍是 vim 的反向搜索
 key '?'
-check "console 的 NORMAL 下 ?：打开键位帮助，不是反向搜索" eval '[[ -n $(box) && $(help | head -1) == *"─ ? ─"* && $(mode) == COMMAND && $(e2e_text 105 160 42) != "│?"* ]]'
+check "console 的 NORMAL 下 ?：打开键位帮助，不是反向搜索" eval '[[ -n $(box) && $(help | head -1) == *"─ ? ─"* && $(mode) == COMMAND && $(e2e_text 98 160 42) != "│?"* ]]'
 key Escape
 check "esc 关掉帮助，回到 NORMAL" eval '[[ -z $(box) && $(mode) == NORMAL ]]'
 key i; e2e_type 'select 1 ?'; sleep 0.3; key Escape
-check "INSERT 下 ?：照常输入到 console 里" eval '[[ -z $(box) && $(e2e_text 105 160 2) == *"select 1 ?"* ]]'
+check "INSERT 下 ?：照常输入到 console 里" eval '[[ -z $(box) && $(e2e_text 98 160 2) == *"select 1 ?"* ]]'
 key v; key '?'
-check "VISUAL 下 ?：交给 vim，是反向搜索的命令行" eval '[[ -z $(box) && $(mode) == COMMAND && $(e2e_text 105 160 42) == "│?"* ]]'
+check "VISUAL 下 ?：交给 vim，是反向搜索的命令行" eval '[[ -z $(box) && $(mode) == COMMAND && $(e2e_text 98 160 42) == "│?"* ]]'
 key Escape; key Escape; key d; key '?'
-check "d 后面的 ?：交给 vim（d? 的搜索命令行）" eval '[[ -z $(box) && $(e2e_text 105 160 42) == "│?"* ]]'
+check "d 后面的 ?：交给 vim（d? 的搜索命令行）" eval '[[ -z $(box) && $(e2e_text 98 160 42) == "│?"* ]]'
 key Escape
 key Space; e2e_type '?'; sleep 0.4
 check "console 里 <leader>?：打开帮助（根层标题是 keyhelp.open 绑的键，F3.25 起是 ?），列出 ↵ 执行和 gs，不列 vim 自己的键" eval '[[ $(help | head -1) == *"─ ? ─"* ]] && has "↵ +→ 执行" && has "gs +→ |g +→ …" && ! help | grep -qE "^dd|w +→ 下一个词"'

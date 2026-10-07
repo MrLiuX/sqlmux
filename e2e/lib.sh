@@ -255,7 +255,7 @@ bar() { e2e_text 1 "$(e2e_flag pane_width)" "$(H)"; }                    # the s
 pos() { bar | grep -oE ' [0-9]+,[0-9]+ ' | tr -d ' '; }                 # its 行,列
 pos_is() { [[ $(pos) == "$1" ]] || { echo "  行,列 '$(pos)', want '$1'"; false; }; }
 mode_is() { [[ $(bar) == *" $1 " ]] || { echo "  mode: $(e2e_text 120 160 "$(H)")"; false; }; }
-where_in() { e2e_text 42 157 2 | sed 's/ *$//'; }                       # the WHERE input (▾ at its right end)
+where_in() { e2e_text 42 159 2 | sed -E 's/ {2,}(([^ ]+) ){0,2}▾ *$//; s/ *$//'; }   # the WHERE input; F8.14: the right end is [icon] [key] ▾
 qb() { e2e_text 35 159 3; }                                             # the query bar's second row
 qb_has() { [[ $(qb) == *"$1"* ]] || { echo "  query bar: '$(qb)', want '$1'"; false; }; }
 cnt() { qb | grep -oE 'auto · [^ ]+ 行' | awk '{ print $3 }'; }

@@ -63,15 +63,15 @@ start_t -x 39; check "39 宽：截短 session 名" bar_has " doraem… ▾"
 
 # ---- 其余 window（F5.2 起又能新建 window，补回 M0 的这几项）：dim 字、无底色；变窄时排在连接地址之后、光标位置之前省略
 start_t; e2e_keys Space; e2e_type c; sleep 0.5; e2e_keys Space; e2e_type p; sleep 0.3   # 新建 window 1，回到 0
-check "其余 window：dim 字、无底色" eval 'bar_has " doraemon ▾  0: data*  1: data " && at "1: data" fg=$DIM && at "1: data" bg=$BAR'
-e2e_resize 91 45; sleep 0.3; check "两个 window、91 宽：全部显示" bar_has "0: data*  1: data  @  @ ·    1,1  @ doraemon · sqlmux@localhost:55432  NORMAL "
-e2e_resize 90 45; sleep 0.3; check "90 宽：先省略连接地址，其余 window 还在" eval 'bar_lacks sqlmux@ && bar_has "0: data*  1: data " && bar_has "1,1"'
-e2e_resize 54 45; sleep 0.3; check "54 宽：其余 window 还在" eval 'bar_has "0: data*  1: data " && bar_has "1,1"'
-e2e_resize 53 45; sleep 0.3; check "53 宽：去掉其余 window，光标位置还在" eval 'bar_lacks "1: data" && bar_has "0: data*" && bar_has "1,1"'
+check "其余 window：dim 字、无底色" eval 'bar_has " doraemon ▾  0: data*  1: data-2 " && at "1: data-2" fg=$DIM && at "1: data-2" bg=$BAR'
+e2e_resize 93 45; sleep 0.3; check "两个 window、93 宽：全部显示" bar_has "0: data*  1: data-2  @  @ ·    1,1  @ doraemon · sqlmux@localhost:55432  NORMAL "
+e2e_resize 92 45; sleep 0.3; check "92 宽：先省略连接地址，其余 window 还在" eval 'bar_lacks sqlmux@ && bar_has "0: data*  1: data-2 " && bar_has "1,1"'
+e2e_resize 56 45; sleep 0.3; check "56 宽：其余 window 还在" eval 'bar_has "0: data*  1: data-2 " && bar_has "1,1"'
+e2e_resize 55 45; sleep 0.3; check "55 宽：去掉其余 window，光标位置还在" eval 'bar_lacks "1: data-2" && bar_has "0: data*" && bar_has "1,1"'
 monotonic() {  # 省略顺序：有连接地址 ⇒ 有其余 window ⇒ 有 1,1 ⇒ session 名完整；且必留的块都在
   local b; b=$(bar)
   local c=0 r=0 p=0 s=0
-  [[ $b == *sqlmux@localhost* ]] && c=1; [[ $b == *"1: data"* ]] && r=1; [[ $b == *"1,1"* ]] && p=1; [[ $b == *" doraemon ▾"* ]] && s=1
+  [[ $b == *sqlmux@localhost* ]] && c=1; [[ $b == *"1: data-2"* ]] && r=1; [[ $b == *"1,1"* ]] && p=1; [[ $b == *" doraemon ▾"* ]] && s=1
   ((c <= r && r <= p && p <= s)) || { echo "  width $(W): order broken: '$b'"; return 1; }
   [[ $b == *"▾  0: data*"*" @  @ ·   "*" NORMAL " ]] || { echo "  width $(W): a kept block is missing: '$b'"; return 1; }
 }

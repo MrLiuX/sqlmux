@@ -51,7 +51,7 @@ check "REPLACE 模式不配对" eval '[[ $(line 1) == "(" ]] || { echo "  $(line
 key u; key g g; key d G; key 3; key o; typ "("; key Escape
 check "3o( 再 esc：每一行各配一对" eval '[[ $(line 2) == "()" && $(line 3) == "()" && $(line 4) == "()" ]] || { echo "  $(line 2) / $(line 3) / $(line 4)"; false; }'
 key :; typ "s/a/("
-check ": 命令行不配对" eval '[[ $(e2e_text 105 160 42) == "│:s/a/("*  && $(e2e_text 105 160 42) != *"()"* ]]'
+check ": 命令行不配对" eval '[[ $(e2e_text 98 160 42) == "│:s/a/("*  && $(e2e_text 98 160 42) != *"()"* ]]'
 key Escape
 
 # ---- autopairs = false：哪里都不配对

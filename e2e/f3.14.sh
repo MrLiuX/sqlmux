@@ -8,7 +8,7 @@ e2e_build || exit 1
 typ() { e2e_type "$1"; sleep 0.3; }
 mbs() { e2e_keys M-BSpace; sleep 0.3; }                                        # Option / Alt + 退格
 line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
-cmdline() { e2e_text 106 159 42 | sed 's/ *$//'; }
+cmdline() { e2e_text 99 159 42 | sed 's/ *$//'; }
 mode() { bar | awk '{ print $NF }'; }
 col_x() { e2e_find "$1" "$(hy)" | tr ' ' '\n' | awk '$1 > 34 { print; exit }'; }
 cell() { local x; x=$(col_x note); e2e_text "$x" $((x + 20)) $(( $(grid_y) + 10 )) | sed 's/ *▾.*//; s/ *│.*//; s/ *$//'; }   # 第 10 行 note 格（编辑中右边有选项浮层的 ▾）

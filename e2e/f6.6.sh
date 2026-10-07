@@ -28,7 +28,7 @@ check ": 空格 g t ? 都是要打的字：面板、which-key 没有打开，文
 for i in 1 2 3 4 5 6 7; do key BSpace; done
 # ---- 选择与替换、撤销重做
 key S-Left; key S-Left; key S-Left; key S-Left
-check "S-← 选择：选区用 visual 底（#2d3f76），选中了第 2 行末尾的 222;" eval 'sel_bg 118 3 && sel_bg 121 3 && ! sel_bg 117 3 && modeless'
+check "S-← 选择：选区用 visual 底（#2d3f76），选中了第 2 行末尾的 222;" eval 'sel_bg 111 3 && sel_bg 114 3 && ! sel_bg 110 3 && modeless'
 e2e_type "9"; sleep 0.3
 check "再输入就替换选区：select 之后是 9" eval '[[ $(cl 2) == "select 9" ]]'
 key C-z
@@ -62,21 +62,21 @@ check "输入 t_us：自动弹出补全，没有模式块" eval 'screen_has "t_u
 key Escape; sleep 0.3
 check "esc 只关列表：文字还在，仍在 console 里（没有模式可退）" eval '! screen_has "┌─────" || true; [[ $(cl 1) == "select * from t_us" && $(focused) == 2 ]]'
 key S-Left; key S-Left; key C-c; sleep 0.3
-check "C-c 取消选区（不算退出提示的第一次）：选区没了，也没有「再按一次」" eval '! sel_bg 130 2 && ! screen_has "再按一次"' || true
+check "C-c 取消选区（不算退出提示的第一次）：选区没了，也没有「再按一次」" eval '! sel_bg 123 2 && ! screen_has "再按一次"' || true
 # ---- WHERE：/ 进入（表格的键），一直可输入，↵ 执行，C-r 历史，esc 回表格
 saved() { [[ $(qb) == *已保存* ]]; }
-qb() { e2e_text 36 103 3; }
+qb() { e2e_text 36 95 3; }
 editing() { [[ $(bar) == *"-- editing WHERE --"* ]]; }
 start -C "$D/c"; open_table t_order; wait_for 8 settled
 key /; e2e_type "id < 5 gt ?"; sleep 0.3
-check "WHERE：/ 进入，不分模式，gt 和 ? 是字符，状态栏没有模式块、有 editing WHERE" eval 'editing && modeless && [[ $(e2e_text 36 103 2) == *"id < 5 gt ?"* ]]'
+check "WHERE：/ 进入，不分模式，gt 和 ? 是字符，状态栏没有模式块、有 editing WHERE" eval 'editing && modeless && [[ $(e2e_text 36 95 2) == *"id < 5 gt ?"* ]]'
 for i in 1 2 3 4 5; do key BSpace; done; sleep 0.3
 key Enter; wait_for 8 settled
-check "↵ 执行：回到表格，一页（id < 5 只有 4 行）" eval '! editing && [[ $(e2e_text 36 103 2) == *"id < 5"* ]] && [[ $(qb) == *"PAGE 1/1"* ]]'
+check "↵ 执行：回到表格，一页（id < 5 只有 4 行）" eval '! editing && [[ $(e2e_text 36 95 2) == *"id < 5"* ]] && [[ $(qb) == *"PAGE 1/1"* ]]'
 key /; key C-r; sleep 0.5
 check "C-r：历史下拉打开" eval '[[ -n $(e2e_panes | awk "\$1 == \"-\"") ]]'
 key Escape; key Escape; sleep 0.3
-check "esc 先关下拉；再 esc 回表格（输入框恢复成生效的条件）" eval '! editing && [[ $(e2e_text 36 103 2) == *"id < 5"* ]]'
+check "esc 先关下拉；再 esc 回表格（输入框恢复成生效的条件）" eval '! editing && [[ $(e2e_text 36 95 2) == *"id < 5"* ]]'
 
 # ---- 表格：方向键移动、↵ 编辑、C-s 保存；PgDn / PgUp 翻页；Delete 标记 / 取消删除
 start -C "$D/c"; open_table t_order; wait_for 8 settled
@@ -105,8 +105,8 @@ check "↑ 往上移了一行" eval '[[ $(tsel) != *Views* ]]'
 
 # ---- 鼠标拖动选择（console）
 start -C "$D/c"; key C-l; e2e_type "select 111\;"; key Enter; e2e_type "select 222\;"; sleep 0.3
-e2e_drag 118 2 121 2; sleep 0.3
-check "鼠标在 console 里拖动：选区用 visual 底" eval 'sel_bg 118 2 && sel_bg 120 2 && ! sel_bg 117 2'
+e2e_drag 104 2 107 2; sleep 0.3
+check "鼠标在 console 里拖动：选区用 visual 底" eval 'sel_bg 111 2 && sel_bg 113 2 && ! sel_bg 110 2'
 e2e_type "7"; sleep 0.3
 check "再输入替换选区：select 7" eval '[[ $(cl 1) == "select 7" || $(cl 1) == "select 7;" ]] || { echo "  [$(cl 1)] [$(cl 2)]"; false; }'
 

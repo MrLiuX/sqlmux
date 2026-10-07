@@ -9,11 +9,11 @@ run() { key Enter; wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 0.3; }
 
 start; key C-l
 key Space; e2e_type r; sleep 0.3
-check "还没有结果区时 SPC r：不做事" eval 'geom_is 2 "105 1 56 44" && [[ -z $(geom 3) ]] && focus_is 2'
+check "还没有结果区时 SPC r：不做事" eval 'geom_is 2 "98 1 63 44" && [[ -z $(geom 3) ]] && focus_is 2'
 key i; e2e_type "select 1 as x"; key Escape; run
-check "执行一条 SQL：底部出现结果区 ③" eval 'geom_is 3 "34 27 127 18" && geom_is 2 "105 1 56 26"'
+check "执行一条 SQL：底部出现结果区 ③" eval 'geom_is 3 "34 27 127 18" && geom_is 2 "98 1 63 26"'
 key Space; e2e_type r; sleep 0.3
-check "SPC r：结果区消失，console 和 ① 变高（占满 44 行），焦点不动" eval '[[ -z $(geom 3) ]] && geom_is 2 "105 1 56 44" && geom_is 1 "34 1 70 44" && focus_is 2'
+check "SPC r：结果区消失，console 和 ① 变高（占满 44 行），焦点不动" eval '[[ -z $(geom 3) ]] && geom_is 2 "98 1 63 44" && geom_is 1 "34 1 63 44" && focus_is 2'
 key Space; e2e_type r; sleep 0.3
 check "再按 SPC r：原样回来，结果 tab 还在" eval 'geom_is 3 "34 27 127 18" && rtabs_are "1:日志- │ 2:console_1 #1*"'
 key C-j; key Space; e2e_type r; sleep 0.3
