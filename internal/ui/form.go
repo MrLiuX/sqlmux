@@ -148,7 +148,7 @@ func (fm Form) drawIn(f *Frame, area uv.Rectangle, focus bool) uv.Position {
 		x = f.Text(x, y, x1, " "+b.text+" ", st)
 		x = f.Text(x, y, x1, "]", edge) + 1
 	}
-	if hx := x1 - hintRowWidth(fm.Hints); hx > x+1 {
+	if hx := x1 - hintRowWidth(fm.Hints); hx >= x {
 		hintRow(f, hx, y, x1, fm.Hints, dim, Target{Kind: KindButton})
 	}
 	return cursor

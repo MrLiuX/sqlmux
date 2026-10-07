@@ -143,8 +143,14 @@ func appendText(c Connection) (string, error) {
 }
 
 // CheckAppend is the error AppendConnection would give for c, nothing
-// written: asked before a password goes into the keychain for it (F7.3).
+// written, a file that cannot be appended to included: asked before a
+// password goes into the keychain for it (F7.3, F8.16).
 func CheckAppend(c Connection) error {
+	if f, err := os.OpenFile(connectionsPath(), os.O_WRONLY|os.O_APPEND, 0); err == nil {
+		_ = f.Close()
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
 	_, err := appendText(c)
 	return err
 }

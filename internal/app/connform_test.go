@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/exp/golden"
 
@@ -464,5 +465,38 @@ func TestConnFormClosedFoldIgnored(t *testing.T) {
 	feed(t, a, "<CR>")
 	if file := connections(); a.form != nil || strings.Contains(file, "mysql://x@y/z") || strings.Contains(file, "password_cmd") || !strings.Contains(file, "postgres://u@h:5432/d") {
 		t.Errorf("form %v, file:\n%s", a.form, file)
+	}
+}
+
+// A connections.toml that cannot be appended to is found out before the
+// password goes into the keychain: the form says why, the keychain is not
+// asked, the file is as it was (F8.16).
+func TestConnFormUnwritableFile(t *testing.T) {
+	a := managed(t)
+	path := filepath.Join(config.Dir(), "connections.toml")
+	if err := os.Chmod(path, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	a.form = nil
+	feed(t, a, "<C-p>conn.new<CR>ro1<Tab><Tab>h<Tab><Tab>u<Tab>pw-ro<Tab>d<CR>")
+	if a.form == nil || a.form.err == "" || connections() != managerFile || len(kcCalled("add-generic-password", "store")) != 0 {
+		t.Errorf("form %v, file changed %v, keychain asked %q", a.form != nil, connections() != managerFile, kcLog())
+	}
+}
+
+// At 80×24 the form's buttons and the keys under it are both on the screen
+// (F7.4).
+func TestConnFormHintsAt80x24(t *testing.T) {
+	a := managed(t)
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	a.run("conn.new", 0)
+	row := ""
+	for _, l := range strings.Split(a.render().String(), "\n") {
+		if strings.Contains(l, "[ 保存 ]") {
+			row = l
+		}
+	}
+	if !strings.Contains(row, "[ 取消 ]") || !strings.Contains(row, "Tab 下一项 · ↵ 保存 · esc 取消") {
+		t.Errorf("the buttons' row: %q", row)
 	}
 }

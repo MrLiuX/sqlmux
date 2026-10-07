@@ -160,3 +160,25 @@ func TestNoConnections(t *testing.T) {
 		}
 	}
 }
+
+// A file that cannot be appended to is the error of CheckAppend, one that is
+// not there yet is not (F8.16).
+func TestCheckAppendUnwritable(t *testing.T) {
+	c := Connection{Name: "n", Engine: "postgres", DSN: "postgres://h/n"}
+	path := connectionsFile(t, "[[connection]]\nname = \"a\"\nengine = \"postgres\"\ndsn = \"postgres://h/a\"\n")
+	if err := CheckAppend(c); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	if os.Geteuid() != 0 && CheckAppend(c) == nil {
+		t.Error("a read-only file")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckAppend(c); err != nil {
+		t.Errorf("no file yet: %v", err)
+	}
+}
