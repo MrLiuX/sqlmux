@@ -56,6 +56,7 @@ func init() {
 		}},
 		"palette.window": {Title: i18n.N("命令面板：窗口"), Run: do(func(a *App, _ Args) { a.openPalette("&") })},
 		"palette.tab":    {Title: i18n.N("命令面板：Tab"), Run: do(func(a *App, _ Args) { a.openPalette("#") })},
+		"palette.table":  {Title: i18n.N("命令面板：表"), Run: do(func(a *App, _ Args) { a.openPalette("@") })},
 		"palette.sql":    {Title: i18n.N("快速 SQL"), Run: do(func(a *App, _ Args) { a.openPalette(";") })}, // ; as if ; was typed (§12)
 		// Keys inside the palette. Like every overlay's own actions they are
 		// Local, which the palette does not list (§12); bound elsewhere in

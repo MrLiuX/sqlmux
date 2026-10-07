@@ -80,7 +80,7 @@ func TestPaletteListsNoOverlayKeys(t *testing.T) {
 	for _, q := range []string{"关闭", "palette"} {
 		feed(t, a, "<C-p>"+q)
 		for _, r := range rowsOf(a) {
-			if strings.HasPrefix(r, "palette.") && r != "palette.open=:" && r != "palette.command=" && r != "palette.window=" && r != "palette.tab=" && r != "palette.sql=;" {
+			if strings.HasPrefix(r, "palette.") && r != "palette.open=:" && r != "palette.command=" && r != "palette.window=" && r != "palette.tab=" && r != "palette.table=" && r != "palette.sql=;" {
 				t.Errorf("%s lists %s", q, r)
 			}
 		}
@@ -612,5 +612,23 @@ func TestPaletteWindowAndTabScopes(t *testing.T) {
 	a.run("palette.tab", 0)
 	if got := namesOf(a); got[len(got)-1] != "Tab:t_order" || got[0] != "Tab:console_1" {
 		t.Errorf("after the switch: %v", got)
+	}
+}
+
+// palette.table opens the palette in its table scope, the tables of every
+// connection that is connected in it (F8.13, §12).
+func TestPaletteTableCommand(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	other := readyConn("seed")
+	other.Schema, other.Schemas, other.home = "public", []string{"public"}, "public"
+	other.Tables = []db.Table{{Schema: "public", Name: "t_seed_only"}}
+	a.sess.Conns = append(a.sess.Conns, other)
+	a.run("palette.table", 0)
+	if a.palette == nil || a.palette.input.Text != "@" {
+		t.Fatalf("palette.table: %+v", a.palette)
+	}
+	names := namesOf(a)
+	if !slices.Contains(names, "表:t_order") || !slices.Contains(names, "表:t_seed_only") {
+		t.Errorf("the tables of both connections: %v", names)
 	}
 }
