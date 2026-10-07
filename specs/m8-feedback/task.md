@@ -26,7 +26,8 @@
 
 **开发**（§9.7「接受」）
 - [ ] 补全列表开着时，`↵` 一律只接受选中项，不执行、不换行，就算接受后文字一个字都没变（原来「文字没变就当没接受」的分支删掉，连同「跨过自动配对的右引号」那条例外）。想换行或执行，再按一次 `↵`。
-- [ ] 接受后补空格的规则改成按「后面自然接什么」：关键字、表名、列名后面接的是下一个词，补一个空格（光标后已经是空白就只移过去）；值（`null` / `true` / `false` / `is null` / `is not null`）、函数（接 `(`）、枚举值（接右引号）、INSERT 列清单里的列（接 `,` / `)`）不补。表名后面要打 `.` 的用户多敲一次退格，比每次手动补空格划算（决策者定）。
+- [ ] 接受后补空格的规则改成按「后面自然接什么」：关键字、表名、列名后面接的是下一个词，补一个空格（光标后已经是空白就只移过去）；值（`null` / `true` / `false` / `is null` / `is not null`）、函数（接 `(`）、枚举值（接右引号）、INSERT 列清单里的列（接 `,` / `)`）不补。光标后面紧跟 `)` `,` `;` `.` 时不补（审查时定：`(stat↵` 不能变成 `(status )`）；WHERE 执行和记历史前去掉首尾空白。
+- [ ] 不改文字的键（`i` / `a` / `A` / `o`、方向键）不弹列表（§9.7「输入时自动弹出」，审查时发现原来就弹、只是以前无害）；`C-n` 手动唤起列出该位置的全部候选，不因 F8.4 少掉表和关键字。
 
 **验收**
 - [ ] 单测：console 里 `id` 候选只有 `id` 时 `↵` → `id |`、没有换行；WHERE 里同样 → 不执行；`count` → `count`；INSERT 列清单里 `id` → `id`。
@@ -71,10 +72,11 @@
 - [ ] 光标前一个词是 `select`、`where`、`and`、`or`、`on`、`set`、`having`、`by`（`order by` / `group by`），或者光标在 select 列表、`set` 列表、`order by` 列表里的 `,` 后面，且这条语句里能找到表（`from` / `update` / `delete from` / `insert into` / `join` 的表，含别名），就在打空格之后自动弹出列名列表，前缀为空；候选是这些表的列（多表时带 `表.` 或别名前缀排在各自的列后面，同现在打了字母之后的做法），不含「全部列」项。找不到表就不弹。`esc` 关掉，继续打字就按前缀过滤，和现在一样。
 - [ ] WHERE 输入框里同样：光标在 `and ` / `or ` 后面时弹出这张表的列（空输入框不弹，见细节）。
 - [ ] 先看 lazysql `components/sql_completer.go` 怎么判断「这里要列名」，不要自己从头猜；本项目已有的上下文解析（§9.7）能复用的就复用。
+- [ ] 审查时定：触发词加 `distinct`；`↵` 接受关键字补出的空格不触发（`where↵↵` 要能换行）；快速 SQL 共用同一套、行为一致，tester 也覆盖；`between … and `、MySQL `on duplicate key update ` 记为已知上限。
 - [ ] 细节（worker 2026-10-07 提议，已定）：只在光标紧跟空白后面时弹（`select ` 弹，`a,` 不弹，免得打 `a,b` 闪一下、换行要先 esc）；多表沿用打了字母之后的排法（所在层的表在前、外层在后，注释「类型 · 表名」），不新增 `表.列` / `别名.列` 形式的候选；`by` / `on` / `set` 只看前一个词、不分上下文（`partition by`、`on conflict … set` 同样弹，找不到表就不弹）；WHERE 输入框只在 `and ` / `or ` 之后弹，**空输入框不弹**（删空条件按 `↵` 是清除过滤，一弹出来 `↵` 就变成接受列名）。lazysql 的 completer 前缀为空直接返回 nil，没有可借的，在 `sqlkit.CompletionContext` 上加 `WantsColumn`。
 
 **验收**
-- [ ] 单测：`select |`、`select * from t where |`、`update t set |`、`delete from t where |`、`… where a = 1 and |` 都弹出 t 的列；`select |` 在还没写 `from` 时不弹（找不到表）；`from |` 弹的仍是表名。
+- [ ] 单测：`select |`、`select distinct |`、`select * from t where |`、`update t set |`、`delete from t where |`、`… where a = 1 and |` 都弹出 t 的列；`select |` 在还没写 `from` 时不弹（找不到表）；`from |` 弹的仍是表名。
 - [ ] e2e：console 里打 `delete from t_event where ` 弹出列名；`esc` 关掉后继续打字再弹。
 
 ## F8.5 短列不收缩：`[grid] full_width` · 状态：todo

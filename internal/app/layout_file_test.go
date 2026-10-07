@@ -69,7 +69,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 				Name: "a", Focus: 3, Zoom: 3, SidebarOpen: true, SidebarWidth: 40, ResultHeight: 0.25,
 				Layout: &config.LayoutNode{Split: "h", Ratio: 0.25, A: leafNode(1), B: &config.LayoutNode{Split: "v", Ratio: 0.75, A: leafNode(2), B: leafNode(3)}},
 				Panes: []config.LayoutPane{
-					{ID: 1, Current: 1, Tabs: []config.LayoutTab{order, {Kind: "console", Connection: "play", Schema: "s_play", N: 1}}},
+					{ID: 1, Current: 1, Tabs: []config.LayoutTab{order, {Kind: "console", Connection: "play", Schema: "s_play", Name: "console_1"}}},
 					{ID: 2, Tabs: []config.LayoutTab{{Kind: "table", Connection: "doraemon", Schema: "agentable", Table: "planner", Limit: 100}}},
 					{ID: 3},
 				},
@@ -78,7 +78,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 		}},
 		{Name: "two", Connection: "play", Windows: []config.LayoutWindow{{
 			Name: "c", Focus: 1, Layout: leafNode(1),
-			Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{{Kind: "console", Connection: "doraemon", Schema: "agentable", N: 2}}}},
+			Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{{Kind: "console", Connection: "doraemon", Schema: "agentable", Name: "console_2"}}}},
 		}}},
 	}}
 	a := layoutApp(restoredFrom(t, want))
@@ -139,9 +139,9 @@ func TestLayoutRestoreGaps(t *testing.T) {
 	console := func(n int, conn string) config.LayoutTab {
 		return config.LayoutTab{Kind: "console", N: n, Connection: conn}
 	}
-	consoles := func(s *Session) (ns []int) {
+	consoles := func(s *Session) (ns []string) {
 		for _, c := range s.consoles() {
-			ns = append(ns, c.n)
+			ns = append(ns, c.name)
 		}
 		slices.Sort(ns)
 		return ns
@@ -161,7 +161,7 @@ func TestLayoutRestoreGaps(t *testing.T) {
 		if len(w.Root.Leaves()) != 2 || w.pane(7) == nil || w.pane(9) != nil || len(w.pane(1).Tabs) != 3 || w.lastID != 7 || w.Root.Ratio != 0.5 {
 			t.Errorf("panes %d, tabs %d, last %d, ratio %v", len(w.Root.Leaves()), len(w.pane(1).Tabs), w.lastID, w.Root.Ratio)
 		}
-		if c := consoleOf(w.pane(1)); c == nil || c.n != 1 {
+		if c := consoleOf(w.pane(1)); c == nil || c.name != "console_1" {
 			t.Errorf("the pane the tree has gets console_1: %+v", c)
 		}
 		if tb := w.pane(1).Tabs[2]; tb.Data == nil || tb.Data.conn.Spec.Name != "play" {
@@ -182,20 +182,20 @@ func TestLayoutRestoreGaps(t *testing.T) {
 	t.Run("no tree", func(t *testing.T) {
 		r := restoredFrom(t, oneWindow(config.LayoutWindow{Name: "a", Panes: []config.LayoutPane{{ID: 0}, {ID: 4, Tabs: []config.LayoutTab{console(1, "")}}, {ID: 5, Tabs: []config.LayoutTab{console(2, "")}}}}))
 		w := r.Sessions[0].Windows[0]
-		if leaves := w.Root.Leaves(); len(leaves) != 1 || leaves[0].ID != 4 || len(leaves[0].Tabs) != 1 || !slices.Equal(consoles(r.Sessions[0]), []int{1}) {
+		if leaves := w.Root.Leaves(); len(leaves) != 1 || leaves[0].ID != 4 || len(leaves[0].Tabs) != 1 || !slices.Equal(consoles(r.Sessions[0]), []string{"console_1"}) {
 			t.Errorf("the first pane there is: %+v", w.Root.Leaves())
 		}
 	})
 
 	t.Run("console numbers", func(t *testing.T) {
 		t.Setenv("XDG_DATA_HOME", t.TempDir())
-		if err := os.MkdirAll(filepath.Dir(config.ConsolePath(1)), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(config.ConsolePath("console_1")), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(config.ConsolePath(1), []byte("one\n"), 0o600); err != nil {
+		if err := os.WriteFile(config.ConsolePath("console_1"), []byte("one\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(config.ConsolePath(2), []byte("two\n"), 0o600); err != nil {
+		if err := os.WriteFile(config.ConsolePath("console_2"), []byte("two\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		win := func(n int) []config.LayoutWindow {
@@ -208,16 +208,16 @@ func TestLayoutRestoreGaps(t *testing.T) {
 			{Name: "4", Connection: "play"},                     // and the next one's the one after
 		}}))
 		text := func(s *Session) string { return strings.Join(s.consoles()[0].ed.Lines(), "\n") }
-		if text(r.Sessions[0]) != "one" || r.Sessions[1].consoles()[0].n != 2 || text(r.Sessions[1]) != "two" {
+		if text(r.Sessions[0]) != "one" || r.Sessions[1].consoles()[0].name != "console_2" || text(r.Sessions[1]) != "two" {
 			t.Errorf("consoles %v %v", r.Sessions[0].consoles(), r.Sessions[1].consoles())
 		}
-		if got := consoles(r.Sessions[2]); !slices.Equal(got, []int{3}) || r.Sessions[2].start.Spec.Name != "play" || len(r.Sessions[2].Windows) != 1 {
+		if got := consoles(r.Sessions[2]); !slices.Equal(got, []string{"console_3"}) || r.Sessions[2].start.Spec.Name != "play" || len(r.Sessions[2].Windows) != 1 {
 			t.Errorf("the default window: consoles %v", got)
 		}
 		if r.Sessions[1].start.Spec.Name != "doraemon" || len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "nowhere") {
 			t.Errorf("a connection that is not there: starts on %s, warnings %q", r.Sessions[1].start.Spec.Name, r.Warnings)
 		}
-		if got := consoles(r.Sessions[3]); !slices.Equal(got, []int{4}) {
+		if got := consoles(r.Sessions[3]); !slices.Equal(got, []string{"console_4"}) {
 			t.Errorf("a second default window: consoles %v", got)
 		}
 	})
@@ -225,7 +225,7 @@ func TestLayoutRestoreGaps(t *testing.T) {
 	t.Run("console file unreadable", func(t *testing.T) {
 		t.Setenv("XDG_DATA_HOME", t.TempDir())
 		// a file that does not read
-		if err := os.MkdirAll(config.ConsolePath(1), 0o755); err != nil {
+		if err := os.MkdirAll(config.ConsolePath("console_1"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 		r := Restore(layoutSpecs, &config.Layout{Version: 1, Sessions: []config.LayoutSession{
@@ -418,19 +418,19 @@ func TestLayoutSaveAndList(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sized(160, 45, "nerd")
 	a.run("layout.save", 0)
-	if a.layoutName == nil || a.mode() != keymap.Insert || a.render().Cursor == nil {
+	if a.askName == nil || a.mode() != keymap.Insert || a.render().Cursor == nil {
 		t.Fatal("no prompt")
 	}
 	for _, bad := range []string{"my/x", "last", ".x"} {
 		a.run("layout.save", 0)
-		if feed(t, a, bad+"<CR>"); a.layoutName != nil || a.toast == "" || len(config.LayoutNames()) != 0 {
+		if feed(t, a, bad+"<CR>"); a.askName != nil || a.toast == "" || len(config.LayoutNames()) != 0 {
 			t.Errorf("%q: toast %q, layouts %v", bad, a.toast, config.LayoutNames())
 		}
 		a.toast = ""
 	}
 	a.run("layout.save", 0)
 	feed(t, a, "<Esc>")
-	if a.layoutName != nil || len(config.LayoutNames()) != 0 {
+	if a.askName != nil || len(config.LayoutNames()) != 0 {
 		t.Error("esc")
 	}
 	a.run("layout.save", 0)
@@ -557,7 +557,7 @@ func (d closeDB) Close() error { d.n.Add(1); return nil }
 func TestNewSessionStart(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	conns := []*Conn{readyConn("a"), readyConn("b")}
-	s := newSession("x", conns, conns[1], 1)
+	s := newSession("x", conns, conns[1], config.ConsoleName(1))
 	a.sessions, a.sess = []*Session{s}, s
 	if got := a.layoutOf().Sessions[0].Connection; got != "b" {
 		t.Errorf("started on b, saved %q", got)

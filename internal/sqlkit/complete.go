@@ -105,7 +105,9 @@ func CompletionContext(text string, pos int, d Dialect) Completion {
 			if depth[j] != depth[p] {
 				continue
 			}
-			if w := word(j); fromEnds[w] || w == "select" || w == "from" || w == "by" {
+			// the stop words of a FROM list, but not the ( ) and AS in it: a ) ends a call
+			// the list goes on past, an AS is an alias in it
+			if w := word(j); fromEnds[w] && w != "(" && w != ")" && w != "as" || w == "select" || w == "from" || w == "by" {
 				if w == "from" {
 					c.Kind = CompTables
 				}
@@ -116,7 +118,7 @@ func CompletionContext(text string, pos int, d Dialect) Completion {
 	default:
 		c.WantsColumn = columnFollows[word(p)]
 	}
-	c.WantsColumn = c.WantsColumn && c.Kind == CompAny && c.Prefix == "" && pos > 0 && isBlank(text[pos-1])
+	c.WantsColumn = c.WantsColumn && spaceBefore(all, pos)
 	c.readInsert(text, ts, depth, before)
 	for i := 0; i < len(ts); i++ {
 		switch w := word(i); {
@@ -165,9 +167,14 @@ func (c *Completion) readInsert(text string, ts []Token, depth []int, before int
 }
 
 // columnFollows are the words a column is typed after (F8.4).
-var columnFollows = map[string]bool{"select": true, "where": true, "and": true, "or": true, "on": true, "set": true, "having": true, "by": true}
+var columnFollows = map[string]bool{"select": true, "distinct": true, "where": true, "and": true, "or": true, "on": true, "set": true, "having": true, "by": true}
 
-func isBlank(b byte) bool { return b == ' ' || b == '\t' || b == '\n' || b == '\r' }
+// spaceBefore is whether the cursor at pos is right after white space, as
+// the scanner reads it: a column is offered once a blank is typed, not at
+// the word before it.
+func spaceBefore(ts []Token, pos int) bool {
+	return slices.ContainsFunc(ts, func(t Token) bool { return t.Kind == Space && t.Start < pos && pos <= t.End })
+}
 
 // fromEnds are the words a FROM list stops at.
 var fromEnds = map[string]bool{

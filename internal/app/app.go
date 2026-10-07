@@ -25,14 +25,14 @@ type App struct {
 	icons *ui.Icons
 	// baseIcons is what `icons` chose, a theme's [icon] not on it, and themeName
 	// the theme in use: theme.switch loads another over them (F6.2).
-	layoutName *ui.Input // layout.save's name typed in the status bar (F6.5)
-	lastPath   string    // where the working set is kept as the program quits; "" for nowhere
-	plain      bool      // vim = false: console and WHERE edit without modes (§6.9)
-	restored   bool      // the sessions are a layout's: console_1 is not looked up in state.json (F6.5)
-	baseIcons  *ui.Icons
-	themeName  string
-	keys       *keymap.Map
-	res        *keymap.Resolver
+	askName   *nameAsk // a name typed in the status bar: layout.save's, a session's, a console's (F6.5, F8.11)
+	lastPath  string   // where the working set is kept as the program quits; "" for nowhere
+	plain     bool     // vim = false: console and WHERE edit without modes (§6.9)
+	restored  bool     // the sessions are a layout's: console_1 is not looked up in state.json (F6.5)
+	baseIcons *ui.Icons
+	themeName string
+	keys      *keymap.Map
+	res       *keymap.Resolver
 	// sess is the session attached, one of sessions (§5, F5.1).
 	sess     *Session
 	sessions []*Session
@@ -346,8 +346,8 @@ func (a *App) feed(k keymap.Key, maps bool) tea.Cmd {
 // same actions keys run.
 func (a *App) click(p uv.Position) tea.Cmd {
 	t, ok := ui.HitAt(a.hits, p)
-	if a.layoutName != nil { // so is a click off the layout name's (F6.5)
-		a.layoutName = nil
+	if a.askName != nil { // so is a click off the name's (F6.5)
+		a.askName = nil
 		return nil
 	}
 	if a.winRename != nil { // a click off its input is esc, and no more (§5)
@@ -397,7 +397,8 @@ func (a *App) click(p uv.Position) tea.Cmd {
 		case a.form != nil:
 			a.formClick(t.I)
 		case tab != nil && tab.hist != nil:
-			return a.histApply(tab, t.I)
+			es, _ := a.histEntries(tab)
+			return a.histApply(tab, histRow(es, t.I))
 		case a.drop != nil:
 			return a.dropPick(t.I)
 		case a.cols != nil: // a column's row: show or hide it (Q-04)
@@ -561,9 +562,9 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 			case a.form != nil:
 				a.formKey(k)
 			case a.winRename != nil:
-				a.renameWindowKey(k)
-			case a.layoutName != nil:
-				cmds = append(cmds, a.layoutNameKey(k))
+				cmds = append(cmds, a.renameWindowKey(k))
+			case a.askName != nil:
+				cmds = append(cmds, a.askNameKey(k))
 			case a.drop != nil:
 				a.dropKey(k)
 			case a.cols != nil:
@@ -585,7 +586,7 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 // mode is derived from state, never stored (§3 principle 3).
 func (a *App) mode() keymap.Mode {
 	switch t, ed := a.typingTab(), a.vim(); {
-	case a.form != nil, a.winRename != nil, a.layoutName != nil, a.sessList != nil && a.sessList.rename != nil: // inputs with the keys over the panes (§7.8)
+	case a.form != nil, a.winRename != nil, a.askName != nil, a.sessList != nil && a.sessList.rename != nil: // inputs with the keys over the panes (§7.8)
 		return keymap.Insert
 	case a.overlaid(), t != nil && t.hist != nil: // an overlay has the keys (§7.8)
 		return keymap.Command
@@ -614,7 +615,7 @@ func (a *App) context() keymap.Context {
 		return keymap.Context{Overlay: "sessions", Mode: keymap.Command}
 	case a.form != nil: // its inputs: unbound keys are text
 		return keymap.Context{Overlay: "form", Mode: keymap.Insert}
-	case a.winRename != nil, a.layoutName != nil:
+	case a.winRename != nil, a.askName != nil:
 		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Insert}
 	case a.drop != nil:
 		return keymap.Context{Overlay: "dropdown", Mode: keymap.Command}

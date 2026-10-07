@@ -44,6 +44,9 @@ func init() {
 		"palette.command": {Title: i18n.N("命令面板：命令"), Run: do(func(a *App, _ Args) { a.openPalette(">") })}, // as if > was typed; bind : to it for the command scope (§6.8)
 		"theme.switch":    {Title: i18n.N("切换主题…"), Run: do(func(a *App, _ Args) { a.openThemeDrop() })},
 		"layout.save":     {Title: i18n.N("保存布局为…"), Run: do(func(a *App, _ Args) { a.askLayoutName() })},
+		"session.close":   {Title: i18n.N("关闭 session"), Run: func(a *App, _ Args) tea.Cmd { return a.closeSession(a.sess) }},
+		"session.rename":  {Title: i18n.N("重命名 session…"), Run: do(func(a *App, _ Args) { a.askSessionName() })},
+		"console.rename":  {Title: i18n.N("重命名 console…"), Run: do(func(a *App, _ Args) { a.askConsoleName() })},
 		"layout.open": {Title: i18n.N("打开布局"), Run: func(a *App, _ Args) tea.Cmd {
 			if len(a.sess.Conns) == 0 { // a layout is of connections (F7.4)
 				return a.noConnection()
@@ -53,6 +56,7 @@ func init() {
 		}},
 		"palette.window": {Title: i18n.N("命令面板：窗口"), Run: do(func(a *App, _ Args) { a.openPalette("&") })},
 		"palette.tab":    {Title: i18n.N("命令面板：Tab"), Run: do(func(a *App, _ Args) { a.openPalette("#") })},
+		"palette.table":  {Title: i18n.N("命令面板：表"), Run: do(func(a *App, _ Args) { a.openPalette("@") })},
 		"palette.sql":    {Title: i18n.N("快速 SQL"), Run: do(func(a *App, _ Args) { a.openPalette(";") })}, // ; as if ; was typed (§12)
 		// Keys inside the palette. Like every overlay's own actions they are
 		// Local, which the palette does not list (§12); bound elsewhere in

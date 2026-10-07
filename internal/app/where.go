@@ -444,7 +444,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 				far = append(far, columns(t)...)
 			}
 		}
-		if c.WantsColumn { // a column is next, the statement's tables' alone, though nothing is typed (F8.4)
+		if c.WantsColumn && !manual { // a column is next, the statement's tables' alone, though nothing is typed (F8.4); C-n lists all
 			groups, resolved = [][]candidate{near, far}, true
 			break
 		}
@@ -523,9 +523,11 @@ func (c *completion) plan(text string, pos int) accepted {
 		p.drop = 1
 	}
 	if cd.space {
-		if after != "" && (after[0] == ' ' || after[0] == '\t') {
+		switch {
+		case after != "" && (after[0] == ' ' || after[0] == '\t'):
 			p.ins, p.drop = p.ins+after[:1], 1
-		} else {
+		case after != "" && strings.IndexByte("),;.", after[0]) >= 0: // what comes next is there: none
+		default:
 			p.ins += " "
 		}
 	}
@@ -606,7 +608,7 @@ func (a *App) whereDid(t *dataTab, eff editor.Effect) tea.Cmd {
 		if t.where.Text != was {
 			t.hist.typed, t.hist.sel = true, 0
 		}
-	case t.ed.Mode() == editor.Insert:
+	case t.ed.Mode() == editor.Insert && t.where.Text != was: // only typing opens the list: an arrow does not (§9.7)
 		a.complete(t)
 	default:
 		t.comp = nil
@@ -691,7 +693,7 @@ func (a *App) completeView(c *completion, at uv.Position) (ui.Complete, uv.Recta
 		v.Items = append(v.Items, ui.CompleteItem{Text: cd.label, Pos: cd.pos, Note: cd.note})
 		w = max(w, ui.Width(cd.label+"  "+cd.note)+4)
 	}
-	box, rows := ui.CompleteBox(a.window(), at, w, len(v.Items))
+	box, rows := ui.CompleteBox(a.window(), at, w, len(v.Items), 0)
 	v.Top = max(0, v.Sel-rows+1)
 	return v, box, rows
 }
@@ -721,8 +723,8 @@ func (a *App) tableState(t *dataTab) *config.TableState {
 	return a.state.Tables[key]
 }
 
-// histEntries is the favorites, then the history, that the WHERE input
-// matches once typed into, newest first in each.
+// histEntries is the history, then the favorites, that the WHERE input
+// matches once typed into, newest first in each (F8.14).
 func (a *App) histEntries(t *dataTab) (entries []histEntry, pos [][]int) {
 	st, pattern := a.tableState(t), ""
 	if t.hist != nil && t.hist.typed {
@@ -731,7 +733,7 @@ func (a *App) histEntries(t *dataTab) (entries []histEntry, pos [][]int) {
 	for _, g := range []struct {
 		qs  []config.Query
 		fav bool
-	}{{st.Favorites, true}, {st.History, false}} {
+	}{{st.History, false}, {st.Favorites, true}} {
 		wheres := make([]string, len(g.qs))
 		for i, q := range g.qs {
 			wheres[i] = q.Where
@@ -760,7 +762,7 @@ func (a *App) histMove(t *dataTab, d int) {
 func (a *App) histApply(t *dataTab, i int) tea.Cmd {
 	es, _ := a.histEntries(t)
 	t.hist = nil
-	if i >= len(es) {
+	if i < 0 || i >= len(es) {
 		return nil
 	}
 	q := es[i].q
@@ -795,12 +797,12 @@ const whereRows = 100
 // runWhere runs the WHERE typed, from the first page, counting again; a
 // condition goes into the history, a repeat moving up to the top (§9.7).
 func (a *App) runWhere(t *dataTab) tea.Cmd {
-	t.applied = t.where.Text
+	t.applied = strings.TrimSpace(t.where.Text) // paid↵↵ is not "paid " in the history
 	t.stopTyping()
 	t.pageNo = 0
 	fetch := a.fetch(t, true)
 	cmds := []tea.Cmd{fetch}
-	if strings.TrimSpace(t.applied) != "" && fetch != nil { // not one fetch refuses
+	if t.applied != "" && fetch != nil { // not one fetch refuses
 		st := a.tableState(t)
 		q := config.Query{Where: t.applied, Order: t.order, Desc: t.desc, At: time.Now()}
 		if t.limit != limits[0] {
@@ -813,20 +815,57 @@ func (a *App) runWhere(t *dataTab) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+// histSep is where the rule between the history and the favorites goes: the
+// index of the first favorite, when something comes before it; -1 for none
+// (F8.14). The list draws a row more past it, which is no entry.
+func histSep(es []histEntry) int {
+	if i := slices.IndexFunc(es, func(e histEntry) bool { return e.fav }); i > 0 {
+		return i
+	}
+	return -1
+}
+
+// histRow is the entry the list's row stands for, the rule not counted;
+// -1 for the rule itself.
+func histRow(es []histEntry, row int) int {
+	switch sep := histSep(es); {
+	case sep < 0 || row < sep:
+		return row
+	case row == sep:
+		return -1
+	}
+	return row - 1
+}
+
 func (a *App) histView(p *Pane, t *dataTab) (ui.Complete, uv.Rectangle, int) {
 	es, pos := a.histEntries(t)
-	v := ui.Complete{Sel: t.hist.sel}
-	w := 40
+	v := ui.Complete{Sel: t.hist.sel, Foot: bound(
+		ui.Hint{Key: a.hints("where", "/", "where.up", "where.down"), Label: i18n.T("移动")},
+		ui.Hint{Key: a.keys.Hint("where.apply", "where"), Label: i18n.T("应用"), Action: "where.apply"},
+		ui.Hint{Key: a.keys.Hint("where.star", "where"), Label: i18n.T("收藏 / 取消收藏"), Action: "where.star"},
+		ui.Hint{Key: a.keys.Hint("where.close", "where"), Label: i18n.T("关闭"), Action: "where.close"},
+	)}
+	w, sep := 40, histSep(es)
 	for i, e := range es { // an icon each, no group titles (F3.31)
 		note, icon := e.q.At.Local().Format("01-02 15:04"), a.icons.History
 		if e.fav {
 			note, icon = queryNote(e.q), a.icons.Star
 			icon.Fg = cmp.Or(icon.Fg, a.theme.Warn)
 		}
+		if i == sep {
+			v.Items = append(v.Items, ui.CompleteItem{Sep: true})
+		}
 		v.Items = append(v.Items, ui.CompleteItem{Icon: icon, Text: e.q.Where, Pos: pos[i], Note: note})
 		w = max(w, ui.Width(icon.Text+" "+e.q.Where+"  "+note)+4)
 	}
-	box, rows := ui.CompleteBox(a.window(), a.whereAt(p, t), w, len(v.Items))
+	if sep >= 0 && v.Sel >= sep {
+		v.Sel++
+	}
+	foot := 0
+	if len(v.Foot) > 0 {
+		foot, w = 1, max(w, v.FootWidth())
+	}
+	box, rows := ui.CompleteBox(a.window(), a.whereAt(p, t), w, len(v.Items), foot)
 	v.Top = max(0, v.Sel-rows+1)
 	return v, box, rows
 }

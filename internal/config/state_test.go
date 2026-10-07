@@ -115,7 +115,7 @@ func TestLayoutFile(t *testing.T) {
 			Panes: []LayoutPane{
 				{ID: 1, Current: 1, Tabs: []LayoutTab{
 					{Kind: "table", Connection: "doraemon", Schema: "public", Table: "t_order", Where: "id > 5", Order: "amount", Desc: true, Limit: 500, Page: 2, Cols: []string{"meta", "note"}, Transpose: true},
-					{Kind: "console", N: 1, Connection: "doraemon", Schema: "agentable"},
+					{Kind: "console", Name: "console_1", Connection: "doraemon", Schema: "agentable"},
 				}},
 				{ID: 2}, {ID: 3},
 			},

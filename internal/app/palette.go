@@ -613,9 +613,11 @@ func (a *App) paletteKey(k keymap.Key) tea.Cmd {
 	if scope, _ := a.paletteScope(); scope == sqlScope && p.input.Pos > 0 { // the SQL after the ; pairs (§7.9)
 		edit = a.editPaired
 	}
-	if edit(&p.input, k) {
-		p.sel, p.top = 0, 0
+	if !edit(&p.input, k) { // a key that types nothing, an arrow: the list is not opened anew (§9.7)
+		p.comp = nil
+		return nil
 	}
+	p.sel, p.top = 0, 0
 	return a.completeSQL()
 }
 

@@ -88,7 +88,7 @@ func (a *App) sessionsAttach(i int) {
 func (a *App) attach(s *Session) {
 	a.sess = s
 	a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.keyHelp = false, false, nil, nil, nil, nil
-	a.confirm, a.form, a.winRename, a.layoutName, a.sessList = nil, nil, nil, nil, nil
+	a.confirm, a.form, a.winRename, a.askName, a.sessList = nil, nil, nil, nil, nil
 	a.res.Reset()
 }
 
@@ -146,19 +146,25 @@ func (a *App) gotSessionDialed(m sessionDialed) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// killSession is x on a session's row (§7.8): asked first when changes or
-// a transaction would go; its consoles written, its connections closed,
-// which rolls a transaction back. The one attached gives way to the one
-// before it, or after; the last one gone is quitting. The list stays.
+// killSession is x on a session's row (§7.8).
 func (a *App) killSession() tea.Cmd {
 	r := a.sessionRows()[a.sessList.sel]
 	if r.win >= 0 {
 		return nil
 	}
+	return a.closeSession(r.s)
+}
+
+// closeSession closes s, as x on its row in the list does and session.close
+// does the one attached (§7.8, F8.12): asked first when changes or a
+// transaction would go; its consoles written, its connections closed, which
+// rolls a transaction back. The one attached gives way to the one before it,
+// or after; the last one gone is quitting. A list open stays.
+func (a *App) closeSession(s *Session) tea.Cmd {
 	if len(a.sessions) == 1 {
 		return a.quit()
 	}
-	s, ps := r.s, r.s.panes()
+	ps := s.panes()
 	return a.unlessLost(unsaved(ps...), i18n.T("%s 里", s.Name), txConns(s), verbClose, func() tea.Cmd {
 		if cmd, ok := a.flushAll(ps...); !ok { // the consoles' text is not lost (§11)
 			return cmd

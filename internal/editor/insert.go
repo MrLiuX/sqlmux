@@ -41,8 +41,8 @@ func (e *Editor) openLine(below int, c cmd) {
 
 // endsStatement is whether l, its trailing blanks aside, ends in a ;: the
 // next line starts a statement, in the first column (M8 F8.2; nvim's SQL
-// indent has no such rule). ponytail: a ; in a trailing -- comment counts
-// too, and a comment is not looked into.
+// indent has no such rule). ponytail: the line's end is not read as SQL: a ;
+// in a trailing comment or an unclosed string counts too.
 func endsStatement(l string) bool { return strings.HasSuffix(strings.TrimRight(l, " \t"), ";") }
 
 // indentOf is the indent autoindent gives the line after l: as wide as

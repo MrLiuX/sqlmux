@@ -76,16 +76,42 @@ type QueryBar struct {
 	Pane    int
 	Names   SQLNames // the WHERE's tables and columns, for its colors (§7.3)
 	Dialect sqlkit.Dialect
+	// History and HistKey, the icon and the key that open the WHERE's
+	// history, show before its ▾ when the input keeps room (F8.14); no key,
+	// none shown.
+	History Icon
+	HistKey string
 }
 
 // QueryBarRows is how tall a query bar is.
 const QueryBarRows = 2
 
+// minWhere is the room the WHERE input keeps before the history's hint
+// takes any.
+const minWhere = 16
+
+// histHint is the history's icon and key, "󰋚 C-r", when the bar drawn in r
+// has room for them besides the input and the ▾; "" when not.
+func (q QueryBar) histHint(r uv.Rectangle) string {
+	if q.HistKey == "" {
+		return ""
+	}
+	h := q.History.Text + " " + q.HistKey
+	if r.Max.X-2-1-Width(h)-1-(r.Min.X+1+Width("WHERE")+1) < minWhere {
+		return ""
+	}
+	return h
+}
+
 // InputRect is where the WHERE input goes when the bar is drawn in r: after
-// "WHERE ", short of the ▾.
+// "WHERE ", short of the history's hint and the ▾.
 func (q QueryBar) InputRect(r uv.Rectangle) uv.Rectangle {
 	x := r.Min.X + 1 + Width("WHERE") + 1
-	return uv.Rect(x, r.Min.Y, max(r.Max.X-2-x-1, 0), 1)
+	end := r.Max.X - 2 - 1 // the ▾ and a space before it
+	if h := q.histHint(r); h != "" {
+		end -= Width(h) + 1
+	}
+	return uv.Rect(x, r.Min.Y, max(end-x, 0), 1)
 }
 
 // ChipRect is where the chip running action goes when the bar is drawn in r.
@@ -153,10 +179,17 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 	dim := uv.Style{Fg: th.Dim, Bg: th.PaneBg}
 	f.Region(uv.Rect(r.Min.X, r.Min.Y, r.Dx(), 1), Target{Kind: KindHint, Pane: q.Pane, Action: "grid.where"}) // a click types in it (Q-01)
 	f.Text(r.Min.X+1, r.Min.Y, r.Max.X-1, "WHERE", uv.Style{Fg: th.Keyword, Bg: th.PaneBg, Attrs: uv.AttrBold})
-	vx := r.Max.X - 2 // ▾: the history and favorites (Q-02)
-	vst := dim
-	if f.Region(uv.Rect(vx, r.Min.Y, 1, 1), Target{Kind: KindHint, Pane: q.Pane, Action: "where.history"}) {
+	vx := r.Max.X - 2 // ▾: the history and favorites (Q-02), with its key before it when there is room (F8.14)
+	vst, hx := dim, vx
+	h := q.histHint(r)
+	if h != "" {
+		hx = vx - 1 - Width(h)
+	}
+	if f.Region(uv.Rect(hx, r.Min.Y, vx+1-hx, 1), Target{Kind: KindHint, Pane: q.Pane, Action: "where.history"}) {
 		vst.Bg = th.Select
+	}
+	if h != "" {
+		f.Text(hx, r.Min.Y, r.Max.X, h+" ", vst)
 	}
 	f.Text(vx, r.Min.Y, r.Max.X, "▾", vst)
 	if c := q.Where.DrawSQL(f, q.InputRect(r), bg, q.Dialect, q.Names); q.Typing {

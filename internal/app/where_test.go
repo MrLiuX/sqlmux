@@ -5,9 +5,11 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/exp/golden"
 
 	"sqlmux/internal/config"
 	"sqlmux/internal/db"
@@ -316,7 +318,7 @@ func TestWhereHistory(t *testing.T) {
 		t.Fatalf("favorites %+v", st.Favorites)
 	}
 	f := a.render().String()
-	if !strings.Contains(f, a.icons.Star.Text+" status = 'done'") || !strings.Contains(f, a.icons.History.Text+" id > 5") || strings.Contains(f, "收藏") || !strings.Contains(f, "amount ↑ · 500") {
+	if !strings.Contains(f, a.icons.Star.Text+" status = 'done'") || !strings.Contains(f, a.icons.History.Text+" id > 5") || !strings.Contains(f, "amount ↑ · 500") {
 		t.Errorf("the list:\n%s", f)
 	}
 	for keys, want := range map[string]int{"<Up>": 2, "<Down>": 1, "<Tab><Tab><Tab>": 0, "<S-Tab>": 2} { // from the first
@@ -324,8 +326,8 @@ func TestWhereHistory(t *testing.T) {
 			t.Errorf("%s: at %d, want %d", keys, tab.hist.sel, want)
 		}
 	}
-	feed(t, a, wipe+"don")                                       // filters the list
-	if es, _ := a.histEntries(tab); len(es) != 2 || !es[0].fav { // the favorite, and its run
+	feed(t, a, wipe+"don")                                                    // filters the list
+	if es, _ := a.histEntries(tab); len(es) != 2 || es[0].fav || !es[1].fav { // its run, and the favorite after
 		t.Fatalf("filtered: %+v", es)
 	}
 	feed(t, a, "<CR>")
@@ -488,5 +490,91 @@ func TestWhereHistoryModes(t *testing.T) {
 			t.Errorf("%s: %q in %v", ks, tab.where.Text, tab.ed.Mode())
 		}
 		feed(t, a, "<Esc><Esc><Esc>") // the list, INSERT, the WHERE
+	}
+}
+
+// Keys that type nothing open no list in the WHERE: ↵ after an arrow or
+// after A runs it; the space ↵ puts after a keyword does not open one; and
+// what runs, and is kept, has no blanks around it (§9.7, F8.1, F8.4).
+func TestWhereNoListWithoutTyping(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	feed(t, a, "/paid is not null<Esc>A<CR>")
+	if tab.applied != "paid is not null" || tab.typing != "" {
+		t.Errorf("A↵: applied %q typing %q", tab.applied, tab.typing)
+	}
+	feed(t, a, "/<C-u>id > 5 and paid"+strings.Repeat("<Left>", 4)+"<CR>")
+	if tab.applied != "id > 5 and paid" {
+		t.Errorf("←↵: applied %q", tab.applied)
+	}
+	feed(t, a, "/<C-u>id > 5 and<CR>")
+	if tab.where.Text != "id > 5 and " || tab.comp != nil || tab.typing != "where" {
+		t.Errorf("and↵: %q, list %v, typing %q", tab.where.Text, tab.comp != nil, tab.typing)
+	}
+	feed(t, a, "<Esc><Esc>/<C-u>paid<CR><CR>")
+	if st := a.tableState(tab); tab.applied != "paid" || st.History[0].Where != "paid" {
+		t.Errorf("paid↵↵: applied %q, history %q", tab.applied, st.History[0].Where)
+	}
+}
+
+// The history list is the history, a rule, then the favorites, the rule
+// only when both are there, and a foot of the keys; clicking a row takes
+// the entry it is, not the rule's place; the WHERE row shows the key that
+// opens it (F8.14).
+func TestWhereHistoryLayout(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	st := a.tableState(tab)
+	at := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	st.History = []config.Query{{Where: "id > 5", At: at}, {Where: "paid", At: at}}
+	feed(t, a, "/<C-r>")
+	if f := a.render().String(); !strings.Contains(f, "↵ 应用 · ") {
+		t.Errorf("no foot:\n%s", f)
+	}
+	rule := func() bool {
+		v, _, _ := a.histView(a.focused(), tab)
+		return slices.ContainsFunc(v.Items, func(i ui.CompleteItem) bool { return i.Sep })
+	}
+	if rule() {
+		t.Error("a rule with nothing under it")
+	}
+	st.Favorites = []config.Query{{Where: "status = 'done'", At: at}}
+	feed(t, a, "<Esc>/<C-r>")
+	if es, _ := a.histEntries(tab); len(es) != 3 || es[0].fav || es[1].fav || !es[2].fav || !rule() {
+		t.Fatalf("history, favorites, the rule: %+v", es)
+	}
+	v, _, _ := a.histView(a.focused(), tab)
+	if len(v.Items) != 4 || !v.Items[2].Sep || v.Items[3].Text != "status = 'done'" {
+		t.Errorf("rows: %+v", v.Items)
+	}
+	feed(t, a, "<C-p>") // from the first up: the last, past the rule
+	if v, _, _ = a.histView(a.focused(), tab); v.Sel != 3 {
+		t.Errorf("the selection is the favorite's row: %d", v.Sel)
+	}
+	es, _ := a.histEntries(tab)
+	for row, want := range []int{0, 1, -1, 2} {
+		if got := histRow(es, row); got != want {
+			t.Errorf("row %d is entry %d, want %d", row, got, want)
+		}
+	}
+	if !strings.Contains(a.render().String(), " "+a.keys.Hint("where.history", "input")+" ▾") {
+		t.Error("the key before the ▾")
+	}
+}
+
+// The history list as it shows: history, a rule, favorites, the keys under
+// them; only a history has no rule (F8.14).
+func TestGoldenWhereHistory(t *testing.T) {
+	at := time.Date(2026, 10, 7, 12, 0, 0, 0, time.Local)
+	for name, favs := range map[string][]config.Query{
+		"both":    {{Where: "status = 'done'", Order: "amount", Desc: true, Limit: 500, At: at}},
+		"history": nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			a, tab, _ := withRecorder(t)
+			st := a.tableState(tab)
+			st.History = []config.Query{{Where: "id > 5", At: at}, {Where: "paid is not null and id < 100", At: at}}
+			st.Favorites = favs
+			feed(t, a, "/<C-r>")
+			golden.RequireEqual(t, a.render().String())
+		})
 	}
 }

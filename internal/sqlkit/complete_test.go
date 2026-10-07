@@ -156,22 +156,43 @@ func TestWantsColumn(t *testing.T) {
 		"select * from t having |":                 true,
 		"select * from t where id in (select a, |": true,
 		"select\n|":                                true,
-		"select|":                                  false, // no blank yet
-		"select a,|":                               false,
-		"select * from t where a|":                 false, // typed
-		"select * from |":                          false, // a table
-		"select * from a, |":                       false,
-		"select * from t where a = |":              false,
-		"select * from t where id in (1, |":        false,
-		"select max(a, |":                          false,
-		"select o.|":                               false,
-		"insert into t (|":                         false,
-		"select 'a |":                              false,
+		"select\t|":                                true,
+		"select distinct |":                        true,
+		"select count(distinct |":                  true,
+		"select a as x, |":                         true, // the AS and the ) in the list are not its start
+		"select count(*), |":                       true,
+		"select max(a) m, |":                       true,
+		"select cast(a as int), |":                 true,
+		"update t set a = now(), |":                true,
+		"select * from t order by lower(a), |":     true,
+		"select * from t group by a, lower(b), |":  true,
+		"select|":                           false, // no blank yet
+		"select a,|":                        false,
+		"select * from t where a|":          false, // typed
+		"select * from |":                   false, // a table
+		"select * from a, |":                false,
+		"select * from t where a = |":       false,
+		"select * from t where id in (1, |": false,
+		"select max(a, |":                   false,
+		"select o.|":                        false,
+		"insert into t (|":                  false,
+		"select 'a |":                       false,
 	} {
 		pos := strings.Index(sql, "|")
 		got := CompletionContext(strings.Replace(sql, "|", "", 1), pos, PG)
 		if got.WantsColumn != want {
 			t.Errorf("%q: WantsColumn %v", sql, got.WantsColumn)
+		}
+	}
+}
+
+// The comma of a FROM list is a table's place too after an alias with AS, a
+// call or a subquery in it (F8.4).
+func TestFromListComma(t *testing.T) {
+	for _, sql := range []string{"select * from a as x, |", "select * from generate_series(1, 2), |", "select * from (select 1) s, |", "select * from a x, b as y, |"} {
+		pos := strings.Index(sql, "|")
+		if got := CompletionContext(strings.Replace(sql, "|", "", 1), pos, PG); got.Kind != CompTables || got.WantsColumn {
+			t.Errorf("%q: kind %v, wants a column %v", sql, got.Kind, got.WantsColumn)
 		}
 	}
 }
