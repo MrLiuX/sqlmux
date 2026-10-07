@@ -20,6 +20,7 @@ type Where struct {
 // WhereContext reads s, in d, up to its byte offset pos.
 func WhereContext(s string, pos int, d Dialect) Where {
 	ts := Scan(s[:pos], d)
+	blank := spaceBefore(ts, pos)
 	w, str := Where{Start: pos, OK: true}, false
 	if n := len(ts); n > 0 && ts[n-1].End == pos {
 		switch last := ts[n-1]; last.Kind {
@@ -44,7 +45,7 @@ func WhereContext(s string, pos int, d Dialect) Where {
 		return ""
 	}
 	word := func(i int) bool { return i < len(back) && (back[i].Kind == Ident || back[i].Kind == Keyword) }
-	w.WantsColumn = w.Prefix == "" && pos > 0 && isBlank(s[pos-1]) && (text(0) == "and" || text(0) == "or")
+	w.WantsColumn = blank && (text(0) == "and" || text(0) == "or")
 	switch {
 	case (text(0) == "=" || text(0) == "<>" || text(0) == "!=") && word(1):
 		w.Column = s[back[1].Start:back[1].End]

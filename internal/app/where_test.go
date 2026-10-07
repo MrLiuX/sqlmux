@@ -490,3 +490,26 @@ func TestWhereHistoryModes(t *testing.T) {
 		feed(t, a, "<Esc><Esc><Esc>") // the list, INSERT, the WHERE
 	}
 }
+
+// Keys that type nothing open no list in the WHERE: ↵ after an arrow or
+// after A runs it; the space ↵ puts after a keyword does not open one; and
+// what runs, and is kept, has no blanks around it (§9.7, F8.1, F8.4).
+func TestWhereNoListWithoutTyping(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	feed(t, a, "/paid is not null<Esc>A<CR>")
+	if tab.applied != "paid is not null" || tab.typing != "" {
+		t.Errorf("A↵: applied %q typing %q", tab.applied, tab.typing)
+	}
+	feed(t, a, "/<C-u>id > 5 and paid"+strings.Repeat("<Left>", 4)+"<CR>")
+	if tab.applied != "id > 5 and paid" {
+		t.Errorf("←↵: applied %q", tab.applied)
+	}
+	feed(t, a, "/<C-u>id > 5 and<CR>")
+	if tab.where.Text != "id > 5 and " || tab.comp != nil || tab.typing != "where" {
+		t.Errorf("and↵: %q, list %v, typing %q", tab.where.Text, tab.comp != nil, tab.typing)
+	}
+	feed(t, a, "<Esc><Esc>/<C-u>paid<CR><CR>")
+	if st := a.tableState(tab); tab.applied != "paid" || st.History[0].Where != "paid" {
+		t.Errorf("paid↵↵: applied %q, history %q", tab.applied, st.History[0].Where)
+	}
+}

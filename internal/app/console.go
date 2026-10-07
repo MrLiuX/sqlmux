@@ -165,12 +165,12 @@ func (a *App) consoleKey(p *Pane, t *consoleTab, k keymap.Key) tea.Cmd {
 		// NORMAL's; add a console INSERT scope when it has to be remappable
 		return a.consoleComplete(t, true)
 	}
-	open := t.comp != nil
+	open, inInsert := t.comp != nil, t.ed.Mode() == editor.Insert // i, a, A, o type nothing: no list (§9.7)
 	cmd := a.consoleDid(t, t.ed.Feed(string(k)))
 	switch {
 	case t.ed.Mode() != editor.Insert:
 		t.asked, t.wait = nil, nil
-	case keymap.Text(k) != "" || open && (k == "<BS>" || k == "<C-h>"):
+	case inInsert && keymap.Text(k) != "" || open && (k == "<BS>" || k == "<C-h>"):
 		return tea.Batch(cmd, a.consoleComplete(t, false))
 	}
 	return cmd

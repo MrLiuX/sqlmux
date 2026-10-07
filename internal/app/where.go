@@ -444,7 +444,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 				far = append(far, columns(t)...)
 			}
 		}
-		if c.WantsColumn { // a column is next, the statement's tables' alone, though nothing is typed (F8.4)
+		if c.WantsColumn && !manual { // a column is next, the statement's tables' alone, though nothing is typed (F8.4); C-n lists all
 			groups, resolved = [][]candidate{near, far}, true
 			break
 		}
@@ -523,9 +523,11 @@ func (c *completion) plan(text string, pos int) accepted {
 		p.drop = 1
 	}
 	if cd.space {
-		if after != "" && (after[0] == ' ' || after[0] == '\t') {
+		switch {
+		case after != "" && (after[0] == ' ' || after[0] == '\t'):
 			p.ins, p.drop = p.ins+after[:1], 1
-		} else {
+		case after != "" && strings.IndexByte("),;.", after[0]) >= 0: // what comes next is there: none
+		default:
 			p.ins += " "
 		}
 	}
@@ -606,7 +608,7 @@ func (a *App) whereDid(t *dataTab, eff editor.Effect) tea.Cmd {
 		if t.where.Text != was {
 			t.hist.typed, t.hist.sel = true, 0
 		}
-	case t.ed.Mode() == editor.Insert:
+	case t.ed.Mode() == editor.Insert && t.where.Text != was: // only typing opens the list: an arrow does not (§9.7)
 		a.complete(t)
 	default:
 		t.comp = nil
@@ -795,12 +797,12 @@ const whereRows = 100
 // runWhere runs the WHERE typed, from the first page, counting again; a
 // condition goes into the history, a repeat moving up to the top (§9.7).
 func (a *App) runWhere(t *dataTab) tea.Cmd {
-	t.applied = t.where.Text
+	t.applied = strings.TrimSpace(t.where.Text) // paid↵↵ is not "paid " in the history
 	t.stopTyping()
 	t.pageNo = 0
 	fetch := a.fetch(t, true)
 	cmds := []tea.Cmd{fetch}
-	if strings.TrimSpace(t.applied) != "" && fetch != nil { // not one fetch refuses
+	if t.applied != "" && fetch != nil { // not one fetch refuses
 		st := a.tableState(t)
 		q := config.Query{Where: t.applied, Order: t.order, Desc: t.desc, At: time.Now()}
 		if t.limit != limits[0] {

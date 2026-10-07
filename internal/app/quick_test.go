@@ -461,3 +461,32 @@ func TestQuickSQLConn(t *testing.T) {
 		t.Errorf("C-e: palette %v, console %+v, kept %+v", a.palette, c, a.state.Consoles)
 	}
 }
+
+// In quick SQL ↵ with the candidates up only takes the selected one, the
+// text the same or not; a second runs it. A key that types nothing, an
+// arrow, opens no list (§9.7, F8.1).
+func TestQuickSQLEnterOnlyAccepts(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	table, cols, _ := ordersTable(0)
+	for i, tb := range a.sess.Conns[0].Tables {
+		if tb.Name == "t_order" {
+			a.sess.Conns[0].Tables[i] = table
+		}
+	}
+	a.sess.Conns[0].cols[idOf(table)] = cols
+	feed(t, a, "<C-p>;select count")
+	if a.palette.comp == nil {
+		t.Fatal("no list for count")
+	}
+	if feed(t, a, "<CR>"); a.palette.quick != nil || a.palette.input.Text != ";select count" || a.palette.comp != nil {
+		t.Fatalf("↵ takes count, the text the same: %q, ran %v", a.palette.input.Text, a.palette.quick != nil)
+	}
+	if feed(t, a, "<CR>"); a.palette.quick == nil || a.palette.quick.running != "select count" {
+		t.Errorf("the second ↵ runs: %+v", a.palette.quick)
+	}
+	a.palette.quick = nil
+	feed(t, a, "<C-u>;select * from t_order where id = 1 and paid"+strings.Repeat("<Left>", 4)+"<CR>")
+	if a.palette.quick == nil || a.palette.quick.running != "select * from t_order where id = 1 and paid" {
+		t.Errorf("←↵ runs: %q, %+v", a.palette.input.Text, a.palette.quick)
+	}
+}

@@ -493,6 +493,55 @@ func TestConsoleEnterOnlyAccepts(t *testing.T) {
 	if text(c) != "select * from t_order where id \n" {
 		t.Errorf("a second ↵ is the newline: %q", text(c))
 	}
+	feed(t, a, "<Esc>ggdGiselect * from t_order where<CR><CR>") // the space ↵ made does not open the list again
+	if text(c) != "select * from t_order where \n" || c.comp != nil {
+		t.Errorf("where↵↵: %q", text(c))
+	}
+	feed(t, a, "<Esc>ggdGiwith recent as (select 1) select * from rec<CR>") // a CTE's name is a word too
+	if text(c) != "with recent as (select 1) select * from recent " {
+		t.Errorf("a CTE: %q", text(c))
+	}
+	// keys that type nothing open no list: A and i on a word that is one's, an arrow
+	for _, k := range []struct{ text, keys, want string }{
+		{"select * from t_order", "A<CR>", "select * from t_order\n"},
+		{"select * from t_order", "0wwi<CR>", "select * \nfrom t_order"}, // i before a word
+		{"select id,", "A<CR>", "select id,\n"},
+		{"select id,", "o<CR>", "select id,\n\n"},
+	} {
+		feed(t, a, "<Esc>ggdGi"+k.text+"<Esc>"+k.keys)
+		if text(c) != k.want || c.comp != nil {
+			t.Errorf("%q then %s: %q, list %v", k.text, k.keys, text(c), c.comp != nil)
+		}
+	}
+	feed(t, a, "<Esc>ggdGiselect * from t_order where id = 1 and paid<Left><Left><Left><Left><CR>")
+	if text(c) != "select * from t_order where id = 1 and \npaid" {
+		t.Errorf("an arrow opens no list: %q", text(c))
+	}
+}
+
+// What comes after the cursor is not given a space before it: ) , ; . are
+// there already (§9.7, F8.1).
+func TestConsoleAcceptNoSpaceBeforePunct(t *testing.T) {
+	a, c := inConsole(t, "autopairs = false", "")
+	table, cols, _ := ordersTable(0)
+	for i, tb := range a.sess.Conns[0].Tables {
+		if tb.Name == "t_order" {
+			a.sess.Conns[0].Tables[i] = table
+		}
+	}
+	a.sess.Conns[0].cols[idOf(table)] = cols
+	for _, k := range []struct{ text, after, want string }{
+		{"select * from t_order where (stat", ")", "select * from t_order where (status)"},
+		{"select * from t_order where id = 1 and stat", ";", "select * from t_order where id = 1 and status;"},
+		{"select stat", ", id from t_order", "select status, id from t_order"},
+		{"select * from t_ord", ".x", "select * from t_order.x"},
+		{"select * from t_ord", "", "select * from t_order "},
+	} {
+		feed(t, a, "<Esc>ggdGi"+k.after+"<Esc>0i"+k.text+"<CR>")
+		if got := text(c); got != k.want {
+			t.Errorf("%q|%q: %q, want %q", k.text, k.after, got, k.want)
+		}
+	}
 }
 
 // Where a column comes next the candidates open with nothing typed, once
@@ -548,6 +597,21 @@ func TestConsoleColumnsAfterBlank(t *testing.T) {
 	feed(t, a, "ggdGiselect * from t_order where st")
 	if got := labels(); len(got) == 0 || got[0] != "status" {
 		t.Errorf("typing filters: %v", got)
+	}
+	feed(t, a, "<Esc>ggdGiselect * from t_order where <Esc>a<C-n>") // a lists everything: the keywords too
+	if got := labels(); !slices.Contains(got, "id") || !slices.Contains(got, "and") || len(got) <= len(want) {
+		t.Errorf("C-n after where: %v", got)
+	}
+	feed(t, a, "<Esc>ggdGiselect <Esc>a<C-n>") // the FROM is not there yet: tables and keywords
+	if got := labels(); !slices.Contains(got, "select") || !slices.Contains(got, "t_order") {
+		t.Errorf("C-n after select: %v", got)
+	}
+	// the tables at the cursor's depth first, the outer ones after
+	conn := a.sess.Conns[0]
+	conn.cols[tableID{"public", "t_user"}] = db.Columns{Cols: []db.Column{{Name: "uname"}, {Name: "email"}}}
+	feed(t, a, "<Esc>ggdGiselect * from t_order where id in (select from t_user"+strings.Repeat("<Left>", 11)+" ")
+	if got := labels(); !slices.Equal(got, append([]string{"uname", "email"}, want...)) {
+		t.Errorf("a subquery: %v", got)
 	}
 	feed(t, a, "<Esc>ggdGiselect * from t_order where id = 1,")
 	if c.comp != nil {
@@ -844,5 +908,18 @@ func TestConsoleRename(t *testing.T) {
 	}
 	if !slices.Contains(seen, "orders/0") {
 		t.Errorf("the layout writes the name, no n: %v", seen)
+	}
+}
+
+// A click on a candidate takes it, with its space (§9.7, F8.1).
+func TestConsoleClickCandidate(t *testing.T) {
+	a, c := inConsole(t, "", "")
+	feed(t, a, "iselect * from t_o")
+	if c.comp == nil {
+		t.Fatal("no list")
+	}
+	click(a, find(t, a, ui.Target{Kind: ui.KindRow, I: 0}).Min)
+	if text(c) != "select * from t_order " || c.comp != nil {
+		t.Errorf("clicked: %q", text(c))
 	}
 }
