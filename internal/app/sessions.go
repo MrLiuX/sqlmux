@@ -133,17 +133,11 @@ func (a *App) gotSessionDialed(m sessionDialed) tea.Cmd {
 	for slices.ContainsFunc(a.sessions, func(s *Session) bool { return s.Name == strconv.Itoa(n) }) {
 		n++
 	}
-	s := newSession(strconv.Itoa(n), conns, conns[start], a.freeConsole())
+	s := &Session{Name: strconv.Itoa(n), Conns: conns, start: conns[start], last: conns[start], open: map[string]bool{}}
+	s.Windows = []*Window{s.blankWindow()} // no console: one is made when it is wanted (F8.18)
 	a.sessions = append(a.sessions, s)
 	a.attach(s)
-	cmds := []tea.Cmd{a.loadCatalog(conns[start])}
-	if s.warning != "" {
-		cmds = append(cmds, a.showToast(s.warning, toastTTL))
-	}
-	for _, t := range s.consoles() { // new: on the current connection, kept for its file (§11)
-		cmds = append(cmds, a.keepConsole(t))
-	}
-	return tea.Batch(cmds...)
+	return a.loadCatalog(conns[start])
 }
 
 // killSession is x on a session's row (§7.8).

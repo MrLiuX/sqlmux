@@ -169,7 +169,7 @@ func TestCloseRunning(t *testing.T) {
 	c.running = &run{}
 	for _, act := range []string{"tab.close", "pane.close", "window.close"} {
 		a.toast = ""
-		if a.run(act, 0); a.toast != "正在执行，结束后再关闭" || len(a.sess.consoles()) != 2 || len(a.sess.Windows) != 2 {
+		if a.run(act, 0); a.toast != "正在执行，结束后再关闭" || len(a.sess.consoles()) != 1 || len(a.sess.Windows) != 2 {
 			t.Errorf("%s: toast %q, %d consoles, %d windows", act, a.toast, len(a.sess.consoles()), len(a.sess.Windows))
 		}
 	}

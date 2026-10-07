@@ -187,7 +187,7 @@ func TestTabQuit(t *testing.T) {
 	loadOrders(t, a, 3)
 	a.newTab()
 	a.run("tab.quit", 0)
-	if p := win.pane(1); len(a.sess.Windows) != 2 || len(win.Root.Leaves()) != 2 || len(p.Tabs) != 1 {
+	if p := win.pane(1); len(a.sess.Windows) != 2 || len(win.Root.Leaves()) != 1 || len(p.Tabs) != 1 {
 		t.Errorf("a pane that has a tab left: %d windows, %d panes, %d tabs", len(a.sess.Windows), len(win.Root.Leaves()), len(p.Tabs))
 	}
 }

@@ -129,6 +129,27 @@ func TestNewSessionFails(t *testing.T) {
 	}
 }
 
+// A session made is one window of one empty pane, on the connection that was
+// dialed for it, and no console, nor a file for one (F8.18).
+func TestNewSessionIsOneEmptyPane(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a := sized(160, 45, "nerd")
+	a.Update(sessionDialed{spec: a.sess.Conns[0].Spec, d: dialed{main: noDB{}, meta: noDB{}}})
+	s := a.sess
+	if len(a.sessions) != 2 || s.Name != "1" || len(s.Windows) != 1 {
+		t.Fatalf("%d sessions, attached %q with %d windows", len(a.sessions), s.Name, len(s.Windows))
+	}
+	if ps := s.Windows[0].Root.Leaves(); len(ps) != 1 || len(ps[0].Tabs) != 0 || len(s.consoles()) != 0 {
+		t.Errorf("%d panes, %d consoles", len(s.Windows[0].Root.Leaves()), len(s.consoles()))
+	}
+	if es, _ := os.ReadDir(filepath.Join(config.DataDir(), "consoles")); len(es) != 0 {
+		t.Errorf("files made for it: %v", es)
+	}
+	if s.start.State != connReady || s.last != s.start {
+		t.Error("the connection dialed is its start")
+	}
+}
+
 // conn.new opens the form; ↵ checks the connection as connections.toml is
 // read, the field at fault getting the keys; one that checks goes at the
 // end of the file and into every session's tree, not connected (§7.8).
@@ -151,8 +172,7 @@ func TestConnForm(t *testing.T) {
 	}
 }
 
-// SPC c makes a window of the default layout at the end, shown, its
-// console the next free; SPC n / SPC p go round; SPC l goes back to the
+// SPC c makes a window of one empty pane at the end, shown (F8.18); SPC n / SPC p go round; SPC l goes back to the
 // one used before, by its ID, gone with it; a click on the status bar's
 // window switches; the tree's window node too (§5, F5.2).
 func TestWindows(t *testing.T) {
@@ -160,8 +180,12 @@ func TestWindows(t *testing.T) {
 	data := a.win()
 	feed(t, a, "<Space>c")
 	w := a.win()
-	if len(a.sess.Windows) != 2 || a.sess.Active != 1 || w.Name != "data-2" || w.ID != 2 || consoleOf(w.Root.B.Pane).name != "console_2" {
+	if len(a.sess.Windows) != 2 || a.sess.Active != 1 || w.Name != "data-2" || w.ID != 2 {
 		t.Fatalf("SPC c: %d windows, on %d %q", len(a.sess.Windows), a.sess.Active, w.Name)
+	}
+	// one empty pane, the landing page, focused; no console, no file for it (F8.18)
+	if ps := w.Root.Leaves(); len(ps) != 1 || len(ps[0].Tabs) != 0 || w.Focus != ps[0].ID || len(a.sess.consoles()) != 1 {
+		t.Errorf("a new window: %d panes, %d consoles in the session", len(w.Root.Leaves()), len(a.sess.consoles()))
 	}
 	feed(t, a, "<Space>c<Space>n")
 	if a.sess.Active != 0 {

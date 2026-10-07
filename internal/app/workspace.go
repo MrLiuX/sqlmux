@@ -323,17 +323,21 @@ func (s *Session) newWindow(conn *Conn, console string) (w *Window, warning stri
 			consolePane.Tabs = []Tab{{Name: console, Console: cons}}
 		}
 	}
+	return s.window(&Node{Split: Horiz, Ratio: 0.5, A: leaf(data), B: leaf(consolePane)}, 2), warning
+}
+
+// blankWindow is the window window.new and session.new make: the sidebar and
+// one empty pane, the landing page, no console, as tmux's new-window (§5,
+// F8.18).
+func (s *Session) blankWindow() *Window { return s.window(leaf(&Pane{ID: 1, Prev: -1}), 1) }
+
+// window is a new window of s over root, whose panes number up to lastID,
+// named by freeWindowName, the pane 1 focused.
+func (s *Session) window(root *Node, lastID int) *Window {
 	s.winID++
-	w = &Window{
-		ID:       s.winID,
-		Name:     s.freeWindowName(),
-		TreeOpen: true,
-		Tree:     &Pane{ID: 0},
-		Root:     &Node{Split: Horiz, Ratio: 0.5, A: leaf(data), B: leaf(consolePane)},
-		lastID:   2,
-	}
+	w := &Window{ID: s.winID, Name: s.freeWindowName(), TreeOpen: true, Tree: &Pane{ID: 0}, Root: root, lastID: lastID}
 	w.focus(1)
-	return w, warning
+	return w
 }
 
 // selectWindow shows window i of the session, the one shown so far being
@@ -352,18 +356,10 @@ func (s *Session) windowByID(id int) int {
 	return slices.IndexFunc(s.Windows, func(w *Window) bool { return w.ID == id })
 }
 
-// addWindow is SPC c: a window of the default layout at the end, shown,
-// its console_n on the current connection, kept for the file (§11).
+// addWindow is SPC c: a window of one empty pane at the end, shown (F8.18).
 func (a *App) addWindow() tea.Cmd {
-	w, warning := a.sess.newWindow(a.conn(), a.freeConsole())
-	a.sess.Windows = append(a.sess.Windows, w)
+	a.sess.Windows = append(a.sess.Windows, a.sess.blankWindow())
 	a.selectWindow(len(a.sess.Windows) - 1)
-	if warning != "" {
-		return a.showToast(warning, toastTTL)
-	}
-	if c := consoleOf(w.Root.B.Pane); c != nil { // none at a start with no connection (F7.4)
-		return a.keepConsole(c)
-	}
 	return nil
 }
 

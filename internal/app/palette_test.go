@@ -581,7 +581,10 @@ func TestPaletteWindowAndTabScopes(t *testing.T) {
 	if a.palette.input.Text != "&" || len(namesOf(a)) != 1 || namesOf(a)[0] != "窗口:0: data" {
 		t.Fatalf("palette.window: %q %v", a.palette.input.Text, namesOf(a))
 	}
-	feed(t, a, "<Esc><Space>c<Space>c")
+	feed(t, a, "<Esc><Space>c")
+	a.run("console.new", 0) // console_2 in window 1: a new window has none
+	feed(t, a, "<Space>c")
+	a.run("console.new", 0)                                     // console_3 in window 2
 	a.state.Recent = []config.Recent{{Kind: "window", ID: "3"}} // picked last, the number goes first
 	a.run("palette.window", 0)
 	if got := namesOf(a); !slices.Equal(got, []string{"窗口:0: data", "窗口:1: data-2", "窗口:2: data-3"}) {

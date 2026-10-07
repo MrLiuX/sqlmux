@@ -162,11 +162,11 @@ func TestPlainConsoleRunWithList(t *testing.T) {
 // key: a ? is the text, not the help (§6.9).
 func TestPlainFreshConsole(t *testing.T) {
 	a := sizedWith(160, 45, userConfig(t, "vim = false", ""))
-	feed(t, a, "<Space>c") // made in an Update: what is drawn next is modeless already
-	if c := a.win().pane(2); consoleOf(c) == nil || !consoleOf(c).ed.Plain() {
+	feed(t, a, "<Space>c")             // a window of one empty pane
+	feed(t, a, "<C-p>console.new<CR>") // made in an Update: what is drawn next is modeless already
+	if c := consoleOf(a.focused()); c == nil || !c.ed.Plain() {
 		t.Fatal("a console made by a command is not modeless as it is drawn")
 	}
-	feed(t, a, "<C-l>")
 	c := a.focusedConsole()
 	if c == nil {
 		t.Fatal("no console")

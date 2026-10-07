@@ -224,8 +224,8 @@ func newSessionOn(t *testing.T, eng, dsn string) {
 	if len(a.sessions) != 2 || s == sess || s.Name != "1" || s.Conns[0] == sess.Conns[0] || s.Conns[0].State != connReady || len(s.Conns[0].Tables) == 0 || s.Conns[1].State != connIdle {
 		t.Fatalf("sessions %d, attached %s, %v / %v", len(a.sessions), s.Name, s.Conns[0].State, s.Conns[1].State)
 	}
-	if c := consoleOf(s.Windows[0].Root.B.Pane); c == nil || c.name != "console_2" || c.conn != s.Conns[0] {
-		t.Errorf("its console: %+v", c)
+	if ps := s.Windows[0].Root.Leaves(); len(ps) != 1 || len(s.consoles()) != 0 {
+		t.Errorf("one empty pane, no console (F8.18): %d panes, %d consoles", len(ps), len(s.consoles()))
 	}
 }
 
@@ -438,8 +438,9 @@ func TestKillSessionUnderWay(t *testing.T) {
 	settle(a, cmd)
 	seed := a.sess.Conns[1]
 	dial := a.connect(seed) // seed opened in session 1's tree
+	a.run("console.new", 0) // a new session has none
 	con := a.sess.consoles()[0]
-	run := a.runSQL(con, con.conn, con.schema, "console_2", "select pg_sleep(3)", 0, con.ver)
+	run := a.runSQL(con, con.conn, con.schema, con.name, "select pg_sleep(3)", 0, con.ver)
 	ran := make(chan tea.Msg, 1)
 	go func() { ran <- run().(tea.BatchMsg)[0]() }()
 	time.Sleep(300 * time.Millisecond)
