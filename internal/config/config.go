@@ -23,7 +23,7 @@ type Config struct {
 	Icons      *ui.Icons // `icons = "nerd" | "ascii"`, with the theme file's [icon] on top (§7.7)
 	BaseIcons  *ui.Icons // what `icons` chose, a theme's [icon] not on it: a theme switched to goes on this
 	ThemeName  string    // the theme in use: `theme`, or tokyonight-storm
-	Language   string    // `language = "zh" | "en"` (§14「界面语言」)
+	Language   string    // `language = "en" | "zh"` (§14「界面语言」)
 	Vim        bool      // `vim = false`: console and WHERE are plain editors, the grid and tree get arrow keys too (§6.9)
 	Timeoutlen int       // ms to wait on an ambiguous key sequence
 	TabWidth   int       // the console's indent, and the formatter's (§14)
@@ -55,7 +55,7 @@ type Binding struct {
 }
 
 func Default() *Config {
-	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "zh", Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 1000, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true}
+	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "en", Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 1000, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true}
 }
 
 // Dir is $XDG_CONFIG_HOME/sqlmux, falling back to ~/.config/sqlmux on every
@@ -129,18 +129,18 @@ func Parse(data string) (*Config, error) {
 		return nil, err
 	}
 	if raw.Keys != nil || raw.Map != nil { // F5.9 moved them
-		return nil, errors.New("[keys] / [map] 要写在 keymaps.toml 里（sqlmux keys --format toml 生成一份完整的参考）")
+		return nil, errors.New("[keys] / [map] belong in keymaps.toml (sqlmux keys --format toml writes a complete reference)")
 	}
 	if raw.Icons != nil {
 		if *raw.Icons != "nerd" && *raw.Icons != "ascii" {
-			return nil, fmt.Errorf(`icons = %q：只能是 "nerd" 或 "ascii"`, *raw.Icons)
+			return nil, fmt.Errorf(`icons = %q: must be "nerd" or "ascii"`, *raw.Icons)
 		}
 		c.Icons = ui.IconSet(*raw.Icons)
 		c.BaseIcons = c.Icons
 	}
 	if raw.Language != nil {
 		if *raw.Language != "zh" && *raw.Language != "en" {
-			return nil, fmt.Errorf(`language = %q：只能是 "zh" 或 "en"`, *raw.Language)
+			return nil, fmt.Errorf(`language = %q: must be "en" or "zh"`, *raw.Language)
 		}
 		c.Language = *raw.Language
 	}
@@ -152,25 +152,25 @@ func Parse(data string) (*Config, error) {
 	}
 	if raw.Timeoutlen != nil {
 		if *raw.Timeoutlen <= 0 {
-			return nil, fmt.Errorf("timeoutlen = %d：必须大于 0", *raw.Timeoutlen)
+			return nil, fmt.Errorf("timeoutlen = %d: must be greater than 0", *raw.Timeoutlen)
 		}
 		c.Timeoutlen = *raw.Timeoutlen
 	}
 	if raw.TabWidth != nil {
 		if *raw.TabWidth <= 0 {
-			return nil, fmt.Errorf("tab_width = %d：必须大于 0", *raw.TabWidth)
+			return nil, fmt.Errorf("tab_width = %d: must be greater than 0", *raw.TabWidth)
 		}
 		c.TabWidth = *raw.TabWidth
 	}
 	if h := raw.Height; h != nil {
 		if *h <= 0 || *h >= 1 {
-			return nil, fmt.Errorf("result_height = %v：要在 0 和 1 之间", *h)
+			return nil, fmt.Errorf("result_height = %v: must be between 0 and 1", *h)
 		}
 		c.ResultHeight = *h
 	}
 	if k := raw.Case; k != nil {
 		if *k != "lower" && *k != "upper" && *k != "preserve" {
-			return nil, fmt.Errorf(`keyword_case = %q：只能是 "lower"、"upper" 或 "preserve"`, *k)
+			return nil, fmt.Errorf(`keyword_case = %q: must be "lower", "upper" or "preserve"`, *k)
 		}
 		c.KeywordCase = *k
 	}
@@ -183,7 +183,7 @@ func Parse(data string) (*Config, error) {
 	}
 	if n := raw.Console.MaxRows; n != nil {
 		if *n <= 0 {
-			return nil, fmt.Errorf("[console] max_rows = %d：必须大于 0", *n)
+			return nil, fmt.Errorf("[console] max_rows = %d: must be greater than 0", *n)
 		}
 		c.MaxRows = *n
 	}
@@ -201,21 +201,21 @@ func ParseKeys(data string) (leader string, bindings []Binding, err error) {
 	}
 	for _, k := range md.Keys() {
 		if k[0] != "keys" && k[0] != "map" {
-			return "", nil, fmt.Errorf("%s：这里只能写 [keys] 和 [map.*]", k[0])
+			return "", nil, fmt.Errorf("%s: only [keys] and [map.*] go here", k[0])
 		}
 		if md.Type(k...) == "Hash" {
 			continue
 		}
 		v, ok := lookup(raw, k).(string)
 		if !ok {
-			return "", nil, fmt.Errorf("%s：值必须是字符串", k)
+			return "", nil, fmt.Errorf("%s: the value must be a string", k)
 		}
 		if k.String() == "keys.leader" {
 			leader = v
 			continue
 		}
 		if len(k) < 3 {
-			return "", nil, fmt.Errorf("%s：键位要写在 [keys.normal]、[map.normal] 这样的表里", k)
+			return "", nil, fmt.Errorf("%s: a key goes in a table such as [keys.normal] or [map.normal]", k)
 		}
 		bindings = append(bindings, Binding{strings.Join(k[:len(k)-1], "."), k[len(k)-1], v})
 	}

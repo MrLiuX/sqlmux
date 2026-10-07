@@ -5,11 +5,12 @@ package i18n
 
 import "fmt"
 
-var english bool
+// english is the default: what is shown before Set, and what any language
+// but "zh" is (config.Parse has said it is one of the two).
+var english = true
 
-// Set picks the language, "zh" or "en", once, as the program starts. What
-// else is written is Chinese: config.Parse has said it is not one.
-func Set(lang string) { english = lang == "en" }
+// Set picks the language, "en" or "zh", once, as the program starts.
+func Set(lang string) { english = lang != "zh" }
 
 // T is zh in the language in use, with args put in as fmt.Sprintf does,
 // when there are any.

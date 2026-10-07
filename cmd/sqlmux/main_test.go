@@ -15,9 +15,14 @@ import (
 	"sqlmux/internal/i18n"
 )
 
+// The tests read the Chinese texts: the language they run in is not the
+// default, English (F7.6).
+func init() { i18n.Set("zh") }
+
 // writeConfig makes a config dir of the test's own with file name in it.
 func writeConfig(t *testing.T, name, toml string) {
 	t.Helper()
+	t.Cleanup(func() { i18n.Set("zh") }) // run and keysCmd set the language the config says
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("XDG_DATA_HOME", t.TempDir()) // open() reads the consoles there
@@ -47,20 +52,34 @@ func TestKeysCheck(t *testing.T) {
 
 	writeConfig(t, "config.toml", "[keys.normal]\nx = \"\"\n")
 	errb.Reset()
-	if code := keysCmd([]string{"--check"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "config.toml: [keys] / [map] 要写在 keymaps.toml 里") {
+	if code := keysCmd([]string{"--check"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "config.toml: [keys] / [map] belong in keymaps.toml") {
 		t.Fatalf("keys in config.toml: exit %d, stderr %q", code, errb.String())
 	}
 }
 
-// `sqlmux keys` says its headings in the language of config.toml (§14).
+// `sqlmux keys` says its headings in the language of config.toml, English
+// when it does not say (§14, F7.6).
 func TestKeysFollowLanguage(t *testing.T) {
 	defer i18n.Set("zh")
-	for lang, want := range map[string]string{"zh": "| 作用域 | 键 | 操作 |", "en": "| Scope | Key | Action |"} {
+	for lang, want := range map[string]string{"zh": "| 作用域 | 键 | 操作 |", "en": "| Scope | Key | Action |", "unwritten": "| Scope | Key | Action |"} {
 		writeConfig(t, "config.toml", "language = \""+lang+"\"\n")
+		if lang == "unwritten" {
+			writeConfig(t, "config.toml", "# no language here\n")
+		}
 		var out, errb bytes.Buffer
 		if code := keysCmd(nil, &out, &errb); code != 0 || !strings.Contains(out.String(), want) {
 			t.Errorf("language = %s: exit %d, output %.60q", lang, code, out.String())
 		}
+	}
+}
+
+// With no language written the reference TOML's comments are English too.
+func TestKeysTOMLDefaultEnglish(t *testing.T) {
+	defer i18n.Set("zh")
+	writeConfig(t, "config.toml", "# no language here\n")
+	var out, errb bytes.Buffer
+	if code := keysCmd([]string{"--format", "toml"}, &out, &errb); code != 0 || !strings.Contains(out.String(), "# While the palette is open\n[keys.palette]") {
+		t.Errorf("exit %d, output %.200q", code, out.String())
 	}
 }
 
@@ -172,7 +191,7 @@ func TestRunArguments(t *testing.T) {
 	if err := run([]string{"--layout", "x", "play"}); err == nil || !strings.Contains(err.Error(), "--layout") {
 		t.Errorf("a connection and --layout: %v", err)
 	}
-	if err := run([]string{"a", "b"}); err == nil || !strings.Contains(err.Error(), "用法") {
+	if err := run([]string{"a", "b"}); err == nil || !strings.Contains(err.Error(), "usage") {
 		t.Errorf("two connections: %v", err)
 	}
 }

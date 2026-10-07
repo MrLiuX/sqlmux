@@ -31,7 +31,7 @@ func main() {
 // the UI is up ends the program with the error on the terminal (§14「启动时找不到连接」).
 func run(args []string) error {
 	flags := flag.NewFlagSet("sqlmux", flag.ContinueOnError)
-	layout := flags.String("layout", "", "打开这个布局（名字或路径）")
+	layout := flags.String("layout", "", "open this layout (a name or a path)")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -41,10 +41,10 @@ func run(args []string) error {
 	case 1:
 		name = flags.Arg(0)
 	default:
-		return errors.New("用法：sqlmux [--layout 名字或路径] [连接名]")
+		return errors.New("usage: sqlmux [--layout name-or-path] [connection]")
 	}
 	if name != "" && *layout != "" {
-		return errors.New("连接名和 --layout 只能给一个")
+		return errors.New("give a connection name or --layout, not both")
 	}
 	cfg, err := config.Load()
 	if err != nil {
@@ -145,8 +145,8 @@ func open(name string) (*app.Session, error) {
 func keysCmd(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("sqlmux keys", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	format := fs.String("format", "md", "输出格式：md | toml")
-	check := fs.Bool("check", false, "只检查冲突；有冲突时退出码为 1")
+	format := fs.String("format", "md", "output format: md | toml")
+	check := fs.Bool("check", false, "only check for conflicts; exit 1 when there are some")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -172,7 +172,7 @@ func keysCmd(args []string, stdout, stderr io.Writer) int {
 	case "toml":
 		fmt.Fprint(stdout, keys.TOML(app.Titles()))
 	default:
-		fmt.Fprintf(stderr, "sqlmux keys：不支持的格式 %q\n", *format)
+		fmt.Fprintf(stderr, "sqlmux keys: unsupported format %q\n", *format)
 		return 2
 	}
 	return 0

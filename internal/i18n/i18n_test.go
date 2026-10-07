@@ -18,37 +18,6 @@ import (
 // English as it is (、 ： ；).
 var text = regexp.MustCompile(`[\p{Han}\x{3000}-\x{303F}\x{FF00}-\x{FFEF}]`)
 
-// stay is a place where a Chinese text is shown as it is, whatever language
-// (§14「界面语言」): the literals of a function that holds frag, all of them
-// when it is "", and why. What is read before `language` is, the way the
-// command line is spoken to, and no more of the function than that.
-type stay struct{ rel, fn, frag, why string }
-
-var stays = []stay{
-	{"internal/config/config.go", "Parse", "", "config.toml's own errors: the language is one of the things being read"},
-	{"internal/config/config.go", "ParseKeys", "", "keymaps.toml's own errors, read with it"},
-	{"cmd/sqlmux/main.go", "run", "打开这个布局", "the --layout flag's usage"},
-	{"cmd/sqlmux/main.go", "run", "用法：", "the usage line"},
-	{"cmd/sqlmux/main.go", "run", "只能给一个", "a flag error"},
-	{"cmd/sqlmux/main.go", "keysCmd", "输出格式", "the --format flag's usage"},
-	{"cmd/sqlmux/main.go", "keysCmd", "只检查冲突", "the --check flag's usage"},
-	{"cmd/sqlmux/main.go", "keysCmd", "不支持的格式", "a flag error"},
-}
-
-// stayed is whether text s, in function fn of file rel, is one of those; the
-// entry it is one of is marked used.
-var stayed = map[int]bool{}
-
-func staysAt(rel, fn, s string) bool {
-	for i, st := range stays {
-		if st.rel == rel && st.fn == fn && strings.Contains(s, st.frag) {
-			stayed[i] = true
-			return true
-		}
-	}
-	return false
-}
-
 // literal is a string or character of the program's code with a place.
 type literal struct{ rel, fn, text string }
 
@@ -125,7 +94,7 @@ func scanFile(rel string, f *ast.File, keys map[string][]int, outside *[]literal
 					}
 				}
 			case *ast.BasicLit:
-				if s, _ := strconv.Unquote(x.Value); !key[x] && (x.Kind == token.STRING || x.Kind == token.CHAR) && text.MatchString(s) && !staysAt(rel, fn, s) {
+				if s, _ := strconv.Unquote(x.Value); !key[x] && (x.Kind == token.STRING || x.Kind == token.CHAR) && text.MatchString(s) {
 					*outside = append(*outside, literal{rel, fn, s})
 				}
 			}
@@ -141,17 +110,11 @@ func firstArg(c *ast.CallExpr) ast.Expr {
 	return c.Args[0]
 }
 
-// Every Chinese text the program shows goes through T or N, bar what stays
-// (§14「界面语言」).
+// Every Chinese text the program shows goes through T or N (§14「界面语言」).
 func TestNoChineseOutsideT(t *testing.T) {
 	_, outside := scan(t)
 	for _, l := range outside {
 		t.Errorf("not translated: %s %s: %q", l.rel, l.fn, l.text)
-	}
-	for i, st := range stays {
-		if !stayed[i] {
-			t.Errorf("%s %s %q stays, and there is nothing there: take it out", st.rel, st.fn, st.frag)
-		}
 	}
 }
 
@@ -205,7 +168,11 @@ func verbs(s string) []string {
 func TestT(t *testing.T) {
 	en["测试 %d"] = "test %d"
 	defer delete(en, "测试 %d")
-	defer Set("zh")
+	defer Set("en")
+	if got := T("测试 %d", 3); got != "test 3" { // before any Set: F7.6
+		t.Errorf("default: %q", got)
+	}
+	Set("zh")
 	if got := T("测试 %d", 3); got != "测试 3" {
 		t.Errorf("zh: %q", got)
 	}
@@ -223,7 +190,7 @@ func TestT(t *testing.T) {
 
 // The scan sees what a text is made of: a key is a bare string first
 // argument; a prefix, a Sprintf, a second argument, a rune and a full-width
-// mark are outside it, unless the place is one that stays.
+// mark are outside it.
 func TestScanSeesWhatItShould(t *testing.T) {
 	src := `package x
 import ("fmt"; "sqlmux/internal/i18n")
@@ -238,8 +205,7 @@ func f(x string) {
 	_ = fmt.Sprintf(i18n.T("两个 %s %s"), x)
 }
 func g() {
-	_ = "放行的这句"
-	_ = "别的这句"
+	_ = "这句"
 	_ = fmt.Sprintf(i18n.T("展开 %s %s"), []any{1, 2}...)
 }
 `
@@ -249,14 +215,12 @@ func g() {
 	}
 	keys := map[string][]int{}
 	var outside []literal
-	defer func(n int) { stays = stays[:n] }(len(stays))
-	stays = append(stays, stay{"x.go", "g", "放行", "a test"})
 	scanFile("x.go", f, keys, &outside)
 	var got []string
 	for _, l := range outside {
 		got = append(got, l.text)
 	}
-	if want := []string{"前缀", "中文 %s", "参数里的中文", "：", "汉", "，", "别的这句"}; !slices.Equal(got, want) {
+	if want := []string{"前缀", "中文 %s", "参数里的中文", "：", "汉", "，", "这句"}; !slices.Equal(got, want) {
 		t.Errorf("outside %q, want %q", got, want)
 	}
 	if len(keys["展开 %s %s"]) != 1 || keys["展开 %s %s"][0] != -1 {

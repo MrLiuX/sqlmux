@@ -3,7 +3,13 @@ package editor
 import (
 	"strings"
 	"testing"
+
+	"sqlmux/internal/i18n"
 )
+
+// The tests below read the Chinese texts: the language they run in is not the
+// default, English (F7.6).
+func init() { i18n.Set("zh") }
 
 // RE2 reads + ? | ( ) as vim's \v does, not as vim's default magic: these
 // cannot be compared with nvim, so they are checked here.

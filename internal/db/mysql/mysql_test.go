@@ -12,8 +12,13 @@ import (
 	"time"
 
 	"sqlmux/internal/db"
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/sqlkit"
 )
+
+// The tests read the Chinese texts: the language they run in is not the
+// default, English (F7.6).
+func init() { i18n.Set("zh") }
 
 // my is the engine the tests go through.
 var my Engine

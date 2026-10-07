@@ -8,8 +8,13 @@ import (
 	"strings"
 	"testing"
 
+	"sqlmux/internal/i18n"
 	"sqlmux/internal/ui"
 )
+
+// The tests below read the Chinese texts: the language they run in is not the
+// default, English (F7.6).
+func init() { i18n.Set("zh") }
 
 func TestParse(t *testing.T) {
 	c, err := Parse(`
@@ -123,7 +128,7 @@ func TestLoadUsesXDGConfigHome(t *testing.T) {
 	if err := os.WriteFile(keys, []byte(`theme = "x"`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load(); err == nil || !strings.HasPrefix(err.Error(), keys+": theme：") {
+	if _, err := Load(); err == nil || !strings.HasPrefix(err.Error(), keys+": theme: ") {
 		t.Errorf("theme in keymaps.toml: %v", err)
 	}
 }
@@ -176,16 +181,16 @@ func TestThemeFile(t *testing.T) {
 	}
 }
 
-// language is "zh" or "en", zh when not written; another one is an error
-// that says what is allowed (§14「界面语言」).
+// language is "en" or "zh", en when not written; another one is an error
+// that says, in English, what is allowed (§14「界面语言」, F7.6).
 func TestLanguage(t *testing.T) {
-	if c, err := Parse(""); err != nil || c.Language != "zh" {
+	if c, err := Parse(""); err != nil || c.Language != "en" {
 		t.Errorf("default: %q %v", c.Language, err)
 	}
-	if c, err := Parse(`language = "en"`); err != nil || c.Language != "en" {
-		t.Errorf("en: %v", err)
+	if c, err := Parse(`language = "zh"`); err != nil || c.Language != "zh" {
+		t.Errorf("zh: %v", err)
 	}
-	if _, err := Parse(`language = "fr"`); err == nil || !strings.Contains(err.Error(), `language = "fr"`) {
+	if _, err := Parse(`language = "fr"`); err == nil || err.Error() != `language = "fr": must be "en" or "zh"` {
 		t.Errorf("fr: %v", err)
 	}
 }

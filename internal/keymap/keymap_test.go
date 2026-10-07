@@ -8,7 +8,12 @@ import (
 	"testing"
 
 	"sqlmux/internal/config"
+	"sqlmux/internal/i18n"
 )
+
+// The tests below read the Chinese texts: the language they run in is not the
+// default, English (F7.6).
+func init() { i18n.Set("zh") }
 
 // load builds the keymap with toml as the user's keymaps.toml.
 func load(t *testing.T, toml string) (*Map, []Problem) {
