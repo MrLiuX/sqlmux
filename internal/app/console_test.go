@@ -1163,3 +1163,30 @@ func TestAsyncColumnsKeepThePick(t *testing.T) {
 		t.Errorf("↵ took %q", text(c))
 	}
 }
+
+// And the pick survives the columns of a second table coming after the first
+// (F8.17).
+func TestAsyncColumnsKeepThePickTwice(t *testing.T) {
+	a, c := inConsole(t, "", "")
+	ordersCatalog(a)
+	var others []db.Table
+	for _, tb := range a.sess.Conns[0].Tables {
+		if tb.Name != "t_order" && tb.Schema == "public" {
+			others = append(others, tb)
+		}
+	}
+	feed(t, a, "iselect * from t_order a join "+others[0].Name+" b on b.x = a.id join "+others[1].Name+" c on <Tab><Tab>")
+	if c.comp == nil || c.comp.sel != 1 {
+		t.Fatalf("the pick: %+v", c.comp)
+	}
+	pick := c.comp.items[1].label
+	for i, o := range others[:2] {
+		a.Update(colsMsg{a.sess.Conns[0], o, db.Columns{Cols: []db.Column{{Name: "zz_" + strconv.Itoa(i), Type: "int"}}}, nil})
+	}
+	if c.comp == nil || c.comp.sel < 0 || c.comp.items[c.comp.sel].label != pick {
+		t.Fatalf("the pick %q after two arrivals: %+v", pick, c.comp)
+	}
+	if feed(t, a, "<CR>"); !strings.HasSuffix(text(c), " on "+pick+" ") {
+		t.Errorf("↵ took %q", text(c))
+	}
+}

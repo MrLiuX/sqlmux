@@ -313,7 +313,7 @@ func (a *App) gotCols(m colsMsg) tea.Cmd {
 	}
 	if now := a.completing(); old != nil && now != nil && old.moved { // what was picked stays picked when its candidate is still there
 		if i := slices.IndexFunc(now.items, func(c candidate) bool { return c.label == old.items[old.sel].label }); i >= 0 {
-			now.sel = i
+			now.sel, now.moved = i, true
 		}
 	}
 	return cmd
