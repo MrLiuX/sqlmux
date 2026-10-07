@@ -220,7 +220,7 @@ func TestTabReopen(t *testing.T) {
 	}
 	a.run("tab.reopen", 0) // the console: its pane is gone, so the current one
 	p := a.focused()
-	if c := consoleOf(p); c == nil || c.n != 1 || c.schema != "agentable" || len(p.Tabs) != 2 {
+	if c := consoleOf(p); c == nil || c.name != "console_1" || c.schema != "agentable" || len(p.Tabs) != 2 {
 		t.Fatalf("console: %+v in pane %d", c, p.ID)
 	}
 	selectTab(p, 0)
@@ -250,7 +250,7 @@ func TestTabReopenConsoleElsewhere(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sized(160, 45, "nerd")
 	first := a.sess
-	second := newSession("2", []*Conn{first.Conns[0]}, first.Conns[0], 2)
+	second := newSession("2", []*Conn{first.Conns[0]}, first.Conns[0], config.ConsoleName(2))
 	a.sessions = append(a.sessions, second)
 	first.recordClosed(1, 2, Tab{Name: "console_2", Console: consoleOf(second.Windows[0].pane(2))})
 	if a.run("tab.reopen", 0); a.sess != second || a.focused().ID != 2 || len(first.closed) != 0 {

@@ -44,6 +44,8 @@ func init() {
 		"palette.command": {Title: i18n.N("命令面板：命令"), Run: do(func(a *App, _ Args) { a.openPalette(">") })}, // as if > was typed; bind : to it for the command scope (§6.8)
 		"theme.switch":    {Title: i18n.N("切换主题…"), Run: do(func(a *App, _ Args) { a.openThemeDrop() })},
 		"layout.save":     {Title: i18n.N("保存布局为…"), Run: do(func(a *App, _ Args) { a.askLayoutName() })},
+		"session.rename":  {Title: i18n.N("重命名 session…"), Run: do(func(a *App, _ Args) { a.askSessionName() })},
+		"console.rename":  {Title: i18n.N("重命名 console…"), Run: do(func(a *App, _ Args) { a.askConsoleName() })},
 		"layout.open": {Title: i18n.N("打开布局"), Run: func(a *App, _ Args) tea.Cmd {
 			if len(a.sess.Conns) == 0 { // a layout is of connections (F7.4)
 				return a.noConnection()

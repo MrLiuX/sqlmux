@@ -15,6 +15,7 @@ import (
 
 	"sqlmux/internal/config"
 	"sqlmux/internal/db"
+	"sqlmux/internal/keymap"
 	"sqlmux/internal/ui"
 )
 
@@ -155,7 +156,7 @@ func TestWindows(t *testing.T) {
 	data := a.win()
 	feed(t, a, "<Space>c")
 	w := a.win()
-	if len(a.sess.Windows) != 2 || a.sess.Active != 1 || w.Name != "data" || w.ID != 2 || consoleOf(w.Root.B.Pane).key() != "console_2" {
+	if len(a.sess.Windows) != 2 || a.sess.Active != 1 || w.Name != "data-2" || w.ID != 2 || consoleOf(w.Root.B.Pane).key() != "console_2" {
 		t.Fatalf("SPC c: %d windows, on %d %q", len(a.sess.Windows), a.sess.Active, w.Name)
 	}
 	feed(t, a, "<Space>c<Space>n")
@@ -278,9 +279,9 @@ func TestWindowSwitches(t *testing.T) {
 	}
 	a.openPalette("%")
 	items, ms := a.paletteMatches()
-	at := slices.IndexFunc(ms, func(m ui.Match) bool { return items[m.Index].kind == itemWindow && items[m.Index].name == "2: data" })
+	at := slices.IndexFunc(ms, func(m ui.Match) bool { return items[m.Index].kind == itemWindow && items[m.Index].name == "2: data-3" })
 	if a.paletteRun(at, false); a.sess.Active != 2 || a.state.Recent[0] != (config.Recent{Kind: "window", ID: strconv.Itoa(a.win().ID)}) {
-		t.Errorf("the palette's 2: data: on %d, recent %+v", a.sess.Active, a.state.Recent)
+		t.Errorf("the palette's 2: data-3: on %d, recent %+v", a.sess.Active, a.state.Recent)
 	}
 }
 
@@ -314,5 +315,64 @@ func TestPaletteOverLists(t *testing.T) {
 	b.run("conn.new", 0)
 	if feed(t, b, "<C-s>"); b.form == nil || b.form.err != "缺少 name" {
 		t.Errorf("C-s in the form: %+v", b.form)
+	}
+}
+
+// A new window is data, else data-2, data-3: the first name the session
+// has none of; a window cannot be renamed to another's, the name typed
+// staying (§5, F8.11).
+func TestWindowNames(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	feed(t, a, "<Space>c<Space>c")
+	names := func() (out []string) {
+		for _, w := range a.sess.Windows {
+			out = append(out, w.Name)
+		}
+		return out
+	}
+	if got := names(); !slices.Equal(got, []string{"data", "data-2", "data-3"}) {
+		t.Fatalf("three windows: %v", got)
+	}
+	a.selectWindow(1)
+	a.run("window.close", 0)
+	feed(t, a, "<Space>c")
+	if got := names(); !slices.Equal(got, []string{"data", "data-3", "data-2"}) {
+		t.Errorf("the least free number: %v", got)
+	}
+	a.run("window.rename", 0)
+	feed(t, a, "<C-u>data<CR>")
+	if a.winRename == nil || a.toast == "" || a.win().Name != "data-2" {
+		t.Errorf("another's name: input %v, toast %q, name %q", a.winRename != nil, a.toast, a.win().Name)
+	}
+	feed(t, a, "<C-u>mine<CR>")
+	if a.winRename != nil || a.win().Name != "mine" {
+		t.Errorf("a name of its own: %q", a.win().Name)
+	}
+	a.run("window.rename", 0) // its own name again
+	if feed(t, a, "<CR>"); a.winRename != nil || a.win().Name != "mine" {
+		t.Errorf("unchanged: %q", a.win().Name)
+	}
+}
+
+// session.rename types this session's name in the status bar: another
+// session's is refused, the input staying; esc drops it (F8.11).
+func TestSessionRenameCommand(t *testing.T) {
+	a, report := withSessions()
+	a.attach(report)
+	a.run("session.rename", 0)
+	if a.askName == nil || a.mode() != keymap.Insert || a.askName.in.Text != "report" {
+		t.Fatalf("not asking: %+v", a.askName)
+	}
+	feed(t, a, "<C-u>doraemon<CR>")
+	if a.askName == nil || a.toast == "" || report.Name != "report" {
+		t.Errorf("another's name: asking %v, toast %q, %q", a.askName != nil, a.toast, report.Name)
+	}
+	feed(t, a, "<C-u>weekly<CR>")
+	if a.askName != nil || report.Name != "weekly" {
+		t.Errorf("a name of its own: %q", report.Name)
+	}
+	a.run("session.rename", 0)
+	if feed(t, a, "<C-u>x<Esc>"); a.askName != nil || report.Name != "weekly" {
+		t.Errorf("esc: %q", report.Name)
 	}
 }

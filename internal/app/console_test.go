@@ -2,9 +2,11 @@ package app
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -100,7 +102,7 @@ func TestConsoleMaps(t *testing.T) {
 // for the latest change.
 func TestConsoleFile(t *testing.T) {
 	a, c := inConsole(t, "", "")
-	if c.path != config.ConsolePath(1) {
+	if c.path != config.ConsolePath("console_1") {
 		t.Fatalf("path %s", c.path)
 	}
 	feed(t, a, "iselect 1;<Esc>")
@@ -209,7 +211,7 @@ func TestConsoleRestore(t *testing.T) {
 // soloSession is a new session over doraemon alone, not connected.
 func soloSession() *Session {
 	c := newConn(config.Connection{Name: "doraemon", Engine: "postgres"})
-	return newSession("doraemon", []*Conn{c}, c, 1)
+	return newSession("doraemon", []*Conn{c}, c, config.ConsoleName(1))
 }
 
 // A console file that cannot be read is not opened, empty or not: a toast
@@ -217,7 +219,7 @@ func soloSession() *Session {
 func TestConsoleUnreadable(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	// a directory where the file goes
-	if err := os.MkdirAll(config.ConsolePath(1), 0o700); err != nil {
+	if err := os.MkdirAll(config.ConsolePath("console_1"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	s := soloSession()
@@ -761,5 +763,86 @@ func TestConsoleView(t *testing.T) {
 	feed(t, a, "<Esc>:%s")
 	if v := view(); v.Prompt != ":" || v.Text != "%s" || v.Pos != 2 {
 		t.Errorf("command line: %+v", v)
+	}
+}
+
+// console.rename names the focused console's file: it is written, then
+// renamed, the tab's name, the state's key and the layout's `name` going
+// with it; a name that is no file's, or one that another file or console
+// has, is refused with the input left (§11, F8.11).
+func TestConsoleRename(t *testing.T) {
+	a, c := inConsole(t, "", "")
+	feed(t, a, "iselect 1")
+	if c.ver == c.saved {
+		t.Fatal("nothing to write yet")
+	}
+	a.keepConsole(c)
+	if _, ok := a.state.Consoles["console_1"]; !ok {
+		t.Fatal("the state knows console_1")
+	}
+	feed(t, a, "<Esc>")
+	a.run("console.rename", 0)
+	if a.askName == nil || a.askName.in.Text != "console_1" {
+		t.Fatalf("not asking: %+v", a.askName)
+	}
+	if cmd, ok := a.newConsole(c.conn); !ok || cmd == nil { // console_2, taking the focus: back to the first
+		t.Fatal("a second console")
+	}
+	a.askName.in = ui.Input{}
+	feed(t, a, "console_2<CR>")
+	if a.askName == nil || a.toast == "" || c.name != "console_1" {
+		t.Errorf("another console open: asking %v, toast %q, %q", a.askName != nil, a.toast, c.name)
+	}
+	for _, bad := range []string{"a/b", ".hidden", `a\\b`} {
+		a.askName.in = ui.Input{}
+		if feed(t, a, bad+"<CR>"); a.askName == nil || c.name != "console_1" {
+			t.Errorf("%q: asking %v, %q", bad, a.askName != nil, c.name)
+		}
+	}
+	if err := config.WriteConsole(config.ConsolePath("taken"), "x"); err != nil {
+		t.Fatal(err)
+	}
+	a.askName.in = ui.Input{}
+	if feed(t, a, "taken<CR>"); a.askName == nil || c.name != "console_1" {
+		t.Errorf("a file of that name: asking %v, %q", a.askName != nil, c.name)
+	}
+	a.askName.in = ui.Input{}
+	feed(t, a, "orders<CR>")
+	if a.askName != nil || c.name != "orders" || c.path != config.ConsolePath("orders") {
+		t.Fatalf("renamed: asking %v, %q at %s", a.askName != nil, c.name, c.path)
+	}
+	if got, err := config.ReadConsole(config.ConsolePath("orders")); err != nil || got != "select 1\n" {
+		t.Errorf("the file went with it: %q %v", got, err)
+	}
+	if _, err := os.Stat(config.ConsolePath("console_1")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the old file is still there: %v", err)
+	}
+	if _, old := a.state.Consoles["console_1"]; old || a.state.Consoles["orders"].Conn == "" {
+		t.Errorf("the state's key: %+v", a.state.Consoles)
+	}
+	var tabs []string
+	for _, p := range a.win().Root.Leaves() {
+		for _, tb := range p.Tabs {
+			if tb.Console == c {
+				tabs = append(tabs, tb.Name)
+			}
+		}
+	}
+	if !slices.Equal(tabs, []string{"orders"}) {
+		t.Errorf("the tab: %v", tabs)
+	}
+	l := a.layoutOf()
+	var seen []string
+	for _, w := range l.Sessions[0].Windows {
+		for _, p := range w.Panes {
+			for _, lt := range p.Tabs {
+				if lt.Kind == "console" {
+					seen = append(seen, lt.Name+"/"+strconv.Itoa(lt.N))
+				}
+			}
+		}
+	}
+	if !slices.Contains(seen, "orders/0") {
+		t.Errorf("the layout writes the name, no n: %v", seen)
 	}
 }

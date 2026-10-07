@@ -584,7 +584,7 @@ func TestPaletteWindowAndTabScopes(t *testing.T) {
 	feed(t, a, "<Esc><Space>c<Space>c")
 	a.state.Recent = []config.Recent{{Kind: "window", ID: "3"}} // picked last, the number goes first
 	a.run("palette.window", 0)
-	if got := namesOf(a); !slices.Equal(got, []string{"窗口:0: data", "窗口:1: data", "窗口:2: data"}) {
+	if got := namesOf(a); !slices.Equal(got, []string{"窗口:0: data", "窗口:1: data-2", "窗口:2: data-3"}) {
 		t.Errorf("by number: %v", got)
 	}
 	feed(t, a, "<Esc><Space>p<Space>p") // back on window 0, console_1 and a table in it

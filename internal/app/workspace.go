@@ -3,7 +3,9 @@ package app
 import (
 	"cmp"
 	"context"
-	"fmt"
+	"errors"
+	"io/fs"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -279,34 +281,44 @@ func (c *Conn) dropCols() {
 // and console_n on start beside it at 5 : 4 (§7.8), which has what its
 // file kept (§11). A file that cannot be read leaves that pane with no tab
 // too: opened empty, the autosave would write over it.
-func newSession(name string, conns []*Conn, start *Conn, n int) *Session {
+func newSession(name string, conns []*Conn, start *Conn, console string) *Session {
 	s := &Session{Name: name, Conns: conns, start: start, last: start, open: map[string]bool{}}
 	var w *Window
-	w, s.warning = s.newWindow(start, n)
+	w, s.warning = s.newWindow(start, console)
 	s.Windows = []*Window{w}
 	return s
+}
+
+// freeWindowName is the name a new window gets: data, else data-2, data-3…
+// the first no window of s has (F8.11).
+func (s *Session) freeWindowName() string {
+	name := "data"
+	for n := 2; slices.ContainsFunc(s.Windows, func(w *Window) bool { return w.Name == name }); n++ {
+		name = "data-" + strconv.Itoa(n)
+	}
+	return name
 }
 
 // newWindow is a window of the default layout (§5): the sidebar, a pane
 // with no tab and console_n on conn beside it at 5 : 4 (§7.8), named data;
 // warning says why the console's file could not be read.
-func (s *Session) newWindow(conn *Conn, n int) (w *Window, warning string) {
+func (s *Session) newWindow(conn *Conn, console string) (w *Window, warning string) {
 	data := &Pane{ID: 1, Prev: -1}
-	console := &Pane{ID: 2, Prev: -1}
+	consolePane := &Pane{ID: 2, Prev: -1}
 	if conn != nil { // a console is a connection's: none yet at a start with none (F7.4)
-		if cons, err := openConsole(conn, n); err != nil {
+		if cons, err := openConsole(conn, console); err != nil {
 			warning = err.Error()
 		} else {
-			console.Tabs = []Tab{{Name: fmt.Sprintf("console_%d", n), Console: cons}}
+			consolePane.Tabs = []Tab{{Name: console, Console: cons}}
 		}
 	}
 	s.winID++
 	w = &Window{
 		ID:       s.winID,
-		Name:     "data",
+		Name:     s.freeWindowName(),
 		TreeOpen: true,
 		Tree:     &Pane{ID: 0},
-		Root:     &Node{Split: Horiz, Ratio: 0.5, A: leaf(data), B: leaf(console)},
+		Root:     &Node{Split: Horiz, Ratio: 0.5, A: leaf(data), B: leaf(consolePane)},
 		lastID:   2,
 	}
 	w.focus(1)
@@ -352,14 +364,107 @@ func (a *App) cycleWindow(d int) {
 }
 
 // renameWindowKey edits the name typed in the status bar: ↵ takes it but a
-// blank one, esc drops it (§5).
-func (a *App) renameWindowKey(k keymap.Key) {
-	if name, done := typeName(a.winRename, k); done {
-		if name != "" {
-			a.win().Name = name
-		}
-		a.winRename = nil
+// blank one, or another window's of the session, which is refused with the
+// input left; esc drops it (§5, F8.11).
+func (a *App) renameWindowKey(k keymap.Key) tea.Cmd {
+	name, done := typeName(a.winRename, k)
+	if !done {
+		return nil
 	}
+	if name != "" && slices.ContainsFunc(a.sess.Windows, func(w *Window) bool { return w != a.win() && w.Name == name }) {
+		return a.showToast(i18n.T("已有同名 window"), toastTTL)
+	}
+	if name != "" {
+		a.win().Name = name
+	}
+	a.winRename = nil
+	return nil
+}
+
+// nameAsk is a name typed in the status bar, over its left: label says
+// what for, ↵ gives the trimmed name, never blank, to done, which is told to
+// keep the input when the name was refused with a toast (esc drops it).
+type nameAsk struct {
+	label string
+	in    ui.Input
+	done  func(a *App, name string) (cmd tea.Cmd, keep bool)
+}
+
+// askNameKey is key k in that input.
+func (a *App) askNameKey(k keymap.Key) tea.Cmd {
+	n := a.askName
+	name, done := typeName(&n.in, k)
+	if !done {
+		return nil
+	}
+	if name == "" {
+		a.askName = nil
+		return nil
+	}
+	cmd, keep := n.done(a, name)
+	if !keep {
+		a.askName = nil
+	}
+	return cmd
+}
+
+// askSessionName is session.rename: this session's name typed in the status
+// bar; another session's is refused (F8.11).
+func (a *App) askSessionName() {
+	s := a.sess
+	a.askName = &nameAsk{label: i18n.T("session 名："), in: ui.Input{Text: s.Name, Pos: len(s.Name)}, done: func(a *App, name string) (tea.Cmd, bool) {
+		if name != s.Name && slices.ContainsFunc(a.sessions, func(o *Session) bool { return o.Name == name }) {
+			return a.showToast(i18n.T("已有同名 session"), toastTTL), true
+		}
+		s.Name = name
+		return nil, false
+	}}
+}
+
+// askConsoleName is console.rename: the focused console's name typed in the
+// status bar. Its name is its file's: the file is written, then renamed,
+// the state's and the tabs' names going with it. A name that is no file's,
+// or that another file, or another console open, has, is refused (F8.11).
+func (a *App) askConsoleName() {
+	t := consoleOf(a.focused())
+	if t == nil {
+		return
+	}
+	a.askName = &nameAsk{label: i18n.T("console 名："), in: ui.Input{Text: t.name, Pos: len(t.name)}, done: func(a *App, name string) (tea.Cmd, bool) {
+		if name == t.name {
+			return nil, false
+		}
+		path := config.ConsolePath(name)
+		_, err := os.Stat(path)
+		switch {
+		case config.CheckConsoleName(name) != nil:
+			return a.showToast(config.CheckConsoleName(name).Error(), toastTTL), true
+		case err == nil || a.consoleOpen(path):
+			return a.showToast(i18n.T("已有同名 console"), toastTTL), true
+		case !errors.Is(err, fs.ErrNotExist):
+			return a.showToast(err.Error(), toastTTL), true
+		}
+		if err := t.flush(); err != nil {
+			return a.saveFailed(err), true
+		}
+		if err := os.Rename(t.path, path); err != nil && !errors.Is(err, fs.ErrNotExist) { // no file yet: nothing typed
+			return a.showToast(err.Error(), toastTTL), true
+		}
+		delete(a.state.Consoles, t.name)
+		t.name, t.path = name, path
+		for _, s := range a.sessions {
+			for _, w := range s.Windows {
+				for _, p := range w.Root.Leaves() {
+					for i := range p.Tabs {
+						if p.Tabs[i].Console == t {
+							p.Tabs[i].Name = name
+						}
+					}
+				}
+			}
+		}
+		return a.keepConsole(t), false
+	}}
 }
 
 // typeName is key k on in, a name typed in its place: ↵ ends it with the
@@ -407,7 +512,7 @@ func (a *App) closeWindow() tea.Cmd {
 // form open as the App begins (§14「启动时找不到连接」).
 func OpenEmpty() *Session {
 	s := &Session{Name: "sqlmux", open: map[string]bool{}}
-	w, _ := s.newWindow(nil, 1)
+	w, _ := s.newWindow(nil, config.ConsoleName(1))
 	s.Windows = []*Window{w}
 	return s
 }
@@ -424,7 +529,7 @@ func Open(ctx context.Context, specs []config.Connection, start int) (*Session, 
 		return nil, err
 	}
 	conns[start].take(d)
-	return newSession(specs[start].Name, conns, conns[start], 1), nil
+	return newSession(specs[start].Name, conns, conns[start], config.ConsoleName(1)), nil
 }
 
 // dialed is a connection's Main and Meta as dial connected them, and
@@ -576,13 +681,13 @@ func (a *App) newTab() {
 // file, in place of a landing tab or in a new tab of openTarget's pane.
 // ok is false when the file cannot be read: no console, a toast.
 func (a *App) newConsole(conn *Conn) (cmd tea.Cmd, ok bool) {
-	p, n := a.openTarget(), a.freeConsole()
-	c, err := openConsole(conn, n)
+	p, name := a.openTarget(), a.freeConsole()
+	c, err := openConsole(conn, name)
 	if err != nil {
 		return a.showToast(err.Error(), toastTTL), false
 	}
 	a.showPane(p.ID)
-	putTab(p, Tab{Name: fmt.Sprintf("console_%d", n), Console: c}, p.tab().landing())
+	putTab(p, Tab{Name: name, Console: c}, p.tab().landing())
 	return a.keepConsole(c), true
 }
 
@@ -680,18 +785,19 @@ func (a *App) consoles() []*consoleTab {
 	return out
 }
 
-// freeConsole is the least n no session has console_n open (§11).
-func (a *App) freeConsole() int {
-	return freeNumber(func(n int) bool { return a.consoleOpen(config.ConsolePath(n)) })
+// freeConsole is the first of console_1, console_2… no session has open
+// (§11).
+func (a *App) freeConsole() string {
+	return freeConsoleName(func(name string) bool { return a.consoleOpen(config.ConsolePath(name)) })
 }
 
-// freeNumber is the least console number taken says is not.
-func freeNumber(taken func(int) bool) int {
-	n := 1
-	for taken(n) {
-		n++
+// freeConsoleName is the first of console_1, console_2… taken says is not.
+func freeConsoleName(taken func(string) bool) string {
+	for n := 1; ; n++ {
+		if name := config.ConsoleName(n); !taken(name) {
+			return name
+		}
 	}
-	return n
 }
 
 // Close closes every session's connections, as the program ends.
@@ -1027,7 +1133,7 @@ type closedTab struct {
 	conn      *Conn
 	table     db.Table // a table's, with the request it had
 	req       request
-	console   int // console_n, 0 for a table
+	console   string // the console's name, "" for a table
 	schema    string
 }
 
@@ -1043,7 +1149,7 @@ func (s *Session) recordClosed(win, pane int, tab Tab) {
 		d := tab.Data
 		c = closedTab{conn: d.conn, table: d.table, req: request{applied: d.applied, order: d.order, desc: d.desc, limit: d.limit}}
 	case tab.Console != nil:
-		c = closedTab{conn: tab.Console.conn, console: tab.Console.n, schema: tab.Console.schema}
+		c = closedTab{conn: tab.Console.conn, console: tab.Console.name, schema: tab.Console.schema}
 	default:
 		return
 	}
@@ -1065,11 +1171,11 @@ func (a *App) reopenTab() tea.Cmd {
 	}
 	c := s.closed[len(s.closed)-1]
 	s.closed = s.closed[:len(s.closed)-1]
-	if c.console > 0 {
+	if c.console != "" {
 		for _, s2 := range a.sessions {
 			for wi, w := range s2.Windows {
 				for _, p := range w.Root.Leaves() {
-					if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Console != nil && tb.Console.n == c.console }); i >= 0 {
+					if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Console != nil && tb.Console.name == c.console }); i >= 0 {
 						if s2 != s {
 							a.attach(s2)
 						}
@@ -1086,7 +1192,7 @@ func (a *App) reopenTab() tea.Cmd {
 		a.selectWindow(wi)
 		p = s.Windows[wi].pane(c.pane)
 	}
-	if c.console == 0 {
+	if c.console == "" {
 		return a.openTableAs(p, c.conn, c.table, &c.req)
 	}
 	t, err := openConsole(c.conn, c.console)
@@ -1095,7 +1201,7 @@ func (a *App) reopenTab() tea.Cmd {
 	}
 	t.schema = c.schema
 	a.showPane(p.ID)
-	putTab(p, Tab{Name: fmt.Sprintf("console_%d", c.console), Console: t}, p.tab().landing())
+	putTab(p, Tab{Name: c.console, Console: t}, p.tab().landing())
 	return a.keepConsole(t)
 }
 

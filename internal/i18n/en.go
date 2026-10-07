@@ -136,6 +136,8 @@ var en = map[string]string{
 	"选中":               "Select",
 	"重命名 session":      "Rename session",
 	"重命名 window":       "Rename window",
+	"重命名 session…":     "Rename session…",
+	"重命名 console…":     "Rename console…",
 	"重开关掉的 tab":        "Reopen the closed tab",
 	"重跑":               "Run again",
 	"键位帮助":             "Key help",
@@ -349,6 +351,10 @@ var en = map[string]string{
 	// Elsewhere
 	"keymaps.toml 有 %d 处问题：": "keymaps.toml has %d problem(s):",
 	"只有表里的行能复制为 INSERT":      "Only a table's rows copy as INSERT",
+	"已有同名 window":            "A window of that name exists",
+	"已有同名 console":           "A console of that name exists",
+	"session 名：":             "Session name: ",
+	"console 名：":             "Console name: ",
 	"知道了":                    "Got it",
 	"；":                      "; ",
 }

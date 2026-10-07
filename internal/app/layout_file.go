@@ -12,8 +12,6 @@ import (
 	"sqlmux/internal/config"
 	"sqlmux/internal/db"
 	"sqlmux/internal/i18n"
-	"sqlmux/internal/keymap"
-	"sqlmux/internal/ui"
 )
 
 // The working set as a file (§14「布局文件」, F6.5): layoutOf takes it from
@@ -96,7 +94,7 @@ func paneLayout(p *Pane) config.LayoutPane {
 			if t.want != nil { // not there yet: it is where it is going that is kept
 				c, schema = t.want, t.wantSchema
 			}
-			lt = config.LayoutTab{Kind: "console", Connection: c.Spec.Name, Schema: schema, N: t.n}
+			lt = config.LayoutTab{Kind: "console", Connection: c.Spec.Name, Schema: schema, Name: t.name}
 		default: // a landing tab
 			continue
 		}
@@ -133,7 +131,7 @@ func (r *Restored) DialStart(ctx context.Context) error {
 // not there, a console file that does not read.
 func Restore(specs []config.Connection, l *config.Layout) *Restored {
 	r := &Restored{Active: min(max(l.Active, 0), len(l.Sessions)-1)}
-	used := map[int]bool{} // the consoles taken, by number
+	used := map[string]bool{} // the consoles taken, by name
 	for _, ls := range l.Sessions {
 		conns := make([]*Conn, len(specs))
 		for j, spec := range specs {
@@ -153,12 +151,12 @@ func Restore(specs []config.Connection, l *config.Layout) *Restored {
 			r.Warnings = append(r.Warnings, warns...)
 		}
 		if len(s.Windows) == 0 { // a session with no window is one with the default
-			n := freeNumber(func(n int) bool { return used[n] })
-			w, warning := s.newWindow(conns[start], n)
+			name := freeConsoleName(func(name string) bool { return used[name] })
+			w, warning := s.newWindow(conns[start], name)
 			if warning != "" {
 				r.Warnings = append(r.Warnings, warning)
 			} else {
-				used[n] = true
+				used[name] = true
 			}
 			s.Windows = append(s.Windows, w)
 		}
@@ -172,7 +170,7 @@ func Restore(specs []config.Connection, l *config.Layout) *Restored {
 // names, their tabs, the focus and the zoom. A pane the tree has that no
 // entry gives is an empty one; one the tree does not have gets no tab; a
 // window with no tree is one pane, the first there is.
-func restoreWindow(s *Session, lw config.LayoutWindow, used map[int]bool) (*Window, []string) {
+func restoreWindow(s *Session, lw config.LayoutWindow, used map[string]bool) (*Window, []string) {
 	var warns []string
 	panes := map[int]*Pane{} // the tree's
 	w := &Window{Name: lw.Name, TreeOpen: lw.SidebarOpen, TreeW: lw.SidebarWidth, Tree: &Pane{ID: 0}}
@@ -252,14 +250,14 @@ func restoreWindow(s *Session, lw config.LayoutWindow, used map[int]bool) (*Wind
 // restoreTab is a layout's tab: a table, pending its connection's catalog,
 // or a console on its file; warn says why there is none. A tab with no
 // connection is on the session's start (§14).
-func (s *Session) restoreTab(lt config.LayoutTab, used map[int]bool) (tb Tab, warn string) {
+func (s *Session) restoreTab(lt config.LayoutTab, used map[string]bool) (tb Tab, warn string) {
 	if lt.Kind != "table" && lt.Kind != "console" {
 		return tb, i18n.T("不认识的 tab")
 	}
 	name := cmp.Or(lt.Connection, s.start.Spec.Name)
 	i := slices.IndexFunc(s.Conns, func(c *Conn) bool { return c.Spec.Name == name })
 	if i < 0 {
-		return tb, i18n.T("没有名为 %s 的连接，跳过 %s", name, cmp.Or(lt.Table, fmt.Sprintf("console_%d", lt.N)))
+		return tb, i18n.T("没有名为 %s 的连接，跳过 %s", name, cmp.Or(lt.Table, lt.ConsoleName()))
 	}
 	c := s.Conns[i]
 	if lt.Kind == "table" { // a schema it does not name is the connection's home, known with the catalog
@@ -277,21 +275,21 @@ func (s *Session) restoreTab(lt config.LayoutTab, used map[int]bool) (tb Tab, wa
 		d.transpose = lt.Transpose
 		return Tab{Name: lt.Table, Data: d}, ""
 	}
-	n := lt.N
-	if n <= 0 || used[n] { // taken: the next free one, with its own file
-		n = freeNumber(func(n int) bool { return used[n] })
+	cname := lt.ConsoleName()
+	if cname == "" || used[cname] || config.CheckConsoleName(cname) != nil { // none, taken or not a file's: the next free one, with its own file
+		cname = freeConsoleName(func(name string) bool { return used[name] })
 	}
-	t, err := openConsole(s.start, n)
+	t, err := openConsole(s.start, cname)
 	if err != nil {
 		return tb, err.Error()
 	}
-	used[n] = true
+	used[cname] = true
 	if c == s.start {
 		t.schema = lt.Schema
 	} else { // the connection it was on goes over once it is there
 		t.want, t.wantSchema = c, lt.Schema
 	}
-	return Tab{Name: fmt.Sprintf("console_%d", n), Console: t}, ""
+	return Tab{Name: cname, Console: t}, ""
 }
 
 // Adopt makes r the program's sessions, the one it names attached; the
@@ -401,30 +399,19 @@ func (a *App) saveLast() {
 // askLayoutName is layout.save: the name typed in the status bar, ↵ writes
 // layouts/<name>.toml, esc drops it (§14「命令」).
 func (a *App) askLayoutName() {
-	a.layoutName = &ui.Input{}
-}
-
-// layoutNameKey is key k in that input.
-func (a *App) layoutNameKey(k keymap.Key) tea.Cmd {
-	name, done := typeName(a.layoutName, k)
-	if !done {
-		return nil
-	}
-	a.layoutName = nil
-	if name == "" {
-		return nil
-	}
-	if err := config.CheckLayoutName(name); err != nil {
-		return a.showToast(err.Error(), toastTTL)
-	}
-	l := a.layoutOf()
-	if len(l.Sessions) == 0 { // a start with no connection has nothing to save (F7.4)
-		return a.noConnection()
-	}
-	if err := config.SaveLayout(config.LayoutPath(name), l); err != nil {
-		return a.showToast(err.Error(), toastTTL)
-	}
-	return a.showToast(i18n.T("已保存布局 %s", name), toastTTL)
+	a.askName = &nameAsk{label: i18n.T("布局名："), done: func(a *App, name string) (tea.Cmd, bool) {
+		if err := config.CheckLayoutName(name); err != nil {
+			return a.showToast(err.Error(), toastTTL), false
+		}
+		l := a.layoutOf()
+		if len(l.Sessions) == 0 { // a start with no connection has nothing to save (F7.4)
+			return a.noConnection(), false
+		}
+		if err := config.SaveLayout(config.LayoutPath(name), l); err != nil {
+			return a.showToast(err.Error(), toastTTL), false
+		}
+		return a.showToast(i18n.T("已保存布局 %s", name), toastTTL), false
+	}}
 }
 
 // openLayoutDrop is layout.open: the layouts listed, last among them when

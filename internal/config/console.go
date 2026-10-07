@@ -17,10 +17,19 @@ func DataDir() string {
 	return filepath.Join(home, ".local", "share", "sqlmux")
 }
 
-// ConsolePath is the file of console n (§11), whatever connection it is on.
-func ConsolePath(n int) string {
-	return filepath.Join(DataDir(), "consoles", fmt.Sprintf("console_%d.sql", n))
+// ConsoleName is what the nth console is called until it is renamed (§11).
+func ConsoleName(n int) string { return fmt.Sprintf("console_%d", n) }
+
+// ConsolePath is the file of the console called name (§11), whatever
+// connection it is on.
+func ConsolePath(name string) string {
+	return filepath.Join(DataDir(), "consoles", name+".sql")
 }
+
+// CheckConsoleName is why name is no name for a console: it is a file's,
+// so the rule is a connection's (F8.11). The caller has trimmed it, and not
+// asked for a blank one.
+func CheckConsoleName(name string) error { return checkFileName(name) }
 
 // ReadConsole is the console file at path; "" when there is none yet.
 func ReadConsole(path string) (string, error) {

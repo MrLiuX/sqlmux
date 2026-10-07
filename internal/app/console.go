@@ -29,7 +29,7 @@ type consoleTab struct {
 	want       *Conn
 	wantSchema string
 	ed         *editor.Editor
-	n          int // console_n: the state keeps where it runs by it
+	name       string // the file's name, console_1: the state keeps where it runs by it
 	path       string
 	ver, saved int       // changes made, and the one the file has
 	failed     int       // the first line of the statement whose last run failed, its ▶ red; -1 for none
@@ -53,19 +53,19 @@ type compWait struct {
 	manual bool
 }
 
-// openConsole is console n on connection c, in its Schema, with what its
-// file keeps (§11).
-func openConsole(c *Conn, n int) (*consoleTab, error) {
-	path := config.ConsolePath(n)
+// openConsole is the console called name on connection c, in its Schema,
+// with what its file keeps (§11).
+func openConsole(c *Conn, name string) (*consoleTab, error) {
+	path := config.ConsolePath(name)
 	text, err := config.ReadConsole(path)
 	if err != nil {
 		return nil, fmt.Errorf(i18n.T("读取失败：%w"), err)
 	}
-	return &consoleTab{conn: c, schema: c.Schema, ed: editor.New(text), n: n, path: path, failed: -1}, nil
+	return &consoleTab{conn: c, schema: c.Schema, ed: editor.New(text), name: name, path: path, failed: -1}, nil
 }
 
 // key is t's file name, console_1, which the state keeps where it runs by.
-func (t *consoleTab) key() string { return fmt.Sprintf("console_%d", t.n) }
+func (t *consoleTab) key() string { return t.name }
 
 func consoleOf(p *Pane) *consoleTab {
 	if p.Cur < len(p.Tabs) {
@@ -85,7 +85,7 @@ func (a *App) focusedConsole() *consoleTab {
 
 // overlaid reports whether an overlay has the keys (§7.8).
 func (a *App) overlaid() bool {
-	return a.palette != nil || a.drop != nil || a.cols != nil || a.confirm != nil || a.keyHelp != nil || a.sessList != nil || a.form != nil || a.winRename != nil || a.layoutName != nil
+	return a.palette != nil || a.drop != nil || a.cols != nil || a.confirm != nil || a.keyHelp != nil || a.sessList != nil || a.form != nil || a.winRename != nil || a.askName != nil
 }
 
 // vim is the editor that has the keys, with nothing over it: the focused

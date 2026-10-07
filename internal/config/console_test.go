@@ -11,7 +11,7 @@ import (
 func TestConsoleFiles(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", dir)
-	path := ConsolePath(1)
+	path := ConsolePath("console_1")
 	if want := filepath.Join(dir, "sqlmux", "consoles", "console_1.sql"); path != want {
 		t.Fatalf("path %s, want %s", path, want)
 	}

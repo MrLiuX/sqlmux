@@ -410,7 +410,7 @@ func TestQuickSQLToResult(t *testing.T) {
 func TestQuickSQLEdit(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sized(160, 45, "nerd")
-	if err := config.WriteConsole(config.ConsolePath(2), "select 1\n"); err != nil {
+	if err := config.WriteConsole(config.ConsolePath("console_2"), "select 1\n"); err != nil {
 		t.Fatal(err)
 	}
 	feed(t, a, "<C-p>;delete from t_order<Esc><CR><C-e>")
@@ -431,7 +431,7 @@ func TestQuickSQLEdit(t *testing.T) {
 	if feed(t, a, "<C-e>"); a.palette != nil || !strings.HasSuffix(text(consoleOf(a.focused())), "select * from t_or") {
 		t.Errorf("C-e over the candidates: palette %v", a.palette)
 	}
-	if err := os.MkdirAll(config.ConsolePath(4), 0o700); err != nil { // console_4's file can't be read
+	if err := os.MkdirAll(config.ConsolePath("console_4"), 0o700); err != nil { // console_4's file can't be read
 		t.Fatal(err)
 	}
 	if feed(t, a, "<C-p>;select 9<C-e>"); a.palette == nil || a.palette.input.Text != ";select 9" || a.toast == "" {

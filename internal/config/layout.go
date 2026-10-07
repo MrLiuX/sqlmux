@@ -75,8 +75,20 @@ type LayoutTab struct {
 	Page      int      `toml:"page,omitempty"` // from 0
 	Cols      []string `toml:"cols,omitempty"` // the columns COLS hides
 	Transpose bool     `toml:"transpose,omitempty"`
-	// a console's: console_<n>
-	N int `toml:"n,omitempty"`
+	// a console's: the name of its file; N is what layouts of before
+	// M8 F8.11 say, console_<n>
+	Name string `toml:"name,omitempty"`
+	N    int    `toml:"n,omitempty"`
+}
+
+// ConsoleName is the name of a console tab's file: Name, or console_<N> in
+// a layout of before the names (no migration: it is read, and written as a
+// name).
+func (t LayoutTab) ConsoleName() string {
+	if t.Name == "" && t.N > 0 {
+		return ConsoleName(t.N)
+	}
+	return t.Name
 }
 
 // LayoutsDir is where the named layouts are.
@@ -116,11 +128,20 @@ func LayoutArg(nameOrPath string) string {
 // LayoutsDir, and last is last.toml's. The caller has trimmed it, and not
 // asked for a blank one.
 func CheckLayoutName(name string) error {
-	switch {
-	case strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, "."):
-		return errors.New(i18n.T("名字不能含 / 或 \\，也不能以 . 开头"))
-	case name == "last":
+	if err := checkFileName(name); err != nil {
+		return err
+	}
+	if name == "last" {
 		return errors.New(i18n.T("last 是保留名，指上次退出时的布局"))
+	}
+	return nil
+}
+
+// checkFileName is the rule of a name that is a file's: none of / or \, no
+// leading . (a connection's, a layout's, a console's).
+func checkFileName(name string) error {
+	if strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, ".") {
+		return errors.New(i18n.T("名字不能含 / 或 \\，也不能以 . 开头"))
 	}
 	return nil
 }
