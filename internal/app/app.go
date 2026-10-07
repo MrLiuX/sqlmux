@@ -381,6 +381,11 @@ func (a *App) click(p uv.Position) tea.Cmd {
 		if a.form != nil {
 			a.formSegment(t.Pane, t.I)
 		}
+	case ui.KindConn: // a row of the manager's list: selected, and the list has the keys (F8.16)
+		if a.form != nil {
+			a.selectConn(t.I)
+			a.form.list = true
+		}
 	case ui.KindRow:
 		switch tab, c := a.typingTab(), a.completing(); {
 		case tab != nil && tab.cell != nil: // an option applies at once (§10.2)
@@ -559,7 +564,7 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 				if a.sessList.rename != nil {
 					cmds = append(cmds, a.renameKey(k))
 				}
-			case a.form != nil:
+			case a.form != nil && !a.form.list:
 				a.formKey(k)
 			case a.winRename != nil:
 				cmds = append(cmds, a.renameWindowKey(k))
@@ -586,7 +591,7 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 // mode is derived from state, never stored (§3 principle 3).
 func (a *App) mode() keymap.Mode {
 	switch t, ed := a.typingTab(), a.vim(); {
-	case a.form != nil, a.winRename != nil, a.askName != nil, a.sessList != nil && a.sessList.rename != nil: // inputs with the keys over the panes (§7.8)
+	case a.form != nil && !a.form.list, a.winRename != nil, a.askName != nil, a.sessList != nil && a.sessList.rename != nil: // inputs with the keys over the panes (§7.8)
 		return keymap.Insert
 	case a.overlaid(), t != nil && t.hist != nil: // an overlay has the keys (§7.8)
 		return keymap.Command
@@ -613,6 +618,8 @@ func (a *App) context() keymap.Context {
 		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Insert}
 	case a.sessList != nil:
 		return keymap.Context{Overlay: "sessions", Mode: keymap.Command}
+	case a.form != nil && a.form.list: // the list of connections (F8.16)
+		return keymap.Context{Overlay: "conns", Mode: keymap.Command}
 	case a.form != nil: // its inputs: unbound keys are text
 		return keymap.Context{Overlay: "form", Mode: keymap.Insert}
 	case a.winRename != nil, a.askName != nil:

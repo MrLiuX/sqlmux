@@ -181,7 +181,7 @@
 **开发**（§5、§6.8、§11）
 - [ ] 新 window 的默认名：第一个 `data`，之后 `data-2`、`data-3`……取同一 session 里最小的没用过的序号。`window.rename` 改成同 session 里已有的名字时 toast 拒绝、输入框留着。
 - [ ] `session.rename`「重命名 session…」：在任何地方可用（面板、可绑键），用状态栏的单行输入（同 `window.rename`）；名字和已有 session 重复时拒绝。session 列表里的 `$` 照旧。
-- [ ] `console.rename`「重命名 console…」：同上。console 的名字就是文件名：`consoles/<名字>.sql`，默认 `console_<n>`，改名就是改文件名（目标已存在时拒绝；名字规则同连接名：不含 `/`、`\`，不以 `.` 开头）；tab、pane 标题、工作区树、面板都显示新名字；state.json 的 `consoles` 键和布局文件里的 console 项改成记名字（`n` 改成 `name`，读到旧的 `n` 当 `console_<n>`，不写迁移代码）。改名后另一个 session 正开着同名文件的情况不会出现（打开时就互斥，§11）。
+- [ ] `console.rename`「重命名 console…」：同上；焦点不在 console 上时什么都不做、不 toast（审查时定，同其他只对 console 起作用的命令）。console 的名字就是文件名：`consoles/<名字>.sql`，默认 `console_<n>`，改名就是改文件名（目标已存在时拒绝；名字规则同连接名：不含 `/`、`\`，不以 `.` 开头）；tab、pane 标题、工作区树、面板都显示新名字；state.json 的 `consoles` 键和布局文件里的 console 项改成记名字（`n` 改成 `name`，读到旧的 `n` 当 `console_<n>`，不写迁移代码）。改名后另一个 session 正开着同名文件的情况不会出现（打开时就互斥，§11）。
 
 **验收**
 - [ ] 单测：连开三个 window 得 `data`、`data-2`、`data-3`；重命名成已有名字被拒绝；console 改名后文件改名、state.json 键改名、布局文件写 `name`，旧布局的 `n` 能读。
@@ -222,7 +222,7 @@
 
 **开发**（§9.6「WHERE 的 `C-r` 历史 / 收藏下拉」、§7.8 查询条）
 - [ ] 列表顺序改成历史在前、收藏在后，两组之间画一行 `sep` 色的横线（两组都非空时才画）；图标照旧，不画组标题。
-- [ ] WHERE 行右端的 `▾` 前面加 `history` 图标和打开下拉的键（从 keymap 读 `where.history` 在 `input` 作用域的键，默认 `C-r`），`dim` 色，如 `󰋚 C-r ▾`；放不下时只留 `▾`。
+- [ ] WHERE 行右端的 `▾` 前面加 `history` 图标和打开下拉的键（从 keymap 读 `where.history` 在 `input` 作用域的键，默认 `C-r`），`dim` 色，如 `󰋚 C-r ▾`；输入框留得下 16 列才显示，放不下时只留 `▾`；键位文字那一段也能点开下拉（worker 定，审查时接受）。
 - [ ] 下拉底部一行提示：移动 · 应用 · 收藏 / 取消收藏 · 关闭，键位从 keymap 读（同面板底栏的做法）；已有的话只核对顺序。
 
 **验收**
@@ -254,7 +254,14 @@
 - [ ] 命令 `conn.manage`「管理连接…」：居中浮层，左边是 connections.toml 顺序的连接列表（图标 + 名字，只读的带 `lock`，当前选中项 `select` 底），右边是 F7.4 的表单，填着选中连接的值（`dsn` 写法的连接 host 等字段从 dsn 拆出来显示；`${VAR}` 和 `password_cmd` 原样显示在高级里，不展开）；`j` / `k` / 点击切换，`Tab` 进表单，`↵` / `C-s` 保存，`esc` 关闭。列表最后一项是 `＋ 新建`，`conn.new` 和侧栏的 `＋` 都打开这个浮层并选中它（表单空白），不再另有一个单独的新建表单。
 - [ ] 保存：改写 connections.toml 里这一个 `[[connection]]` 块的 `key = value` 行（改值的改、新加的键加在这一块最后一个键后面、清空的键删掉），文件其他部分（注释、空行、别的块）一个字节不动；密码照 F7.3 走钥匙串。`name` 改了时 state.json 里按连接名记的东西（`recent`、`tables` 的键）跟着改。已连上的连接改了之后不重连，toast「下次连接时生效」。
 - [ ] 删除：列表上 `x`（`[keys.conns]` 作用域）或表单下的「删除」按钮，确认框「删除连接 <名字>？」；有 session 正在用它（有它的 tab 或它是启动连接）时拒绝、toast「先关掉用它的 tab」；删掉文件里这一块（它上面紧挨着的注释行一起删）；钥匙串里的密码一并删（`security delete-generic-password` / `secret-tool clear`）。
-- [ ] 细节由 worker 开工前提议：块的边界怎么定、`dsn` 写法的连接改字段后写回 dsn 还是拆成字段、列表作用域的键。先看 lazysql 怎么存和改连接（它整文件重写，会丢注释，正是我们不这么做的原因）。
+- [ ] 细节（worker 2026-10-07 提议，已定；lazysql 整文件重写、pgtui 存自己的库，都不能借）：
+  - **块的边界**：从 `[[connection]]` 行到下一个以 `[` 开头的行或文件末尾；块上面紧挨着的连续 `#` 行算它的（删除一起删，改值不动）。改值只动 `key = value` 单行，缺的键加在最后一个键行后，清空的删行；块里有多行值、点号键、内联表这类写法时拒绝保存，表单里说「connections.toml 里这一项写法太特别，请手工改」。
+  - **`dsn` 写法的连接**（决策者选了小的做法）：host / port / user / database 从 dsn 拆出来只读显示（灰），只能改 `dsn` 一栏和 password / read_only / name；不做「改字段写回 dsn 对应段」（`ponytail:` 标上限：用户要时再做）。新建仍照 F7.4 拼 dsn。
+  - **改名**：state.json 里 `recent`、`tables` 的键、`consoles` 的 `conn` 跟着改；layouts/*.toml 和 last.toml 里的 `connection = "旧名"` 不改（恢复时本来就报「没有叫 X 的连接」并跳过），§14 提一句。名字不能和别的连接重复。
+  - **钥匙串**：只认我们自己模板的 `password_cmd`（`security find-generic-password -a sqlmux -s …` / `secret-tool lookup service sqlmux account …`），删除时用命令里的服务名删，用户自己写的不碰；改名不改 password_cmd（指着旧服务名照样能用）；表单里 password 非空就按当前名字存一条新的、换掉 password_cmd、旧的我们的项先删，留空 = 不改密码。
+  - **正在用**：有任何 tab 挂在它上面或它是某 session 的启动连接就拒绝删除；只是连着没 tab 的可以删，内存里留到退出。改了已连上的 toast「下次连接时生效」，各 session 的 Spec 换成新读出来的。
+  - **界面**：`ui.ConnManager`，宽 100、左 26 列列表、右边复用 `ui.Form` 的字段绘制（拆出来共用，不另写）；新作用域 `[keys.conns]`：`conns.up` / `conns.down` / `conns.form`（`Tab` / `l` / `→` 进表单）/ `conns.delete`（`x`）/ `conns.close`；表单里 `esc` 回列表、再 `esc` 关；F7.4 的独立表单删掉，零连接启动也开这个浮层并选中「＋ 新建」；F7.4 的 golden 重生成。
+  - `internal/config` 加 `UpdateConnection(old, new)` / `DeleteConnection(name)`，单测含「块在文件末尾没有换行」。
 
 **验收**
 - [ ] 单测：改一个连接的 host 后，文件里只有那一行变了，注释都在；删除后那一块和它的注释没了，其他块不动；改名后 state.json 的键跟着改。
