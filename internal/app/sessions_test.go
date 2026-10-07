@@ -77,6 +77,10 @@ func TestSessionRename(t *testing.T) {
 	if report.Name != "report" || a.sessList.rename != nil {
 		t.Errorf("blank, then esc: %s", report.Name)
 	}
+	a.toast = ""
+	if feed(t, a, "$<CR>"); report.Name != "report" || a.toast != "" {
+		t.Errorf("its own name: %s, toast %q", report.Name, a.toast)
+	}
 	if feed(t, a, "$<BS><BS>rt2<CR>"); report.Name != "report2" {
 		t.Errorf("renamed: %s", report.Name)
 	}
@@ -156,7 +160,7 @@ func TestWindows(t *testing.T) {
 	data := a.win()
 	feed(t, a, "<Space>c")
 	w := a.win()
-	if len(a.sess.Windows) != 2 || a.sess.Active != 1 || w.Name != "data-2" || w.ID != 2 || consoleOf(w.Root.B.Pane).key() != "console_2" {
+	if len(a.sess.Windows) != 2 || a.sess.Active != 1 || w.Name != "data-2" || w.ID != 2 || consoleOf(w.Root.B.Pane).name != "console_2" {
 		t.Fatalf("SPC c: %d windows, on %d %q", len(a.sess.Windows), a.sess.Active, w.Name)
 	}
 	feed(t, a, "<Space>c<Space>n")
@@ -367,6 +371,11 @@ func TestSessionRenameCommand(t *testing.T) {
 	if a.askName == nil || a.toast == "" || report.Name != "report" {
 		t.Errorf("another's name: asking %v, toast %q, %q", a.askName != nil, a.toast, report.Name)
 	}
+	a.toast = ""
+	if feed(t, a, "<C-u>report<CR>"); a.askName != nil || a.toast != "" || report.Name != "report" {
+		t.Errorf("its own name: asking %v, toast %q, %q", a.askName != nil, a.toast, report.Name)
+	}
+	a.run("session.rename", 0)
 	feed(t, a, "<C-u>weekly<CR>")
 	if a.askName != nil || report.Name != "weekly" {
 		t.Errorf("a name of its own: %q", report.Name)
@@ -401,5 +410,43 @@ func TestSessionCloseCommand(t *testing.T) {
 	feed(t, a, "y")
 	if len(a.sessions) != 1 || a.sess.Name != "doraemon" {
 		t.Errorf("confirmed: %d sessions", len(a.sessions))
+	}
+}
+
+// The names asked in the status bar, layout.save, session.rename and
+// console.rename, take the left of it as window.rename does: the mode block
+// stays at the right, INSERT, the input not over it, on a narrow bar too
+// (§7.8, F8.11).
+func TestAskNameKeepsModeBlock(t *testing.T) {
+	for _, w := range []int{160, 50} {
+		for _, cmd := range []string{"layout.save", "session.rename", "console.rename"} {
+			a, _ := inConsole(t, "", "")
+			a.Update(tea.WindowSizeMsg{Width: w, Height: 20})
+			a.run(cmd, 0)
+			if a.askName == nil {
+				t.Fatalf("%s: not asking", cmd)
+			}
+			feed(t, a, "x")
+			row := statusRow(a)
+			if !strings.HasSuffix(row, " INSERT ") || !strings.Contains(row, a.askName.label+a.askName.in.Text) {
+				t.Errorf("%s at %d: %q", cmd, w, row)
+			}
+			if c := a.render().Cursor; c == nil || c.X >= ui.Width(row)-ui.Width(" INSERT ") || c.Y != a.h-1 {
+				t.Errorf("%s at %d: the cursor %v is not in the left", cmd, w, c)
+			}
+			if bg := a.render().Buf.CellAt(1+ui.Width(a.askName.label)+3, a.h-1).Style.Bg; bg != a.theme.Border {
+				t.Errorf("%s at %d: past the name the input is %v, not the bar's %v", cmd, w, bg, a.theme.Border)
+			}
+			// a name longer than the input is its tail: nothing of its start is left
+			// beside it, and the mode block is not covered
+			feed(t, a, "αβγδεζηθικλμν"+strings.Repeat("z", 200))
+			row = statusRow(a)
+			if !strings.HasSuffix(row, " INSERT ") || strings.ContainsAny(row, "αβγδεζηθικλμν") {
+				t.Errorf("%s at %d, a long name: %q", cmd, w, row)
+			}
+			if c := a.render().Cursor; c == nil || c.X >= ui.Width(row)-ui.Width(" INSERT ") || c.Y != a.h-1 {
+				t.Errorf("%s at %d, a long name: the cursor %v", cmd, w, c)
+			}
+		}
 	}
 }

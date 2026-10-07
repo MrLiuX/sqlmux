@@ -911,6 +911,119 @@ func TestConsoleRename(t *testing.T) {
 	}
 }
 
+// Names that differ only in case are one file on some file systems (macOS,
+// Windows): a console cannot take the name of another open, whether or not
+// that one has a file yet; two new ones never get the same file; and its
+// own file may change case (§11, F8.11).
+func TestConsoleRenameCase(t *testing.T) {
+	ask := func(a *App, name string) {
+		a.askName.in = ui.Input{}
+		feed(t, a, name+"<CR>")
+	}
+	a, first := inConsole(t, "", "") // console_1: nothing typed, no file
+	a.newConsole(first.conn)
+	second := consoleOf(a.focused())
+	feed(t, a, "iselect 2<Esc>")
+	if err := second.flush(); err != nil {
+		t.Fatal(err)
+	}
+	a.run("console.rename", 0)
+	if ask(a, "Console_1"); a.askName == nil || second.name != "console_2" {
+		t.Errorf("another open console's name in other case: asking %v, %q", a.askName != nil, second.name)
+	}
+	if got, _ := config.ReadConsole(second.path); got != "select 2\n" {
+		t.Errorf("its file: %q", got)
+	}
+	if ask(a, "Console_3"); a.askName != nil || second.name != "Console_3" {
+		t.Fatalf("a free name: asking %v, %q", a.askName != nil, second.name)
+	}
+	for range 2 {
+		if _, ok := a.newConsole(first.conn); !ok {
+			t.Fatal("a new console")
+		}
+	}
+	var names []string
+	for _, c := range a.consoles() {
+		names = append(names, c.name)
+	}
+	slices.Sort(names)
+	if want := []string{"Console_3", "console_1", "console_2", "console_4"}; !slices.Equal(names, want) {
+		t.Errorf("new consoles go round it: %v, want %v", names, want)
+	}
+
+	a, c := inConsole(t, "", "")
+	feed(t, a, "iselect 1<Esc>")
+	if err := c.flush(); err != nil {
+		t.Fatal(err)
+	}
+	a.run("console.rename", 0)
+	if ask(a, "Console_1"); a.askName != nil || c.name != "Console_1" {
+		t.Fatalf("its own file's case: asking %v, %q", a.askName != nil, c.name)
+	}
+	var files []string
+	es, _ := os.ReadDir(filepath.Dir(c.path))
+	for _, e := range es {
+		files = append(files, e.Name())
+	}
+	if !slices.Equal(files, []string{"Console_1.sql"}) {
+		t.Errorf("files %v", files)
+	}
+
+	// a closed console reopens on the open one of its file, whatever the case
+	a.newConsole(c.conn)
+	a.run("tab.close", 0) // console_2, closed
+	a.showPane(a.win().pane(2).ID)
+	a.run("console.rename", 0)
+	ask(a, "CONSOLE_2")
+	n := len(a.consoles())
+	if a.run("tab.reopen", 0); len(a.consoles()) != n {
+		t.Errorf("reopened on a second console of the one file: %d consoles, was %d", len(a.consoles()), n)
+	}
+}
+
+// A console's name is changed as it stands: its own name again is nothing,
+// one never typed in has no file to move, and a file that cannot be moved
+// leaves the name, the tab and the state as they were (F8.11).
+func TestConsoleRenameEdges(t *testing.T) {
+	a, c := inConsole(t, "", "")
+	a.run("console.rename", 0)
+	a.toast = ""
+	if feed(t, a, "<CR>"); a.askName != nil || a.toast != "" || c.name != "console_1" {
+		t.Errorf("its own name: asking %v, toast %q, %q", a.askName != nil, a.toast, c.name)
+	}
+	a.keepConsole(c)
+	a.run("console.rename", 0)
+	a.askName.in = ui.Input{}
+	if feed(t, a, "fresh<CR>"); a.askName != nil || c.name != "fresh" || a.state.Consoles["fresh"].Conn == "" {
+		t.Errorf("no file yet: asking %v, %q, state %+v", a.askName != nil, c.name, a.state.Consoles)
+	}
+	if _, err := os.Stat(c.path); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("a file made out of nothing: %v", err)
+	}
+
+	if os.Geteuid() == 0 {
+		t.Skip("root writes anywhere")
+	}
+	feed(t, a, "iselect 1<Esc>")
+	if err := c.flush(); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Dir(c.path)
+	if err := os.Chmod(dir, 0o555); err != nil { // a file there can be written over, not moved
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) // the temp dir goes with it
+	a.run("console.rename", 0)
+	a.askName.in = ui.Input{}
+	a.toast = ""
+	if feed(t, a, "moved<CR>"); a.askName == nil || a.toast == "" || c.name != "fresh" || c.path != config.ConsolePath("fresh") {
+		t.Errorf("the file stays: asking %v, toast %q, %q at %s", a.askName != nil, a.toast, c.name, c.path)
+	}
+	if _, ok := a.state.Consoles["moved"]; ok || a.state.Consoles["fresh"].Conn == "" || a.focused().tab().Name != "fresh" {
+		t.Errorf("state %+v, tab %q", a.state.Consoles, a.focused().tab().Name)
+	}
+}
+
 // A click on a candidate takes it, with its space (§9.7, F8.1).
 func TestConsoleClickCandidate(t *testing.T) {
 	a, c := inConsole(t, "", "")

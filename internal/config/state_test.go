@@ -222,3 +222,24 @@ func TestStateRenameConnection(t *testing.T) {
 		t.Errorf("consoles %v", s.Consoles)
 	}
 }
+
+// A name that was a connection's, and has data left from it, gives way to
+// the connection renamed to it: its tables and quick SQL are written over, a
+// pick in both is kept once (F8.16).
+func TestStateRenameOverOldData(t *testing.T) {
+	s := &State{
+		Recent: []Recent{{"table", "dev/public.t"}, {"table", "play/public.t"}, {"table", "dev/public.u"}},
+		Tables: map[string]*TableState{"dev/public.t": {History: []Query{{Where: "dev's"}}}, "play/public.t": {History: []Query{{Where: "play's"}}}},
+		SQL:    map[string][]string{"dev": {"dev's sql"}, "play": {"play's sql"}},
+	}
+	s.RenameConnection("play", "dev")
+	if want := []Recent{{"table", "dev/public.t"}, {"table", "dev/public.u"}}; !slices.Equal(s.Recent, want) {
+		t.Errorf("recent %v, want %v", s.Recent, want)
+	}
+	if h := s.Tables["dev/public.t"].History; len(h) != 1 || h[0].Where != "play's" {
+		t.Errorf("tables %v", h)
+	}
+	if s.SQL["dev"][0] != "play's sql" || len(s.SQL) != 1 {
+		t.Errorf("sql %v", s.SQL)
+	}
+}

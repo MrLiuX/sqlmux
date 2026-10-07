@@ -39,6 +39,11 @@ func TestKeysCheck(t *testing.T) {
 		t.Fatalf("clean config: exit %d, stderr %q", code, errb.String())
 	}
 
+	writeConfig(t, "keymaps.toml", "[keys.normal]\nt = \"tab.next\"\ntc = \"tab.prev\"\n")
+	if code := keysCmd([]string{"--check"}, &out, &errb); code != 0 || errb.Len() > 0 {
+		t.Fatalf("a key and a sequence it starts: exit %d, stderr %q", code, errb.String())
+	}
+
 	writeConfig(t, "keymaps.toml", "[keys.normal]\n\"<C-x>\" = \"a\"\n\"<c-x>\" = \"b\"\n")
 	errb.Reset()
 	if code := keysCmd([]string{"--check"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "[keys.normal] <c-x>") {

@@ -24,8 +24,10 @@ type connForm struct {
 	sel    int
 	err    string
 	cur    int                // the list's selected row: a connection, or len(specs) for the one that makes a new one
+	top    int                // the list's first row showing
 	list   bool               // the list has the keys, not the form
-	was    *config.Connection // the connection the form edits, as it was; nil for a new one
+	direct bool               // opened on a new connection by conn.new, not by going down the list to it: esc closes it
+	was    *config.Connection // the connection the form edits, as connections.toml said it when it was selected; nil for a new one
 }
 
 // The form's fields, in order; the last two are in the 高级 fold.
@@ -78,7 +80,8 @@ func blankFields() []ui.FormField {
 // openConnForm is conn.new: the manager on its last row, a new connection,
 // the form having the keys on name.
 func (a *App) openConnForm() {
-	a.form = &connForm{fields: blankFields(), cur: len(a.sess.Conns)}
+	a.form = &connForm{fields: blankFields(), cur: len(a.sess.Conns), direct: true}
+	a.keepConnInSight()
 }
 
 // openConnManager is conn.manage: the manager on the connection in use, the
@@ -90,19 +93,23 @@ func (a *App) openConnManager() {
 }
 
 // selectConn selects row i of the list and fills the form from it: for a
-// connection that is there its values, the dsn written in the fold, which is
-// open, so the host, port, user and database, split from it for the eye, are
-// dim and not to edit (F8.16).
+// connection that is there its values as connections.toml says them now, the
+// dsn written in the fold, which is open, so the host, port, user and
+// database, split from it for the eye, are dim and not to edit (F8.16).
 // ponytail: edited in the dsn only; a form that rewrites parts of a dsn is
 // what a dsn with its own parameters (?sslmode=…) does not survive.
 func (a *App) selectConn(i int) {
 	f, specs := a.form, a.specs()
-	f.cur, f.err, f.sel = i, "", 0
+	f.cur, f.err, f.sel, f.direct = i, "", 0, false
+	defer a.keepConnInSight()
 	if i >= len(specs) {
 		f.fields, f.was = blankFields(), nil
 		return
 	}
-	c := specs[i]
+	c, err := config.ReadConnection(specs[i].Name) // the user may have edited the file since
+	if err != nil {
+		c, f.err = specs[i], err.Error()
+	}
 	f.was, f.fields = &c, blankFields()
 	text := func(field int, s string) { f.fields[field].Input = ui.Input{Text: s, Pos: len(s)} }
 	text(fieldName, c.Name)
@@ -112,7 +119,9 @@ func (a *App) selectConn(i int) {
 	text(fieldPort, port)
 	text(fieldUser, user)
 	text(fieldDatabase, database)
-	f.fields[fieldReadOnly].On = map[bool]int{false: 0, true: 1}[c.ReadOnly]
+	if c.ReadOnly {
+		f.fields[fieldReadOnly].On = 1
+	}
 	f.fields[fieldAdvanced].On = 1
 	text(fieldDSN, c.DSN)
 	text(fieldPasswordCmd, c.PasswordCmd)
@@ -122,11 +131,15 @@ func (a *App) selectConn(i int) {
 var mysqlDSN = regexp.MustCompile(`^(?:([^:@/]*)(?::[^@]*)?@)?tcp\(([^)]*)\)/([^?]*)`)
 
 // splitDSN is the host, port, user and database a dsn says, as far as it
-// says them in a form it knows: a URL, or MySQL's; "" for what it cannot read.
+// says them in a form it knows: a URL, which is what the form writes for
+// both engines, or the go-sql-driver's; "" for what it cannot read.
 func splitDSN(engine, dsn string) (host, port, user, database string) {
-	if engine == "mysql" {
+	if engine == "mysql" && !strings.Contains(dsn, "://") {
 		if m := mysqlDSN.FindStringSubmatch(dsn); m != nil {
-			host, port, _ = net.SplitHostPort(m[2])
+			host, port, err := net.SplitHostPort(m[2])
+			if err != nil { // no port written
+				host, port = m[2], ""
+			}
 			return host, port, m[1], m[3]
 		}
 		return
@@ -249,10 +262,11 @@ func composeDSN(engine, host, port, user, database string) string {
 	return u.String()
 }
 
-// formCancel is esc in the form: on a connection that is there it goes back
-// to the list; the form of a new one closes the manager (F8.16).
+// formCancel is esc in the form: it goes back to the list, unless the form
+// was opened on its own, by conn.new, the sidebar's ＋ or a start with no
+// connection, which closes the manager (F8.16).
 func (a *App) formCancel() {
-	if f := a.form; f.was != nil && !f.list {
+	if f := a.form; !f.list && !f.direct {
 		f.list = true
 		return
 	}
@@ -267,8 +281,14 @@ func (a *App) connsMove(d int) {
 	}
 }
 
-// connInUse is whether a session has a tab on the connection called name, or
-// started with it: its tabs would lose it (F8.16).
+// keepConnInSight scrolls the list to its selection.
+func (a *App) keepConnInSight() {
+	f := a.form
+	f.top = max(min(f.top, f.cur), f.cur-a.managerView().ListRows()+1, 0)
+}
+
+// connInUse is whether a session has a tab on the connection called name, a
+// result of a run on it, or started with it: its tabs would lose it (F8.16).
 func (a *App) connInUse(name string) bool {
 	on := func(c *Conn) bool { return c != nil && c.Spec.Name == name }
 	for _, s := range a.sessions {
@@ -278,7 +298,8 @@ func (a *App) connInUse(name string) bool {
 		for _, p := range s.panes() {
 			for _, tb := range p.Tabs {
 				switch {
-				case tb.Data != nil && on(tb.Data.conn), tb.Console != nil && (on(tb.Console.conn) || on(tb.Console.want)):
+				case tb.Data != nil && on(tb.Data.conn), tb.Console != nil && (on(tb.Console.conn) || on(tb.Console.want)),
+					tb.Result != nil && tb.Result.run != nil && on(tb.Result.run.conn):
 					return true
 				}
 			}
@@ -289,7 +310,8 @@ func (a *App) connInUse(name string) bool {
 
 // deleteConn is x on the list, or the form's delete: asked first; the block
 // goes from connections.toml, its password from the keychain when it is the
-// one this program put there, the connection from every session (F8.16).
+// one this program put there, the connection from every session, with the
+// tabs closed of it and the password kept for it (F8.16).
 func (a *App) deleteConn() tea.Cmd {
 	f := a.form
 	if f.was == nil {
@@ -304,11 +326,13 @@ func (a *App) deleteConn() tea.Cmd {
 			return a.showToast(err.Error(), toastTTL)
 		}
 		var toast tea.Cmd
-		if _, err := config.DeletePassword(c.PasswordCmd); err != nil {
+		if err := config.DeletePassword(c.PasswordCmd); err != nil {
 			toast = a.showToast(err.Error(), toastTTL)
 		}
+		secrets.Delete(c.Name) // a connection of the name made next asks again
 		for _, s := range a.sessions {
 			s.Conns = slices.DeleteFunc(s.Conns, func(o *Conn) bool { return o.Spec.Name == c.Name })
+			s.closed = slices.DeleteFunc(s.closed, func(t closedTab) bool { return t.conn != nil && t.conn.Spec.Name == c.Name })
 			if s.last != nil && s.last.Spec.Name == c.Name {
 				s.last = s.start
 			}
@@ -322,11 +346,13 @@ func (a *App) deleteConn() tea.Cmd {
 	return nil
 }
 
-// saveEditedConn is ↵ on the form of a connection that is there: what
-// changed is rewritten in its block of connections.toml, nothing else of the
-// file; a password typed goes into the keychain, the old item out of it; the
-// sessions' connections take the new values, those connected when they
-// connect again (F8.16).
+// saveEditedConn is ↵ on the form of a connection that is there: what the
+// form changed is rewritten in its block of connections.toml, nothing else
+// of the file. A password typed, or the one of a connection renamed that
+// this program keeps in the keychain, goes into the keychain under the new
+// name once the file is known to take the edit, and the old item goes
+// after the file is written. The sessions' connections take the block as
+// the file reads back, those connected when they connect again (F8.16).
 func (a *App) saveEditedConn() tea.Cmd {
 	f := a.form
 	fs, was := f.fields, *f.was
@@ -343,55 +369,77 @@ func (a *App) saveEditedConn() tea.Cmd {
 	if field, problem := c.Check(names); problem != "" {
 		return a.fail(slices.Index(connFields, field), problem)
 	}
-	var toast tea.Cmd
-	oldCmd := ""
-	if pw := fs[fieldPassword].Input.Text; pw != "" {
-		if c.PasswordCmd != was.PasswordCmd { // two sources: which one is wanted is not for us to say
-			return a.fail(fieldPassword, i18n.T("password 和 password_cmd 填一个就够了"))
+	pw, typed := fs[fieldPassword].Input.Text, true
+	if pw == "" && c.Name != was.Name && c.PasswordCmd == was.PasswordCmd && config.OwnPassword(was.PasswordCmd) {
+		// its item is named after it: the password goes to one under the new name
+		var err error
+		if pw, err = (config.Connection{PasswordCmd: was.PasswordCmd}).Secret(); err != nil {
+			return a.fail(fieldPassword, i18n.T("钥匙串里读不到 %s 的密码：在 password 里重填，或清空 password_cmd 再保存", was.Name))
 		}
-		cmd, stored, err := config.StorePassword(c.Name, pw)
-		switch {
-		case err != nil:
-			return a.fail(fieldPassword, err.Error())
-		case stored:
-			oldCmd, c.PasswordCmd, c.PasswordEnv, c.Password = was.PasswordCmd, cmd, "", ""
-		case strings.Contains(pw, "${"):
-			return a.fail(fieldPassword, i18n.T("没有钥匙串工具：password 里的 ${ 会被当成环境变量"))
-		default:
-			c.Password = pw
-			toast = a.showToast(i18n.T("没有钥匙串工具，密码以明文存进了 connections.toml"), toastTTL)
-		}
+		typed = false
 	}
-	if err := config.UpdateConnection(was.Name, c); err != nil {
+	if typed && pw != "" && c.PasswordCmd != "" && c.PasswordCmd != was.PasswordCmd { // two sources: which one is wanted is not for us to say
+		return a.fail(fieldPassword, i18n.T("password 和 password_cmd 填一个就够了"))
+	}
+	if pw != "" { // the one place that has the keychain's command and clears the other sources; asked of the file before anything is stored
+		c.PasswordCmd, c.PasswordEnv, c.Password = config.KeychainCmd(c.Name, pw), "", ""
+	}
+	if err := config.CheckUpdate(was.Name, was, c); err != nil {
 		f.err = err.Error()
 		return nil
 	}
-	if oldCmd != "" && oldCmd != c.PasswordCmd { // the old item, of another name, is no one's now
-		_, _ = config.DeletePassword(oldCmd)
+	var toast tea.Cmd
+	if pw != "" {
+		_, ok, err := config.StorePassword(c.Name, pw)
+		switch {
+		case err != nil:
+			return a.fail(fieldPassword, err.Error())
+		case ok:
+		case !typed: // no keychain tool now: the password stays where it was
+			c.PasswordCmd, c.PasswordEnv, c.Password = was.PasswordCmd, was.PasswordEnv, was.Password
+		case strings.Contains(pw, "${"):
+			return a.fail(fieldPassword, i18n.T("没有钥匙串工具：password 里的 ${ 会被当成环境变量"))
+		default: // the file is read password_cmd first: the plaintext would never be used beside one
+			c.PasswordCmd, c.Password = "", pw
+			toast = a.showToast(i18n.T("没有钥匙串工具，密码以明文存进了 connections.toml"), toastTTL)
+		}
 	}
-	connected := false
+	saved, err := config.UpdateConnection(was.Name, was, c)
+	if err != nil { // ponytail: past the check a write can still fail (a full disk, the file changed meanwhile), leaving the item stored; take it out then if it comes up
+		f.err = err.Error()
+		return nil
+	}
+	if !config.SamePassword(was.PasswordCmd, saved.PasswordCmd) { // the old item, of a name or a source left, is no one's now
+		if err := config.DeletePassword(was.PasswordCmd); err != nil {
+			toast = tea.Batch(toast, a.showToast(err.Error(), toastTTL))
+		}
+	}
+	secrets.Delete(was.Name) // a changed password, or a name's, is asked for again
+	secrets.Delete(saved.Name)
+	rest := saved // the name is the tree's at once, it is no news
+	rest.Name = was.Name
+	changed, told := rest != was, false
 	for _, s := range a.sessions {
 		for _, conn := range s.Conns {
 			if conn.Spec.Name != was.Name {
 				continue
 			}
-			conn.Spec = c
-			if conn.State != connReady {
-				conn.eng = engines[c.Engine]
-			} else {
-				connected = true
+			if conn.State == connIdle || conn.State == connFailed {
+				conn.setSpec(saved)
+			} else { // dialed, or being: its engine and lock are the dial's
+				conn.Spec = saved
+				told = changed
 			}
 		}
 	}
-	if c.Name != was.Name {
-		a.state.RenameConnection(was.Name, c.Name)
+	if saved.Name != was.Name {
+		a.state.RenameConnection(was.Name, saved.Name)
 		toast = tea.Batch(toast, a.saveState())
 	}
-	if connected {
+	if told {
 		toast = tea.Batch(toast, a.showToast(i18n.T("下次连接时生效"), toastTTL))
 	}
-	cur := f.cur
-	a.selectConn(cur)
+	a.selectConn(f.cur)
 	return toast
 }
 
@@ -487,7 +535,7 @@ func (a *App) startFirst(conn *Conn) tea.Cmd {
 				cmds = append(cmds, a.showToast(err.Error(), toastTTL))
 				break
 			}
-			putTab(p, Tab{Name: cons.key(), Console: cons}, false)
+			putTab(p, Tab{Name: cons.name, Console: cons}, false)
 			cmds = append(cmds, a.keepConsole(cons))
 		}
 	}
@@ -498,10 +546,10 @@ func (a *App) startFirst(conn *Conn) tea.Cmd {
 // session's order, then the row that makes a new one, and the form (F8.16).
 func (a *App) managerView() ui.ConnManager {
 	ic, f := a.icons, a.form
-	m := ui.ConnManager{Title: i18n.T("连接"), Sel: f.cur, ListFocus: f.list, Form: a.formView()}
-	for _, c := range a.specs() {
-		row := ui.ConnRow{Icon: ic.Engine(c.Engine), Name: c.Name}
-		if c.ReadOnly {
+	m := ui.ConnManager{Title: i18n.T("连接"), Sel: f.cur, Top: f.top, ListFocus: f.list, Form: a.formView()}
+	for _, c := range a.sess.Conns {
+		row := ui.ConnRow{Icon: ic.Engine(c.Spec.Engine), Name: c.Spec.Name}
+		if c.readOnly {
 			row.Lock = ic.Lock
 		}
 		m.Rows = append(m.Rows, row)
@@ -511,14 +559,15 @@ func (a *App) managerView() ui.ConnManager {
 }
 
 // formView is the form as it is drawn: each row's icon, the rows of the
-// closed fold hidden, those that take no part dim.
+// closed fold hidden, those that take no part dim; the keys under it are
+// the list's while it has them.
 func (a *App) formView() ui.Form {
 	f := a.form
 	fields := slices.Clone(f.fields)
 	ic := a.icons
-	title, del := i18n.T("新建连接"), ""
+	del := ""
 	if f.was != nil {
-		title, del = i18n.T("修改连接"), i18n.T("删除")
+		del = i18n.T("删除")
 	}
 	icons := []ui.Icon{fieldName: ic.Tag, fieldEngine: ic.Engine(fields[fieldEngine].Choices[fields[fieldEngine].On]), fieldHost: ic.Host,
 		fieldPort: ic.Port, fieldUser: ic.User, fieldPassword: ic.Key, fieldDatabase: ic.Database, fieldReadOnly: ic.Lock,
@@ -528,9 +577,17 @@ func (a *App) formView() ui.Form {
 		fields[i].Hidden = (i == fieldDSN || i == fieldPasswordCmd) && !f.advanced()
 		fields[i].Dim = f.skipped(i) && !fields[i].Hidden
 	}
-	return ui.Form{Title: title, Fields: fields, Sel: f.sel, Err: f.err, Save: i18n.T("保存"), Cancel: i18n.T("取消"), Delete: del, Hints: bound(
+	hints := bound(
 		ui.Hint{Key: a.keys.Hint("form.next", "form"), Label: i18n.T("下一项"), Action: "form.next"},
 		ui.Hint{Key: a.keys.Hint("form.save", "form"), Label: i18n.T("保存"), Action: "form.save"},
 		ui.Hint{Key: a.keys.Hint("form.cancel", "form"), Label: i18n.T("取消"), Action: "form.cancel"},
-	)}
+	)
+	if f.list {
+		hints = bound(
+			ui.Hint{Key: a.keys.Hint("conns.form", "conns"), Label: i18n.T("编辑"), Action: "conns.form"},
+			ui.Hint{Key: a.keys.Hint("form.save", "conns"), Label: i18n.T("保存"), Action: "form.save"},
+			ui.Hint{Key: a.keys.Hint("conns.close", "conns"), Label: i18n.T("关闭"), Action: "conns.close"},
+		)
+	}
+	return ui.Form{Fields: fields, Sel: f.sel, Err: f.err, Save: i18n.T("保存"), Cancel: i18n.T("取消"), Delete: del, Hints: hints}
 }

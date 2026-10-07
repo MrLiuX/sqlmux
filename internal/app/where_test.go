@@ -558,6 +558,17 @@ func TestWhereHistoryLayout(t *testing.T) {
 	if !strings.Contains(a.render().String(), " "+a.keys.Hint("where.history", "input")+" ▾") {
 		t.Error("the key before the ▾")
 	}
+	// the favorite's row, third entry but fourth row: its entry, not the row's number
+	click(a, find(t, a, ui.Target{Kind: ui.KindRow, I: 3}).Min)
+	if tab.hist != nil || tab.where.Text != "status = 'done'" {
+		t.Errorf("a click on the row after the rule: history %v, where %q", tab.hist, tab.where.Text)
+	}
+	// favorites only: no rule above them
+	st.History = nil
+	feed(t, a, "<Esc>/<C-r>")
+	if es, _ := a.histEntries(tab); len(es) != 1 || rule() {
+		t.Errorf("favorites only: %+v, a rule %v", es, rule())
+	}
 }
 
 // The history list as it shows: history, a rule, favorites, the keys under

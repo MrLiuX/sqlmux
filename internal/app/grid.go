@@ -480,7 +480,7 @@ func sortedBy(col string, desc bool) string {
 // queryBar is the two rows over t's table (§7.8「查询条」).
 func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 	ic := a.icons
-	order := ui.Chip{Label: "ORDER", Value: "—", Action: "grid.order", IconAction: "grid.order.toggle"} // no row identity to sort by
+	order := ui.Chip{Label: "ORDER", Value: "—", Action: "grid.order", IconAction: "grid.order.toggle", Stay: stayOrder} // no row identity to sort by
 	switch s, key := t.shown, t.cols.Key(); {
 	case s.order != "":
 		order.Value, order.Icon = s.order, ic.SortAsc
@@ -500,7 +500,7 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 			pages = "~" + pages
 		}
 	}
-	page := ui.Chip{Label: "PAGE", Value: fmt.Sprintf("%d/%s", t.shown.pageNo+1, pages), Action: "grid.page"}
+	page := ui.Chip{Label: "PAGE", Value: fmt.Sprintf("%d/%s", t.shown.pageNo+1, pages), Action: "grid.page", Stay: stayPage}
 	if t.typing == "page" {
 		page.Input, page.Suffix = &t.pageIn, "/"+pages
 	}
@@ -531,18 +531,32 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 		History: ic.History, HistKey: a.keys.Hint("where.history", "input"),
 		Chips: []ui.Chip{
 			order,
-			{Label: "LIMIT", Value: strconv.Itoa(t.shown.limit), Action: "grid.limit"},
+			{Label: "LIMIT", Value: strconv.Itoa(t.shown.limit), Action: "grid.limit", Stay: stayLimit},
 			page,
-			{Label: "COLS", Value: fmt.Sprintf("%d/%d", len(t.shownCols()), len(t.page.Cols)), Action: "grid.cols"},
+			{Label: "COLS", Value: fmt.Sprintf("%d/%d", len(t.shownCols()), len(t.page.Cols)), Action: "grid.cols", Stay: stayCols},
 		},
 		Buttons: a.toolButtons(t),
 	}
 }
 
+// What gives way on the query bar's second row, the least first (§7.8「第二行
+// 放不下时谁让位」), the only place that says: transpose, auto refresh and stop,
+// + −, then COLS, PAGE, LIMIT, then save and refresh, which has the changes'
+// count, then ORDER.
+const (
+	stayTranspose = iota
+	stayAuto
+	stayRows
+	stayCols
+	stayPage
+	stayLimit
+	staySave
+	stayOrder
+)
+
 // toolButtons are t's query bar buttons (§7.8「工具按钮」): + −, save and
-// refresh, auto refresh and stop, transpose, giving way in the order
-// transpose, auto refresh and stop, + −, save and refresh. Stop and auto
-// refresh go by their state: an [icon] color only when lit.
+// refresh, auto refresh and stop, transpose, giving way in the order above.
+// Stop and auto refresh go by their state: an [icon] color only when lit.
 func (a *App) toolButtons(t *dataTab) []ui.ButtonGroup {
 	th, ic := a.theme, a.icons
 	save := ui.Button{Icon: ic.Save, Action: "save", Fg: th.Info} // Q-05
@@ -558,10 +572,10 @@ func (a *App) toolButtons(t *dataTab) []ui.ButtonGroup {
 		stop.Fg, stop.Plain, stop.Action = th.Error, false, "grid.stop"
 	}
 	return []ui.ButtonGroup{
-		{Buttons: []ui.Button{{Icon: ic.RowAdd, Action: "grid.row.add", Fg: th.Focus}, {Icon: ic.RowDelete, Action: "grid.row.delete", Fg: th.Error}}, Stay: 2},
-		{Buttons: []ui.Button{save, {Icon: ic.Refresh, Action: "grid.refresh", Fg: th.Info}}, Stay: 3},
-		{Buttons: []ui.Button{auto, stop}, Stay: 1},
-		{Buttons: []ui.Button{{Icon: ic.Transpose, Action: "grid.transpose", Fg: th.Info}}},
+		{Buttons: []ui.Button{{Icon: ic.RowAdd, Action: "grid.row.add", Fg: th.Focus}, {Icon: ic.RowDelete, Action: "grid.row.delete", Fg: th.Error}}, Stay: stayRows},
+		{Buttons: []ui.Button{save, {Icon: ic.Refresh, Action: "grid.refresh", Fg: th.Info}}, Stay: staySave},
+		{Buttons: []ui.Button{auto, stop}, Stay: stayAuto},
+		{Buttons: []ui.Button{{Icon: ic.Transpose, Action: "grid.transpose", Fg: th.Info}}, Stay: stayTranspose},
 	}
 }
 

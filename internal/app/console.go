@@ -64,9 +64,6 @@ func openConsole(c *Conn, name string) (*consoleTab, error) {
 	return &consoleTab{conn: c, schema: c.Schema, ed: editor.New(text), name: name, path: path, failed: -1}, nil
 }
 
-// key is t's file name, console_1, which the state keeps where it runs by.
-func (t *consoleTab) key() string { return t.name }
-
 func consoleOf(p *Pane) *consoleTab {
 	if p.Cur < len(p.Tabs) {
 		return p.Tabs[p.Cur].Console

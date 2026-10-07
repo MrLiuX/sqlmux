@@ -916,3 +916,15 @@ func TestStartupWarningIsAToast(t *testing.T) {
 		t.Fatalf("toast row %q", row)
 	}
 }
+
+// With t and tc both bound, the key after t that is no tc is read once t has
+// run, as nvim does: on a landing page t opens the palette on tables, and
+// x, :, ; are then its text, not the page's keys (F8.15).
+func TestKeyAfterBoundPrefixMeetsWhatItRan(t *testing.T) {
+	for keys, want := range map[string]string{"tx": "@x", "t:": "@:", "t;": "@;"} {
+		a := configured(t, 160, 45, "[keys.normal]\ntc = \"console.new\"")
+		if feed(t, a, keys); a.palette == nil || a.palette.input.Text != want {
+			t.Errorf("%s: palette %+v, want its input %q", keys, a.palette, want)
+		}
+	}
+}

@@ -224,7 +224,7 @@ func newSessionOn(t *testing.T, eng, dsn string) {
 	if len(a.sessions) != 2 || s == sess || s.Name != "1" || s.Conns[0] == sess.Conns[0] || s.Conns[0].State != connReady || len(s.Conns[0].Tables) == 0 || s.Conns[1].State != connIdle {
 		t.Fatalf("sessions %d, attached %s, %v / %v", len(a.sessions), s.Name, s.Conns[0].State, s.Conns[1].State)
 	}
-	if c := consoleOf(s.Windows[0].Root.B.Pane); c == nil || c.key() != "console_2" || c.conn != s.Conns[0] {
+	if c := consoleOf(s.Windows[0].Root.B.Pane); c == nil || c.name != "console_2" || c.conn != s.Conns[0] {
 		t.Errorf("its console: %+v", c)
 	}
 }

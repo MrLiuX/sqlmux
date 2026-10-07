@@ -133,6 +133,18 @@ func TestCompleteHover(t *testing.T) {
 // A foot row makes the box one row taller and takes one from the items
 // (F8.14).
 func TestCompleteBoxFoot(t *testing.T) {
+	// flipped up: the foot's row is under the items, inside the box, and the
+	// box ends on the input's row
+	if box, rows := CompleteBox(uv.Rect(0, 0, 80, 24), uv.Pos(10, 20), 20, 5, 1); box.Max.Y != 20 || rows != 5 || box.Dy() != 8 {
+		t.Errorf("up with a foot: %v, %d rows", box, rows)
+	}
+	// room above for exactly the items and the foot: they all fit
+	if box, rows := CompleteBox(uv.Rect(0, 0, 80, 12), uv.Pos(10, 8), 20, 5, 1); box.Min.Y != 0 || box.Max.Y != 8 || rows != 5 {
+		t.Errorf("just enough above: %v, %d rows", box, rows)
+	}
+	if _, rows := CompleteBox(uv.Rect(0, 0, 80, 12), uv.Pos(10, 7), 20, 5, 1); rows != 4 {
+		t.Errorf("a row short above: %d rows", rows)
+	}
 	screen := uv.Rect(0, 0, 80, 24)
 	if box, rows := CompleteBox(screen, uv.Pos(10, 5), 20, 3, 1); box.Dy() != 3+2+1 || rows != 3 {
 		t.Errorf("below: %v %d", box, rows)

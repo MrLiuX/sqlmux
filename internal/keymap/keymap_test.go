@@ -71,7 +71,9 @@ func press(t *testing.T, r *Resolver, c Context, s string) (out []Result, wait b
 		res, w := r.Feed(c, k, maps)
 		wait = w
 		for _, x := range res {
-			if x.Map == nil {
+			if x.Again != "" {
+				feed(x.Again, maps)
+			} else if x.Map == nil {
 				out = append(out, x)
 			}
 			for _, k := range x.Map {
@@ -169,8 +171,8 @@ func TestPurePrefixWaits(t *testing.T) {
 
 func TestAmbiguousNodeTimesOut(t *testing.T) {
 	m, ps := load(t, "[keys.normal]\ng = \"my.g\"")
-	if len(ps) != 1 || ps[0].Table != "keys.normal" || ps[0].Key != "g" {
-		t.Fatalf("expected one prefix warning on g, got %v", ps)
+	if len(ps) != 0 {
+		t.Fatalf("g is the prefix of gt: no warning, got %v", ps)
 	}
 	r := NewResolver(m)
 	out, wait := press(t, r, grid, "g")
@@ -197,7 +199,10 @@ func TestAmbiguousNodeTimesOut(t *testing.T) {
 // nvim does, esc too, so t needs no timeout to run; one that continues one is that
 // sequence; a pause runs t (F8.15, §6.5).
 func TestBoundPrefixRunsWhenTheNextKeyDoesNotContinue(t *testing.T) {
-	m, _ := load(t, "[keys.normal]\nt = \"my.t\"\ntc = \"my.tc\"\ntt = \"my.tt\"")
+	m, ps := load(t, "[keys.normal]\nt = \"my.t\"\ntc = \"my.tc\"\ntt = \"my.tt\"")
+	if len(ps) != 0 { // vim's ordinary case: no notice at start, nothing for keys --check
+		t.Fatalf("a key and a sequence it starts: %v", ps)
+	}
 	for _, c := range []struct {
 		keys string
 		want []string
@@ -222,6 +227,13 @@ func TestBoundPrefixRunsWhenTheNextKeyDoesNotContinue(t *testing.T) {
 	}
 	if got := r.Timeout(r.Seq()); !reflect.DeepEqual(actions(got), []string{"my.t"}) {
 		t.Errorf("a pause: %v", actions(got))
+	}
+	// the key that ends it is not read in the trie t was found in: Feed
+	// hands it back, for the caller to read once t has run
+	r = NewResolver(m)
+	r.Feed(grid, "t", true)
+	if out, _ := r.Feed(grid, "x", true); len(out) != 2 || out[0].Action != "my.t" || out[1].Again != "x" {
+		t.Errorf("tx: %+v", out)
 	}
 }
 

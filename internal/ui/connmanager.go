@@ -18,7 +18,7 @@ type ConnRow struct {
 type ConnManager struct {
 	Title     string
 	Rows      []ConnRow
-	Sel       int
+	Sel, Top  int  // Top is the first row showing
 	ListFocus bool // the list has the keys, else the form's selected field
 	Form      Form
 }
@@ -28,11 +28,15 @@ const (
 	connListWidth    = 26
 )
 
+// ListRows is how many rows of the list show: the form's height, which does
+// not grow with the connections (F8.16).
+func (m ConnManager) ListRows() int { return m.Form.height() - 2 }
+
 // Draw dims what is behind, paints the manager centered and returns where
 // the form's input has the cursor, else (-1, -1).
 func (m ConnManager) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 	th := f.Theme
-	w, h := min(connManagerWidth, screen.Dx()-4), max(m.Form.height(), len(m.Rows)+2)
+	w, h := min(connManagerWidth, screen.Dx()-4), m.Form.height()
 	box := uv.Rect(screen.Min.X+(screen.Dx()-w)/2, screen.Min.Y+max(screen.Dy()-h, 0)/2, w, h)
 	f.Dim()
 	f.Region(f.Bounds(), Target{}) // no click goes past it
@@ -46,8 +50,10 @@ func (m ConnManager) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 	f.Text(box.Min.X+2, box.Min.Y, box.Max.X-1, " "+m.Title+" ", uv.Style{Fg: th.Focus, Bg: th.PaneBg, Attrs: uv.AttrBold})
 	in := uv.Rect(box.Min.X+1, box.Min.Y+1, box.Dx()-2, box.Dy()-2)
 	rule := in.Min.X + connListWidth
-	for i, r := range m.Rows[:min(len(m.Rows), in.Dy())] {
-		line := uv.Rect(in.Min.X, in.Min.Y+i, connListWidth, 1)
+	top := max(min(m.Top, m.Sel), m.Sel-in.Dy()+1, 0) // the selection in sight, whatever Top says
+	for i := top; i < min(len(m.Rows), top+in.Dy()); i++ {
+		r := m.Rows[i]
+		line := uv.Rect(in.Min.X, in.Min.Y+i-top, connListWidth, 1)
 		st := bg
 		switch hover := f.Region(line, Target{Kind: KindConn, I: i}); {
 		case i == m.Sel && m.ListFocus:

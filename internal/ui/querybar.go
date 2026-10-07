@@ -21,6 +21,7 @@ type Chip struct {
 	Suffix       string
 	Icon         Icon
 	IconAction   string
+	Stay         int // against the button groups' Stay: the least gives way first (shown)
 }
 
 func (c Chip) value() string {
@@ -48,8 +49,8 @@ type Button struct {
 }
 
 // ButtonGroup is buttons side by side, a │ between it and the next on the
-// row's one sep strip (§7.8「工具按钮」). On a short row the group with the
-// least Stay gives way first.
+// row's one sep strip (§7.8「工具按钮」). On a short row the group or chip
+// with the least Stay gives way first.
 type ButtonGroup struct {
 	Buttons []Button
 	Stay    int
@@ -262,9 +263,9 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 }
 
 // shown is how many chips show and which groups of buttons, left to
-// right: all that fit, and a note, which goes before them: whole groups
-// give way, the least Stay first, then the chips from the right (§7.8
-// 「查询条」). The count in Right just is not shown.
+// right: all that fit, and a note, which goes before them: a whole group or
+// the last chip gives way, the least Stay first (§7.8「查询条」). The count
+// in Right just is not shown.
 func (q QueryBar) shown(r uv.Rectangle) (chips int, groups []int) {
 	chips = len(q.Chips)
 	for i := range q.Buttons {
@@ -277,6 +278,10 @@ func (q QueryBar) shown(r uv.Rectangle) (chips int, groups []int) {
 			continue
 		}
 		least := slices.MinFunc(groups, func(a, b int) int { return cmp.Compare(q.Buttons[a].Stay, q.Buttons[b].Stay) })
+		if chips > 0 && q.Chips[chips-1].Stay < q.Buttons[least].Stay {
+			chips--
+			continue
+		}
 		groups = slices.DeleteFunc(groups, func(g int) bool { return g == least })
 	}
 	return chips, groups

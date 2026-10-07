@@ -119,7 +119,7 @@ func TestConfirmDangerousReadOnlyAndSelection(t *testing.T) {
 	}
 	feed(t, a, "n")
 
-	a.sess.Conns[0].Spec.ReadOnly = true
+	a.sess.Conns[0].readOnly = true
 	c.ed.Goto(editor.Pos{})
 	shiftArrow(a, tea.KeyRight, 24)
 	press(t, a, "<C-e>")

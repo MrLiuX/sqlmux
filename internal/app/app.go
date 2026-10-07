@@ -329,6 +329,10 @@ func (a *App) feed(k keymap.Key, maps bool) tea.Cmd {
 		return a.dispatch([]keymap.Result{{Keys: []keymap.Key{k}}})
 	}
 	out, wait := a.res.Feed(a.context(), k, maps)
+	if n := len(out); n > 0 && out[n-1].Again != "" { // the shorter binding of an ambiguous pair ran: the key that ended it is read in what that made
+		again := out[n-1].Again
+		return tea.Batch(a.dispatch(out[:n-1]), a.feed(again, maps))
+	}
 	cmd := a.dispatch(out)
 	seq := a.res.Seq()
 	switch {

@@ -91,7 +91,7 @@ func TestTxMode(t *testing.T) {
 // its engine's icon.
 func TestReadOnly(t *testing.T) {
 	a, c := inConsole(t, "", "")
-	c.conn.Spec.ReadOnly = true
+	c.conn.readOnly = true
 	seq := a.sess.RunSeq
 	feed(t, a, "iselect 1; delete from t_order<Esc>V")
 	a.run("console.run", 0)
@@ -116,7 +116,7 @@ func TestReadOnly(t *testing.T) {
 
 	a = sized(160, 45, "nerd")
 	tab := loadOrders(t, a, 3)
-	tab.conn.Spec.ReadOnly = true
+	tab.conn.readOnly = true
 	for _, keys := range []string{"i", "o", "dd", "yyp"} {
 		a.toast = ""
 		if feed(t, a, keys); tab.cell != nil || tab.changes() != 0 || a.toast != "doraemon 是只读连接" {
@@ -142,7 +142,7 @@ func TestGoldenConsoleTx(t *testing.T) {
 	}{{true, false, 'I'}, {true, false, 'T'}, {false, true, 'E'}} {
 		a, con := inConsole(t, "", "")
 		a.Update(tea.WindowSizeMsg{Width: 200, Height: 20})
-		con.conn.Manual, con.conn.Spec.ReadOnly, con.conn.tx = c.manual, c.readOnly, c.tx
+		con.conn.Manual, con.conn.readOnly, con.conn.tx = c.manual, c.readOnly, c.tx
 		f := a.render()
 		lines := strings.Split(f.String(), "\n")
 		r := a.layout()[a.focused().ID]

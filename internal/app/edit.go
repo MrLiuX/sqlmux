@@ -164,7 +164,7 @@ func (t *dataTab) put(add *newRow, k editKey, e edit) {
 // row identity, which can't be saved to.
 func (t *dataTab) whyNoEdit() string {
 	switch {
-	case t.conn.Spec.ReadOnly:
+	case t.conn.readOnly:
 		return i18n.T("%s 是只读连接", t.conn.Spec.Name)
 	case t.cols.Key() == nil:
 		return i18n.T("%s 没有主键，也没有全部列都非空的唯一索引，只读", t.table.Name)

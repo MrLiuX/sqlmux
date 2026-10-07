@@ -49,7 +49,7 @@ func TestEveryBoxUsesFrameBorder(t *testing.T) {
 		},
 		"complete": func(f *Frame) { Complete{Items: []CompleteItem{{Text: "a"}}}.Draw(f, box, 1) },
 		"hint":     func(f *Frame) { CellHint{Text: "bad"}.Draw(f, uv.Rect(10, 5, 20, CellHintRows)) },
-		"form":     func(f *Frame) { Form{Title: "t", Save: "s", Cancel: "c"}.Draw(f, screen) },
+		"form":     func(f *Frame) { ConnManager{Title: "t", Form: Form{Save: "s", Cancel: "c"}}.Draw(f, screen) },
 	} {
 		f := NewFrame(100, 30, TokyonightStorm)
 		f.Border = uv.RoundedBorder()

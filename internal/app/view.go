@@ -105,7 +105,7 @@ func (a *App) render() *ui.Frame {
 		}
 	}
 	y := a.h - 1
-	a.statusLine().Draw(f, uv.Rect(0, y, a.w, 1))
+	rightX := a.statusLine().Draw(f, uv.Rect(0, y, a.w, 1))
 	if a.paneNumbers { // over the status bar's buttons too: a click there only closes them (§5)
 		a.drawPaneNumbers(f, rects)
 	}
@@ -119,10 +119,10 @@ func (a *App) render() *ui.Frame {
 			}
 		}
 	}
-	if n := a.askName; n != nil { // over the status bar's left: "布局名: " and the name typed (F6.5)
-		f.Fill(uv.Rect(0, y, a.w, 1), uv.Style{Fg: th.Fg, Bg: th.Border})
-		f.Text(1, y, a.w, n.label, uv.Style{Fg: th.Warn, Bg: th.Border})
-		c := n.in.Draw(f, uv.Rect(1+ui.Width(n.label), y, max(a.w-ui.Width(n.label)-2, 1), 1), uv.Style{Fg: th.Fg, Bg: th.Border})
+	if n := a.askName; n != nil { // the input over the status bar's left, past n.label ("layout name: "…), the mode block still its own (F6.5, F8.11)
+		x, in := 1+ui.Width(n.label), uv.Style{Fg: th.Fg, Bg: th.Border}
+		f.Fill(uv.Rect(x, y, max(rightX-x, 0), 1), in) // the input does not fill its rectangle: nothing of the bar is left in it
+		c := n.in.Draw(f, uv.Rect(x, y, max(rightX-1-x, 1), 1), in)
 		f.Cursor = &c
 	}
 	if a.keyHelp != nil {
@@ -246,7 +246,7 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 			b.Hints = append(b.Hints, commit, rollback)
 		}
 		name := c.conn.Spec.Name
-		if c.conn.Spec.ReadOnly {
+		if c.conn.readOnly {
 			name += " " + a.icons.Lock.Text
 		}
 		b.Hints = append(b.Hints, ui.Hint{Label: name, Action: "console.conn", Color: th.Info, Prio: 1, Group: 1})
@@ -486,6 +486,10 @@ func (a *App) statusLine() ui.StatusLine {
 			seg = ui.Segment{Runs: []ui.Run{{Text: fmt.Sprintf(" %d: %s* ", i, w.Name), Style: cur}}, Action: seg.Action}
 		}
 		s.Left = append(s.Left, seg)
+	}
+
+	if n := a.askName; n != nil { // a name typed in the place of the session and the windows: render puts the input over it
+		s.Left = []ui.Segment{{Runs: []ui.Run{{Text: " " + n.label, Style: uv.Style{Fg: th.Warn, Bg: th.Border}}}}}
 	}
 
 	pending := ui.Run{Text: "·", Style: bar(th.Dim)}

@@ -35,7 +35,6 @@ type FormField struct {
 // Form is a box of fields over the screen: Sel is the field with the keys,
 // Err why it did not save, in error above the buttons.
 type Form struct {
-	Title        string
 	Fields       []FormField
 	Sel          int
 	Err          string
@@ -43,9 +42,6 @@ type Form struct {
 	Delete       string // a third button's word, when a connection there already is can go (F8.16); "" for none
 	Hints        []Hint
 }
-
-// formWidth is the form's width, as far as the screen allows (§7.8).
-const formWidth = 60
 
 // rows is how many fields show.
 func (fm Form) rows() int {
@@ -60,24 +56,6 @@ func (fm Form) rows() int {
 
 // height is the form's rows, its border in: fields, error, rule, buttons.
 func (fm Form) height() int { return fm.rows() + 5 }
-
-// Draw dims what is behind (§7.5), paints the form centered and returns
-// where the selected input has its cursor, else (-1, -1).
-func (fm Form) Draw(f *Frame, screen uv.Rectangle) uv.Position {
-	w, h := min(formWidth, screen.Dx()-4), fm.height()
-	box := uv.Rect(screen.Min.X+(screen.Dx()-w)/2, screen.Min.Y+max(screen.Dy()-h, 0)/2, w, h)
-	f.Dim()
-	f.Region(f.Bounds(), Target{}) // no click goes past it
-	if box.Dx() < 8 || box.Dy() > screen.Dy() {
-		return uv.Pos(-1, -1)
-	}
-	th := f.Theme
-	f.Fill(box, uv.Style{Fg: th.Fg, Bg: th.PaneBg})
-	border := f.Border.Style(uv.Style{Fg: th.Focus, Bg: th.PaneBg})
-	border.Draw(f.Buf, box)
-	f.Text(box.Min.X+2, box.Min.Y, box.Max.X-1, " "+fm.Title+" ", uv.Style{Fg: th.Focus, Bg: th.PaneBg, Attrs: uv.AttrBold})
-	return fm.drawIn(f, uv.Rect(box.Min.X+1, box.Min.Y+1, box.Dx()-2, box.Dy()-2), true)
-}
 
 // drawIn paints the fields, the error, the rule and the buttons inside in,
 // the border's inner area, the field Sel having the keys when focus; it

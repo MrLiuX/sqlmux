@@ -102,7 +102,7 @@ func New(user *config.Config) (*Map, []Problem) {
 	}
 	m.Timeout = time.Duration(user.Timeoutlen) * time.Millisecond
 	problems = append(problems, m.apply(user.Bindings)...)
-	return m, append(problems, m.ambiguities()...)
+	return m, problems
 }
 
 // apply merges one file's bindings: a key already bound in the same table
@@ -153,26 +153,6 @@ func (m *Map) set(table string, b Binding, unbind bool) {
 		bs = append(bs, b)
 	}
 	m.tables[table] = bs
-}
-
-// ambiguities warns where one binding is a prefix of another in the same
-// table: the shorter one then fires only after timeoutlen (§6.7).
-// ponytail: same table only; a grid "g" against normal's "gt" also makes an
-// ambiguous node once merged. Check per context if that bites.
-func (m *Map) ambiguities() []Problem {
-	var ps []Problem
-	for _, t := range tables {
-		for _, a := range m.tables[t] {
-			for _, b := range m.tables[t] {
-				ka, kb := m.expand(a.Keys), m.expand(b.Keys)
-				if len(ka) < len(kb) && slices.Equal(ka, kb[:len(ka)]) {
-					ps = append(ps, Problem{t, String(a.Keys), fmt.Sprintf(i18n.T("是 %s 的前缀，要等 timeoutlen 之后才执行"), String(b.Keys))})
-					break
-				}
-			}
-		}
-	}
-	return ps
 }
 
 // same reports whether two bindings are the same key once <Leader> is expanded.

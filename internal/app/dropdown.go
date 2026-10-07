@@ -295,7 +295,7 @@ func (a *App) dropKey(k keymap.Key) {
 // dropNote is what the dropdown notes on item i: a read-only connection's
 // lock (§7.8「console 标题」).
 func (a *App) dropNote(i int) string {
-	if a.drop.kind == dropConsoleConn && a.sess.Conns[i].Spec.ReadOnly {
+	if a.drop.kind == dropConsoleConn && a.sess.Conns[i].readOnly {
 		return a.icons.Lock.Text
 	}
 	return ""

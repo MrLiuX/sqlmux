@@ -609,3 +609,23 @@ func TestDropTab(t *testing.T) {
 		}
 	}
 }
+
+// A console tab's file is its name, or console_<n> in a layout of before
+// the names; a name taken (files differing in case are one on some file
+// systems) or no file's (a hand-written ../../x would leave the consoles'
+// directory) is replaced by the next free one, with a file of its own
+// (§11, F8.11).
+func TestLayoutConsoleNames(t *testing.T) {
+	tabs := []config.LayoutTab{{Kind: "console", Name: "Console_3"}, {Kind: "console", N: 3}, {Kind: "console", Name: "../../evil"}, {Kind: "console", Name: "keep"}, {Kind: "console", N: 5}, {Kind: "console", Name: "CONSOLE_5"}}
+	r := restoredFrom(t, oneWindow(config.LayoutWindow{Name: "a", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: tabs}}}))
+	var got []string
+	for _, tb := range r.Sessions[0].Windows[0].pane(1).Tabs {
+		if want := filepath.Join(config.DataDir(), "consoles"); filepath.Dir(tb.Console.path) != want {
+			t.Errorf("%s is at %s, not under %s", tb.Console.name, tb.Console.path, want)
+		}
+		got = append(got, tb.Console.name)
+	}
+	if want := []string{"Console_3", "console_1", "console_2", "keep", "console_5", "console_4"}; !slices.Equal(got, want) {
+		t.Errorf("names %v, want %v", got, want)
+	}
+}
