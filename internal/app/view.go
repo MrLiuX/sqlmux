@@ -119,7 +119,7 @@ func (a *App) render() *ui.Frame {
 			}
 		}
 	}
-	if n := a.askName; n != nil { // over the status bar's left: "布局名: " and the name typed (F6.5)
+	if n := a.askName; n != nil { // over the status bar's left: n.label ("layout name: ", "session name: "…) and the name typed (F6.5, F8.11)
 		f.Fill(uv.Rect(0, y, a.w, 1), uv.Style{Fg: th.Fg, Bg: th.Border})
 		f.Text(1, y, a.w, n.label, uv.Style{Fg: th.Warn, Bg: th.Border})
 		c := n.in.Draw(f, uv.Rect(1+ui.Width(n.label), y, max(a.w-ui.Width(n.label)-2, 1), 1), uv.Style{Fg: th.Fg, Bg: th.Border})

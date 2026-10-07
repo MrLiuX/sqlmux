@@ -210,7 +210,7 @@ func (a *App) renameKey(k keymap.Key) tea.Cmd {
 	l.rename = nil
 	switch s := a.sessionRows()[l.sel].s; {
 	case name == "" || name == s.Name:
-	case slices.ContainsFunc(a.sessions, func(o *Session) bool { return o.Name == name }):
+	case a.sessionNameTaken(s, name):
 		return a.showToast(i18n.T("已有同名 session"), toastTTL)
 	default:
 		s.Name = name

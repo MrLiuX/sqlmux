@@ -71,7 +71,9 @@ func press(t *testing.T, r *Resolver, c Context, s string) (out []Result, wait b
 		res, w := r.Feed(c, k, maps)
 		wait = w
 		for _, x := range res {
-			if x.Map == nil {
+			if x.Again != "" {
+				feed(x.Again, maps)
+			} else if x.Map == nil {
 				out = append(out, x)
 			}
 			for _, k := range x.Map {
@@ -222,6 +224,13 @@ func TestBoundPrefixRunsWhenTheNextKeyDoesNotContinue(t *testing.T) {
 	}
 	if got := r.Timeout(r.Seq()); !reflect.DeepEqual(actions(got), []string{"my.t"}) {
 		t.Errorf("a pause: %v", actions(got))
+	}
+	// the key that ends it is not read in the trie t was found in: Feed
+	// hands it back, for the caller to read once t has run
+	r = NewResolver(m)
+	r.Feed(grid, "t", true)
+	if out, _ := r.Feed(grid, "x", true); len(out) != 2 || out[0].Action != "my.t" || out[1].Again != "x" {
+		t.Errorf("tx: %+v", out)
 	}
 }
 

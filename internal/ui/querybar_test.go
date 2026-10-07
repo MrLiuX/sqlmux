@@ -56,3 +56,16 @@ func TestGoldenWhereColors(t *testing.T) {
 	q.Draw(f, uv.Rect(0, 0, 50, 1))
 	golden.RequireEqual(t, colorShot(f, uv.Pos(-1, -1)))
 }
+
+// The history's hint takes 6 columns of the bar and shows only while the
+// WHERE input keeps 16 of the rest, minWhere (F8.14): at 32 columns it
+// does, one less and it gives way, the input getting its columns back.
+func TestInputRectKeepsMinWhere(t *testing.T) {
+	q := QueryBar{History: Icon{Text: "H"}, HistKey: "C-r"}
+	if got := q.InputRect(uv.Rect(0, 0, 32, 2)).Dx(); got != 16 {
+		t.Errorf("32 wide: the input is %d", got)
+	}
+	if got := q.InputRect(uv.Rect(0, 0, 31, 2)).Dx(); got != 21 {
+		t.Errorf("31 wide: the input is %d, the hint gone", got)
+	}
+}

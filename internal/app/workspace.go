@@ -278,7 +278,7 @@ func (c *Conn) dropCols() {
 
 // newSession is a session's default workspace (§5) over conns, start the
 // one connected: one window, data, with the sidebar, a pane with no tab
-// and console_n on start beside it at 5 : 4 (§7.8), which has what its
+// and console_n on start beside it at 1 : 1 (§5, F8.9), which has what its
 // file kept (§11). A file that cannot be read leaves that pane with no tab
 // too: opened empty, the autosave would write over it.
 func newSession(name string, conns []*Conn, start *Conn, console string) *Session {
@@ -300,8 +300,8 @@ func (s *Session) freeWindowName() string {
 }
 
 // newWindow is a window of the default layout (§5): the sidebar, a pane
-// with no tab and console_n on conn beside it at 5 : 4 (§7.8), named data;
-// warning says why the console's file could not be read.
+// with no tab and console_n on conn beside it at 1 : 1 (§5, F8.9), named
+// by freeWindowName; warning says why the console's file could not be read.
 func (s *Session) newWindow(conn *Conn, console string) (w *Window, warning string) {
 	data := &Pane{ID: 1, Prev: -1}
 	consolePane := &Pane{ID: 2, Prev: -1}
@@ -413,12 +413,17 @@ func (a *App) askNameKey(k keymap.Key) tea.Cmd {
 func (a *App) askSessionName() {
 	s := a.sess
 	a.askName = &nameAsk{label: i18n.T("session 名："), in: ui.Input{Text: s.Name, Pos: len(s.Name)}, done: func(a *App, name string) (tea.Cmd, bool) {
-		if name != s.Name && slices.ContainsFunc(a.sessions, func(o *Session) bool { return o.Name == name }) {
+		if a.sessionNameTaken(s, name) {
 			return a.showToast(i18n.T("已有同名 session"), toastTTL), true
 		}
 		s.Name = name
 		return nil, false
 	}}
+}
+
+// sessionNameTaken is whether name is another session's than s's.
+func (a *App) sessionNameTaken(s *Session, name string) bool {
+	return name != s.Name && slices.ContainsFunc(a.sessions, func(o *Session) bool { return o.Name == name })
 }
 
 // askConsoleName is console.rename: the focused console's name typed in the
@@ -435,13 +440,15 @@ func (a *App) askConsoleName() {
 			return nil, false
 		}
 		path := config.ConsolePath(name)
-		_, err := os.Stat(path)
+		if err := config.CheckConsoleName(name); err != nil {
+			return a.showToast(err.Error(), toastTTL), true
+		}
+		fi, err := os.Stat(path)
+		old, _ := os.Stat(t.path)
 		switch {
-		case config.CheckConsoleName(name) != nil:
-			return a.showToast(config.CheckConsoleName(name).Error(), toastTTL), true
-		case err == nil || a.consoleOpen(path):
+		case err == nil && !os.SameFile(fi, old) || a.consoleOpen(name, t): // a name of its own file only differing in case is its own
 			return a.showToast(i18n.T("已有同名 console"), toastTTL), true
-		case !errors.Is(err, fs.ErrNotExist):
+		case err != nil && !errors.Is(err, fs.ErrNotExist):
 			return a.showToast(err.Error(), toastTTL), true
 		}
 		if err := t.flush(); err != nil {
@@ -700,7 +707,7 @@ func (a *App) newConsole(conn *Conn) (cmd tea.Cmd, ok bool) {
 // connections.toml leaves t as it is; a schema gone, gotCatalog's fallback
 // takes it back. New consoles go on the current connection (newConsole).
 func (a *App) restoreConsole(t *consoleTab) tea.Cmd {
-	st, ok := a.state.Consoles[t.key()]
+	st, ok := a.state.Consoles[t.name]
 	i := slices.IndexFunc(a.sess.Conns, func(c *Conn) bool { return c.Spec.Name == st.Conn })
 	switch {
 	case !ok || i < 0:
@@ -757,14 +764,16 @@ func (a *App) keepConsole(t *consoleTab) tea.Cmd {
 	if a.state.Consoles == nil {
 		a.state.Consoles = map[string]config.ConsoleState{}
 	}
-	a.state.Consoles[t.key()] = config.ConsoleState{Conn: t.conn.Spec.Name, Schema: t.schema}
+	a.state.Consoles[t.name] = config.ConsoleState{Conn: t.conn.Spec.Name, Schema: t.schema}
 	return a.saveState()
 }
 
-// consoleOpen is whether a console of any session is open on path: two
-// on one file would write over each other's autosaves (§11).
-func (a *App) consoleOpen(path string) bool {
-	return slices.ContainsFunc(a.consoles(), func(c *consoleTab) bool { return c.path == path })
+// consoleOpen is whether a console of any session but except is open on the
+// file name is: two on one file would write over each other's autosaves
+// (§11). The file systems of macOS and Windows tell names apart by more
+// than case no better than that, so neither does this.
+func (a *App) consoleOpen(name string, except *consoleTab) bool {
+	return slices.ContainsFunc(a.consoles(), func(c *consoleTab) bool { return c != except && strings.EqualFold(c.name, name) })
 }
 
 // sessionOf is the session c is a connection of: an answer may be for one
@@ -791,7 +800,7 @@ func (a *App) consoles() []*consoleTab {
 // freeConsole is the first of console_1, console_2… no session has open
 // (§11).
 func (a *App) freeConsole() string {
-	return freeConsoleName(func(name string) bool { return a.consoleOpen(config.ConsolePath(name)) })
+	return freeConsoleName(func(name string) bool { return a.consoleOpen(name, nil) })
 }
 
 // freeConsoleName is the first of console_1, console_2… taken says is not.
@@ -1179,7 +1188,7 @@ func (a *App) reopenTab() tea.Cmd {
 		for _, s2 := range a.sessions {
 			for wi, w := range s2.Windows {
 				for _, p := range w.Root.Leaves() {
-					if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Console != nil && tb.Console.name == c.console }); i >= 0 {
+					if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Console != nil && strings.EqualFold(tb.Console.name, c.console) }); i >= 0 {
 						if s2 != s {
 							a.attach(s2)
 						}

@@ -77,6 +77,10 @@ func TestSessionRename(t *testing.T) {
 	if report.Name != "report" || a.sessList.rename != nil {
 		t.Errorf("blank, then esc: %s", report.Name)
 	}
+	a.toast = ""
+	if feed(t, a, "$<CR>"); report.Name != "report" || a.toast != "" {
+		t.Errorf("its own name: %s, toast %q", report.Name, a.toast)
+	}
 	if feed(t, a, "$<BS><BS>rt2<CR>"); report.Name != "report2" {
 		t.Errorf("renamed: %s", report.Name)
 	}
@@ -156,7 +160,7 @@ func TestWindows(t *testing.T) {
 	data := a.win()
 	feed(t, a, "<Space>c")
 	w := a.win()
-	if len(a.sess.Windows) != 2 || a.sess.Active != 1 || w.Name != "data-2" || w.ID != 2 || consoleOf(w.Root.B.Pane).key() != "console_2" {
+	if len(a.sess.Windows) != 2 || a.sess.Active != 1 || w.Name != "data-2" || w.ID != 2 || consoleOf(w.Root.B.Pane).name != "console_2" {
 		t.Fatalf("SPC c: %d windows, on %d %q", len(a.sess.Windows), a.sess.Active, w.Name)
 	}
 	feed(t, a, "<Space>c<Space>n")
@@ -367,6 +371,11 @@ func TestSessionRenameCommand(t *testing.T) {
 	if a.askName == nil || a.toast == "" || report.Name != "report" {
 		t.Errorf("another's name: asking %v, toast %q, %q", a.askName != nil, a.toast, report.Name)
 	}
+	a.toast = ""
+	if feed(t, a, "<C-u>report<CR>"); a.askName != nil || a.toast != "" || report.Name != "report" {
+		t.Errorf("its own name: asking %v, toast %q, %q", a.askName != nil, a.toast, report.Name)
+	}
+	a.run("session.rename", 0)
 	feed(t, a, "<C-u>weekly<CR>")
 	if a.askName != nil || report.Name != "weekly" {
 		t.Errorf("a name of its own: %q", report.Name)

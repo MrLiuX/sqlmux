@@ -232,7 +232,7 @@ func TestNoConnectionFirstConsoles(t *testing.T) {
 		if c == nil || c.conn != a.sess.start {
 			t.Fatalf("a window without its console: %+v", c)
 		}
-		seen[c.key()] = true
+		seen[c.name] = true
 	}
 	if len(seen) != 3 {
 		t.Errorf("consoles %v", seen)

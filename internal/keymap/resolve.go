@@ -132,6 +132,10 @@ type Result struct {
 	Count  int    // count typed before it; 0 when none
 	Keys   []Key  // keys no binding claimed, for the focused widget (count digits included)
 	Map    []Key  // a user mapping's right-hand side, a count typed before it first: feed each as typed, maps off
+	// Again is the key that ended an ambiguous pending sequence: the shorter
+	// binding ran, and this key is fed afresh once what ran before it has
+	// had its effect, in the context it then meets (F8.15). Last in out.
+	Again Key
 }
 
 // Resolver turns key presses into actions: counts, sequences, timeouts and
@@ -146,7 +150,8 @@ type Resolver struct {
 
 func NewResolver(m *Map) *Resolver { return &Resolver{m: m} }
 
-// Feed consumes one key press; maps is false for the keys of a mapping's
+// Feed consumes one key press (a Result.Again in out is for the caller to
+// feed once the results before it ran); maps is false for the keys of a mapping's
 // right-hand side, which are not remapped (noremap). wait reports an
 // ambiguous pending sequence: the caller should call Timeout(seq) after
 // Map.Timeout unless another key comes first.
@@ -233,7 +238,7 @@ func (r *Resolver) feed(c Context, k Key, root *node, out *[]Result) {
 	case r.node != root && r.node.bound:
 		// The shorter binding of an ambiguous node fires; k starts afresh.
 		r.fire(out)
-		r.feed(c, k, root, out)
+		*out = append(*out, Result{Again: k})
 	case k == Esc && (r.node != root || r.count != ""):
 		r.Reset() // esc cancels a pending sequence or count
 	default:

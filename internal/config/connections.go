@@ -100,7 +100,7 @@ func (c Connection) Check(names []string) (field, problem string) {
 		}
 	}
 	// the name keys state.json's tables and tree node IDs (§14)
-	if strings.ContainsAny(c.Name, `/\`) || strings.HasPrefix(c.Name, ".") {
+	if checkFileName(c.Name) != nil {
 		return "name", fmt.Sprintf(i18n.T(`name = %q：不能含 / 或 \，也不能以 . 开头`), c.Name)
 	}
 	if slices.Contains(names, c.Name) { // the tree's roots go by it too (§5)

@@ -487,7 +487,7 @@ func (a *App) startFirst(conn *Conn) tea.Cmd {
 				cmds = append(cmds, a.showToast(err.Error(), toastTTL))
 				break
 			}
-			putTab(p, Tab{Name: cons.key(), Console: cons}, false)
+			putTab(p, Tab{Name: cons.name, Console: cons}, false)
 			cmds = append(cmds, a.keepConsole(cons))
 		}
 	}

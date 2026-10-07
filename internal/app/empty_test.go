@@ -103,7 +103,7 @@ func TestNoConnectionStart(t *testing.T) {
 	if a.form != nil || conn == nil || a.sess.Name != "play" || a.conn() != conn || conn.State != connConnecting {
 		t.Fatalf("saved: form %v, start %v, session %q", a.form, conn, a.sess.Name)
 	}
-	if c := consoleOf(a.win().pane(2)); c == nil || c.conn != conn || c.key() != "console_1" {
+	if c := consoleOf(a.win().pane(2)); c == nil || c.conn != conn || c.name != "console_1" {
 		t.Errorf("console_1: %+v", c)
 	}
 }

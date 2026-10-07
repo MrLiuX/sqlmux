@@ -193,7 +193,7 @@ var en = map[string]string{
 	"引导页：新 tab、没有 tab 的 pane（M3）":       "The landing page: a new tab, a pane with no tab (M3)",
 	"时间列的单元格，分段浮层展开时":                   "A time cell, its segments overlay open",
 	"映射写法不对：%v":                         "invalid map: %v",
-	"是 %s 的前缀，要等 timeoutlen 之后才执行":      "is a prefix of %s: it waits timeoutlen to run",
+	"是 %s 的前缀，单独按时要等 timeoutlen 之后才执行":  "is a prefix of %s: pressed alone, it waits timeoutlen to run",
 	"没有这个表":                             "no such table",
 	"焦点在 schema 树（NORMAL）":              "The focus on the schema tree (NORMAL)",
 	"焦点在表格（NORMAL）":                     "The focus on the grid (NORMAL)",

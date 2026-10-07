@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -131,7 +132,7 @@ func (r *Restored) DialStart(ctx context.Context) error {
 // not there, a console file that does not read.
 func Restore(specs []config.Connection, l *config.Layout) *Restored {
 	r := &Restored{Active: min(max(l.Active, 0), len(l.Sessions)-1)}
-	used := map[string]bool{} // the consoles taken, by name
+	used := map[string]bool{} // the consoles taken, by lower-cased name: files of names differing in case are one on some file systems
 	for _, ls := range l.Sessions {
 		conns := make([]*Conn, len(specs))
 		for j, spec := range specs {
@@ -276,14 +277,14 @@ func (s *Session) restoreTab(lt config.LayoutTab, used map[string]bool) (tb Tab,
 		return Tab{Name: lt.Table, Data: d}, ""
 	}
 	cname := lt.ConsoleName()
-	if cname == "" || used[cname] || config.CheckConsoleName(cname) != nil { // none, taken or not a file's: the next free one, with its own file
+	if cname == "" || used[strings.ToLower(cname)] || config.CheckConsoleName(cname) != nil { // none, taken or not a file's: the next free one, with its own file
 		cname = freeConsoleName(func(name string) bool { return used[name] })
 	}
 	t, err := openConsole(s.start, cname)
 	if err != nil {
 		return tb, err.Error()
 	}
-	used[cname] = true
+	used[strings.ToLower(cname)] = true
 	if c == s.start {
 		t.schema = lt.Schema
 	} else { // the connection it was on goes over once it is there
