@@ -62,12 +62,14 @@ func (fm Form) keysBelow(width int) bool {
 	return len(fm.Hints) > 0 && width-2-used < hintRowWidth(fm.Hints)
 }
 
-// heightIn is the form's rows in a form width wide.
+// heightIn is the form's rows, its border in: fields, error, rule, buttons,
+// and the keys' row when they go under the buttons, in a form width wide.
 func (fm Form) heightIn(width int) int {
+	n := fm.rows() + 5
 	if fm.keysBelow(width) {
-		return fm.height() + 1
+		n++
 	}
-	return fm.height()
+	return n
 }
 
 // rows is how many fields show.
@@ -80,9 +82,6 @@ func (fm Form) rows() int {
 	}
 	return n
 }
-
-// height is the form's rows, its border in: fields, error, rule, buttons.
-func (fm Form) height() int { return fm.rows() + 5 }
 
 // drawIn paints the fields, the error, the rule and the buttons inside in,
 // the border's inner area, the field Sel having the keys when focus; it
@@ -173,7 +172,7 @@ func (fm Form) drawIn(f *Frame, area uv.Rectangle, focus bool) uv.Position {
 	}
 	if hx := x1 - hintRowWidth(fm.Hints); fm.keysBelow(area.Dx()) {
 		hintRow(f, max(hx, x0), y+1, x1, fm.Hints, dim, Target{Kind: KindButton})
-	} else if len(fm.Hints) > 0 {
+	} else {
 		hintRow(f, hx, y, x1, fm.Hints, dim, Target{Kind: KindButton})
 	}
 	return cursor

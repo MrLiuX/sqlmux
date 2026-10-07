@@ -503,6 +503,10 @@ func longList(t *testing.T, width int) {
 	if !hasHit(a, ui.Target{Kind: ui.KindConn, I: 25}) || hasHit(a, ui.Target{Kind: ui.KindConn, I: 25 - rows}) {
 		t.Errorf("scrolled to the selection: rows %d", rows)
 	}
+	// the selection is on the list's last row, the rows drawn the rows scrolled by
+	if !hasHit(a, ui.Target{Kind: ui.KindConn, I: 25 - rows + 1}) || hasHit(a, ui.Target{Kind: ui.KindConn, I: 26}) {
+		t.Errorf("not on the last row: rows %d", rows)
+	}
 	feed(t, a, strings.Repeat("k", 3))
 	if !hasHit(a, ui.Target{Kind: ui.KindConn, I: 22}) || !hasHit(a, ui.Target{Kind: ui.KindConn, I: 25}) {
 		t.Error("moving up a little does not scroll")

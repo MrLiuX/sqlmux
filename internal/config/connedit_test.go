@@ -463,3 +463,17 @@ func TestUpdateConnectionClearsAndAdds(t *testing.T) {
 		}
 	}
 }
+
+// The checks before a write leave nothing in the directory (F8.16).
+func TestChecksLeaveNothing(t *testing.T) {
+	connectionsFile(t, oneConn)
+	if err := CheckAppend(Connection{Name: "n", Engine: "postgres", DSN: "postgres://h/n"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckUpdate("a", connA("postgres://h/a", false), connA("postgres://h/b", false)); err != nil {
+		t.Fatal(err)
+	}
+	if es, _ := os.ReadDir(Dir()); len(es) != 1 {
+		t.Errorf("left in the directory: %v", es)
+	}
+}

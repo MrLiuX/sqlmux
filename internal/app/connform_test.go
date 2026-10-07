@@ -523,3 +523,57 @@ func TestConnFormHints(t *testing.T) {
 		}
 	}
 }
+
+// Every width from 70 to 110, zh and en, new / list / edit: the buttons
+// whole, the keys whole on the buttons' row or the one under it and on
+// one of them only, the box's bottom border right after (F8.16).
+func TestConnFormHintsAtEveryWidth(t *testing.T) {
+	defer i18n.Set("zh")
+	for _, lang := range []string{"zh", "en"} {
+		for w := 70; w <= 110; w++ {
+			i18n.Set(lang)
+			a := managed(t)
+			a.Update(tea.WindowSizeMsg{Width: w, Height: 24})
+			check := func(state string, edit bool) {
+				fv := a.formView()
+				var hs []string
+				for _, h := range fv.Hints {
+					hs = append(hs, h.Key+" "+h.Label)
+				}
+				keys := strings.Join(hs, " · ")
+				lines := strings.Split(a.render().String(), "\n")
+				at := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "[ "+fv.Save+" ]") })
+				if at < 0 {
+					t.Errorf("%s %d %s: no buttons", lang, w, state)
+					return
+				}
+				bs := []string{fv.Save, fv.Cancel}
+				if edit {
+					bs = append(bs, fv.Delete)
+				}
+				for _, b := range bs {
+					if !strings.Contains(lines[at], "[ "+b+" ]") {
+						t.Errorf("%s %d %s: button %q broken: %q", lang, w, state, b, lines[at])
+					}
+				}
+				on := at
+				if !strings.Contains(lines[at], keys) {
+					on = at + 1
+				}
+				if !strings.Contains(lines[on], keys) {
+					t.Errorf("%s %d %s: keys not whole: %q / %q", lang, w, state, lines[at], lines[at+1])
+				}
+				if !strings.Contains(lines[on+1], "└─") {
+					t.Errorf("%s %d %s: not the bottom border after the keys: %q", lang, w, state, lines[on+1])
+				}
+			}
+			a.run("conn.new", 0)
+			check("new", false)
+			a.form = nil
+			a.run("conn.manage", 0)
+			check("list", true)
+			feed(t, a, "<Tab>")
+			check("edit", true)
+		}
+	}
+}
