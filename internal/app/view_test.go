@@ -328,3 +328,17 @@ func TestGoldenMixedTabs160x45(t *testing.T) {
 		}
 	}
 }
+
+// `border` changes the lines of every box, the sidebar, the panes, the
+// result area and the overlays alike, never the layout: hidden has the
+// titles still (§7.1, F8.10).
+func TestGoldenBorders(t *testing.T) {
+	for _, b := range []string{"rounded", "bold", "double", "hidden"} {
+		t.Run(b, func(t *testing.T) {
+			a := sizedWith(160, 45, userConfig(t, `border = "`+b+`"`, ""))
+			loadOrders(t, a, 30)
+			feed(t, a, "<C-p>")
+			golden.RequireEqual(t, a.render().String())
+		})
+	}
+}

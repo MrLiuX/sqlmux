@@ -51,7 +51,7 @@ func (d Dropdown) Draw(f *Frame, box uv.Rectangle, rows int) uv.Position {
 	bg := uv.Style{Fg: th.Fg, Bg: th.PaneBg}
 	dim := uv.Style{Fg: th.Dim, Bg: th.PaneBg}
 	f.Fill(box, bg)
-	border := uv.NormalBorder().Style(uv.Style{Fg: th.Focus, Bg: th.PaneBg})
+	border := f.Border.Style(uv.Style{Fg: th.Focus, Bg: th.PaneBg})
 	border.Draw(f.Buf, box)
 	x0, x1, y := box.Min.X+2, box.Max.X-2, box.Min.Y+1
 	x := f.Text(x0, y, x1, d.Search.Text, d.Search.On(uv.Style{Fg: th.Info, Bg: th.PaneBg}))

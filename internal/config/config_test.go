@@ -77,6 +77,22 @@ func TestGridNewTableDefaults(t *testing.T) {
 	}
 }
 
+// border names the boxes' lines; another name is an error that lists them
+// (F8.10).
+func TestBorder(t *testing.T) {
+	if c, err := Parse(""); err != nil || c.Border != "single" {
+		t.Errorf("default: %q %v", c.Border, err)
+	}
+	for _, b := range []string{"single", "rounded", "double", "bold", "hidden"} {
+		if c, err := Parse(`border = "` + b + `"`); err != nil || c.Border != b {
+			t.Errorf("%s: %v", b, err)
+		}
+	}
+	if _, err := Parse(`border = "dotted"`); err == nil || err.Error() != `border = "dotted": must be "single", "rounded", "double", "bold" or "hidden"` {
+		t.Errorf("dotted: %v", err)
+	}
+}
+
 func TestGridFullWidthDefault(t *testing.T) {
 	if c, err := Parse(""); err != nil || c.GridFullWidth != 20 {
 		t.Errorf("default: %d %v", c.GridFullWidth, err)

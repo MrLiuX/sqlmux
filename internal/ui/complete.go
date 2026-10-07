@@ -42,7 +42,7 @@ func (c Complete) Draw(f *Frame, box uv.Rectangle, rows int) {
 	}
 	f.Region(box, Target{}) // a click inside is not outside
 	f.Fill(box, uv.Style{Bg: th.PaneBg})
-	border := uv.NormalBorder().Style(uv.Style{Fg: th.Focus, Bg: th.PaneBg})
+	border := f.Border.Style(uv.Style{Fg: th.Focus, Bg: th.PaneBg})
 	border.Draw(f.Buf, box)
 	x0, x1 := box.Min.X+1, box.Max.X-1
 	for i := c.Top; i < min(c.Top+rows, len(c.Items)); i++ {
@@ -83,7 +83,7 @@ func (h CellHint) Draw(f *Frame, box uv.Rectangle) {
 	}
 	f.Region(box, Target{}) // a click inside is not outside
 	f.Fill(box, uv.Style{Bg: th.PaneBg})
-	border := uv.NormalBorder().Style(uv.Style{Fg: th.Error, Bg: th.PaneBg})
+	border := f.Border.Style(uv.Style{Fg: th.Error, Bg: th.PaneBg})
 	border.Draw(f.Buf, box)
 	f.Text(box.Min.X+2, box.Min.Y+1, box.Max.X-1, h.Text, uv.Style{Fg: th.Error, Bg: th.PaneBg})
 }

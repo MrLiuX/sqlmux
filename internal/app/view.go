@@ -81,6 +81,7 @@ func (a *App) layout() map[int]uv.Rectangle {
 func (a *App) render() *ui.Frame {
 	th := a.theme
 	f := ui.NewFrame(a.w, a.h, th)
+	f.Border, _ = ui.BorderOf(a.border) // a name Parse has checked
 	f.Fill(f.Bounds(), uv.Style{Fg: th.Fg, Bg: th.Bg})
 	if a.w <= 0 || a.h <= 0 {
 		return f
