@@ -4,7 +4,7 @@ A terminal database client organized the way tmux is: sessions, windows, panes a
 
 ![sqlmux](assets/screenshot.png)
 
-> **Status: early development.** PostgreSQL only for now; MySQL is planned. The UI text is Chinese for now; an English UI is planned. Milestones are tracked in [specs/plan.md](specs/plan.md), and the design is in [specs/tech-design.md](specs/tech-design.md) (Chinese).
+> **Status: early development.** PostgreSQL and MySQL. The UI is in English; `language = "zh"` in `config.toml` switches it to Chinese. Milestones are tracked in [specs/plan.md](specs/plan.md), and the design is in [specs/tech-design.md](specs/tech-design.md) (Chinese).
 
 ## What works today
 
