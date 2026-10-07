@@ -4,6 +4,8 @@ package db
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 	"time"
 
 	"sqlmux/internal/sqlkit"
@@ -14,6 +16,14 @@ type Val struct {
 	S    string
 	Null bool
 }
+
+// BinaryShown is how a value that is no UTF-8 reads in the grid, by its size
+// (§8.1): the bytes themselves are not kept. IsBinaryShown tells such a text.
+func BinaryShown(n int) string { return fmt.Sprintf("<binary %d bytes>", n) }
+
+var binaryShown = regexp.MustCompile(`^<binary \d+ bytes>$`)
+
+func IsBinaryShown(s string) bool { return binaryShown.MatchString(s) }
 
 type Col struct {
 	Name string

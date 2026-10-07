@@ -4,6 +4,7 @@ package postgres
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -33,8 +34,18 @@ func TestPage(t *testing.T) {
 	if r, _, err = db.Page(ctx, c, pg, desc); err != nil || r.Rows[0][0].S != "6000" || r.Rows[1][0].S != "5999" {
 		t.Errorf("default order, down: %v %v", r.Rows, err)
 	}
-	if r, _, err = db.Page(ctx, c, pg, db.Query{Schema: "public", Table: "t_order_item", Key: []string{"order_id", "line_no"}, Desc: true, Limit: 2}); err != nil || r.Rows[0][0].S == "1" { // the first order is last now
-		t.Errorf("composite key, down: %v %v", r.Rows, err)
+	want, err := c.Query(ctx, "select order_id, line_no from t_order_item order by order_id desc, line_no desc limit 3 offset 1") // every column of the key the other way, from the second row on
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _, err = db.Page(ctx, c, pg, db.Query{Schema: "public", Table: "t_order_item", Key: []string{"order_id", "line_no"}, Desc: true, Limit: 3, Offset: 1})
+	if err != nil || len(r.Rows) != 3 {
+		t.Fatalf("composite key, down: %v %v", r.Rows, err)
+	}
+	for i := range r.Rows {
+		if !reflect.DeepEqual(r.Rows[i][:2], want.Rows[i]) {
+			t.Errorf("composite key, down: row %d %v, want %v", i, r.Rows[i][:2], want.Rows[i])
+		}
 	}
 	// no key: no order, still paged; names needing quotes are quoted
 	if r, next, err = db.Page(ctx, c, pg, db.Query{Schema: "public", Table: "t_log", Limit: 2}); err != nil || len(r.Rows) != 2 || !next {

@@ -1,28 +1,28 @@
 ┌─ ⓪  doraemon ─────── SPC b ─┐ ┌─ ①  t_order ───────────────────────────────────────────────┐ ┌─ ②  c…  Tx: 自动 ▾ doraemon · doraemon.public ▾  ▶ run  ↵ ─┐
 │  15 tables                 │ │ WHERE                                                C-r ▾ │ │   1                                                         │
 │──────────────────────────────│ │  ORDER id    LIMIT 100   PAGE 1/?   COLS 7/7             │ │                                                             │
-│ ▾  doraemon                 │ │    │  id │ status  │ amount │ paid │ meta                 ││ │                                                             │
-│   ▸  agentable              │ │────┼──────┼─────────┼────────┼──────┼──────────────────────┼│ │                                                             │
-│   ▾  public                 │ │  1 │    1 │ running │   1.99 │ t    │ {"n": 1, "tags": ["… ││ │                                                             │
-│     ▾  Tables (14)          │ │  2 │    2 │ done    │   2.99 │ t    │ {"n": 2, "tags": ["… ││ │                                                             │
-│       ▸  agent          124 │ │  3 │    3 │ failed  │   3.99 │ t    │ {"n": 3, "tags": ["… ││ │                                                             │
-│       ▸  agent_version  530 │ │  4 │    4 │ pending │   4.99 │ t    │ {"n": 4, "tags": ["… ││ │                                                             │
-│       ▸  goal            57 │ │  5 │    5 │ running │   5.99 │ t    │ {"n": 5, "tags": ["… ││ │                                                             │
-│       ▸  mt_task        812 │ │  6 │    6 │ done    │   6.99 │ t    │ {"n": 6, "tags": ["… ││ │                                                             │
-│       ▸  mt_task_log    96k │ │  7 │    7 │ failed  │   7.99 │ t    │ {"n": 7, "tags": ["… ││ │                                                             │
-│       ▸  schema_migrations  │ │  8 │    8 │ pending │   8.99 │ t    │ {"n": 8, "tags": ["… ││ │                                                             │
-│       ▸  t_order       1.2m │ │  9 │    9 │ running │   9.99 │ t    │ {"n": 9, "tags": ["… ││ │                                                             │
-│       ▸  t_order_item  3.4m │ │ 10 │   10 │ done    │  10.99 │ t    │ {"n": 10, "tags": [… ││ │                                                             │
-│       ▸  t_payment     410k │ │ 11 │   11 │ failed  │  11.99 │ t    │ {"n": 11, "tags": [… ││ │                                                             │
-│       ▸  t_refund       12k │ │ 12 │   12 │ pending │  12.99 │ t    │ {"n": 12, "tags": [… ││ │                                                             │
-│       ▸  t_sku         8.1k │ │ 13 │   13 │ running │  13.99 │ t    │ {"n": 13, "tags": [… ││ │                                                             │
-│       ▸  t_user         38k │ │ 14 │   14 │ done    │  14.99 │ t    │ {"n": 14, "tags": [… ││ │                                                             │
-│       ▸  t_user_address 52k │ │ 15 │   15 │ failed  │  15.99 │ t    │ {"n": 15, "tags": [… ││ │                                                             │
-│       ▸  t_user_profile 38k │ │ 16 │   16 │ pending │  16.99 │ t    │ {"n": 16, "tags": [… ││ │                                                             │
-│        Views (0)            │ │ 17 │   17 │ running │  17.99 │ t    │ {"n": 17, "tags": [… ││ │                                                             │
-│ ▾  工作区                   │ │ 18 │   18 │ done    │  18.99 │ t    │ {"n": 18, "tags": [… ││ │                                                             │
-│   ▾  data                   │ │ 19 │   19 │ failed  │  19.99 │ t    │ {"n": 19, "tags": [… ││ │                                                             │
-│     ▾  pane-1               │ │ 20 │   20 │ pending │  20.99 │ t    │ {"n": 20, "tags": [… ││ │                                                             │
+│ ▾  doraemon                 │ │    │  id │ status  │ amount │ paid │ meta                  │ │                                                             │
+│   ▸  agentable              │ │────┼──────┼─────────┼────────┼──────┼───────────────────────│ │                                                             │
+│   ▾  public                 │ │  1 │    1 │ running │   1.99 │ t    │ {"n": 1, "tags": ["a"…│ │                                                             │
+│     ▾  Tables (14)          │ │  2 │    2 │ done    │   2.99 │ t    │ {"n": 2, "tags": ["a"…│ │                                                             │
+│       ▸  agent          124 │ │  3 │    3 │ failed  │   3.99 │ t    │ {"n": 3, "tags": ["a"…│ │                                                             │
+│       ▸  agent_version  530 │ │  4 │    4 │ pending │   4.99 │ t    │ {"n": 4, "tags": ["a"…│ │                                                             │
+│       ▸  goal            57 │ │  5 │    5 │ running │   5.99 │ t    │ {"n": 5, "tags": ["a"…│ │                                                             │
+│       ▸  mt_task        812 │ │  6 │    6 │ done    │   6.99 │ t    │ {"n": 6, "tags": ["a"…│ │                                                             │
+│       ▸  mt_task_log    96k │ │  7 │    7 │ failed  │   7.99 │ t    │ {"n": 7, "tags": ["a"…│ │                                                             │
+│       ▸  schema_migrations  │ │  8 │    8 │ pending │   8.99 │ t    │ {"n": 8, "tags": ["a"…│ │                                                             │
+│       ▸  t_order       1.2m │ │  9 │    9 │ running │   9.99 │ t    │ {"n": 9, "tags": ["a"…│ │                                                             │
+│       ▸  t_order_item  3.4m │ │ 10 │   10 │ done    │  10.99 │ t    │ {"n": 10, "tags": ["a…│ │                                                             │
+│       ▸  t_payment     410k │ │ 11 │   11 │ failed  │  11.99 │ t    │ {"n": 11, "tags": ["a…│ │                                                             │
+│       ▸  t_refund       12k │ │ 12 │   12 │ pending │  12.99 │ t    │ {"n": 12, "tags": ["a…│ │                                                             │
+│       ▸  t_sku         8.1k │ │ 13 │   13 │ running │  13.99 │ t    │ {"n": 13, "tags": ["a…│ │                                                             │
+│       ▸  t_user         38k │ │ 14 │   14 │ done    │  14.99 │ t    │ {"n": 14, "tags": ["a…│ │                                                             │
+│       ▸  t_user_address 52k │ │ 15 │   15 │ failed  │  15.99 │ t    │ {"n": 15, "tags": ["a…│ │                                                             │
+│       ▸  t_user_profile 38k │ │ 16 │   16 │ pending │  16.99 │ t    │ {"n": 16, "tags": ["a…│ │                                                             │
+│        Views (0)            │ │ 17 │   17 │ running │  17.99 │ t    │ {"n": 17, "tags": ["a…│ │                                                             │
+│ ▾  工作区                   │ │ 18 │   18 │ done    │  18.99 │ t    │ {"n": 18, "tags": ["a…│ │                                                             │
+│   ▾  data                   │ │ 19 │   19 │ failed  │  19.99 │ t    │ {"n": 19, "tags": ["a…│ │                                                             │
+│     ▾  pane-1               │ │ 20 │   20 │ pending │  20.99 │ t    │ {"n": 20, "tags": ["a…│ │                                                             │
 │            t_order          │ │                                                             │ │                                                             │
 │     ▾  pane-2               │ │                                                             │ │                                                             │
 │            console_1        │ │                                                             │ │                                                             │

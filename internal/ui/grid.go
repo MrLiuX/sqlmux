@@ -184,46 +184,81 @@ func (v view) labelWidth() int {
 	return min(w, maxColWidth)
 }
 
-// widths sizes each screen column (§7.6): the larger of its header and the
-// 90th percentile of its values, at most maxColWidth; when they don't fit in
-// room the ones wishing more than FullWidth are squeezed in proportion, never
-// below the header nor FullWidth, and the others stay whole. What still
-// doesn't fit scrolls. Turned, records are not squeezed: a page of them
-// never fits, and squeezed to their numbers they would show nothing.
+// widths sizes each screen column (§7.6): the larger of its header and its
+// widest value on the page, at most maxColWidth; when they don't fit in room
+// the ones wishing more than FullWidth are squeezed in proportion, never below
+// the header nor FullWidth, and the others stay whole. What still doesn't fit
+// scrolls. Turned, records are not squeezed: a page of them never fits, and
+// squeezed to their numbers they would show nothing.
 func (v view) widths(room int) []int {
 	ws := make([]int, v.cols)
 	heads := make([]int, v.cols)
 	total := 0
 	for c := range v.cols {
 		heads[c] = Width(v.head(c))
-		vals := make([]int, 0, v.rows)
+		widest := 0
 		for r := range v.rows {
 			val, _ := v.val(r, c)
-			vals = append(vals, Width(Cell(val)))
+			widest = max(widest, Width(Cell(val)))
 		}
-		p90 := 0
-		if len(vals) > 0 {
-			slices.Sort(vals)
-			p90 = vals[(len(vals)*9+9)/10-1]
-		}
-		ws[c] = min(max(heads[c], p90), maxColWidth)
+		ws[c] = min(max(heads[c], widest), maxColWidth)
 		total += ws[c]
 	}
-	if total > room && total > 0 && !v.g.Transpose {
-		full, wide := v.g.FullWidth, 0
-		for _, w := range ws {
-			if w > full {
-				wide += w
+	if total > room && !v.g.Transpose {
+		var wide, want, floor []int // the columns that give way, and what they wish and keep at least
+		for c, w := range ws {
+			if w > v.g.FullWidth {
+				wide, want, floor = append(wide, c), append(want, w), append(floor, max(heads[c], v.g.FullWidth))
+				total -= w
 			}
 		}
-		avail := room - (total - wide) // what the wide ones share
-		for c := range ws {
-			if ws[c] > full {
-				ws[c] = max(ws[c]*avail/wide, heads[c], full)
-			}
+		for i, w := range squeeze(want, floor, room-total) {
+			ws[wide[i]] = w
 		}
 	}
 	return ws
+}
+
+// squeeze shares room among columns that wish want, in proportion, none
+// below its floor: one the proportion puts below it is held there and the
+// rest share what is left, again; what the division leaves over goes to the
+// first of them, none past its wish. Short of the floors the columns are at
+// them, and the rest scrolls (F8.5).
+func squeeze(want, floor []int, room int) []int {
+	held := make([]bool, len(want))
+	for {
+		left, share, again := room, 0, false
+		for i := range want {
+			if held[i] {
+				left -= floor[i]
+			} else {
+				share += want[i]
+			}
+		}
+		for i := range want {
+			if !held[i] && want[i]*left < floor[i]*share {
+				held[i], again = true, true
+			}
+		}
+		if again {
+			continue
+		}
+		out := slices.Clone(floor)
+		given := 0
+		for i := range want {
+			if !held[i] {
+				out[i] = min(want[i]*left/share, want[i])
+				given += out[i]
+			}
+		}
+		for i := range want {
+			if left > given && !held[i] && out[i] < want[i] {
+				out[i]++
+				given++
+			}
+		}
+		return out
+	}
 }
 
 // layout is where the grid's columns go in area: the label column's width,

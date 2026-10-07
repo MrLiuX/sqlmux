@@ -146,7 +146,7 @@ func TestPaste(t *testing.T) {
 // then just moves the cursor), the wheel, a global key; C-c is esc (§10.1).
 // A double click edits; a click in the input changes nothing.
 func TestEditEndsFirst(t *testing.T) {
-	a := sized(160, 45, "nerd")
+	a := wide(160, 45)
 	tab := loadOrders(t, a, 3)
 	p := a.focused()
 	feed(t, a, "lix")
@@ -830,7 +830,7 @@ func TestCellHintWithMenu(t *testing.T) {
 // at it; ↵, a click elsewhere, the wheel and a global key leave it be,
 // esc drops it for what the cell had before (§10.7).
 func TestCellCheckBlocks(t *testing.T) {
-	a := sized(160, 45, "nerd")
+	a := wide(160, 45)
 	tab := loadOrders(t, a, 3)
 	p := a.focused()
 	feed(t, a, "lli5<Esc>i10d")

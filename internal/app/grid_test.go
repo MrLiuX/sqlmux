@@ -72,7 +72,7 @@ func TestGoldenTable160x45(t *testing.T) {
 	golden.RequireEqual(t, a.render().String())
 }
 
-// In the default layout ① is some 70 columns: the query bar's count gives
+// In the default layout ① is some 63 columns: the query bar's count gives
 // way first; a save's note goes before the buttons and then the chips,
 // from the right, and cut in its middle past that (§7.8「查询条」).
 func TestGoldenQueryBarNarrow(t *testing.T) {
@@ -327,7 +327,7 @@ func TestGridClickCell(t *testing.T) {
 }
 
 func TestGridCells(t *testing.T) {
-	a := wide(160, 45)
+	a := wide(200, 45) // every column whole
 	loadOrders(t, a, 60)
 	f := a.render()
 	th := a.theme
@@ -474,5 +474,26 @@ func TestGridTab(t *testing.T) {
 	feed(t, a, "o<Esc><S-Tab><Tab><Tab>") // the added row, not editing
 	if tab.cell != nil || tab.col != 2 {
 		t.Errorf("on an added row: cell %+v, col %d", tab.cell, tab.col)
+	}
+}
+
+// `[grid] full_width` is every grid's: a table's, a result's, and quick SQL's
+// (§7.6, F8.5).
+func TestFullWidthReachesEveryGrid(t *testing.T) {
+	a := sizedWith(160, 45, userConfig(t, "[grid]\nfull_width = 8", ""))
+	tab := loadOrders(t, a, 3)
+	if g := a.grid(a.focused(), tab); g.FullWidth != 8 {
+		t.Errorf("a table's: %d", g.FullWidth)
+	}
+	r := db.Result{Cols: []db.Col{{Name: "a"}}, Rows: [][]db.Val{{{S: "x"}}}}
+	b, _ := inRun(t, &execDB{res: map[string]db.Result{"select 1": r}}, "select 1;")
+	press(t, b, "<CR>")
+	b.fullWidth = 8
+	res := b.win().Result
+	if g := b.resultGrid(res, res.Tabs[res.Cur].Result); g.FullWidth != 8 {
+		t.Errorf("a result's: %d", g.FullWidth)
+	}
+	if v := b.quickView(&quickSQL{res: r}); v.Grid.FullWidth != 8 {
+		t.Errorf("quick SQL's: %d", v.Grid.FullWidth)
 	}
 }

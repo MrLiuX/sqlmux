@@ -87,7 +87,7 @@
 - **涉及**：`internal/ui`（表格列宽）、`internal/config`
 
 **开发**（§7.5「列宽」）
-- [ ] 列宽规则改成：期望宽度（本页最宽的值，不小于表头）不超过 `full_width` 的列不收缩；总宽度超出时只在比它宽的列之间按比例收缩，收到 `full_width` 为止；还放不下就横向滚动，同转置视图现在的做法。`full_width` 默认 20，写在 config.toml 的 `[grid]` 表里。
+- [ ] 列宽规则改成：期望宽度（**本页最宽的值**，不再是 p90，审查时定：p90 会把只有一行非空的时间列压到表头宽；不小于表头）不超过 `full_width` 的列不收缩；总宽度超出时只在比它宽的列之间按比例收缩，收到 `full_width` 为止；还放不下就横向滚动，同转置视图现在的做法。`full_width` 默认 **22**（审查时定：放得下 `2026-09-01 00:01:00+00`），写在 config.toml 的 `[grid]` 表里。
 - [ ] 转置视图不变。
 
 **验收**
@@ -120,7 +120,7 @@
   - 一行：`insert into "public"."t_order" ("id", "status") values (1, 'done');`，表名和列名走 `Engine.Quote`（PG pgx.Identifier、MySQL 反引号）；关键字（insert into / values / null）跟 `keyword_case`（preserve 当 lower，决策者加：用户配了 upper）。
   - 列：这张表目录里的全部列（不只 COLS 显示的），去掉 `Generated` 的；值取当前显示的，含没保存的修改（同 `yy`）。
   - 字面量：NULL 写 null；数字类型（含 MySQL 的 BIT）不加引号；其余加单引号，`'` 写成 `''`，MySQL 另把 `\` 写成 `\\`（`NO_BACKSLASH_ESCAPES` 下会错，`ponytail:` 标上限）；布尔不特判。转义放 `sqlkit.Literal(s, dialect)`，单测在那里。
-  - 只复制当前一行，不支持计数；成功后整行闪一下（同 `yy`）。结果 tab 没有表可写：toast「只有表里的行能复制为 INSERT」，不写剪贴板；已标删除和新增未保存的行照常复制。
+  - 只复制当前一行，不支持计数；成功后整行闪一下（同 `yy`）。结果 tab 没有表可写：toast「只有表里的行能复制为 INSERT」，不写剪贴板；已标删除和新增未保存的行照常复制。审查时定：行里有 `<binary N bytes>` 占位的格时 `yi` 不写剪贴板、toast「有二进制列，复制不了」，`yy` → `p` 同样拒绝（F3.32 的老路径，补一个测试）；新增行每格都是 DEFAULT 时写 `insert into t default values;` / MySQL `insert into t () values ();`（db/save.go 已有这两种写法），不能什么都不做。
   - lazysql 的 INSERT 带参数（`drivers/utils.go`），没有可借的转义；PG / MySQL 集成测试各把复制出来的语句原样执行回去一遍。
 
 **验收**
@@ -136,7 +136,7 @@
 **开发**（§14 config.toml）
 - [ ] `[grid] order = "asc" | "desc"`（默认 asc）：打开表时默认排序（行标识列）的方向；在 ORDER 下拉里选别的列时第一次也按这个方向。
 - [ ] `[grid] transpose = false`：新打开的表 tab 是否转置。
-- [ ] 两项都只影响新打开的 tab；布局文件里记的 `desc` / `transpose` 照旧优先。
+- [ ] 两项都只影响新打开的 tab；布局文件里记的 `desc` / `transpose` 照旧优先；`tab.reopen` 重开的 tab 保留关掉时的转置状态（closedTab 记上 transpose，审查时定）。
 
 **验收**
 - [ ] 单测：`order = "desc"` 时打开表的 SQL 带 `order by id desc`，chip 显示 `id ↓`；`transpose = true` 时新 tab 是转置视图。
@@ -149,6 +149,7 @@
 - **涉及**：`internal/app`（布局树）
 
 **开发**（§5 / §7.1 布局）
+- [ ] 代价（审查时确认，接受）：160 列下 ① 从 70 列变成 63 列，查询条少显示一组按钮、note 列移出可见区，200 列下都放得下。
 - [ ] worker 2026-10-07 探过：拆分出来的一对本来就均分（侧栏和缝都没算进去，最多差 1 列），不等宽的是默认布局 data : console = 5 : 9（用户截图正是这个两 pane 的默认布局）。决策者定：默认布局改成 1 : 1（§5），拆分规则不动；用户要是指别的情形再说。
 
 **验收**

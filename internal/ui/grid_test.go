@@ -137,12 +137,12 @@ func TestGridWidths(t *testing.T) {
 	for i := range 10 {
 		v := "xx"
 		if i == 9 {
-			v = strings.Repeat("x", 60) // one outlier: above the 90th percentile
+			v = strings.Repeat("x", 60) // one outlier: the widest value counts, to the cap
 		}
 		g.Rows = append(g.Rows, vals([]string{v, strings.Repeat("y", 50)})...)
 	}
-	if got := g.view().widths(100); !reflect.DeepEqual(got, []int{2, 40}) {
-		t.Errorf("roomy: %v, want p90 2 and the 40 cap", got)
+	if got := g.view().widths(100); !reflect.DeepEqual(got, []int{40, 40}) {
+		t.Errorf("roomy: %v, want the widest value and the 40 cap", got)
 	}
 	if got := g.view().widths(20); got[0] < 1 || got[1] < len("long header") || got[1] > 40 {
 		t.Errorf("squeezed: %v, never below the header", got)
@@ -174,12 +174,45 @@ func TestGridWidthsFull(t *testing.T) {
 		{"one long, the short ones whole", grid(20, 6, 8, 40), 34, []int{6, 8, 20}}, // 40 takes the 20 left
 		{"one long, a little room", grid(20, 6, 8, 40), 30, []int{6, 8, 20}},        // not below FullWidth
 		{"one long, more room", grid(20, 6, 8, 40), 44, []int{6, 8, 30}},
-		{"all long, in proportion", grid(20, 40, 30, 40), 60, []int{21, 20, 21}}, // 110 → 60: 21.8, 16.4, 21.8, the middle held at 20
+		{"all long, the floor held, the rest share what is left", grid(20, 40, 30, 40), 60, []int{20, 20, 20}}, // 21.8, 16.4, 21.8 → the middle held at 20, 40 left for the others
+		{"exactly FullWidth is not squeezed", grid(20, 20, 40, 40), 70, []int{20, 25, 25}},
+		{"what the division leaves goes to the first", grid(5, 10, 10, 10), 29, []int{10, 10, 9}},
 		{"all long, below FullWidth no more", grid(20, 40, 30, 40), 30, []int{20, 20, 20}},
 		{"FullWidth 0 squeezes all, as before", grid(0, 6, 8, 40), 27, []int{3, 4, 20}},
 	} {
 		if got := c.v.widths(c.room); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// squeeze keeps every column between its floor and its wish, uses the whole
+// room when the wishes don't fit in it and the floors do, and is at the floors
+// when they don't (F8.5).
+func TestSqueeze(t *testing.T) {
+	seed := uint32(7)
+	next := func(n int) int { seed = seed*1664525 + 1013904223; return int(seed>>8) % n }
+	for range 5000 {
+		n := 1 + next(5)
+		want, floor := make([]int, n), make([]int, n)
+		sw, sf := 0, 0
+		for i := range want {
+			floor[i] = 1 + next(20)
+			want[i] = floor[i] + next(25)
+			sw, sf = sw+want[i], sf+floor[i]
+		}
+		room := next(sw + 10)
+		out := squeeze(want, floor, room)
+		sum := 0
+		for i, w := range out {
+			if w < floor[i] || w > want[i] {
+				t.Fatalf("want %v floor %v room %d: %v out of range", want, floor, room, out)
+			}
+			sum += w
+		}
+		switch {
+		case room >= sw && sum != sw, room < sf && sum != sf, room >= sf && room < sw && sum != room:
+			t.Fatalf("want %v floor %v room %d: %v adds up to %d", want, floor, room, out, sum)
 		}
 	}
 }

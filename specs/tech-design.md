@@ -219,7 +219,7 @@ Window
 - **按编号跳转**（`SPC q`）：编号一直显示到下一个按键，不自动消失（相当于 tmux 的 `display-panes -d 0`）。按数字跳到对应的 pane；按其他键只关闭编号，这个键不再执行别的操作。
   - 鼠标：编号也是键位提示，按 §7.4 可以点击。点击某个 pane（含侧栏 ⟨0⟩），等于按下它的编号；点击 pane 以外的地方（状态栏、间隔）只关闭编号。
 
-默认 window 名为 `data`，之后新建的叫 `data-2`、`data-3`……（同一 session 里最小的没用过的序号；M8 F8.11，用户：三个 `data` 分不清）；同一 session 里 window 名不能重复，`window.rename` 改成已有的名字时 toast 拒绝。各个 pane 随里程碑逐步出现：M1 只有侧栏和 data，data 占满其余宽度；console 在 M3 加入默认布局（data : console 原为 5 : 9；M8 F8.9 起 1 : 1，用户看到两块不等宽以为是 bug，拆分出来的一对本来就是均分的），结果区在第一次执行 SQL 时出现。
+默认 window 名为 `data`，之后新建的叫 `data-2`、`data-3`……（同一 session 里最小的没用过的序号；M8 F8.11，用户：三个 `data` 分不清）；同一 session 里 window 名不能重复，`window.rename` 改成已有的名字时 toast 拒绝。各个 pane 随里程碑逐步出现：M1 只有侧栏和 data，data 占满其余宽度；console 在 M3 加入默认布局（data : console 原为 5 : 9；M8 F8.9 起 1 : 1，用户看到两块不等宽以为是 bug，拆分出来的一对本来就是均分的；代价是 160 列下 ① 从 70 列变成 63 列，查询条按 §7.8 的让位顺序少显示一组按钮，接受），结果区在第一次执行 SQL 时出现。
 
 所有持久化字段都是普通值类型，运行时句柄（连接、编辑器实例）不进入序列化结构。所以工作现场恢复（PRD 10.2 #6，M6 F6.5 布局文件）只需要补上读写逻辑。
 
@@ -576,8 +576,8 @@ type Hit struct {
 
 - **虚拟滚动**：只渲染视口内的行；横向按列偏移滚动。
 - **列宽**：
-  1. 期望宽度取表头宽度与当前页数据宽度 p90 中的较大值，上限 40。
-  2. 总宽度超出时按比例收缩，但不小于表头宽度（G-06）。M8 F8.5 起（用户：`<null>`、`pending` 被缩成 `<nu…` 看不出是什么）：期望宽度不超过 `[grid] full_width`（默认 20）的列不收缩，只在比它宽的列之间按比例收，收到 `full_width` 为止，还放不下就横向滚动。转置时不收缩，直接横向滚动（见下文「转置时列宽不按比例收缩」）。
+  1. 期望宽度取表头宽度与本页最宽的值中的较大值，上限 40（M8 F8.5 起；原来是 p90，为的是少数长值不撑宽列，现在宽列一律按比例收，p90 反而把只有一行非空的时间列压到表头宽、显示成 `2026-09-0…`）。
+  2. 总宽度超出时按比例收缩，但不小于表头宽度（G-06）。M8 F8.5 起（用户：`<null>`、`pending` 被缩成 `<nu…` 看不出是什么）：期望宽度不超过 `[grid] full_width`（默认 22，放得下 `2026-09-01 00:01:00+00`）的列不收缩，只在比它宽的列之间按比例收，收到 `full_width` 为止，还放不下就横向滚动。转置时不收缩，直接横向滚动（见下文「转置时列宽不按比例收缩」）。
   3. 还放不下就横向滚动。
 - **宽度计算**：按字素簇计算（§7.1「宽度」），CJK 字符和 emoji 都能正确处理。
 - **单元格显示**：
@@ -1220,7 +1220,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 ### 10.6 新增与删除行（M2/M3 验收时定）
 
 - **新增**：`o` 或查询条的 `+`，在光标所在行的下面插入一个新行，光标移到它的第一列。新行的行号显示为 `warn` 色的 `+`，每一格先显示 `<default>`（写入时用 DEFAULT），照常编辑。新行只在当前页里，翻页之后仍保留，回到这一页时在原处：记的是「第几页、页里第几行后面」，改 WHERE / ORDER / LIMIT 或刷新后照样放回去，页或行不够时挂到最后一页末尾。没改过的格用 `dim` 色画 `<default>`。
-- **复制为 INSERT**（`yi`，M8 F8.7 才真正实现；F3.32 只留了占位）：当前行拼成一条 `insert into <schema>.<表> (<全部列，去掉 generated>) values (…);` 写进剪贴板，标识符走 `Engine.Quote`，关键字跟 `keyword_case`，数字不加引号、其余单引号（PG `'` 加倍，MySQL 另转义 `\`），值取显示的（含未保存的修改）；结果 tab 上 toast「只有表里的行能复制为 INSERT」。
+- **复制为 INSERT**（`yi`，M8 F8.7 才真正实现；F3.32 只留了占位）：当前行拼成一条 `insert into <schema>.<表> (<全部列，去掉 generated>) values (…);` 写进剪贴板，标识符走 `Engine.Quote`，关键字跟 `keyword_case`，数字不加引号、其余单引号（PG `'` 加倍，MySQL 另转义 `\`），值取显示的（含未保存的修改）；结果 tab 上 toast「只有表里的行能复制为 INSERT」；行里有显示成 `<binary N bytes>` 的格（MySQL 非 UTF-8 的二进制，原始字节不在内存里）时 `yi` 和 `p` 都不做、toast「有二进制列，复制不了」；新增行每一格都是 DEFAULT 时写成和保存一样的 `insert into t default values;`（MySQL `insert into t () values ();`）。
 - **复制成新行**（F3.32）：`yy` 复制整行，`p` 在光标下面粘贴成一个新行，各格取复制的值；行标识列里有默认值的（serial / identity）填 `<default>`，其余照抄。
 - **删除**：`dd` 或查询条的 `−`，把光标所在行标为删除：整行 `dim` 色加删除线，行号显示为 `error` 色的 `−`。删除标记按行标识记，翻页、刷新后照样标着。标了删除的行不能进入编辑，同只读表格不提示，要改先按 `r` 取消删除。光标在新行上时，状态栏的「行,列」里的行显示行号栏画的标记（`+`），和表格上看到的一致。再按一次 `dd`，或 `r`，取消删除。在还没保存的新行上 `dd` 直接去掉它。
 - **保存**（与 §10.3 同一个事务）：先 DELETE，再 UPDATE，最后 INSERT，每条都必须恰好影响 1 行，否则整体回滚。
@@ -1514,14 +1514,14 @@ result_height = 0.4              # 底部结果区默认所占的高度比例
 formatprg    = ""                # 例如 "pg_format -"；为空时使用内置的 sql-formatter
 keyword_case = "lower"
 tab_width    = 2                 # console 缩进与格式化共用
+autopairs    = true              # 输入括号、引号时补上另一半（§7.9）
+confirm_dangerous = true         # 执行没带 WHERE 的 delete / update、drop、truncate，以及保存里有删除行时先确认（§13，M6）
 border       = "single"          # single | rounded | double | bold | hidden，pane 和浮层的边框（M8 F8.10，取值同 lazygit；Unicode 没有粗圆角，所以粗和圆角二选一）
 
 [grid]                           # M8 F8.5 / F8.8
-full_width   = 20                # 期望宽度不超过它的列不收缩
+full_width   = 22                # 期望宽度不超过它的列不收缩（22 放得下带整点时区的 timestamptz）
 order        = "asc"             # asc | desc，新打开的表默认排序的方向
-transpose    = false             # 新打开的表是否转置
-autopairs    = true              # 输入括号、引号时补上另一半（§7.9）
-confirm_dangerous = true         # 执行没带 WHERE 的 delete / update、drop、truncate，以及保存里有删除行时先确认（§13，M6）
+transpose    = false             # 新打开的表是否转置（关掉再重开的 tab 保留原来的状态，同 WHERE / ORDER / LIMIT）
 
 [console]
 max_rows = 1000

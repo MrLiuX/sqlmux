@@ -605,11 +605,14 @@ func (a *App) openTable(c *Conn, t db.Table) tea.Cmd { return a.openTableIn(a.op
 // openTableIn shows c's table t in pane p and focuses it: p's tab of it, a
 // pane having one at most (F3.37), else a new one. A landing tab current
 // gives way to it, replaced, or closed for the tab there (§5「引导页」).
-func (a *App) openTableIn(p *Pane, c *Conn, t db.Table) tea.Cmd { return a.openTableAs(p, c, t, nil) }
+func (a *App) openTableIn(p *Pane, c *Conn, t db.Table) tea.Cmd {
+	return a.openTableAs(p, c, t, nil, a.newTurned)
+}
 
 // openTableAs is openTableIn asking for r, when a new tab is made, in place
-// of the first page as the table opens.
-func (a *App) openTableAs(p *Pane, c *Conn, t db.Table, r *request) tea.Cmd {
+// of the first page as the table opens, and for it turned or not as turned
+// says.
+func (a *App) openTableAs(p *Pane, c *Conn, t db.Table, r *request, turned bool) tea.Cmd {
 	a.showPane(p.ID)
 	landing := p.tab().landing()
 	if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Data != nil && tb.Data.conn == c && idOf(tb.Data.table) == idOf(t) }); i >= 0 {
@@ -625,7 +628,7 @@ func (a *App) openTableAs(p *Pane, c *Conn, t db.Table, r *request) tea.Cmd {
 	// the same, the status bar telling the focused one's (§7.8). Add the
 	// connection, t_order [seed], if that confuses.
 	tab := Tab{Name: t.Name, Data: newDataTab(c, t)}
-	tab.Data.transpose = a.newTurned
+	tab.Data.transpose = turned
 	if r == nil {
 		first := tab.Data.request
 		first.desc = a.newDesc
@@ -1133,6 +1136,7 @@ type closedTab struct {
 	conn      *Conn
 	table     db.Table // a table's, with the request it had
 	req       request
+	turned    bool   // a table's: it was turned
 	console   string // the console's name, "" for a table
 	schema    string
 }
@@ -1147,7 +1151,7 @@ func (s *Session) recordClosed(win, pane int, tab Tab) {
 	switch {
 	case tab.Data != nil:
 		d := tab.Data
-		c = closedTab{conn: d.conn, table: d.table, req: request{applied: d.applied, order: d.order, desc: d.desc, limit: d.limit}}
+		c = closedTab{conn: d.conn, table: d.table, req: request{applied: d.applied, order: d.order, desc: d.desc, limit: d.limit}, turned: d.transpose}
 	case tab.Console != nil:
 		c = closedTab{conn: tab.Console.conn, console: tab.Console.name, schema: tab.Console.schema}
 	default:
@@ -1193,7 +1197,7 @@ func (a *App) reopenTab() tea.Cmd {
 		p = s.Windows[wi].pane(c.pane)
 	}
 	if c.console == "" {
-		return a.openTableAs(p, c.conn, c.table, &c.req)
+		return a.openTableAs(p, c.conn, c.table, &c.req, c.turned)
 	}
 	t, err := openConsole(c.conn, c.console)
 	if err != nil {

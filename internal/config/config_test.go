@@ -57,7 +57,6 @@ L = "5l"
 	}
 }
 
-// Keys belong in keymaps.toml, and only keys (F5.9).
 // [grid] order and transpose are what a table opened anew starts with
 // (F8.8); order is "asc" or "desc".
 func TestGridNewTableDefaults(t *testing.T) {
@@ -80,11 +79,13 @@ func TestGridNewTableDefaults(t *testing.T) {
 // border names the boxes' lines; another name is an error that lists them
 // (F8.10).
 func TestBorder(t *testing.T) {
-	if c, err := Parse(""); err != nil || c.Border != "single" {
-		t.Errorf("default: %q %v", c.Border, err)
+	single, _ := ui.BorderOf("single")
+	if c, err := Parse(""); err != nil || !reflect.DeepEqual(c.Border, single) {
+		t.Errorf("default: %+v %v", c.Border, err)
 	}
 	for _, b := range []string{"single", "rounded", "double", "bold", "hidden"} {
-		if c, err := Parse(`border = "` + b + `"`); err != nil || c.Border != b {
+		want, _ := ui.BorderOf(b)
+		if c, err := Parse(`border = "` + b + `"`); err != nil || !reflect.DeepEqual(c.Border, want) {
 			t.Errorf("%s: %v", b, err)
 		}
 	}
@@ -94,11 +95,12 @@ func TestBorder(t *testing.T) {
 }
 
 func TestGridFullWidthDefault(t *testing.T) {
-	if c, err := Parse(""); err != nil || c.GridFullWidth != 20 {
+	if c, err := Parse(""); err != nil || c.GridFullWidth != 22 {
 		t.Errorf("default: %d %v", c.GridFullWidth, err)
 	}
 }
 
+// Keys belong in keymaps.toml, and only keys (F5.9).
 func TestParseErrors(t *testing.T) {
 	for _, s := range []string{
 		`icons = "emoji"`,

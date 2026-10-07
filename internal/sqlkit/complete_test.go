@@ -168,6 +168,7 @@ func TestWantsColumn(t *testing.T) {
 		"select * from t group by a, lower(b), |":  true,
 		"select|":                           false, // no blank yet
 		"select a,|":                        false,
+		"select a,| b from t":               false, // the blank is after the cursor, not before it
 		"select * from t where a|":          false, // typed
 		"select * from |":                   false, // a table
 		"select * from a, |":                false,

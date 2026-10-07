@@ -31,3 +31,32 @@ func TestText(t *testing.T) {
 		}
 	}
 }
+
+// Every box draws with the frame's border: the sidebar and panes' Block, and
+// every overlay, none keeping the single line's corners (§7.1, F8.10).
+func TestEveryBoxUsesFrameBorder(t *testing.T) {
+	screen := uv.Rect(0, 0, 100, 30)
+	box := uv.Rect(10, 5, 60, 14)
+	for name, draw := range map[string]func(f *Frame){
+		"block":    func(f *Frame) { Block{Num: "①", Focused: true}.Draw(f, box) },
+		"palette":  func(f *Frame) { Palette{Scopes: []string{"all"}, Rows: []PaletteRow{{Name: "x"}}}.Draw(f, screen) },
+		"timepick": func(f *Frame) { TimePick{Kind: Timestamp, Text: "2026-09-01 00:01:00", Sel: -1}.Draw(f, box) },
+		"confirm":  func(f *Frame) { Confirm{Text: "q", YesKey: "y", Yes: "Y", NoKey: "n", No: "N"}.Draw(f, screen) },
+		"dropdown": func(f *Frame) { Dropdown{Items: []string{"a"}, Pos: [][]int{nil}}.Draw(f, box, 1) },
+		"sessions": func(f *Frame) { SessionList{Rows: []SessionRow{{Name: "s"}}}.Draw(f, screen) },
+		"whichkey": func(f *Frame) {
+			WhichKey{Prefix: "g", Items: []WhichKeyItem{{Key: "t", Title: "tab", Group: "normal"}}}.Draw(f, screen)
+		},
+		"complete": func(f *Frame) { Complete{Items: []CompleteItem{{Text: "a"}}}.Draw(f, box, 1) },
+		"hint":     func(f *Frame) { CellHint{Text: "bad"}.Draw(f, uv.Rect(10, 5, 20, CellHintRows)) },
+		"form":     func(f *Frame) { Form{Title: "t", Save: "s", Cancel: "c"}.Draw(f, screen) },
+	} {
+		f := NewFrame(100, 30, TokyonightStorm)
+		f.Border = uv.RoundedBorder()
+		draw(f)
+		got := f.String()
+		if strings.ContainsAny(got, "┌┐└┘") || !strings.Contains(got, "╭") {
+			t.Errorf("%s: not drawn with the frame's border:\n%s", name, got)
+		}
+	}
+}

@@ -176,16 +176,21 @@ func remove(e Engine, schema, table string, keyCols, key []string) (string, []Va
 	return "delete from " + e.Quote(schema, table) + " where " + strings.Join(keyWhere(e, keyCols, key, arg), " and "), *args
 }
 
+// DefaultRow is the INSERT of a row of every column's DEFAULT, as PG's
+// DEFAULT VALUES and MySQL's () VALUES () write it (§10.6); kw writes its
+// keywords as asked for (identity for the save's own).
+func DefaultRow(e Engine, schema, table string, kw func(string) string) string {
+	if e.Dialect() == sqlkit.MySQL {
+		return kw("insert into") + " " + e.Quote(schema, table) + " () " + kw("values") + " ()"
+	}
+	return kw("insert into") + " " + e.Quote(schema, table) + " " + kw("default values")
+}
+
 // insert is the INSERT of a row with cols set, and its arguments; with
-// none set, every column's DEFAULT, as PG's DEFAULT VALUES and MySQL's
-// () VALUES () write it (§10.6).
+// none set, every column's DEFAULT (§10.6).
 func insert(e Engine, schema, table string, cols []Change) (string, []Val) {
-	switch {
-	case len(cols) > 0:
-	case e.Dialect() == sqlkit.MySQL:
-		return "insert into " + e.Quote(schema, table) + " () values ()", nil
-	default:
-		return "insert into " + e.Quote(schema, table) + " default values", nil
+	if len(cols) == 0 {
+		return DefaultRow(e, schema, table, func(s string) string { return s }), nil
 	}
 	args, arg := argsOf(e)
 	var names, vals []string

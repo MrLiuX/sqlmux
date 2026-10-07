@@ -37,12 +37,12 @@ type App struct {
 	sess     *Session
 	sessions []*Session
 
-	tabWidth     int     // the consoles' (§14)
-	maxRows      int     // a console run keeps of each result (§11)
-	resultHeight float64 // the share the result area first takes
-	fullWidth    int     // the grid's columns up to this wide are not squeezed (§7.6)
-	border       string  // the boxes' lines (§7.1)
-	newDesc      bool    // a table opened anew sorts descending, and shows transposed (§14)
+	tabWidth     int       // the consoles' (§14)
+	maxRows      int       // a console run keeps of each result (§11)
+	resultHeight float64   // the share the result area first takes
+	fullWidth    int       // the grid's columns up to this wide are not squeezed (§7.6)
+	border       uv.Border // the boxes' lines (§7.1)
+	newDesc      bool      // a table opened anew sorts descending, and shows transposed (§14)
 	newTurned    bool
 	keywordCase  string // gq's (§9.5)
 	formatPrg    string
