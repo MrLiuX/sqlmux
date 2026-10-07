@@ -192,6 +192,39 @@ func TestAmbiguousNodeTimesOut(t *testing.T) {
 	}
 }
 
+// A key bound and the first of longer sequences too, t with tc and tt: the
+// next key that continues none of them runs t first and is read afresh, as
+// nvim does, esc too, so t needs no timeout to run; one that continues one is that
+// sequence; a pause runs t (F8.15, §6.5).
+func TestBoundPrefixRunsWhenTheNextKeyDoesNotContinue(t *testing.T) {
+	m, _ := load(t, "[keys.normal]\nt = \"my.t\"\ntc = \"my.tc\"\ntt = \"my.tt\"")
+	for _, c := range []struct {
+		keys string
+		want []string
+	}{
+		{"tz", []string{"my.t", "keys z"}},    // z binds nothing there: the widget gets it
+		{"tx", []string{"my.t", "tab.close"}}, // x binds something: t first, then it
+		{"tc", []string{"my.tc"}},
+		{"tt", []string{"my.tt"}},
+		{"tj", []string{"my.t", "grid.down"}},
+		{"t<Esc>", []string{"my.t", "pane.error.close"}}, // esc continues nothing either: t runs, esc is read afresh
+	} {
+		r := NewResolver(m)
+		out, _ := press(t, r, grid, c.keys)
+		if got := actions(out); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: %v, want %v", c.keys, got, c.want)
+		}
+	}
+	r := NewResolver(m)
+	out, wait := press(t, r, grid, "t")
+	if len(out) != 0 || !wait {
+		t.Fatalf("t waits: %v %v", out, wait)
+	}
+	if got := r.Timeout(r.Seq()); !reflect.DeepEqual(actions(got), []string{"my.t"}) {
+		t.Errorf("a pause: %v", actions(got))
+	}
+}
+
 func TestCounts(t *testing.T) {
 	m := mustLoad(t, "")
 	for _, c := range []struct {
