@@ -540,6 +540,9 @@ func TestCellOptionsTab(t *testing.T) {
 	if feed(t, a, "<Tab><Down>"); tab.cell.sel != -1 || a.context().Overlay != "" {
 		t.Errorf("folded: sel %d", tab.cell.sel)
 	}
+	if tab.moveOption(1); tab.cell.sel != -1 { // not by a key either
+		t.Errorf("folded, moveOption: sel %d", tab.cell.sel)
+	}
 	feed(t, a, "<Esc>$i")
 	a.run("cell.options", 0)
 	if feed(t, a, "<Tab>"); tab.cell.seg != 0 || a.context().Overlay != "" {

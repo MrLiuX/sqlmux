@@ -129,13 +129,30 @@ func TestNewSessionFails(t *testing.T) {
 	}
 }
 
+// The pane of a new window is pane 1, the numbers go on from it: a split
+// makes pane 2, not 3 (F8.18).
+func TestNewWindowSplitNumbering(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	feed(t, a, "<Space>c<Space>%")
+	var ids []int
+	for _, p := range a.win().Root.Leaves() {
+		ids = append(ids, p.ID)
+	}
+	if !slices.Equal(ids, []int{1, 2}) {
+		t.Errorf("panes %v", ids)
+	}
+}
+
 // A session made is one window of one empty pane, on the connection that was
 // dialed for it, and no console, nor a file for one (F8.18).
 func TestNewSessionIsOneEmptyPane(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sized(160, 45, "nerd")
-	a.Update(sessionDialed{spec: a.sess.Conns[0].Spec, d: dialed{main: noDB{}, meta: noDB{}}})
+	_, cmd := a.Update(sessionDialed{spec: a.sess.Conns[0].Spec, d: dialed{main: noDB{}, meta: noDB{}}})
 	s := a.sess
+	if m, ok := cmd().(catalogMsg); !ok || m.conn != s.start { // its connections are its own: the tree needs the catalog of this one
+		t.Errorf("the session loads the catalog of its start: %T", cmd())
+	}
 	if len(a.sessions) != 2 || s.Name != "1" || len(s.Windows) != 1 {
 		t.Fatalf("%d sessions, attached %q with %d windows", len(a.sessions), s.Name, len(s.Windows))
 	}

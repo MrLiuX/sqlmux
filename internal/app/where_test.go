@@ -597,3 +597,25 @@ func TestGoldenWhereHistory(t *testing.T) {
 		})
 	}
 }
+
+// A column's values, which the list opens on after its operator, have the
+// first selected as ever, ↵ taking it; the column names after and have none
+// (§9.7, F8.17).
+func TestWhereValuesPreselected(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	feed(t, a, "/status = ")
+	if tab.comp == nil || tab.comp.sel != 0 {
+		t.Fatalf("the values: %+v", tab.comp)
+	}
+	if feed(t, a, "<CR>"); tab.where.Text != "status = 'pending'" || tab.applied != "" {
+		t.Errorf("↵: %q, applied %q", tab.where.Text, tab.applied)
+	}
+	feed(t, a, "<Esc><Esc>/<C-u>status = '")
+	if tab.comp == nil || tab.comp.sel != 0 {
+		t.Errorf("after the quote: %+v", tab.comp)
+	}
+	feed(t, a, "<Esc><Esc>/<C-u>id > 5 and ")
+	if tab.comp == nil || tab.comp.sel != -1 {
+		t.Errorf("the columns after and: %+v", tab.comp)
+	}
+}

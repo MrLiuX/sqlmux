@@ -133,7 +133,7 @@ func (a *App) gotSessionDialed(m sessionDialed) tea.Cmd {
 	for slices.ContainsFunc(a.sessions, func(s *Session) bool { return s.Name == strconv.Itoa(n) }) {
 		n++
 	}
-	s := &Session{Name: strconv.Itoa(n), Conns: conns, start: conns[start], last: conns[start], open: map[string]bool{}}
+	s := bareSession(strconv.Itoa(n), conns, conns[start])
 	s.Windows = []*Window{s.blankWindow()} // no console: one is made when it is wanted (F8.18)
 	a.sessions = append(a.sessions, s)
 	a.attach(s)
