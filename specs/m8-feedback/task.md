@@ -294,6 +294,7 @@
 - [ ] 前缀为空时自动弹出的列表不预选：没有选中项时 `↵` 照常换行 / 执行（console、WHERE、快速 SQL 都一样），`Tab` / `C-n` / `↓` 选中第一项，`S-Tab` / `C-p` / `↑` 选中最后一项；打了字母后按现在的规则第一项自动选中。
 - [ ] 接受关键字补出空格后立即按 F8.4 的规则弹出（去掉「只有打出来的空格才弹」的区分），`esc` 关掉后再打空格才再弹。
 - [ ] `insert into t (` 的「全部列」仍预选，不动。
+- [ ] 细节（worker 2026-10-07 提议，已定）：只有「自动弹出且前缀为空」的列表无选中，`C-n` 手动唤起的仍预选第一项；无选中时 `↵` 等于没有列表；接受任何候选后都重新跑一遍补全（接受列名 / 表名后前一个词不是触发词，自然不弹）；三处（console、WHERE、快速 SQL）一致；golden 补一张无选中的列表。
 
 **验收**
 - [ ] 单测：`where↵` 后列表开着、无选中，再 `↵` 换行；`where↵` `Tab` `↵` 得到第一列；`where↵l↵` 得到 `logged_at `；WHERE 输入框 `and↵↵` 执行。
@@ -311,6 +312,7 @@
 - [ ] `window.new`：一个空 pane（引导页），不建 console。
 - [ ] `session.new`（面板和列表里的 `n`）：一个 window、一个空 pane，不建 console 文件；连接照旧。
 - [ ] 启动时的默认布局不变（左树、引导页、console）。
+- [ ] 细节（worker 提议，已定）：新 window 只有 pane 1、焦点在它上、Root 是单个叶子；`session.new` 不开 console 文件、不 keepConsole；`--layout` 恢复和零连接启动的窗口不变；没有 console 时「去 console」类的键沿用现在的行为，不动。
 
 **验收**
 - [ ] 单测：新 window 一个 pane；新 session 一个 window 一个 pane，consoles 目录没有新文件。
