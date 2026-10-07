@@ -434,6 +434,19 @@ func TestAskNameKeepsModeBlock(t *testing.T) {
 			if c := a.render().Cursor; c == nil || c.X >= ui.Width(row)-ui.Width(" INSERT ") || c.Y != a.h-1 {
 				t.Errorf("%s at %d: the cursor %v is not in the left", cmd, w, c)
 			}
+			if bg := a.render().Buf.CellAt(1+ui.Width(a.askName.label)+3, a.h-1).Style.Bg; bg != a.theme.Border {
+				t.Errorf("%s at %d: past the name the input is %v, not the bar's %v", cmd, w, bg, a.theme.Border)
+			}
+			// a name longer than the input is its tail: nothing of its start is left
+			// beside it, and the mode block is not covered
+			feed(t, a, "αβγδεζηθικλμν"+strings.Repeat("z", 200))
+			row = statusRow(a)
+			if !strings.HasSuffix(row, " INSERT ") || strings.ContainsAny(row, "αβγδεζηθικλμν") {
+				t.Errorf("%s at %d, a long name: %q", cmd, w, row)
+			}
+			if c := a.render().Cursor; c == nil || c.X >= ui.Width(row)-ui.Width(" INSERT ") || c.Y != a.h-1 {
+				t.Errorf("%s at %d, a long name: the cursor %v", cmd, w, c)
+			}
 		}
 	}
 }

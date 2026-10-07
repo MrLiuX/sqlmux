@@ -120,8 +120,9 @@ func (a *App) render() *ui.Frame {
 		}
 	}
 	if n := a.askName; n != nil { // the input over the status bar's left, past n.label ("layout name: "…), the mode block still its own (F6.5, F8.11)
-		x := 1 + ui.Width(n.label)
-		c := n.in.Draw(f, uv.Rect(x, y, max(rightX-1-x, 1), 1), uv.Style{Fg: th.Fg, Bg: th.Border})
+		x, in := 1+ui.Width(n.label), uv.Style{Fg: th.Fg, Bg: th.Border}
+		f.Fill(uv.Rect(x, y, max(rightX-x, 0), 1), in) // the input does not fill its rectangle: nothing of the bar is left in it
+		c := n.in.Draw(f, uv.Rect(x, y, max(rightX-1-x, 1), 1), in)
 		f.Cursor = &c
 	}
 	if a.keyHelp != nil {
@@ -488,10 +489,7 @@ func (a *App) statusLine() ui.StatusLine {
 	}
 
 	if n := a.askName; n != nil { // a name typed in the place of the session and the windows: render puts the input over it
-		s.Left = []ui.Segment{{Runs: []ui.Run{
-			{Text: " " + n.label, Style: uv.Style{Fg: th.Warn, Bg: th.Border}},
-			{Text: n.in.Text + "  ", Style: uv.Style{Fg: th.Fg, Bg: th.Border}},
-		}}}
+		s.Left = []ui.Segment{{Runs: []ui.Run{{Text: " " + n.label, Style: uv.Style{Fg: th.Warn, Bg: th.Border}}}}}
 	}
 
 	pending := ui.Run{Text: "·", Style: bar(th.Dim)}
