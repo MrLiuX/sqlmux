@@ -52,6 +52,7 @@ func TestCompletionContext(t *testing.T) {
 			continue
 		}
 		want := Completion{OK: true, Kind: c.kind, Prefix: c.prefix, Start: pos - len(c.prefix), Qualifier: c.qual, Depth: c.depth, Tables: c.tables, CTEs: c.ctes}
+		want.WantsColumn = got.WantsColumn // TestWantsColumn's
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("%s:\n got %+v\nwant %+v", c.sql, got, want)
 		}
@@ -133,6 +134,44 @@ func TestInsertColumnsContext(t *testing.T) {
 		got := CompletionContext(c.sql[:pos]+c.sql[pos+1:], pos, c.d)
 		if ok := got.Kind == CompInsertCols; ok != c.ok || ok && (got.Into != c.into || !slices.Equal(got.Listed, c.listed) || got.Prefix != c.prefix) {
 			t.Errorf("%s: %v %+v %q", c.sql, got.Kind, got.Into, got.Listed)
+		}
+	}
+}
+
+// A column is what comes next, with nothing typed after a blank, where
+// WantsColumn says so; not after a ., a FROM or when something is typed
+// (M8 F8.4).
+func TestWantsColumn(t *testing.T) {
+	for sql, want := range map[string]bool{
+		"select |":                                 true,
+		"select * from t where |":                  true,
+		"select * from t where a = 1 and |":        true,
+		"select * from t where a = 1 or |":         true,
+		"select * from a join b on |":              true,
+		"update t set |":                           true,
+		"update t set a = 1, |":                    true,
+		"select * from t group by |":               true,
+		"select * from t order by a, |":            true,
+		"select a, |":                              true,
+		"select * from t having |":                 true,
+		"select * from t where id in (select a, |": true,
+		"select\n|":                                true,
+		"select|":                                  false, // no blank yet
+		"select a,|":                               false,
+		"select * from t where a|":                 false, // typed
+		"select * from |":                          false, // a table
+		"select * from a, |":                       false,
+		"select * from t where a = |":              false,
+		"select * from t where id in (1, |":        false,
+		"select max(a, |":                          false,
+		"select o.|":                               false,
+		"insert into t (|":                         false,
+		"select 'a |":                              false,
+	} {
+		pos := strings.Index(sql, "|")
+		got := CompletionContext(strings.Replace(sql, "|", "", 1), pos, PG)
+		if got.WantsColumn != want {
+			t.Errorf("%q: WantsColumn %v", sql, got.WantsColumn)
 		}
 	}
 }

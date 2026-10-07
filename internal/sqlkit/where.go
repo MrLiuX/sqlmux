@@ -6,12 +6,15 @@ import "strings"
 // Start, is the word or the value being typed that a completion replaces;
 // Column is set where a value of that column goes (col =, col <>,
 // col in ( … ,). OK is false where nothing completes: in a comment or a
-// quoted identifier, or a string outside a value's place.
+// quoted identifier, or a string outside a value's place. WantsColumn is
+// set with nothing typed, after AND or OR and a blank: a column comes next
+// (M8 F8.4); an empty input is not it, ↵ there clears the filter.
 type Where struct {
-	Prefix string
-	Start  int
-	Column string
-	OK     bool
+	Prefix      string
+	Start       int
+	Column      string
+	OK          bool
+	WantsColumn bool
 }
 
 // WhereContext reads s, in d, up to its byte offset pos.
@@ -41,6 +44,7 @@ func WhereContext(s string, pos int, d Dialect) Where {
 		return ""
 	}
 	word := func(i int) bool { return i < len(back) && (back[i].Kind == Ident || back[i].Kind == Keyword) }
+	w.WantsColumn = w.Prefix == "" && pos > 0 && isBlank(s[pos-1]) && (text(0) == "and" || text(0) == "or")
 	switch {
 	case (text(0) == "=" || text(0) == "<>" || text(0) == "!=") && word(1):
 		w.Column = s[back[1].Start:back[1].End]

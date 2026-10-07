@@ -102,6 +102,34 @@ func TestWhereEnterOnlyAccepts(t *testing.T) {
 	}
 }
 
+// After AND or OR and a blank the WHERE's list opens with nothing typed:
+// the columns, no keyword; an empty input opens none, ↵ there clears the
+// filter (§9.7, F8.4).
+func TestWhereColumnsAfterAnd(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	feed(t, a, "/")
+	if tab.comp != nil {
+		t.Fatalf("an empty input: %+v", tab.comp)
+	}
+	feed(t, a, "id > 5 and")
+	if tab.comp != nil && tab.comp.items[0].label != "and" {
+		t.Errorf("and, no blank: %+v", tab.comp.items)
+	}
+	feed(t, a, " ")
+	if tab.comp == nil || len(tab.comp.items) != len(tab.cols.Cols) || tab.comp.items[0].kw {
+		t.Fatalf("and and a blank: the columns: %+v", tab.comp)
+	}
+	feed(t, a, "<BS><BS><BS><BS>or ")
+	if tab.comp == nil || tab.comp.items[0].kw {
+		t.Errorf("or: %+v", tab.comp)
+	}
+	feed(t, a, "<Esc>")
+	feed(t, a, "<BS><BS><BS><BS>")
+	if tab.comp != nil {
+		t.Errorf("after id > 5 : %+v", tab.comp)
+	}
+}
+
 // Completion ignores case throughout, first character and fuzzy rest
 // alike; the palette keeps fzf's smart case (§9.7).
 func TestRankedIgnoresCase(t *testing.T) {

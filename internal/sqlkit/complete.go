@@ -31,6 +31,10 @@ type Completion struct {
 	CTEs      []string
 	Into      TableRef // CompInsertCols: the table inserted into
 	Listed    []string // CompInsertCols: the columns the parentheses name already, quotes off
+	// WantsColumn: nothing is typed, the cursor is after a blank, and a
+	// column is what comes next: after SELECT, WHERE, AND, OR, ON, SET,
+	// HAVING, BY, or the comma of a select, set or order by list (M8 F8.4)
+	WantsColumn bool
 }
 
 // CompletionContext tells what the cursor at pos in text is at (§9.7):
@@ -101,14 +105,18 @@ func CompletionContext(text string, pos int, d Dialect) Completion {
 			if depth[j] != depth[p] {
 				continue
 			}
-			if w := word(j); fromEnds[w] || w == "select" || w == "from" {
+			if w := word(j); fromEnds[w] || w == "select" || w == "from" || w == "by" {
 				if w == "from" {
 					c.Kind = CompTables
 				}
+				c.WantsColumn = w == "select" || w == "set" || w == "by"
 				break
 			}
 		}
+	default:
+		c.WantsColumn = columnFollows[word(p)]
 	}
+	c.WantsColumn = c.WantsColumn && c.Kind == CompAny && c.Prefix == "" && pos > 0 && isBlank(text[pos-1])
 	c.readInsert(text, ts, depth, before)
 	for i := 0; i < len(ts); i++ {
 		switch w := word(i); {
@@ -155,6 +163,11 @@ func (c *Completion) readInsert(text string, ts []Token, depth []int, before int
 		return
 	}
 }
+
+// columnFollows are the words a column is typed after (F8.4).
+var columnFollows = map[string]bool{"select": true, "where": true, "and": true, "or": true, "on": true, "set": true, "having": true, "by": true}
+
+func isBlank(b byte) bool { return b == ' ' || b == '\t' || b == '\n' || b == '\r' }
 
 // fromEnds are the words a FROM list stops at.
 var fromEnds = map[string]bool{

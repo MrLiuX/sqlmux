@@ -68,7 +68,7 @@ func (a *App) complete(t *dataTab) {
 		}
 		groups, pattern = [][]candidate{vals}, strings.TrimLeft(w.Prefix, `'"`) // MySQL's "…" too
 	} else {
-		if w.Prefix == "" { // nothing typed yet: no list
+		if w.Prefix == "" && !w.WantsColumn { // nothing typed yet: no list
 			return
 		}
 		var cols, kws []candidate
@@ -79,6 +79,9 @@ func (a *App) complete(t *dataTab) {
 			if k != "ilike" || t.conn.eng.Dialect() == sqlkit.PG { // PG's alone
 				kws = append(kws, candidate{label: k, insert: k, note: i18n.T("关键字"), kw: true, space: sqlkit.SpaceAfter(k)})
 			}
+		}
+		if w.WantsColumn { // the column is next, not a keyword
+			kws = nil
 		}
 		groups = [][]candidate{cols, kws}
 	}
@@ -440,6 +443,10 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 			} else {
 				far = append(far, columns(t)...)
 			}
+		}
+		if c.WantsColumn { // a column is next, the statement's tables' alone, though nothing is typed (F8.4)
+			groups, resolved = [][]candidate{near, far}, true
+			break
 		}
 		var kws []candidate
 		for _, k := range sqlkit.Common(conn.eng.Dialect()) {

@@ -493,6 +493,73 @@ func TestConsoleEnterOnlyAccepts(t *testing.T) {
 	}
 }
 
+// Where a column comes next the candidates open with nothing typed, once
+// a blank is: the statement's tables' columns alone, none when the
+// statement names no table yet; esc closes them and typing filters them
+// (§9.7, F8.4).
+func TestConsoleColumnsAfterBlank(t *testing.T) {
+	a, c := inConsole(t, "", "")
+	table, cols, _ := ordersTable(0)
+	for i, tb := range a.sess.Conns[0].Tables {
+		if tb.Name == "t_order" {
+			a.sess.Conns[0].Tables[i] = table
+		}
+	}
+	a.sess.Conns[0].cols[idOf(table)] = cols
+	labels := func() (out []string) {
+		if c.comp != nil {
+			for _, cd := range c.comp.items {
+				out = append(out, cd.label)
+			}
+		}
+		return out
+	}
+	want := make([]string, len(cols.Cols))
+	for i, col := range cols.Cols {
+		want[i] = col.Name
+	}
+	for _, sql := range []string{
+		"select * from t_order where ", "select * from t_order where id = 1 and ", "select * from t_order where id = 1 or ",
+		"select * from t_order order by id, ", "update t_order set ", "select * from t_order group by status having ",
+		"select * from t_order o join t_order p on ",
+	} {
+		feed(t, a, "<Esc>ggdGi"+sql)
+		if got := labels(); !slices.Equal(got, want) {
+			t.Errorf("%q: %v, want the columns %v", sql, got, want)
+		}
+	}
+	feed(t, a, "<Esc>ggdGiselect ")
+	if got := labels(); got != nil {
+		t.Errorf("no table yet, but a list: %v", got)
+	}
+	feed(t, a, "<Esc>ggdGi from t_order<Esc>0iselect ")
+	if got := labels(); !slices.Equal(got, want) {
+		t.Errorf("the FROM after the cursor: %v", got)
+	}
+	feed(t, a, "<Esc>ggdGiselect * from t_order where a")
+	if feed(t, a, "<BS> "); c.comp == nil || len(c.comp.items) != len(want) || c.comp.items[0].kw {
+		t.Errorf("after the BS and a blank: %v", labels())
+	}
+	if feed(t, a, "<Esc>"); c.comp != nil {
+		t.Error("esc closes it")
+	}
+	feed(t, a, "ggdGiselect * from t_order where st")
+	if got := labels(); len(got) == 0 || got[0] != "status" {
+		t.Errorf("typing filters: %v", got)
+	}
+	feed(t, a, "<Esc>ggdGiselect * from t_order where id = 1,")
+	if c.comp != nil {
+		t.Errorf("no blank, no list: %v", labels())
+	}
+	feed(t, a, "<Esc>ggdGiselect * from ")
+	if got := labels(); got != nil {
+		t.Errorf("after FROM nothing opens on its own: %v", got)
+	}
+	if feed(t, a, "<C-n>"); len(labels()) == 0 || slices.Contains(labels(), "id") {
+		t.Errorf("C-n after FROM: the tables, no columns: %v", labels())
+	}
+}
+
 // In a console the candidates follow the cursor's place (§9.7): tables
 // after FROM; an alias's columns right after its ., fetched once and
 // completed again as they come; CTE names among the tables; C-n with

@@ -1,6 +1,9 @@
 package sqlkit
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 type whereCase struct {
 	in          string // | is the cursor
@@ -51,4 +54,25 @@ func TestWhereContext(t *testing.T) {
 		{"x = 1 # sta|", "", "", false},
 		{`note like "a|`, "", "", false},
 	})
+}
+
+// After AND or OR and a blank, with nothing typed, a column comes next; an
+// empty input, after a word, or right after the and, does not (M8 F8.4).
+func TestWhereWantsColumn(t *testing.T) {
+	for in, want := range map[string]bool{
+		"id > 5 and |":         true,
+		"id > 5 OR |":          true,
+		"a = 1 and b = 2 or |": true,
+		"|":                    false, // ↵ in an empty input clears the filter
+		"id > |":               false,
+		"id > 5 and|":          false,
+		"id > 5 and s|":        false,
+		"id > 5 |":             false,
+		"a in (1, |":           false,
+	} {
+		pos := strings.Index(in, "|")
+		if got := WhereContext(strings.Replace(in, "|", "", 1), pos, PG).WantsColumn; got != want {
+			t.Errorf("%q: %v", in, got)
+		}
+	}
 }
