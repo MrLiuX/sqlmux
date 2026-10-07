@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/csv"
+	"maps"
 	"os"
 	"os/exec"
 	"regexp"
@@ -117,7 +118,7 @@ func (a *App) yankGrid(row bool) tea.Cmd {
 	return tea.Batch(clipCopy(text), a.flashYank(flash))
 }
 
-// yankInsert is yi on the focused table's row (§7.6, F8.7): an INSERT of
+// yankInsert is yi on the focused table's row (§10.6, F8.7): an INSERT of
 // every column the page has, but the server's own (generated), as it shows,
 // changes in, to the clipboard, flashing. A DEFAULT cell is left out. A
 // number is bare, anything else a string literal, NULL as it is; the
@@ -145,6 +146,9 @@ func (a *App) yankInsert() tea.Cmd {
 	for _, pc := range t.page.Cols {
 		col := t.column(pc.Name)
 		v, set := t.value(sr, key, pc.Name)
+		if set && db.IsBinaryShown(v.S) { // the bytes are not here: no statement of what they are
+			return a.showToast(i18n.T("有二进制列，复制不了"), toastTTL)
+		}
 		if col.Generated || !set {
 			continue
 		}
@@ -152,16 +156,16 @@ func (a *App) yankInsert() tea.Cmd {
 		switch {
 		case v.Null:
 			vals = append(vals, a.keyword("null"))
-		case (col.Fixed || colType(col.Type) == ui.ColNumber) && number.MatchString(v.S):
+		case (col.Fixed || colType(col.Type) == ui.ColNumber) && number.MatchString(v.S) && v.S != "-0": // bare, PG reads -0 as the integer: a float loses its sign
 			vals = append(vals, v.S)
 		default:
 			vals = append(vals, sqlkit.Literal(v.S, eng.Dialect()))
 		}
 	}
-	if len(names) == 0 {
-		return nil
+	text := db.DefaultRow(eng, t.table.Schema, t.table.Name, a.keyword) + ";"
+	if len(names) > 0 {
+		text = a.keyword("insert into") + " " + eng.Quote(t.table.Schema, t.table.Name) + " (" + strings.Join(names, ", ") + ") " + a.keyword("values") + " (" + strings.Join(vals, ", ") + ");"
 	}
-	text := a.keyword("insert into") + " " + eng.Quote(t.table.Schema, t.table.Name) + " (" + strings.Join(names, ", ") + ") " + a.keyword("values") + " (" + strings.Join(vals, ", ") + ");"
 	return tea.Batch(clipCopy(text), a.flashYank(yankFlash{pane: p.ID, cell: [2]int{gs.row, -1}}))
 }
 
@@ -200,6 +204,9 @@ func (a *App) pasteRow() tea.Cmd {
 	t, ok := a.focusedGrid()
 	if !ok || a.rowCopy == nil || a.rowCopy.conn != t.conn || a.rowCopy.table != idOf(t.table) {
 		return nil
+	}
+	if slices.ContainsFunc(slices.Collect(maps.Values(a.rowCopy.vals)), func(v db.Val) bool { return db.IsBinaryShown(v.S) }) {
+		return a.showToast(i18n.T("有二进制列，复制不了"), toastTTL) // what yy took of them is the text shown, not the bytes
 	}
 	cmd := a.addRow()
 	sr, _, ok := t.cursor()

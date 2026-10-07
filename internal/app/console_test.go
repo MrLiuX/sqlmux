@@ -785,7 +785,7 @@ func TestConsoleSchemaFromCatalog(t *testing.T) {
 // everything and the name.
 func TestGoldenConsoleTitle(t *testing.T) {
 	var titles []string
-	for _, w := range []int{200, 160, 130, 110, 100, 90} {
+	for _, w := range []int{200, 160, 130, 110, 100, 90, 80} {
 		a, _ := inConsole(t, "", "")
 		a.Update(tea.WindowSizeMsg{Width: w, Height: 20})
 		r := a.layout()[a.focused().ID]

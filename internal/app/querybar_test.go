@@ -629,8 +629,39 @@ func TestNewTableDefaults(t *testing.T) {
 	if tab.order != "status" || !tab.desc {
 		t.Errorf("a column picked: %q desc %v", tab.order, tab.desc)
 	}
+	a.run("grid.order", 0)
+	feed(t, a, "默认<CR>") // the default order
+	if tab.order != "" || !tab.desc || !strings.Contains(rec.sqls[len(rec.sqls)-1], `order by "id" desc limit`) {
+		t.Errorf("the default picked: order %q desc %v, %s", tab.order, tab.desc, rec.sqls[len(rec.sqls)-1])
+	}
 	a.run("grid.transpose", 0)
 	if tab.transpose {
 		t.Error("T turns it back")
+	}
+}
+
+// A tab closed and reopened is as it was, turned or not, whatever
+// `[grid] transpose` says of new ones (§14, F8.8).
+func TestReopenKeepsTranspose(t *testing.T) {
+	for _, conf := range []string{"[grid]\ntranspose = true", ""} {
+		a := sizedWith(160, 45, userConfig(t, conf, ""))
+		table, cols, page := ordersTable(3)
+		conn := a.sess.Conns[0]
+		conn.Meta = db.NewWorker(&recDB{})
+		conn.cols[idOf(table)] = cols
+		a.openTable(conn, table)
+		tab := dataOf(a.focused())
+		a.Update(pageMsg{tab: tab, seq: tab.seq, cols: cols, page: page})
+		was := tab.transpose
+		a.run("grid.transpose", 0)
+		if tab.transpose == was {
+			t.Fatalf("%q: not turned", conf)
+		}
+		turned := tab.transpose
+		a.run("tab.close", 0)
+		a.run("tab.reopen", 0)
+		if re := dataOf(a.focused()); re == nil || re.transpose != turned {
+			t.Errorf("%q: reopened turned %v, was %v", conf, re != nil && re.transpose, turned)
+		}
 	}
 }

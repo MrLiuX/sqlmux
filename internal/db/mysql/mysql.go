@@ -230,7 +230,7 @@ func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (
 // shown is a value as the grid shows it: a blob that is no UTF-8 by its size (§8.1).
 func shown(v []byte) string {
 	if !utf8.Valid(v) {
-		return fmt.Sprintf("<binary %d bytes>", len(v))
+		return db.BinaryShown(len(v))
 	}
 	return string(v)
 }

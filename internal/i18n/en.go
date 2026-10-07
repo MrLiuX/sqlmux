@@ -357,6 +357,7 @@ var en = map[string]string{
 	"已有同名 console":           "A console of that name exists",
 	"session 名：":             "Session name: ",
 	"console 名：":             "Console name: ",
+	"有二进制列，复制不了":             "A binary column cannot be copied",
 	"知道了":                    "Got it",
 	"；":                      "; ",
 }

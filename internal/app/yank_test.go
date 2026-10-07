@@ -178,3 +178,43 @@ func TestYankInsert(t *testing.T) {
 		t.Errorf("a result: toast %q", b.toast)
 	}
 }
+
+// A row added with nothing set is the DEFAULT row, written as the save
+// writes it; with one cell set only that one is named; a binary placeholder
+// refuses yi and p (§10.6, F8.7).
+func TestYankInsertAddedAndBinary(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	feed(t, a, "o<Esc>")
+	if sr, _, ok := tab.cursor(); !ok || sr.add == nil {
+		t.Fatal("not on the added row")
+	}
+	if cmd := keys(t, a, "yi"); !clipped(cmd, `insert into "public"."t_order" default values;`) {
+		t.Errorf("all DEFAULT")
+	}
+	a.keywordCase = "upper"
+	if cmd := keys(t, a, "yi"); !clipped(cmd, `INSERT INTO "public"."t_order" DEFAULT VALUES;`) {
+		t.Errorf("all DEFAULT, upper case")
+	}
+	a.keywordCase = "lower"
+	feed(t, a, "i9<Esc>")
+	if cmd := keys(t, a, "yi"); !clipped(cmd, `insert into "public"."t_order" ("id") values (9);`) {
+		t.Errorf("one cell set")
+	}
+
+	b := wide(160, 45)
+	bt := loadOrders(t, b, 3)
+	bt.page.Rows[0][5] = db.Val{S: db.BinaryShown(4)}
+	if cmd := keys(t, b, "yi"); clipped(cmd, "") || b.toast != "有二进制列，复制不了" {
+		t.Errorf("yi: toast %q", b.toast)
+	}
+	b.toast = ""
+	keys(t, b, "yy")
+	if b.rowCopy == nil {
+		t.Fatal("yy took nothing")
+	}
+	n := len(bt.added)
+	if keys(t, b, "p"); len(bt.added) != n || b.toast != "有二进制列，复制不了" {
+		t.Errorf("p: %d rows added, toast %q", len(bt.added), b.toast)
+	}
+}

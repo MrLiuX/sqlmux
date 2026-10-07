@@ -60,7 +60,7 @@ func (a *App) complete(t *dataTab) {
 				continue
 			}
 			for _, e := range c.Enum {
-				vals = append(vals, candidate{label: e, insert: "'" + strings.ReplaceAll(e, "'", "''") + "'", note: i18n.T("值")})
+				vals = append(vals, candidate{label: e, insert: sqlkit.Literal(e, t.conn.eng.Dialect()), note: i18n.T("值")})
 			}
 			if c.Type == "boolean" || c.Type == "tinyint(1)" { // MySQL's takes true and false too
 				vals = append(vals, candidate{label: "true", insert: "true", note: i18n.T("值")}, candidate{label: "false", insert: "false", note: i18n.T("值")})

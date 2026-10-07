@@ -1,30 +1,30 @@
 ┌─ ⓪  doraemon ─────── SPC b ─┐ ┌─ ①  t_order ───────────────────────────────────────────────────┐
 │  15 tables                 │ │ WHERE                                                    C-r ▾ │
 │──────────────────────────────│ │  ORDER id    LIMIT 100   PAGE 1/?   COLS 7/7     1           │
-│ ▾  doraemon                 │ │    │  id │ status  │ amount │ paid │ meta                 │ not│
-│   ▸  agentable              │ │────┼──────┼─────────┼────────┼──────┼──────────────────────┼────│
-│   ▾  public                 │ │  1 │    1 │ done    │   1.99 │ t    │ {"n": 1, "tags": ["… │ not│
-│     ▾  Tables (14)          │ │  2 │    2 │ done    │   2.99 │ t    │ {"n": 2, "tags": ["… │ lin│
-│       ▸  agent          124 │ │  3 │    3 │ failed  │   3.99 │ t    │ {"n": 3, "tags": ["… │ <nu│
-│       ▸  agent_version  530 │ │  4 │    4 │ pending │   4.99 │ t    │ {"n": 4, "tags": ["… │ not│
-│       ▸  goal            57 │ │  5 │    5 │ running │   5.99 │ t    │ {"n": 5, "tags": ["… │ lin│
-│       ▸  mt_task        812 │ │  6 │    6 │ done    │   6.99 │ t    │ {"n": 6, "tags": ["… │ <nu│
-│       ▸  mt_┌───────────────────────────────────────────────────────────────────┐ags": ["… │ not│
-│       ▸  sch│ 1 unsaved change(s); quitting would discard them.                 │ags": ["… │ lin│
-│       ▸  t_o│ Uncommitted transaction in doraemon; quitting would roll it back. │ags": ["… │ <nu│
-│       ▸  t_o│                                                                   │tags": [… │ not│
-│       ▸  t_p│                                                y Quit   n Cancel  │tags": [… │ lin│
-│       ▸  t_r└───────────────────────────────────────────────────────────────────┘tags": [… │ <nu│
-│       ▸  t_sku         8.1k │ │ 13 │   13 │ running │  13.99 │ t    │ {"n": 13, "tags": [… │ not│
-│       ▸  t_user         38k │ │ 14 │   14 │ done    │  14.99 │ t    │ {"n": 14, "tags": [… │ lin│
-│       ▸  t_user_address 52k │ │ 15 │   15 │ failed  │  15.99 │ t    │ {"n": 15, "tags": [… │ <nu│
-│       ▸  t_user_profile 38k │ │ 16 │   16 │ pending │  16.99 │ t    │ {"n": 16, "tags": [… │ not│
-│        Views (0)            │ │ 17 │   17 │ running │  17.99 │ t    │ {"n": 17, "tags": [… │ lin│
-│ ▾  Workspace                │ │ 18 │   18 │ done    │  18.99 │ t    │ {"n": 18, "tags": [… │ <nu│
-│   ▾  data                   │ │ 19 │   19 │ failed  │  19.99 │ t    │ {"n": 19, "tags": [… │ not│
-│     ▾  pane-1               │ │ 20 │   20 │ pending │  20.99 │ t    │ {"n": 20, "tags": [… │ lin│
-│            t_order          │ │ 21 │   21 │ running │  21.99 │ t    │ {"n": 21, "tags": [… │ <nu│
-│──────────────────────────────│ │ 22 │   22 │ done    │  22.99 │ t    │ {"n": 22, "tags": [… │ not│
+│ ▾  doraemon                 │ │    │  id │ status  │ amount │ paid │ meta                   │ n│
+│   ▸  agentable              │ │────┼──────┼─────────┼────────┼──────┼────────────────────────┼──│
+│   ▾  public                 │ │  1 │    1 │ done    │   1.99 │ t    │ {"n": 1, "tags": ["a"… │ n│
+│     ▾  Tables (14)          │ │  2 │    2 │ done    │   2.99 │ t    │ {"n": 2, "tags": ["a"… │ l│
+│       ▸  agent          124 │ │  3 │    3 │ failed  │   3.99 │ t    │ {"n": 3, "tags": ["a"… │ <│
+│       ▸  agent_version  530 │ │  4 │    4 │ pending │   4.99 │ t    │ {"n": 4, "tags": ["a"… │ n│
+│       ▸  goal            57 │ │  5 │    5 │ running │   5.99 │ t    │ {"n": 5, "tags": ["a"… │ l│
+│       ▸  mt_task        812 │ │  6 │    6 │ done    │   6.99 │ t    │ {"n": 6, "tags": ["a"… │ <│
+│       ▸  mt_┌───────────────────────────────────────────────────────────────────┐ags": ["a"… │ n│
+│       ▸  sch│ 1 unsaved change(s); quitting would discard them.                 │ags": ["a"… │ l│
+│       ▸  t_o│ Uncommitted transaction in doraemon; quitting would roll it back. │ags": ["a"… │ <│
+│       ▸  t_o│                                                                   │tags": ["a… │ n│
+│       ▸  t_p│                                                y Quit   n Cancel  │tags": ["a… │ l│
+│       ▸  t_r└───────────────────────────────────────────────────────────────────┘tags": ["a… │ <│
+│       ▸  t_sku         8.1k │ │ 13 │   13 │ running │  13.99 │ t    │ {"n": 13, "tags": ["a… │ n│
+│       ▸  t_user         38k │ │ 14 │   14 │ done    │  14.99 │ t    │ {"n": 14, "tags": ["a… │ l│
+│       ▸  t_user_address 52k │ │ 15 │   15 │ failed  │  15.99 │ t    │ {"n": 15, "tags": ["a… │ <│
+│       ▸  t_user_profile 38k │ │ 16 │   16 │ pending │  16.99 │ t    │ {"n": 16, "tags": ["a… │ n│
+│        Views (0)            │ │ 17 │   17 │ running │  17.99 │ t    │ {"n": 17, "tags": ["a… │ l│
+│ ▾  Workspace                │ │ 18 │   18 │ done    │  18.99 │ t    │ {"n": 18, "tags": ["a… │ <│
+│   ▾  data                   │ │ 19 │   19 │ failed  │  19.99 │ t    │ {"n": 19, "tags": ["a… │ n│
+│     ▾  pane-1               │ │ 20 │   20 │ pending │  20.99 │ t    │ {"n": 20, "tags": ["a… │ l│
+│            t_order          │ │ 21 │   21 │ running │  21.99 │ t    │ {"n": 21, "tags": ["a… │ <│
+│──────────────────────────────│ │ 22 │   22 │ done    │  22.99 │ t    │ {"n": 22, "tags": ["a… │ n│
 │ j/k move · ↵ open            │ │ 1: t_order* │ +            hjkl · ↵ edit · T Transpose · gt/gT │
 └──────────────────────────────┘ └─────────────────────────────────────────────────────────────────┘
  doraemon ▾  0: data*                    ·    1,1   doraemon · pg@localhost:5432  In tx  COMMAND 
