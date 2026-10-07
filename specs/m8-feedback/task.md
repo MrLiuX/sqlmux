@@ -114,8 +114,12 @@
 - **涉及**：`internal/app`
 
 **开发**
-- [ ] 复现并找根因：是没写进剪贴板、还是写了但没有 yank 闪烁 / toast，或者 `y` 之后的 `i` 被当成 `grid.edit`。修在根因处。
-- [ ] 复制成功后和 `yy` 一样闪一下（§7.5 yank 高亮）。
+- [ ] 根因（worker 2026-10-07 查明）：`grid.yank.insert` 从 F3.32 起就是个没有 Run 的占位，从来没实现过。从头做，细节（worker 提议，已定）：
+  - 一行：`insert into "public"."t_order" ("id", "status") values (1, 'done');`，表名和列名走 `Engine.Quote`（PG pgx.Identifier、MySQL 反引号）；关键字（insert into / values / null）跟 `keyword_case`（preserve 当 lower，决策者加：用户配了 upper）。
+  - 列：这张表目录里的全部列（不只 COLS 显示的），去掉 `Generated` 的；值取当前显示的，含没保存的修改（同 `yy`）。
+  - 字面量：NULL 写 null；数字类型（含 MySQL 的 BIT）不加引号；其余加单引号，`'` 写成 `''`，MySQL 另把 `\` 写成 `\\`（`NO_BACKSLASH_ESCAPES` 下会错，`ponytail:` 标上限）；布尔不特判。转义放 `sqlkit.Literal(s, dialect)`，单测在那里。
+  - 只复制当前一行，不支持计数；成功后整行闪一下（同 `yy`）。结果 tab 没有表可写：toast「只有表里的行能复制为 INSERT」，不写剪贴板；已标删除和新增未保存的行照常复制。
+  - lazysql 的 INSERT 带参数（`drivers/utils.go`），没有可借的转义；PG / MySQL 集成测试各把复制出来的语句原样执行回去一遍。
 
 **验收**
 - [ ] e2e：表格上 `yi`，假 pbcopy 收到 `insert into … values (…);`，行闪一下。
