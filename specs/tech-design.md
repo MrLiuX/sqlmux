@@ -219,7 +219,7 @@ Window
 - **按编号跳转**（`SPC q`）：编号一直显示到下一个按键，不自动消失（相当于 tmux 的 `display-panes -d 0`）。按数字跳到对应的 pane；按其他键只关闭编号，这个键不再执行别的操作。
   - 鼠标：编号也是键位提示，按 §7.4 可以点击。点击某个 pane（含侧栏 ⟨0⟩），等于按下它的编号；点击 pane 以外的地方（状态栏、间隔）只关闭编号。
 
-默认 window 名为 `data`，之后新建的叫 `data-2`、`data-3`……（同一 session 里最小的没用过的序号；M8 F8.11，用户：三个 `data` 分不清）；同一 session 里 window 名不能重复，`window.rename` 改成已有的名字时 toast 拒绝。各个 pane 随里程碑逐步出现：M1 只有侧栏和 data，data 占满其余宽度；console 在 M3 加入默认布局，结果区在第一次执行 SQL 时出现。
+默认 window 名为 `data`，之后新建的叫 `data-2`、`data-3`……（同一 session 里最小的没用过的序号；M8 F8.11，用户：三个 `data` 分不清）；同一 session 里 window 名不能重复，`window.rename` 改成已有的名字时 toast 拒绝。各个 pane 随里程碑逐步出现：M1 只有侧栏和 data，data 占满其余宽度；console 在 M3 加入默认布局（data : console 原为 5 : 9；M8 F8.9 起 1 : 1，用户看到两块不等宽以为是 bug，拆分出来的一对本来就是均分的），结果区在第一次执行 SQL 时出现。
 
 所有持久化字段都是普通值类型，运行时句柄（连接、编辑器实例）不进入序列化结构。所以工作现场恢复（PRD 10.2 #6，M6 F6.5 布局文件）只需要补上读写逻辑。
 
