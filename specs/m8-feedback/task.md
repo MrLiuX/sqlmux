@@ -404,7 +404,7 @@
 - [ ] 菜单项：console 文件 → 打开 / 重命名… / 删除…；表、视图 → 打开 / 在新 tab 打开 / 删除表…（视图「删除视图…」）；其他节点不弹。
 - [ ] 删除表：危险确认框（§13 的样式，正文是要执行的 `DROP TABLE <引号表名>`），`confirm_dangerous = false` 也问；在所在连接的 `Main` 上执行（`Engine.Quote`），成功后关掉所有 session 里这张表的 tab、重载 catalog、toast「已删除 <表>」；失败进 toast。只读连接拒绝。表 / 视图节点上 `dd` 等于菜单里的「删除表…」。
 - [ ] 先看 lazysql 有没有 drop table 的做法（它的 tree 有删除吗）；没有就按上面做。
-- [ ] 细节由 worker 开工前提议：菜单的绘制和 Frame 命中、MySQL 的 DROP VIEW、手动事务模式下 DROP 的处理（PG 可回滚，MySQL 隐式提交）。
+- [ ] 细节（worker 2026-10-08 提议，已定）：`ui.Menu` 用 Block 画、左上角贴指针、放不下向左 / 上翻，每项一个命中、整窗一个 backdrop（点别处关、不透传），右键同时把树光标移到被点的节点；`menu` 作用域 4 个 Action，默认 `k` `↑` / `j` `↓` / `↵` / `esc`（novim 层只方向键），菜单开着时别的键吞掉，菜单里不画键位文字；菜单项都转成已有的 Action（tree.open / tree.open.tab / console 改名 / tree.delete）；删表 SQL 按 `Table.Kind`：表和分区表 `DROP TABLE`、视图 `DROP VIEW`、PG 物化视图 `DROP MATERIALIZED VIEW`、外部表 `DROP FOREIGN TABLE`，不带 CASCADE（被依赖时错误原文进 toast，用户去 console 写）；**手动事务模式下拒绝删表**，toast「手动事务模式下不能删表：先提交或回滚，或切回自动」（PG 里 DROP 进了事务 catalog 和 tab 都不知道该怎么办，MySQL 隐式提交会把 pending 一起提交；要在事务里删表去 console 写）；删表不碰 `Conn.tx`。`[tree] width`：配置值夹在 16 到 w/2，窗口 < 100 列时只往小缩到 24，拖过的 / 布局文件的宽度优先，类型不对报配置错误、越界只夹。
 
 **验收**
 - [ ] golden：表节点上的右键菜单；删表的确认框。
