@@ -844,16 +844,17 @@ func (a *App) consoles() []*consoleTab {
 	return out
 }
 
-// freeConsole is the first of console_1, console_2… no session has open
-// (§11).
+// freeConsole is the first of console_1, console_2… no session has open and
+// no file keeps: a closed console stays in the Consoles list till it is
+// deleted there (§11, F8.21).
 func (a *App) freeConsole() string {
 	return freeConsoleName(func(name string) bool { return a.consoleOpen(name, nil) })
 }
 
-// freeConsoleName is the first of console_1, console_2… taken says is not.
+// freeConsoleName is the first of console_1, console_2… taken says is not, and that has no file.
 func freeConsoleName(taken func(string) bool) string {
 	for n := 1; ; n++ {
-		if name := config.ConsoleName(n); !taken(name) {
+		if name := config.ConsoleName(n); !taken(name) && !config.ConsoleExists(name) {
 			return name
 		}
 	}
@@ -1231,21 +1232,8 @@ func (a *App) reopenTab() tea.Cmd {
 	}
 	c := s.closed[len(s.closed)-1]
 	s.closed = s.closed[:len(s.closed)-1]
-	if c.console != "" {
-		for _, s2 := range a.sessions {
-			for wi, w := range s2.Windows {
-				for _, p := range w.Root.Leaves() {
-					if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Console != nil && strings.EqualFold(tb.Console.name, c.console) }); i >= 0 {
-						if s2 != s {
-							a.attach(s2)
-						}
-						a.selectWindow(wi)
-						a.showTab(p, i)
-						return nil
-					}
-				}
-			}
-		}
+	if c.console != "" && a.focusConsole(c.console) {
+		return nil
 	}
 	p := a.openTarget()
 	if wi := s.windowByID(c.win); wi >= 0 && s.Windows[wi].pane(c.pane) != nil {
@@ -1263,6 +1251,27 @@ func (a *App) reopenTab() tea.Cmd {
 	a.showPane(p.ID)
 	putTab(p, Tab{Name: c.console, Console: t}, p.tab().landing())
 	return a.keepConsole(t)
+}
+
+// focusConsole goes to the tab of the console called name, in whichever
+// window of whichever session has it open, that session attached; false when
+// none has (F5.16, F8.21).
+func (a *App) focusConsole(name string) bool {
+	for _, s := range a.sessions {
+		for wi, w := range s.Windows {
+			for _, p := range w.Root.Leaves() {
+				if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Console != nil && strings.EqualFold(tb.Console.name, name) }); i >= 0 {
+					if s != a.sess {
+						a.attach(s)
+					}
+					a.selectWindow(wi)
+					a.showTab(p, i)
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // quitTab is tab.quit: the current tab closed as tab.close does, and when

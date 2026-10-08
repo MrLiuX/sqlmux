@@ -203,21 +203,21 @@ func TestLayoutRestoreGaps(t *testing.T) {
 		}
 		r := readyStart(Restore(layoutSpecs, &config.Layout{Version: 1, Sessions: []config.LayoutSession{
 			{Name: "1", Connection: "doraemon", Windows: win(1)},
-			{Name: "2", Connection: "nowhere", Windows: win(1)}, // the number is taken: the next, with its own file
+			{Name: "2", Connection: "nowhere", Windows: win(1)}, // the number is taken: the next with no file, which console_2 has (F8.21)
 			{Name: "3", Connection: "play"},                     // no window: the default, on the next free number
 			{Name: "4", Connection: "play"},                     // and the next one's the one after
 		}}))
 		text := func(s *Session) string { return strings.Join(s.consoles()[0].ed.Lines(), "\n") }
-		if text(r.Sessions[0]) != "one" || r.Sessions[1].consoles()[0].name != "console_2" || text(r.Sessions[1]) != "two" {
+		if text(r.Sessions[0]) != "one" || r.Sessions[1].consoles()[0].name != "console_3" || text(r.Sessions[1]) != "" {
 			t.Errorf("consoles %v %v", r.Sessions[0].consoles(), r.Sessions[1].consoles())
 		}
-		if got := consoles(r.Sessions[2]); !slices.Equal(got, []string{"console_3"}) || r.Sessions[2].start.Spec.Name != "play" || len(r.Sessions[2].Windows) != 1 {
+		if got := consoles(r.Sessions[2]); !slices.Equal(got, []string{"console_4"}) || r.Sessions[2].start.Spec.Name != "play" || len(r.Sessions[2].Windows) != 1 {
 			t.Errorf("the default window: consoles %v", got)
 		}
 		if r.Sessions[1].start.Spec.Name != "doraemon" || len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "nowhere") {
 			t.Errorf("a connection that is not there: starts on %s, warnings %q", r.Sessions[1].start.Spec.Name, r.Warnings)
 		}
-		if got := consoles(r.Sessions[3]); !slices.Equal(got, []string{"console_4"}) {
+		if got := consoles(r.Sessions[3]); !slices.Equal(got, []string{"console_5"}) {
 			t.Errorf("a second default window: consoles %v", got)
 		}
 	})
@@ -229,10 +229,9 @@ func TestLayoutRestoreGaps(t *testing.T) {
 			t.Fatal(err)
 		}
 		r := Restore(layoutSpecs, &config.Layout{Version: 1, Sessions: []config.LayoutSession{
-			{Name: "1", Connection: "doraemon"},
 			{Name: "2", Connection: "doraemon", Windows: []config.LayoutWindow{{Name: "w", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{console(1, "")}}}}}},
 		}})
-		if len(r.Sessions) != 2 || len(r.Warnings) != 2 || len(r.Sessions[0].Windows) != 1 || len(consoles(r.Sessions[0])) != 0 {
+		if len(r.Sessions) != 1 || len(r.Warnings) != 1 || len(r.Sessions[0].Windows) != 1 || len(consoles(r.Sessions[0])) != 0 {
 			t.Errorf("sessions %d, warnings %q", len(r.Sessions), r.Warnings)
 		}
 	})

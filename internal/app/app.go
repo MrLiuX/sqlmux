@@ -27,6 +27,7 @@ type App struct {
 	// fresh is that nothing changed since, reuse that an Update found the
 	// pointer moved inside it and View may answer with seen (F8.20)
 	rendered ui.Rendered
+	files    consoleDir // the Consoles node's list (F8.21)
 	probes   []uv.Rectangle
 	seenAt   uv.Position
 	seen     tea.View

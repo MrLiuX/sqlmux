@@ -204,20 +204,23 @@ const (
 	nodeWindow
 	nodePane
 	nodeTab
+	nodeConsoles    // the root over the console files
+	nodeConsoleFile // one of them
 )
 
 // node is one of the tree's rows: what it stands for, and how it draws.
 type node struct {
 	ui.TreeNode
-	id     string // stable while the node exists: expansion and the cursor go by it
-	kind   nodeKind
-	conn   *Conn    // the connection it is under; nil in the workspace
-	schema string   // the schema it is under; "" outside them
-	table  db.Table // a table's, or a column's table
-	column string
-	win    int
-	pane   *Pane
-	tab    int
+	id      string // stable while the node exists: expansion and the cursor go by it
+	kind    nodeKind
+	conn    *Conn    // the connection it is under; nil in the workspace
+	schema  string   // the schema it is under; "" outside them
+	table   db.Table // a table's, or a column's table
+	column  string
+	console string // a console file's name
+	win     int
+	pane    *Pane
+	tab     int
 }
 
 // opened is whether node id of s's tree shows its children: as the user
@@ -354,9 +357,26 @@ func (a *App) treeNodes() (ns []node, matches int) {
 	if filtering { // the workspace isn't what a filter looks for (§7.8)
 		return ns, len(pos)
 	}
-	if !add(node{id: "workspace", kind: nodeWorkspace, TreeNode: ui.TreeNode{Branch: true, Open: a.sess.opened("workspace", true), Icon: ic.Window, IconFg: th.Info, Text: i18n.T("工作区")}}) {
-		return ns, len(pos)
+	if add(node{id: "workspace", kind: nodeWorkspace, TreeNode: ui.TreeNode{Branch: true, Open: a.sess.opened("workspace", true), Icon: ic.Window, IconFg: th.Info, Text: i18n.T("工作区")}}) {
+		a.workspaceNodes(add, target)
 	}
+	if add(node{id: "consoles", kind: nodeConsoles, TreeNode: ui.TreeNode{Branch: true, Open: a.sess.opened("consoles", true), Icon: ic.Console, IconFg: th.Info, Text: "Consoles"}}) {
+		for _, name := range a.consoleList() {
+			open := a.consoleOpen(name, nil)
+			cn := node{id: "consoles/" + name, kind: nodeConsoleFile, console: name, TreeNode: ui.TreeNode{
+				Depth: 1, Icon: ic.Console, IconFg: th.Info, Text: name, Current: open,
+				Note: a.state.Consoles[name].Conn, NoteFg: th.Dim,
+			}}
+			add(cn)
+		}
+	}
+	return ns, len(pos)
+}
+
+// workspaceNodes adds the windows, panes and tabs under the workspace
+// root.
+func (a *App) workspaceNodes(add func(node) bool, target *Pane) {
+	s, th, ic := a.sess, a.theme, a.icons
 	for wi, w := range s.Windows {
 		var leaves []*Pane
 		if w.Root != nil {
@@ -390,7 +410,6 @@ func (a *App) treeNodes() (ns []node, matches int) {
 			}
 		}
 	}
-	return ns, len(pos)
 }
 
 func b2i(b bool) int {
@@ -553,6 +572,8 @@ func (a *App) treeOpen(tablesOnly bool) tea.Cmd {
 	case n.kind == nodeTable:
 		return a.openTable(n.conn, n.table)
 	case tablesOnly:
+	case n.kind == nodeConsoleFile:
+		return a.openConsoleFile(n.console)
 	case n.kind == nodeColumn:
 		cmd := a.openTable(n.conn, n.table)
 		a.gotoColumn(n.conn, n.table, n.column)
