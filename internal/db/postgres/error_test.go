@@ -1,11 +1,18 @@
 package postgres
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"io"
+	"net"
 	"slices"
+	"syscall"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"sqlmux/internal/db"
 )
 
 // pg is the engine the tests go through.
@@ -18,5 +25,31 @@ func TestErrorOf(t *testing.T) {
 	pe := &pgconn.PgError{Severity: "ERROR", Code: "42703", Message: "column \"x\" does not exist", Detail: "one\ntwo", Hint: "try y", Position: 8}
 	if e := pg.ErrorOf(pe); e.Code != "42703" || e.Position != 8 || !slices.Equal(e.More, []string{"DETAIL: one", "two", "HINT: try y"}) {
 		t.Errorf("%+v", e)
+	}
+}
+
+func TestBroken(t *testing.T) {
+	write := &net.OpError{Op: "write", Err: syscall.EPIPE}
+	for _, tc := range []struct {
+		err  error
+		want db.Lost
+	}{
+		{&pgconn.PgError{Code: "57P01", Message: "terminating connection due to administrator command"}, db.LostSent},
+		{&pgconn.PgError{Code: "57P03"}, db.LostSent},
+		{&pgconn.PgError{Code: "08006"}, db.LostSent},
+		{&pgconn.PgError{Code: "42601", Message: "syntax error"}, db.NotLost},
+		{&pgconn.PgError{Code: "57014", Message: "canceling statement due to user request"}, db.NotLost},
+		{write, db.LostSent},
+		{fmt.Errorf("failed to write: %w", write), db.LostSent},
+		{io.EOF, db.LostSent},
+		{fmt.Errorf("read: %w", io.ErrUnexpectedEOF), db.LostSent},
+		{&net.OpError{Op: "read", Err: syscall.ECONNRESET}, db.LostSent},
+		{context.Canceled, db.NotLost},
+		{context.DeadlineExceeded, db.NotLost},
+		{errors.New("something else"), db.NotLost},
+	} {
+		if got := pg.Broken(tc.err); got != tc.want {
+			t.Errorf("%v: %d, want %d", tc.err, got, tc.want)
+		}
 	}
 }

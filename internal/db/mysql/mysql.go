@@ -76,8 +76,6 @@ func Config(dsn, password string) (*mysql.Config, error) {
 
 // Connect opens one connection. readOnly makes every transaction read
 // only, as the Meta connection is (§8.2).
-// ponytail: one the server drops, idle past wait_timeout (8 hours by
-// default), is not dialed again; sqlmux starts anew (§8.2)
 func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, db.Info, error) {
 	cfg, err := Config(dsn, password)
 	if err != nil {
@@ -319,6 +317,20 @@ func (Engine) Same(col, arg string) string {
 func (e Engine) UseSchema(ctx context.Context, c db.Conn, schema, _ string) error {
 	_, err := c.Query(ctx, "use "+e.Quote(schema))
 	return err
+}
+
+// Broken says whether err is a lost connection (§8.2「断线重连」):
+// database/sql's ErrBadConn is the driver's for one that sent nothing; the
+// rest is the driver's invalid connection, the network's, and the server's
+// own as it goes away (1053 shutdown, 1927 killed).
+func (Engine) Broken(err error) db.Lost {
+	switch {
+	case errors.Is(err, driver.ErrBadConn):
+		return db.LostUnsent
+	case errors.Is(err, mysql.ErrInvalidConn), db.NetworkError(err), errno(err) == 1053, errno(err) == 1927:
+		return db.LostSent
+	}
+	return db.NotLost
 }
 
 // ErrorOf is err as the log and an error bar show it (§11): a server's

@@ -16,7 +16,7 @@ import (
 // ponytail: one with a LIMIT of its own, or in parentheses, is worked out
 // whole
 func (e Engine) Quick(ctx context.Context, w *db.Worker, sql, schema string, maxRows int) (r db.Result, err error) {
-	err = w.Run(ctx, func(ctx context.Context, c db.Conn) error {
+	err = w.RunSafe(ctx, func(ctx context.Context, c db.Conn) error {
 		if _, err := c.Query(ctx, "start transaction read only"); err != nil {
 			return err
 		}

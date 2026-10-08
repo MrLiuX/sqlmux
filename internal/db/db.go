@@ -99,6 +99,8 @@ type Engine interface {
 	// UseSchema makes schema the first unqualified names go to, then
 	// started, the one c connected with (§8.6).
 	UseSchema(ctx context.Context, c Conn, schema, started string) error
+	// Broken says whether err is a lost connection (§8.2「断线重连」).
+	Broken(err error) Lost
 	ErrorOf(err error) ServerError
 }
 

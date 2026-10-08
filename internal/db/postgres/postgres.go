@@ -26,8 +26,8 @@ type Conn struct {
 }
 
 // cancelGrace is how long a cancelled request may take to stop on the
-// server before the connection is dropped instead (§8.3).
-// ponytail: a dropped connection stays dropped; reconnect when that bites.
+// server before the connection is dropped instead (§8.3); the Worker dials
+// again on the next request.
 const cancelGrace = 5 * time.Second
 
 // Connect opens one connection. dsn goes through pgconn.ParseConfig, which
@@ -110,6 +110,10 @@ func (c *Conn) Query(ctx context.Context, sql string, args ...db.Val) (db.Result
 }
 
 func (c *Conn) Close() error { return c.pg.Close(context.Background()) }
+
+// Closed is whether pgconn has closed the connection: the server dropped
+// it, or a cancel took too long (§8.3).
+func (c *Conn) Closed() bool { return c.pg.IsClosed() }
 
 // TxStatus is where the last request left the connection, as the
 // server's ReadyForQuery said: 'I' out of a transaction, 'T' in one, 'E'
