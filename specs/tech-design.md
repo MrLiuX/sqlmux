@@ -677,6 +677,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
       - **分组节点**：`Tables (n)`、`Views (n)`，n 为这个 schema 下的个数；n 为 0 时照样显示，没有 `▸`。Tables 含普通表、分区表的父表、外部表；Views 含视图和物化视图。函数、序列、角色等不列：目前对它们没有可做的操作，有用处时再加。
       - **表 / 视图节点**：图标（`func` 色）+ 名字 + 右对齐的行数量级（`border` 色）；普通视图没有行数，不显示。
       - **列节点**：展开表的时候才从 `Meta` 取列，与打开表共用列缓存（§8.4），取回之前不显示子节点，也不显示「加载中」。每行是图标 + 列名 + 右侧 `dim` 色的类型（`format_type`）；主键列用 `key` 图标（`pk` 色），其余用 `column` 图标。
+      - **Consoles 节点**（M8 F8.21，同 DataGrip 的「文件」列表）：工作区节点下面再一个根节点，列出 `consoles/*.sql` 的全部文件（按名字，`console_<n>` 按 n 排，改过名的按字母排在后面），每项 `console` 图标 + 名字，右端 `dim` 色的连接名（state.json 里记的最后一次连接，没有就空）；正在某个 session 里开着的名字用 `focus` 色。`↵` / 单击：已经开着就聚焦过去（别的 session 开着就 attach 过去，同 `tab.reopen` 的规则），没开着就在当前 data pane 里新开一个 tab，连接按 §11（记下的连接，不在了用当前连接）。`dd`（`tree.delete`「删除 console 文件」，只对这个节点下的项有效）：确认框「删除 console_3？」后删文件和 state.json 里的记录；正在开着的拒绝、toast「先关掉它的 tab」。新建、关闭、改名、删除后列表跟着变。
       - **工作区节点**：当前 session 的 window → pane → tab，最小粒度是 tab（M1 用户反馈）。pane 节点显示为 `<pane 图标> pane-<n>`（M5 F5.15 起画图标 `pane`，用户验收时觉得前面空一格很怪；原来不画、留空对齐），只列普通 pane 和结果区，空 pane 没有子节点；tab 节点比 pane 节点多缩进一级，结果区的「日志」tab 画图标 `log`（F3.30）；在 pane 节点上 `↵` 或单击是展开 / 折叠，不跳转；在 tab 节点上才聚焦过去；tab 节点显示表名加 `dim` 色的条件摘要（WHERE、非默认的 ORDER）。打开、关闭、切换 tab 后跟着变。
       - **默认展开**：启动时的连接、它 `current_schema()` 所在的 schema 和那个 schema 的 Tables、工作区及其下所有节点；其余折叠，其他连接也折叠着、不连。之后连上的连接同样展开它的 `current_schema()` 和 Tables。展开状态记在 session 上（节点按连接区分），只在内存里。
       - 行数量级：n < 1000 原样显示；1000 以上用 k / m / b 后缀，一律向下取整，首位只有一位数字时保留一位小数（`8.1k`、`2.1m`），否则取整（`48k`、`410k`）；`reltuples < 0` 显示 `?`。
@@ -1304,7 +1305,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 
 **文件**：
 
-- 每个 console tab 对应 `$XDG_DATA_HOME/sqlmux/consoles/<名字>.sql`，默认名 `console_<n>`（M5 F5.11 起不再按连接名分目录；M8 F8.11 起可以用 `console.rename` 改名，改名就是改文件名，名字规则同连接名，目标已存在时拒绝；state.json 的 `consoles` 和布局文件都按名字记，布局文件的 `n` 改成 `name`，旧的 `n` 读成 `console_<n>`）。新建时 n 取所有 session 里都没被打开的最小值（两个 session 打开同一个文件，自动保存会互相覆盖），文件已经存在就载入，所以默认的 console_1 每次启动都带着上次写的 SQL，文件也不会越积越多。state.json 记着每个文件最后用的连接和 schema（§14），只在启动时恢复默认布局里的 console_1（以后 M6 恢复布局）时用；新建的 console 一律用当前连接（§8.6「默认值」）；记下的连接已经不在 connections.toml 里时用当前连接。旧版本 `consoles/<连接名>/` 下的文件不写迁移代码。
+- 每个 console tab 对应 `$XDG_DATA_HOME/sqlmux/consoles/<名字>.sql`，默认名 `console_<n>`（M5 F5.11 起不再按连接名分目录；M8 F8.11 起可以用 `console.rename` 改名，改名就是改文件名，名字规则同连接名，目标已存在时拒绝；state.json 的 `consoles` 和布局文件都按名字记，布局文件的 `n` 改成 `name`，旧的 `n` 读成 `console_<n>`）。新建时 n 取**没有文件、也没在任何 session 里打开**的最小值（M8 F8.21，用户 2026-10-08：关掉 console_3 再新建又是 console_3、带着旧内容，像 DataGrip 那样应该是 console_4，关掉的文件留在列表里随时能再开；原来只看「没被打开」，所以关掉就被复用；两个 session 不能打开同一个文件，自动保存会互相覆盖）；关 tab 不删文件，在树的「Consoles」节点里删掉文件后这个编号才会被新建的用上。启动时的 console_1 文件已经存在就载入，所以每次启动都带着上次写的 SQL。state.json 记着每个文件最后用的连接和 schema（§14），只在启动时恢复默认布局里的 console_1（以后 M6 恢复布局）时用；新建的 console 一律用当前连接（§8.6「默认值」）；记下的连接已经不在 connections.toml 里时用当前连接。旧版本 `consoles/<连接名>/` 下的文件不写迁移代码。
 - 最后一次修改后 1s 自动保存（去抖），写临时文件再 rename，目录 0700、文件 0600（§13）；`:w`、`C-s`、关闭 tab、退出时立即写；没改过就不写。写入失败用 toast 提示。文件存在但读不出来时（是目录、权限为 000 等），toast「读取失败：<err>」，这个 console tab 不打开（pane 显示引导页），程序照常启动；不能用空内容打开，否则自动保存会把那个读不出的文件覆盖掉。`:q` 关闭 tab 不弹确认，内容已经写盘。`:wq` 是先 `:w` 再 `:q`：console 上等同 `:q`；表 tab 上先保存修改（§10.3），保存成功后才关闭，失败时 tab 留着、查询条显示原因，不弹丢弃确认。console 文件写不进去时，`:q`、关 pane、退出都不执行，toast「保存失败：<err>」。
 
 **执行（C-02）**：
