@@ -214,10 +214,7 @@ func Parse(data string) (*Config, error) {
 		}
 		c.MaxRows = *n
 	}
-	if n := raw.Tree.Width; n != nil {
-		if *n <= 0 {
-			return nil, fmt.Errorf("[tree] width = %d: must be greater than 0", *n)
-		}
+	if n := raw.Tree.Width; n != nil { // held to 16 and half the window where it is used, whatever it is
 		c.TreeWidth = *n
 	}
 	if n := raw.Grid.FullWidth; n != nil {

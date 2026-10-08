@@ -534,6 +534,9 @@ func title(action string) string {
 // run executes "id [arg]" from the registry.
 func (a *App) run(action string, count int) tea.Cmd {
 	id, arg, _ := strings.Cut(action, " ")
+	if a.menu != nil && !strings.HasPrefix(id, "menu.") && id != "cancel" { // what it has no key for is no one's: cancel is esc, which closes it (F8.23)
+		return nil
+	}
 	if !strings.HasPrefix(id, "cell.") && id != "cancel" && !a.endEdit() { // cancel is esc here, which ends it itself
 		return nil
 	}
