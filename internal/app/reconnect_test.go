@@ -133,6 +133,10 @@ func TestConsoleEndLost(t *testing.T) {
 		{"rollback", "rollback", errLost, "ROLLBACK"},
 		{"abort", "abort", errLost, "ROLLBACK"},
 		{"update t set a = 1", "update t set a = 1", errLost, "ERROR: 连接断开，事务已丢失，这条没有执行"},
+		// back to a savepoint is no end: the transaction would go on, and it is not told so
+		{"rollback to savepoint a", "rollback to savepoint a", errLost, "ERROR: 连接断开，事务已丢失，这条没有执行"},
+		{"rollback work to a", "rollback work to a", errLost, "ERROR: 连接断开，事务已丢失，这条没有执行"},
+		{"rollback to a", "rollback to a", errLost, "ERROR: 连接断开，事务已丢失，这条没有执行"},
 	} {
 		d := &execDB{tx: 'T', fail: map[string]error{tc.key: tc.fail}}
 		a, c := inRun(t, d, "select 1")

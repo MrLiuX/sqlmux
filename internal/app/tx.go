@@ -83,18 +83,6 @@ func txLost(sql string, err error) error {
 	return db.ErrNotCommitted
 }
 
-// endsTx is "commit" or "rollback" for a statement that ends the
-// transaction, as the user types it, "" for any other.
-func endsTx(stmt string, d sqlkit.Dialect) string {
-	switch sqlkit.FirstWord(stmt, d) {
-	case "commit", "end":
-		return "commit"
-	case "rollback", "abort":
-		return "rollback"
-	}
-	return ""
-}
-
 // runTxLost is what a console run says when it failed with the transaction
 // lost: at a COMMIT or a ROLLBACK the user typed, what txLost says of it, a
 // rollback ending the run as done.
@@ -102,7 +90,7 @@ func runTxLost(rs []db.Result, err error, texts []string, d sqlkit.Dialect) ([]d
 	if !errors.As(err, new(db.TxLost)) || len(rs) >= len(texts) {
 		return rs, err
 	}
-	sql := endsTx(texts[len(rs)], d)
+	sql := sqlkit.EndsTx(texts[len(rs)], d)
 	switch said := txLost(sql, err); {
 	case sql == "rollback" && len(rs)+1 == len(texts): // it is the last: nothing is left unrun
 		return append(rs, db.Result{Tag: "ROLLBACK"}), nil

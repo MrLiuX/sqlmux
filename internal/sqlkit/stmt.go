@@ -421,10 +421,6 @@ func NoBegin(s string, d Dialect) bool {
 func MySQLTx(s string, tx byte) byte {
 	ts, _ := words(s, MySQL)
 	w := func(i int) string { return lower(s, ts, i) }
-	i := 1
-	if w(i) == "work" {
-		i++
-	}
 	switch w(0) {
 	case "begin":
 		return 'T'
@@ -433,10 +429,10 @@ func MySQLTx(s string, tx byte) byte {
 			return 'T'
 		}
 	case "commit", "rollback":
-		switch {
-		case w(i) == "to": // rollback [work] to [savepoint] s
+		switch _, to, chain := txEnding(s, ts); {
+		case to:
 			return tx
-		case w(i) == "and" && w(i+1) == "chain":
+		case chain:
 			return 'T'
 		}
 		return 'I'
@@ -445,6 +441,38 @@ func MySQLTx(s string, tx byte) byte {
 		return 'I'
 	}
 	return tx
+}
+
+// txEnding reads a COMMIT or a ROLLBACK at the start of s, END and ABORT
+// too, PG's names for them: which one it is ("commit" or "rollback", "" for
+// neither), and whether it goes to a savepoint (to), which leaves the
+// transaction going, or chains a new one (chain).
+func txEnding(s string, ts []Token) (kind string, to, chain bool) {
+	w := func(i int) string { return lower(s, ts, i) }
+	switch w(0) {
+	case "commit", "end":
+		kind = "commit"
+	case "rollback", "abort":
+		kind = "rollback"
+	default:
+		return "", false, false
+	}
+	i := 1
+	if w(i) == "work" || w(i) == "transaction" {
+		i++
+	}
+	return kind, w(i) == "to", w(i) == "and" && w(i+1) == "chain"
+}
+
+// EndsTx is "commit" or "rollback" for a statement that ends the
+// transaction it runs in, as the user types it (COMMIT [WORK], END, ROLLBACK
+// [WORK], ABORT), "" for any other: ROLLBACK TO a savepoint ends none.
+func EndsTx(s string, d Dialect) string {
+	ts, _ := words(s, d)
+	if kind, to, _ := txEnding(s, ts); !to {
+		return kind
+	}
+	return ""
 }
 
 // commitsMySQL is whether statement ts of s commits the transaction it
