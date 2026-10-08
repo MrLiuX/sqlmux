@@ -85,9 +85,6 @@ func (a *App) menuMove(d int) {
 func (a *App) menuRun(i int) tea.Cmd {
 	m := a.menu
 	a.menu = nil
-	if i < 0 || i >= len(m.items) {
-		return nil
-	}
 	return m.items[i].run()
 }
 
@@ -197,6 +194,9 @@ func (a *App) gotDropped(m dropped) tea.Cmd {
 	c := m.conn
 	c.busy--
 	if m.err != nil {
+		if c.eng.Broken(m.err) != db.NotLost { // the connection event says it: reconnected, run it again
+			return a.loadCatalog(c)
+		}
 		e := c.eng.ErrorOf(m.err)
 		msg := e.Message
 		if errors.Is(m.err, context.Canceled) {

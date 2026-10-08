@@ -718,6 +718,9 @@ func dropTableOn(t *testing.T, eng, dsn string) {
 	if want := map[string]string{"postgres": `table "probe" does not exist`, "mysql": "Unknown table"}[eng]; !strings.Contains(a.toast, want) || play.busy != busy {
 		t.Errorf("a table that is gone: toast %q, busy %d (was %d)", a.toast, play.busy, busy)
 	}
+	if has("probe") { // a failure reads the catalog again too: the stale node goes
+		t.Errorf("a table that is gone is still listed: %v", play.Tables)
+	}
 	// read only: nothing is asked
 	b := opened(t, config.Connection{Name: "ro", Engine: eng, DSN: dsn, ReadOnly: true})
 	b.win().focus(0)

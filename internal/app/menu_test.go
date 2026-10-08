@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"io"
 	"slices"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"sqlmux/internal/config"
 	"sqlmux/internal/db"
 	"sqlmux/internal/ui"
 )
@@ -223,9 +225,16 @@ func TestDropTableFails(t *testing.T) {
 	if !ok || m.err == nil || c.busy != busy+1 {
 		t.Fatalf("answer %+v, busy %d (was %d)", m, c.busy, busy)
 	}
-	_, next := a.Update(m)
-	if tabNames(data) != "t_user" || a.toast != "cannot drop table t_user · DETAIL: view v depends on table t_user" || c.busy != busy || next == nil {
-		t.Errorf("tabs %q, toast %q, busy %d (was %d), catalog again: %v", tabNames(data), a.toast, c.busy, busy, next != nil)
+	a.Update(m)
+	if tabNames(data) != "t_user" || a.toast != "cannot drop table t_user · DETAIL: view v depends on table t_user" || c.busy != busy {
+		t.Errorf("tabs %q, toast %q, busy %d (was %d)", tabNames(data), a.toast, c.busy, busy)
+	}
+	// a lost connection says so by its own event: no toast of the driver's here
+	c.busy++
+	a.toast = "kept"
+	a.Update(dropped{c, m.table, io.ErrUnexpectedEOF})
+	if a.toast != "kept" {
+		t.Errorf("a lost connection: toast %q", a.toast)
 	}
 	c.busy++
 	if a.Update(dropped{c, m.table, context.Canceled}); a.toast != "查询已取消" {
@@ -247,6 +256,9 @@ func TestDropTableClosesItsTabs(t *testing.T) {
 	first.Conns = append(first.Conns, other)
 	user := db.Table{Schema: "public", Name: "t_user"}
 	report.Conns[0].Tables = []db.Table{user}
+	idle := newConn(config.Connection{Name: "doraemon", Engine: "postgres"}) // listed, not dialed: it has no Meta to read a catalog with
+	third := newSession("third", []*Conn{idle}, idle, a.freeConsole())
+	a.sessions = append(a.sessions, third)
 	a.attach(report)
 	a.openTable(report.Conns[0], user)
 	a.attach(first)
@@ -281,8 +293,8 @@ func TestDropTableClosesItsTabs(t *testing.T) {
 	if _, ok := report.Conns[0].cols[idOf(user)]; ok {
 		t.Error("what the other session read of it stays")
 	}
-	if cmd == nil {
-		t.Error("no catalog read again")
+	if batch, ok := cmd().(tea.BatchMsg); !ok || len(batch) != 3 { // the toast, and the catalog of each of the two connections that can read it
+		t.Errorf("%d commands, want the toast and two catalogs: %T", len(batch), batch)
 	}
 }
 
@@ -401,8 +413,11 @@ func TestMenuPlacement(t *testing.T) {
 			first := find(t, a, ui.Target{Kind: ui.KindRow, I: 0}).Min.Y
 			y := hit.Rect.Min.Y
 			fits := y+1+len(a.menu.items)+2 <= a.window().Max.Y
-			switch want := map[bool]int{true: y + 2, false: y - len(a.menu.items) - 1}[fits]; {
-			case first != want:
+			want := y - len(a.menu.items) - 1
+			if fits {
+				want = y + 2
+			}
+			if first != want {
 				t.Fatalf("h %d, pointer row %d: first item on row %d, want %d (fits below: %v)", h, y, first, want, fits)
 			}
 			below, above = below || fits, above || !fits
