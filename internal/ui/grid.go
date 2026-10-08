@@ -279,6 +279,12 @@ func (v view) layout(area uv.Rectangle) (labelW int, ws []int, rows int) {
 func (g Grid) View(area uv.Rectangle) (top, left int) {
 	v := g.view()
 	labelW, ws, rows := v.layout(area)
+	return g.viewWith(v, area, labelW, ws, rows)
+}
+
+// viewWith is View with the layout already worked out: Draw has it, and the
+// widths of every column of the page are a pass over every value (F8.20).
+func (g Grid) viewWith(v view, area uv.Rectangle, labelW int, ws []int, rows int) (top, left int) {
 	voff, hoff := v.screen(g.Top, g.Left)
 	cr, cc := voff, hoff
 	if g.Row >= 0 {
@@ -332,8 +338,8 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 	if area.Dx() <= 0 || area.Dy() <= 0 || len(g.Cols) == 0 {
 		return cursor
 	}
-	labelW, ws, _ := v.layout(area)
-	g.Top, g.Left = g.View(area)
+	labelW, ws, rows := v.layout(area)
+	g.Top, g.Left = g.viewWith(v, area, labelW, ws, rows)
 	voff, hoff := v.screen(g.Top, g.Left)
 	cr, cc := v.screen(g.Row, g.Col)
 	line := uv.Style{Fg: th.Sep, Bg: th.PaneBg}
