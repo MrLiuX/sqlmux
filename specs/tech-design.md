@@ -642,9 +642,9 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
 - **整体布局**：
   - 最外层不留边距。
   - 横向相邻的 pane 之间留 1 列空白，纵向相邻的不留。
-  - data 与 console 的宽度比为 5 : 4（设计稿中分别是 flex 5 和 flex 4）。
+  - data 与 console 的宽度比为 1 : 1（M8 F8.9 起；设计稿是 5 : 4）。
 - **schema 侧栏**：
-  - 宽度默认 32 列（含边框；设计稿为 250px）。窗口宽度小于 100 列时，缩到 24 列。
+  - 宽度默认 32 列（含边框；设计稿为 250px），config.toml 的 `[tree] width` 可改（M8 F8.22，用户要 300px 左右，即 38 列；范围 16 到窗口宽度的一半，超出夹住；布局文件里记的 `sidebar_width` 优先，拖过的宽度照旧记在 window 上）。窗口宽度小于 100 列时，缩到 24 列。
   - 可以用鼠标拖动侧栏和右边 pane 之间的那 1 列间隔来调宽度，最窄 16 列，最宽为窗口宽度的一半；拖过的宽度记在 window 上。折叠时不能拖。
   - 标题为 `⟨0⟩ <conn 图标> <session 名>`，例如 `⓪  seed`，右侧提示仍是 `SPC b`；放不下时先去掉 `SPC b`，再截短 session 名。点击标题只聚焦树。schema 不再放在标题上、也不再用下拉框切换，改成树里的节点（M1 用户反馈：用下拉框切 schema，看不出还有别的 schema；参考 sqmeow.nvim 的层级树）。
   - 折叠后是 3 列宽的细栏（设计稿为 24px），左右各 1 列边框、中间 1 列内容：顶部显示 `»`，下面竖排 `schema · SPC b`，每行一个字符。
@@ -677,6 +677,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
       - **分组节点**：`Tables (n)`、`Views (n)`，n 为这个 schema 下的个数；n 为 0 时照样显示，没有 `▸`。Tables 含普通表、分区表的父表、外部表；Views 含视图和物化视图。函数、序列、角色等不列：目前对它们没有可做的操作，有用处时再加。
       - **表 / 视图节点**：图标（`func` 色）+ 名字 + 右对齐的行数量级（`border` 色）；普通视图没有行数，不显示。
       - **列节点**：展开表的时候才从 `Meta` 取列，与打开表共用列缓存（§8.4），取回之前不显示子节点，也不显示「加载中」。每行是图标 + 列名 + 右侧 `dim` 色的类型（`format_type`）；主键列用 `key` 图标（`pk` 色），其余用 `column` 图标。
+      - **右键菜单**（M8 F8.23，用户要在树里删 console 和表）：在树的节点上右键（SGR 按钮 2）弹出一个小菜单，贴着指针、`select` 底高亮、可点击，作用域 `menu`（`j` / `k` / `↑` / `↓` 移动，`↵` 执行，`esc` 或点别处关闭），键位文字从 keymap 读。菜单项按节点：console 文件 → 打开、重命名…、删除…；表 / 视图 → 打开、在新 tab 打开、删除表…（视图是「删除视图…」）；其他节点不弹。「删除表…」走危险操作的确认框（§13，同没带 WHERE 的 delete：红色标题，正文是要执行的 `DROP TABLE "public"."t_log"`，`y` / `↵` 确认），在那个连接的 `Main` 上执行，成功后关掉这张表的全部 tab（所有 session）、重载 catalog、toast；`confirm_dangerous = false` 也照样问（删表没有不问的理由）。键盘上同样的事：表 / 视图节点上 `dd`（`tree.delete`，F8.21 的同一个 Action，按节点类型决定删文件还是删表）。只读连接上拒绝、toast。
       - **Consoles 节点**（M8 F8.21，同 DataGrip 的「文件」列表）：工作区节点下面再一个根节点，列出 `consoles/*.sql` 的全部文件（按名字，`console_<n>` 按 n 排，改过名的按字母排在后面），每项 `console` 图标 + 名字，右端 `dim` 色的连接名（state.json 里记的最后一次连接，没有就空）；正在某个 session 里开着的名字用 `focus` 色。`↵` / 单击：已经开着就聚焦过去（别的 session 开着就 attach 过去，同 `tab.reopen` 的规则），没开着就在当前 data pane 里新开一个 tab，连接按 §11（记下的连接，不在了用当前连接）。`dd`（`tree.delete`「删除 console 文件」，只对这个节点下的项有效）：确认框「删除 console_3？」后删文件和 state.json 里的记录；正在开着的拒绝、toast「先关掉它的 tab」。新建、关闭、改名、删除后列表跟着变。
       - **工作区节点**：当前 session 的 window → pane → tab，最小粒度是 tab（M1 用户反馈）。pane 节点显示为 `<pane 图标> pane-<n>`（M5 F5.15 起画图标 `pane`，用户验收时觉得前面空一格很怪；原来不画、留空对齐），只列普通 pane 和结果区，空 pane 没有子节点；tab 节点比 pane 节点多缩进一级，结果区的「日志」tab 画图标 `log`（F3.30）；在 pane 节点上 `↵` 或单击是展开 / 折叠，不跳转；在 tab 节点上才聚焦过去；tab 节点显示表名加 `dim` 色的条件摘要（WHERE、非默认的 ORDER）。打开、关闭、切换 tab 后跟着变。
       - **默认展开**：启动时的连接、它 `current_schema()` 所在的 schema 和那个 schema 的 Tables、工作区及其下所有节点；其余折叠，其他连接也折叠着、不连。之后连上的连接同样展开它的 `current_schema()` 和 Tables。展开状态记在 session 上（节点按连接区分），只在内存里。
@@ -1525,6 +1526,9 @@ tab_width    = 2                 # console 缩进与格式化共用
 autopairs    = true              # 输入括号、引号时补上另一半（§7.9）
 confirm_dangerous = true         # 执行没带 WHERE 的 delete / update、drop、truncate，以及保存里有删除行时先确认（§13，M6）
 border       = "single"          # single | rounded | double | bold | hidden，pane 和浮层的边框（M8 F8.10，取值同 lazygit；Unicode 没有粗圆角，所以粗和圆角二选一）
+
+[tree]                           # M8 F8.22
+width        = 32                # 侧栏宽度（列，含边框）
 
 [grid]                           # M8 F8.5 / F8.8
 full_width   = 22                # 期望宽度不超过它的列不收缩（22 放得下带整点时区的 timestamptz）
