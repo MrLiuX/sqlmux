@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -31,5 +32,13 @@ func TestConsoleFiles(t *testing.T) {
 	}
 	if left, _ := filepath.Glob(filepath.Join(filepath.Dir(path), "*-*")); len(left) > 0 {
 		t.Errorf("temporary files left: %v", left)
+	}
+}
+
+func TestSortConsoles(t *testing.T) {
+	names := []string{"Zeta", "alpha", "console_10", "console_2", "console_02", "Beta"}
+	SortConsoles(names)
+	if want := []string{"console_2", "console_10", "alpha", "Beta", "console_02", "Zeta"}; !slices.Equal(names, want) {
+		t.Errorf("got %v, want %v", names, want)
 	}
 }

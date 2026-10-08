@@ -2,6 +2,7 @@ package app
 
 import (
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -119,14 +120,68 @@ func TestConsolesNode(t *testing.T) {
 	if c2 := consoleOf(a.focused()); c2 != c || len(a.consoles()) != 2 {
 		t.Errorf("↵ on an open console: %v, %d open", c2, len(a.consoles()))
 	}
-	// a name typed in is in the list once it is written
-	c.ed.Load("select 2")
-	a.consoleDid(c, c.ed.Load("select 2"))
-	if err := c.flush(); err != nil {
+	// a console with no file is listed while it is open, and once it is
+	// written, closed: the directory is read again after its first write
+	a.run("console.new", 0)
+	n := consoleOf(a.focused())
+	if !slices.Contains(consoleNames(a), n.name) || config.ConsoleExists(n.name) {
+		t.Fatalf("%s open, with no file: %v", n.name, consoleNames(a))
+	}
+	a.consoleDid(n, n.ed.Load("select 2"))
+	if err := n.flush(); err != nil {
 		t.Fatal(err)
 	}
-	if got := consoleNames(a); !slices.Contains(got, "console_2") {
-		t.Errorf("after a write: %v", got)
+	a.run("tab.close", 0)
+	if len(a.consoles()) != 2 || slices.ContainsFunc(a.consoles(), func(c *consoleTab) bool { return c.name == n.name }) {
+		t.Fatalf("%s not closed: %d open", n.name, len(a.consoles()))
+	}
+	if got := consoleNames(a); !slices.Contains(got, n.name) {
+		t.Errorf("after a write and a close: %v", got)
+	}
+}
+
+// ↵ on a console not open opens it on the connection state.json says it was
+// on; when that is no connection of the session, on the current one (F8.21).
+func TestOpenConsoleFileConnection(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a := sized(160, 45, "nerd")
+	other := readyConn("other")
+	a.sess.Conns = append(a.sess.Conns, other)
+	consoleFile(t, "console_2", "two\n")
+	consoleFile(t, "console_3", "three\n")
+	a.state.Consoles = map[string]config.ConsoleState{"console_2": {Conn: "other"}, "console_3": {Conn: "gone"}}
+	for _, c := range []struct { // in this order: the current connection is the one the focused tab is on
+		name string
+		want *Conn
+	}{{"console_3", a.sess.Conns[0]}, {"console_2", other}} {
+		consoleNode(t, a, c.name)
+		feed(t, a, "<CR>")
+		if got := consoleOf(a.focused()); got == nil || got.name != c.name || got.conn != c.want {
+			t.Errorf("%s: opened on %v, want %s", c.name, got, c.want.Spec.Name)
+		}
+	}
+}
+
+// A file that cannot be deleted says so, and keeps its file and what
+// state.json has of it (F8.21).
+func TestDeleteConsoleFileFails(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	a := sized(160, 45, "nerd")
+	consoleFile(t, "console_2", "two\n")
+	a.state.Consoles = map[string]config.ConsoleState{"console_2": {Conn: "doraemon"}}
+	if os.Geteuid() == 0 {
+		t.Skip("root deletes in a read-only directory")
+	}
+	dir := filepath.Dir(config.ConsolePath("x"))
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(dir, 0o700) //nolint:errcheck // the temp dir goes next
+	consoleNode(t, a, "console_2")
+	feed(t, a, "dd<CR>")
+	if a.toast == "" || !config.ConsoleExists("console_2") || a.state.Consoles["console_2"].Conn != "doraemon" {
+		t.Errorf("toast %q, file %v, state %v", a.toast, config.ConsoleExists("console_2"), a.state.Consoles)
 	}
 }
 
