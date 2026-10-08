@@ -64,8 +64,8 @@ newcon
 check "再新建：得到全新的 console_3（空内容，没有文件）" eval 'ws_is "console_1 console_2 console_3" && [[ $(files) == "console_1 console_2 console_4 " ]] && l1=$(g=($(geom $(focused))); e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $((g[1] + 1)) | tr -d " ▶"); [[ $l1 == 1 ]] || { echo "  line 1: [$l1]"; false; }'
 tree_to console_1; key d; key d; sleep 0.6
 check "开着的 console_1 上 dd：拒绝，toast「先关掉它的 tab」，没有确认框，文件还在" eval '[[ -z $(box) && -n $(cat_f console_1) ]] && toast_is "先关掉它的 tab"'
-tree_to t_user; key d; key d; sleep 0.5
-check "表节点上 dd：什么都不发生（没有确认框）" eval '[[ -z $(box) ]]'
+tree_to public; key d; key d; sleep 0.5
+check "schema 节点（public）上 dd：什么都不发生（没有确认框；F8.23 起表节点上 dd 是删表，见 f8.23）" eval '[[ -z $(box) ]] && ! e2e_plain | grep -q "不能撤销"'
 
 # ---- 改名：树里跟着变
 key C-l; key C-l 2>/dev/null
