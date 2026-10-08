@@ -106,8 +106,8 @@ e2e_click 130 10; sleep 0.3                                                    #
 switch_to d s; wait_for 3 eval "on s public >/dev/null"
 setsql "begin"; run
 psql_n "select pg_terminate_backend(pid) from pg_stat_activity where application_name = '$APP_S' and state like 'idle in transaction%'" >/dev/null; sleep 0.5
-setsql "rollback"; run                                                               # 断开要等下一个请求才知道（TxStatus 随应答带回）
-check "s 的 Main 在事务里被服务端断开：下一次执行报连接已断" eval 'logs3 | tail -1 | grep -q "FATAL: terminating connection due to administrator command" || { logs3 | tail -2; false; }'
+setsql "rollback"; run                                                               # 断开要等下一个请求才知道；F8.19 起重拨，手敲的 rollback 就算成功
+check "s 的 Main 在事务里被服务端断开：F8.19 起自动重拨，手敲的 rollback 按成功（日志最后一行是 ROLLBACK，不再报 FATAL）" eval 'logs3 | tail -1 | grep -q "console_1  rollback  ROLLBACK · " && ! logs3 | tail -1 | grep -q FATAL || { logs3 | tail -2; false; }'
 switch_to s d
 check "之后 s 的 Main 已关，不算在事务里：能换到 d" eval 'wait_for 3 eval "on d public >/dev/null" || on d public'
 
