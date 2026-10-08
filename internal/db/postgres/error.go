@@ -28,14 +28,15 @@ func (Engine) ErrorOf(err error) db.ServerError {
 
 // Broken says whether err is a lost connection (§8.2「断线重连」): the
 // network's, pgconn's own for a connection it has closed, which sent
-// nothing, or the server's FATAL as it goes away, a shutdown or a
-// pg_terminate_backend (57P0x), a connection failure (class 08). Any other
+// nothing, or the server's FATAL as it goes away, a shutdown, a
+// pg_terminate_backend, an idle_session_timeout (pgconn closes the
+// connection on any FATAL), or a connection failure (class 08). Any other
 // PgError is a SQL error.
 func (Engine) Broken(err error) db.Lost {
 	var pe *pgconn.PgError
 	switch {
 	case errors.As(err, &pe):
-		if pe.Code == "57P01" || pe.Code == "57P02" || pe.Code == "57P03" || strings.HasPrefix(pe.Code, "08") {
+		if pe.Severity == "FATAL" || pe.Severity == "PANIC" || strings.HasPrefix(pe.Code, "08") {
 			return db.LostSent
 		}
 		return db.NotLost

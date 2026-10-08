@@ -297,3 +297,35 @@ func TestMySQLTx(t *testing.T) {
 		}
 	}
 }
+
+// What ends the transaction it runs in, as typed: COMMIT and ROLLBACK, their
+// WORK / TRANSACTION forms, PG's END and ABORT, a chain too (it ends this
+// one); not ROLLBACK to a savepoint, nor any other statement.
+func TestEndsTx(t *testing.T) {
+	for _, tc := range []struct {
+		sql  string
+		d    Dialect
+		want string
+	}{
+		{"commit", PG, "commit"},
+		{"COMMIT WORK;", MySQL, "commit"},
+		{"commit and chain", PG, "commit"},
+		{"end", PG, "commit"},
+		{"end transaction", PG, "commit"},
+		{"rollback", MySQL, "rollback"},
+		{"rollback work", MySQL, "rollback"},
+		{"abort", PG, "rollback"},
+		{"rollback and no chain", PG, "rollback"},
+		{"rollback to savepoint a", PG, ""},
+		{"rollback work to a", MySQL, ""},
+		{"rollback to a", MySQL, ""},
+		{"rollback transaction to savepoint a", PG, ""},
+		{"-- note\nrollback to a", PG, ""},
+		{"select 1", PG, ""},
+		{"commit_log", PG, ""},
+	} {
+		if got := EndsTx(tc.sql, tc.d); got != tc.want {
+			t.Errorf("%q: %q, want %q", tc.sql, got, tc.want)
+		}
+	}
+}

@@ -9,6 +9,7 @@ import (
 
 	"sqlmux/internal/db"
 	"sqlmux/internal/i18n"
+	"sqlmux/internal/sqlkit"
 )
 
 // txOpen is why a connection's transaction keeps it as it is: a console on
@@ -58,7 +59,45 @@ func (a *App) endTx(c *Conn, sql string) tea.Cmd {
 			m.tag, err = db.End(ctx, cn, sql)
 			return err
 		})
+		m.err = txLost(sql, m.err)
 		return m
+	}
+}
+
+// txLost is what a commit or a rollback says when the connection lost its
+// transaction: a rollback nothing, it is done; a commit that it did not
+// take, or that it may have, which the user must look up (§8.2「断线重连」).
+// sql is "commit" or "rollback", any other leaves err as it is.
+func txLost(sql string, err error) error {
+	var lost db.TxLost
+	switch {
+	case !errors.As(err, &lost):
+		return err
+	case sql == "rollback":
+		return nil
+	case sql != "commit":
+		return err
+	case lost.Sent:
+		return db.ErrCommitUnknown
+	}
+	return db.ErrNotCommitted
+}
+
+// runTxLost is what a console run says when it failed with the transaction
+// lost: at a COMMIT or a ROLLBACK the user typed, what txLost says of it, a
+// rollback ending the run as done.
+func runTxLost(rs []db.Result, err error, texts []string, d sqlkit.Dialect) ([]db.Result, error) {
+	if !errors.As(err, new(db.TxLost)) || len(rs) >= len(texts) {
+		return rs, err
+	}
+	sql := sqlkit.EndsTx(texts[len(rs)], d)
+	switch said := txLost(sql, err); {
+	case sql == "rollback" && len(rs)+1 == len(texts): // it is the last: nothing is left unrun
+		return append(rs, db.Result{Tag: "ROLLBACK"}), nil
+	case sql == "rollback":
+		return rs, err
+	default:
+		return rs, said
 	}
 }
 

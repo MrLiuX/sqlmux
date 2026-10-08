@@ -4,8 +4,11 @@ package postgres
 
 import (
 	"context"
+	"errors"
+	"net/url"
 	"slices"
 	"testing"
+	"time"
 
 	"sqlmux/internal/db"
 )
@@ -14,16 +17,35 @@ import (
 // the events it heard.
 func redialing(t *testing.T, dsn string, readOnly bool) (w *db.Worker, events *[]db.Event) {
 	t.Helper()
+	return redialingTo(t, dsn, dsn, readOnly)
+}
+
+// redialingTo is redialing with a first connection to dsn, and the next to
+// again: a proxy that is cut, then the database itself.
+func redialingTo(t *testing.T, dsn, again string, readOnly bool) (w *db.Worker, events *[]db.Event) {
+	t.Helper()
 	c, err := Connect(context.Background(), dsn, "", readOnly)
 	if err != nil {
 		t.Fatal(err)
 	}
 	w, events = db.NewWorker(c), new([]db.Event)
-	w.Redial = func(ctx context.Context) (db.Conn, error) { return Connect(ctx, dsn, "", readOnly) }
+	w.Redial = func(ctx context.Context) (db.Conn, error) { return Connect(ctx, again, "", readOnly) }
 	w.Broken = pg.Broken
 	w.Notify = func(e db.Event) { *events = append(*events, e) }
 	t.Cleanup(func() { w.Close() })
 	return w, events
+}
+
+// proxied is dsn's database behind a proxy of the test's own.
+func proxied(t *testing.T, dsn string) (*db.Proxy, string) {
+	t.Helper()
+	u, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := db.NewProxy(t, u.Host)
+	u.Host = p.Addr()
+	return p, u.String()
 }
 
 // kill terminates w's backend from another connection, as a proxy or a
@@ -118,5 +140,218 @@ func TestReconnectTransactionLost(t *testing.T) {
 	}
 	if !slices.Equal(*events, []db.Event{{TxLost: true, Rerun: true}}) {
 		t.Fatalf("events %v", *events)
+	}
+}
+
+// A transaction lost with the connection: a write in it is not run, on any
+// way the loss shows, and says so; the new connection is in none (F8.19).
+func TestReconnectTransactionLostWrite(t *testing.T) {
+	ctx := context.Background()
+	dsn := OwnDB(t)
+	w, events := redialing(t, dsn, false)
+	if _, err := w.Exec(ctx, "create table t_re (n int)", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Run(ctx, func(ctx context.Context, c db.Conn) error {
+		_, err := c.Exec(ctx, "begin; insert into t_re values (1)", 0)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	kill(t, w)
+	err := w.Run(ctx, func(ctx context.Context, c db.Conn) error {
+		_, err := c.Query(ctx, "insert into t_re values (2)")
+		return err
+	})
+	var lost db.TxLost
+	if !errors.As(err, &lost) || !lost.Sent || sqlState(lost.Err) != "57P01" {
+		t.Fatalf("the write: %v", err)
+	}
+	if !slices.Equal(*events, []db.Event{{TxLost: true}}) {
+		t.Fatalf("events %v", *events)
+	}
+	if r, err := w.Query(ctx, "select count(*), current_setting('transaction_isolation') from t_re"); err != nil || r.Rows[0][0].S != "0" || w.Run(ctx, func(_ context.Context, c db.Conn) error {
+		if c.(interface{ TxStatus() byte }).TxStatus() != 'I' {
+			return errors.New("the new connection is in a transaction")
+		}
+		return nil
+	}) != nil {
+		t.Fatalf("after: %v %v", r.Rows, err)
+	}
+}
+
+// What a proxy cut between the statements of a run does: the statements
+// done are done, the run is not run again, whichever way tsh dies, with an
+// RST or a FIN (F8.19).
+func TestReconnectBetweenStatements(t *testing.T) {
+	for _, rst := range []bool{true, false} {
+		t.Run(map[bool]string{true: "RST", false: "FIN"}[rst], func(t *testing.T) {
+			ctx := context.Background()
+			dsn := OwnDB(t)
+			p, via := proxied(t, dsn)
+			w, events := redialingTo(t, via, dsn, false)
+			if _, err := w.Exec(ctx, "create table t_re (n int)", 0); err != nil {
+				t.Fatal(err)
+			}
+			stmts := []string{"insert into t_re values (1)", "insert into t_re values (2)"}
+			err := w.Run(ctx, func(ctx context.Context, c db.Conn) error {
+				_, err := db.ExecEach(ctx, c, stmts, 0, func(s string) bool {
+					if s == stmts[1] {
+						p.Cut(rst)
+						time.Sleep(100 * time.Millisecond)
+					}
+					return false
+				})
+				return err
+			})
+			if err == nil || pg.Broken(err) == db.NotLost {
+				t.Fatalf("the run: %v", err)
+			}
+			if len(*events) != 1 || (*events)[0].Rerun {
+				t.Fatalf("events %v", *events)
+			}
+			if r, err := w.Query(ctx, "select string_agg(n::text, ',') from t_re"); err != nil || r.Rows[0][0].S != "1" {
+				t.Fatalf("rows: %v %v", r.Rows, err)
+			}
+		})
+	}
+}
+
+// What an error is after a proxy is cut, or a connection closed: the real
+// ones, not those built by hand (F8.19).
+func TestBrokenSamples(t *testing.T) {
+	ctx := context.Background()
+	closed := connect(t, false)
+	closed.Close()
+	_, err := closed.Query(ctx, "select 1")
+	if got := pg.Broken(err); got != db.LostUnsent {
+		t.Errorf("closed: %v is %d", err, got)
+	}
+	gone, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = connect(t, false).Query(gone, "select 1")
+	if got := pg.Broken(err); got != db.NotLost {
+		t.Errorf("cancelled: %v is %d", err, got)
+	}
+	timedOut, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+	_, err = connect(t, false).Query(timedOut, "select pg_sleep(2)")
+	if got := pg.Broken(err); got != db.NotLost {
+		t.Errorf("timed out: %v is %d", err, got)
+	}
+	_, err = connect(t, false).Query(ctx, "select 1/0")
+	if got := pg.Broken(err); got != db.NotLost {
+		t.Errorf("SQL error: %v is %d", err, got)
+	}
+	// terminated, idle: the FATAL the server sent on its way
+	c := connect(t, false)
+	r, _ := c.Query(ctx, "select pg_backend_pid()")
+	if _, err := connect(t, false).Query(ctx, "select pg_terminate_backend("+r.Rows[0][0].S+")"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	_, err = c.Query(ctx, "select 1")
+	if got := pg.Broken(err); got != db.LostSent {
+		t.Errorf("terminated: %v is %d", err, got)
+	}
+	// the proxy cut idle: nothing from the server, the write may have gone out or not
+	for _, rst := range []bool{true, false} {
+		p, via := proxied(t, IntegrationDSN(t))
+		c, err := Connect(ctx, via, "", false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p.Cut(rst)
+		time.Sleep(100 * time.Millisecond)
+		_, err = c.Query(ctx, "select 1")
+		if got := pg.Broken(err); got == db.NotLost {
+			t.Errorf("cut (RST %v): %v is %d", rst, err, got)
+		}
+		c.Close()
+	}
+}
+
+// The server closing an idle connection by idle_session_timeout, or a
+// transaction's by idle_in_transaction_session_timeout: FATALs, read as
+// lost; a transaction's loss is told (F8.19).
+func TestReconnectServerTimeouts(t *testing.T) {
+	ctx := context.Background()
+	w, events := redialing(t, IntegrationDSN(t), true)
+	if _, err := w.Exec(ctx, "set idle_session_timeout = '1s'", 0); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1500 * time.Millisecond)
+	if r, err := w.Query(ctx, "select 1"); err != nil || r.Rows[0][0].S != "1" || !slices.Equal(*events, []db.Event{{Rerun: true}}) {
+		t.Fatalf("idle_session_timeout: %v %v, events %v", r.Rows, err, *events)
+	}
+
+	dsn := OwnDB(t)
+	w, events = redialing(t, dsn, false)
+	if _, err := w.Exec(ctx, "create table t_re (n int)", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Run(ctx, func(ctx context.Context, c db.Conn) error {
+		_, err := c.Exec(ctx, "set idle_in_transaction_session_timeout = '1s'; begin; insert into t_re values (1)", 0)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1500 * time.Millisecond)
+	if r, err := w.Query(ctx, "select count(*) from t_re"); err != nil || r.Rows[0][0].S != "0" || !slices.Equal(*events, []db.Event{{TxLost: true, Rerun: true}}) {
+		t.Fatalf("idle_in_transaction_session_timeout: %v %v, events %v", r.Rows, err, *events)
+	}
+}
+
+// A cancel the server does not act on in 5s drops the connection (§8.3); the
+// next request dials first, and says the transaction went with it (F8.19).
+func TestReconnectAfterCancelDropsTheConnection(t *testing.T) {
+	ctx := context.Background()
+	dsn := OwnDB(t)
+	p, via := proxied(t, dsn)
+	w, events := redialingTo(t, via, dsn, false)
+	if err := w.Run(ctx, func(ctx context.Context, c db.Conn) error { _, err := c.Exec(ctx, "begin", 0); return err }); err != nil {
+		t.Fatal(err)
+	}
+	p.Refuse(true) // the CancelRequest's own connection cannot get through
+	cctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer cancel()
+	if _, err := w.Query(cctx, "select pg_sleep(20)"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("cancelled: %v", err)
+	}
+	if r, err := w.Query(ctx, "select 1"); err != nil || r.Rows[0][0].S != "1" || !slices.Equal(*events, []db.Event{{TxLost: true, Rerun: true}}) {
+		t.Fatalf("next: %v %v, events %v", r.Rows, err, *events)
+	}
+}
+
+// A write on a connection the proxy cut while it was idle: after an RST it
+// found the connection gone before it sent anything, and runs again, once;
+// after a FIN it had gone out, and is not run again (F8.19).
+func TestReconnectIdleCutWrite(t *testing.T) {
+	for _, rst := range []bool{true, false} {
+		t.Run(map[bool]string{true: "RST", false: "FIN"}[rst], func(t *testing.T) {
+			ctx := context.Background()
+			dsn := OwnDB(t)
+			p, via := proxied(t, dsn)
+			w, events := redialingTo(t, via, dsn, false)
+			if _, err := w.Exec(ctx, "create table t_re (n int)", 0); err != nil {
+				t.Fatal(err)
+			}
+			p.Cut(rst)
+			time.Sleep(100 * time.Millisecond)
+			err := w.Run(ctx, func(ctx context.Context, c db.Conn) error {
+				_, err := c.Query(ctx, "insert into t_re values (1)")
+				return err
+			})
+			want := "0"
+			if rst {
+				want = "1"
+			}
+			if r, qerr := w.Query(ctx, "select count(*) from t_re"); qerr != nil || r.Rows[0][0].S != want || (err == nil) != rst {
+				t.Fatalf("err %v, %v rows, want %s: %v", err, r.Rows, want, qerr)
+			}
+			if !slices.Equal(*events, []db.Event{{Rerun: rst}}) {
+				t.Fatalf("events %v", *events)
+			}
+		})
 	}
 }

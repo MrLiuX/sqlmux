@@ -23,17 +23,21 @@ type connEvent struct {
 	db.Event
 }
 
-// worker is a Worker over conn, dialed from spec, that dials again when the
-// connection is lost; the password is asked for again as the first time
-// (§8.2「断线重连」).
-func (c *Conn) worker(conn db.Conn, spec config.Connection, readOnly, meta bool) *db.Worker {
+// worker is a Worker over conn that dials again when the connection is
+// lost, with the connection as it is now (a rename or a new address
+// included: the old keychain item or address would never connect), its
+// engine and lock those of from, the spec it was dialed from; the
+// password is asked for again as the first time (§8.2「断线重连」).
+func (c *Conn) worker(conn db.Conn, from config.Connection, meta bool) *db.Worker {
 	w := db.NewWorker(conn)
 	w.Redial = func(ctx context.Context) (db.Conn, error) {
+		spec := c.liveSpec()
+		spec.Engine = from.Engine
 		secrets.Delete(spec.Name)
-		c, _, err := connectTo(ctx, spec, readOnly)
-		return c, err
+		cn, _, err := connectTo(ctx, spec, meta || from.ReadOnly)
+		return cn, err
 	}
-	w.Broken = engines[spec.Engine].Broken
+	w.Broken = engines[from.Engine].Broken
 	w.Notify = func(e db.Event) { Send(connEvent{c, meta, e}) }
 	return w
 }

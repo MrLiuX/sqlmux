@@ -44,6 +44,7 @@
 
   版本线为 bubbletea v2.0.9。lipgloss 最初也在依赖里，M0 修剪时去掉了，颜色改用 `ansi.XParseColor` 解析。
 - **性能不是瓶颈。** 数据库 TUI 只在有输入或数据回来时才重绘，画一帧 200×60 的界面远不到 1ms。真正影响体验的是数据量，靠两点解决：表格只渲染可见行（§7.6），结果集设行数上限（§11）。
+  - **M8 F8.20 的实测修正**（用户 2026-10-08：在表格上拖动指针时卡顿、悬停行的底色跟不上，活动监视器里 sqlmux 44%、tmux 40%、kitty 33%）：悬停靠 1003 模式的全量移动上报，指针一动就是一个事件、一次 Update + View，事件率可以到每秒上百次；一帧的开销乘上这个频率才是真实负担。所以要有 profile 的开关和一个可重复的测量（§15「性能」），按测量结果优化到：160×45 的表格上每秒 100 个移动事件，sqlmux 占不到一个核的 10%，悬停底色不落后于指针。
 
 Go 生态相对 Rust 缺三样东西，对策如下：
 
@@ -641,9 +642,9 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
 - **整体布局**：
   - 最外层不留边距。
   - 横向相邻的 pane 之间留 1 列空白，纵向相邻的不留。
-  - data 与 console 的宽度比为 5 : 4（设计稿中分别是 flex 5 和 flex 4）。
+  - data 与 console 的宽度比为 1 : 1（M8 F8.9 起；设计稿是 5 : 4）。
 - **schema 侧栏**：
-  - 宽度默认 32 列（含边框；设计稿为 250px）。窗口宽度小于 100 列时，缩到 24 列。
+  - 宽度默认 32 列（含边框；设计稿为 250px），config.toml 的 `[tree] width` 可改（M8 F8.22，用户要 300px 左右，即 38 列；范围 16 到窗口宽度的一半，超出夹住；布局文件里记的 `sidebar_width` 优先，拖过的宽度照旧记在 window 上）。窗口宽度小于 100 列时，缩到 24 列。
   - 可以用鼠标拖动侧栏和右边 pane 之间的那 1 列间隔来调宽度，最窄 16 列，最宽为窗口宽度的一半；拖过的宽度记在 window 上。折叠时不能拖。
   - 标题为 `⟨0⟩ <conn 图标> <session 名>`，例如 `⓪  seed`，右侧提示仍是 `SPC b`；放不下时先去掉 `SPC b`，再截短 session 名。点击标题只聚焦树。schema 不再放在标题上、也不再用下拉框切换，改成树里的节点（M1 用户反馈：用下拉框切 schema，看不出还有别的 schema；参考 sqmeow.nvim 的层级树）。
   - 折叠后是 3 列宽的细栏（设计稿为 24px），左右各 1 列边框、中间 1 列内容：顶部显示 `»`，下面竖排 `schema · SPC b`，每行一个字符。
@@ -676,6 +677,8 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
       - **分组节点**：`Tables (n)`、`Views (n)`，n 为这个 schema 下的个数；n 为 0 时照样显示，没有 `▸`。Tables 含普通表、分区表的父表、外部表；Views 含视图和物化视图。函数、序列、角色等不列：目前对它们没有可做的操作，有用处时再加。
       - **表 / 视图节点**：图标（`func` 色）+ 名字 + 右对齐的行数量级（`border` 色）；普通视图没有行数，不显示。
       - **列节点**：展开表的时候才从 `Meta` 取列，与打开表共用列缓存（§8.4），取回之前不显示子节点，也不显示「加载中」。每行是图标 + 列名 + 右侧 `dim` 色的类型（`format_type`）；主键列用 `key` 图标（`pk` 色），其余用 `column` 图标。
+      - **右键菜单**（M8 F8.23，用户要在树里删 console 和表）：在树的节点上右键（SGR 按钮 2）弹出一个小菜单，贴着指针、`select` 底高亮、可点击，作用域 `menu`（`j` / `k` / `↑` / `↓` 移动，`↵` 执行，`esc` 或点别处关闭），键位文字从 keymap 读。菜单项按节点：console 文件 → 打开、重命名…、删除…；表 / 视图 → 打开、在新 tab 打开、删除表…（视图是「删除视图…」）；其他节点不弹。「删除表…」走危险操作的确认框（§13，同没带 WHERE 的 delete：红色标题，正文是要执行的 `DROP TABLE "public"."t_log"`，`y` / `↵` 确认），在那个连接的 `Main` 上执行，成功后关掉这张表的全部 tab（所有 session）、重载 catalog、toast；`confirm_dangerous = false` 也照样问（删表没有不问的理由）。键盘上同样的事：表 / 视图节点上 `dd`（`tree.delete`，F8.21 的同一个 Action，按节点类型决定删文件还是删表）。只读连接上拒绝、toast。
+      - **Consoles 节点**（M8 F8.21，同 DataGrip 的「文件」列表）：工作区节点下面再一个根节点，列出 `consoles/*.sql` 的全部文件（按名字，`console_<n>` 按 n 排，改过名的按字母排在后面），每项 `console` 图标 + 名字，右端 `dim` 色的连接名（state.json 里记的最后一次连接，没有就空）；正在某个 session 里开着的名字用 `focus` 色。`↵` / 单击：已经开着就聚焦过去（别的 session 开着就 attach 过去，同 `tab.reopen` 的规则），没开着就在当前 data pane 里新开一个 tab，连接按 §11（记下的连接，不在了用当前连接）。`dd`（`tree.delete`「删除 console 文件」，只对这个节点下的项有效）：确认框「删除 console_3？」后删文件和 state.json 里的记录；正在开着的拒绝、toast「先关掉它的 tab」。新建、关闭、改名、删除后列表跟着变。
       - **工作区节点**：当前 session 的 window → pane → tab，最小粒度是 tab（M1 用户反馈）。pane 节点显示为 `<pane 图标> pane-<n>`（M5 F5.15 起画图标 `pane`，用户验收时觉得前面空一格很怪；原来不画、留空对齐），只列普通 pane 和结果区，空 pane 没有子节点；tab 节点比 pane 节点多缩进一级，结果区的「日志」tab 画图标 `log`（F3.30）；在 pane 节点上 `↵` 或单击是展开 / 折叠，不跳转；在 tab 节点上才聚焦过去；tab 节点显示表名加 `dim` 色的条件摘要（WHERE、非默认的 ORDER）。打开、关闭、切换 tab 后跟着变。
       - **默认展开**：启动时的连接、它 `current_schema()` 所在的 schema 和那个 schema 的 Tables、工作区及其下所有节点；其余折叠，其他连接也折叠着、不连。之后连上的连接同样展开它的 `current_schema()` 和 Tables。展开状态记在 session 上（节点按连接区分），只在内存里。
       - 行数量级：n < 1000 原样显示；1000 以上用 k / m / b 后缀，一律向下取整，首位只有一位数字时保留一位小数（`8.1k`、`2.1m`），否则取整（`48k`、`410k`）；`reltuples < 0` 显示 `?`。
@@ -847,9 +850,9 @@ type Result struct {
 - **MySQL 的事务状态**（F5.4 审查时定，MySQL 8.4 上实测）：MySQL 拿不到 TxStatus，按执行过的语句记。begin / start transaction 记为在事务中；commit、rollback（不含 rollback to），以及手册「Statements That Cause an Implicit Commit」列出的语句（TEMPORARY 以外的 DDL、账号管理、LOCK / UNLOCK TABLES、ANALYZE / OPTIMIZE / REPAIR / FLUSH、RESET、再一次 BEGIN / START 等）执行后记为不在事务中；死锁（1213）时 MySQL 回滚整个事务，也记为不在事务中，并 toast「死锁，整个事务已回滚」。否则状态记错之后，手动模式不再补 BEGIN、取数和保存的 savepoint 报不存在，已经提交的写入还被报成「已回滚」。其余记不准的情况（如在存储过程里提交）是已知上限，代码里用 `ponytail:` 标出。不另用 `SET autocommit = 0`：隐式提交之后状态照样要自己记。
 - **断线重连**（M8 F8.19，用户 2026-10-08：经 `tsh` 代理连公司的库，代理经常断开又自动恢复，sqlmux 要跟着重连；原来断开的连接不自动重连，MySQL `wait_timeout` 8 小时空闲断开后也要重启 sqlmux）：
   - **判定**：`Meta` / `Main` 上的一次请求以连接级错误失败——PG 是 `pgconn` 报的 `conn closed`、`broken pipe`、`EOF`、`connection reset`，或 `PgConn().IsClosed()`；MySQL 是 `driver.ErrBadConn`、`invalid connection`、同样的网络错误——就把这条连接标成断开。SQL 错误（语法、权限、约束）不算。
-  - **重连**：Worker 在同一个 goroutine 里立刻重拨（同一个 Spec，`password_cmd` / `${VAR}` 照建连时的办法再取一次密码，超时同建连），成功后重放会话状态：建连参数本来就带 DateStyle 和只读（RuntimeParams，§8.2），console 选过的 schema / search_path 要再 `set` 一次（§8.6「Schema」记在 console 上，不是记在连接上，重放的是这条连接上最后一次设置的值）；正在进行的事务（手动模式的，或用户自己 `begin` 的）已经随连接丢了：事务状态回到空闲，**模式不变**（手动还是手动——改回自动的话用户的下一条 update 会被悄悄自动提交，更危险；F8.19 时定），toast「<连接名>：连接断开，事务已丢失」。
-  - **判定分三档**（F8.19 时定）：不是连接错误；连接丢了但请求没发出去（PG `pgconn.SafeToRetry`、MySQL `driver.ErrBadConn`）——这档写语句也能重跑，正好是「空闲后的第一条 update」；连接丢了、不知道服务端执行了没有（网络错误、`conn closed`、PG 的 57P01 / 57P02 / 57P03 和 08 类 PgError）——这档只有只读才重跑。请求前先问一下连接是否已关（PG `IsClosed`），已关就先重拨，取消 5 秒后断开的连接不让用户先吃一个错误。
-  - **重试**：重连成功后，失败的那次请求只在**安全**时自动重跑一次：`Meta` 上的全部请求（catalog、取数、计数、补全的查询）和快速 SQL（只读事务，§9.6）都安全；console 的语句按 §13 的读写判定，只读的重跑，写语句不重跑（服务端可能已经执行了一半），错误栏显示原来的错误，并 toast「<连接名>：已重连，请重新执行」；表格保存（一个事务）不重跑，照 §10.3 报错，用户再按一次 `C-s`。重跑再失败就按普通错误报，不再重连（每次请求最多重连一次）。
+  - **重连**：Worker 在同一个 goroutine 里立刻重拨，用**当前**配置的 dsn 和密码来源（F8.19 审查时定：连接管理里改了名或 dsn 之后，旧 Spec 的 password_cmd 指着已删的钥匙串项、旧地址，会永远拨不通），engine 和 read_only 沿用建连时的（界面上的只读状态记在 Conn 上，§7.8 连接管理）；`password_cmd` / `${VAR}` 再取一次密码，超时同建连，成功后重放会话状态：建连参数本来就带 DateStyle 和只读（RuntimeParams，§8.2），console 选过的 schema / search_path 要再 `set` 一次（§8.6「Schema」记在 console 上，不是记在连接上，重放的是这条连接上最后一次设置的值）；正在进行的事务（手动模式的，或用户自己 `begin` 的）已经随连接丢了：事务状态回到空闲，**模式不变**（手动还是手动——改回自动的话用户的下一条 update 会被悄悄自动提交，更危险；F8.19 时定），toast「<连接名>：连接断开，事务已丢失」。**事务丢失时可能写的请求一律不跑**（F8.19 审查时定）：失败的那条 console 写语句、表格保存不重跑，返回「连接断开，事务已丢失，这条没有执行」；`commit` 没发出去时报「事务已丢失，没有提交」，**已发出、回复前断开的报「连接断开，提交结果未知：请先查一下数据」**（服务端可能已经提交，这时说「已丢失」会让用户整个重做一遍、变成双写）；`rollback` 两种结果都等于回滚，不区分；console 里手敲的 `commit`（含 `commit work` 等写法）和 `rollback` 同样按这两条处理，不走「这条没有执行」的固定文字（F8.19 复审时定）；新连接上 commit 只会得到一个 WARNING，界面上看起来像提交成功了，其实是半个事务，所以不跑。只读请求照常。事务丢失时同时重载目录和表格（同死锁的处理，手动模式下表格还显示着丢掉的未提交数据）。整个事务由用户重做。
+  - **判定分三档**（F8.19 时定）：不是连接错误；连接丢了但请求没发出去（PG `pgconn.SafeToRetry`、MySQL `driver.ErrBadConn`）——这档写语句也能重跑；实测只有代理 RST 断开才落在这档，空闲连接被 `pg_terminate_backend`、`KILL`、`wait_timeout` / `idle_session_timeout`、代理 FIN 断开后，下一次请求拿到的都是「已发出」，所以空闲断开后的第一条 update 会提示「请重新执行」，不自动重跑（要做到得每次请求前多一次探测往返，不值）；连接丢了、不知道服务端执行了没有（网络错误、`conn closed`、PG 的 57P01 / 57P02 / 57P03 和 08 类 PgError）——这档只有只读才重跑。请求前先问一下连接是否已关（PG `IsClosed`），已关就先重拨，取消 5 秒后断开的连接不让用户先吃一个错误。
+  - **重试**：重连成功后，失败的那次请求只在**安全**时自动重跑一次：`Meta` 上的全部请求（catalog、取数、计数、补全的查询）和快速 SQL（只读事务，§9.6）都安全；console 的语句（读写都一样）只在「没发出去」时重跑：IsRead 看不出 `select nextval(…)`、`select setval(…)`、`select get_lock(…)`、用户自己写的会 insert 的函数这些副作用，Main 又不是只读连接，「已发出」的 select 再跑一遍就是双写（审查时在真库上实测）；表格保存按三档：没发出去的重跑（自动提交模式下的保存是一个完整事务，整体重跑是安全的），发出去了不知道执行没有的不重跑，错误栏显示原来的错误并 toast「<连接名>：已重连，请重新执行」，保存照 §10.3 报错、用户再按一次 `C-s`；事务丢失时按上一条一律不跑。一次执行里多条语句时，「没发出去」只对第一条成立：前面的语句已经自动提交，整个请求不能重跑。重跑再失败就按普通错误报，不再重连（每次请求最多重连一次）。
   - **重连失败**：树上的连接节点转成失败状态（`error` 色，§7.8），toast `<连接名>：<错误>`，tab 都留着；下一次请求再试一次拨号，所以 tsh 恢复之后用户随便操作一下就回来了。不做后台定时探活、不做指数退避：没有请求时断不断开没有影响。
   - 原来 §8.3 里「取消 5 秒后断开的连接不自动重连」和 MySQL 的空闲断开都由这条覆盖。
 - `Meta` 建连后设为只读：PG 设 `default_transaction_read_only = on`（和 DateStyle 一样放在 RuntimeParams 里，效果等同 `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`），MySQL 执行 `SET SESSION TRANSACTION READ ONLY`。`Meta` 上只有读操作，写入只走 `Main`，所以 WHERE 里就算调用了会写数据的函数，也改不了数据。和 §13 一样，这是为了防误操作，不是权限边界。只读连接（`read_only = true`，§13）的 `Main` 也放同样的 RuntimeParams（M5 F5.3），`RESET` / `DISCARD ALL` 之后仍是只读。
@@ -1303,7 +1306,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 
 **文件**：
 
-- 每个 console tab 对应 `$XDG_DATA_HOME/sqlmux/consoles/<名字>.sql`，默认名 `console_<n>`（M5 F5.11 起不再按连接名分目录；M8 F8.11 起可以用 `console.rename` 改名，改名就是改文件名，名字规则同连接名，目标已存在时拒绝；state.json 的 `consoles` 和布局文件都按名字记，布局文件的 `n` 改成 `name`，旧的 `n` 读成 `console_<n>`）。新建时 n 取所有 session 里都没被打开的最小值（两个 session 打开同一个文件，自动保存会互相覆盖），文件已经存在就载入，所以默认的 console_1 每次启动都带着上次写的 SQL，文件也不会越积越多。state.json 记着每个文件最后用的连接和 schema（§14），只在启动时恢复默认布局里的 console_1（以后 M6 恢复布局）时用；新建的 console 一律用当前连接（§8.6「默认值」）；记下的连接已经不在 connections.toml 里时用当前连接。旧版本 `consoles/<连接名>/` 下的文件不写迁移代码。
+- 每个 console tab 对应 `$XDG_DATA_HOME/sqlmux/consoles/<名字>.sql`，默认名 `console_<n>`（M5 F5.11 起不再按连接名分目录；M8 F8.11 起可以用 `console.rename` 改名，改名就是改文件名，名字规则同连接名，目标已存在时拒绝；state.json 的 `consoles` 和布局文件都按名字记，布局文件的 `n` 改成 `name`，旧的 `n` 读成 `console_<n>`）。新建时 n 取**没有文件、也没在任何 session 里打开**的最小值（M8 F8.21，用户 2026-10-08：关掉 console_3 再新建又是 console_3、带着旧内容，像 DataGrip 那样应该是 console_4，关掉的文件留在列表里随时能再开；原来只看「没被打开」，所以关掉就被复用；两个 session 不能打开同一个文件，自动保存会互相覆盖）；关 tab 不删文件，在树的「Consoles」节点里删掉文件后这个编号才会被新建的用上。启动时的 console_1 文件已经存在就载入，所以每次启动都带着上次写的 SQL。state.json 记着每个文件最后用的连接和 schema（§14），只在启动时恢复默认布局里的 console_1（以后 M6 恢复布局）时用；新建的 console 一律用当前连接（§8.6「默认值」）；记下的连接已经不在 connections.toml 里时用当前连接。旧版本 `consoles/<连接名>/` 下的文件不写迁移代码。
 - 最后一次修改后 1s 自动保存（去抖），写临时文件再 rename，目录 0700、文件 0600（§13）；`:w`、`C-s`、关闭 tab、退出时立即写；没改过就不写。写入失败用 toast 提示。文件存在但读不出来时（是目录、权限为 000 等），toast「读取失败：<err>」，这个 console tab 不打开（pane 显示引导页），程序照常启动；不能用空内容打开，否则自动保存会把那个读不出的文件覆盖掉。`:q` 关闭 tab 不弹确认，内容已经写盘。`:wq` 是先 `:w` 再 `:q`：console 上等同 `:q`；表 tab 上先保存修改（§10.3），保存成功后才关闭，失败时 tab 留着、查询条显示原因，不弹丢弃确认。console 文件写不进去时，`:q`、关 pane、退出都不执行，toast「保存失败：<err>」。
 
 **执行（C-02）**：
@@ -1524,6 +1527,9 @@ autopairs    = true              # 输入括号、引号时补上另一半（§7
 confirm_dangerous = true         # 执行没带 WHERE 的 delete / update、drop、truncate，以及保存里有删除行时先确认（§13，M6）
 border       = "single"          # single | rounded | double | bold | hidden，pane 和浮层的边框（M8 F8.10，取值同 lazygit；Unicode 没有粗圆角，所以粗和圆角二选一）
 
+[tree]                           # M8 F8.22
+width        = 32                # 侧栏宽度（列，含边框）
+
 [grid]                           # M8 F8.5 / F8.8
 full_width   = 22                # 期望宽度不超过它的列不收缩（22 放得下带整点时区的 timestamptz）
 order        = "asc"             # asc | desc，新打开的表默认排序的方向
@@ -1569,6 +1575,8 @@ read_only    = false
 ```
 
 ## 15. 测试
+
+- **性能**（M8 F8.20）：`SQLMUX_PPROF=<addr>` 启动时开 `net/http/pprof`（如 `localhost:6060`），`just profile` 起一个连着 seed 库的实例并打印 `go tool pprof` 的用法；不开时零开销。可重复的测量放在 `internal/app` 的 benchmark 里：默认布局、160×45、t_order 一页 100 行，往 Update 里喂指针在表格上来回扫过的移动事件（每个事件一次 View），报告每事件的耗时和分配；目标是每事件 < 1ms（100 事件 / 秒不到一个核的 10%）。优化只按 profile 的热点做（AGENTS.md：不做没有测量依据的性能优化），做完的数字写在这里。
 
 - **静态检查**（M7 F7.1，用户 2026-10-05 要求）：golangci-lint v2，规则在仓库根的 `.golangci.yml`，每个 commit 零报告，reviewer 审查前先跑。规则以 golangci-lint 的默认集（errcheck、govet、ineffassign、staticcheck、unused）为底，加上能抓到真 bug 和误用的：errorlint、nilerr、exhaustive（`default-signifies-exhaustive`，`keymap.Key` 不算枚举）、copyloopvar、intrange、unconvert、unparam、wastedassign、perfsprint、usestdlibvars、misspell、gocritic（diagnostic + performance 组，关掉 evalOrder、filepathJoin 两个误报项和 hugeParam、rangeValCopy）、revive（默认规则）、nolintlint（要写明 linter 和理由）、govet 的 nilness；staticcheck 去掉 QF*（按口味的重构建议）；formatters 用 gofmt、goimports（import 分标准库 / 第三方 / sqlmux 三组）；`build-tags: [integration]`，集成测试也检查。排除 preset `comments`（revive 要求每个导出名写「X is …」，和「注释写为什么」相反）和 `std-error-handling`。不开只为速度、没有测量依据的（prealloc、perfsprint 的 concat-loop、hugeParam、rangeValCopy，同 AGENTS.md「不做没有测量依据的性能优化」），不开和 gofmt 打架或只讲风格的（wsl、nlreturn、lll、godot、varnamelen、exhaustruct 等），也不开 depguard、gochecknoglobals 这类要为项目逐个配的。每个开启的 linter 在配置里一行注释写为什么；屏蔽用带理由的 `//nolint`。版本钉在 v2.14.0，本地和 CI 一致（reviewer 2026-10-05 起草，398899a 上 131 条报告：生产代码 52、测试 79）。
 - **CI**（M7 F7.1）：GitHub Actions，push 和 PR 到 main 时跑 lint、vet、单测、集成测试（PG 17 和 MySQL 8.4 用 services 起，seed 同 docker-compose）；e2e 不进 CI（要 tmux 和 40 分钟以上，本地由 tester 跑）。

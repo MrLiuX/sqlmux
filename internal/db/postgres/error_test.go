@@ -28,22 +28,25 @@ func TestErrorOf(t *testing.T) {
 	}
 }
 
+// The hand-built errors: pgconn's own, and the server's, by Severity. The
+// real ones, from a killed, cut or closed connection, are TestBrokenSamples's.
 func TestBroken(t *testing.T) {
-	write := &net.OpError{Op: "write", Err: syscall.EPIPE}
 	for _, tc := range []struct {
 		err  error
 		want db.Lost
 	}{
-		{&pgconn.PgError{Code: "57P01", Message: "terminating connection due to administrator command"}, db.LostSent},
-		{&pgconn.PgError{Code: "57P03"}, db.LostSent},
-		{&pgconn.PgError{Code: "08006"}, db.LostSent},
-		{&pgconn.PgError{Code: "42601", Message: "syntax error"}, db.NotLost},
-		{&pgconn.PgError{Code: "57014", Message: "canceling statement due to user request"}, db.NotLost},
-		{write, db.LostSent},
-		{fmt.Errorf("failed to write: %w", write), db.LostSent},
+		{&pgconn.PgError{Severity: "FATAL", Code: "57P01", Message: "terminating connection due to administrator command"}, db.LostSent},
+		{&pgconn.PgError{Severity: "FATAL", Code: "57P03"}, db.LostSent},
+		{&pgconn.PgError{Severity: "FATAL", Code: "57P05", Message: "terminating connection due to idle-session timeout"}, db.LostSent},
+		{&pgconn.PgError{Severity: "FATAL", Code: "25P03", Message: "terminating connection due to idle-in-transaction timeout"}, db.LostSent},
+		{&pgconn.PgError{Severity: "PANIC", Code: "XX000"}, db.LostSent},
+		{&pgconn.PgError{Severity: "ERROR", Code: "08006"}, db.LostSent},
+		{&pgconn.PgError{Severity: "ERROR", Code: "42601", Message: "syntax error"}, db.NotLost},
+		{&pgconn.PgError{Severity: "ERROR", Code: "57014", Message: "canceling statement due to user request"}, db.NotLost},
+		{fmt.Errorf("failed to write: %w", &net.OpError{Op: "write", Err: syscall.ECONNRESET}), db.LostSent},
+		{&net.OpError{Op: "read", Err: syscall.ETIMEDOUT}, db.LostSent},
 		{io.EOF, db.LostSent},
 		{fmt.Errorf("read: %w", io.ErrUnexpectedEOF), db.LostSent},
-		{&net.OpError{Op: "read", Err: syscall.ECONNRESET}, db.LostSent},
 		{context.Canceled, db.NotLost},
 		{context.DeadlineExceeded, db.NotLost},
 		{errors.New("something else"), db.NotLost},
