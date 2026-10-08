@@ -322,3 +322,36 @@ func TestReconnectAfterCancelDropsTheConnection(t *testing.T) {
 		t.Fatalf("next: %v %v, events %v", r.Rows, err, *events)
 	}
 }
+
+// A write on a connection the proxy cut while it was idle: after an RST it
+// found the connection gone before it sent anything, and runs again, once;
+// after a FIN it had gone out, and is not run again (F8.19).
+func TestReconnectIdleCutWrite(t *testing.T) {
+	for _, rst := range []bool{true, false} {
+		t.Run(map[bool]string{true: "RST", false: "FIN"}[rst], func(t *testing.T) {
+			ctx := context.Background()
+			dsn := OwnDB(t)
+			p, via := proxied(t, dsn)
+			w, events := redialingTo(t, via, dsn, false)
+			if _, err := w.Exec(ctx, "create table t_re (n int)", 0); err != nil {
+				t.Fatal(err)
+			}
+			p.Cut(rst)
+			time.Sleep(100 * time.Millisecond)
+			err := w.Run(ctx, func(ctx context.Context, c db.Conn) error {
+				_, err := c.Query(ctx, "insert into t_re values (1)")
+				return err
+			})
+			want := "0"
+			if rst {
+				want = "1"
+			}
+			if r, qerr := w.Query(ctx, "select count(*) from t_re"); qerr != nil || r.Rows[0][0].S != want || (err == nil) != rst {
+				t.Fatalf("err %v, %v rows, want %s: %v", err, r.Rows, want, qerr)
+			}
+			if !slices.Equal(*events, []db.Event{{Rerun: rst}}) {
+				t.Fatalf("events %v", *events)
+			}
+		})
+	}
+}

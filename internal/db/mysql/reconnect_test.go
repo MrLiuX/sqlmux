@@ -313,3 +313,75 @@ func TestReconnectFailedRedialThenNext(t *testing.T) {
 		t.Fatalf("next: %v %v", r.Rows, err)
 	}
 }
+
+// A write on a connection the proxy cut while it was idle: after an RST it
+// found the connection gone before it sent anything, and runs again, once;
+// after a FIN it had gone out, and is not run again (F8.19).
+func TestReconnectIdleCutWrite(t *testing.T) {
+	for _, rst := range []bool{true, false} {
+		t.Run(map[bool]string{true: "RST", false: "FIN"}[rst], func(t *testing.T) {
+			ctx := context.Background()
+			dsn := OwnDB(t)
+			p, via := proxied(t, dsn)
+			w, events := redialingTo(t, via, dsn, false)
+			if _, err := w.Exec(ctx, "create table t_re (n int)", 0); err != nil {
+				t.Fatal(err)
+			}
+			p.Cut(rst)
+			time.Sleep(100 * time.Millisecond)
+			err := w.Run(ctx, func(ctx context.Context, c db.Conn) error {
+				_, err := c.Query(ctx, "insert into t_re values (1)")
+				return err
+			})
+			want := "0"
+			if rst {
+				want = "1"
+			}
+			if r, qerr := w.Query(ctx, "select count(*) from t_re"); qerr != nil || r.Rows[0][0].S != want || (err == nil) != rst {
+				t.Fatalf("err %v, %v rows, want %s: %v", err, r.Rows, want, qerr)
+			}
+			if !slices.Equal(*events, []db.Event{{Rerun: rst}}) {
+				t.Fatalf("events %v", *events)
+			}
+		})
+	}
+}
+
+// MySQL, in a transaction: a statement cancelled, its KILL QUERY unable to
+// get through, and the connection dying before it ends. The Worker does not
+// dial for a cancelled request, and still knows the connection lost for the
+// next, a write, which must not run by itself on the new one (F8.19).
+func TestReconnectCancelledThenLostInTransaction(t *testing.T) {
+	ctx := context.Background()
+	dsn := OwnDB(t)
+	p, via := proxied(t, dsn)
+	w, events := redialingTo(t, via, dsn, false)
+	if _, err := w.Exec(ctx, "create table t_re (n int) engine=innodb", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Run(ctx, func(ctx context.Context, c db.Conn) error {
+		_, err := db.ExecEach(ctx, c, []string{"begin", "insert into t_re values (1)"}, 0, nil)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	p.Refuse(true) // KILL QUERY's connection cannot get through
+	cctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer cancel()
+	go func() { time.Sleep(800 * time.Millisecond); p.Cut(true) }()
+	if err := w.Run(cctx, func(ctx context.Context, c db.Conn) error { _, err := c.Query(ctx, "select sleep(5)"); return err }); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("cancelled: %v", err)
+	}
+	p.Refuse(false)
+	err := w.Run(ctx, func(ctx context.Context, c db.Conn) error {
+		_, err := c.Query(ctx, "insert into t_re values (2)")
+		return err
+	})
+	var lost db.TxLost
+	if !errors.As(err, &lost) || !slices.Equal(*events, []db.Event{{TxLost: true}}) {
+		t.Fatalf("the write: %v, events %v", err, *events)
+	}
+	if r, err := w.Query(ctx, "select count(*) from t_re"); err != nil || r.Rows[0][0].S != "0" {
+		t.Fatalf("rows: %v %v", r.Rows, err)
+	}
+}

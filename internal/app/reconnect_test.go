@@ -93,23 +93,72 @@ func TestRunAfterLostConnection(t *testing.T) {
 	}
 }
 
-// What a run says when the transaction is lost with the connection: not run,
-// and so (F8.19).
+// What a run says when the transaction is lost with the connection: its
+// statement was not run, not the SET of the schema that went first, which is
+// the one that found the connection lost (F8.19).
 func TestRunInLostTransaction(t *testing.T) {
 	evs := heard(t)
-	d := &execDB{tx: 'T', fail: map[string]error{"update t set a = 1": errLost}}
+	set := `search_path "agentable" "$user", public`
+	d := &execDB{tx: 'T', fail: map[string]error{"update t set a = 1": errLost, set: errLost}}
 	a, c := inRun(t, d, "select 1")
 	d2 := &execDB{}
 	redialed(a, d2)
+	a.sess.Conns[0].startedPath = `"$user", public`
 	press(t, a, "<CR>") // Main is in a transaction as this run ends
+	c.schema = "agentable"
 	a.consoleDid(c, c.ed.Load("update t set a = 1"))
 	*evs = nil
 	press(t, a, "<CR>")
-	if len(d2.ran) != 0 || !strings.HasSuffix(logText(a), "ERROR: 连接断开，事务已丢失，这条没有执行") {
+	if len(d2.ran) != 0 || logText(a)[strings.LastIndex(logText(a), "\n")+1:] != "console_1  update t set a = 1  ERROR: 连接断开，事务已丢失，这条没有执行" {
 		t.Fatalf("ran %q on the new connection, log %q", d2.ran, logText(a))
 	}
 	if len(*evs) != 1 || !(*evs)[0].TxLost {
 		t.Fatalf("events %+v", *evs)
+	}
+}
+
+// A COMMIT or a ROLLBACK the user types in the console says what the
+// commit of the toolbar says: a commit not taken, or not known to have; a
+// rollback is done (F8.19).
+func TestConsoleEndLost(t *testing.T) {
+	heard(t)
+	for _, tc := range []struct {
+		sql, key string
+		fail     error
+		want     string // the last log line, past the statement
+	}{
+		{"commit", "commit", errLost, "ERROR: 连接断开，提交结果未知：请先查一下数据"},
+		{"commit work", "commit work", errUnsent, "ERROR: 事务已丢失，没有提交"},
+		{"end", "end", errLost, "ERROR: 连接断开，提交结果未知：请先查一下数据"},
+		{"rollback", "rollback", errLost, "ROLLBACK"},
+		{"abort", "abort", errLost, "ROLLBACK"},
+		{"update t set a = 1", "update t set a = 1", errLost, "ERROR: 连接断开，事务已丢失，这条没有执行"},
+	} {
+		d := &execDB{tx: 'T', fail: map[string]error{tc.key: tc.fail}}
+		a, c := inRun(t, d, "select 1")
+		redialed(a, &execDB{})
+		press(t, a, "<CR>") // Main is in a transaction as this run ends
+		a.consoleDid(c, c.ed.Load(tc.sql))
+		press(t, a, "<CR>")
+		log := logText(a)
+		if got := log[strings.LastIndex(log, "\n")+1:]; !strings.HasPrefix(got, "console_1  "+tc.sql+"  "+tc.want) {
+			t.Errorf("%s: %q", tc.sql, got)
+		}
+	}
+}
+
+// What a lost rollback leaves unrun of a run that goes on past it is told
+// as it is: the rollback was not run either (F8.19).
+func TestConsoleRollbackLostMidRun(t *testing.T) {
+	heard(t)
+	d := &execDB{tx: 'T', fail: map[string]error{"rollback": errLost}}
+	a, c := inRun(t, d, "select 1")
+	redialed(a, &execDB{})
+	press(t, a, "<CR>")
+	a.consoleDid(c, c.ed.Load("rollback;\nselect 2"))
+	press(t, a, "ggVG<CR>")
+	if !strings.Contains(logText(a), "ERROR: 连接断开，事务已丢失，这条没有执行") {
+		t.Errorf("log %q", logText(a))
 	}
 }
 
@@ -247,6 +296,30 @@ func TestRedialEventOfAClosedSession(t *testing.T) {
 	gone := newConn(config.Connection{Name: "gone", Engine: "postgres"})
 	if _, cmd := a.Update(connEvent{gone, false, db.Event{Err: errors.New("x")}}); cmd != nil || a.toast != "" || gone.down() != nil {
 		t.Errorf("toast %q, down %v", a.toast, gone.down())
+	}
+}
+
+// A connection renamed in the manager takes its keychain item with it, and
+// a Worker that dials again reads the new one, not the item of the old name,
+// which is gone (F8.19).
+func TestRedialAfterRenameInTheManager(t *testing.T) {
+	a := managed(t)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	withOwnPassword(t, a)
+	conn := a.sess.Conns[1]
+	conn.take(dialed{main: noDB{}, meta: noDB{}, spec: conn.Spec})
+	a.run("conn.manage", 0)
+	feed(t, a, "j<Tab><C-u>third<C-s>")
+	if conn.Spec.Name != "third" {
+		t.Fatalf("renamed to %q", conn.Spec.Name)
+	}
+	_ = os.Remove(filepath.Join(os.Getenv("FAKE"), "log"))
+	_, err := conn.Main.Redial(context.Background())
+	if err == nil || strings.Contains(err.Error(), "password") {
+		t.Errorf("the redial: %v", err) // a dial that fails, its password found
+	}
+	if calls := kcCalled("find-generic-password"); len(calls) != 1 || !strings.Contains(calls[0], "third") {
+		t.Errorf("the keychain read: %q", calls)
 	}
 }
 

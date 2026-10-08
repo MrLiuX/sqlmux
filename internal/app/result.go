@@ -327,6 +327,10 @@ func (a *App) startRun(t *consoleTab, conn *Conn, schema, name, sql string, base
 			}
 			return err
 		})
+		if errors.As(m.err, new(db.TxLost)) { // it is the user's statement that was not run, not the SET
+			m.set = ""
+		}
+		m.rs, m.err = runTxLost(m.rs, m.err, texts, d)
 		return m
 	}, a.runTick(r))
 }

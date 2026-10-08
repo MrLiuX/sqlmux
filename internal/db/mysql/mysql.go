@@ -33,6 +33,7 @@ type Conn struct {
 	kill driver.Connector // a second connection's, for KILL QUERY (§8.3)
 	id   string           // connection_id()
 	tx   byte             // 'I' or 'T', as the statements run tell (sqlkit.MySQLTx)
+	dead bool             // a request found the connection lost: the Worker, told so by Closed, dials before the next
 }
 
 // Config is dsn as the driver takes it: mysql://user:pass@host:port/db?…,
@@ -114,6 +115,9 @@ func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, d
 	return c, info, nil
 }
 
+// Closed is whether a request found the connection lost (Broken).
+func (c *Conn) Closed() bool { return c.dead }
+
 func (c *Conn) Close() error {
 	c.c.Close()
 	return c.pool.Close()
@@ -169,7 +173,7 @@ func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (
 		case errno(err) == 1213:
 			c.tx, err = 'I', db.RolledBack{Err: err}
 		case (Engine{}).Broken(err) != db.NotLost: // the server took the transaction with the connection
-			c.tx = 'I'
+			c.tx, c.dead = 'I', true // a cancelled request, whose Worker does not dial, may find it so
 		}
 	}()
 	run, start := context.WithoutCancel(ctx), time.Now()

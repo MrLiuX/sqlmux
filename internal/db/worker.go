@@ -198,7 +198,6 @@ func (w *Worker) lost(ctx context.Context, safe, redialed bool, lost Lost, err e
 	}
 	switch {
 	case again:
-		w.conn.calls = 0
 		if err = f(ctx, w.conn); err != nil && ctx.Err() == nil && w.Broken(err) != NotLost {
 			w.broken = true // lost again: the next request dials, this one is over
 		}

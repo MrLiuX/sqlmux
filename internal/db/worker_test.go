@@ -245,6 +245,24 @@ func TestWorkerRunWithAStatementDoneIsNotRunAgain(t *testing.T) {
 	}
 }
 
+// The first call of a request that fails unsent, whatever it is, runs the
+// request again: also on a connection that served requests before, whose
+// calls are not this one's (F8.19).
+func TestWorkerFirstCallUnsentRunsAgain(t *testing.T) {
+	ctx := context.Background()
+	exec := func(sql string) func(context.Context, Conn) error {
+		return func(ctx context.Context, c Conn) error { _, err := c.Exec(ctx, sql, 0); return err }
+	}
+	l := newLostWorker(nil)
+	if err := l.Run(ctx, exec("earlier")); err != nil {
+		t.Fatal(err)
+	}
+	l.first.dead = errUnsent
+	if err := l.Run(ctx, exec("update")); err != nil || !slices.Equal(l.ran, []string{"1:earlier", "2:update"}) {
+		t.Fatalf("%v, ran %v, events %v", err, l.ran, l.events)
+	}
+}
+
 func TestWorkerSqlErrorIsNoRedial(t *testing.T) {
 	l := newLostWorker(nil)
 	if _, err := l.Query(context.Background(), errSQL.Error()); !errors.Is(err, errSQL) || l.dials != 0 || len(l.events) != 0 {

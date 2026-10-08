@@ -542,8 +542,8 @@ func reconnect(t *testing.T, eng, _ string) {
 	if len(play.Tables) == 0 || play.down() != nil || a.toast != "" {
 		t.Fatalf("the catalog: %d tables, %v, toast %q", len(play.Tables), play.down(), a.toast)
 	}
-	if _, err := play.Meta.Query(context.Background(), "create table zz_ro (a int)"); play.eng.ErrorOf(err).Code != "25006" { // Meta is read only after the redial too
-		t.Fatalf("a write on Meta: %v", err)
+	if code := writeCode(play, play.Meta); code != "25006" { // Meta is read only after the redial too
+		t.Fatalf("a write on Meta: %q", code)
 	}
 	if run("select count(*) from agent"); !failed() || a.toast != "play：已重连，请重新执行" {
 		t.Fatalf("a run after the drop: %s, toast %q", lastLog(a), a.toast)
@@ -581,28 +581,32 @@ func reconnect(t *testing.T, eng, _ string) {
 	}
 }
 
+// writeCode is the SQLSTATE a write on w is refused with, "no error" when
+// it is not refused (the test's database is its own).
+func writeCode(c *Conn, w *db.Worker) string {
+	_, err := w.Query(context.Background(), "create table zz_ro (a int)")
+	if err == nil {
+		return "no error"
+	}
+	return c.eng.ErrorOf(err).Code
+}
+
 // What was dialed read only is read only after the redial too: a read-only
 // connection's Main, and every connection's Meta (F8.19).
 func TestReconnectReadOnly(t *testing.T) { eachEngine(t, reconnectReadOnly) }
 
-func reconnectReadOnly(t *testing.T, eng, dsn string) {
+func reconnectReadOnly(t *testing.T, eng, _ string) {
+	dsn := ownDB(t, eng) // a write that gets through must not reach the shared one
 	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: dsn, ReadOnly: true})
 	was := Send
 	Send = func(m tea.Msg) { a.Update(m) }
 	t.Cleanup(func() { Send = was })
 	play := a.sess.Conns[0]
 	killBackends(t, eng, dsn, play)
-	write := func(w *db.Worker) string {
-		_, err := w.Query(context.Background(), "create table zz_ro (a int)")
-		if err == nil {
-			_, _ = w.Query(context.Background(), "drop table zz_ro")
-		}
-		return play.eng.ErrorOf(err).Code
-	}
-	if code := write(play.Main); code != "25006" { // read_only_sql_transaction, MySQL's 1792 too
+	if code := writeCode(play, play.Main); code != "25006" { // read_only_sql_transaction, MySQL's 1792 too
 		t.Errorf("Main after the redial: %q", code)
 	}
-	if code := write(play.Meta); code != "25006" {
+	if code := writeCode(play, play.Meta); code != "25006" {
 		t.Errorf("Meta after the redial: %q", code)
 	}
 }
@@ -633,4 +637,27 @@ func reconnectTable(t *testing.T, eng, dsn string) {
 	if m, ok := cmd().(ddlMsg); !ok || m.err != nil || m.text == "" {
 		t.Errorf("the DDL after the drop: %+v", m)
 	}
+}
+
+// The manager's setConfig, in Update, and a Worker's redial reading the
+// connection as it is now, in a request's goroutine (F8.19); the data race is
+// -race's to find.
+func TestRedialReadsConfigWithoutARace(*testing.T) {
+	spec := config.Connection{Name: "race", Engine: "postgres", DSN: "postgres://u@127.0.0.1:1/x?connect_timeout=1"}
+	c := newConn(spec)
+	c.take(dialed{main: noDB{}, meta: noDB{}, spec: spec})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 20 {
+			_, _ = c.Main.Redial(context.Background())
+			_, _ = c.Meta.Redial(context.Background())
+		}
+	}()
+	for i := range 200 {
+		edited := spec
+		edited.DSN = fmt.Sprintf("postgres://u@127.0.0.1:%d/x?connect_timeout=1", 1+i%2)
+		c.setConfig(edited)
+	}
+	<-done
 }
