@@ -350,7 +350,7 @@
 - **涉及**：`cmd/sqlmux`（pprof 开关）、`internal/app`（benchmark、热点）、`internal/ui`（绘制的热点）、`justfile`
 
 **开发**（§2「性能」、§15「性能」）
-- [ ] `SQLMUX_PPROF=<addr>` 开 `net/http/pprof`，不设时零开销；`just profile` 起实例并打印取 CPU / heap profile 的命令。
+- [ ] `SQLMUX_PPROF=<addr>` 开 `net/http/pprof`，不设时运行零开销（二进制多约 2.4 MB，接受）；`just profile` 起实例并打印取 CPU / heap profile 的命令。
 - [ ] benchmark：默认布局、160×45、t_order 一页 100 行（用测试里现成的假数据），喂指针在表格上来回扫过的移动事件，每个事件一次 Update + View；报告 ns/op 和 allocs/op，先记下优化前的数字。
 - [ ] 用真实终端复现一次（tmux 里 `send-keys` 喂 SGR 移动序列，或用户的操作），取 CPU profile，找出热点。可能的嫌疑（只是提示，以 profile 为准）：每帧重算整个表格每个单元格的字素宽度和截断、每帧重建样式字符串和命中表、指针停在同一行时也重画整帧、事件在队列里堆积没有合并。
 - [ ] 按热点优化到目标：每事件 < 1ms；指针停在同一个命中目标上时不做多余的工作；先做改动最小、收益最大的那一两处，不为了数字重写绘制。
@@ -372,7 +372,7 @@
 - [ ] 新建 console 的编号：取没有文件、也没在任何 session 里打开的最小 n。
 - [ ] 树里加「Consoles」根节点（工作区节点下面），列出 `consoles/*.sql`：名字、右端 `dim` 色的最后一次连接名，开着的用 `focus` 色；`↵` / 单击打开或聚焦（已开着就聚焦 / attach，没开就在当前 data pane 新开 tab）；新建、关闭、改名、删除后跟着变。
 - [ ] `tree.delete`「删除 console 文件」，默认键 `dd`（`[keys.tree]`，只对 Consoles 下的项有效，别处无事）：确认框，删文件和 state.json 的记录；开着的拒绝并 toast「先关掉它的 tab」。
-- [ ] 细节（worker 2026-10-08 提议，已定）：列表 = `consoles/*.sql` ∪ 当前所有 session 里开着的 console（没打过字的没有文件但占着编号，要列出来，否则树里没有、新建又跳号），`console_<n>` 按 n 排、改过名的按字母排在后面；0 字节的文件照常列；右端是 state.json 记的最后一次连接名，不在 connections.toml 了也照显示；目录列表缓存在 App 里，启动、新建 / 关闭 / 改名 / 删除、第一次落盘时重读，不每帧读目录（F8.20 刚压下来的）；`↵` / 单击 / `l`：开着的聚焦（别的 session 开着就 attach，走 `tab.reopen` 的路径），没开着的在 `openTarget()` 的 data pane 新开；`tree.delete` 默认 `dd`（novim 层不绑），确认框「删除 console_3？」，删文件 + state 记录 + 刷新缓存，开着的拒绝，不是 Consoles 下的项无事，删失败 toast；绘制复用 `ui.TreeNode`（Aside 放连接名、开着的 TextFg 用 focus），图标用 console tab 的；`nextConsoleName()` 加「目录下没有 `console_<n>.sql`」；树的 `/` 过滤不管 Consoles。
+- [ ] 细节（worker 2026-10-08 提议，已定）：列表 = `consoles/*.sql` ∪ 当前所有 session 里开着的 console（没打过字的没有文件但占着编号，要列出来，否则树里没有、新建又跳号），`console_<n>` 按 n 排、改过名的按字母排在后面；0 字节的文件照常列；右端是 state.json 记的最后一次连接名，不在 connections.toml 了也照显示；目录列表按目录 mtime 缓存（每帧 stat 一次、变了才重读；审查时定，比在 5 处显式失效省事，外部改动也能看到）；`↵` / 单击 / `l`：开着的聚焦（别的 session 开着就 attach，走 `tab.reopen` 的路径），没开着的在 `openTarget()` 的 data pane 新开；`tree.delete` 默认 `dd`（novim 层不绑），确认框「删除 console_3？」，删文件 + state 记录 + 刷新缓存，开着的拒绝，不是 Consoles 下的项无事，删失败 toast；绘制复用 `ui.TreeNode`（Aside 放连接名、开着的 TextFg 用 focus），图标用 console tab 的；`nextConsoleName()` 加「目录下没有 `console_<n>.sql`」；树的 `/` 过滤不管 Consoles。
 
 **验收**
 - [ ] 单测：有 console_1、_2、_3 文件时新建得 _4；删掉 _2 再新建得全新的 _2（空内容）；开着 _3 没文件（没打过字）时新建得 _4。
