@@ -55,7 +55,7 @@ func ordersTable(n int) (db.Table, db.Columns, db.Result) {
 
 // loadOrders opens ordersTable(n) in the focused data pane through the
 // real path, answering the fetch it starts as the database would.
-func loadOrders(t *testing.T, a *App, n int) *dataTab {
+func loadOrders(t testing.TB, a *App, n int) *dataTab {
 	t.Helper()
 	table, cols, page := ordersTable(n)
 	if a.openTable(a.sess.Conns[0], table) == nil {

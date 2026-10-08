@@ -42,6 +42,18 @@ e2e *scripts:
     done
     [ ${#failed[@]} -eq 0 ] || { echo "e2e failed: ${failed[*]}"; exit 1; }
 
+# sqlmux over the seed database with pprof on addr, and the commands that take a profile of it (§15「性能」)
+profile addr="localhost:6060":
+    #!/usr/bin/env bash
+    set -eu
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    mkdir -p "$tmp/config/sqlmux" "$tmp/state" "$tmp/data"
+    (umask 077; printf '[[connection]]\nname = "seed"\nengine = "postgres"\ndsn = "%s"\n' "$SQLMUX_TEST_PG" >"$tmp/config/sqlmux/connections.toml")
+    echo "CPU:  go tool pprof -top -cum 'http://{{addr}}/debug/pprof/profile?seconds=10'"
+    echo "heap: go tool pprof -sample_index=alloc_space -top http://{{addr}}/debug/pprof/heap"
+    XDG_CONFIG_HOME=$tmp/config XDG_STATE_HOME=$tmp/state XDG_DATA_HOME=$tmp/data SQLMUX_PPROF={{addr}} go run ./cmd/sqlmux
+
 # golangci-lint at the pinned version, with .golangci.yml
 lint:
     @golangci-lint --version | grep -q "version {{lint_version}} " || { echo "golangci-lint {{lint_version}} wanted: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v{{lint_version}}" >&2; exit 1; }

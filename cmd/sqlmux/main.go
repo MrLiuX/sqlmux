@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
+	_ "net/http/pprof" // registers on DefaultServeMux: only served when SQLMUX_PPROF is set
 	"os"
 
 	tea "charm.land/bubbletea/v2"
@@ -20,6 +22,9 @@ import (
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "keys" {
 		os.Exit(keysCmd(os.Args[2:], os.Stdout, os.Stderr))
+	}
+	if addr := os.Getenv("SQLMUX_PPROF"); addr != "" { // §15「性能」: unset, nothing listens
+		go func() { _ = http.ListenAndServe(addr, nil) }()
 	}
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "sqlmux:", err)
