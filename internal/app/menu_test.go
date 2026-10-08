@@ -232,9 +232,9 @@ func TestDropTableFails(t *testing.T) {
 	// a lost connection says so by its own event: no toast of the driver's here
 	c.busy++
 	a.toast = "kept"
-	a.Update(dropped{c, m.table, io.ErrUnexpectedEOF})
-	if a.toast != "kept" {
-		t.Errorf("a lost connection: toast %q", a.toast)
+	_, lost := a.Update(dropped{c, m.table, io.ErrUnexpectedEOF})
+	if a.toast != "kept" || lost == nil { // the server may have dropped it after the connection went: the catalog is read, and that is all
+		t.Errorf("a lost connection: toast %q, catalog read: %v", a.toast, lost != nil)
 	}
 	c.busy++
 	if a.Update(dropped{c, m.table, context.Canceled}); a.toast != "查询已取消" {
