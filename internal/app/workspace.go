@@ -190,6 +190,11 @@ const (
 // its Main and Meta once connected, its catalog and what is cached of it.
 type Conn struct {
 	Spec config.Connection
+	// live is Spec as the Workers' redials read it, from their goroutines:
+	// they dial with the connection as it is now, a rename or a new address
+	// included (F8.19).
+	liveMu sync.Mutex
+	live   config.Connection
 	// eng and readOnly are Spec.Engine's and Spec.ReadOnly as the connection
 	// was dialed: an edit of the spec meanwhile is for the next dial (F8.16).
 	eng        db.Engine
@@ -237,7 +242,23 @@ func newConn(spec config.Connection) *Conn {
 // setSpec makes spec what the connection is, for the dial after the one it
 // may be in.
 func (c *Conn) setSpec(spec config.Connection) {
-	c.Spec, c.eng, c.readOnly = spec, engines[spec.Engine], spec.ReadOnly
+	c.setConfig(spec)
+	c.eng, c.readOnly = engines[spec.Engine], spec.ReadOnly
+}
+
+// setConfig makes spec what the connection is for the redials of the
+// dial it is in, its engine and lock the dial's.
+func (c *Conn) setConfig(spec config.Connection) {
+	c.Spec = spec
+	c.liveMu.Lock()
+	c.live = spec
+	c.liveMu.Unlock()
+}
+
+func (c *Conn) liveSpec() config.Connection {
+	c.liveMu.Lock()
+	defer c.liveMu.Unlock()
+	return c.live
 }
 
 // engines are the engines connections.toml names (§8.1).
@@ -609,7 +630,7 @@ func connectTo(ctx context.Context, spec config.Connection, readOnly bool) (db.C
 
 // take makes c connected over d.
 func (c *Conn) take(d dialed) {
-	c.State, c.Main, c.Meta = connReady, c.worker(d.main, d.spec, d.spec.ReadOnly, false), c.worker(d.meta, d.spec, true, true)
+	c.State, c.Main, c.Meta = connReady, c.worker(d.main, d.spec, false), c.worker(d.meta, d.spec, true)
 	c.Addr, c.DB, c.startedPath = d.info.Addr, d.info.Database, d.info.Path
 }
 

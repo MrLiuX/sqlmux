@@ -121,8 +121,7 @@ func (c *Conn) Close() error {
 
 // TxStatus is 'T' after a begin or a start transaction and 'I' after a
 // commit or a rollback: MySQL tells the driver, which tells no one.
-// ponytail: a DDL's implicit commit, autocommit off, a dropped connection
-// go by unseen
+// ponytail: a DDL's implicit commit, autocommit off go by unseen
 func (c *Conn) TxStatus() byte { return c.tx }
 
 // Exec runs sql, one statement: no multiStatements.
@@ -169,6 +168,8 @@ func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (
 			c.tx = sqlkit.MySQLTx(query, c.tx)
 		case errno(err) == 1213:
 			c.tx, err = 'I', db.RolledBack{Err: err}
+		case (Engine{}).Broken(err) != db.NotLost: // the server took the transaction with the connection
+			c.tx = 'I'
 		}
 	}()
 	run, start := context.WithoutCancel(ctx), time.Now()
@@ -321,13 +322,15 @@ func (e Engine) UseSchema(ctx context.Context, c db.Conn, schema, _ string) erro
 
 // Broken says whether err is a lost connection (§8.2「断线重连」):
 // database/sql's ErrBadConn is the driver's for one that sent nothing; the
-// rest is the driver's invalid connection, the network's, and the server's
-// own as it goes away (1053 shutdown, 1927 killed).
+// rest is the driver's invalid connection, the out of sync packets it
+// reads from what wait_timeout closed, the network's, and the server's own
+// as it goes away (1053).
 func (Engine) Broken(err error) db.Lost {
 	switch {
 	case errors.Is(err, driver.ErrBadConn):
 		return db.LostUnsent
-	case errors.Is(err, mysql.ErrInvalidConn), db.NetworkError(err), errno(err) == 1053, errno(err) == 1927:
+	case errors.Is(err, mysql.ErrInvalidConn), errors.Is(err, mysql.ErrPktSync), errors.Is(err, mysql.ErrPktSyncMul),
+		db.NetworkError(err), errno(err) == 1053:
 		return db.LostSent
 	}
 	return db.NotLost

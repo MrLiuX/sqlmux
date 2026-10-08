@@ -500,10 +500,11 @@ func killBackends(t *testing.T, eng, dsn string, c *Conn) {
 }
 
 // A connection the server dropped comes back by itself on the next
-// request, the user seeing no error: the catalog, a console's read, which
-// finds its schema as the console set it; a write is not run again, the
-// error is the first and a toast says so; a transaction is lost, said so,
-// the manual mode kept (§8.2「断线重连」, F8.19).
+// request: the catalog without a word; a console run, which may write, says
+// the connection is back and to run it again, its error the first, and the
+// run after finds its schema as the console set it. A transaction is lost
+// with the connection: a write in it is not run, a commit says it is not
+// known to have taken; the manual mode stays (§8.2「断线重连」, F8.19).
 func TestReconnect(t *testing.T) { eachEngine(t, reconnect) }
 
 func reconnect(t *testing.T, eng, _ string) {
@@ -538,11 +539,17 @@ func reconnect(t *testing.T, eng, _ string) {
 	killBackends(t, eng, dsn, play)
 	a.toast = ""
 	settle(a, a.loadCatalog(play))
-	if len(play.Tables) == 0 || play.down() != nil {
-		t.Fatalf("the catalog: %d tables, %v", len(play.Tables), play.down())
+	if len(play.Tables) == 0 || play.down() != nil || a.toast != "" {
+		t.Fatalf("the catalog: %d tables, %v, toast %q", len(play.Tables), play.down(), a.toast)
 	}
-	if run("select count(*) from agent"); failed() || a.toast != "" {
-		t.Fatalf("a read after the drop: %s, toast %q", lastLog(a), a.toast)
+	if _, err := play.Meta.Query(context.Background(), "create table zz_ro (a int)"); play.eng.ErrorOf(err).Code != "25006" { // Meta is read only after the redial too
+		t.Fatalf("a write on Meta: %v", err)
+	}
+	if run("select count(*) from agent"); !failed() || a.toast != "play：已重连，请重新执行" {
+		t.Fatalf("a run after the drop: %s, toast %q", lastLog(a), a.toast)
+	}
+	if run("select count(*) from agent"); failed() {
+		t.Fatalf("the run again, in the console's schema: %s", lastLog(a))
 	}
 	c.schema = home
 
@@ -560,8 +567,43 @@ func reconnect(t *testing.T, eng, _ string) {
 	}
 	killBackends(t, eng, dsn, play)
 	a.toast = ""
-	if run("select 1"); a.toast != "play：连接断开，事务已丢失" || !play.Manual || count() != "1" {
-		t.Errorf("lost: toast %q, manual %v, %s rows", a.toast, play.Manual, count())
+	run("insert into probe values (4)")
+	if !strings.HasSuffix(lastLog(a), "连接断开，事务已丢失，这条没有执行") || a.toast != "play：连接断开，事务已丢失" || play.tx != 'I' || !play.Manual || count() != "1" {
+		t.Fatalf("a write in the lost transaction: %s, toast %q, status %c, manual %v, %s rows", lastLog(a), a.toast, play.tx, play.Manual, count())
+	}
+	if run("insert into probe values (5)"); failed() || play.tx != 'T' {
+		t.Fatalf("a new transaction: %s, %c", lastLog(a), play.tx)
+	}
+	killBackends(t, eng, dsn, play)
+	settle(a, a.endTx(play, "commit"))
+	if a.toast != "连接断开，提交结果未知：请先查一下数据" || play.tx != 'I' || count() != "1" {
+		t.Errorf("a commit as the connection drops: toast %q, status %c, %s rows", a.toast, play.tx, count())
+	}
+}
+
+// What was dialed read only is read only after the redial too: a read-only
+// connection's Main, and every connection's Meta (F8.19).
+func TestReconnectReadOnly(t *testing.T) { eachEngine(t, reconnectReadOnly) }
+
+func reconnectReadOnly(t *testing.T, eng, dsn string) {
+	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: dsn, ReadOnly: true})
+	was := Send
+	Send = func(m tea.Msg) { a.Update(m) }
+	t.Cleanup(func() { Send = was })
+	play := a.sess.Conns[0]
+	killBackends(t, eng, dsn, play)
+	write := func(w *db.Worker) string {
+		_, err := w.Query(context.Background(), "create table zz_ro (a int)")
+		if err == nil {
+			_, _ = w.Query(context.Background(), "drop table zz_ro")
+		}
+		return play.eng.ErrorOf(err).Code
+	}
+	if code := write(play.Main); code != "25006" { // read_only_sql_transaction, MySQL's 1792 too
+		t.Errorf("Main after the redial: %q", code)
+	}
+	if code := write(play.Meta); code != "25006" {
+		t.Errorf("Meta after the redial: %q", code)
 	}
 }
 

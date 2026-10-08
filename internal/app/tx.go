@@ -58,8 +58,25 @@ func (a *App) endTx(c *Conn, sql string) tea.Cmd {
 			m.tag, err = db.End(ctx, cn, sql)
 			return err
 		})
+		m.err = txLost(sql, m.err)
 		return m
 	}
+}
+
+// txLost is what a commit or a rollback says when the connection lost its
+// transaction: a rollback nothing, it is done; a commit that it did not
+// take, or that it may have, which the user must look up (§8.2「断线重连」).
+func txLost(sql string, err error) error {
+	var lost db.TxLost
+	switch {
+	case !errors.As(err, &lost):
+		return err
+	case sql == "rollback":
+		return nil
+	case lost.Sent:
+		return db.ErrCommitUnknown
+	}
+	return db.ErrNotCommitted
 }
 
 // gotTx takes where the transaction is now, and c's tables and catalog

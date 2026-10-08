@@ -427,7 +427,7 @@ func (a *App) saveEditedConn() tea.Cmd {
 			if conn.State == connIdle || conn.State == connFailed {
 				conn.setSpec(saved)
 			} else { // dialed, or being: its engine and lock are the dial's
-				conn.Spec = saved
+				conn.setConfig(saved)
 				told = changed
 			}
 		}

@@ -9,15 +9,16 @@ import (
 // Requests come from tea.Cmds, each on its own goroutine already, so a lock
 // is all it takes; which result is current is the caller's seq to decide.
 type Worker struct {
-	conn Conn
+	conn *counted
 	// Redial, Broken and Notify are the connection coming back (§8.2「断线重连」);
-	// with none, a lost connection stays lost. Redial dials again as the
-	// connection was dialed, Broken says whether a request's error is a lost
-	// connection, Notify hears of each redial.
+	// with none, a lost connection stays lost. Redial dials again, Broken
+	// says whether a request's error is a lost connection, Notify hears of
+	// each redial.
 	Redial func(context.Context) (Conn, error)
 	Broken func(error) Lost
 	Notify func(Event)
 	broken bool // the connection is gone and the last redial failed: the next request dials first
+	closed bool // Close was called: no more redials, or the new connection would be no one's
 	tx     byte // where the transaction on conn was as the last request ended
 
 	run    sync.Mutex // held for the whole request
@@ -25,7 +26,51 @@ type Worker struct {
 	cancel context.CancelFunc
 }
 
-func NewWorker(c Conn) *Worker { return &Worker{conn: c} }
+// counted is a Worker's connection, counting the calls that went through in
+// the request running: a request that failed on its first call, with nothing
+// sent, may run again whatever it writes (§8.2「断线重连」). It is the same
+// value for each request till a redial, which is what callers compare.
+type counted struct {
+	Conn
+	calls int
+}
+
+func (c *counted) Exec(ctx context.Context, sql string, maxRows int) ([]Result, error) {
+	r, err := c.Conn.Exec(ctx, sql, maxRows)
+	if err == nil {
+		c.calls++
+	}
+	return r, err
+}
+
+func (c *counted) Query(ctx context.Context, sql string, args ...Val) (Result, error) {
+	r, err := c.Conn.Query(ctx, sql, args...)
+	if err == nil {
+		c.calls++
+	}
+	return r, err
+}
+
+// Setup runs f on c, a session's setting up that a request run again would
+// repeat harmlessly, search_path say: what it does is not counted as done.
+func Setup(c Conn, f func() error) error {
+	cc, ok := c.(*counted)
+	if !ok {
+		return f()
+	}
+	was := cc.calls
+	defer func() { cc.calls = was }()
+	return f()
+}
+
+func (c *counted) TxStatus() byte { return TxStatus(c.Conn) }
+
+func (c *counted) closed() bool {
+	cl, ok := c.Conn.(closer)
+	return ok && cl.Closed()
+}
+
+func NewWorker(c Conn) *Worker { return &Worker{conn: &counted{Conn: c}} }
 
 // Exec and Query run again on a lost connection, redialed: they are what
 // the catalog reads with.
@@ -41,14 +86,15 @@ func (w *Worker) Query(ctx context.Context, sql string, args ...Val) (r Result, 
 
 // Run runs f on the connection as one request: nothing else runs on it in
 // between, so f can keep a transaction open (§12 快速 SQL). A connection
-// lost with f's statements sent is redialed, and f not run again: it may
-// have written; the caller's error is the original.
+// lost is redialed; f, which may write, runs again only when nothing of it
+// was sent, and never when the connection's transaction is lost with it:
+// that is TxLost (§8.2「断线重连」).
 func (w *Worker) Run(ctx context.Context, f func(context.Context, Conn) error) error {
 	return w.do(ctx, false, f)
 }
 
 // RunSafe is Run for an f that only reads: run again on the new connection
-// when the connection was lost.
+// whenever the connection was lost.
 func (w *Worker) RunSafe(ctx context.Context, f func(context.Context, Conn) error) error {
 	return w.do(ctx, true, f)
 }
@@ -92,12 +138,15 @@ func (w *Worker) Close() error {
 	w.Cancel()
 	w.run.Lock()
 	defer w.run.Unlock()
+	w.closed = true
 	return w.conn.Close()
 }
 
 // do runs f, redialing when the connection is lost: before f when it is
-// known to be, after when f's error says so, once a request. f runs again
-// then if again says it may: it was safe, or nothing had been sent.
+// known to be, after when f's error says so, once a request. Reads (safe)
+// run again then; a request that may write runs again only if nothing of
+// it was sent, and not at all once the connection's transaction is lost
+// with it.
 func (w *Worker) do(ctx context.Context, safe bool, f func(context.Context, Conn) error) error {
 	w.run.Lock()
 	defer w.run.Unlock()
@@ -105,28 +154,27 @@ func (w *Worker) do(ctx context.Context, safe bool, f func(context.Context, Conn
 	defer cancel()
 	w.setCancel(cancel)
 	defer w.setCancel(nil)
-	if c, ok := w.conn.(closer); w.Redial != nil && (w.broken || ok && c.Closed()) {
-		if err := w.redial(ctx, true); err != nil {
+	redialed := false
+	if w.redials() && (w.broken || w.conn.closed()) {
+		txLost := w.inTx()
+		if err := w.redial(ctx, txLost, safe || !txLost); err != nil {
 			return err
 		}
+		redialed = true
+		if txLost && !safe {
+			return TxLost{}
+		}
 	}
+	w.conn.calls = 0
 	err := f(ctx, w.conn)
 	// A request stopped by Cancel or the caller's ctx fails with the ctx's
 	// error, which says more than the server's reply to the cancel.
-	if err != nil && ctx.Err() == nil && w.Redial != nil && w.Broken != nil {
+	if err != nil && ctx.Err() == nil && w.redials() {
 		if lost := w.Broken(err); lost != NotLost {
-			again := safe || lost == LostUnsent
-			if rerr := w.redial(ctx, again); rerr != nil {
-				return rerr
-			}
-			if again {
-				if err = f(ctx, w.conn); err != nil && ctx.Err() == nil && w.Broken(err) != NotLost {
-					w.broken = true // lost again: the next request redials, this one is over
-				}
-			}
+			err = w.lost(ctx, safe, redialed, lost, err, f)
 		}
 	}
-	if !w.broken {
+	if !w.broken && !w.conn.closed() { // a closed one says it is out of a transaction, which it is not known to be
 		w.tx = TxStatus(w.conn)
 	}
 	if err != nil && ctx.Err() != nil {
@@ -135,10 +183,41 @@ func (w *Worker) do(ctx context.Context, safe bool, f func(context.Context, Conn
 	return err
 }
 
-// redial replaces the connection, rerun saying whether the request goes on
-// to run again. A cancel of ctx on the way is not the database's failure.
-func (w *Worker) redial(ctx context.Context, rerun bool) error {
-	txLost := w.tx == 'T' || w.tx == 'E'
+// lost is what a request that failed with err on a lost connection comes
+// to: the connection dialed again unless this request did it already, and f
+// run again if it may.
+func (w *Worker) lost(ctx context.Context, safe, redialed bool, lost Lost, err error, f func(context.Context, Conn) error) error {
+	if redialed { // once a request: the next one dials
+		w.broken = true
+		return err
+	}
+	txLost, sent := w.inTx(), w.conn.calls > 0
+	again := safe || !txLost && lost == LostUnsent && !sent
+	if rerr := w.redial(ctx, txLost, again); rerr != nil {
+		return rerr
+	}
+	switch {
+	case again:
+		w.conn.calls = 0
+		if err = f(ctx, w.conn); err != nil && ctx.Err() == nil && w.Broken(err) != NotLost {
+			w.broken = true // lost again: the next request dials, this one is over
+		}
+	case txLost:
+		return TxLost{Err: err, Sent: lost == LostSent}
+	}
+	return err
+}
+
+func (w *Worker) redials() bool { return w.Redial != nil && w.Broken != nil && !w.closed }
+
+// inTx is whether conn had a transaction as the last request left it.
+func (w *Worker) inTx() bool { return w.tx == 'T' || w.tx == 'E' }
+
+// redial replaces the connection. txLost is whether a transaction went with
+// the old one, rerun whether the request goes on to run. A cancel of ctx on
+// the way is not the database's failure: no Notify, and the request's error
+// is the dial's, which wraps the ctx's.
+func (w *Worker) redial(ctx context.Context, txLost, rerun bool) error {
 	go w.conn.Close() // a peer that is gone may hold Close for long
 	c, err := w.Redial(ctx)
 	if err != nil {
@@ -148,7 +227,7 @@ func (w *Worker) redial(ctx context.Context, rerun bool) error {
 		}
 		return err
 	}
-	w.conn, w.broken, w.tx = c, false, 'I'
+	w.conn, w.broken, w.tx = &counted{Conn: c}, false, 'I'
 	if w.Notify != nil {
 		w.Notify(Event{TxLost: txLost, Rerun: rerun})
 	}
