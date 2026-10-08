@@ -1430,7 +1430,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - **`C-y`**：CSV 为表头加显示的行（最多 100 行），NULL 写空串（同 lazysql `helpers/csv.go`），写系统剪贴板走和 `"+` 寄存器同一处（§11「寄存器」：先 pbcopy 等本地工具，找不到才 OSC 52）；没有结果时不做事，复制后不加 toast。
   - **写语句（F-05）**：判为写的语句不执行（只拦首词是 SQL 关键字、且判为写的；首词不是关键字的，比如打错的 `selec 1`，照旧发给数据库，在只读事务里报语法错误，M4 全量 e2e 发现。关键字表要包含 PG 全部语句的首词，因为只读事务兜不住其中几条：reviewer 在 PG 17 上实测 `copy … to '<文件>'` / `to program`、`reindex`、`cluster`、`load`、`checkpoint` 在 `begin read only` 里都能执行），结果区显示 `warn` 色的「写语句不在这里执行 · C-e 在 console 中打开」，键位文字从 keymap 读。在 console 里由用户自己按下执行，这一步就是确认，不再需要 C-S-↵。M1–M3 还没接读写判定，写语句由只读事务拒绝，显示数据库返回的错误；M4 起改为这里的做法。
   - **`C-t` 送到结果区**（M4）：把结果作为固定的结果 tab 放进结果区，tab 名 `quick #n`（n 取 session 的执行序号），日志记一行 `quick  <首行>  N 行`；在这个 tab 上重跑（`R`），在 tab 记下的连接的 `Meta` 的只读事务里重新执行，search_path 用执行时记下的 schema（M5 起；原来用树当前的），结果原地替换、`#n` 和导出名不变（不同于 console 的固定 tab 另开新 tab：quick 没有要续的那一组）；导出文件名 `quick-42.csv`；面板不关。
-  - **`C-e` 在 console 中打开**（M4）：在打开表的目标 pane（§12 的规则）里按 `console.new` 的规则新开 console（取最小的 console_n，当前是引导 tab 就原地替换）；文件已有内容时把这条 SQL 追加到末尾、前面空一行，光标落在 SQL 第一行；关掉面板、聚焦这个 console。新 console 的连接和 schema 取当前连接和它的 Schema，与快速 SQL 执行时用的一致。
+  - **`C-e` 在 console 中打开**（M4）：在打开表的目标 pane（§12 的规则）里按 `console.new` 的规则新开 console（编号照 §11，当前是引导 tab 就原地替换）；新 console 一定是空的（F8.21 起编号不复用关掉的文件），SQL 就是全部内容，光标落在第一行；关掉面板、聚焦这个 console。新 console 的连接和 schema 取当前连接和它的 Schema，与快速 SQL 执行时用的一致。
   - **错误**：语法错误显示红色提示。
   - **已修改提示（F-03）**：当前输入与上次执行的语句不同时，提示「已修改，↵ 重新执行」。
   - **后续操作（F-04）**：`C-t` 把结果送到一个新的、已固定的 result pane；`C-y` 用 `encoding/csv` 生成 CSV，再写进系统剪贴板（同 §11「寄存器」）；`C-e` 在 console 中打开。结果区标题栏上的按钮都可以点击。M1 先做 `C-y`，另外两个要等 M3 有了 console 和结果区。
