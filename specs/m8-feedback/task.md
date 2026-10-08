@@ -1,6 +1,6 @@
 # M8 第一轮使用反馈 · 任务清单
 
-- **状态**：**验收中**（2026-10-08）。用户验收时追加的 F8.17、F8.18（节点 5）passed（708de5c；e2e 9461fda，全量 110 个脚本 2595 项全过）；F8.19 断线重连（节点 6）开发中；F8.20 性能（节点 7）、F8.21 console 文件（节点 8）、F8.22–F8.23 侧栏宽度与右键菜单（节点 9）排队。F8.1–F8.16 全部 passed（31c5f56；e2e f512b23，完整回归 108 个脚本 2533 项全过，`just check` 全绿）。2026-10-07 用户照 WALKTHROUGH 走完 M5–M7 的验收版后提出 20 条意见，决策者拆成 F8.1–F8.16。验收通过后和 M5–M7 一起打 tag `m5` … `m8`、`v0.1.0`。
+- **状态**：**验收中**（2026-10-08）。用户验收时追加的 F8.17、F8.18（节点 5）passed（708de5c；e2e 9461fda，全量 110 个脚本 2595 项全过）；F8.19 断线重连（节点 6）passed（76a713d；e2e e89e90b，全量 113 个脚本 2659 项全过）；F8.20 性能（节点 7）、F8.21 console 文件（节点 8）、F8.22–F8.23 侧栏宽度与右键菜单（节点 9）排队。F8.1–F8.16 全部 passed（31c5f56；e2e f512b23，完整回归 108 个脚本 2533 项全过，`just check` 全绿）。2026-10-07 用户照 WALKTHROUGH 走完 M5–M7 的验收版后提出 20 条意见，决策者拆成 F8.1–F8.16。验收通过后和 M5–M7 一起打 tag `m5` … `m8`、`v0.1.0`。
 - **目标**：把用户实际使用时碰到的 bug 修掉，补齐几处配置项和命令，连接可以修改、删除。
 - **范围**：tech-design §5（window 名）、§6.5（前缀）、§6.8（新命令）、§7.5（列宽）、§7.8（WHERE 下拉、连接管理）、§9.7（补全）、§14（配置项）。
 - **依赖**：M7 F7.6 passed。
@@ -322,7 +322,7 @@
 - [x] 单测：新 window 一个 pane；新 session 一个 window 一个 pane，consoles 目录没有新文件。
 - [x] e2e：`tc` 后工作区树里新 window 下只有 pane-1；`tC` 同样。
 
-## F8.19 断线重连 · 状态：todo
+## F8.19 断线重连 · 状态：passed（76a713d；e2e e89e90b）
 
 用户 2026-10-08：经 `tsh` 代理连公司 stg 的库，代理经常断开又自动恢复，断开后 console 执行报 `write: broken pipe`，要重启 sqlmux；要像代理一样自动重连。
 
@@ -330,17 +330,17 @@
 - **涉及**：`internal/db`（Worker、postgres/、mysql/：断开判定、重拨、会话状态重放）、`internal/app`（toast、Tx 回自动、树节点状态）
 
 **开发**（§8.2「断线重连」）
-- [ ] 连接级错误的判定，PG / MySQL 各一处，有单测（真错误样本：`broken pipe`、`EOF`、`conn closed`、`driver.ErrBadConn`，SQL 错误不算）。先看 lazysql / pgtui 怎么处理 `ErrBadConn` 和重连；pgx 的 `SafeToRetry` 能用就用。
-- [ ] Worker 收到连接级错误：重拨一次（密码再取一次、超时同建连），重放会话状态（console 的 schema / search_path；DateStyle 和只读在 RuntimeParams 里自带），事务丢失时状态回空闲、模式不变，toast。
-- [ ] 重试规则（审查时按三档理顺）：`Meta` 上的请求和快速 SQL 重跑一次；console 的只读语句重跑；写语句和自动提交模式的保存「没发出去」才重跑，发出去了的报原错误并 toast「已重连，请重新执行」；**事务丢失（断开前在事务里）时可能写的请求一律不跑**：写语句、保存返回「连接断开，事务已丢失，这条没有执行」，commit / rollback 报「事务已丢失，没有提交」，用户重做整个事务；一次执行多条语句时第 2 条起不算「没发出去」，整个请求不重跑（前面的已经提交，重跑会执行两次）。每次请求最多重连一次。
-- [ ] 审查时在真库上实测后定（5 条，都照 reviewer 的倾向）：重拨用当前配置的 dsn 和密码来源，engine / read_only 沿用建连时的；console 的语句读写都只在「没发出去」时重跑（`select nextval()` 这类写函数 IsRead 看不出）；commit 已发出、结果未知时报「连接断开，提交结果未知：请先查一下数据」，没发出去才报「事务已丢失，没有提交」；console 里手敲的 commit / rollback 同样（复审时定，原来走的是「这条没有执行」）；事务丢失时重载目录和表格（worker 加的，保留，补测试）；空闲断开后的第一条 update 实测都是「已发出」、不自动重跑，接受，spec 措辞已改。
-- [ ] 重连失败：树节点转失败态、toast，下一次请求再试。不做后台探活、不做退避。
-- [ ] 集成测试：PG 用 `pg_terminate_backend` 杀掉 `Meta` 的后端，再取一页数据 → 自动重连、数据回来；MySQL 用 `KILL <id>` 同样；console 写语句被杀后不重跑。`tsh` 场景按「服务端杀连接」等价模拟（AGENTS.md：拿不准的驱动行为先实测）。
-- [ ] 细节（worker 2026-10-08 提议，已定）：判定三档（SQL 错误 / 没发出去可重跑任何语句 / 不知道执行没有只重跑只读），`Broken(err)` 放 Engine 接口；请求前先问 `Closed()`（可选接口，PG 有）已关就先重拨；Worker 加 `Redial` / `Broken` / `OnRedial` 三个字段，nil 时行为不变，`Exec` / `Query` 失败后重连重跑一次，`Run` 不重跑（保存、commit / rollback），新增 `RunSafe` 重跑（快速 SQL、全是只读语句的 console 执行），重跑从头来；ctx 已取消不重连；console 的 search_path 不另存，`OnRedial` 清掉 `mainPath` 让下一次 run 自然重 set；**事务丢失：Tx 状态回空闲、模式不变**（决策者改：spec 原写「回到自动」，改回自动会让下一条 update 悄悄自动提交），toast「<连接名>：连接断开，事务已丢失」；Worker 回调经 `prog.Send` 发 `connEvent` 到 Update 统一处理（测试里换成收集器）；树节点变红用 `Conn.down error`、State 保持 `connReady`（否则各处拒发请求、和「下一次请求再试」冲突）；重拨前清掉缓存的密码再取一次（tsh 令牌会换）；Main / Meta 各自重连，同一次断开只 toast 一次，重跑成功的不提示；MySQL 重拨重记 connection_id、重建 kill connector；两处「不重连」的 `ponytail:` 注释删掉。
+- [x] 连接级错误的判定，PG / MySQL 各一处，有单测（真错误样本：`broken pipe`、`EOF`、`conn closed`、`driver.ErrBadConn`，SQL 错误不算）。先看 lazysql / pgtui 怎么处理 `ErrBadConn` 和重连；pgx 的 `SafeToRetry` 能用就用。
+- [x] Worker 收到连接级错误：重拨一次（密码再取一次、超时同建连），重放会话状态（console 的 schema / search_path；DateStyle 和只读在 RuntimeParams 里自带），事务丢失时状态回空闲、模式不变，toast。
+- [x] 重试规则（审查时按三档理顺）：`Meta` 上的请求和快速 SQL 重跑一次；console 的只读语句重跑；写语句和自动提交模式的保存「没发出去」才重跑，发出去了的报原错误并 toast「已重连，请重新执行」；**事务丢失（断开前在事务里）时可能写的请求一律不跑**：写语句、保存返回「连接断开，事务已丢失，这条没有执行」，commit / rollback 报「事务已丢失，没有提交」，用户重做整个事务；一次执行多条语句时第 2 条起不算「没发出去」，整个请求不重跑（前面的已经提交，重跑会执行两次）。每次请求最多重连一次。
+- [x] 审查时在真库上实测后定（5 条，都照 reviewer 的倾向）：重拨用当前配置的 dsn 和密码来源，engine / read_only 沿用建连时的；console 的语句读写都只在「没发出去」时重跑（`select nextval()` 这类写函数 IsRead 看不出）；commit 已发出、结果未知时报「连接断开，提交结果未知：请先查一下数据」，没发出去才报「事务已丢失，没有提交」；console 里手敲的 commit / rollback 同样（复审时定，原来走的是「这条没有执行」）；事务丢失时重载目录和表格（worker 加的，保留，补测试）；空闲断开后的第一条 update 实测都是「已发出」、不自动重跑，接受，spec 措辞已改。
+- [x] 重连失败：树节点转失败态、toast，下一次请求再试。不做后台探活、不做退避。
+- [x] 集成测试：PG 用 `pg_terminate_backend` 杀掉 `Meta` 的后端，再取一页数据 → 自动重连、数据回来；MySQL 用 `KILL <id>` 同样；console 写语句被杀后不重跑。`tsh` 场景按「服务端杀连接」等价模拟（AGENTS.md：拿不准的驱动行为先实测）。
+- [x] 细节（worker 2026-10-08 提议，已定）：判定三档（SQL 错误 / 没发出去可重跑任何语句 / 不知道执行没有只重跑只读），`Broken(err)` 放 Engine 接口；请求前先问 `Closed()`（可选接口，PG 有）已关就先重拨；Worker 加 `Redial` / `Broken` / `OnRedial` 三个字段，nil 时行为不变，`Exec` / `Query` 失败后重连重跑一次，`Run` 不重跑（保存、commit / rollback），新增 `RunSafe` 重跑（快速 SQL、全是只读语句的 console 执行），重跑从头来；ctx 已取消不重连；console 的 search_path 不另存，`OnRedial` 清掉 `mainPath` 让下一次 run 自然重 set；**事务丢失：Tx 状态回空闲、模式不变**（决策者改：spec 原写「回到自动」，改回自动会让下一条 update 悄悄自动提交），toast「<连接名>：连接断开，事务已丢失」；Worker 回调经 `prog.Send` 发 `connEvent` 到 Update 统一处理（测试里换成收集器）；树节点变红用 `Conn.down error`、State 保持 `connReady`（否则各处拒发请求、和「下一次请求再试」冲突）；重拨前清掉缓存的密码再取一次（tsh 令牌会换）；Main / Meta 各自重连，同一次断开只 toast 一次，重跑成功的不提示；MySQL 重拨重记 connection_id、重建 kill connector；两处「不重连」的 `ponytail:` 注释删掉。
 
 **验收**
-- [ ] 集成测试（PG、MySQL）：杀后端后取数 / 计数 / 补全 / 快速 SQL 都自动恢复，用户看不到错误；console 的 `select` 自动恢复，`update` 报错 + toast、不重跑；手动事务里被杀 → 事务状态回空闲、模式仍是手动、toast 事务丢失；重连后 console 的 search_path 还是选过的 schema。
-- [ ] e2e：用 docker `pause` / `unpause` 或 `pg_terminate_backend` 模拟断开，表格 `R` 刷新后数据回来、树节点不变红；库停掉时刷新 → 节点变红、toast，库起来后再 `R` 恢复。
+- [x] 集成测试（PG、MySQL）：杀后端后取数 / 计数 / 补全 / 快速 SQL 都自动恢复，用户看不到错误；console 的 `select` 自动恢复，`update` 报错 + toast、不重跑；手动事务里被杀 → 事务状态回空闲、模式仍是手动、toast 事务丢失；重连后 console 的 search_path 还是选过的 schema。
+- [x] e2e：用 docker `pause` / `unpause` 或 `pg_terminate_backend` 模拟断开，表格 `R` 刷新后数据回来、树节点不变红；库停掉时刷新 → 节点变红、toast，库起来后再 `R` 恢复。
 
 ## F8.20 性能：profile 开关、指针移动的测量与优化 · 状态：todo
 
