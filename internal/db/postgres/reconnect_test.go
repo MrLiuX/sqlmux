@@ -224,7 +224,7 @@ func TestBrokenSamples(t *testing.T) {
 	closed := connect(t, false)
 	closed.Close()
 	_, err := closed.Query(ctx, "select 1")
-	if got := pg.Broken(err); got != db.LostUnsent {
+	if got := pg.Broken(err); got != db.LostSent { // pgconn says the same of a connection a failed read closed: Worker asks IsClosed before a request
 		t.Errorf("closed: %v is %d", err, got)
 	}
 	gone, cancel := context.WithCancel(ctx)
@@ -353,5 +353,51 @@ func TestReconnectIdleCutWrite(t *testing.T) {
 				t.Fatalf("events %v", *events)
 			}
 		})
+	}
+}
+
+// A statement the server ran, its answer lost with the connection (an RST
+// after it): pgconn closes the connection and reports "conn closed" from the
+// next read, which is not "nothing was sent". The insert is not run again
+// (F8.19, found in the review of F8.23).
+func TestReconnectLostAnswerIsNotRunAgain(t *testing.T) {
+	ctx := context.Background()
+	dsn := OwnDB(t)
+	own, err := Connect(ctx, dsn, "", false) // the test's own database, not through the proxy
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer own.Close()
+	if _, err := own.Exec(ctx, "create table t_la (n int)", 0); err != nil {
+		t.Fatal(err)
+	}
+	p, via := proxied(t, dsn)
+	w, events := redialingTo(t, via, dsn, false)
+	if _, err := w.Exec(ctx, "select 1", 0); err != nil {
+		t.Fatal(err)
+	}
+	p.HoldReplies(true)
+	done := make(chan error, 1)
+	go func() {
+		done <- w.Run(ctx, func(ctx context.Context, c db.Conn) error {
+			_, err := c.Exec(ctx, "insert into t_la values (1)", 0)
+			return err
+		})
+	}()
+	for range 100 { // the insert has run on the server
+		if r, err := own.Query(ctx, "select count(*) from t_la"); err == nil && r.Rows[0][0].S == "1" {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	p.Cut(true)
+	if err := <-done; err == nil {
+		t.Fatal("no error")
+	}
+	if r, err := own.Query(ctx, "select count(*) from t_la"); err != nil || r.Rows[0][0].S != "1" {
+		t.Fatalf("the insert ran again: %v %v", r.Rows, err)
+	}
+	if slices.ContainsFunc(*events, func(e db.Event) bool { return e.Rerun }) {
+		t.Errorf("events %v", *events)
 	}
 }
