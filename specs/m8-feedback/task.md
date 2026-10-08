@@ -1,6 +1,6 @@
 # M8 第一轮使用反馈 · 任务清单
 
-- **状态**：**验收中**（2026-10-08）。用户验收时追加的 F8.17、F8.18（节点 5）passed（708de5c；e2e 9461fda，全量 110 个脚本 2595 项全过）。F8.1–F8.16 全部 passed（31c5f56；e2e f512b23，完整回归 108 个脚本 2533 项全过，`just check` 全绿）。2026-10-07 用户照 WALKTHROUGH 走完 M5–M7 的验收版后提出 20 条意见，决策者拆成 F8.1–F8.16。验收通过后和 M5–M7 一起打 tag `m5` … `m8`、`v0.1.0`。
+- **状态**：**验收中**（2026-10-08）。用户验收时追加的 F8.17、F8.18（节点 5）passed（708de5c；e2e 9461fda，全量 110 个脚本 2595 项全过）；F8.19 断线重连（节点 6）开发中。F8.1–F8.16 全部 passed（31c5f56；e2e f512b23，完整回归 108 个脚本 2533 项全过，`just check` 全绿）。2026-10-07 用户照 WALKTHROUGH 走完 M5–M7 的验收版后提出 20 条意见，决策者拆成 F8.1–F8.16。验收通过后和 M5–M7 一起打 tag `m5` … `m8`、`v0.1.0`。
 - **目标**：把用户实际使用时碰到的 bug 修掉，补齐几处配置项和命令，连接可以修改、删除。
 - **范围**：tech-design §5（window 名）、§6.5（前缀）、§6.8（新命令）、§7.5（列宽）、§7.8（WHERE 下拉、连接管理）、§9.7（补全）、§14（配置项）。
 - **依赖**：M7 F7.6 passed。
@@ -10,7 +10,8 @@
   2. F8.10 之后：F8.5–F8.10 一批（表格和布局）；
   3. F8.15 之后：F8.11–F8.15 一批（工作区的命令和配置）；
   4. F8.16 之后：F8.16 单独一批（连接管理，改动面大）；
-  5. F8.18 之后：F8.17、F8.18 一批（用户 2026-10-07 验收 M8 时提出）。
+  5. F8.18 之后：F8.17、F8.18 一批（用户 2026-10-07 验收 M8 时提出）；
+  6. F8.19 之后：F8.19 单独一批（断线重连，用户 2026-10-08 提出，动 db 和 Worker）。
 
 用户自己配置文件里的改动（Cmd+b、`tn`、HJKL、`S` 排序、`SPC wa/wx/wA`、`keyword_case = "upper"`、`tab_width = 4`、默认 desc、圆角边框）由决策者在对应 feature 通过后改 `~/.config/sqlmux/`，不在清单里。
 
@@ -317,3 +318,22 @@
 **验收**
 - [x] 单测：新 window 一个 pane；新 session 一个 window 一个 pane，consoles 目录没有新文件。
 - [x] e2e：`tc` 后工作区树里新 window 下只有 pane-1；`tC` 同样。
+
+## F8.19 断线重连 · 状态：todo
+
+用户 2026-10-08：经 `tsh` 代理连公司 stg 的库，代理经常断开又自动恢复，断开后 console 执行报 `write: broken pipe`，要重启 sqlmux；要像代理一样自动重连。
+
+- **依赖**：F5.1（每连接两条长连接）、F5.4（MySQL）
+- **涉及**：`internal/db`（Worker、postgres/、mysql/：断开判定、重拨、会话状态重放）、`internal/app`（toast、Tx 回自动、树节点状态）
+
+**开发**（§8.2「断线重连」）
+- [ ] 连接级错误的判定，PG / MySQL 各一处，有单测（真错误样本：`broken pipe`、`EOF`、`conn closed`、`driver.ErrBadConn`，SQL 错误不算）。先看 lazysql / pgtui 怎么处理 `ErrBadConn` 和重连；pgx 的 `SafeToRetry` 能用就用。
+- [ ] Worker 收到连接级错误：重拨一次（密码再取一次、超时同建连），重放会话状态（console 的 schema / search_path；DateStyle 和只读在 RuntimeParams 里自带），手动事务丢失时 Tx 回自动并 toast。
+- [ ] 重试规则：`Meta` 上的请求和快速 SQL 重跑一次；console 的语句只读才重跑（§13 的判定），写语句报原错误并 toast「已重连，请重新执行」；表格保存不重跑。每次请求最多重连一次。
+- [ ] 重连失败：树节点转失败态、toast，下一次请求再试。不做后台探活、不做退避。
+- [ ] 集成测试：PG 用 `pg_terminate_backend` 杀掉 `Meta` 的后端，再取一页数据 → 自动重连、数据回来；MySQL 用 `KILL <id>` 同样；console 写语句被杀后不重跑。`tsh` 场景按「服务端杀连接」等价模拟（AGENTS.md：拿不准的驱动行为先实测）。
+- [ ] 细节由 worker 开工前提议：Worker 里重连和请求的衔接、`PgConn().IsClosed()` 和错误串判定各覆盖哪些情况。
+
+**验收**
+- [ ] 集成测试（PG、MySQL）：杀后端后取数 / 计数 / 补全 / 快速 SQL 都自动恢复，用户看不到错误；console 的 `select` 自动恢复，`update` 报错 + toast、不重跑；手动事务里被杀 → Tx 回自动、toast 事务丢失；重连后 console 的 search_path 还是选过的 schema。
+- [ ] e2e：用 docker `pause` / `unpause` 或 `pg_terminate_backend` 模拟断开，表格 `R` 刷新后数据回来、树节点不变红；库停掉时刷新 → 节点变红、toast，库起来后再 `R` 恢复。

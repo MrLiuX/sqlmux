@@ -845,13 +845,18 @@ type Result struct {
   - 在事务中的取数包在 `SAVEPOINT sqlmux_page` 里，WHERE 写错或取消只撤到 savepoint，不让整个事务进入出错状态（F5.3 worker 加、审查认可）；不在事务里时不发 SAVEPOINT；
   - WHERE 跑在可写的 `Main` 上，调用了写数据的函数（如 `nextval`）就真的写了；只读本来就不是权限边界（§13）。计数仍在 `Meta` 上，看不到没提交的增删（ponytail）。
 - **MySQL 的事务状态**（F5.4 审查时定，MySQL 8.4 上实测）：MySQL 拿不到 TxStatus，按执行过的语句记。begin / start transaction 记为在事务中；commit、rollback（不含 rollback to），以及手册「Statements That Cause an Implicit Commit」列出的语句（TEMPORARY 以外的 DDL、账号管理、LOCK / UNLOCK TABLES、ANALYZE / OPTIMIZE / REPAIR / FLUSH、RESET、再一次 BEGIN / START 等）执行后记为不在事务中；死锁（1213）时 MySQL 回滚整个事务，也记为不在事务中，并 toast「死锁，整个事务已回滚」。否则状态记错之后，手动模式不再补 BEGIN、取数和保存的 savepoint 报不存在，已经提交的写入还被报成「已回滚」。其余记不准的情况（如在存储过程里提交）是已知上限，代码里用 `ponytail:` 标出。不另用 `SET autocommit = 0`：隐式提交之后状态照样要自己记。
-- **MySQL 的空闲断开**：服务端默认 `wait_timeout` 8 小时，空闲的连接会被断开，而断开的连接不自动重连（§8.3），开一夜之后这个连接就不能用了，要重启 sqlmux。已知上限，以后做断线重连时一起解决。
+- **断线重连**（M8 F8.19，用户 2026-10-08：经 `tsh` 代理连公司的库，代理经常断开又自动恢复，sqlmux 要跟着重连；原来断开的连接不自动重连，MySQL `wait_timeout` 8 小时空闲断开后也要重启 sqlmux）：
+  - **判定**：`Meta` / `Main` 上的一次请求以连接级错误失败——PG 是 `pgconn` 报的 `conn closed`、`broken pipe`、`EOF`、`connection reset`，或 `PgConn().IsClosed()`；MySQL 是 `driver.ErrBadConn`、`invalid connection`、同样的网络错误——就把这条连接标成断开。SQL 错误（语法、权限、约束）不算。
+  - **重连**：Worker 在同一个 goroutine 里立刻重拨（同一个 Spec，`password_cmd` / `${VAR}` 照建连时的办法再取一次密码，超时同建连），成功后重放会话状态：建连参数本来就带 DateStyle 和只读（RuntimeParams，§8.2），console 选过的 schema / search_path 要再 `set` 一次（§8.6「Schema」记在 console 上，不是记在连接上，重放的是这条连接上最后一次设置的值）；手动事务模式下正在进行的事务已经随连接丢了，Tx 回到「自动」并 toast「<连接名>：连接断开，事务已丢失」。
+  - **重试**：重连成功后，失败的那次请求只在**安全**时自动重跑一次：`Meta` 上的全部请求（catalog、取数、计数、补全的查询）和快速 SQL（只读事务，§9.6）都安全；console 的语句按 §13 的读写判定，只读的重跑，写语句不重跑（服务端可能已经执行了一半），错误栏显示原来的错误，并 toast「<连接名>：已重连，请重新执行」；表格保存（一个事务）不重跑，照 §10.3 报错，用户再按一次 `C-s`。重跑再失败就按普通错误报，不再重连（每次请求最多重连一次）。
+  - **重连失败**：树上的连接节点转成失败状态（`error` 色，§7.8），toast `<连接名>：<错误>`，tab 都留着；下一次请求再试一次拨号，所以 tsh 恢复之后用户随便操作一下就回来了。不做后台定时探活、不做指数退避：没有请求时断不断开没有影响。
+  - 原来 §8.3 里「取消 5 秒后断开的连接不自动重连」和 MySQL 的空闲断开都由这条覆盖。
 - `Meta` 建连后设为只读：PG 设 `default_transaction_read_only = on`（和 DateStyle 一样放在 RuntimeParams 里，效果等同 `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`），MySQL 执行 `SET SESSION TRANSACTION READ ONLY`。`Meta` 上只有读操作，写入只走 `Main`，所以 WHERE 里就算调用了会写数据的函数，也改不了数据。和 §13 一样，这是为了防误操作，不是权限边界。只读连接（`read_only = true`，§13）的 `Main` 也放同样的 RuntimeParams（M5 F5.3），`RESET` / `DISCARD ALL` 之后仍是只读。
 
 ### 8.3 取消、超时、过期响应
 
 - **取消**：当前连接（§5，M5 起；原来是本 session）忙碌时（`Main` 上的 console 执行，或 `Meta` 上的表格取数），状态栏在模式块左边显示 ` busy · C-c 取消 `（`warn` 色，键位文字从 keymap 读），点击执行 Action `cancel`。`C-c` 在当前连接有请求执行中时取消它，空闲时照旧是连按两次退出（§6.8）。取消后 toast 显示「查询已取消」，tab 保留之前的数据，第一次打开就是空表。取消按连接算，不按 tab：手动模式下表格取数排在 console 的长查询后面时，在表格上按 `C-c` 取消的是 console 的语句，事务因此进入出错状态，只能回滚（同 psql 在事务里按 Ctrl-C；表格自己的取数在 savepoint 里，取消它不影响事务，§8.2）。按 tab 单独取消要给 Worker 的每个请求一个 ctx，暂不做。
-  - PG：取消请求的 ctx。pgconn 默认的 `DeadlineContextWatcherHandler` 会在 context 取消时给连接设 deadline，连接随之断开。每个连接只有两条长连接，所以改用 `CancelRequestContextWatcherHandler`，由它发 CancelRequest，取消之后连接还能继续用。`DeadlineDelay` 取 5s：取消发出 5 秒后服务端还没停，就断开连接；断开的连接不自动重连，M1 不做，代码里用 `ponytail:` 注释标出。
+  - PG：取消请求的 ctx。pgconn 默认的 `DeadlineContextWatcherHandler` 会在 context 取消时给连接设 deadline，连接随之断开。每个连接只有两条长连接，所以改用 `CancelRequestContextWatcherHandler`，由它发 CancelRequest，取消之后连接还能继续用。`DeadlineDelay` 取 5s：取消发出 5 秒后服务端还没停，就断开连接；断开后由「断线重连」（§8.2，M8 F8.19）在下一次请求时重连。
   - MySQL（M5）：`Query` 自己监听 ctx，取消时另开一条临时连接执行 `KILL QUERY <connection_id>`，id 在建连时记录。只取消 context 的话，驱动会关掉连接，但服务端上的查询会继续跑。已知上限（F5.4）：临时连接连不上时（库被删、连接数满、网络断）没有兜底，Worker 一直锁到那条语句自己结束；PG 那边 5 秒后断开连接，以后和它对齐，代码里用 `ponytail:` 标出。
 - **超时**：建连 10s。计数查询 3s，用 ctx 超时实现：取消由 `CancelRequestContextWatcherHandler` 发出，返回 `context.DeadlineExceeded` 后显示 `?`（用户按 `C-c` 取消返回的是 `context.Canceled`）。不用 `SET LOCAL statement_timeout`：那要 begin / set / count / rollback 四次往返，且必须在 Worker 同一把锁里执行，否则别的请求会插进事务，等于要给 Worker 加 Tx；ctx 的做法引擎无关，MySQL 也能用。计数用 `tea.Sequence` 排在取数之后，3s 从页面数据回来后才开始算；计数不算 busy，不显示忙碌提示。
 - **过期响应**：每个 tab 维护一个递增的 `seq`，请求时带上。结果回来时 `seq` 已经不是最新的就丢弃，避免快速翻页时旧结果覆盖新结果。
