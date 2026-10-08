@@ -70,6 +70,7 @@ type App struct {
 	drop      *dropdown    // non-nil while a one-pick dropdown is open (§8.6, §7.8)
 	cols      *colsMenu    // non-nil while the COLS list is open (Q-04)
 	confirm   *confirmBox  // non-nil while it asks before changes go (§10.5)
+	menu      *menu        // non-nil while the tree's right-click menu is open (F8.23)
 	whichKey  bool         // the which-key overlay is up (§6.5)
 	keyHelp   *keyHelp     // non-nil while the ? help is open (§6.5)
 	// paneNumbers is SPC q's overlay: the next key picks a pane by its ⟨n⟩.
@@ -259,6 +260,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.gotCols(msg)
 	case saveMsg:
 		return a, a.gotSave(msg)
+	case dropped:
+		return a, a.gotDropped(msg)
 	case txDone:
 		return a, a.gotTx(msg)
 	case connEvent:
@@ -329,6 +332,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m := msg.Mouse(); m.Button {
 		case tea.MouseLeft:
 			return a, a.click(uv.Pos(m.X, m.Y))
+		case tea.MouseRight: // the menu of a tree node (F8.23)
+			a.rightClick(uv.Pos(m.X, m.Y))
 		case tea.MouseMiddle: // a table in the tree opens in a new tab (§7.8)
 			if t, _ := ui.HitAt(a.hits, uv.Pos(m.X, m.Y)); t.Kind == ui.KindNode {
 				a.treeGo(t.I)
@@ -421,7 +426,7 @@ func (a *App) click(p uv.Position) tea.Cmd {
 	case ui.KindNumber:
 		a.jumpToPane(keymap.Key(strconv.Itoa(t.I)))
 	case ui.KindBackdrop: // outside an overlay: close it; outside a confirm box: no
-		a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.confirm, a.keyHelp, a.sessList = false, false, nil, nil, nil, nil, nil, nil
+		a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.confirm, a.keyHelp, a.sessList, a.menu = false, false, nil, nil, nil, nil, nil, nil, nil
 		a.res.Reset()
 	case ui.KindSegment:
 		if a.form != nil {
@@ -434,6 +439,8 @@ func (a *App) click(p uv.Position) tea.Cmd {
 		}
 	case ui.KindRow:
 		switch tab, c := a.typingTab(), a.completing(); {
+		case a.menu != nil:
+			return a.menuRun(t.I)
 		case tab != nil && tab.cell != nil: // an option applies at once (§10.2)
 			if os := tab.options(); t.I < len(os) {
 				tab.applyOption(os[t.I])
@@ -602,6 +609,7 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 		}
 		for _, k := range r.Keys { // unbound keys go to the input that has them
 			switch t := a.typingTab(); {
+			case a.menu != nil: // no text to type: the key is none of its
 			case a.keyHelp != nil:
 				cmds = append(cmds, a.keyHelpKey(k))
 			case a.palette != nil:
@@ -654,6 +662,8 @@ func (a *App) context() keymap.Context {
 	switch typing := a.typingTab(); {
 	case a.confirm != nil:
 		return keymap.Context{Overlay: "confirm", Mode: keymap.Command}
+	case a.menu != nil:
+		return keymap.Context{Overlay: "menu", Mode: keymap.Command}
 	case a.keyHelp != nil: // the keys it lists come to keyHelpKey
 		return keymap.Context{Overlay: "keyhelp", Mode: keymap.Command}
 	case a.palette != nil && a.palette.comp != nil: // the palette's keys under the list's: its ↵ and esc see to the list first (§9.7)

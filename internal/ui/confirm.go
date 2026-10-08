@@ -12,6 +12,7 @@ import (
 // a notice is read (§6.7). A click outside it says no.
 type Confirm struct {
 	Text        string // lines apart by \n
+	Danger      bool   // the first line, the title, is in the error color (§13)
 	YesKey, Yes string // "y", "退出": runs confirm.yes
 	NoKey, No   string // "n", "取消": runs confirm.no
 }
@@ -22,8 +23,12 @@ func (c Confirm) Draw(f *Frame, screen uv.Rectangle) {
 	// a line the screen cannot hold goes on the next: a question that loses
 	// what it asks about is read wrong
 	var lines []string
-	for _, l := range strings.Split(c.Text, "\n") {
+	title := 0 // how many of them are the first line's
+	for i, l := range strings.Split(c.Text, "\n") {
 		lines = append(lines, strings.Split(ansi.Wrap(l, max(screen.Dx()-4, 1), ""), "\n")...)
+		if i == 0 {
+			title = len(lines)
+		}
 	}
 	yes, no := " "+c.YesKey+" "+c.Yes+" ", ""
 	buttons := Width(yes)
@@ -43,7 +48,11 @@ func (c Confirm) Draw(f *Frame, screen uv.Rectangle) {
 	border := f.Border.Style(uv.Style{Fg: th.Focus, Bg: th.PaneBg})
 	border.Draw(f.Buf, box)
 	for i, l := range lines {
-		f.Text(box.Min.X+2, box.Min.Y+1+i, box.Max.X-2, l, uv.Style{Fg: th.Fg, Bg: th.PaneBg})
+		fg := th.Fg
+		if c.Danger && i < title {
+			fg = th.Error
+		}
+		f.Text(box.Min.X+2, box.Min.Y+1+i, box.Max.X-2, l, uv.Style{Fg: fg, Bg: th.PaneBg})
 	}
 	x, y := box.Max.X-2-buttons, box.Max.Y-2 // at the right, under a blank line
 	for _, b := range []struct{ key, text, action string }{{c.YesKey, yes, "confirm.yes"}, {c.NoKey, no, "confirm.no"}} {

@@ -637,7 +637,7 @@ func (a *App) saveTab(t *dataTab, closing bool) tea.Cmd {
 		if other := t.changes() - n; other > 0 {
 			text = i18n.T("将删除 %d 行（另有 %d 处修改），确定保存？", n, other)
 		}
-		a.confirm = &confirmBox{text, i18n.T("保存"), func() tea.Cmd { return a.sendSave(t, closing) }}
+		a.confirm = &confirmBox{text: text, yes: i18n.T("保存"), then: func() tea.Cmd { return a.sendSave(t, closing) }}
 		return nil
 	}
 	return a.sendSave(t, closing)
@@ -778,6 +778,7 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 type confirmBox struct {
 	text, yes string
 	then      func() tea.Cmd
+	danger    bool // its first line is in the error color: what is asked is a delete or a drop (§13)
 }
 
 // unsaved is how many changes the tabs of panes hold (§10.6).
@@ -828,7 +829,7 @@ func (a *App) unlessLost(n int, what string, conns []*Conn, verb lostVerb, then 
 		return then()
 	}
 	text := strings.Join(sentences, "\n")
-	a.confirm = &confirmBox{text, i18n.T(verb.label), then}
+	a.confirm = &confirmBox{text: text, yes: i18n.T(verb.label), then: then}
 	return nil
 }
 

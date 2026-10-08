@@ -35,7 +35,7 @@ func settle(a *App, cmd tea.Cmd) {
 		for _, c := range m {
 			settle(a, c)
 		}
-	case connected, catalogMsg, sessionDialed, runDone, txDone, pageMsg, saveMsg:
+	case connected, catalogMsg, sessionDialed, runDone, txDone, pageMsg, saveMsg, dropped:
 		_, next := a.Update(m)
 		settle(a, next)
 	}
@@ -660,4 +660,68 @@ func TestRedialReadsConfigWithoutARace(*testing.T) {
 		c.setConfig(edited)
 	}
 	<-done
+}
+
+// dd on a table or a view in the tree (TestDropTable) drops it on Main: its tabs close, the
+// catalog loads again without it; a drop the server refuses is its message
+// in a toast; a read-only connection is not asked (F8.23).
+func TestDropTableOnServer(t *testing.T) { eachEngine(t, dropTableOn) }
+
+func dropTableOn(t *testing.T, eng, dsn string) {
+	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: ownDB(t, eng)})
+	play, c := a.sess.Conns[0], consoleOf(a.win().Root.B.Pane)
+	a.win().focus(a.win().Root.B.Pane.ID)
+	sql := "create table probe (a int);\ncreate view v_probe as select a from probe;"
+	c.ed.Load(sql)
+	settle(a, a.runSQL(c, c.conn, c.schema, "console_1", sql, 0, c.ver))
+	settle(a, a.loadCatalog(play))
+	has := func(name string) bool {
+		return slices.ContainsFunc(play.Tables, func(tb db.Table) bool { return tb.Name == name })
+	}
+	if !has("probe") || !has("v_probe") {
+		t.Fatalf("tables %v", play.Tables)
+	}
+	data := a.openTarget() // where the table opens
+	drop := func(name string) {
+		t.Helper()
+		a.win().focus(0)
+		treeTo(t, a, name)
+		if feed(t, a, "dd"); a.confirm == nil || !strings.Contains(a.confirm.text, "DROP") {
+			t.Fatalf("%s: asked %+v", name, a.confirm)
+		}
+		_, cmd := a.Update(teaKey("<CR>"))
+		settle(a, cmd)
+	}
+	var probe db.Table
+	for _, tb := range play.Tables {
+		if tb.Name == "probe" {
+			probe = tb
+		}
+	}
+	a.sess.open[groupNode(play, probe.Schema, true)] = true // the Views
+	settle(a, a.openTable(play, probe))
+	if !strings.Contains(tabNames(data), "probe") {
+		t.Fatalf("tabs %q", tabNames(data))
+	}
+	drop("v_probe")
+	if has("v_probe") || !has("probe") || a.toast != "已删除 "+probe.Schema+".v_probe" {
+		t.Errorf("view: tables %v, toast %q", play.Tables, a.toast)
+	}
+	drop("probe")
+	if has("probe") || strings.Contains(tabNames(data), "probe") || !strings.HasPrefix(a.toast, "已删除 ") {
+		t.Errorf("table: tables %v, tabs %q, toast %q", play.Tables, tabNames(data), a.toast)
+	}
+	// the node is stale, the table gone already: the server's answer
+	play.Tables = append(play.Tables, probe)
+	drop("probe")
+	if strings.HasPrefix(a.toast, "已删除") || a.toast == "" {
+		t.Errorf("a table that is gone: toast %q", a.toast)
+	}
+	// read only: nothing is asked
+	b := opened(t, config.Connection{Name: "ro", Engine: eng, DSN: dsn, ReadOnly: true})
+	b.win().focus(0)
+	treeTo(t, b, "t_user")
+	if feed(t, b, "dd"); b.confirm != nil || b.toast != "ro 是只读连接" {
+		t.Errorf("read only: asked %v, toast %q", b.confirm != nil, b.toast)
+	}
 }

@@ -25,7 +25,7 @@ var noVimTOML string
 // in resolution priority order for the export. which-key is no scope: keys
 // pressed over it resolve as without it (§6.5).
 var tables = []string{
-	"keys.confirm", "keys.palette", "keys.conns", "keys.form", "keys.where", "keys.cols", "keys.dropdown", "keys.sessions",
+	"keys.confirm", "keys.menu", "keys.palette", "keys.conns", "keys.form", "keys.where", "keys.cols", "keys.dropdown", "keys.sessions",
 	"keys.complete", "keys.newrow", "keys.options", "keys.segments", "keys.keyhelp", "keys.cell", "keys.input",
 	"keys.wherenormal", "keys.result", "keys.grid", "keys.tree", "keys.console", "keys.landing", "keys.normal", "keys.global",
 	"map.console.normal", "map.console.visual", "map.grid.normal", "map.grid.visual",
@@ -245,6 +245,7 @@ var when = map[string]string{
 	"keys.form":        i18n.N("连接表单打开时（M5）"),
 	"keys.conns":       i18n.N("连接管理的列表有焦点时（F8.16）"),
 	"keys.confirm":     i18n.N("确认框打开时"),
+	"keys.menu":        i18n.N("树的右键菜单打开时（F8.23）"),
 	"keys.newrow":      i18n.N("编辑还没保存的新行的格时，叠在选项 / 分段浮层之上（F3.33）"),
 	"keys.options":     i18n.N("非时间列的单元格，选项浮层展开、而且有选项时"),
 	"keys.segments":    i18n.N("时间列的单元格，分段浮层展开时"),

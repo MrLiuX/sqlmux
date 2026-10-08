@@ -162,6 +162,9 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 			f.Cursor = &c
 		}
 	}
+	if a.menu != nil {
+		a.drawMenu(f)
+	}
 	if a.cols != nil {
 		d := a.colsView()
 		box, rows := a.colsBox(d)
@@ -191,7 +194,7 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 		}
 	}
 	if c := a.confirm; c != nil {
-		cf := ui.Confirm{Text: c.text, YesKey: a.keys.Hint("confirm.yes", "confirm"), Yes: c.yes}
+		cf := ui.Confirm{Text: c.text, Danger: c.danger, YesKey: a.keys.Hint("confirm.yes", "confirm"), Yes: c.yes}
 		if c.then != nil { // a notice has no "no" (§6.7)
 			cf.NoKey, cf.No = a.keys.Hint("confirm.no", "confirm"), i18n.T("取消")
 		}

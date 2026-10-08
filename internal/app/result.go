@@ -228,7 +228,7 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 		}
 		if len(risky) > 0 { // no run is begun, no log line made, till the answer is yes (§13)
 			asked := t.conn // a connection that lands meanwhile may take the console over
-			a.confirm = &confirmBox{dangerText(risky), i18n.T("执行"), func() tea.Cmd {
+			a.confirm = &confirmBox{text: dangerText(risky), yes: i18n.T("执行"), danger: true, then: func() tea.Cmd {
 				if t.conn != asked {
 					return a.showToast(i18n.T("确认时 console 换了连接，没有执行"), toastTTL)
 				}
