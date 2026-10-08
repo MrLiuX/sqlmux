@@ -471,7 +471,7 @@ func (a *App) fetchDDL(m previewDue) tea.Cmd {
 		ctx, cancel := context.WithTimeout(ctx, countTimeout)
 		defer cancel()
 		m := ddlMsg{conn: conn, table: t}
-		m.err = meta.Run(ctx, func(ctx context.Context, c db.Conn) (err error) {
+		m.err = meta.RunSafe(ctx, func(ctx context.Context, c db.Conn) (err error) {
 			if m.text, err = eng.DDL(ctx, c, t.Schema, t.Name); err != nil || t.View() {
 				return err
 			}

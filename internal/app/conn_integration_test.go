@@ -473,3 +473,122 @@ func TestNewSessionTakesNewConn(t *testing.T) {
 		t.Errorf("session %s: %d connections", a.sess.Name, len(a.sess.Conns))
 	}
 }
+
+// killBackends ends c's Main and Meta on the server, as a proxy dropping
+// them would.
+func killBackends(t *testing.T, eng, dsn string, c *Conn) {
+	t.Helper()
+	ctx := context.Background()
+	idSQL, killSQL := "select pg_backend_pid()", "select pg_terminate_backend(%s)"
+	if eng == "mysql" {
+		idSQL, killSQL = "select connection_id()", "kill %s"
+	}
+	admin, _, err := engines[eng].Connect(ctx, dsn, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer admin.Close()
+	for _, w := range []*db.Worker{c.Main, c.Meta} {
+		r, err := w.Query(ctx, idSQL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := admin.Query(ctx, fmt.Sprintf(killSQL, r.Rows[0][0].S)); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// A connection the server dropped comes back by itself on the next
+// request, the user seeing no error: the catalog, a console's read, which
+// finds its schema as the console set it; a write is not run again, the
+// error is the first and a toast says so; a transaction is lost, said so,
+// the manual mode kept (§8.2「断线重连」, F8.19).
+func TestReconnect(t *testing.T) { eachEngine(t, reconnect) }
+
+func reconnect(t *testing.T, eng, _ string) {
+	dsn := ownDB(t, eng)
+	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: dsn})
+	was := Send
+	Send = func(m tea.Msg) { a.Update(m) } // as the program's Send, in the order the events came in
+	t.Cleanup(func() { Send = was })
+	play, c := a.sess.Conns[0], consoleOf(a.win().Root.B.Pane)
+	a.win().focus(a.win().Root.B.Pane.ID)
+	run := func(sql string) {
+		t.Helper()
+		c.ed.Load(sql)
+		settle(a, a.runSQL(c, c.conn, c.schema, "console_1", sql, 0, c.ver))
+	}
+	count := func() string {
+		t.Helper()
+		r, err := play.Meta.Query(context.Background(), "select count(*) from probe")
+		if err != nil {
+			return err.Error()
+		}
+		return r.Rows[0][0].S
+	}
+	failed := func() bool { return strings.Contains(lastLog(a), "ERROR") || strings.Contains(lastLog(a), "FATAL") }
+	run("create table probe (a int)")
+	home := c.schema
+	c.schema = "agentable"
+	if run("select count(*) from agent"); failed() {
+		t.Fatalf("agentable's agent: %s", lastLog(a))
+	}
+
+	killBackends(t, eng, dsn, play)
+	a.toast = ""
+	settle(a, a.loadCatalog(play))
+	if len(play.Tables) == 0 || play.down() != nil {
+		t.Fatalf("the catalog: %d tables, %v", len(play.Tables), play.down())
+	}
+	if run("select count(*) from agent"); failed() || a.toast != "" {
+		t.Fatalf("a read after the drop: %s, toast %q", lastLog(a), a.toast)
+	}
+	c.schema = home
+
+	killBackends(t, eng, dsn, play)
+	if run("insert into probe values (1)"); !failed() || a.toast != "play：已重连，请重新执行" || count() != "0" {
+		t.Fatalf("a write after the drop: %s, toast %q, %s rows", lastLog(a), a.toast, count())
+	}
+	if run("insert into probe values (2)"); failed() || count() != "1" {
+		t.Fatalf("the connection is back: %s", lastLog(a))
+	}
+
+	play.Manual = true
+	if run("insert into probe values (3)"); play.tx != 'T' {
+		t.Fatalf("a transaction: %c", play.tx)
+	}
+	killBackends(t, eng, dsn, play)
+	a.toast = ""
+	if run("select 1"); a.toast != "play：连接断开，事务已丢失" || !play.Manual || count() != "1" {
+		t.Errorf("lost: toast %q, manual %v, %s rows", a.toast, play.Manual, count())
+	}
+}
+
+// A table's page and the palette's DDL preview come back after the drop
+// with no error (F8.19).
+func TestReconnectTable(t *testing.T) { eachEngine(t, reconnectTable) }
+
+func reconnectTable(t *testing.T, eng, dsn string) {
+	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: dsn})
+	play := a.sess.Conns[0]
+	i := slices.IndexFunc(play.Tables, func(tb db.Table) bool { return tb.Schema == play.Schema && tb.Name == "t_order" })
+	settle(a, a.openTable(play, play.Tables[i]))
+	tab := dataOf(a.focused())
+	killBackends(t, eng, dsn, play)
+	a.toast = ""
+	settle(a, a.fetch(tab, true))
+	if tab.bar != nil || len(tab.page.Rows) == 0 || a.toast != "" {
+		t.Errorf("after the drop: bar %v, %d rows, toast %q", tab.bar, len(tab.page.Rows), a.toast)
+	}
+	// and the palette's DDL preview
+	killBackends(t, eng, dsn, play)
+	feed(t, a, "<C-p>@t_order")
+	cmd := a.fetchDDL(previewDue{a.palette, a.palette.previewSeq})
+	if cmd == nil {
+		t.Fatal("no DDL asked for")
+	}
+	if m, ok := cmd().(ddlMsg); !ok || m.err != nil || m.text == "" {
+		t.Errorf("the DDL after the drop: %+v", m)
+	}
+}

@@ -164,7 +164,7 @@ func TestConfirmDangerousConnLands(t *testing.T) {
 	if a.confirm == nil {
 		t.Fatal("no question")
 	}
-	a.Update(connected{conn: idle, d: dialed{main: &execDB{}, meta: noDB{}}})
+	a.Update(connected{conn: idle, d: dialed{main: &execDB{}, meta: noDB{}, spec: idle.Spec}})
 	if c.conn != idle {
 		t.Fatalf("the console stays on %s", c.conn.Spec.Name)
 	}

@@ -202,6 +202,10 @@ type Conn struct {
 	// out of one, 'T' in one, 'E' in one that failed; 0 before any. The
 	// replies bring it: Main may be busy, its lock not to wait on (F5.11).
 	tx byte
+	// downMain and downMeta are why the last redial of Main, of Meta, failed;
+	// nil once one went through (F8.19). The connection stays State
+	// connReady: its next request dials again.
+	downMain, downMeta error
 	// Manual is the transaction mode, its consoles' and its saves': a run
 	// or a save begins one, which stays till committed or rolled back
 	// (F5.3). Each connects in the auto mode.
@@ -221,6 +225,7 @@ type Conn struct {
 	// not known, touched in Main's requests only (§8.6).
 	DB                    string
 	startedPath, mainPath string
+	mainOn                db.Conn // the connection mainPath is of; another is a redial's (F8.19)
 }
 
 func newConn(spec config.Connection) *Conn {
@@ -551,11 +556,14 @@ func Open(ctx context.Context, specs []config.Connection, start int) (*Session, 
 	return newSession(specs[start].Name, conns, conns[start], config.ConsoleName(1)), nil
 }
 
-// dialed is a connection's Main and Meta as dial connected them, and
-// where Main landed.
+// dialed is a connection's Main and Meta as dial connected them, where
+// Main landed, and the spec they were dialed from: an edit of the
+// connection meanwhile is for the next dial (F8.16), and a redial is of
+// this one.
 type dialed struct {
 	main, meta db.Conn
 	info       db.Info
+	spec       config.Connection
 }
 
 // secrets caches what a connection's password source gave, by its name
@@ -565,37 +573,43 @@ var secrets sync.Map
 
 // dial connects spec's Main and then its Meta (§8.2).
 func dial(ctx context.Context, spec config.Connection) (dialed, error) {
-	spec, err := spec.Expanded()
+	main, info, err := connectTo(ctx, spec, spec.ReadOnly) // a read-only connection's too (§13)
 	if err != nil {
 		return dialed{}, err
+	}
+	meta, _, err := connectTo(ctx, spec, true)
+	if err != nil {
+		main.Close()
+		return dialed{}, err
+	}
+	return dialed{main, meta, info, spec}, nil
+}
+
+// connectTo is one connection of spec's, read only or not.
+func connectTo(ctx context.Context, spec config.Connection, readOnly bool) (db.Conn, db.Info, error) {
+	spec, err := spec.Expanded()
+	if err != nil {
+		return nil, db.Info{}, err
 	}
 	pw, cached := secrets.Load(spec.Name)
 	if !cached {
 		s, err := spec.Secret()
 		if err != nil {
-			return dialed{}, err
+			return nil, db.Info{}, err
 		}
 		pw = s
 		secrets.Store(spec.Name, s)
 	}
-	eng := engines[spec.Engine]
-	main, info, err := eng.Connect(ctx, spec.DSN, pw.(string), spec.ReadOnly) // a read-only connection's too (§13)
+	c, info, err := engines[spec.Engine].Connect(ctx, spec.DSN, pw.(string), readOnly)
 	if err != nil {
 		secrets.Delete(spec.Name)
-		return dialed{}, err
 	}
-	meta, _, err := eng.Connect(ctx, spec.DSN, pw.(string), true)
-	if err != nil {
-		secrets.Delete(spec.Name)
-		main.Close()
-		return dialed{}, err
-	}
-	return dialed{main, meta, info}, nil
+	return c, info, err
 }
 
 // take makes c connected over d.
 func (c *Conn) take(d dialed) {
-	c.State, c.Main, c.Meta = connReady, db.NewWorker(d.main), db.NewWorker(d.meta)
+	c.State, c.Main, c.Meta = connReady, c.worker(d.main, d.spec, d.spec.ReadOnly, false), c.worker(d.meta, d.spec, true, true)
 	c.Addr, c.DB, c.startedPath = d.info.Addr, d.info.Database, d.info.Path
 }
 

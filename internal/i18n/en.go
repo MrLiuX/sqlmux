@@ -251,6 +251,8 @@ var en = map[string]string{
 	"不是有效的整数":        "not a valid integer",
 	"不是有效的日期 / 时间":   "not a valid date / time",
 	"事务已出错，提交改为了回滚":      "The transaction had failed: the commit rolled it back",
+	"%s：连接断开，事务已丢失":      "%s: connection lost, the transaction is gone",
+	"%s：已重连，请重新执行":       "%s: reconnected, run it again",
 	"关闭会丢弃。":             "closing would discard them.",
 	"关闭会回滚。":             "closing would roll it back.",
 	"刷新会丢弃。":             "refreshing would discard them.",

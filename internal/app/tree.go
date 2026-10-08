@@ -280,6 +280,9 @@ func (a *App) treeNodes() (ns []node, matches int) {
 			cn.TextFg = th.Error
 		case connIdle, connReady: // the name as it is
 		}
+		if c.down() != nil { // a redial failed: its next request tries again (F8.19)
+			cn.TextFg = th.Error
+		}
 		if filtering && !slices.ContainsFunc(c.Tables, func(t db.Table) bool { _, ok := pos[tableNode(c, t)]; return ok }) {
 			continue
 		}

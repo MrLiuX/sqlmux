@@ -148,7 +148,7 @@ func TestNewWindowSplitNumbering(t *testing.T) {
 func TestNewSessionIsOneEmptyPane(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sized(160, 45, "nerd")
-	_, cmd := a.Update(sessionDialed{spec: a.sess.Conns[0].Spec, d: dialed{main: noDB{}, meta: noDB{}}})
+	_, cmd := a.Update(sessionDialed{spec: a.sess.Conns[0].Spec, d: dialed{main: noDB{}, meta: noDB{}, spec: a.sess.Conns[0].Spec}})
 	s := a.sess
 	if m, ok := cmd().(catalogMsg); !ok || m.conn != s.start { // its connections are its own: the tree needs the catalog of this one
 		t.Errorf("the session loads the catalog of its start: %T", cmd())

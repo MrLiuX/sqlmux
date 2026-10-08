@@ -72,7 +72,9 @@ func run(args []string) error {
 	a.SaveLayoutOnExit(config.LastPath())
 	a.KeyProblems(problems)
 	defer a.Close()
-	_, err = tea.NewProgram(a).Run()
+	p := tea.NewProgram(a)
+	app.Send = p.Send
+	_, err = p.Run()
 	return err
 }
 

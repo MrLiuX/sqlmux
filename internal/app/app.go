@@ -221,6 +221,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.gotSave(msg)
 	case txDone:
 		return a, a.gotTx(msg)
+	case connEvent:
+		return a, a.gotConnEvent(msg)
 	case autosave:
 		if msg.ver == msg.t.ver {
 			if err := msg.t.flush(); err != nil {

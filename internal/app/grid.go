@@ -193,7 +193,7 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 		q.Key = cols.Key()
 		var r db.Result
 		var next bool
-		err := w.Run(ctx, func(ctx context.Context, c db.Conn) error {
+		err := w.RunSafe(ctx, func(ctx context.Context, c db.Conn) error {
 			return db.Guarded(ctx, c, "sqlmux_page", func() (err error) { r, next, err = db.Page(ctx, c, eng, q); return err })
 		})
 		return pageMsg{tab: t, seq: seq, cols: cols, page: r, next: next, err: err}

@@ -278,7 +278,9 @@ func (a *App) startRun(t *consoleTab, conn *Conn, schema, name, sql string, base
 	// ponytail: select set_config('search_path', …) goes by unseen (its first
 	// word is select): the next run then trusts mainPath still
 	resets := false // what search_path, or MySQL's database, is past this run is not known (§8.6)
+	reads := true   // a lost connection is dialed again and a run that only reads goes again, not one that may write (F8.19)
 	for i, s := range stmts {
+		reads = reads && sqlkit.IsRead(sql[s.Start:s.End], d)
 		texts[i] = sqlkit.AutoLimit(sql[s.Start:s.End], d, a.maxRows+1)
 		switch sqlkit.FirstWord(texts[i], d) {
 		case "set", "reset", "discard", "use":
@@ -290,15 +292,22 @@ func (a *App) startRun(t *consoleTab, conn *Conn, schema, name, sql string, base
 	if d == sqlkit.MySQL {
 		set = "use "
 	}
+	runOn := s.Main.Run
+	if reads {
+		runOn = s.Main.RunSafe
+	}
 	return tea.Batch(func() tea.Msg {
 		m := runDone{r: r}
-		m.err = s.Main.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
+		m.err = runOn(context.Background(), func(ctx context.Context, c db.Conn) error {
 			// mainPath is read and written in Main's requests only, one at
 			// a time: runs of two consoles may queue in either order. It is
 			// kept out of transactions only: in a failed one a SET fails too
 			// and the user's rollback would never run; in one going on, a
 			// rollback may take the SET back.
 			defer func() { m.tx = db.TxStatus(c) }()
+			if s.mainOn != c { // a connection dialed again has the search_path it started with (F8.19)
+				s.mainPath, s.mainOn = "", c
+			}
 			switch tx := db.TxStatus(c); {
 			case schema == "":
 			case tx == 'E':
