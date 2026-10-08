@@ -211,7 +211,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // stillOver is whether msg changed nothing the last frame shows: a pointer
 // moving, with none of the rects the frame asked about crossed, and nothing
 // else that moving does (a border or text dragged, a list's selection
-// following the pointer) (F8.20).
+// following the pointer) (F8.20). The seconds of a run on its way are the
+// exception: they move on between ticks, and a pointer moving meanwhile does
+// not redraw them; the tick that is due brings the right ones.
 func (a *App) stillOver(msg tea.Msg) bool {
 	m, ok := msg.(tea.MouseMotionMsg)
 	if !ok || a.drag != nil || a.dragTree || a.dragText != 0 || a.dragWhere != 0 {

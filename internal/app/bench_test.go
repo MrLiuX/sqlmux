@@ -16,7 +16,6 @@ func BenchmarkPointerMotion(b *testing.B) {
 	a.View()
 	const x, top, bottom = 90, 4, 38
 	b.ReportAllocs()
-	b.ResetTimer()
 	for i := 0; b.Loop(); i++ {
 		y := top + i%(2*(bottom-top))
 		if y > bottom {

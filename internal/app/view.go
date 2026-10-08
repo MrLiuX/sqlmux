@@ -80,8 +80,6 @@ func (a *App) layout() map[int]uv.Rectangle {
 	return rects
 }
 
-func (a *App) render() *ui.Frame { return a.drawOn(ui.NewFrame(a.w, a.h, a.theme)) }
-
 // drawOn draws the whole interface on f, a frame over a fresh buffer or the
 // one a frame two before it was drawn in: it fills all of it first.
 func (a *App) drawOn(f *ui.Frame) *ui.Frame {

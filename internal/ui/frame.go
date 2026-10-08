@@ -65,6 +65,10 @@ type Frame struct {
 func NewFrame(w, h int, th *Theme) *Frame {
 	buf := uv.NewScreenBuffer(max(w, 0), max(h, 0))
 	buf.Method = ansi.GraphemeWidth
+	return frameIn(buf, th)
+}
+
+func frameIn(buf uv.ScreenBuffer, th *Theme) *Frame {
 	return &Frame{Buf: buf, mouse: uv.Pos(-1, -1), Theme: th, Border: uv.NormalBorder()}
 }
 
@@ -197,15 +201,12 @@ func mix(a, b color.Color, t float64) color.Color {
 	return color.RGBA{m(ar, br), m(ag, bg), m(ab, bb), 0xff}
 }
 
-func (f *Frame) Render() string { return f.Buf.Render() }
-
-// Rendered is the frame last drawn: its cells and the text of each line,
+// Rendered is the frame last drawn: its buffer and the text of each line,
 // for RenderReusing to carry to the next frame, and the buffer of the frame
 // before it, which the next one is drawn in rather than in a new one: 7200
 // cells are 1.1 MB, and the garbage of it, at a frame per pointer move, was
 // a third of the work (F8.20).
 type Rendered struct {
-	cells []uv.Line
 	text  []string
 	cur   uv.ScreenBuffer
 	spare uv.ScreenBuffer
@@ -218,7 +219,7 @@ func (r *Rendered) NewFrame(w, h int, th *Theme) *Frame {
 	if r.spare.RenderBuffer == nil || r.spare.Width() != w || r.spare.Height() != h {
 		return NewFrame(w, h, th)
 	}
-	return &Frame{Buf: r.spare, mouse: uv.Pos(-1, -1), Theme: th, Border: uv.NormalBorder()}
+	return frameIn(r.spare, th)
 }
 
 // RenderReusing is Render for a frame that follows another, last: a line
@@ -230,13 +231,13 @@ func (f *Frame) RenderReusing(last *Rendered) string {
 	lines := f.Buf.Lines
 	text := make([]string, len(lines))
 	for y, l := range lines {
-		if y < len(last.cells) && slices.Equal(l, last.cells[y]) {
+		if y < len(last.text) && y < len(last.cur.Lines) && slices.Equal(l, last.cur.Lines[y]) {
 			text[y] = last.text[y]
 			continue
 		}
 		text[y] = l.Render()
 	}
-	last.cells, last.text = lines, text
+	last.text = text
 	last.spare, last.cur = last.cur, f.Buf
 	return strings.Join(text, "\n")
 }

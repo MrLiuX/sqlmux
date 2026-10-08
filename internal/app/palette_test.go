@@ -37,7 +37,7 @@ func TestPaletteOpensAndCloses(t *testing.T) {
 		t.Error("the backdrop should dim what is behind (§7.5)")
 	}
 	feed(t, a, "<Esc>")
-	if after := a.render(); after.Render() != before.Render() || after.Cursor != nil {
+	if after := a.render(); after.Buf.Render() != before.Buf.Render() || after.Cursor != nil {
 		t.Error("closing should give the screen back as it was")
 	}
 }
