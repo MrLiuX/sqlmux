@@ -16,7 +16,7 @@ tree() { local y; for y in $(seq 3 43); do e2e_text 2 31 "$y"; done | python3 -c
 import re, sys
 rows = [re.sub(r"^[\s▾▸\ue000-\uf8ff]+|\s+$", "", l) for l in sys.stdin.read().split("\n")]
 rest = rows[rows.index("工作区") + 1:] if "工作区" in rows else []
-print("/".join(r for r in rest[:next((i for i, r in enumerate(rest) if r.startswith("──")), len(rest))] if r))'; }
+print("/".join(r for r in rest[:next((i for i, r in enumerate(rest) if r.startswith("──") or r.startswith("Consoles")), len(rest))] if r))'; }
 tree_is() { [[ $(tree) == "$1" ]] || { echo "  tree: '$(tree)', want '$1'"; false; }; }
 cdir() { ls "$E2E_TMP/data/sqlmux/consoles" 2>/dev/null | tr '\n' ' '; }
 
