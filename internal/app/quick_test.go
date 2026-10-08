@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -419,26 +418,25 @@ func TestQuickSQLToResult(t *testing.T) {
 	}
 }
 
-// C-e puts the SQL scope's text, the ; off, at the end of a new console
-// in the pane a table would open in, after a blank line; the palette goes,
-// the console has the focus, its cursor on the SQL in NORMAL (§12). The
-// candidates up, it still does; with no console to open, the palette
-// stays, the SQL in it.
+// C-e puts the SQL scope's text, the ; off, in a new console in the pane a
+// table would open in, which is empty, a number no file has (F8.21); the
+// palette goes, the console has the focus, its cursor on the SQL in NORMAL
+// (§12). The candidates up, it still does.
 func TestQuickSQLEdit(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sized(160, 45, "nerd")
-	if err := config.WriteConsole(config.ConsolePath("console_2"), "select 1\n"); err != nil {
+	if err := config.WriteConsole(config.ConsolePath("console_2"), "select 1\n"); err != nil { // a file: its number is not new
 		t.Fatal(err)
 	}
 	feed(t, a, "<C-p>;delete from t_order<Esc><CR><C-e>")
 	c := consoleOf(a.focused())
-	if a.palette != nil || c == nil || a.focused().Object() != "console_2" || text(c) != "select 1\n\ndelete from t_order" {
+	if a.palette != nil || c == nil || a.focused().Object() != "console_3" || text(c) != "delete from t_order" {
 		t.Fatalf("C-e: palette %v, %v", a.palette, a.focused().Object())
 	}
-	if c.ed.Cursor() != (editor.Pos{Line: 2}) || c.ed.Mode() != editor.Normal {
+	if c.ed.Cursor() != (editor.Pos{}) || c.ed.Mode() != editor.Normal {
 		t.Errorf("cursor %v in %v", c.ed.Cursor(), c.ed.Mode())
 	}
-	if feed(t, a, "u"); text(c) != "select 1" {
+	if feed(t, a, "u"); text(c) != "" {
 		t.Errorf("one undo step: %q", text(c))
 	}
 	feed(t, a, "<C-p>;select * from t_or") // the candidates up: C-e over them, as C-t and C-y
@@ -447,12 +445,6 @@ func TestQuickSQLEdit(t *testing.T) {
 	}
 	if feed(t, a, "<C-e>"); a.palette != nil || !strings.HasSuffix(text(consoleOf(a.focused())), "select * from t_or") {
 		t.Errorf("C-e over the candidates: palette %v", a.palette)
-	}
-	if err := os.MkdirAll(config.ConsolePath("console_4"), 0o700); err != nil { // console_4's file can't be read
-		t.Fatal(err)
-	}
-	if feed(t, a, "<C-p>;select 9<C-e>"); a.palette == nil || a.palette.input.Text != ";select 9" || a.toast == "" {
-		t.Errorf("no console: the palette and its SQL go (%v, toast %q)", a.palette, a.toast)
 	}
 }
 

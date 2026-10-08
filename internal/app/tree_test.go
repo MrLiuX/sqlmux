@@ -82,7 +82,7 @@ func TestTreeNodes(t *testing.T) {
 	if !slices.Equal(got[:6], want) {
 		t.Fatalf("top:\n%s", strings.Join(got[:6], "\n"))
 	}
-	if tail := strings.Join(got[18:], "|"); tail != "    ▸ Views (2)|▾ 工作区|  ▾ data|      pane-1|    ▾ pane-2|          console_1" { // a pane is pane-<n>, no type (§7.8); a tab a level under it (F3.30)
+	if tail := strings.Join(got[18:], "|"); tail != "    ▸ Views (2)|▾ 工作区|  ▾ data|      pane-1|    ▾ pane-2|          console_1|▾ Consoles|    console_1" { // a pane is pane-<n>, no type (§7.8); a tab a level under it (F3.30)
 		t.Errorf("tail %q", tail)
 	}
 	ns, _ := a.treeNodes()
@@ -412,7 +412,7 @@ func TestTreeWorkspace(t *testing.T) {
 		}
 		return "▾ 工作区" + ws
 	}
-	if ws := workspace(); ws != "▾ 工作区\n  ▾ data\n    ▾ pane-1\n          t_user\n          t_sku\n    ▾ pane-2\n          console_1" {
+	if ws := workspace(); ws != "▾ 工作区\n  ▾ data\n    ▾ pane-1\n          t_user\n          t_sku\n    ▾ pane-2\n          console_1\n▾ Consoles\n    console_1" {
 		t.Fatalf("workspace:\n%s", ws)
 	}
 	ns, _ := a.treeNodes()

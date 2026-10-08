@@ -26,12 +26,18 @@ import (
 	"sqlmux/internal/ui"
 )
 
+// testData is the data directory of the tests that set none of their own:
+// sizedWith gives each App a fresh one, for the files of consoles are listed
+// and numbered after (F8.21).
+var testData string
+
 func TestMain(m *testing.M) {
 	// feed runs the Cmds keys return, the ticks too: they must not hold it up
 	whichKeyDelay, quitWindow, toastTTL, autosaveDelay, runTickEvery, yankFlashFor, previewDelay = time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond
 	i18n.Set("zh")  // the tests read the Chinese texts, not the default, English (F7.6)
 	clipTools = nil // OSC 52: the user's clipboard stays theirs
 	dir, _ := os.MkdirTemp("", "sqlmux-app-test")
+	testData = dir
 	os.Setenv("XDG_STATE_HOME", dir)  // saves the state from the Cmds tests run go here, not the user's
 	os.Setenv("XDG_DATA_HOME", dir)   // and the consoles
 	os.Setenv("XDG_CONFIG_HOME", dir) // and a form's connection
@@ -120,6 +126,10 @@ func sized(w, h int, icons string) *App {
 }
 
 func sizedWith(w, h int, c *config.Config) *App {
+	if os.Getenv("XDG_DATA_HOME") == testData {
+		dir, _ := os.MkdirTemp(testData, "data")
+		os.Setenv("XDG_DATA_HOME", dir)
+	}
 	keys, _ := keymap.New(c)
 	a := New(c, keys, testSession(), &config.State{}, "")
 	a.Update(tea.WindowSizeMsg{Width: w, Height: h})

@@ -159,10 +159,10 @@ func TestWheelScrollsPaneUnderPointer(t *testing.T) {
 	for range 4 {
 		wheel(0, tea.MouseWheelDown)
 	}
-	if tree.top != 24-11 {
+	if tree.top != 26-11 { // 24 nodes, and the Consoles root with its one
 		t.Fatalf("the last node stops at the bottom: top %d", tree.top)
 	}
-	a.treeGo(23)
+	a.treeGo(25)
 	for range 5 {
 		wheel(0, tea.MouseWheelUp)
 	}

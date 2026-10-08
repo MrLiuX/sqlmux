@@ -226,9 +226,9 @@ func (a *App) gotQuickRerun(m quickRerun) tea.Cmd {
 }
 
 // quickEdit is C-e (§12「C-e 在 console 中打开」): the SQL scope's text, the
-// ; off, at the end of a new console in openTarget's pane, a blank line
-// before it when there is text; one undo step, the cursor at its start in
-// NORMAL; the palette goes, the console has the focus.
+// ; off, in a new console in openTarget's pane: one undo step, the cursor at
+// its start in NORMAL; the palette goes, the console has the focus. A new
+// console is empty (F8.21).
 func (a *App) quickEdit() tea.Cmd {
 	scope, sql := a.paletteScope()
 	if scope != sqlScope || strings.TrimSpace(sql) == "" {
@@ -243,16 +243,8 @@ func (a *App) quickEdit() tea.Cmd {
 	}
 	a.palette = nil
 	t := consoleOf(a.focused())
-	pre := strings.Join(t.ed.Lines(), "\n")
-	switch {
-	case pre == "":
-	case strings.HasSuffix(pre, "\n"): // a blank line last: that one goes before the SQL
-		pre += "\n"
-	default:
-		pre += "\n\n"
-	}
-	cmd := a.consoleDid(t, t.ed.Load(pre+sql))
-	t.ed.Click(strings.Count(pre, "\n"), 0)
+	cmd := a.consoleDid(t, t.ed.Load(sql))
+	t.ed.Click(0, 0)
 	return tea.Batch(kept, cmd)
 }
 

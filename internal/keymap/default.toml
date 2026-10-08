@@ -86,6 +86,7 @@ leader = "<Space>"
 "t" = "tree.open.tab"
 "/" = "tree.filter"
 "R" = "tree.refresh"
+"dd" = "tree.delete"
 ":" = "palette.open"
 ";" = "palette.sql"
 
