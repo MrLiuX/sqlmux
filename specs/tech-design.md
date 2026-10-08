@@ -44,6 +44,7 @@
 
   版本线为 bubbletea v2.0.9。lipgloss 最初也在依赖里，M0 修剪时去掉了，颜色改用 `ansi.XParseColor` 解析。
 - **性能不是瓶颈。** 数据库 TUI 只在有输入或数据回来时才重绘，画一帧 200×60 的界面远不到 1ms。真正影响体验的是数据量，靠两点解决：表格只渲染可见行（§7.6），结果集设行数上限（§11）。
+  - **M8 F8.20 的实测修正**（用户 2026-10-08：在表格上拖动指针时卡顿、悬停行的底色跟不上，活动监视器里 sqlmux 44%、tmux 40%、kitty 33%）：悬停靠 1003 模式的全量移动上报，指针一动就是一个事件、一次 Update + View，事件率可以到每秒上百次；一帧的开销乘上这个频率才是真实负担。所以要有 profile 的开关和一个可重复的测量（§15「性能」），按测量结果优化到：160×45 的表格上每秒 100 个移动事件，sqlmux 占不到一个核的 10%，悬停底色不落后于指针。
 
 Go 生态相对 Rust 缺三样东西，对策如下：
 
@@ -1569,6 +1570,8 @@ read_only    = false
 ```
 
 ## 15. 测试
+
+- **性能**（M8 F8.20）：`SQLMUX_PPROF=<addr>` 启动时开 `net/http/pprof`（如 `localhost:6060`），`just profile` 起一个连着 seed 库的实例并打印 `go tool pprof` 的用法；不开时零开销。可重复的测量放在 `internal/app` 的 benchmark 里：默认布局、160×45、t_order 一页 100 行，往 Update 里喂指针在表格上来回扫过的移动事件（每个事件一次 View），报告每事件的耗时和分配；目标是每事件 < 1ms（100 事件 / 秒不到一个核的 10%）。优化只按 profile 的热点做（AGENTS.md：不做没有测量依据的性能优化），做完的数字写在这里。
 
 - **静态检查**（M7 F7.1，用户 2026-10-05 要求）：golangci-lint v2，规则在仓库根的 `.golangci.yml`，每个 commit 零报告，reviewer 审查前先跑。规则以 golangci-lint 的默认集（errcheck、govet、ineffassign、staticcheck、unused）为底，加上能抓到真 bug 和误用的：errorlint、nilerr、exhaustive（`default-signifies-exhaustive`，`keymap.Key` 不算枚举）、copyloopvar、intrange、unconvert、unparam、wastedassign、perfsprint、usestdlibvars、misspell、gocritic（diagnostic + performance 组，关掉 evalOrder、filepathJoin 两个误报项和 hugeParam、rangeValCopy）、revive（默认规则）、nolintlint（要写明 linter 和理由）、govet 的 nilness；staticcheck 去掉 QF*（按口味的重构建议）；formatters 用 gofmt、goimports（import 分标准库 / 第三方 / sqlmux 三组）；`build-tags: [integration]`，集成测试也检查。排除 preset `comments`（revive 要求每个导出名写「X is …」，和「注释写为什么」相反）和 `std-error-handling`。不开只为速度、没有测量依据的（prealloc、perfsprint 的 concat-loop、hugeParam、rangeValCopy，同 AGENTS.md「不做没有测量依据的性能优化」），不开和 gofmt 打架或只讲风格的（wsl、nlreturn、lll、godot、varnamelen、exhaustruct 等），也不开 depguard、gochecknoglobals 这类要为项目逐个配的。每个开启的 linter 在配置里一行注释写为什么；屏蔽用带理由的 `//nolint`。版本钉在 v2.14.0，本地和 CI 一致（reviewer 2026-10-05 起草，398899a 上 131 条报告：生产代码 52、测试 79）。
 - **CI**（M7 F7.1）：GitHub Actions，push 和 PR 到 main 时跑 lint、vet、单测、集成测试（PG 17 和 MySQL 8.4 用 services 起，seed 同 docker-compose）；e2e 不进 CI（要 tmux 和 40 分钟以上，本地由 tester 跑）。
