@@ -15,12 +15,14 @@ import (
 	"sqlmux/internal/ui"
 )
 
-// sidebarWidth is the ⟨0⟩ schema sidebar's default width, borders included (§7.8).
-func sidebarWidth(w int) int {
-	if w < 100 {
-		return 24
+// sidebarWidth is the ⟨0⟩ schema sidebar's default width, borders included
+// (§7.8): the configured one, 16 columns at least. A window under 100 columns
+// gives it 24 at most, however narrow (as before F8.22); a wider one half the window.
+func (a *App) sidebarWidth() int {
+	if w := max(a.treeWidth, 16); a.w < 100 {
+		return min(w, 24)
 	}
-	return 32
+	return treeWidth(a.treeWidth, a.w)
 }
 
 // treeWidth is the width a dragged sidebar gets in a window w wide: 16
@@ -48,7 +50,7 @@ func (a *App) window() uv.Rectangle { return uv.Rect(0, 0, max(a.w, 0), max(a.h-
 // sidebarRect is where the ⟨0⟩ sidebar, open or folded, goes.
 func (a *App) sidebarRect() uv.Rectangle {
 	side := a.window()
-	w := sidebarWidth(a.w)
+	w := a.sidebarWidth()
 	if a.win().TreeW != 0 {
 		w = treeWidth(a.win().TreeW, a.w)
 	}

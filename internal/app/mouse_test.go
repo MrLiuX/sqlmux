@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 
+	"sqlmux/internal/config"
 	"sqlmux/internal/ui"
 )
 
@@ -273,5 +274,25 @@ func TestSidebarTitle(t *testing.T) {
 	click(a, uv.Pos(6, 0))
 	if a.win().Focus != 0 || a.drop != nil {
 		t.Error("clicking the title focuses the sidebar, nothing else")
+	}
+}
+
+// [tree] width (F8.22) sets the sidebar of a window whose sidebar was never
+// dragged: held to 16 and half the window, 24 at most under 100 columns; a
+// width dragged or restored from the layout file goes before it.
+func TestConfiguredSidebarWidth(t *testing.T) {
+	for _, c := range []struct{ conf, w, want int }{
+		{38, 160, 38}, {8, 160, 16}, {38, 100, 38}, {38, 99, 24}, {20, 99, 20}, {38, 60, 24}, {38, 40, 24}, {32, 160, 32},
+	} {
+		cfg := config.Default()
+		cfg.TreeWidth = c.conf
+		a := sizedWith(c.w, 30, cfg)
+		if got := a.sidebarRect().Dx(); got != c.want {
+			t.Errorf("width %d in %d columns: %d, want %d", c.conf, c.w, got, c.want)
+		}
+		a.win().TreeW = 50
+		if got := a.sidebarRect().Dx(); got != min(50, c.w/2) { // a dragged width goes before the narrow rule
+			t.Errorf("width %d dragged to 50 in %d columns: %d", c.conf, c.w, got)
+		}
 	}
 }
