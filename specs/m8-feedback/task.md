@@ -405,6 +405,8 @@
 - [ ] 删除表：危险确认框（§13 的样式，正文是要执行的 `DROP TABLE <引号表名>`），`confirm_dangerous = false` 也问；在所在连接的 `Main` 上执行（`Engine.Quote`），成功后关掉所有 session 里这张表的 tab、重载 catalog、toast「已删除 <表>」；失败进 toast。只读连接拒绝。表 / 视图节点上 `dd` 等于菜单里的「删除表…」。
 - [ ] 先看 lazysql 有没有 drop table 的做法（它的 tree 有删除吗）；没有就按上面做。
 - [ ] 细节（worker 2026-10-08 提议，已定）：`ui.Menu` 用 Block 画、左上角贴指针、放不下向左 / 上翻，每项一个命中、整窗一个 backdrop（点别处关、不透传），右键同时把树光标移到被点的节点；`menu` 作用域 4 个 Action，默认 `k` `↑` / `j` `↓` / `↵` / `esc`（novim 层只方向键），菜单开着时别的键吞掉，菜单里不画键位文字；菜单项都转成已有的 Action（tree.open / tree.open.tab / console 改名 / tree.delete）；删表 SQL 按 `Table.Kind`：表和分区表 `DROP TABLE`、视图 `DROP VIEW`、PG 物化视图 `DROP MATERIALIZED VIEW`、外部表 `DROP FOREIGN TABLE`，不带 CASCADE（被依赖时错误原文进 toast，用户去 console 写）；**手动事务模式下拒绝删表**，toast「手动事务模式下不能删表：先提交或回滚，或切回自动」（PG 里 DROP 进了事务 catalog 和 tab 都不知道该怎么办，MySQL 隐式提交会把 pending 一起提交；要在事务里删表去 console 写）；删表不碰 `Conn.tx`。`[tree] width`：配置值夹在 16 到 w/2，窗口 < 100 列时只往小缩到 24，拖过的 / 布局文件的宽度优先，类型不对报配置错误、越界只夹。
+- [ ] 审查时定（7 条，都照 reviewer 的倾向）：删表的守卫是 `c.Manual || c.inTx()`，自动模式下在事务里 toast「事务中不能删表：先提交或回滚」（真库实测 MySQL 隐式提交、PG 进事务后 tab 和 catalog 对不上）；菜单框从指针下一行开始、放不下翻到上一行结束，被点的节点不被盖住；菜单开着时再右键先关再按新位置处理；`j` / `k` 留在 default.toml 的 `[keys.menu]`（措辞改，不是「novim 层只方向键」）；F6.7 的危险确认框标题也用 `error` 色（§13 补写，补测试）；被删表的 tab 里未保存的修改随 tab 丢弃、不另提示；`width ≤ 0` 只夹到 16、不报错。
+- [ ] F8.19 的 bug（审查时在真库复现，并进这一轮）：pgconn 读回复出错时先关连接再报 `conn closed`，它的 SafeToRetry 恒为 true，被当成「没发出去」重跑，已提交的 insert 写了两行；`conn closed` 归「不知道执行了没有」那一档（§8.2 已改措辞），补一个真错误样本的单测。
 
 **验收**
 - [ ] golden：表节点上的右键菜单；删表的确认框。
