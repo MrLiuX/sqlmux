@@ -123,7 +123,7 @@ func TestCompleteBoxFlips(t *testing.T) {
 func TestCompleteHover(t *testing.T) {
 	c := Complete{Items: []CompleteItem{{Text: "a"}, {Text: "b"}, {Text: "c"}}}
 	f := NewFrame(20, 5, TokyonightStorm)
-	f.Mouse = uv.Pos(3, 3) // over c
+	f.SetMouse(uv.Pos(3, 3)) // over c
 	c.Draw(f, uv.Rect(0, 0, 20, 5), 3)
 	if pick, hover := f.Buf.CellAt(2, 1).Style.Bg, f.Buf.CellAt(2, 3).Style.Bg; pick != TokyonightStorm.Select || hover != TokyonightStorm.Row {
 		t.Errorf("picked %v, hovered %v", pick, hover)

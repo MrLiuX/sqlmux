@@ -81,6 +81,9 @@ func Cell(v db.Val) string {
 // Printable is s as a cell or an input shows it (§7.6): a newline as ↵, a
 // tab as a space, any other control character dropped.
 func Printable(s string) string {
+	if printableASCII(s) {
+		return s
+	}
 	return strings.Map(func(r rune) rune {
 		switch {
 		case r == '\n':
@@ -393,7 +396,7 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 	for r := voff; r < v.rows && y < area.Max.Y; r, y = r+1, y+1 {
 		bg := th.PaneBg
 		switch {
-		case r == cr, f.Mouse.In(uv.Rect(area.Min.X, y, area.Dx(), 1)): // the current row, and the one under the pointer (G-06)
+		case r == cr, f.Over(uv.Rect(area.Min.X, y, area.Dx(), 1)): // the current row, and the one under the pointer (G-06)
 			bg = th.Row
 		case (r+1)%2 == 0: // even row numbers: zebra
 			bg = th.RowAlt

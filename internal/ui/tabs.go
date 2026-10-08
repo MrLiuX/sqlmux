@@ -60,7 +60,7 @@ func (t Tabs) Draw(f *Frame, r uv.Rectangle) {
 		}
 		x = f.Text(x, y, r.Max.X, n, st)
 		tail := mark + " "
-		if t.Close.Text != "" && i >= t.Keep && f.Mouse.In(hot) {
+		if t.Close.Text != "" && i >= t.Keep && f.Over(hot) {
 			// × in the mark's place, or the blank's after the name, and a
 			// blank after it on its background: a nerd glyph draws past its
 			// cell (§7.7). With no mark that blank is the next │'s cell, so

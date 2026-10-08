@@ -26,3 +26,16 @@ func BenchmarkPointerMotion(b *testing.B) {
 		a.View()
 	}
 }
+
+// BenchmarkPointerWithinRow is the event of a pointer moving along a row, the
+// terminal reporting each cell it crosses: the frame stays as it is (F8.20).
+func BenchmarkPointerWithinRow(b *testing.B) {
+	a := wide(160, 45)
+	loadOrders(b, a, 100)
+	a.View()
+	b.ReportAllocs()
+	for i := 0; b.Loop(); i++ {
+		a.Update(tea.MouseMotionMsg{X: 40 + i%2, Y: 10})
+		a.View()
+	}
+}

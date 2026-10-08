@@ -4,6 +4,8 @@ package ui
 import (
 	"cmp"
 	"image/color"
+	"slices"
+	"strings"
 	"unicode/utf8"
 
 	uv "github.com/charmbracelet/ultraviolet"
@@ -53,7 +55,8 @@ type Hit struct {
 type Frame struct {
 	Buf    uv.ScreenBuffer
 	Hits   []Hit
-	Mouse  uv.Position // pointer, for hover styles; (-1,-1) when unknown
+	mouse  uv.Position    // pointer, for hover styles, read by Over only; (-1,-1) when unknown
+	Probes []uv.Rectangle // what Over was asked about
 	Theme  *Theme
 	Cursor *uv.Position // the terminal cursor, while an input has focus
 	Border uv.Border    // the characters every box is drawn with (§7.1, F8.10)
@@ -62,7 +65,7 @@ type Frame struct {
 func NewFrame(w, h int, th *Theme) *Frame {
 	buf := uv.NewScreenBuffer(max(w, 0), max(h, 0))
 	buf.Method = ansi.GraphemeWidth
-	return &Frame{Buf: buf, Mouse: uv.Pos(-1, -1), Theme: th, Border: uv.NormalBorder()}
+	return &Frame{Buf: buf, mouse: uv.Pos(-1, -1), Theme: th, Border: uv.NormalBorder()}
 }
 
 // BorderOf is the box characters `border` names (§14): single, rounded,
@@ -93,7 +96,18 @@ func (f *Frame) Region(r uv.Rectangle, t Target) (hover bool) {
 		return false
 	}
 	f.Hits = append(f.Hits, Hit{r, t})
-	return f.Mouse.In(r)
+	return f.Over(r)
+}
+
+// SetMouse tells the frame where the pointer is.
+func (f *Frame) SetMouse(p uv.Position) { f.mouse = p }
+
+// Over is whether the pointer is over r, the only way to ask: every rect
+// asked is kept in Probes, for a frame to stand while the pointer moves, if
+// it crosses no edge of them (F8.20).
+func (f *Frame) Over(r uv.Rectangle) bool {
+	f.Probes = append(f.Probes, r)
+	return f.mouse.In(r)
 }
 
 // HitAt returns the topmost target at p: later hits were drawn on top.
@@ -122,7 +136,7 @@ func (f *Frame) Text(x, y, right int, s string, st uv.Style) int {
 	}
 	right = min(right, b.Max.X)
 	for s != "" {
-		gr, w := ansi.FirstGraphemeCluster(s, ansi.GraphemeWidth)
+		gr, w := firstGrapheme(s)
 		s = s[len(gr):]
 		if w == 0 {
 			continue
@@ -184,6 +198,48 @@ func mix(a, b color.Color, t float64) color.Color {
 }
 
 func (f *Frame) Render() string { return f.Buf.Render() }
+
+// Rendered is the frame last drawn: its cells and the text of each line,
+// for RenderReusing to carry to the next frame, and the buffer of the frame
+// before it, which the next one is drawn in rather than in a new one: 7200
+// cells are 1.1 MB, and the garbage of it, at a frame per pointer move, was
+// a third of the work (F8.20).
+type Rendered struct {
+	cells []uv.Line
+	text  []string
+	cur   uv.ScreenBuffer
+	spare uv.ScreenBuffer
+}
+
+// NewFrame is ui.NewFrame, in the spare buffer when it is the size wanted;
+// the frame is drawn over what it held, which Fill of the whole frame
+// first, as App.render does, paints out.
+func (r *Rendered) NewFrame(w, h int, th *Theme) *Frame {
+	if r.spare.RenderBuffer == nil || r.spare.Width() != w || r.spare.Height() != h {
+		return NewFrame(w, h, th)
+	}
+	return &Frame{Buf: r.spare, mouse: uv.Pos(-1, -1), Theme: th, Border: uv.NormalBorder()}
+}
+
+// RenderReusing is Render for a frame that follows another, last: a line
+// of the same cells as that frame's has its text, so a pointer moving, which
+// changes two lines of 45, does not have the other 43 written again
+// (F8.20). A line's text does not depend on the lines around it. last
+// becomes this frame's.
+func (f *Frame) RenderReusing(last *Rendered) string {
+	lines := f.Buf.Lines
+	text := make([]string, len(lines))
+	for y, l := range lines {
+		if y < len(last.cells) && slices.Equal(l, last.cells[y]) {
+			text[y] = last.text[y]
+			continue
+		}
+		text[y] = l.Render()
+	}
+	last.cells, last.text = lines, text
+	last.spare, last.cur = last.cur, f.Buf
+	return strings.Join(text, "\n")
+}
 
 // String is the frame as plain text, for golden tests.
 func (f *Frame) String() string { return f.Buf.String() }

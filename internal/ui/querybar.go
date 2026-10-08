@@ -209,7 +209,7 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 			w := Width(c.Icon.Text) + 1 // and the space after it; where the chip's text puts it, so none when cut off
 			icon = uv.Rect(cr.Min.X+Width(c.text())-w, y, w, 1).Intersect(cr)
 		}
-		if f.Region(cr, Target{Kind: KindHint, Pane: q.Pane, Action: c.Action}) && !f.Mouse.In(icon) {
+		if f.Region(cr, Target{Kind: KindHint, Pane: q.Pane, Action: c.Action}) && !f.Over(icon) {
 			chip.Bg = th.Select
 		}
 		x := f.Text(cr.Min.X, y, cr.Max.X, " "+c.Label+" ", uv.Style{Fg: th.Dim, Bg: chip.Bg})

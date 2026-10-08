@@ -3,7 +3,35 @@ package ui
 import "github.com/charmbracelet/x/ansi"
 
 // Width is the display width of s in cells.
-func Width(s string) int { return ansi.StringWidth(s) }
+func Width(s string) int {
+	if printableASCII(s) {
+		return len(s)
+	}
+	return ansi.StringWidth(s)
+}
+
+// printableASCII is whether every byte of s is a printable ASCII one: one
+// cell each, and nothing the width of which depends on what comes next.
+// Most of what a grid shows is, and the grapheme tables are slow for it
+// (F8.20).
+func printableASCII(s string) bool {
+	for i := range len(s) {
+		if s[i] < 0x20 || s[i] >= 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+// firstGrapheme is the first grapheme cluster of s and its width. A
+// printable ASCII byte followed by another ASCII byte, or by nothing, is one
+// by itself: a mark or a joiner that would join it is not ASCII.
+func firstGrapheme(s string) (string, int) {
+	if s != "" && s[0] >= 0x20 && s[0] < 0x7f && (len(s) == 1 || s[1] < 0x80) {
+		return s[:1], 1
+	}
+	return ansi.FirstGraphemeCluster(s, ansi.GraphemeWidth)
+}
 
 // Truncate cuts s to at most w cells, ending in … when cut.
 func Truncate(s string, w int) string { return ansi.Truncate(s, max(w, 0), "…") }

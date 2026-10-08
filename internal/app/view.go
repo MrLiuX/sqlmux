@@ -78,15 +78,18 @@ func (a *App) layout() map[int]uv.Rectangle {
 	return rects
 }
 
-func (a *App) render() *ui.Frame {
+func (a *App) render() *ui.Frame { return a.drawOn(ui.NewFrame(a.w, a.h, a.theme)) }
+
+// drawOn draws the whole interface on f, a frame over a fresh buffer or the
+// one a frame two before it was drawn in: it fills all of it first.
+func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 	th := a.theme
-	f := ui.NewFrame(a.w, a.h, th)
 	f.Border = a.border
 	f.Fill(f.Bounds(), uv.Style{Fg: th.Fg, Bg: th.Bg})
 	if a.w <= 0 || a.h <= 0 {
 		return f
 	}
-	f.Mouse = a.mouse
+	f.SetMouse(a.mouse)
 	rects := a.layout()
 	if r, ok := rects[a.win().Tree.ID]; ok {
 		a.drawSidebar(f, r)

@@ -41,7 +41,7 @@ func TestTabsNoShift(t *testing.T) {
 			want := regions(base)
 			for x := range w {
 				f := NewFrame(w, 1, TokyonightStorm)
-				f.Mouse = uv.Pos(x, 0)
+				f.SetMouse(uv.Pos(x, 0))
 				tb.Draw(f, uv.Rect(0, 0, w, 1))
 				if got := regions(f); got != want {
 					t.Errorf("cfg %d w %d pointer %d: regions moved\n base %s\n got  %s\n %q vs %q", ci, w, x, want, got, base.String(), f.String())

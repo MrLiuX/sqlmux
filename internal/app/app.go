@@ -22,7 +22,17 @@ import (
 type App struct {
 	w, h  int
 	theme *ui.Theme
-	icons *ui.Icons
+	// rendered is the last frame, whose lines the next reuses; probes what it
+	// asked of the pointer, seenAt where that was, seen the view it made;
+	// fresh is that nothing changed since, reuse that an Update found the
+	// pointer moved inside it and View may answer with seen (F8.20)
+	rendered ui.Rendered
+	probes   []uv.Rectangle
+	seenAt   uv.Position
+	seen     tea.View
+	fresh    bool
+	reuse    bool
+	icons    *ui.Icons
 	// baseIcons is what `icons` chose, a theme's [icon] not on it, and themeName
 	// the theme in use: theme.switch loads another over them (F6.2).
 	askName   *nameAsk // a name typed in the status bar: layout.save's, a session's, a console's (F6.5, F8.11)
@@ -184,11 +194,37 @@ func (a *App) plainConsoles() {
 // Update is update, then the columns the consoles on screen want (§7.3)
 // and the DDL the palette's selection may (F4.2).
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	wasFresh := a.fresh
+	a.fresh, a.reuse = false, false
 	_, cmd := a.update(msg)
+	if wasFresh && a.stillOver(msg) { // a pointer moved inside what it was over: the frame is the same
+		a.fresh, a.reuse = true, true
+	}
 	a.plainConsoles()
 	a.sess.last = a.conn() // where the focus goes next may name none (§5)
 	a.sess.touch(a.focused().tab())
 	return a, tea.Batch(cmd, a.wantCols(), a.wantDDL())
+}
+
+// stillOver is whether msg changed nothing the last frame shows: a pointer
+// moving, with none of the rects the frame asked about crossed, and nothing
+// else that moving does (a border or text dragged, a list's selection
+// following the pointer) (F8.20).
+func (a *App) stillOver(msg tea.Msg) bool {
+	m, ok := msg.(tea.MouseMotionMsg)
+	if !ok || a.drag != nil || a.dragTree || a.dragText != 0 || a.dragWhere != 0 {
+		return false
+	}
+	if t, _ := ui.HitAt(a.hits, a.mouse); t.Kind == ui.KindRow {
+		return false
+	}
+	now := uv.Pos(m.X, m.Y)
+	for _, r := range a.probes {
+		if a.seenAt.In(r) != now.In(r) {
+			return false
+		}
+	}
+	return true
 }
 
 func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -703,9 +739,13 @@ func (a *App) showToast(s string, ttl time.Duration) tea.Cmd {
 }
 
 func (a *App) View() tea.View {
-	f := a.render()
-	a.hits = f.Hits // clicks are looked up in what was drawn
-	v := tea.NewView(f.Render())
+	if a.reuse {
+		a.reuse = false
+		return a.seen
+	}
+	f := a.drawOn(a.rendered.NewFrame(a.w, a.h, a.theme))
+	a.hits, a.probes, a.seenAt = f.Hits, f.Probes, a.mouse // clicks are looked up in what was drawn
+	v := tea.NewView(f.RenderReusing(&a.rendered))
 	if c := f.Cursor; c != nil { // the terminal's own cursor, which input methods follow (§12)
 		v.Cursor = tea.NewCursor(c.X, c.Y)
 		v.Cursor.Shape = tea.CursorBar
@@ -718,5 +758,6 @@ func (a *App) View() tea.View {
 	}
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeAllMotion
+	a.seen, a.fresh = v, true
 	return v
 }
