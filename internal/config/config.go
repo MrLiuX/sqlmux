@@ -44,6 +44,9 @@ type Config struct {
 	// GridFullWidth is the width up to which a column of the grid is never
 	// squeezed (`[grid] full_width`, §7.6).
 	GridFullWidth int
+	// TreeWidth is the sidebar's width in columns, borders included, for a
+	// window whose sidebar has not been dragged (§7.8).
+	TreeWidth int
 	// GridDesc is `[grid] order = "desc"` and GridTranspose `[grid]
 	// transpose`: what a table opened anew starts with (§14).
 	GridDesc, GridTranspose bool
@@ -63,7 +66,7 @@ type Binding struct {
 }
 
 func Default() *Config {
-	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "en", Border: uv.NormalBorder(), Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 1000, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true, GridFullWidth: 22}
+	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "en", Border: uv.NormalBorder(), Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 1000, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true, GridFullWidth: 22, TreeWidth: 32}
 }
 
 // Dir is $XDG_CONFIG_HOME/sqlmux, falling back to ~/.config/sqlmux on every
@@ -131,6 +134,9 @@ func Parse(data string) (*Config, error) {
 		Console    struct {
 			MaxRows *int `toml:"max_rows"`
 		} `toml:"console"`
+		Tree struct {
+			Width *int `toml:"width"`
+		} `toml:"tree"`
 		Grid struct {
 			FullWidth *int    `toml:"full_width"`
 			Order     *string `toml:"order"`
@@ -207,6 +213,12 @@ func Parse(data string) (*Config, error) {
 			return nil, fmt.Errorf("[console] max_rows = %d: must be greater than 0", *n)
 		}
 		c.MaxRows = *n
+	}
+	if n := raw.Tree.Width; n != nil {
+		if *n <= 0 {
+			return nil, fmt.Errorf("[tree] width = %d: must be greater than 0", *n)
+		}
+		c.TreeWidth = *n
 	}
 	if n := raw.Grid.FullWidth; n != nil {
 		if *n <= 0 {

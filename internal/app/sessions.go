@@ -88,7 +88,7 @@ func (a *App) sessionsAttach(i int) {
 func (a *App) attach(s *Session) {
 	a.sess = s
 	a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.keyHelp = false, false, nil, nil, nil, nil
-	a.confirm, a.form, a.winRename, a.askName, a.sessList = nil, nil, nil, nil, nil
+	a.confirm, a.form, a.winRename, a.askName, a.sessList, a.menu = nil, nil, nil, nil, nil, nil
 	a.res.Reset()
 }
 

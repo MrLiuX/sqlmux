@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	_ "net/http/pprof" // registers on DefaultServeMux: only served when SQLMUX_PPROF is set
 	"os"
@@ -24,7 +25,12 @@ func main() {
 		os.Exit(keysCmd(os.Args[2:], os.Stdout, os.Stderr))
 	}
 	if addr := os.Getenv("SQLMUX_PPROF"); addr != "" { // §15「性能」: unset, nothing listens
-		go func() { _ = http.ListenAndServe(addr, nil) }()
+		ln, err := net.Listen("tcp", addr) // here, so a taken port or a bad address is said before the UI takes the terminal
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "sqlmux: SQLMUX_PPROF:", err)
+			os.Exit(1)
+		}
+		go func() { _ = http.Serve(ln, nil) }()
 	}
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "sqlmux:", err)

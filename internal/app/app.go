@@ -51,6 +51,7 @@ type App struct {
 	tabWidth     int       // the consoles' (§14)
 	maxRows      int       // a console run keeps of each result (§11)
 	resultHeight float64   // the share the result area first takes
+	treeWidth    int       // config [tree] width: the sidebar's default width (§7.8)
 	fullWidth    int       // the grid's columns up to this wide are not squeezed (§7.6)
 	border       uv.Border // the boxes' lines (§7.1)
 	newDesc      bool      // a table opened anew sorts descending, and shows transposed (§14)
@@ -69,6 +70,7 @@ type App struct {
 	drop      *dropdown    // non-nil while a one-pick dropdown is open (§8.6, §7.8)
 	cols      *colsMenu    // non-nil while the COLS list is open (Q-04)
 	confirm   *confirmBox  // non-nil while it asks before changes go (§10.5)
+	menu      *menu        // non-nil while the tree's right-click menu is open (F8.23)
 	whichKey  bool         // the which-key overlay is up (§6.5)
 	keyHelp   *keyHelp     // non-nil while the ? help is open (§6.5)
 	// paneNumbers is SPC q's overlay: the next key picks a pane by its ⟨n⟩.
@@ -122,7 +124,7 @@ var whichKeyDelay = 400 * time.Millisecond
 // not "", shows as a toast on start.
 func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, warning string) *App {
 	a := &App{
-		theme: cfg.Theme, icons: cfg.Icons, baseIcons: cfg.BaseIcons, plain: !cfg.Vim, themeName: cfg.ThemeName, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, resultHeight: cfg.ResultHeight, fullWidth: cfg.GridFullWidth, border: cfg.Border, newDesc: cfg.GridDesc, newTurned: cfg.GridTranspose,
+		theme: cfg.Theme, icons: cfg.Icons, baseIcons: cfg.BaseIcons, plain: !cfg.Vim, themeName: cfg.ThemeName, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, resultHeight: cfg.ResultHeight, fullWidth: cfg.GridFullWidth, treeWidth: cfg.TreeWidth, border: cfg.Border, newDesc: cfg.GridDesc, newTurned: cfg.GridTranspose,
 		keywordCase: cfg.KeywordCase, formatPrg: cfg.FormatPrg, autoPairs: cfg.AutoPairs, confirmDangerous: cfg.ConfirmDangerous,
 		keys: keys, res: keymap.NewResolver(keys), sess: sess, sessions: []*Session{sess},
 		mouse: uv.Pos(-1, -1), warning: JoinNotes(warning, sess.warning), state: st,
@@ -210,7 +212,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // stillOver is whether msg changed nothing the last frame shows: a pointer
 // moving, with none of the rects the frame asked about crossed, and nothing
 // else that moving does (a border or text dragged, a list's selection
-// following the pointer) (F8.20).
+// following the pointer) (F8.20). The seconds of a run on its way are the
+// exception: they move on between ticks, and a pointer moving meanwhile does
+// not redraw them; the tick that is due brings the right ones.
 func (a *App) stillOver(msg tea.Msg) bool {
 	m, ok := msg.(tea.MouseMotionMsg)
 	if !ok || a.drag != nil || a.dragTree || a.dragText != 0 || a.dragWhere != 0 {
@@ -256,6 +260,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.gotCols(msg)
 	case saveMsg:
 		return a, a.gotSave(msg)
+	case dropped:
+		return a, a.gotDropped(msg)
 	case txDone:
 		return a, a.gotTx(msg)
 	case connEvent:
@@ -326,6 +332,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m := msg.Mouse(); m.Button {
 		case tea.MouseLeft:
 			return a, a.click(uv.Pos(m.X, m.Y))
+		case tea.MouseRight: // the menu of a tree node (F8.23)
+			a.rightClick(uv.Pos(m.X, m.Y))
 		case tea.MouseMiddle: // a table in the tree opens in a new tab (§7.8)
 			if t, _ := ui.HitAt(a.hits, uv.Pos(m.X, m.Y)); t.Kind == ui.KindNode {
 				a.treeGo(t.I)
@@ -418,7 +426,7 @@ func (a *App) click(p uv.Position) tea.Cmd {
 	case ui.KindNumber:
 		a.jumpToPane(keymap.Key(strconv.Itoa(t.I)))
 	case ui.KindBackdrop: // outside an overlay: close it; outside a confirm box: no
-		a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.confirm, a.keyHelp, a.sessList = false, false, nil, nil, nil, nil, nil, nil
+		a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.confirm, a.keyHelp, a.sessList, a.menu = false, false, nil, nil, nil, nil, nil, nil, nil
 		a.res.Reset()
 	case ui.KindSegment:
 		if a.form != nil {
@@ -431,6 +439,8 @@ func (a *App) click(p uv.Position) tea.Cmd {
 		}
 	case ui.KindRow:
 		switch tab, c := a.typingTab(), a.completing(); {
+		case a.menu != nil:
+			return a.menuRun(t.I)
 		case tab != nil && tab.cell != nil: // an option applies at once (§10.2)
 			if os := tab.options(); t.I < len(os) {
 				tab.applyOption(os[t.I])
@@ -599,6 +609,7 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 		}
 		for _, k := range r.Keys { // unbound keys go to the input that has them
 			switch t := a.typingTab(); {
+			case a.menu != nil: // no text to type: the key is none of its
 			case a.keyHelp != nil:
 				cmds = append(cmds, a.keyHelpKey(k))
 			case a.palette != nil:
@@ -651,6 +662,8 @@ func (a *App) context() keymap.Context {
 	switch typing := a.typingTab(); {
 	case a.confirm != nil:
 		return keymap.Context{Overlay: "confirm", Mode: keymap.Command}
+	case a.menu != nil:
+		return keymap.Context{Overlay: "menu", Mode: keymap.Command}
 	case a.keyHelp != nil: // the keys it lists come to keyHelpKey
 		return keymap.Context{Overlay: "keyhelp", Mode: keymap.Command}
 	case a.palette != nil && a.palette.comp != nil: // the palette's keys under the list's: its ↵ and esc see to the list first (§9.7)

@@ -1,0 +1,45 @@
+┌─ ⓪  doraemon ─────── SPC b ─┐ ┌─ ①  t_sku ─────────────────────────────────────────────────┐ ┌─ ②  c…  Tx: 自动 ▾ doraemon · doraemon.public ▾  ▶ run  ↵ ─┐
+│  17 tables                 │ │ WHERE                                                C-r ▾ │ │   1                                                         │
+│──────────────────────────────│ │  ORDER —   LIMIT 100   PAGE 1/?   COLS 0/0                │ │                                                             │
+│ ▾  doraemon                 │ │                                                             │ │                                                             │
+│   ▸  agentable              │ │                                                             │ │                                                             │
+│   ▾  public                 │ │                                                             │ │                                                             │
+│     ▾  Tables (14)          │ │                                                             │ │                                                             │
+│       ▸  agent          124 │ │                                                             │ │                                                             │
+│       ▸  agent_version  530 │ │                                                             │ │                                                             │
+│       ▸  goal            57 │ │                                                             │ │                                                             │
+│       ▸  mt_task        812 │ │                                                             │ │                                                             │
+│       ▸  mt_task_log    96k │ │                                                             │ │                                                             │
+│       ▸  schema_migrations  │ │                                                             │ │                                                             │
+│       ▸  t_order       1.2m │ │                                                             │ │                                                             │
+│       ▸  t_order_item  3.4m │ │                                                             │ │                                                             │
+│       ▸  t_payment     410k │ │                                                             │ │                                                             │
+│       ▸  t_refund       12k │ │                                                             │ │                                                             │
+│       ▸  t_sku         8.1k │ │                                                             │ │                                                             │
+│       ▸  t_user         38k │ │                                                             │ │                                                             │
+│       ▸  t_user_address 52k │ │                            ┌──────────────────────────────────┐                                                             │
+│       ▸  t_user_profile 38k │ │                            │ 删除表 public.t_user，不能撤销： │                                                             │
+│     ▾  Views (2)            │ │                            │   DROP TABLE "public"."t_user"   │                                                             │
+│       ▸  v_paid             │ │                            │                                  │                                                             │
+│       ▸  mv_sum           ? │ │                            │                 y 删除   n 取消  │                                                             │
+│ ▾  工作区                   │ │                            └──────────────────────────────────┘                                                             │
+│   ▾  data                   │ │                                                             │ │                                                             │
+│     ▾  pane-1               │ │                                                             │ │                                                             │
+│            t_user           │ │                                                             │ │                                                             │
+│            t_sku            │ │                                                             │ │                                                             │
+│     ▾  pane-2               │ │                                                             │ │                                                             │
+│            console_1        │ │                                                             │ │                                                             │
+│ ▾  Consoles                 │ │                                                             │ │                                                             │
+│      console_1              │ │                                                             │ │                                                             │
+│                              │ │                                                             │ │                                                             │
+│                              │ │                                                             │ │                                                             │
+│                              │ │                                                             │ │                                                             │
+│                              │ │                                                             │ │                                                             │
+│                              │ │                                                             │ │                                                             │
+│                              │ │                                                             │ │                                                             │
+│                              │ │                                                             │ │                                                             │
+│                              │ │                                                             │ │                                                             │
+│──────────────────────────────│ │                                                             │ │                                                             │
+│ j/k move · ↵ open            │ │ 1: t_user- │ 2: t_sku* │ +                                │ │ 1: console_1* │ +                                    gt/gT │
+└──────────────────────────────┘ └─────────────────────────────────────────────────────────────┘ └─────────────────────────────────────────────────────────────┘
+ doraemon ▾  0: data*                                                                           ·     doraemon · pg@localhost:5432  busy · C-c 取消  COMMAND 

@@ -208,8 +208,12 @@ func init() {
 		"tree.open.tab": {Title: i18n.N("打开"), Run: func(a *App, _ Args) tea.Cmd { return a.treeOpen(true) }},
 		"tree.filter":   {Title: i18n.N("过滤"), Run: do(func(a *App, _ Args) { a.treeFilter() })},
 		"tree.refresh":  {Title: i18n.N("刷新表列表"), Run: func(a *App, _ Args) tea.Cmd { return a.refreshTree() }},
-		"tree.delete":   {Title: i18n.N("删除 console 文件"), Run: func(a *App, _ Args) tea.Cmd { return a.deleteConsole() }},
+		"tree.delete":   {Title: i18n.N("删除 console 文件、表、视图"), Run: func(a *App, _ Args) tea.Cmd { return a.treeDelete() }},
 		// Keys inside the dropdowns and the COLS list (§6.8): untitled, like the palette's.
+		"menu.up":         {Title: i18n.N("上移"), Local: true, Run: when(inMenu, func(a *App) tea.Cmd { a.menuMove(-1); return nil })},
+		"menu.down":       {Title: i18n.N("下移"), Local: true, Run: when(inMenu, func(a *App) tea.Cmd { a.menuMove(1); return nil })},
+		"menu.run":        {Title: i18n.N("执行"), Local: true, Run: when(inMenu, func(a *App) tea.Cmd { return a.menuRun(a.menu.sel) })},
+		"menu.close":      {Title: i18n.N("关闭菜单"), Local: true, Run: when(inMenu, func(a *App) tea.Cmd { a.menu = nil; return nil })},
 		"dropdown.up":     {Title: i18n.N("上移"), Local: true, Run: when(inDrop, func(a *App) tea.Cmd { a.dropMove(-1); return nil })},
 		"dropdown.down":   {Title: i18n.N("下移"), Local: true, Run: when(inDrop, func(a *App) tea.Cmd { a.dropMove(1); return nil })},
 		"dropdown.select": {Title: i18n.N("选中"), Local: true, Run: when(inDrop, func(a *App) tea.Cmd { return a.dropPick(a.drop.sel) })},

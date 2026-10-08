@@ -15,12 +15,14 @@ import (
 	"sqlmux/internal/ui"
 )
 
-// sidebarWidth is the ⟨0⟩ schema sidebar's default width, borders included (§7.8).
-func sidebarWidth(w int) int {
-	if w < 100 {
-		return 24
+// sidebarWidth is the ⟨0⟩ schema sidebar's default width, borders included
+// (§7.8): the configured one, 16 columns at least. A window under 100 columns
+// gives it 24 at most, however narrow (as before F8.22); a wider one half the window.
+func (a *App) sidebarWidth() int {
+	if w := max(a.treeWidth, 16); a.w < 100 {
+		return min(w, 24)
 	}
-	return 32
+	return treeWidth(a.treeWidth, a.w)
 }
 
 // treeWidth is the width a dragged sidebar gets in a window w wide: 16
@@ -48,7 +50,7 @@ func (a *App) window() uv.Rectangle { return uv.Rect(0, 0, max(a.w, 0), max(a.h-
 // sidebarRect is where the ⟨0⟩ sidebar, open or folded, goes.
 func (a *App) sidebarRect() uv.Rectangle {
 	side := a.window()
-	w := sidebarWidth(a.w)
+	w := a.sidebarWidth()
 	if a.win().TreeW != 0 {
 		w = treeWidth(a.win().TreeW, a.w)
 	}
@@ -77,8 +79,6 @@ func (a *App) layout() map[int]uv.Rectangle {
 	win.Root.Rects(a.mainArea(), rects)
 	return rects
 }
-
-func (a *App) render() *ui.Frame { return a.drawOn(ui.NewFrame(a.w, a.h, a.theme)) }
 
 // drawOn draws the whole interface on f, a frame over a fresh buffer or the
 // one a frame two before it was drawn in: it fills all of it first.
@@ -162,6 +162,9 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 			f.Cursor = &c
 		}
 	}
+	if a.menu != nil {
+		a.drawMenu(f)
+	}
 	if a.cols != nil {
 		d := a.colsView()
 		box, rows := a.colsBox(d)
@@ -191,7 +194,7 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 		}
 	}
 	if c := a.confirm; c != nil {
-		cf := ui.Confirm{Text: c.text, YesKey: a.keys.Hint("confirm.yes", "confirm"), Yes: c.yes}
+		cf := ui.Confirm{Text: c.text, Danger: c.danger, YesKey: a.keys.Hint("confirm.yes", "confirm"), Yes: c.yes}
 		if c.then != nil { // a notice has no "no" (§6.7)
 			cf.NoKey, cf.No = a.keys.Hint("confirm.no", "confirm"), i18n.T("取消")
 		}

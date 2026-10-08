@@ -122,6 +122,14 @@ leader = "<Space>"
 "<CR>" = "dropdown.select"
 "<Esc>" = "dropdown.close"
 
+[keys.menu] # the tree's right-click menu (§7.8, F8.23)
+"j" = "menu.down"
+"<Down>" = "menu.down"
+"k" = "menu.up"
+"<Up>" = "menu.up"
+"<CR>" = "menu.run"
+"<Esc>" = "menu.close"
+
 [keys.complete] # §9.7: ↵ (takes the selected one and does no more, F8.1; with none selected it is the input's, F8.17) and esc are the input's; in quick SQL the palette's keys come next
 "<Tab>" = "complete.down"
 "<C-n>" = "complete.down"

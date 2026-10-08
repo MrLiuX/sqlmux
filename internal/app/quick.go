@@ -244,7 +244,6 @@ func (a *App) quickEdit() tea.Cmd {
 	a.palette = nil
 	t := consoleOf(a.focused())
 	cmd := a.consoleDid(t, t.ed.Load(sql))
-	t.ed.Click(0, 0)
 	return tea.Batch(kept, cmd)
 }
 

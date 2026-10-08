@@ -94,7 +94,7 @@ func SortConsoles(names []string) {
 		case nb >= 0:
 			return 1
 		}
-		return strings.Compare(a, b)
+		return cmp.Or(strings.Compare(strings.ToLower(a), strings.ToLower(b)), strings.Compare(a, b))
 	})
 }
 
@@ -102,7 +102,7 @@ func SortConsoles(names []string) {
 // written once there is a word in it, and not deleted by closing it (§11).
 func ConsoleExists(name string) bool {
 	_, err := os.Stat(ConsolePath(name))
-	return err == nil
+	return !errors.Is(err, fs.ErrNotExist) // a file we cannot stat is there, its number not free
 }
 
 // DeleteConsole deletes the console file called name; none is no error.

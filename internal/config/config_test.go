@@ -259,3 +259,15 @@ func TestConfirmDangerousDefault(t *testing.T) {
 		t.Errorf("off: %v %v", c, err)
 	}
 }
+
+func TestTreeWidth(t *testing.T) {
+	if c, err := Parse(""); err != nil || c.TreeWidth != 32 {
+		t.Errorf("default: %d %v", c.TreeWidth, err)
+	}
+	if c, err := Parse("[tree]\nwidth = 38"); err != nil || c.TreeWidth != 38 {
+		t.Errorf("38: %d %v", c.TreeWidth, err)
+	}
+	if _, err := Parse("[tree]\nwidth = 0"); err == nil {
+		t.Error("0 accepted")
+	}
+}
