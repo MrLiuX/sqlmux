@@ -11,7 +11,7 @@ trap 'e2e_stop; rm -rf "$D"' EXIT
 e2e_own_db || { echo "e2e: could not create the private database" >&2; exit 1; }
 APP=e2e-f41-$$
 mkdir -p "$D/own"; printf '[[connection]]\nname = "d"\nengine = "postgres"\ndsn = "%s&application_name=%s"\n' "$E2E_DB" "$APP" >"$D/own/connections.toml"; chmod 600 "$D/own/connections.toml"
-# console_2 已有内容（C-e 追加在它后面）；console_4.sql 是个目录（读不出来）
+# console_2.sql 已有内容、console_4.sql 是个目录：F8.21 起新建 console 的编号跳过有文件的（console_2、console_4），新的总是空的
 (umask 077; mkdir -p "$CD/console_4.sql"; printf 'select 1;\n-- old' >"$CD/console_2.sql")
 . "$(dirname "$0")/palette.sh"
 WARN=#e0af68 RP=3
@@ -77,12 +77,12 @@ check "; 后面为空：历史里有 delete from t_log" eval '[[ $(selected) == 
 e2e_keys Enter; sleep 0.5
 check "选中它 ↵：填进输入，还是写语句提示" eval '[[ $(input) == ";delete from t_log" ]] && blocked'
 
-# ---- C-e：在目标 pane 按 console.new 开 console，追加在已有内容后面，一个撤销步（§12「C-e 在 console 中打开」）
+# ---- C-e：在目标 pane 按 console.new 开一个全新的空 console，把 SQL 放进去，一个撤销步（§12「C-e 在 console 中打开」；F8.21 起不追加在旧文件后面）
 e2e_keys C-e; sleep 0.5
-check "C-e：面板关掉，① 的引导 tab 换成 console_2（console_1 开在 ②），焦点在 ①" eval 'closed && focus_is 1 && tabs_are 1 "1:console_2*"'
-check "console_2.sql 原来的两行后面空一行，接着这条 SQL；光标在 SQL 那一行行首、NORMAL" eval '[[ $(cline 1 1) == "select 1;" && $(cline 1 2) == "-- old" && -z $(cline 1 3) && $(cline 1 4) == "delete from t_log" ]] && [[ $(ccur 1) == 4,1 ]] && mode_is NORMAL || { for i in 1 2 3 4; do echo "  $i: $(cline 1 $i)"; done; false; }'
+check "C-e：面板关掉，① 的引导 tab 换成 console_3（console_1 开在 ②；console_2.sql 已有文件，编号跳过它），焦点在 ①" eval 'closed && focus_is 1 && tabs_are 1 "1:console_3*"'
+check "新 console_3 是空的（不带 console_2.sql 的旧内容），只有这条 SQL；光标在 1,1、NORMAL" eval '[[ $(cline 1 1) == "delete from t_log" && -z $(cline 1 2) ]] && [[ $(ccur 1) == 1,1 ]] && mode_is NORMAL || { for i in 1 2; do echo "  $i: $(cline 1 $i)"; done; false; }'
 key u
-check "u 一次撤掉整个追加" eval '[[ $(cline 1 1) == "select 1;" && $(cline 1 2) == "-- old" && -z $(e2e_text 35 95 4 | tr -d " ") ]]'
+check "u 一次撤掉整个放入：console_3 又是空的" eval '[[ -z $(cline 1 1) ]]'
 key C-r
 pal '\;'; e2e_keys C-e; sleep 0.3
 check "; 后面为空时 C-e 不做事：面板还开着" eval 'is_open && [[ $(input) == ";" ]]'
@@ -139,16 +139,14 @@ e2e_click 130 2; sleep 0.3; e2e_click $TREE_AGENTABLE; sleep 0.3               #
 pal; sql "select 2 as y"; clear_all; e2e_type ";delete from agent_v"; sleep 0.6
 check "输入 agent_v：补全列表开着（树在 agentable，补全用它的表）" eval '[[ -n $(pop) ]]'
 e2e_keys C-e; sleep 0.5
-check "焦点在树上时 C-e：开到最近聚焦过的 ②，新开 tab console_3（当前不是引导 tab，不替换），焦点在 ②" eval 'closed && focus_is 2 && tabs_are 2 "1:console_1- │ 2:console_3*"'
+check "焦点在树上时 C-e：开到最近聚焦过的 ②，新开 tab console_5（当前不是引导 tab，不替换；3 开着、4 是目录，编号跳过），焦点在 ②" eval 'closed && focus_is 2 && tabs_are 2 "1:console_1- │ 2:console_5*"'
 check "取的是输入框里的文字（delete from agent_v，不是上次执行的 select 2 as y）；新文件只有这一行，光标在 1,1" eval '[[ $(cline 2 1) == "delete from agent_v" && -z $(cline 2 2) ]] && [[ $(ccur 2) == 1,1 ]] || { cline 2 1; ccur 2; false; }'
-check "console_3 取当前连接（树光标所在的 d）和它的 Schema agentable" eval 'text_has 98 160 1 " d · sqlmux_e2e_$$.agentable ▾"'
-pal; sql "select 3 as z"; e2e_keys C-e; sleep 0.5
-check "console_4.sql 读不出来：toast「读取失败」，面板不关，SQL 还在输入框里" eval 'screen_has "读取失败" && screen_has "console_4.sql" && is_open && [[ $(input) == ";select 3 as z" ]]'
-rmdir "$CD/console_4.sql"
+check "console_5 取当前连接（树光标所在的 d）和它的 Schema agentable" eval 'text_has 98 160 1 " d · sqlmux_e2e_$$.agentable ▾"'
+pal; sql "select 3 as z"
 y=$(( $(prows | grep -n -m1 " 只读" | cut -d: -f1) + $(pbox | cut -d" " -f2) - 1 ))
 c=$(e2e_find "C-t 结果区" "$y"); e2e_click "${c%% *}" "$y"; sleep 0.5
 check "点标题上的 C-t 结果区：同 C-t，面板还开着" eval 'is_open && wtree | grep -q "quick #9$" || { wtree | tail -5; false; }'
 c=$(e2e_find "C-e console" "$y"); e2e_click "${c%% *}" "$y"; sleep 0.5
-check "点标题上的 C-e console：同 C-e，② 新开 console_4，里面是 select 3 as z" eval 'closed && focus_is 2 && tabs_are 2 "1:console_1 │ 2:console_3- │ 3:console_4*" && [[ $(cline 2 1) == "select 3 as z" ]]'
+check "点标题上的 C-e console：同 C-e，② 新开 console_6（里面是 select 3 as z；4 仍是目录，编号跳过）" eval 'closed && focus_is 2 && tabs_are 2 "1:console_1 │ 2:console_5- │ 3:console_6*" && [[ $(cline 2 1) == "select 3 as z" ]]'
 
 e2e_done

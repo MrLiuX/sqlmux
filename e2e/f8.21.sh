@@ -72,4 +72,12 @@ key C-l; key C-l 2>/dev/null
 check "（准备）焦点在 console_3 上" eval '[[ $(tabbar $(focused)) == *console_3* ]]'
 pal ">console.rename"; key Enter; sleep 0.4; for i in $(seq 12); do e2e_keys BSpace; done; e2e_type "mine"; key Enter; sleep 1
 check "console.rename 改成 mine：工作区和 Consoles 下都是 mine，console_N 的排在前面，改过名的排在后面" eval 'ws_is "console_1 console_2 mine" || ws_is "console_1 mine console_2"; co_is "console_1:doraemon console_2:doraemon console_4:doraemon mine:doraemon" || { sections; false; }'
+# ---- 读不了的文件：树里 ↵ 打开它，toast 读取失败，不开 tab（F8.21 起 C-e 不再读旧文件，读失败只剩这一条路）
+key Escape; key Escape
+printf 'secret' >"$E2E_TMP/data/sqlmux/consoles/console_9.sql"; chmod 000 "$E2E_TMP/data/sqlmux/consoles/console_9.sql"; sleep 0.5
+nt=$(tabbar $(focused))
+if tree_to console_9; then key Enter; sleep 1; ok=1; else ok=; fi
+check "（准备）外面新放进 consoles/ 的 console_9.sql 在树里（目录 mtime 变了，列表跟着变）" eval '[[ -n $ok ]]'
+check "读不了的 console_9.sql（权限 000）：树里 ↵ 打开，toast 说读取失败，不多开 tab" eval '[[ $(tabbar $(focused)) != *console_9* ]] && { screen_has "读取失败" || screen_has "denied" || screen_has "permission"; } || { echo "  tab=[$(tabbar $(focused))]"; false; }'
+chmod 644 "$E2E_TMP/data/sqlmux/consoles/console_9.sql"
 e2e_done
