@@ -282,7 +282,7 @@ func TestSidebarTitle(t *testing.T) {
 // width dragged or restored from the layout file goes before it.
 func TestConfiguredSidebarWidth(t *testing.T) {
 	for _, c := range []struct{ conf, w, want int }{
-		{38, 160, 38}, {8, 160, 16}, {38, 100, 38}, {38, 99, 24}, {20, 99, 20}, {38, 60, 24}, {38, 40, 24}, {32, 160, 32},
+		{38, 160, 38}, {8, 160, 16}, {8, 99, 16}, {-3, 160, 16}, {0, 99, 16}, {38, 100, 38}, {38, 99, 24}, {20, 99, 20}, {38, 60, 24}, {38, 40, 24}, {32, 160, 32},
 	} {
 		cfg := config.Default()
 		cfg.TreeWidth = c.conf

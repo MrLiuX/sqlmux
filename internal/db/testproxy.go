@@ -17,6 +17,7 @@ type Proxy struct {
 	mu     sync.Mutex
 	pairs  [][2]net.Conn
 	refuse atomic.Bool
+	hold   atomic.Bool
 }
 
 // NewProxy listens on a port of its own, until the test ends, forwarding to
@@ -46,7 +47,19 @@ func NewProxy(t *testing.T, target string) *Proxy {
 			p.pairs = append(p.pairs, [2]net.Conn{c, up})
 			p.mu.Unlock()
 			go func() { _, _ = io.Copy(up, c); up.Close() }()
-			go func() { _, _ = io.Copy(c, up); c.Close() }()
+			go func() { // the server's side to the client's, unless held
+				buf := make([]byte, 32<<10)
+				for {
+					n, err := up.Read(buf)
+					if n > 0 && !p.hold.Load() {
+						_, _ = c.Write(buf[:n])
+					}
+					if err != nil {
+						break
+					}
+				}
+				c.Close()
+			}()
 		}
 	}()
 	t.Cleanup(func() { ln.Close(); p.Cut(false) })
@@ -74,3 +87,7 @@ func (p *Proxy) Cut(rst bool) {
 // Refuse makes it close new connections at once: a CancelRequest that
 // cannot get through.
 func (p *Proxy) Refuse(on bool) { p.refuse.Store(on) }
+
+// HoldReplies makes it drop what the server sends, the client's bytes still
+// going through: a statement runs and its answer never arrives.
+func (p *Proxy) HoldReplies(on bool) { p.hold.Store(on) }

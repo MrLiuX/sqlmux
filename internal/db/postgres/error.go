@@ -27,8 +27,8 @@ func (Engine) ErrorOf(err error) db.ServerError {
 }
 
 // Broken says whether err is a lost connection (§8.2「断线重连」): the
-// network's, pgconn's own for a connection it has closed, which sent
-// nothing, or the server's FATAL as it goes away, a shutdown, a
+// network's, pgconn's own for a connection it has closed, which may have
+// run the statement (below), or the server's FATAL as it goes away, a shutdown, a
 // pg_terminate_backend, an idle_session_timeout (pgconn closes the
 // connection on any FATAL), or a connection failure (class 08). Any other
 // PgError is a SQL error.
@@ -42,6 +42,11 @@ func (Engine) Broken(err error) db.Lost {
 		return db.NotLost
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return db.NotLost
+	case errors.Is(err, pgconn.ErrConnClosed):
+		// pgconn closes the connection when it fails to read a reply, then
+		// reports this from the read that follows, and SafeToRetry says true
+		// of it: the statement may have run, its answer lost (F8.23 review).
+		return db.LostSent
 	case pgconn.SafeToRetry(err):
 		return db.LostUnsent
 	case db.NetworkError(err):

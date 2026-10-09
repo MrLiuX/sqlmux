@@ -267,7 +267,7 @@ func TestTreeWidth(t *testing.T) {
 	if c, err := Parse("[tree]\nwidth = 38"); err != nil || c.TreeWidth != 38 {
 		t.Errorf("38: %d %v", c.TreeWidth, err)
 	}
-	if _, err := Parse("[tree]\nwidth = 0"); err == nil {
-		t.Error("0 accepted")
+	if c, err := Parse("[tree]\nwidth = -5"); err != nil || c.TreeWidth != -5 { // no error: the sidebar holds it to 16
+		t.Errorf("-5: %d %v", c.TreeWidth, err)
 	}
 }

@@ -45,6 +45,7 @@ func TestBroken(t *testing.T) {
 		{&pgconn.PgError{Severity: "ERROR", Code: "57014", Message: "canceling statement due to user request"}, db.NotLost},
 		{fmt.Errorf("failed to write: %w", &net.OpError{Op: "write", Err: syscall.ECONNRESET}), db.LostSent},
 		{&net.OpError{Op: "read", Err: syscall.ETIMEDOUT}, db.LostSent},
+		{fmt.Errorf("conn closed: %w", pgconn.ErrConnClosed), db.LostSent}, // pgconn's, from a read that failed: the statement may have run
 		{io.EOF, db.LostSent},
 		{fmt.Errorf("read: %w", io.ErrUnexpectedEOF), db.LostSent},
 		{context.Canceled, db.NotLost},

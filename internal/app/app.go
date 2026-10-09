@@ -236,6 +236,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.w, a.h = msg.Width, msg.Height
+		a.menu = nil // it was placed by the pointer, on a tree that is laid out again
 	case connected:
 		return a, a.gotConnected(msg)
 	case sessionDialed:
@@ -529,6 +530,9 @@ func (a *App) click(p uv.Position) tea.Cmd {
 // Shift turns the vertical wheel horizontal, as does a touchpad's sideways
 // swipe (buttons 6 and 7).
 func (a *App) wheel(m tea.Mouse) {
+	if a.menu != nil { // the menu is of the node the cursor is on: the wheel goes no further (F8.23)
+		return
+	}
 	if a.keyHelp != nil { // a notch a row (§6.5)
 		a.scrollKeyHelp(map[tea.MouseButton]int{tea.MouseWheelUp: -1, tea.MouseWheelDown: 1}[m.Button], false)
 		return

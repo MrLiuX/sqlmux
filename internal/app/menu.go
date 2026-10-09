@@ -2,7 +2,10 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -52,9 +55,15 @@ func (a *App) menuItems(n node) []menuItem {
 }
 
 // rightClick opens the menu of the tree node under the pointer, the cursor
-// put on it; a click while one is open only closes it, through the backdrop.
+// put on it. One open is closed first: a click on it is no more, one off it
+// goes on to the node under the pointer, which its backdrop covers.
 func (a *App) rightClick(p uv.Position) {
-	t, _ := ui.HitAt(a.hits, p)
+	hits := a.hits
+	if a.menu != nil {
+		a.menu = nil
+		hits = slices.DeleteFunc(slices.Clone(a.hits), func(h ui.Hit) bool { return h.Target.Kind == ui.KindBackdrop })
+	}
+	t, _ := ui.HitAt(hits, p)
 	if t.Kind != ui.KindNode && t.Kind != ui.KindFold || a.overlaid() || !a.endEdit() { // on the ▸ too
 		return
 	}
@@ -76,23 +85,20 @@ func (a *App) menuMove(d int) {
 func (a *App) menuRun(i int) tea.Cmd {
 	m := a.menu
 	a.menu = nil
-	if i < 0 || i >= len(m.items) {
-		return nil
-	}
 	return m.items[i].run()
 }
 
-// drawMenu paints the menu beside the pointer, in a Complete's box: its
-// corner at the pointer, moved over when it does not fit; a click off it
-// closes it.
+// drawMenu paints the menu in a Complete's box, its left edge in the
+// pointer's column, moved over when it does not fit; a click off it closes it.
 func (a *App) drawMenu(f *ui.Frame) {
 	m := a.menu
-	v, w := ui.Complete{Sel: m.sel}, 12
+	v, w := ui.Complete{Sel: m.sel}, 0
 	for _, it := range m.items {
 		v.Items = append(v.Items, ui.CompleteItem{Text: it.label})
 		w = max(w, ui.Width(it.label)+5) // a border, a blank and the two cells Complete leaves on the right
 	}
-	box, rows := ui.CompleteBox(a.window(), uv.Pos(m.at.X, m.at.Y-1), w, len(v.Items), 0)
+	// from the row under the pointer; over it, ending on the row above, when it does not fit below: the node clicked is seen
+	box, rows := ui.CompleteBox(a.window(), m.at, w, len(v.Items), 0)
 	f.Region(f.Bounds(), ui.Target{Kind: ui.KindBackdrop})
 	v.Draw(f, box, rows)
 }
@@ -154,10 +160,12 @@ func (a *App) dropTable() tea.Cmd {
 	}
 	c, t := n.conn, n.table
 	switch {
-	case c.readOnly: // the tree lists tables of a connection ready only
+	case c.readOnly:
 		return a.showToast(i18n.T("%s 是只读连接", c.Spec.Name), toastTTL)
 	case c.Manual:
 		return a.showToast(i18n.T("手动事务模式下不能删表：先提交或回滚，或切回自动"), toastTTL)
+	case c.inTx(): // begun by the user in a console: MySQL's DROP would commit it, PG's join it
+		return a.showToast(i18n.T("事务中不能删表：先提交或回滚"), toastTTL)
 	}
 	sql := dropSQL(c.eng, t)
 	title := i18n.T("删除表 %s，不能撤销：", t.Schema+"."+t.Name)
@@ -179,22 +187,44 @@ func (a *App) dropTable() tea.Cmd {
 }
 
 // gotDropped closes the tabs of the table dropped, in every session, loads
-// the catalog again and says so; a failure is the server's message.
+// the catalog again and says so; a failure is the server's message, or the
+// cancel's, and the catalog is read again then too: the server may have
+// dropped it after all (the connection lost as it was sent).
 func (a *App) gotDropped(m dropped) tea.Cmd {
 	c := m.conn
 	c.busy--
 	if m.err != nil {
-		return a.showToast(c.eng.ErrorOf(m.err).Message, toastTTL)
+		if c.eng.Broken(m.err) != db.NotLost { // the connection event says it: reconnected, run it again
+			return a.loadCatalog(c)
+		}
+		e := c.eng.ErrorOf(m.err)
+		msg := e.Message
+		if errors.Is(m.err, context.Canceled) {
+			msg = i18n.T("查询已取消")
+		}
+		if len(e.More) > 0 && strings.HasPrefix(e.More[0], "DETAIL: ") { // what depends on it
+			msg += " · " + e.More[0]
+		}
+		return tea.Batch(a.showToast(msg, toastTTL), a.loadCatalog(c))
 	}
-	for _, s := range a.sessions {
-		for _, p := range s.panes() {
-			for i := len(p.Tabs) - 1; i >= 0; i-- {
-				if d := p.Tabs[i].Data; d != nil && d.conn == c && idOf(d.table) == idOf(m.table) {
-					dropTab(p, i)
+	cmds := []tea.Cmd{a.showToast(i18n.T("已删除 %s", m.table.Schema+"."+m.table.Name), toastTTL)}
+	for _, s := range a.sessions { // a session has its own Conn of a connection's name
+		for _, o := range s.Conns {
+			if o.Spec.Name != c.Spec.Name {
+				continue
+			}
+			for _, p := range s.panes() {
+				for i := len(p.Tabs) - 1; i >= 0; i-- {
+					if d := p.Tabs[i].Data; d != nil && d.conn == o && idOf(d.table) == idOf(m.table) {
+						dropTab(p, i)
+					}
 				}
+			}
+			o.dropCols()
+			if o.State == connReady {
+				cmds = append(cmds, a.loadCatalog(o))
 			}
 		}
 	}
-	c.dropCols()
-	return tea.Batch(a.loadCatalog(c), a.showToast(i18n.T("已删除 %s", m.table.Schema+"."+m.table.Name), toastTTL))
+	return tea.Batch(cmds...)
 }

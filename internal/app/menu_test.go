@@ -1,15 +1,19 @@
 package app
 
 import (
-	"errors"
+	"context"
+	"io"
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/jackc/pgx/v5/pgconn"
 
+	"sqlmux/internal/config"
 	"sqlmux/internal/db"
 	"sqlmux/internal/ui"
 )
@@ -73,8 +77,8 @@ func TestMenuItemsByNode(t *testing.T) {
 		a.menu = nil
 		a.View()
 		rightClickNode(t, a, c.node)
-		if got := menuLabels(a); !slices.Equal(got, c.want) {
-			t.Errorf("%s: %v, want %v", c.node, got, c.want)
+		if got := menuLabels(a); !slices.Equal(got, c.want) || (a.menu == nil) != (c.want == nil) {
+			t.Errorf("%s: %v (open: %v), want %v", c.node, got, a.menu != nil, c.want)
 		}
 		if n, _ := a.treeNode(); n.Text != c.node && n.id != c.node {
 			t.Errorf("%s: the cursor is on %s", c.node, n.Text)
@@ -176,7 +180,8 @@ func TestDropTable(t *testing.T) {
 	if feed(t, a, "dd"); a.confirm != nil {
 		t.Fatal("dd on a schema asks")
 	}
-	for node, want := range map[string]string{"t_user": `DROP TABLE "public"."t_user"`, "v_paid": `DROP VIEW "public"."v_paid"`, "mv_sum": `DROP MATERIALIZED VIEW "public"."mv_sum"`} {
+	a.sess.Conns[0].Tables = append(a.sess.Conns[0].Tables, db.Table{Schema: "public", Name: "ft_remote", Kind: "f", Rows: -1})
+	for node, want := range map[string]string{"t_user": `DROP TABLE "public"."t_user"`, "v_paid": `DROP VIEW "public"."v_paid"`, "mv_sum": `DROP MATERIALIZED VIEW "public"."mv_sum"`, "ft_remote": `DROP FOREIGN TABLE "public"."ft_remote"`} {
 		treeTo(t, a, node)
 		if feed(t, a, "dd"); a.confirm == nil || !a.confirm.danger || !strings.Contains(a.confirm.text, want) {
 			t.Fatalf("%s: %+v", node, a.confirm)
@@ -201,16 +206,276 @@ func TestDropTable(t *testing.T) {
 	}
 }
 
-// A drop that the server refuses is its message in a toast, and the tabs stay (F8.23).
+// A drop that the server refuses is its message in a toast, with what
+// depends on the table, the tabs stay and the catalog is read again; a cancel
+// is said so (F8.23).
 func TestDropTableFails(t *testing.T) {
 	a := menuApp()
+	c := a.sess.Conns[0]
+	boom := &pgconn.PgError{Severity: "ERROR", Code: "2BP01", Message: "cannot drop table t_user", Detail: "view v depends on table t_user"}
+	c.Main = db.NewWorker(&execDB{fail: map[string]error{`DROP TABLE "public"."t_user"`: boom}})
 	data := a.win().Root.Leaves()[0]
 	feed(t, a, "<C-p>@t_user<CR>")
 	a.win().focus(0)
 	treeTo(t, a, "t_user")
-	a.Update(dropped{a.sess.Conns[0], db.Table{Schema: "public", Name: "t_user"}, errors.New("boom")})
-	if tabNames(data) != "t_user" || a.toast != "boom" {
-		t.Errorf("tabs %q, toast %q", tabNames(data), a.toast)
+	feed(t, a, "dd")
+	busy := c.busy
+	_, cmd := a.Update(teaKey("<CR>"))
+	m, ok := cmd().(dropped)
+	if !ok || m.err == nil || c.busy != busy+1 {
+		t.Fatalf("answer %+v, busy %d (was %d)", m, c.busy, busy)
+	}
+	a.Update(m)
+	if tabNames(data) != "t_user" || a.toast != "cannot drop table t_user · DETAIL: view v depends on table t_user" || c.busy != busy {
+		t.Errorf("tabs %q, toast %q, busy %d (was %d)", tabNames(data), a.toast, c.busy, busy)
+	}
+	// a lost connection says so by its own event: no toast of the driver's here
+	c.busy++
+	a.toast = "kept"
+	_, lost := a.Update(dropped{c, m.table, io.ErrUnexpectedEOF})
+	if a.toast != "kept" || lost == nil { // the server may have dropped it after the connection went: the catalog is read, and that is all
+		t.Errorf("a lost connection: toast %q, catalog read: %v", a.toast, lost != nil)
+	}
+	c.busy++
+	if a.Update(dropped{c, m.table, context.Canceled}); a.toast != "查询已取消" {
+		t.Errorf("cancelled: toast %q", a.toast)
+	}
+}
+
+// Only the tabs of the table dropped close: not one of the same name in
+// another schema, nor of another connection; in every session that has the
+// connection by name, whatever its Conn; what was read of the table is gone
+// (F8.23).
+func TestDropTableClosesItsTabs(t *testing.T) {
+	a, report := withSessions()
+	first := a.sess
+	c := first.Conns[0]
+	c.Tables = append(c.Tables, db.Table{Schema: "agentable", Name: "t_user"})
+	other := readyConn("other")
+	other.Tables = []db.Table{{Schema: "public", Name: "t_user"}}
+	first.Conns = append(first.Conns, other)
+	user := db.Table{Schema: "public", Name: "t_user"}
+	report.Conns[0].Tables = []db.Table{user}
+	idle := newConn(config.Connection{Name: "doraemon", Engine: "postgres"}) // listed, not dialed: it has no Meta to read a catalog with
+	third := newSession("third", []*Conn{idle}, idle, a.freeConsole())
+	a.sessions = append(a.sessions, third)
+	a.attach(report)
+	a.openTable(report.Conns[0], user)
+	a.attach(first)
+	a.openTable(c, user)
+	a.openTable(c, db.Table{Schema: "agentable", Name: "t_user"})
+	a.openTable(other, user)
+	tabs := func(s *Session) (names []string) {
+		for _, p := range s.panes() {
+			for _, tb := range p.Tabs {
+				if d := tb.Data; d != nil {
+					names = append(names, d.conn.Spec.Name+"."+d.table.Schema)
+				}
+			}
+		}
+		return names
+	}
+	if got := tabs(first); !slices.Equal(got, []string{"doraemon.public", "doraemon.agentable", "other.public"}) {
+		t.Fatalf("tabs %v", got)
+	}
+	c.cols[idOf(user)] = db.Columns{}
+	report.Conns[0].cols[idOf(user)] = db.Columns{}
+	_, cmd := a.Update(dropped{c, user, nil})
+	if got := tabs(first); !slices.Equal(got, []string{"doraemon.agentable", "other.public"}) {
+		t.Errorf("first session: %v", got)
+	}
+	if got := tabs(report); len(got) != 0 {
+		t.Errorf("the other session's: %v", got)
+	}
+	if _, ok := c.cols[idOf(user)]; ok {
+		t.Error("what was read of the table stays")
+	}
+	if _, ok := report.Conns[0].cols[idOf(user)]; ok {
+		t.Error("what the other session read of it stays")
+	}
+	if batch, ok := cmd().(tea.BatchMsg); !ok || len(batch) != 3 { // the toast, and the catalog of each of the two connections that can read it
+		t.Errorf("%d commands, want the toast and two catalogs: %T", len(batch), batch)
+	}
+}
+
+// Begun by the user, a transaction is not dropped into: MySQL's DROP would
+// commit what it has, PG's would join it and the tree not know (F8.23).
+func TestDropTableInTransaction(t *testing.T) {
+	a := menuApp()
+	a.sess.Conns[0].tx = 'T'
+	treeTo(t, a, "t_user")
+	if feed(t, a, "dd"); a.confirm != nil || a.toast != "事务中不能删表：先提交或回滚" {
+		t.Errorf("asked %v, toast %q", a.confirm != nil, a.toast)
+	}
+}
+
+// The error color is the title's, in a drop's question and in the one before a
+// delete with no WHERE, and not the statement's (F8.23, F6.7).
+func TestDangerTitleIsErrorColored(t *testing.T) {
+	// the foreground of the first cell of the first row that says text
+	fgOf := func(a *App, text string) any {
+		f := a.render()
+		first, _ := utf8.DecodeRuneInString(text)
+		for y, l := range strings.Split(f.String(), "\n") {
+			if !strings.Contains(l, text) {
+				continue
+			}
+			for x := range a.w {
+				if c := f.Buf.CellAt(x, y); c.String() == string(first) {
+					return c.Style.Fg
+				}
+			}
+		}
+		return nil
+	}
+	titleFg := func(a *App, title, line string) (any, any) { return fgOf(a, title), fgOf(a, line) }
+	a := menuApp()
+	treeTo(t, a, "t_user")
+	feed(t, a, "dd")
+	if tf, lf := titleFg(a, "删除表 public.t_user", "DROP TABLE"); tf != a.theme.Error || lf == a.theme.Error {
+		t.Errorf("drop: title %v, statement %v, error is %v", tf, lf, a.theme.Error)
+	}
+	d := dangerScene(t)
+	if tf, lf := titleFg(d, "这次执行有", "delete from t_log"); tf != d.theme.Error || lf == d.theme.Error {
+		t.Errorf("delete: title %v, statement %v, error is %v", tf, lf, d.theme.Error)
+	}
+}
+
+// The menu takes what is asked of the app while it is open: C-p, an action run
+// by name, the wheel over the tree, a resize; only C-c, which is esc, closes it (F8.23).
+func TestMenuIsAlone(t *testing.T) {
+	a := menuApp()
+	a.View()
+	rightClickNode(t, a, "t_user")
+	feed(t, a, "k") // not above the first item
+	if a.menu.sel != 0 {
+		t.Fatalf("k on the first: %d", a.menu.sel)
+	}
+	for _, act := range []string{"palette.open", "window.new", "session.list", "tab.next"} {
+		if a.run(act, 0); a.menu == nil || a.palette != nil || a.sessList != nil {
+			t.Fatalf("%s: menu %v, palette %v", act, a.menu != nil, a.palette != nil)
+		}
+	}
+	feed(t, a, "<C-p>")
+	if a.menu == nil || a.palette != nil {
+		t.Fatalf("C-p: menu %v, palette %v", a.menu != nil, a.palette != nil)
+	}
+	feed(t, a, "<C-c>")
+	if a.menu != nil {
+		t.Error("C-c does not close it")
+	}
+	rightClickNode(t, a, "t_user")
+	a.Update(tea.WindowSizeMsg{Width: 60, Height: 15})
+	if a.menu != nil {
+		t.Error("a menu through a resize")
+	}
+	// the tree scrolls here: the wheel over it would move the cursor, not with a menu open
+	a.View()
+	rightClickNode(t, a, "t_user")
+	at, _ := a.treeNode()
+	r := nodeRect(t, a, "t_user")
+	a.Update(tea.MouseWheelMsg{X: r.Min.X + 2, Y: r.Min.Y, Button: tea.MouseWheelUp})
+	if n, _ := a.treeNode(); n.id != at.id || a.menu == nil {
+		t.Errorf("the wheel moved the cursor to %s or closed the menu", n.Text)
+	}
+	a.menu = nil
+	a.Update(tea.MouseWheelMsg{X: r.Min.X + 2, Y: r.Min.Y, Button: tea.MouseWheelUp})
+	if n, _ := a.treeNode(); n.id == at.id {
+		t.Error("the wheel does not move the cursor with no menu: the case is not a case")
+	}
+	// a session attached, as one dialed in the background is, takes it down
+	a.menu = &menu{items: []menuItem{{"x", nil}}}
+	a.attach(a.sess)
+	if a.menu != nil {
+		t.Error("a menu through an attach")
+	}
+}
+
+// The box starts on the row under the pointer, the node clicked in view; where it does not
+// fit below it ends on the row above (F8.23).
+func TestMenuPlacement(t *testing.T) {
+	for _, h := range []int{45, 15} {
+		a := menuApp()
+		a.Update(tea.WindowSizeMsg{Width: 160, Height: h})
+		a.View()
+		var below, above bool
+		ns, _ := a.treeNodes()
+		for _, hit := range a.hits {
+			if hit.Target.Kind != ui.KindNode || ns[hit.Target.I].kind != nodeTable {
+				continue
+			}
+			a.menu = nil
+			a.Update(tea.MouseClickMsg{X: hit.Rect.Min.X + 3, Y: hit.Rect.Min.Y, Button: tea.MouseRight})
+			if a.menu == nil {
+				t.Fatalf("h %d: no menu on %s", h, ns[hit.Target.I].Text)
+			}
+			a.View()
+			first := find(t, a, ui.Target{Kind: ui.KindRow, I: 0}).Min.Y
+			y := hit.Rect.Min.Y
+			fits := y+1+len(a.menu.items)+2 <= a.window().Max.Y
+			want := y - len(a.menu.items) - 1
+			if fits {
+				want = y + 2
+			}
+			if first != want {
+				t.Fatalf("h %d, pointer row %d: first item on row %d, want %d (fits below: %v)", h, y, first, want, fits)
+			}
+			below, above = below || fits, above || !fits
+			a.Update(tea.WindowSizeMsg{Width: 160, Height: h}) // closes it, for the next
+			a.View()
+		}
+		if h == 45 && !below || h == 15 && !(below && above) {
+			t.Errorf("h %d: below %v, above %v: the cases were not met", h, below, above)
+		}
+	}
+}
+
+// A right click with a menu open closes it, and goes on to the node under the
+// pointer; on the menu itself it only closes it (F8.23).
+func TestMenuRightClickWhileOpen(t *testing.T) {
+	a := menuApp()
+	a.View()
+	rightClickNode(t, a, "t_user")
+	a.View()
+	rightClickNode(t, a, "t_order")
+	if n, _ := a.treeNode(); a.menu == nil || n.Text != "t_order" || !slices.Equal(menuLabels(a), []string{"打开", "在新 tab 打开", "删除表…"}) {
+		t.Fatalf("on another node: menu %v, cursor %q", a.menu != nil, n.Text)
+	}
+	a.View()
+	r := find(t, a, ui.Target{Kind: ui.KindRow, I: 1})
+	a.Update(tea.MouseClickMsg{X: r.Min.X + 2, Y: r.Min.Y, Button: tea.MouseRight})
+	if n, _ := a.treeNode(); a.menu != nil || n.Text != "t_order" {
+		t.Errorf("on the menu: menu %v, cursor %q", a.menu != nil, n.Text)
+	}
+	a.View()
+	rightClickNode(t, a, "t_order")
+	a.View()
+	a.Update(tea.MouseClickMsg{X: 100, Y: 30, Button: tea.MouseRight})
+	if a.menu != nil {
+		t.Error("off the tree: a menu is open")
+	}
+}
+
+// The right click goes to the tree whichever pane has the focus, and not at
+// all while a cell's edit cannot end (F8.23).
+func TestMenuRightClickFocusAndEdit(t *testing.T) {
+	a := menuApp()
+	a.win().focus(a.win().Root.Leaves()[1].ID) // the console
+	a.View()
+	rightClickNode(t, a, "t_user")
+	if n, _ := a.treeNode(); a.menu == nil || a.win().Focus != 0 || n.Text != "t_user" {
+		t.Errorf("from the console: menu %v, focus %d, cursor %q", a.menu != nil, a.win().Focus, n.Text)
+	}
+	b := wide(160, 45)
+	loadOrders(t, b, 10)
+	feed(t, b, "ix")
+	if tab := b.typingTab(); tab == nil || tab.cell == nil || tab.cellHint() == "" {
+		t.Fatal("no cell edit that cannot end")
+	}
+	b.View()
+	rightClickNode(t, b, "t_user")
+	if b.menu != nil {
+		t.Error("a menu while a cell's edit cannot end")
 	}
 }
 
