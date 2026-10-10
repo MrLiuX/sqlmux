@@ -206,4 +206,4 @@
 - [x] 细节（已定）：二进制名、配置目录、`sqlmux keys` 等用户可见的东西都不变；README 的「Build」节由决策者加一行 `go install github.com/kackerx/sqlmux/cmd/sqlmux@latest`（下一个 tag 起才有效）。
 
 **验收**
-- [x] `just check` 全绿；在仓库外的临时目录 `GOFLAGS=-mod=mod go install github.com/kackerx/sqlmux/cmd/sqlmux@<这个 commit 的 sha>` 能装（决策者 2026-10-11 在 `v0.2.0` 上确认：装出的二进制 `keys --check` 通过；推送后几分钟内 sum.golang.org 还没收录，先用 `GONOSUMDB` 验的）。
+- [x] `just check` 全绿；在仓库外的临时目录 `GOFLAGS=-mod=mod go install github.com/kackerx/sqlmux/cmd/sqlmux@<这个 commit 的 sha>` 能装（决策者 2026-10-11 在 `v0.2.0` 上确认：装出的二进制 `keys --check` 通过；推送后几分钟内 sum.golang.org 还没收录，先用 `GONOSUMDB` 验、之后走 proxy.golang.org 带校验又装了一次）。
