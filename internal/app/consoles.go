@@ -83,25 +83,40 @@ func (a *App) openConsoleFile(name string) tea.Cmd {
 }
 
 // deleteConsole is tree.delete on a console of the Consoles node: after a
-// question the file goes, and what state.json kept of it; one that is open
-// is not asked about, it has to be closed first (F8.21). On any other node
-// it does nothing.
+// question the file goes, and what state.json kept of it, and the tabs that
+// have it open, in every session (F8.21, F10.10). On any other node it
+// does nothing.
 func (a *App) deleteConsole() tea.Cmd {
 	n, ok := a.treeNode()
 	if !ok || n.kind != nodeConsoleFile {
 		return nil
 	}
 	name := n.console
-	if a.consoleOpen(name, nil) {
-		return a.showToast(i18n.T("先关掉它的 tab"), toastTTL)
-	}
 	a.confirm = &confirmBox{text: i18n.T("删除 %s？", name), yes: i18n.T("删除"), then: func() tea.Cmd {
 		if err := config.DeleteConsole(name); err != nil {
 			return a.showToast(err.Error(), toastTTL)
 		}
+		a.dropConsoleTabs(name)
 		delete(a.state.Consoles, name)
 		a.clampTree()
 		return a.saveState()
 	}}
 	return nil
+}
+
+// dropConsoleTabs closes the tabs that have console name open, in every
+// session, as a dropped table's go (F8.23): what was typed and not written
+// goes with the file, and an autosave still to come writes nothing; a pane
+// left with no tab shows the landing page (F10.10).
+func (a *App) dropConsoleTabs(name string) {
+	for _, s := range a.sessions {
+		for _, p := range s.panes() {
+			for i := len(p.Tabs) - 1; i >= 0; i-- {
+				if t := p.Tabs[i].Console; t != nil && strings.EqualFold(t.name, name) {
+					t.saved = t.ver
+					dropTab(p, i)
+				}
+			}
+		}
+	}
 }

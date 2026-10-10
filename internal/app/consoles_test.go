@@ -186,8 +186,8 @@ func TestDeleteConsoleFileFails(t *testing.T) {
 }
 
 // tree.delete on a console file asks first, then deletes the file and what
-// state.json kept of it, and the number is free again; one open is not
-// asked about; on any other node it does nothing (F8.21).
+// state.json kept of it, and the number is free again; on any other node it
+// does nothing (F8.21).
 func TestDeleteConsoleFile(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
@@ -214,16 +214,59 @@ func TestDeleteConsoleFile(t *testing.T) {
 	if got := a.freeConsole(); got != "console_2" {
 		t.Errorf("the number is free: %s", got)
 	}
-	// an open one is refused
-	consoleNode(t, a, "console_1")
-	if feed(t, a, "dd"); a.confirm != nil || a.toast != "先关掉它的 tab" {
-		t.Errorf("open: asked %v, toast %q", a.confirm, a.toast)
-	}
 	// another node: nothing
 	a.toast = ""
 	treeTo(t, a, "public")
 	if feed(t, a, "dd"); a.confirm != nil || a.toast != "" {
 		t.Errorf("a schema: asked %v, toast %q", a.confirm, a.toast)
+	}
+}
+
+// A console that is open is deleted all the same, after the question: the
+// file, what state.json kept, and its tabs in every session, the pane they
+// leave empty; text not written goes with it, and an autosave still to come
+// writes the file no more; one with no file yet is deleted as well (F10.10).
+func TestDeleteOpenConsole(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	a, report := withSessions()
+	other := report.consoles()[0]
+	other.name = "Console_1" // the same file, open in the other session as well
+	c := consoleOf(a.win().Root.B.Pane)
+	a.win().focus(a.win().Root.B.Pane.ID)
+	feed(t, a, "iselect 1<Esc>")
+	if c.name != "console_1" || c.ver == c.saved {
+		t.Fatalf("typed in %s: ver %d saved %d", c.name, c.ver, c.saved)
+	}
+	consoleFile(t, "console_1", "select 0\n")
+	a.state.Consoles = map[string]config.ConsoleState{"console_1": {Conn: "doraemon"}}
+	consoleNode(t, a, "console_1")
+	feed(t, a, "dd")
+	if a.confirm == nil || a.confirm.text != "删除 console_1？" || a.toast != "" {
+		t.Fatalf("asked: %v, toast %q", a.confirm, a.toast)
+	}
+	feed(t, a, "<Esc>")
+	if len(a.sess.consoles()) != 1 || !config.ConsoleExists("console_1") {
+		t.Fatal("no: it stays")
+	}
+	pane := a.win().Root.B.Pane
+	feed(t, a, "dd<CR>")
+	if len(a.sess.consoles()) != 0 || len(report.consoles()) != 0 || len(pane.Tabs) != 0 {
+		t.Errorf("tabs left: %d here, %d there, %d in its pane", len(a.sess.consoles()), len(report.consoles()), len(pane.Tabs))
+	}
+	if config.ConsoleExists("console_1") || a.state.Consoles["console_1"].Conn != "" {
+		t.Errorf("file %v, state %v", config.ConsoleExists("console_1"), a.state.Consoles)
+	}
+	a.Update(autosave{t: c, ver: c.ver}) // what was typed does not bring the file back
+	if config.ConsoleExists("console_1") || a.toast != "" {
+		t.Errorf("an autosave after: file %v, toast %q", config.ConsoleExists("console_1"), a.toast)
+	}
+	// open and with no file yet: nothing to remove, the tab goes
+	a.openConsoleFile("console_7")
+	d := a.consoles()[slices.IndexFunc(a.consoles(), func(c *consoleTab) bool { return c.name == "console_7" })]
+	consoleNode(t, a, "console_7")
+	if feed(t, a, "dd<CR>"); a.toast != "" || slices.Contains(a.consoles(), d) {
+		t.Errorf("no file: toast %q, open %v", a.toast, slices.Contains(a.consoles(), d))
 	}
 }
 
