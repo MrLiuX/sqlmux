@@ -198,7 +198,7 @@ func jsonValue(c ui.ColType, v db.Val) any {
 	switch {
 	case v.Null:
 		return nil
-	case c == ui.ColNumber && number.MatchString(v.S) && json.Valid([]byte(v.S)):
+	case c == ui.ColNumber && json.Valid([]byte(v.S)): // not "NaN", nor "007"
 		return json.RawMessage(v.S)
 	case c == ui.ColBool && slices.Contains([]string{"t", "true", "1"}, v.S):
 		return true
@@ -210,41 +210,31 @@ func jsonValue(c ui.ColType, v db.Val) any {
 	return v.S
 }
 
-// fields is an object with its keys in the order they were given, which a
-// map would not keep.
-type fields []jsonField
-
-func (fs fields) MarshalJSON() ([]byte, error) {
-	var b bytes.Buffer
-	b.WriteByte('{')
+// rowJSON is a row as a JSON object, in two spaces' indents (F9.5): its keys
+// in the order of the columns, which a map would not keep, so the braces and
+// commas are written here and each key and value by encoding/json.
+func rowJSON(fs []jsonField) (string, error) {
+	var raw bytes.Buffer
+	raw.WriteByte('{')
 	for i, f := range fs {
 		if i > 0 {
-			b.WriteByte(',')
+			raw.WriteByte(',')
 		}
 		k, err := jsonOf(f.name)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		v, err := jsonOf(jsonValue(f.class, f.val))
 		if err != nil {
-			return nil, err
+			return "", err
 		}
-		b.Write(k)
-		b.WriteByte(':')
-		b.Write(v)
+		raw.Write(k)
+		raw.WriteByte(':')
+		raw.Write(v)
 	}
-	b.WriteByte('}')
-	return b.Bytes(), nil
-}
-
-// rowJSON is a row as a JSON object, in two spaces' indents (F9.5).
-func rowJSON(fs []jsonField) (string, error) {
-	raw, err := jsonOf(fields(fs))
-	if err != nil {
-		return "", err
-	}
+	raw.WriteByte('}')
 	var out bytes.Buffer
-	if err := json.Indent(&out, raw, "", "  "); err != nil {
+	if err := json.Indent(&out, raw.Bytes(), "", "  "); err != nil {
 		return "", err
 	}
 	return out.String(), nil

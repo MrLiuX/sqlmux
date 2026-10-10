@@ -94,7 +94,7 @@ func (a *App) cycleSession(d int) {
 // attachLast is session.last: the session attached before this one, if it is
 // still there (F9.10).
 func (a *App) attachLast() {
-	if s := a.lastSess; s != nil && s != a.sess && slices.Contains(a.sessions, s) {
+	if s := a.lastSess; s != nil && slices.Contains(a.sessions, s) {
 		a.attach(s)
 	}
 }

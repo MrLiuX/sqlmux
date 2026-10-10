@@ -67,6 +67,24 @@ func TestSessionNextPrevLast(t *testing.T) {
 	}
 }
 
+// ↵ in the session list on the session shown attaches it to itself, which is
+// no switch: SPC L still goes back to the one before (F9.10).
+func TestSessionLastAfterAttachingItself(t *testing.T) {
+	a, report := withSessions()
+	doraemon := a.sess
+	feed(t, a, "<Space>)")
+	if a.sess != report {
+		t.Fatal("not on report")
+	}
+	feed(t, a, "<Space>s<CR>") // the list opens on the session shown
+	if a.sess != report || a.sessList != nil {
+		t.Fatalf("↵: on %s", a.sess.Name)
+	}
+	if feed(t, a, "<Space>L"); a.sess != doraemon {
+		t.Errorf("SPC L: on %s, want %s", a.sess.Name, doraemon.Name)
+	}
+}
+
 // The session list (§7.8): open on the session attached; l shows a
 // session's windows, h hides them; ↵ attaches, on a window switching to
 // it too; a click on a row is ↵ on it; the status bar's session block and
