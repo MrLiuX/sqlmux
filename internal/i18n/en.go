@@ -219,6 +219,8 @@ var en = map[string]string{
 	"值":               "value",
 	"全不选":             "None",
 	"全选":              "All",
+	"列上移":             "Move the column up",
+	"列下移":             "Move the column down",
 	"全部 %d 列":         "all %d columns",
 	"关":               "off",
 	"关键字":             "keyword",

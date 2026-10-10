@@ -1,0 +1,45 @@
+┌─ ⓪  doraemon ─────── SPC b ─┐ ┌─ ①  t_order ───────────────────────────────────────────────┐ ┌─ ②  c…  Tx: 自动 ▾ doraemon · doraemon.public ▾  ▶ run  ↵ ─┐
+│  15 tables                 │ │ WHERE                                                C-r ▾ │ │   1                                                         │
+│──────────────────────────────│ │  ORDER id    LIMIT 100   PAGE 1/?   COLS 7/7             │ │                                                             │
+│ ▾  doraemon                 │ │     │  id │ amount │ status  │ paid┌────────────────────────────────────────────┐                                          │
+│   ▸  agentable              │ │─────┼──────┼────────┼─────────┼─────│                                       7/7 │                                          │
+│   ▾  public                 │ │   1 │    1 │   1.99 │ running │ t   │────────────────────────────────────────────│                                          │
+│     ▾  Tables (14)          │ │   2 │    2 │   2.99 │ done    │ t   │ [x] id                            bigint  │                                          │
+│       ▸  agent          124 │ │   3 │    3 │   3.99 │ failed  │ t   │ [x] amount                   numeric(10,2) │                                          │
+│       ▸  agent_version  530 │ │   4 │    4 │   4.99 │ pending │ t   │ [x] status                    order_status │                                          │
+│       ▸  goal            57 │ │   5 │    5 │   5.99 │ running │ t   │ [x] paid                           boolean │                                          │
+│       ▸  mt_task        812 │ │   6 │    6 │   6.99 │ done    │ t   │ [x] meta                             jsonb │                                          │
+│       ▸  mt_task_log    96k │ │   7 │    7 │   7.99 │ failed  │ t   │ [x] note                              text │                                          │
+│       ▸  schema_migrations  │ │   8 │    8 │   8.99 │ pending │ t   │ [x] created_at    timestamp with time zone │                                          │
+│       ▸  t_order       1.2m │ │   9 │    9 │   9.99 │ running │ t   │────────────────────────────────────────────│                                          │
+│       ▸  t_order_item  3.4m │ │  10 │   10 │  10.99 │ done    │ t   │ J/K 移动 · a 全选 · A 全不选               │                                          │
+│       ▸  t_payment     410k │ │  11 │   11 │  11.99 │ failed  │ t   └────────────────────────────────────────────┘                                          │
+│       ▸  t_refund       12k │ │  12 │   12 │  12.99 │ pending │ t    │ {"n": 12, "tags": ["a│ │                                                             │
+│       ▸  t_sku         8.1k │ │  13 │   13 │  13.99 │ running │ t    │ {"n": 13, "tags": ["a│ │                                                             │
+│       ▸  t_user         38k │ │  14 │   14 │  14.99 │ done    │ t    │ {"n": 14, "tags": ["a│ │                                                             │
+│       ▸  t_user_address 52k │ │  15 │   15 │  15.99 │ failed  │ t    │ {"n": 15, "tags": ["a│ │                                                             │
+│       ▸  t_user_profile 38k │ │  16 │   16 │  16.99 │ pending │ t    │ {"n": 16, "tags": ["a│ │                                                             │
+│        Views (0)            │ │  17 │   17 │  17.99 │ running │ t    │ {"n": 17, "tags": ["a│ │                                                             │
+│ ▾  工作区                   │ │  18 │   18 │  18.99 │ done    │ t    │ {"n": 18, "tags": ["a│ │                                                             │
+│   ▾  data                   │ │  19 │   19 │  19.99 │ failed  │ t    │ {"n": 19, "tags": ["a│ │                                                             │
+│     ▾  pane-1               │ │  20 │   20 │  20.99 │ pending │ t    │ {"n": 20, "tags": ["a│ │                                                             │
+│            t_order          │ │  21 │   21 │  21.99 │ running │ t    │ {"n": 21, "tags": ["a│ │                                                             │
+│     ▾  pane-2               │ │  22 │   22 │  22.99 │ done    │ t    │ {"n": 22, "tags": ["a│ │                                                             │
+│            console_1        │ │  23 │   23 │  23.99 │ failed  │ t    │ {"n": 23, "tags": ["a│ │                                                             │
+│ ▾  Consoles                 │ │  24 │   24 │  24.99 │ pending │ t    │ {"n": 24, "tags": ["a│ │                                                             │
+│      console_1              │ │  25 │   25 │  25.99 │ running │ t    │ {"n": 25, "tags": ["a│ │                                                             │
+│                              │ │  26 │   26 │  26.99 │ done    │ t    │ {"n": 26, "tags": ["a│ │                                                             │
+│                              │ │  27 │   27 │  27.99 │ failed  │ t    │ {"n": 27, "tags": ["a│ │                                                             │
+│                              │ │  28 │   28 │  28.99 │ pending │ t    │ {"n": 28, "tags": ["a│ │                                                             │
+│                              │ │  29 │   29 │  29.99 │ running │ t    │ {"n": 29, "tags": ["a│ │                                                             │
+│                              │ │  30 │   30 │  30.99 │ done    │ t    │ {"n": 30, "tags": ["a│ │                                                             │
+│                              │ │  31 │   31 │  31.99 │ failed  │ t    │ {"n": 31, "tags": ["a│ │                                                             │
+│                              │ │  32 │   32 │  32.99 │ pending │ t    │ {"n": 32, "tags": ["a│ │                                                             │
+│                              │ │  33 │   33 │  33.99 │ running │ t    │ {"n": 33, "tags": ["a│ │                                                             │
+│                              │ │  34 │   34 │  34.99 │ done    │ t    │ {"n": 34, "tags": ["a│ │                                                             │
+│                              │ │  35 │   35 │  35.99 │ failed  │ t    │ {"n": 35, "tags": ["a│ │                                                             │
+│                              │ │  36 │   36 │  36.99 │ pending │ t    │ {"n": 36, "tags": ["a│ │                                                             │
+│──────────────────────────────│ │  37 │   37 │  37.99 │ running │ t    │ {"n": 37, "tags": ["a│ │                                                             │
+│ j/k move · ↵ open            │ │ 1: t_order* │ +             hjkl · ↵ edit · T 转置 · gt/gT │ │ 1: console_1* │ +                                    gt/gT │
+└──────────────────────────────┘ └─────────────────────────────────────────────────────────────┘ └─────────────────────────────────────────────────────────────┘
+ doraemon ▾  0: data*                                                                                       ·    1,1   doraemon · pg@localhost:5432  COMMAND 

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"image/color"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/keymap"
@@ -355,6 +357,81 @@ func TestCols(t *testing.T) {
 	if a.cols != nil {
 		t.Error("then closes")
 	}
+}
+
+// J and K in COLS move the column under the selection down and up a place,
+// the table's order and the cursor's column with it; yy, yi and Y go by that
+// order, hidden columns in Y and yi too; with the filter on J does nothing; a
+// column the refresh brings goes last, one it takes away leaves the order
+// (F10.3).
+func TestColsMove(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	names := func() string {
+		var s []string
+		for _, f := range tab.shownCols() {
+			s = append(s, tab.page.Cols[f].Name)
+		}
+		return strings.Join(s, " ")
+	}
+	feed(t, a, "ll") // on amount
+	feed(t, a, "gcjjK")
+	if names() != "id amount status paid meta note created_at" || tab.col != 1 || a.cols.sel != 1 {
+		t.Fatalf("K on amount: %s, cursor %d, selected %d", names(), tab.col, a.cols.sel)
+	}
+	if feed(t, a, "KK"); names() != "amount id status paid meta note created_at" || a.cols.sel != 0 {
+		t.Errorf("K at the top stays: %s, selected %d", names(), a.cols.sel)
+	}
+	if feed(t, a, "JJJ"); names() != "id status paid amount meta note created_at" || tab.col != 3 {
+		t.Errorf("J three times: %s, cursor %d", names(), tab.col)
+	}
+	if v := a.colsView(); v.Items[3] != "amount" || v.Items[0] != "id" {
+		t.Errorf("the list follows the order: %v", v.Items)
+	}
+	feed(t, a, "/am<CR>J") // filtered: not all of the list is there
+	if names() != "id status paid amount meta note created_at" {
+		t.Errorf("J with the filter on: %s", names())
+	}
+	feed(t, a, "<Esc>")
+
+	text := func(cmd tea.Cmd) string { s, _ := clipText(cmd); return s }
+	// the copies go by the order: yy the shown columns, yi and Y every one
+	feed(t, a, "<Esc>")
+	tab.hidden["status"] = true
+	if cmd := keys(t, a, "yy"); !strings.HasPrefix(text(cmd), "1\tt\t1.99\t") {
+		t.Errorf("yy: %q", text(cmd))
+	}
+	if cmd := keys(t, a, "yi"); !strings.Contains(text(cmd), `("id", "status", "paid", "amount", "meta", "note", "created_at")`) {
+		t.Errorf("yi: %q", text(cmd))
+	}
+	keysOf := regexp.MustCompile(`(?m)^  "(\w+)":`).FindAllStringSubmatch(text(keys(t, a, "Y")), -1)
+	var got []string
+	for _, k := range keysOf {
+		got = append(got, k[1])
+	}
+	if strings.Join(got, " ") != "id status paid amount meta note created_at" {
+		t.Errorf("Y: %v", got)
+	}
+
+	// a refresh: a column it brings goes last, one it takes away leaves the order
+	page := db.Result{}
+	for _, c := range tab.page.Cols {
+		if c.Name != "meta" {
+			page.Cols = append(page.Cols, c)
+		}
+	}
+	page.Cols = append(page.Cols, db.Col{Name: "extra"})
+	a.Update(pageMsg{tab: tab, seq: tab.seq, cols: tab.cols, page: page})
+	if got := strings.Join(tab.colOrder, " "); got != "id status paid amount note created_at" || names() != "id paid amount note created_at extra" {
+		t.Errorf("refreshed: order %q, shown %q", got, names())
+	}
+}
+
+// The list as it shows after a K: the order in it and in the table's header,
+// and the J/K hint under it (F10.3).
+func TestGoldenColsMoved(t *testing.T) {
+	a, _, _ := withRecorder(t)
+	feed(t, a, "gcjjK")
+	golden.RequireEqual(t, a.render().String())
 }
 
 // The count comes in after the page: n, ? past the timeout, ~n with no

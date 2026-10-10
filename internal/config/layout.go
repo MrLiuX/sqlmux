@@ -72,8 +72,9 @@ type LayoutTab struct {
 	Order     string   `toml:"order,omitempty"`
 	Desc      bool     `toml:"desc,omitempty"`
 	Limit     int      `toml:"limit,omitempty"`
-	Page      int      `toml:"page,omitempty"` // from 0
-	Cols      []string `toml:"cols,omitempty"` // the columns COLS hides
+	Page      int      `toml:"page,omitempty"`       // from 0
+	Cols      []string `toml:"cols,omitempty"`       // the columns COLS hides
+	OrderCols []string `toml:"order_cols,omitempty"` // the columns in the order COLS puts them (F10.3)
 	Transpose bool     `toml:"transpose,omitempty"`
 	// a console's: the name of its file; N is what layouts of before
 	// M8 F8.11 say, console_<n>

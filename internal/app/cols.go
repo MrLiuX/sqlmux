@@ -28,14 +28,20 @@ func (a *App) openCols() {
 	}
 }
 
-// colsMatches is the columns that pass the filter, in the table's order.
+// colsMatches is the columns that pass the filter, in COLS's order; Index is
+// the column's in the page's.
 func (a *App) colsMatches() []ui.Match {
-	var names []string
-	for _, c := range a.cols.tab.page.Cols {
-		names = append(names, c.Name)
+	t := a.cols.tab
+	o := t.ordered()
+	names := make([]string, len(o))
+	for i, f := range o {
+		names[i] = t.page.Cols[f].Name
 	}
 	ms := ui.Filter(a.cols.filter.Text, names)
 	slices.SortFunc(ms, func(x, y ui.Match) int { return x.Index - y.Index })
+	for i := range ms {
+		ms[i].Index = o[ms[i].Index]
+	}
 	return ms
 }
 
@@ -55,6 +61,28 @@ func (a *App) colsMove(d int) {
 	_, rows := a.colsBox(a.colsView())
 	m.sel = max(min(m.sel+d, n-1), 0)
 	m.top = max(min(m.top, m.sel), m.sel-rows+1)
+}
+
+// colsShift is J (d 1) and K on the selected column: it and the one next to
+// it in the list change places, the cursor staying on the column it was on;
+// with the filter on it does nothing, the list not being all there (F10.3).
+func (a *App) colsShift(d int) {
+	m := a.cols
+	t := m.tab
+	o := t.ordered()
+	if j := m.sel + d; m.filter.Text != "" || m.sel >= len(o) || j < 0 || j >= len(o) {
+		return
+	}
+	at := t.fieldAt(t.col)
+	o[m.sel], o[m.sel+d] = o[m.sel+d], o[m.sel]
+	t.colOrder = nil
+	for _, f := range o {
+		t.colOrder = append(t.colOrder, t.page.Cols[f].Name)
+	}
+	if at >= 0 {
+		t.col = slices.Index(t.shownCols(), at)
+	}
+	a.colsMove(d)
 }
 
 // colsToggle shows or hides the column at row i of the list.
@@ -113,6 +141,7 @@ func (a *App) colsView() ui.Dropdown {
 		Pane:  m.pane.ID,
 		Count: fmt.Sprintf("%d/%d", len(ms), len(t.page.Cols)),
 		Hints: bound(
+			ui.Hint{Key: a.hints("cols", "/", "cols.move.down", "cols.move.up"), Label: i18n.T("移动")},
 			ui.Hint{Key: a.keys.Hint("cols.all", "cols"), Label: i18n.T("全选"), Action: "cols.all"},
 			ui.Hint{Key: a.keys.Hint("cols.none", "cols"), Label: i18n.T("全不选"), Action: "cols.none"},
 		),

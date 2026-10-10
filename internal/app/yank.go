@@ -146,7 +146,8 @@ func (a *App) yankInsert() tea.Cmd {
 	}
 	eng := t.conn.eng
 	var names, vals []string
-	for _, pc := range t.page.Cols {
+	for _, f := range t.ordered() { // as COLS has them, hidden ones too (F10.3)
+		pc := t.page.Cols[f]
 		col := t.column(pc.Name)
 		v, set := t.value(sr, key, pc.Name)
 		if set && db.IsBinaryShown(v.S) { // the bytes are not here: no statement of what they are
@@ -258,7 +259,8 @@ func (a *App) yankJSON() tea.Cmd {
 		if !ok {
 			return nil
 		}
-		for _, c := range t.page.Cols {
+		for _, f := range t.ordered() {
+			c := t.page.Cols[f]
 			if v, set := t.value(sr, key, c.Name); set {
 				fs = append(fs, jsonField{c.Name, colType(cmp.Or(t.typeOf(c.Name), c.Type)), v})
 			}

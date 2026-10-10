@@ -89,6 +89,7 @@ func paneLayout(p *Pane) config.LayoutPane {
 				}
 			}
 			slices.Sort(lt.Cols)
+			lt.OrderCols = slices.Clone(d.colOrder)
 		case tb.Console != nil:
 			t := tb.Console
 			c, schema := t.conn, t.schema
@@ -274,6 +275,7 @@ func (s *Session) restoreTab(lt config.LayoutTab, used map[string]bool) (tb Tab,
 			d.hidden[name] = true
 		}
 		d.transpose = lt.Transpose
+		d.colOrder = slices.Clone(lt.OrderCols)
 		return Tab{Name: lt.Table, Data: d}, ""
 	}
 	cname := lt.ConsoleName()

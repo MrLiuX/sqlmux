@@ -187,6 +187,8 @@ leader = "<Space>"
 [keys.cols] # Q-04: the list has the keys until / gives them to the filter
 "j" = "cols.down"
 "k" = "cols.up"
+"J" = "cols.move.down" # the column goes down / up a place, the table's order with it (F10.3)
+"K" = "cols.move.up"
 "<Space>" = "cols.toggle"
 "a" = "cols.all"
 "A" = "cols.none"

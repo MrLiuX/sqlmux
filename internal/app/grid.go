@@ -59,6 +59,7 @@ type dataTab struct {
 	where    ui.Input         // the WHERE input
 	ed       *editor.Editor   // its vim while typing is "where" (F3.39): where shows its line
 	hidden   map[string]bool  // columns COLS hides
+	colOrder []string         // the columns' names in the order COLS puts them; one it lacks goes after (F10.3)
 	pageIn   ui.Input         // PAGE's page number, while typed
 	typing   string           // the input that has the keys: "where", "page", "cell" or ""
 	cell     *cellEdit        // the cell being edited, while typing is "cell" (§10.1)
@@ -233,6 +234,9 @@ func (a *App) gotPage(m pageMsg) tea.Cmd {
 	}
 	clearBar(&t.bar, "fetch")
 	t.cols, t.page, t.next, t.shown = m.cols, m.page, m.next, t.request
+	t.colOrder = slices.DeleteFunc(t.colOrder, func(name string) bool { // a column that is gone (F10.3)
+		return !slices.ContainsFunc(t.page.Cols, func(c db.Col) bool { return c.Name == name })
+	})
 	t.row = max(min(t.row, len(t.shownRows())-1), 0)
 	if t.wantRec > 0 {
 		t.goRec(t.wantRec - 1)
@@ -307,11 +311,30 @@ func (t *dataTab) pages() (int64, bool) {
 	return max((t.count+int64(t.shown.limit)-1)/int64(t.shown.limit), 1), true
 }
 
-// shownCols is the columns COLS lets through, as indexes into the page's.
+// ordered is every column of the page, as indexes into the page's, in the
+// order COLS puts them: those colOrder names first, the others after as the
+// page has them, so a column that came with a refresh goes last (F10.3).
+func (t *dataTab) ordered() []int {
+	out := make([]int, 0, len(t.page.Cols))
+	for _, name := range t.colOrder {
+		if i := slices.IndexFunc(t.page.Cols, func(c db.Col) bool { return c.Name == name }); i >= 0 {
+			out = append(out, i)
+		}
+	}
+	for i, c := range t.page.Cols {
+		if !slices.Contains(t.colOrder, c.Name) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// shownCols is the columns COLS lets through, in its order, as indexes into
+// the page's.
 func (t *dataTab) shownCols() []int {
 	var out []int
-	for i, c := range t.page.Cols {
-		if !t.hidden[c.Name] {
+	for _, i := range t.ordered() {
+		if !t.hidden[t.page.Cols[i].Name] {
 			out = append(out, i)
 		}
 	}
@@ -327,10 +350,11 @@ func (t *dataTab) fieldAt(i int) int {
 }
 
 // nearestShown is the shown index of page column field, or of the first
-// shown one after it, or else the last shown one.
+// shown one after it in COLS's order, or else the last shown one.
 func (t *dataTab) nearestShown(field int) int {
-	s := t.shownCols()
-	if i := slices.IndexFunc(s, func(f int) bool { return f >= field }); i >= 0 {
+	o, s := t.ordered(), t.shownCols()
+	at := slices.Index(o, field)
+	if i := slices.IndexFunc(s, func(f int) bool { return slices.Index(o, f) >= at }); i >= 0 {
 		return i
 	}
 	return max(len(s)-1, 0)

@@ -2,7 +2,9 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -24,6 +26,26 @@ func clipped(cmd tea.Cmd, want string) bool {
 		return slices.ContainsFunc(m, func(c tea.Cmd) bool { return clipped(c, want) })
 	}
 	return msg == tea.SetClipboard(want)()
+}
+
+// clipText is the text cmd, or one it batches, puts on the clipboard.
+func clipText(cmd tea.Cmd) (string, bool) {
+	if cmd == nil {
+		return "", false
+	}
+	msg := cmd()
+	if m, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range m {
+			if s, ok := clipText(c); ok {
+				return s, true
+			}
+		}
+		return "", false
+	}
+	if msg != nil && fmt.Sprintf("%T", msg) == "tea.setClipboardMsg" {
+		return reflect.ValueOf(msg).String(), true
+	}
+	return "", false
 }
 
 // keys presses keys and is the Cmd the last one returned.

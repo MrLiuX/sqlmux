@@ -318,6 +318,8 @@ func init() {
 		"sessions.close":    {Title: i18n.N("关闭列表"), Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessList = nil; return nil })},
 		"cols.up":           {Title: i18n.N("上移"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsMove(-1); return nil })},
 		"cols.down":         {Title: i18n.N("下移"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsMove(1); return nil })},
+		"cols.move.up":      {Title: i18n.N("列上移"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsShift(-1); return nil })},
+		"cols.move.down":    {Title: i18n.N("列下移"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsShift(1); return nil })},
 		"cols.toggle":       {Title: i18n.N("显示 / 隐藏这一列"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsToggle(a.cols.sel); return nil })},
 		"cols.all":          {Title: i18n.N("全部显示"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsSetAll(true); return nil })},
 		"cols.none":         {Title: i18n.N("全部隐藏"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsSetAll(false); return nil })},

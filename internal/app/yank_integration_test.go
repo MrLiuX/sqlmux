@@ -4,37 +4,13 @@ package app
 
 import (
 	"context"
-	"fmt"
-	"reflect"
 	"strings"
 	"testing"
-
-	tea "charm.land/bubbletea/v2"
 
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/db/mysql"
 	"github.com/kackerx/sqlmux/internal/db/postgres"
 )
-
-// clipText is the text cmd, or one it batches, puts on the clipboard.
-func clipText(cmd tea.Cmd) (string, bool) {
-	if cmd == nil {
-		return "", false
-	}
-	msg := cmd()
-	if m, ok := msg.(tea.BatchMsg); ok {
-		for _, c := range m {
-			if s, ok := clipText(c); ok {
-				return s, true
-			}
-		}
-		return "", false
-	}
-	if msg != nil && fmt.Sprintf("%T", msg) == "tea.setClipboardMsg" {
-		return reflect.ValueOf(msg).String(), true
-	}
-	return "", false
-}
 
 func yiRoundTrip(t *testing.T, c db.Conn, eng db.Engine, schema string, setup []string, clone string) {
 	ctx := context.Background()
