@@ -592,14 +592,14 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 
 // What gives way on the query bar's second row, the least first (§7.8「第二行
 // 放不下时谁让位」), the only place that says: transpose, auto refresh and stop,
-// + −, then the count of records selected, COLS, PAGE, LIMIT, then save and refresh, which has the changes'
+// + −, then COLS, the count of records selected, PAGE, LIMIT, then save and refresh, which has the changes'
 // count, then ORDER.
 const (
 	stayTranspose = iota
 	stayAuto
 	stayRows
-	staySelected
 	stayCols
+	staySelected
 	stayPage
 	stayLimit
 	staySave

@@ -333,7 +333,8 @@ func TestSelectPausesAutoRefresh(t *testing.T) {
 
 // The count of records selected is a segment of the query bar's own, not the
 // row count's: it shows where that has given way, and gives way after the
-// buttons and before COLS (F10.7).
+// buttons and COLS, before PAGE: COLS gives way for it, where it is not
+// room for both (F10.7).
 func TestSelectCountSegment(t *testing.T) {
 	row := func(a *App) string {
 		r := a.layout()[a.focused().ID]
@@ -348,10 +349,13 @@ func TestSelectCountSegment(t *testing.T) {
 	if a.queryBar(a.focused(), tab).Selected != "已选 2" {
 		t.Errorf("the segment: %q", a.queryBar(a.focused(), tab).Selected)
 	}
-	a = sized(160, 45, "nerd") // 63 columns: the buttons gone, COLS stays
+	a = sized(160, 45, "nerd") // 63 columns: the buttons gone, COLS gives way to the count, PAGE stays
 	loadOrders(t, a, 6)
+	if got := row(a); !strings.Contains(got, "COLS") {
+		t.Fatalf("narrow, none selected: %q", got)
+	}
 	feed(t, a, "mjm")
-	if got := row(a); strings.Contains(got, "已选") || !strings.Contains(got, "COLS") {
+	if got := row(a); !strings.Contains(got, "已选 2") || strings.Contains(got, "COLS") || !strings.Contains(got, "PAGE") {
 		t.Errorf("narrow: %q", got)
 	}
 }
