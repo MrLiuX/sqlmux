@@ -142,7 +142,7 @@ def main():
                 title = "".join(ch[0] for ch in row[x:x2])
                 m = re.search(r"⟨(\d+)⟩|([⓪①-⑳])", title)
                 num = m[1] if m and m[1] else (str(CIRCLED.index(m[2])) if m else "-")
-                print(num, x + 1, y + 1, x2 - x + 1, y2 - y + 1, int(c[1] == "#9ece6a"))
+                print(num, x + 1, y + 1, x2 - x + 1, y2 - y + 1, int(c[1] == "#9ece6a" or (c[1] == "#e0af68" and x == 0 and y == 0)))   # F9.6: a zoomed pane (alone, from the corner) has the zoom color (default warn) and is the focused one
     elif cmd == "width":
         for row in g:
             print(len(row))

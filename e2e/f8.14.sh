@@ -20,7 +20,7 @@ start -S "$ST"; open_table t_order; wait_for 8 settled
 run "id < 50"; run "status = 'done'"
 edit; key C-r; sleep 0.5
 check "只有历史：两项，没有分隔线，底部有一行提示" eval '[[ $(items | grep -c "^─") == 0 && $(items | grep -c "^id < 50\\|^status") == 2 && $(items | tail -1) == "C-p/C-n 移动"* ]] || { items; false; }'
-check "底部提示的键位文字来自 keymap：移动 C-p/C-n、↵ 应用、C-f 收藏 / 取消收藏、esc 关闭" eval 'items | tail -1 | grep -q "^C-p/C-n 移动 · ↵ 应用 · C-f 收藏 / 取消收藏 · esc 关闭$"'
+check "底部提示的键位文字来自 keymap：移动 C-p/C-n、↵ 应用、C-e 填入（F9.1）、C-f 收藏 / 取消收藏、esc 关闭" eval 'items | tail -1 | grep -q "^C-p/C-n 移动 · ↵ 应用 · C-e 填入 · C-f 收藏 / 取消收藏 · esc 关闭$"'
 key C-f
 check "C-f 收藏第一项（最新的 status = 'done'）：历史在上，一条横线，收藏在下" eval 'it=$(items); [[ $(grep -c "^─" <<<"$it") == 1 ]] && n=$(grep -n "^─" <<<"$it" | cut -d: -f1) && [[ $(sed -n "$((n + 1))p" <<<"$it") == "status = "* ]] && sed -n "1p" <<<"$it" | grep -q "^status = " || { echo "$it"; false; }'
 key Escape; key Escape

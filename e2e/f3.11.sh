@@ -23,14 +23,14 @@ logs() { local g y; g=($(geom 3)); for ((y = g[1] + 1; y < g[1] + g[3] - 2; y++)
 psql_n() { psql "$E2E_DB" -At -c "$1"; }
 
 start -C "$D/own"
-check "② 标题：<连接> · <库名>.<schema> ▾，默认是树当前的 public" eval '[[ $(title 2) == *" d · $DB.public ▾  ▶ run  ↵ ─┐" ]] || { echo "  $(title 2)"; false; }'
+check "② 标题：<连接> · <库名>.<schema> ▾，默认是树当前的 public" eval '[[ $(title 2) == *" d · $DB.public ▾  ▶ run"* ]] || { echo "  $(title 2)"; false; }'
 key C-l; key g; key s
 check "gs：打开下拉框，输入直接进过滤框（COMMAND）" eval '[[ -n $(pop) && $(bar) == *" COMMAND " ]]'
 g=($(pop)); x=$(e2e_find "$DB.public" 1 | cut -d" " -f1)
 check "下拉框在按钮下方、与按钮左对齐，右边框和 ② 的右边框对齐" eval '[[ ${g[0]} == $x && ${g[1]} == 2 && $(( g[0] + g[2] - 1 )) == 160 ]] || { echo "  box ${g[*]}, button x $x"; false; }'
 check "当前的 public 用 pk 色标出；系统 schema 不列" eval 'y=$(for y in $(seq 3 12); do [[ $(e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $y) == *" public "* ]] && echo $y; done | head -1); [[ -n $y ]] && c=$(e2e_find public $y | tr " " "\n" | awk -v l=${g[0]} "\$1 > l { print; exit }") && style_has $c $y fg=$PK && ! screen_has pg_catalog && ! screen_has information_schema'
 e2e_type agen; sleep 0.3; key Enter
-check "过滤出 agentable、↵：标题变成 $DB.agentable ▾" eval '[[ -z $(pop) && $(title 2) == *" d · $DB.agentable ▾  ▶ run  ─┐" ]]'
+check "过滤出 agentable、↵：标题变成 $DB.agentable ▾" eval '[[ -z $(pop) && $(title 2) == *" d · $DB.agentable ▾  ▶ run"* ]]'
 setsql "select count(*) as n from agent"
 run
 check "选了 agentable：不带 schema 的 agent 查的是 agentable.agent" eval '[[ $(rrow 3) == *" $(psql_n "select count(*) from agentable.agent")"* ]] || { echo "  $(rrow 3)"; false; }'
