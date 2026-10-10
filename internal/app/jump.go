@@ -20,12 +20,10 @@ const jumpLabels = "asdfghjklqwertyuiopzxcvbnm"
 
 // jumpState is a flash-style jump going on: the pattern typed and the
 // matches of it on the screen as the last key left it, labelled (§6.10,
-// F10.8). scanning is set while the frame drawn is the one the matches are
-// read from, which has no backdrop and no labels yet.
+// F10.8).
 type jumpState struct {
-	pattern  string
-	matches  []jumpMatch
-	scanning bool
+	pattern string
+	matches []jumpMatch
 }
 
 // jumpMatch is a place on the screen the pattern is: in the hit region
@@ -36,7 +34,7 @@ type jumpMatch struct {
 	at     uv.Position
 	width  int
 	label  string
-	dist   int // from the cursor, for the focused pane's: what the labels are given by
+	dist   int // from the cursor, by the rows and then the columns, for the focused pane's: what the labels are given by
 }
 
 // cluster is a grapheme on the screen: its text, and the cell it starts at
@@ -93,13 +91,8 @@ func findIn(cs []cluster, pat []rune, fold bool, from int) int {
 	return -1
 }
 
-// jumpStart is s: a jump begins, but on a console's VISUAL, which has its own
-// s the keymap lets through (F10.8). The palette's does not come from a key,
-// and in INSERT no key comes here: it begins one.
+// jumpStart is s: a jump begins (F10.8).
 func (a *App) jumpStart() tea.Cmd {
-	if c := a.focusedConsole(); c != nil && vimMode(c.ed.Mode()) == keymap.Visual {
-		return a.consoleKey(a.focused(), c, "s")
-	}
 	a.jump = &jumpState{}
 	return nil
 }
@@ -170,9 +163,7 @@ func (a *App) jumpScan() {
 	if j.pattern == "" {
 		return
 	}
-	j.scanning = true
 	f := a.drawOn(ui.NewFrame(a.w, a.h, a.theme))
-	j.scanning = false
 	pat := []rune(j.pattern)
 	fold := j.pattern == strings.ToLower(j.pattern) // smartcase: a capital makes it exact
 	cursor, haveCursor := a.jumpCursor(f)
@@ -191,26 +182,30 @@ func (a *App) jumpScan() {
 		}
 		for y := rect.Min.Y; y < rect.Max.Y; y++ {
 			cs := clustersOf(f, y, rect.Min.X, rect.Max.X)
+			end := 0 // where the last match ends: those of a console do not overlap, a cell or a row has its first
 			for from := 0; ; {
 				i := findIn(cs, pat, fold, from)
 				if i < 0 {
 					break
 				}
-				last := cs[i+len(pat)-1]
-				m := jumpMatch{target: h.Target, at: uv.Pos(cs[i].x, y), width: last.x + last.w - cs[i].x}
-				if h.Target.Pane == focus && haveCursor {
-					m.dist = abs(m.at.X-cursor.X) + 2*abs(m.at.Y-cursor.Y)
-				}
-				j.matches = append(j.matches, m)
-				if i+len(pat) < len(cs) {
+				from = i + 1
+				if i+len(pat) < len(cs) { // after every one there is, not only those that are matches
 					if r := []rune(cs[i+len(pat)].s); len(r) == 1 {
 						skip[unicode.ToLower(r[0])] = true
 					}
 				}
-				if h.Target.Kind != ui.KindText {
-					break // one match to a cell or a row
+				if i < end {
+					continue
 				}
-				from = i + len(pat)
+				last := cs[i+len(pat)-1]
+				m := jumpMatch{target: h.Target, at: uv.Pos(cs[i].x, y), width: last.x + last.w - cs[i].x}
+				if h.Target.Pane == focus && haveCursor {
+					m.dist = abs(m.at.Y-cursor.Y)*a.w + abs(m.at.X-cursor.X) // a nearer line is nearer, as flash.nvim has it
+				}
+				j.matches = append(j.matches, m)
+				if end = i + len(pat); h.Target.Kind != ui.KindText {
+					end = len(cs)
+				}
 			}
 		}
 	}
@@ -284,7 +279,7 @@ func (a *App) jumpCursor(f *ui.Frame) (uv.Position, bool) {
 // in the yank's colors (§6.10).
 func (a *App) drawJump(f *ui.Frame) {
 	th := a.theme
-	for y := range f.Buf.Height() {
+	for y := range f.Buf.Height() - 1 { // not the status bar, whose JUMP block is its own
 		for x := range f.Buf.Width() {
 			f.Buf.CellAt(x, y).Style.Fg = th.Dim
 		}

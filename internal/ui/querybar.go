@@ -3,6 +3,7 @@ package ui
 import (
 	"cmp"
 	"image/color"
+	"math"
 	"slices"
 
 	uv "github.com/charmbracelet/ultraviolet"
@@ -73,10 +74,15 @@ type QueryBar struct {
 	Chips   []Chip
 	Buttons []ButtonGroup // left to right (§7.8「工具按钮」)
 	Right   string        // "auto · 6000 行 · 12ms"
-	Note    Note          // how a save went, in Right's place while it stands (Q-06)
-	Pane    int
-	Names   SQLNames // the WHERE's tables and columns, for its colors (§7.3)
-	Dialect sqlkit.Dialect
+	// Selected is the count of records selected, after the buttons and ahead
+	// of Right, which it does not go with: it gives way by SelectedStay as a
+	// chip or a group does (F10.7).
+	Selected     string
+	SelectedStay int
+	Note         Note // how a save went, in Right's place while it stands (Q-06)
+	Pane         int
+	Names        SQLNames // the WHERE's tables and columns, for its colors (§7.3)
+	Dialect      sqlkit.Dialect
 	// History and HistKey, the icon and the key that open the WHERE's
 	// history, show before its ▾ when the input keeps room (F8.14); no key,
 	// none shown.
@@ -128,7 +134,7 @@ func (q QueryBar) ChipRect(r uv.Rectangle, action string) uv.Rectangle {
 // ButtonRect is where the button running action goes when the bar is
 // drawn in r; empty when it gave way.
 func (q QueryBar) ButtonRect(r uv.Rectangle, action string) uv.Rectangle {
-	chips, groups := q.shown(r)
+	chips, groups, _ := q.shown(r)
 	for i, g := range q.buttonRects(r, chips, groups) {
 		for j, br := range g {
 			if q.Buttons[i].Buttons[j].Action == action {
@@ -200,7 +206,7 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 		return cursor
 	}
 	y := r.Min.Y + 1
-	chips, groups := q.shown(r)
+	chips, groups, sel := q.shown(r)
 	for i, cr := range q.chipRects(r)[:chips] {
 		c := q.Chips[i]
 		chip := uv.Style{Fg: th.Fg, Bg: th.Sep}
@@ -250,6 +256,9 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 		}
 	}
 	x := q.end(r, chips, groups)
+	if sel {
+		x = f.Text(x, y, r.Max.X-1, q.Selected, dim) + 1
+	}
 	right, st := q.Right, dim
 	if n := q.Note; n != (Note{}) {
 		if right = n.Fit(r.Max.X - 2 - x); n.Fg != nil {
@@ -262,29 +271,44 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 	return cursor
 }
 
-// shown is how many chips show and which groups of buttons, left to
-// right: all that fit, and a note, which goes before them: a whole group or
-// the last chip gives way, the least Stay first (§7.8「查询条」). The count
-// in Right just is not shown.
-func (q QueryBar) shown(r uv.Rectangle) (chips int, groups []int) {
-	chips = len(q.Chips)
+// shown is how many chips show, which groups of buttons and whether the
+// count selected does, left to right: all that fit, and a note, which goes
+// before them: a whole group, the last chip or the count gives way, the least
+// Stay first (§7.8「查询条」). The count in Right just is not shown.
+func (q QueryBar) shown(r uv.Rectangle) (chips int, groups []int, sel bool) {
+	chips, sel = len(q.Chips), q.Selected != ""
 	for i := range q.Buttons {
 		groups = append(groups, i)
 	}
-	need := Width(q.Note.Head + q.Note.Mid + q.Note.Tail)
-	for chips+len(groups) > 0 && q.end(r, chips, groups)+need >= r.Max.X-1 {
-		if len(groups) == 0 {
-			chips--
-			continue
+	note := Width(q.Note.Head + q.Note.Mid + q.Note.Tail)
+	for chips+len(groups) > 0 || sel {
+		need := note
+		if sel {
+			need += Width(q.Selected)
 		}
-		least := slices.MinFunc(groups, func(a, b int) int { return cmp.Compare(q.Buttons[a].Stay, q.Buttons[b].Stay) })
-		if chips > 0 && q.Chips[chips-1].Stay < q.Buttons[least].Stay {
-			chips--
-			continue
+		if q.end(r, chips, groups)+need < r.Max.X-1 {
+			break
 		}
-		groups = slices.DeleteFunc(groups, func(g int) bool { return g == least })
+		least, group := math.MaxInt, -1
+		for i, g := range groups {
+			if s := q.Buttons[g].Stay; s < least {
+				least, group = s, i
+			}
+		}
+		chip := math.MaxInt // the last chip's
+		if chips > 0 {
+			chip = q.Chips[chips-1].Stay
+		}
+		switch {
+		case sel && q.SelectedStay < min(least, chip):
+			sel = false
+		case chips > 0 && chip < least, group < 0:
+			chips--
+		default:
+			groups = slices.Delete(groups, group, group+1)
+		}
 	}
-	return chips, groups
+	return chips, groups, sel
 }
 
 // end is where the first chips and the groups of buttons end on the

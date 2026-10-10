@@ -54,7 +54,7 @@ type Action struct {                // 注册表是 map[id]Action，id 如 "pane
 | `cell` | 正在编辑单元格（INSERT） |
 | `input` | 任意单行输入框获得焦点（INSERT） |
 | `result` | result pane 获得焦点时生效，优先级在 `grid` 之上（如 `P`、`q`）；其余按键落到 `grid` |
-| `select` | 表格有选中的记录、或在 VISUAL 扩选时生效，叠在 `grid` / `result` 之上（M10 F10.7，§7.6「选择」）：`d` / `y` 对选中的记录生效、`esc` 清空；它们是完整绑定，上层优先，不因为下层的 `dd` / `yy` 等 `timeoutlen`：解析器合并 trie 时，`select` 是「完整绑定优先」的作用域，挂在它已绑节点下面的下层更长序列不并进来（Context 里指定，只对 `select` 生效；别的作用域照旧先到先得、更长序列仍挂在下面） |
+| `select` | 表格有选中的记录、或在 VISUAL 扩选时生效，叠在 `grid` / `result` 之上（M10 F10.7，§7.6「选择」）：`d` / `y` 对选中的记录生效、`esc` 清空；它们是完整绑定，上层优先，不因为下层的 `dd` / `yy` 等 `timeoutlen`：解析器合并 trie 时，`select` 是「完整绑定优先」的作用域，挂在它已绑节点下面的下层更长序列不并进来（Context 里指定，只对 `select` 生效；别的作用域照旧先到先得、更长序列仍挂在下面）。表格的 VISUAL 仍是 NORMAL 上下文，`normal` 层和用户映射照常叠在下面（`C-h` / `C-j` / `C-k` / `C-l`、`gt` / `gT`、`?`、leader 都能用）；「VISUAL 下不叠 `normal`」只是 console 的 vim VISUAL |
 | `jump` | flash 式跳转进行中（M10 F10.8，§6.10）：`esc`、`backspace`、`↵`；其余可打印字符进模式，不经过别的作用域 |
 | `grid` / `tree` / `console` / `landing` | 对应控件获得焦点：按 pane 当前 tab 的类型，表格 → grid，console → console，引导页和没有 tab 的 pane → landing（M3 F3.7）。`console` 只含应用层的键（如 ↵ 执行），其余按键交给 vim 引擎；`gq` 是编辑器的操作符（§9.5） |
 | `normal` | 所有 NORMAL 上下文共用：pane 焦点、leader、gt/gT。`:`、`;` M3 起在 grid / tree / landing 里（§6.8） |
@@ -176,7 +176,7 @@ H = "0"
 | console | `↵`（NORMAL / VISUAL） | 执行光标所在语句 · 执行选区 | ⌥↵ |
 | console | `gq{移动}` · `gqq` | 格式化移动碰到的语句 · 当前语句；VISUAL 下格式化选区。`gq` 是编辑器的操作符，不在 `[keys.console]` 里 | 同 |
 | console | `gs` | 打开 schema 下拉框（仅 PG，§8.6） | 新增 |
-| console | `s` | flash 式跳转（M10 F10.8，§6.10）；覆盖 vim 的 `s`，和 flash.nvim 一样，`cl` 照旧 | 新增（M10） |
+| console | `s` | flash 式跳转（M10 F10.8，§6.10）；覆盖 vim 的 `s`，和 flash.nvim 一样，`cl` 照旧；按键只在 NORMAL 下进跳转，VISUAL 下的 `s` 仍是 vim 的 | 新增（M10） |
 | 命令面板 | `C-t` | 打开表（F3.37 起和 `↵` 相同）；快速 SQL 的结果送到 result pane | C-↵ |
 | 快速 SQL | `C-y` · `C-e` | 复制为 CSV · 在 console 中打开（写语句也走这条路） | C-y / C-e；取消 C-S-↵ |
 | 单元格编辑 | 见 §10.2 | 时间分段调整、选项选择 | 新增 |
@@ -252,7 +252,7 @@ console 里的 `x` 是 vim 的删除字符，所以 console 的 tab 用 `:q` 关
 
 照 [flash.nvim](https://github.com/folke/flash.nvim) 的 jump 模式做，用户要的是「`s` 跳到屏幕上任意一个光标在 NORMAL 下能停的字符」。实现上复用命中表（§7.4）：标签就是一次代替鼠标的点击。
 
-- **进入**：表格、结果区、树、console 的 NORMAL 下按 `s`（`jump.start`）。作用域 `jump`（§6.4），模式块显示 JUMP（`info` 色）。`esc` 退出、光标不动；`backspace` 删掉模式的最后一个字符，删到空仍在 JUMP；`↵` 跳到当前匹配；其余可打印字符追加到模式。只有一个匹配也不自动跳（flash 的 `jump.autojump = false`）。
+- **进入**：表格、结果区、树、console 的 NORMAL 下按 `s`（`jump.start`）。作用域 `jump`（§6.4），模式块显示 JUMP（`info` 色）。`esc` 退出、光标不动；`backspace` 删掉模式的最后一个字符，删到空仍在 JUMP；`↵` 跳到当前匹配；其余可打印字符追加到模式，粘贴也追加到模式（表格和 console 一样，不写进 console）。只有一个匹配也不自动跳（flash 的 `jump.autojump = false`）。从命令面板执行 `jump.start` 同样进 JUMP，console 在 VISUAL 时也进（flash 在可视模式下的 `s` 本来就是跳转），不交给 vim 的 `s`；「VISUAL 下 `s` 仍是 vim 的」只对按键生效。
 - **匹配**：模式非空后，在整个屏幕的可跳区域里找精确子串（flash 的 `search.mode = "exact"`、`multi_window = true`），smartcase：模式全小写不分大小写，含大写就区分。可跳区域是命中表里光标能停的目标：单元格（`cell`，含结果区的表格）、console 的文字、树的节点行；chip、标题、按钮、输入框不算。同一个目标只取第一处匹配。当前匹配是焦点 pane 里离光标最近的那个。
-- **标签**：字母表 `asdfghjklqwertyuiopzxcvbnm`，去掉任一匹配后面紧跟的那个字符，这样继续打字不会被当成标签；小写用完用大写（`label.uppercase = true`）。焦点 pane 里的匹配按离光标的距离先分配（`label.distance`），其余按屏幕顺序；分不到标签的匹配只高亮，继续打字收窄。标签画在匹配之后一格、覆盖那个字符（`label.after = true`），样式同 `yank`（`warn` 底、`bg` 字）；匹配的字符 `match` 色；屏幕上其余内容的前景降成 `dim`（flash 的 backdrop）。
+- **标签**：字母表 `asdfghjklqwertyuiopzxcvbnm`，去掉任一匹配后面紧跟的那个字符，这样继续打字不会被当成标签；小写用完用大写（`label.uppercase = true`）。焦点 pane 里的匹配按离光标的距离先分配（`label.distance`），其余按屏幕顺序；分不到标签的匹配只高亮，继续打字收窄。标签画在匹配之后一格、覆盖那个字符（`label.after = true`），样式同 `yank`（`warn` 底、`bg` 字）；匹配的字符 `match` 色；pane 区域里其余内容的前景降成 `dim`（flash 的 backdrop）。遮罩只盖 pane 区域，不盖状态栏，模式块的 JUMP 要看得清。
 - **跳**：按标签字母就执行那个位置的点击动作并退出 JUMP：单元格是聚焦 pane 并 `grid.goto`；树是光标到那个节点，不展开、不打开；console 是聚焦并把光标放到那个字符，和单击一样。console 里只是移动，不做 operator-pending（`ds…`）和远程操作，也不做 treesitter 模式。

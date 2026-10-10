@@ -99,7 +99,7 @@ func TestQueryBarYieldOrder(t *testing.T) {
 		gone := map[string]int{} // the width an item first is not there at, narrowing
 		for w := 120; w >= 12; w-- {
 			r := uv.Rect(0, 0, w, 2)
-			chips, groups := q.shown(r)
+			chips, groups, _ := q.shown(r)
 			shown := map[string]bool{"cols": chips > 3, "page": chips > 2, "limit": chips > 1, "order": chips > 0}
 			for _, g := range groups {
 				shown[[]string{"add", "save", "auto", "transpose"}[g]] = true
@@ -125,7 +125,7 @@ func TestQueryBarYieldOrder(t *testing.T) {
 	q := bar(Note{})
 	for w := 70; w > 30; w-- { // the width where the three chips have gone and the save group is still there
 		r := uv.Rect(0, 0, w, 2)
-		if chips, groups := q.shown(r); chips == 1 && len(groups) == 1 {
+		if chips, groups, _ := q.shown(r); chips == 1 && len(groups) == 1 {
 			save, order := q.ButtonRect(r, "save"), q.ChipRect(r, "order")
 			if save.Empty() || order.Empty() || save.Min.X < order.Max.X || !q.ButtonRect(r, "add").Empty() {
 				t.Errorf("width %d: save %v, order %v, add %v", w, save, order, q.ButtonRect(r, "add"))

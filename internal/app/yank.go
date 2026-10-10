@@ -265,7 +265,7 @@ func jsonFields(tab *Tab, row int) (fs []jsonField, ok bool) {
 			}
 		}
 		return fs, true
-	case tab.Result != nil && row >= 0 && row < len(tab.Result.page.Rows):
+	case tab.Result != nil && row < len(tab.Result.page.Rows):
 		for i, c := range tab.Result.page.Cols {
 			fs = append(fs, jsonField{c.Name, colType(c.Type), tab.Result.page.Rows[row][i]})
 		}

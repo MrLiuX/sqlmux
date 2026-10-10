@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/kackerx/sqlmux/internal/config"
@@ -177,20 +178,6 @@ func TestManagerGroups(t *testing.T) {
 		t.Errorf("rows: %s", strings.Join(got, "|"))
 	}
 	golden.RequireEqual(t, a.render().String())
-	// the list is shorter than its rows and rules: moving down keeps the selection showing
-	for range 7 {
-		feed(t, a, "j")
-	}
-	v = a.managerView()
-	lines := 0
-	for _, r := range v.Rows[a.form.top : a.form.cur+1] {
-		if lines++; r.Rule {
-			lines++
-		}
-	}
-	if lines > v.ListRows(a.w) {
-		t.Errorf("the selection is out of sight: top %d, cur %d, %d lines in %d", a.form.top, a.form.cur, lines, v.ListRows(a.w))
-	}
 }
 
 // A connection moved into a group takes the place the file gives it among
@@ -249,31 +236,51 @@ func readConn(t *testing.T) string {
 	return string(b)
 }
 
-// The group field lists the groups there are: all of them before anything is
-// typed, none selected, then those that start as what is typed does, the first
-// selected; Tab and ↵ take the selected one and only that, with none selected
-// they are what they are without the list; ↓ and ↑ pick, esc closes the list
-// (F10.6).
+// preludeFile is groupedFile and a connection of a group that starts as prod
+// does.
+const preludeFile = groupedFile + `
+[[connection]]
+name = "pre"
+group = "prelude"
+engine = "postgres"
+dsn = "postgres://u@h/pre"
+`
+
+// The group field lists the groups once something is typed and there is a
+// match, those that start as what is typed does, the first selected, as a
+// completion does; focus coming into the field opens none, so C-p is the
+// palette's; Tab and ↵ take the selected one and only that, with no list they
+// are what they are without it; ↓ and ↑ pick, esc closes the list (F10.6).
 func TestFormGroupList(t *testing.T) {
-	a := grouped(t)
+	a := groupedIn(t, preludeFile)
 	feed(t, a, "<C-p>conn.new<CR>n<Tab>")
 	cands := func() string { return strings.Join(a.groupCands(), " ") }
 	pick := func() int { return a.form.groupPick(len(a.groupCands())) }
-	if a.form.sel != fieldGroup || cands() != "prod dev" || pick() != -1 || a.context().Overlay != "groups" {
-		t.Fatalf("empty: on %d, %q, pick %d, overlay %q", a.form.sel, cands(), pick(), a.context().Overlay)
+	if a.form.sel != fieldGroup || cands() != "" || a.context().Overlay != "form" {
+		t.Fatalf("empty: on %d, %q, overlay %q", a.form.sel, cands(), a.context().Overlay)
+	}
+	if feed(t, a, "<C-p>"); a.palette == nil {
+		t.Errorf("C-p on the group field is the palette's")
+	}
+	feed(t, a, "<Esc>p")
+	if cands() != "prod prelude" || pick() != 0 || a.context().Overlay != "groups" {
+		t.Fatalf("p: %q, pick %d, overlay %q", cands(), pick(), a.context().Overlay)
+	}
+	if feed(t, a, "<Down>"); pick() != 1 {
+		t.Errorf("↓: %d", pick())
 	}
 	if feed(t, a, "<Down>"); pick() != 0 {
-		t.Errorf("↓: %d", pick())
+		t.Errorf("↓ round: %d", pick())
 	}
 	if feed(t, a, "<Up>"); pick() != 1 {
 		t.Errorf("↑ round: %d", pick())
 	}
 	feed(t, a, "<CR>")
-	if fieldText(a, fieldGroup) != "dev" || a.form == nil || a.form.sel != fieldGroup || cands() != "" {
-		t.Errorf("↵ takes dev and saves nothing: %q, form %v, %q", fieldText(a, fieldGroup), a.form != nil, cands())
+	if fieldText(a, fieldGroup) != "prelude" || a.form == nil || a.form.sel != fieldGroup || cands() != "" {
+		t.Errorf("↵ takes prelude and saves nothing: %q, form %v, %q", fieldText(a, fieldGroup), a.form != nil, cands())
 	}
 	feed(t, a, "<C-u>P")
-	if cands() != "prod" || pick() != 0 {
+	if cands() != "prod prelude" || pick() != 0 {
 		t.Errorf("a prefix, either case: %q pick %d", cands(), pick())
 	}
 	if feed(t, a, "<Tab>"); fieldText(a, fieldGroup) != "prod" || a.form.sel != fieldGroup {
@@ -286,41 +293,27 @@ func TestFormGroupList(t *testing.T) {
 	if feed(t, a, "<Tab>"); a.form.sel != fieldEngine {
 		t.Errorf("Tab with no list goes on: %d", a.form.sel)
 	}
-	feed(t, a, "<S-Tab><C-u>")
-	if cands() != "prod dev" {
-		t.Fatalf("empty again: %q", cands())
+	if feed(t, a, "<S-Tab><C-u><Tab>"); a.form.sel != fieldEngine || fieldText(a, fieldGroup) != "" {
+		t.Errorf("Tab with nothing typed goes on: %d %q", a.form.sel, fieldText(a, fieldGroup))
 	}
-	if feed(t, a, "<Tab>"); a.form.sel != fieldEngine || fieldText(a, fieldGroup) != "" {
-		t.Errorf("Tab with none selected goes on: %d %q", a.form.sel, fieldText(a, fieldGroup))
-	}
-	feed(t, a, "<S-Tab><Esc>")
+	feed(t, a, "<S-Tab>p<Esc>")
 	if a.form == nil || cands() != "" || a.context().Overlay != "form" {
 		t.Errorf("esc closes the list, not the form: %v %q", a.form != nil, cands())
 	}
-	feed(t, a, "p")
-	if cands() != "prod" {
+	feed(t, a, "r")
+	if cands() != "prod prelude" {
 		t.Errorf("typing opens it again: %q", cands())
 	}
 	golden.RequireEqual(t, a.render().String())
 }
 
-// A session that starts on a connection of a group starts on that one, the
-// order the tree has moving it: the console of a layout with no window is on
-// it (F10.6).
-func TestRestoreStartsOnItsConnection(t *testing.T) {
-	grouped(t) // the file
-	specs, _, err := config.LoadConnections("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("XDG_DATA_HOME", t.TempDir())
-	r := Restore(specs, &config.Layout{Sessions: []config.LayoutSession{{Name: "s", Connection: "stage"}}})
-	s := r.Sessions[0]
-	if got := s.start.Spec.Name; got != "stage" {
-		t.Errorf("start %s", got)
-	}
-	if cs := s.consoles(); len(cs) != 1 || cs[0].conn != s.start {
-		t.Errorf("console of %+v", cs)
+// The list is the group field's: another field has none however its text
+// starts (F10.6).
+func TestFormGroupListOnlyOnTheField(t *testing.T) {
+	a := grouped(t)
+	feed(t, a, "<C-p>conn.new<CR>n<Tab>p<Esc><Tab>") // what is typed matches, and the focus is on the engine
+	if a.form.sel != fieldEngine || len(a.groupCands()) != 0 {
+		t.Errorf("a list on field %d: %q", a.form.sel, a.groupCands())
 	}
 }
 
@@ -329,10 +322,10 @@ func TestRestoreStartsOnItsConnection(t *testing.T) {
 // offers it; the arrows that only move the cursor do not open the list again
 // after esc closed it, a click on a field does (F10.6).
 func TestFormGroupListMouseScrollCase(t *testing.T) {
-	a := grouped(t)
-	feed(t, a, "<C-p>conn.new<CR>n<Tab>")
+	a := groupedIn(t, preludeFile)
+	feed(t, a, "<C-p>conn.new<CR>n<Tab>p")
 	click(a, find(t, a, ui.Target{Kind: ui.KindRow, I: 1, Action: "form.pick"}).Min)
-	if fieldText(a, fieldGroup) != "dev" || a.form.sel != fieldGroup || len(a.groupCands()) != 0 {
+	if fieldText(a, fieldGroup) != "prelude" || a.form.sel != fieldGroup || len(a.groupCands()) != 0 {
 		t.Errorf("click: %q on %d", fieldText(a, fieldGroup), a.form.sel)
 	}
 	feed(t, a, "<C-u>Prod")
@@ -354,8 +347,8 @@ func TestFormGroupListMouseScrollCase(t *testing.T) {
 		fmt.Fprintf(&many, "[[connection]]\nname = \"c%d\"\ngroup = \"g%d\"\nengine = \"postgres\"\ndsn = \"postgres://u@h/d\"\n\n", i, i)
 	}
 	a = groupedIn(t, many.String())
-	feed(t, a, "<C-p>conn.new<CR>n<Tab>"+strings.Repeat("<Down>", 9))
-	find(t, a, ui.Target{Kind: ui.KindRow, I: 8, Action: "form.pick"}) // the ninth is drawn
+	feed(t, a, "<C-p>conn.new<CR>n<Tab>g"+strings.Repeat("<Down>", 9))
+	find(t, a, ui.Target{Kind: ui.KindRow, I: 9, Action: "form.pick"}) // the tenth is drawn
 }
 
 // With every connection in a group the tree begins with a rule: the cursor of
@@ -370,5 +363,186 @@ dsn = "postgres://u@h/s"
 	a.win().focus(0)
 	if n, ok := a.treeNode(); !ok || n.kind != nodeConn {
 		t.Errorf("the cursor is on %+v", n)
+	}
+}
+
+// freshOrder is the order of the connections a start over the file gives.
+func freshOrder(t *testing.T) string {
+	t.Helper()
+	specs, _, err := config.LoadConnections("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cs []*Conn
+	for _, s := range specs {
+		cs = append(cs, newConn(s))
+	}
+	groupOrder(cs)
+	var names []string
+	for _, c := range cs {
+		names = append(names, c.Spec.Name)
+	}
+	return strings.Join(names, " ")
+}
+
+// Deleting the first connection of the group the file has first makes another
+// group the first: the session follows the file as a start does (F10.6).
+func TestGroupDeleteRegroups(t *testing.T) {
+	a := grouped(t)
+	a.run("conn.manage", 0)
+	a.selectConn(slices.IndexFunc(a.sess.Conns, func(c *Conn) bool { return c.Spec.Name == "stage" }))
+	a.form.list = true
+	feed(t, a, "xy")
+	if got := connOrder(a); got != "doraemon misc ops live" || got != freshOrder(t) {
+		t.Errorf("order %q, a start's %q", got, freshOrder(t))
+	}
+}
+
+// A group edited moves the connection in every session, not only the one the
+// form is in; one that is connected keeps its state and its tabs and says
+// nothing of the next connect, as only its group changed (F10.6).
+func TestGroupEditEverySession(t *testing.T) {
+	a := grouped(t)
+	var conns []*Conn
+	for _, c := range a.sess.Conns {
+		conns = append(conns, newConn(c.Spec))
+	}
+	s2 := bareSession("s2", conns, conns[0])
+	s2.Windows = []*Window{s2.blankWindow()}
+	a.sessions = append(a.sessions, s2)
+	doraemon, state := a.sess.Conns[0], a.sess.Conns[0].State
+	a.toast = ""
+	a.run("conn.manage", 0)
+	a.selectConn(slices.IndexFunc(a.sess.Conns, func(c *Conn) bool { return c.Spec.Name == "ops" }))
+	feed(t, a, "<Tab><Tab><C-u>prod<Esc><C-s>")
+	var names []string
+	for _, c := range s2.Conns {
+		names = append(names, c.Spec.Name)
+	}
+	if got := strings.Join(names, " "); got != connOrder(a) || got != freshOrder(t) {
+		t.Errorf("the other session %q, this %q, a start's %q", got, connOrder(a), freshOrder(t))
+	}
+	a.selectConn(0)
+	feed(t, a, "<Tab><Tab><C-u>prod<Esc><C-s>")
+	if i := slices.Index(a.sess.Conns, doraemon); i < 0 || doraemon.State != state || doraemon.Spec.Group != "prod" {
+		t.Errorf("the connection is lost or changed: at %d, %v", i, doraemon.State)
+	}
+	if strings.Contains(a.toast, "下次连接时生效") {
+		t.Errorf("a group alone is not for the next connect: %q", a.toast)
+	}
+}
+
+// With every connection in a group the tree begins with a rule: G and then gg
+// show the first one with it, k at the top has nowhere to go (F10.6).
+func TestTreeTopShowsItsRule(t *testing.T) {
+	var b strings.Builder
+	for i := range 60 {
+		fmt.Fprintf(&b, "[[connection]]\nname = \"c%02d\"\ngroup = \"g%d\"\nengine = \"postgres\"\ndsn = \"postgres://u@h/d\"\n\n", i, i/30)
+	}
+	a := groupedIn(t, b.String())
+	a.win().focus(0)
+	feed(t, a, "Ggg")
+	ns, _ := a.treeNodes()
+	if _, top := a.treeAt(ns); top != 0 {
+		t.Errorf("the first group's rule is out of sight: top %d", top)
+	}
+}
+
+// A list of more rows and rules than the manager shows keeps the selection
+// drawn going down and up through them (F10.6).
+func TestManagerGroupsScroll(t *testing.T) {
+	var b strings.Builder
+	for i := range 12 {
+		fmt.Fprintf(&b, "[[connection]]\nname = \"c%02d\"\ngroup = \"g%d\"\nengine = \"postgres\"\ndsn = \"postgres://u@h/d\"\n\n", i, i)
+	}
+	a := groupedIn(t, b.String())
+	a.run("conn.manage", 0)
+	a.selectConn(0)
+	a.form.list = true
+	drawn := func(step string) {
+		a.View()
+		for _, h := range a.hits {
+			if h.Target.Kind == ui.KindConn && h.Target.I == a.form.cur {
+				return
+			}
+		}
+		t.Errorf("%s: the selection %d is not drawn (top %d)", step, a.form.cur, a.form.top)
+	}
+	for i := range 13 {
+		feed(t, a, "j")
+		drawn(fmt.Sprintf("j %d", i))
+	}
+	for i := range 13 {
+		feed(t, a, "k")
+		drawn(fmt.Sprintf("k %d", i))
+	}
+}
+
+// A rule is a line in sep and its title in dim, in the tree and in the manager
+// (F10.6).
+func TestGroupRuleColors(t *testing.T) {
+	check := func(name string, f *ui.Frame, area uv.Rectangle) {
+		t.Helper()
+		var lines, titles int
+		for y := area.Min.Y; y < area.Max.Y; y++ {
+			var row strings.Builder
+			for x := area.Min.X; x < area.Max.X; x++ {
+				row.WriteString(f.Buf.CellAt(x, y).Content)
+			}
+			if !strings.Contains(row.String(), "── prod ") {
+				continue
+			}
+			for x := area.Min.X; x < area.Max.X; x++ {
+				c := f.Buf.CellAt(x, y)
+				switch {
+				case c.Content == "─" && c.Style.Fg == f.Theme.Sep:
+					lines++
+				case slices.Contains([]string{"p", "r", "o", "d"}, c.Content) && c.Style.Fg == f.Theme.Dim:
+					titles++
+				}
+			}
+		}
+		if lines < 10 || titles < 4 {
+			t.Errorf("%s: %d line cells in sep, %d title cells in dim", name, lines, titles)
+		}
+	}
+	a := grouped(t)
+	a.sess.open["conn:doraemon"] = false
+	check("tree", a.render(), a.sidebarRect())
+	a.run("conn.manage", 0)
+	f := a.render()
+	var list uv.Rectangle
+	for _, h := range f.Hits {
+		if h.Target.Kind == ui.KindConn {
+			list = list.Union(h.Rect)
+		}
+	}
+	check("manager", f, list)
+}
+
+// A session that starts on a connection of a group starts on that one, the
+// order the tree has moving it: the console of a layout with no window is on
+// it, and the connections are in the tree's order (F10.6).
+func TestRestoreStartsOnItsConnection(t *testing.T) {
+	grouped(t) // the file
+	specs, _, err := config.LoadConnections("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	r := Restore(specs, &config.Layout{Sessions: []config.LayoutSession{{Name: "s", Connection: "stage"}}})
+	s := r.Sessions[0]
+	if got := s.start.Spec.Name; got != "stage" {
+		t.Errorf("start %s", got)
+	}
+	if cs := s.consoles(); len(cs) != 1 || cs[0].conn != s.start {
+		t.Errorf("console of %+v", cs)
+	}
+	var names []string
+	for _, c := range s.Conns {
+		names = append(names, c.Spec.Name)
+	}
+	if got := strings.Join(names, " "); got != "doraemon misc stage live ops" {
+		t.Errorf("the tree's order: %q", got)
 	}
 }

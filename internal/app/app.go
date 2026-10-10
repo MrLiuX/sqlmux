@@ -203,6 +203,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	wasFresh := a.fresh
 	a.fresh, a.reuse = false, false
 	_, cmd := a.update(msg)
+	switch msg.(type) {
+	case tea.KeyPressMsg, tea.PasteMsg, tea.MouseMsg:
+	default:
+		if a.jump != nil { // what came changed the screen the matches are of
+			a.jumpScan()
+		}
+	}
 	if wasFresh && a.stillOver(msg) { // a pointer moved inside what it was over: the frame is the same
 		a.fresh, a.reuse = true, true
 	}
@@ -608,6 +615,11 @@ func (a *App) wheel(m tea.Mouse) {
 // starts editing the current cell with s; a console takes it whole, as
 // text in any mode (§11).
 func (a *App) paste(s string) tea.Cmd {
+	if j := a.jump; j != nil { // text for the pattern, whatever has the focus (F10.8)
+		j.pattern += strings.NewReplacer("\r\n", " ", "\r", " ", "\n", " ").Replace(s)
+		a.jumpScan()
+		return nil
+	}
 	if a.ddl != nil && a.ddl.col != "" { // the column's box goes with it, as with a key, and what is pasted is then typed (F9.8)
 		a.ddl = nil
 	}
@@ -634,6 +646,10 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 	var cmds []tea.Cmd
 	for _, r := range out {
 		if r.Action != "" {
+			if c := a.focusedConsole(); r.Action == "jump.start" && c != nil && vimMode(c.ed.Mode()) == keymap.Visual { // a console's VISUAL has its own s
+				cmds = append(cmds, a.consoleKey(a.focused(), c, "s"))
+				continue
+			}
 			cmds = append(cmds, a.run(r.Action, r.Count))
 			continue
 		}
@@ -769,10 +785,14 @@ func (a *App) context() keymap.Context {
 	if s := gridStateOf(a.focused()); s != nil && s.selecting() && (scope == "grid" || scope == "result") {
 		over, firm = []string{"select"}, "select"
 	}
-	if scope == "result" { // over grid's keys, which its tables move by (§6.4)
-		return keymap.Context{Focus: append(over, "result", "grid"), Pane: "grid", Mode: a.mode(), Firm: firm}
+	mode := a.mode()
+	if scope != "console" && mode == keymap.Visual { // a table's VISUAL is NORMAL with the select scope over it (F10.7)
+		mode = keymap.Normal
 	}
-	return keymap.Context{Focus: append(over, scope), Pane: scope, Mode: a.mode(), Plain: a.plain && scope == "console", Firm: firm}
+	if scope == "result" { // over grid's keys, which its tables move by (§6.4)
+		return keymap.Context{Focus: append(over, "result", "grid"), Pane: "grid", Mode: mode, Firm: firm}
+	}
+	return keymap.Context{Focus: append(over, scope), Pane: scope, Mode: mode, Plain: a.plain && scope == "console", Firm: firm}
 }
 
 // paneScope is the keymap scope of the focused pane: its current tab's.

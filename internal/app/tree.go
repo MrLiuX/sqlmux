@@ -448,7 +448,11 @@ func (a *App) treeAt(ns []node) (cursor, top int) {
 	for t.cursor < len(ns)-1 && ns[t.cursor].kind == nodeSep {
 		t.cursor++
 	}
-	return treeView(t.cursor, t.top, len(ns), a.treeRows())
+	cursor, top = treeView(t.cursor, t.top, len(ns), a.treeRows())
+	if top == cursor && cursor > 0 && ns[cursor-1].kind == nodeSep { // a rule shows with the node it is over
+		top--
+	}
+	return cursor, top
 }
 
 // clampTree settles the cursor on a node; its schema is its connection's

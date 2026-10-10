@@ -1,12 +1,14 @@
 package app
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/exp/golden"
 
+	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/editor"
 	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
@@ -230,5 +232,213 @@ func TestJumpEndedByOthers(t *testing.T) {
 	a.run("jump.start", 0)
 	if a.jump == nil || strings.Join(c.ed.Lines(), "\n") != "select 1;" {
 		t.Errorf("jump %v, text %q", a.jump, c.ed.Lines())
+	}
+}
+
+// What follows an occurrence of the pattern anywhere on the screen is no label
+// as it goes on being typed, the occurrence being a match or not: a cell has
+// the one match, its first, and a console's overlap (F10.8).
+func TestJumpSkipsAfterEveryOccurrence(t *testing.T) {
+	a := wide(160, 45)
+	loadOrders(t, a, 30)
+	feed(t, a, `s"`) // the cells of meta have "a" after a quote, and not as the first of them
+	feed(t, a, "a")
+	if a.jump == nil || a.jump.pattern != `"a` {
+		t.Errorf("a was a label: %+v", a.jump)
+	}
+	a = sized(160, 45, "nerd")
+	loadOrders(t, a, 3)
+	c := consoleOf(a.win().Root.B.Pane)
+	a.focusPane(a.win().Root.B.Pane.ID)
+	c.ed.Load("select 'oooa';")
+	feed(t, a, "soo") // oo twice in ooo, one match, and what follows the second is a
+	feed(t, a, "a")
+	if a.jump == nil || a.jump.pattern != "ooa" {
+		t.Errorf("a was a label after an overlapping oo: %+v", a.jump)
+	}
+}
+
+// C-c is esc in a jump: it ends it, is not the first of two presses that quit
+// and does not cancel a query (§6.8, F10.8).
+func TestJumpCtrlC(t *testing.T) {
+	a := wide(160, 45)
+	loadOrders(t, a, 6)
+	quit := feed(t, a, "s<C-c>")
+	if a.jump != nil || a.toast != "" {
+		t.Fatalf("jump %v, toast %q", a.jump, a.toast)
+	}
+	if quit = feed(t, a, "s<C-c>") || quit; quit {
+		t.Errorf("s C-c s C-c quits")
+	}
+	a.conn().busy = 1
+	feed(t, a, "s<C-c>")
+	if a.jump != nil || a.conn().busy != 1 {
+		t.Errorf("a running query cancelled: busy %d", a.conn().busy)
+	}
+}
+
+// What is pasted in a jump is the pattern's whatever has the focus, a
+// console's text left alone (F10.8).
+func TestJumpPaste(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	loadOrders(t, a, 3)
+	c := consoleOf(a.win().Root.B.Pane)
+	a.focusPane(a.win().Root.B.Pane.ID)
+	c.ed.Load("select 1;")
+	feed(t, a, "ssel")
+	a.Update(tea.PasteMsg{Content: "ec\nt"})
+	if a.jump == nil || a.jump.pattern != "selec t" || strings.Join(c.ed.Lines(), "") != "select 1;" {
+		t.Errorf("pattern %+v, text %q", a.jump, c.ed.Lines())
+	}
+}
+
+// The palette's jump on a console in VISUAL begins a jump and leaves the
+// selection; the key is the vim's (F10.8).
+func TestJumpFromPaletteInVisual(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	loadOrders(t, a, 3)
+	c := consoleOf(a.win().Root.B.Pane)
+	a.focusPane(a.win().Root.B.Pane.ID)
+	c.ed.Load("select 1;")
+	feed(t, a, "vl<C-p>")
+	a.paletteDo(paletteItem{kind: itemCommand, id: "jump.start"})
+	if a.jump == nil || strings.Join(c.ed.Lines(), "") != "select 1;" {
+		t.Errorf("jump %v, text %q", a.jump, c.ed.Lines())
+	}
+}
+
+// The backdrop does not dim the status bar: the JUMP block keeps its own
+// colors (F10.8).
+func TestJumpBackdropSparesStatusBar(t *testing.T) {
+	a := wide(160, 45)
+	loadOrders(t, a, 6)
+	feed(t, a, "s")
+	f := a.render()
+	for x := range a.w {
+		if c := f.Buf.CellAt(x, a.h-1); c.Content == "J" && f.Buf.CellAt(x+1, a.h-1).Content == "U" {
+			if c.Style.Fg == a.theme.Dim {
+				t.Errorf("JUMP is dim")
+			}
+			return
+		}
+	}
+	t.Error("no JUMP block")
+}
+
+// A message that changes the screen under the matches, a catalog that comes
+// with a table before the one that matched, has them read again: the label
+// goes where it is drawn (F10.8).
+func TestJumpRescansWhatChanges(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	a.win().focus(0)
+	feed(t, a, "st_sku")
+	conn := a.sess.Conns[0]
+	tables := append([]db.Table{{Schema: "public", Name: "aaa_new"}}, conn.Tables...)
+	a.Update(catalogMsg{conn: conn, schemas: conn.Schemas, current: conn.home, tables: tables})
+	if len(a.jump.matches) != 1 {
+		t.Fatalf("%d matches", len(a.jump.matches))
+	}
+	feed(t, a, a.jump.matches[0].label)
+	if n, _ := a.treeNode(); n.Text != "t_sku" {
+		t.Errorf("the cursor is on %q", n.Text)
+	}
+}
+
+// The labels go to the nearest by lines first, then by columns, as flash.nvim
+// has it: a cell in the next row is further than one in the row of the cursor
+// however far right (F10.8).
+func TestJumpNearestByLines(t *testing.T) {
+	a := wide(160, 45)
+	loadOrders(t, a, 6)
+	feed(t, a, "s2") // the date of the first row, 2026, and the next row's id
+	if got := a.jump.matches[0].target.Action; got != "grid.goto 0 6" {
+		t.Errorf("the first label is on %s", got)
+	}
+}
+
+// The pattern is case-blind when it has no capital, in a console too, and the
+// letter after a match in capitals is no label either; a label of the second
+// round is a capital (F10.8).
+func TestJumpSmartcaseAndCapitals(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	loadOrders(t, a, 3)
+	c := consoleOf(a.win().Root.B.Pane)
+	a.focusPane(a.win().Root.B.Pane.ID)
+	c.ed.Load(strings.TrimSpace(strings.Repeat("SELECT 1;\n", 14)))
+	feed(t, a, "ssel")
+	n := 0
+	for _, m := range a.jump.matches {
+		if m.target.Kind == ui.KindText {
+			n++
+		}
+	}
+	labels, _ := matchLabels(a)
+	if n != 14 || slices.Contains(labels, "e") || slices.Contains(labels, "E") {
+		t.Errorf("%d matches of sel in SELECT, labels %v", n, labels)
+	}
+	b := wide(160, 45)
+	loadOrders(t, b, 30)
+	feed(t, b, "s0") // more cells than letters: the rest are capitals
+	labels, _ = matchLabels(b)
+	if len(labels) < 30 || !slices.ContainsFunc(labels, func(l string) bool { return l != strings.ToLower(l) }) {
+		t.Errorf("labels %v", labels)
+	}
+}
+
+// A label on a table's cell, the jump begun from the console, puts the focus
+// on the table and the cursor on the cell (F10.8).
+func TestJumpToCellFocusesItsPane(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	tab := loadOrders(t, a, 6)
+	data := a.focused()
+	a.focusPane(a.win().Root.B.Pane.ID)
+	feed(t, a, "srun")
+	i := slices.IndexFunc(a.jump.matches, func(m jumpMatch) bool { return m.target.Kind == ui.KindCell })
+	feed(t, a, a.jump.matches[i].label)
+	if a.focused() != data || tab.row != 0 || tab.col != 1 {
+		t.Errorf("focus %d, cursor %d, %d", a.win().Focus, tab.row, tab.col)
+	}
+}
+
+// The first labels are the nearest to the cursor of the focused pane in the
+// tree, in a console and in a result as in a table: the cursor is found
+// there (F10.8).
+func TestJumpNearestInTreeConsoleResult(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	loadOrders(t, a, 3)
+	a.win().focus(0)
+	feed(t, a, "Gst_") // the cursor on the last node
+	var ys []int
+	for _, m := range a.jump.matches {
+		if m.target.Kind == ui.KindNode {
+			ys = append(ys, m.at.Y)
+		}
+	}
+	if len(ys) < 2 || ys[0] != slices.Max(ys) {
+		t.Errorf("the tree's matches: %v", ys)
+	}
+	feed(t, a, "<Esc>")
+	c := consoleOf(a.win().Root.B.Pane)
+	a.focusPane(a.win().Root.B.Pane.ID)
+	c.ed.Load("select 1;\nselect 2;\nselect 3;")
+	feed(t, a, "Gssel") // the cursor on the last line
+	ys = nil
+	for _, m := range a.jump.matches {
+		if m.target.Kind == ui.KindText {
+			ys = append(ys, m.at.Y)
+		}
+	}
+	if len(ys) != 3 || ys[0] != slices.Max(ys) {
+		t.Errorf("the console's matches: %v", ys)
+	}
+	feed(t, a, "<Esc>")
+
+	r := db.Result{Cols: []db.Col{{Name: "n", Type: "text"}}, Rows: [][]db.Val{{{S: "x1"}}, {{S: "x2"}}, {{S: "x3"}}}}
+	b, _ := inRun(t, &execDB{res: map[string]db.Result{"select 1": r}}, "select 1;")
+	press(t, b, "<CR>")
+	b.win().focus(b.win().Result.ID)
+	feed(t, b, "jjsx")
+	if got := b.jump.matches[0].target.Action; got != "grid.goto 2 0" {
+		t.Errorf("the result's first match is %s", got)
 	}
 }

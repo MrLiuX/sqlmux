@@ -112,10 +112,9 @@ func (m *Map) trie(c Context, maps bool) *node {
 			}
 		}
 		for _, b := range bs {
-			n, longer := root, false
+			n := root
 			for _, k := range m.expand(b.Keys) {
-				if n.firm { // a complete binding of the Firm scope: nothing hangs under it
-					longer = true
+				if n.firm && t != "keys."+c.Firm { // a complete binding of the Firm scope: nothing of a lower one hangs under it
 					break
 				}
 				if n.next == nil {
@@ -127,8 +126,8 @@ func (m *Map) trie(c Context, maps bool) *node {
 				}
 				n = n.next[k]
 			}
-			if !longer && !n.bound {
-				n.bound, n.action, n.rhs, n.firm = true, b.Action, b.RHS, c.Firm != "" && t == "keys."+c.Firm
+			if !n.bound {
+				n.bound, n.action, n.rhs, n.firm = true, b.Action, b.RHS, t == "keys."+c.Firm
 			}
 		}
 	}

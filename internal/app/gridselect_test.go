@@ -1,25 +1,21 @@
 package app
 
 import (
+	"maps"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
-func markedOf(s *gridState) []int {
-	return slices.Sorted(func(yield func(int) bool) {
-		for r := range s.marked {
-			if !yield(r) {
-				return
-			}
-		}
-	})
-}
+func markedOf(s *gridState) []int { return slices.Sorted(maps.Keys(s.marked)) }
 
 // m marks the record under the cursor, again unmarks it, and the record
 // numbers say so; d marks the records for deletion as dd does and nothing is
@@ -32,10 +28,13 @@ func TestSelectMarkAndDelete(t *testing.T) {
 	if got := markedOf(&tab.gridState); !slices.Equal(got, []int{0, 2}) || a.context().Focus[0] != "select" || a.mode() != keymap.Normal {
 		t.Fatalf("marked %v, scopes %v, mode %v", got, a.context().Focus, a.mode())
 	}
-	if !strings.Contains(a.queryBar(a.focused(), tab).Right, " · 2 selected") && !strings.Contains(a.queryBar(a.focused(), tab).Right, " · 已选 2") {
-		t.Errorf("the count: %q", a.queryBar(a.focused(), tab).Right)
+	if got := a.queryBar(a.focused(), tab).Selected; !strings.Contains(got, "2 selected") && !strings.Contains(got, "已选 2") {
+		t.Errorf("the count: %q", got)
 	}
-	feed(t, a, "mm") // unmarked, marked again
+	if feed(t, a, "m"); !slices.Equal(markedOf(&tab.gridState), []int{0}) { // unmarked,
+		t.Fatalf("m again: %v", markedOf(&tab.gridState))
+	}
+	feed(t, a, "m") // marked again
 	if got := markedOf(&tab.gridState); !slices.Equal(got, []int{0, 2}) {
 		t.Fatalf("m twice: %v", got)
 	}
@@ -64,13 +63,7 @@ func TestSelectVisual(t *testing.T) {
 		t.Fatalf("mode %v, status %q", a.mode(), statusRow(a))
 	}
 	feed(t, a, "2j")
-	if got := slices.Sorted(func(yield func(int) bool) {
-		for r := range tab.selected() {
-			if !yield(r) {
-				return
-			}
-		}
-	}); !slices.Equal(got, []int{0, 1, 2}) {
+	if got := tab.positions(); !slices.Equal(got, []int{0, 1, 2}) {
 		t.Fatalf("v 2j: %v", got)
 	}
 	feed(t, a, "<Esc>")
@@ -84,6 +77,10 @@ func TestSelectVisual(t *testing.T) {
 	feed(t, a, "<Esc>")
 	if tab.selecting() || a.context().Focus[0] != "grid" {
 		t.Errorf("esc with marks only clears them: %v", markedOf(&tab.gridState))
+	}
+	feed(t, a, "gg3jvkk") // up from the anchor
+	if got := tab.positions(); !slices.Equal(got, []int{1, 2, 3}) {
+		t.Errorf("v k k: %v", got)
 	}
 }
 
@@ -155,6 +152,15 @@ func TestSelectInResult(t *testing.T) {
 	rt := resultOf(a.focused())
 	if got := markedOf(&rt.gridState); !slices.Equal(got, []int{0, 1}) || a.context().Focus[0] != "select" || a.context().Focus[1] != "result" {
 		t.Fatalf("marked %v, scopes %v", got, a.context().Focus)
+	}
+	f := a.render()
+	_, _, area, _ := a.gridOf(a.focused())
+	var rows []string
+	for r := range 3 {
+		rows = append(rows, bgBand(a, f, area.Min.Y+2+r, area.Min.X, area.Min.X+5))
+	}
+	if got := strings.Join(rows, " "); got != "vvv.. vvv.. ....." {
+		t.Errorf("the numbers of a result: %s", got)
 	}
 	if feed(t, a, "d"); !rt.selecting() {
 		t.Error("d has no table to delete from, the selection stays")
@@ -231,5 +237,189 @@ func TestSelectClearedAsRowsMove(t *testing.T) {
 	a.run("grid.refresh", 0)
 	if tab.selecting() {
 		t.Errorf("refreshed, the marks stay: %v", markedOf(&tab.gridState))
+	}
+}
+
+// y writes the records in the order they show, not the order they were
+// marked in: the fourth marked before the first (F10.7).
+func TestSelectYankOrder(t *testing.T) {
+	a := wide(160, 45)
+	loadOrders(t, a, 5)
+	feed(t, a, "3jmggm")
+	text, _ := clipText(keys(t, a, "y"))
+	if i, j := strings.Index(text, "\"id\": 1,"), strings.Index(text, "\"id\": 4,"); i < 0 || j < i {
+		t.Errorf("y: %q", text)
+	}
+}
+
+// d refuses where dd does, a read-only connection, the selection staying; it
+// takes the last save's note away as a change does; the records marked for
+// deletion that all are have the marks taken off and a row added among them
+// keeps what was typed in it; with some not marked, all are, and a row added
+// goes as dd takes it out (F10.7).
+func TestSelectDeleteRules(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 5)
+	tab.conn.readOnly = true
+	feed(t, a, "mjm")
+	if feed(t, a, "d"); len(tab.deleted) != 0 || !tab.selecting() || !strings.Contains(a.toast, "只读") {
+		t.Errorf("read only: deleted %v, selecting %v, toast %q", tab.deleted, tab.selecting(), a.toast)
+	}
+	tab.conn.readOnly = false
+	tab.note = ui.Note{Head: "已保存 1 行"}
+	if feed(t, a, "d"); len(tab.deleted) != 2 || tab.note != (ui.Note{}) {
+		t.Errorf("d: deleted %v, note %+v", tab.deleted, tab.note)
+	}
+
+	feed(t, a, "gg")
+	feed(t, a, "o<Esc>") // a row added under the first, the cursor in it
+	feed(t, a, "ggVjj")  // the first record, the row added, the second: the records both marked for deletion
+	if feed(t, a, "d"); len(tab.deleted) != 0 || len(tab.added) != 1 || tab.selecting() {
+		t.Errorf("all marked: deleted %v, added %d, selecting %v", tab.deleted, len(tab.added), tab.selecting())
+	}
+	feed(t, a, "ggVjjj") // those and the third, not marked
+	if feed(t, a, "d"); len(tab.deleted) != 3 || len(tab.added) != 0 {
+		t.Errorf("some marked: deleted %v, added %d", tab.deleted, len(tab.added))
+	}
+}
+
+// On an empty table there is no record for m and v to take (F10.7).
+func TestSelectEmptyTable(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 0)
+	feed(t, a, "mv")
+	if tab.selecting() || a.mode() != keymap.Normal {
+		t.Errorf("selecting %v, mode %v", tab.selecting(), a.mode())
+	}
+}
+
+// A table's VISUAL is NORMAL with the select scope over it: the pane focus,
+// the tabs, ? and the leader work in it as in NORMAL (§6.4, F10.7).
+func TestSelectVisualKeepsNormal(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	tab := loadOrders(t, a, 6)
+	from := a.win().Focus
+	feed(t, a, "v<C-l>")
+	if a.win().Focus == from || !tab.visual {
+		t.Errorf("C-l in VISUAL: focus %d from %d, visual %v", a.win().Focus, from, tab.visual)
+	}
+	a.win().focus(from)
+	if feed(t, a, "?"); a.keyHelp == nil {
+		t.Errorf("? in VISUAL")
+	}
+	a.keyHelp = nil
+	open := a.win().TreeOpen
+	if feed(t, a, "<Space>b"); a.win().TreeOpen == open {
+		t.Errorf("SPC b in VISUAL")
+	}
+}
+
+// With records selected, or in VISUAL, the auto refresh skips its turns: it
+// would put the selection back; without, it fetches (F10.7).
+func TestSelectPausesAutoRefresh(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 6)
+	tab.auto, tab.out = 2*time.Second, 0
+	feed(t, a, "mjv")
+	out := tab.out
+	if a.Update(autoMsg{tab, tab.autoGen}); tab.out != out || len(tab.positions()) != 2 || !tab.visual {
+		t.Errorf("a turn with a selection: out %d, selected %v, visual %v", tab.out, tab.positions(), tab.visual)
+	}
+	feed(t, a, "<Esc><Esc>")
+	if a.Update(autoMsg{tab, tab.autoGen}); tab.out == out {
+		t.Errorf("a turn with none fetches")
+	}
+}
+
+// The count of records selected is a segment of the query bar's own, not the
+// row count's: it shows where that has given way, and gives way after the
+// buttons and COLS, before PAGE: COLS gives way for it, where it is not
+// room for both (F10.7).
+func TestSelectCountSegment(t *testing.T) {
+	row := func(a *App) string {
+		r := a.layout()[a.focused().ID]
+		return strings.Split(a.render().String(), "\n")[r.Min.Y+2]
+	}
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 6)
+	feed(t, a, "mjm")
+	if got := row(a); !strings.Contains(got, "已选 2") || !strings.Contains(got, "COLS") {
+		t.Errorf("wide: %q", got)
+	}
+	if a.queryBar(a.focused(), tab).Selected != "已选 2" {
+		t.Errorf("the segment: %q", a.queryBar(a.focused(), tab).Selected)
+	}
+	a = sized(160, 45, "nerd") // 63 columns: the buttons gone, COLS gives way to the count, PAGE stays
+	loadOrders(t, a, 6)
+	if got := row(a); !strings.Contains(got, "COLS") {
+		t.Fatalf("narrow, none selected: %q", got)
+	}
+	feed(t, a, "mjm")
+	if got := row(a); !strings.Contains(got, "已选 2") || strings.Contains(got, "COLS") || !strings.Contains(got, "PAGE") {
+		t.Errorf("narrow: %q", got)
+	}
+}
+
+// bgBand is row y's backgrounds from x0 to x1, a letter a column: "v" the
+// visual's, "y" the yank's, "." any other.
+func bgBand(a *App, f *ui.Frame, y, x0, x1 int) string {
+	var b strings.Builder
+	for x := x0; x < x1; x++ {
+		switch f.Buf.CellAt(x, y).Style.Bg {
+		case a.theme.Visual:
+			b.WriteByte('v')
+		case a.theme.Yank:
+			b.WriteByte('y')
+		default:
+			b.WriteByte('.')
+		}
+	}
+	return b.String()
+}
+
+// The whole cell of a record's number is on the visual background, the
+// numbers of a table turned too, and flashes in the yank's after a yank, of
+// this pane's grid only (F10.7).
+func TestSelectNumberCells(t *testing.T) {
+	a := wide(160, 45)
+	loadOrders(t, a, 6)
+	feed(t, a, "mjjmjv")
+	f := a.render()
+	_, _, area, _ := a.gridOf(a.focused())
+	var rows []string
+	for r := range 6 {
+		rows = append(rows, bgBand(a, f, area.Min.Y+2+r, area.Min.X, area.Min.X+5))
+	}
+	if got := strings.Join(rows, " "); got != "vvv.. ..... vvv.. vvv.. ..... ....." {
+		t.Errorf("the cells of the numbers: %s", got)
+	}
+	a.run("grid.transpose", 0)
+	f = a.render()
+	// the first and the third records, marked: a record's cell is its column and the space either side
+	if got := bgBand(a, f, area.Min.Y, area.Min.X, area.Max.X); !regexp.MustCompile(`^\.+v+\.v+\.+$`).MatchString(got) {
+		t.Errorf("transposed: %s", got)
+	}
+
+	a = wide(160, 45)
+	loadOrders(t, a, 6)
+	feed(t, a, "vj")
+	keys(t, a, "y")
+	f = a.render()
+	_, _, area, _ = a.gridOf(a.focused())
+	rows = nil
+	for r := range 3 {
+		rows = append(rows, bgBand(a, f, area.Min.Y+2+r, area.Min.X, area.Min.X+5))
+	}
+	if got := strings.Join(rows, " "); got != "yyy.. yyy.. ....." {
+		t.Errorf("the flash: %s", got)
+	}
+}
+
+// What a yank flashes is the pane's it was done in (F10.7).
+func TestFlashNumsOfItsPane(t *testing.T) {
+	a := wide(160, 45)
+	a.flash = &yankFlash{pane: 7, nums: map[int]bool{0: true}}
+	if a.flashNums(&Pane{ID: 7}) == nil || a.flashNums(&Pane{ID: 8}) != nil {
+		t.Errorf("flash of pane 7: %v, of 8: %v", a.flashNums(&Pane{ID: 7}), a.flashNums(&Pane{ID: 8}))
 	}
 }

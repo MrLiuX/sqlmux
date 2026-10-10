@@ -346,6 +346,7 @@ func (a *App) deleteConn() tea.Cmd {
 				s.last = s.start
 			}
 		}
+		a.regroup() // the first of a group gone: the next one is where the group begins
 		if a.form != nil {
 			a.selectConn(min(a.form.cur, len(a.sess.Conns)))
 			a.form.list = true
@@ -569,7 +570,7 @@ func (a *App) managerView() ui.ConnManager {
 		}
 		m.Rows = append(m.Rows, row)
 	}
-	m.Rows = append(m.Rows, ui.ConnRow{Icon: ic.RowAdd, Name: i18n.T("新建"), Rule: group != ""})
+	m.Rows = append(m.Rows, ui.ConnRow{Icon: ic.RowAdd, Name: i18n.T("新建"), Rule: len(a.groupNames()) > 0})
 	return m
 }
 
@@ -615,15 +616,18 @@ func (a *App) formView() ui.Form {
 }
 
 // groupCands are the groups the group field's list offers: those that start
-// as what is typed does, in either case, but not what is typed exactly; all of them
-// before anything is. None when the field has no keys or the list is closed
-// (F10.6).
+// as what is typed does, in either case, but not what is typed exactly; none
+// before anything is typed, as a completion has none (§7.8). None either when
+// the field has no keys or the list is closed (F10.6).
 func (a *App) groupCands() (out []string) {
 	f := a.form
 	if f == nil || f.list || f.sel != fieldGroup || f.groupOff {
 		return nil
 	}
 	text := strings.TrimSpace(f.fields[fieldGroup].Input.Text)
+	if text == "" {
+		return nil
+	}
 	typed := strings.ToLower(text)
 	for _, g := range a.groupNames() {
 		if strings.HasPrefix(strings.ToLower(g), typed) && g != text {
@@ -633,13 +637,13 @@ func (a *App) groupCands() (out []string) {
 	return out
 }
 
-// groupPick is the candidate of n the list has selected: the first once a
-// prefix is typed, none (-1) before, till ↓ or ↑ picks one.
+// groupPick is the candidate of n the list has selected: the first, till ↓
+// or ↑ picks another; none (-1) when there are none.
 func (f *connForm) groupPick(n int) int {
 	switch {
 	case f.groupSel >= 0 && f.groupSel < n:
 		return f.groupSel
-	case strings.TrimSpace(f.fields[fieldGroup].Input.Text) != "":
+	case n > 0:
 		return 0
 	}
 	return -1
@@ -651,19 +655,11 @@ func (a *App) groupMove(d int) {
 	if n == 0 {
 		return
 	}
-	switch cur := f.groupPick(n); {
-	case cur < 0 && d > 0:
-		f.groupSel = 0
-	case cur < 0:
-		f.groupSel = n - 1
-	default:
-		f.groupSel = (cur + d + n) % n
-	}
+	f.groupSel = (f.groupPick(n) + d + n) % n
 }
 
 // groupAccept puts the candidate selected in the field, and is whether one
-// was: Tab and ↵ take it, or, with none selected, do what they do without
-// the list (F10.6).
+// was: Tab and ↵ take it, or, with no list, do what they do without it (F10.6).
 func (a *App) groupAccept() bool {
 	f, cands := a.form, a.groupCands()
 	i := f.groupPick(len(cands))

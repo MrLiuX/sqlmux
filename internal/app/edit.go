@@ -140,7 +140,7 @@ func (t *dataTab) cursor() (shownRow, string, bool) { return t.recordAt(t.row) }
 // for one added.
 func (t *dataTab) recordAt(row int) (shownRow, string, bool) {
 	rows := t.shownRows()
-	if row < 0 || row >= len(rows) || len(t.shownCols()) == 0 {
+	if row >= len(rows) || len(t.shownCols()) == 0 {
 		return shownRow{}, "", false
 	}
 	if sr := rows[row]; sr.add == nil {
@@ -540,25 +540,49 @@ func (a *App) deleteRow() tea.Cmd {
 	if !ok {
 		return nil
 	}
+	return a.deleteRecords(t, []int{t.row})
+}
+
+// deleteRecords marks the records of t at positions for deletion, or takes the
+// marks off when they all have one, which is what dd on one record is; a row
+// added goes, as dd takes it out, but not when marks are taken off, which keeps
+// what was typed in it. Nothing is selected after (§10.6, F10.7).
+func (a *App) deleteRecords(t *dataTab, positions []int) tea.Cmd {
 	if why := t.whyNoEdit(); why != "" {
 		return a.showToast(why, toastTTL)
 	}
-	sr, key, ok := t.cursor()
-	if !ok {
+	var keys []string
+	var added []*newRow
+	for _, pos := range positions {
+		switch sr, key, ok := t.recordAt(pos); {
+		case !ok:
+		case sr.add != nil:
+			added = append(added, sr.add)
+		default:
+			keys = append(keys, key)
+		}
+	}
+	if len(keys)+len(added) == 0 {
 		return nil
 	}
 	t.note, t.failed = ui.Note{}, nil // a change starts over what the last save said (§10.3)
-	switch {
-	case sr.add != nil:
-		t.dropAdded(sr.add)
-	case t.deleted[key]:
-		delete(t.deleted, key)
-	default:
-		if t.deleted == nil {
-			t.deleted = map[string]bool{}
+	all := len(keys) > 0 && !slices.ContainsFunc(keys, func(k string) bool { return !t.deleted[k] })
+	for _, k := range keys {
+		switch {
+		case all:
+			delete(t.deleted, k)
+		case t.deleted == nil:
+			t.deleted = map[string]bool{k: true}
+		default:
+			t.deleted[k] = true
 		}
-		t.deleted[key] = true
 	}
+	if !all {
+		for _, r := range added {
+			t.dropAdded(r)
+		}
+	}
+	t.deselect()
 	return nil
 }
 

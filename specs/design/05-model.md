@@ -14,7 +14,7 @@ type Workspace struct {
 
 type Session struct {           // M5 起：session 是一个工作区，不再绑定一个连接（用户 2026-10-02 定）
     Name      string            // 默认取启动时的连接名；之后新建的按 tmux 习惯叫 1、2……，可重命名
-    Conns     []*Conn           // connections.toml 里的全部连接，按文件顺序；用到时才连
+    Conns     []*Conn           // connections.toml 里的全部连接，按分组排（§7.8「分组」）；用到时才连
     Windows   []*Window
     ActiveWin int
     RunSeq    int               // result 标题里的执行序号，如 #42

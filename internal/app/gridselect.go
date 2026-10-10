@@ -6,9 +6,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-
-	"github.com/kackerx/sqlmux/internal/i18n"
-	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // gridStateOf is the state of the grid pane p shows in its current tab, a
@@ -104,45 +101,13 @@ func (a *App) selectClear() {
 	}
 }
 
-// selectDelete is d on the records selected of a table: each marked for
-// deletion as dd does, or none of them when they all are; one added is taken
-// out as dd takes it. Nothing is selected after (F10.7).
+// selectDelete is d on the records selected of a table (F10.7).
 func (a *App) selectDelete() tea.Cmd {
 	t, ok := a.focusedGrid()
 	if !ok {
 		return nil
 	}
-	if why := t.whyNoEdit(); why != "" {
-		return a.showToast(why, toastTTL)
-	}
-	var keys []string
-	var added []*newRow
-	for _, pos := range t.positions() {
-		switch sr, key, ok := t.recordAt(pos); {
-		case !ok:
-		case sr.add != nil:
-			added = append(added, sr.add)
-		default:
-			keys = append(keys, key)
-		}
-	}
-	t.note, t.failed = ui.Note{}, nil // a change starts over what the last save said (§10.3)
-	all := len(keys) > 0 && !slices.ContainsFunc(keys, func(k string) bool { return !t.deleted[k] })
-	for _, k := range keys {
-		switch {
-		case all:
-			delete(t.deleted, k)
-		case t.deleted == nil:
-			t.deleted = map[string]bool{k: true}
-		default:
-			t.deleted[k] = true
-		}
-	}
-	for _, r := range added {
-		t.dropAdded(r)
-	}
-	t.deselect()
-	return nil
+	return a.deleteRecords(t, t.positions())
 }
 
 // selectYank is y on the records selected: a JSON array of them, in the order
@@ -166,7 +131,7 @@ func (a *App) selectYank() tea.Cmd {
 		}
 		objects = append(objects, string(raw))
 	}
-	flash := yankFlash{pane: p.ID, nums: maps.Clone(s.selected())}
+	flash := yankFlash{pane: p.ID, nums: s.selected()}
 	s.deselect()
 	if len(objects) == 0 {
 		return nil
@@ -176,13 +141,4 @@ func (a *App) selectYank() tea.Cmd {
 		return a.showToast(err.Error(), toastTTL)
 	}
 	return tea.Batch(clipCopy(text), a.flashYank(flash))
-}
-
-// selectedNote is the count of records selected as the query bar says it
-// after the rows', "" for none (F10.7).
-func (s *gridState) selectedNote() string {
-	if n := len(s.selected()); n > 0 {
-		return i18n.T(" · 已选 %d", n)
-	}
-	return ""
 }

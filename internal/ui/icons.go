@@ -138,7 +138,7 @@ var ASCIIIcons = &Icons{
 	User:        Icon{Text: "~"},
 	Database:    Icon{Text: "="},
 	Advanced:    Icon{Text: "+"},
-	Group:       Icon{Text: "#"},
+	Group:       Icon{Text: "%"},
 	Link:        Icon{Text: "&"},
 	Labeled:     true,
 }
