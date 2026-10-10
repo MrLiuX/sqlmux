@@ -36,7 +36,7 @@ y=$(for y in $(seq 3 43); do [[ $(e2e_text 1 32 "$y") == *" query_2"* ]] && echo
 e2e_click 12 "$y"; sleep 0.3; key Enter; sleep 1
 check "树里 query_2 ↵：打开，内容是 select 2 as two" eval 'e2e_plain | grep -q "select 2 as two"'
 check "notes.txt 原样" eval '[[ $(cat "$DDIR/queries/notes.txt") == "keep me" ]]'
-quit_app() { e2e_type ":"; sleep 0.4; e2e_type qa; key Enter; sleep 1.5; }
+quit_app() { e2e_type ":"; sleep 0.4; e2e_type qa; key Enter; wait_for 8 exited; sleep 0.5; }
 quit_app
 check "退出后 state.json 里写的是 queries 键（query_2 的连接还在），没有 consoles" eval 'python3 - "$D/st/sqlmux/state.json" <<PY
 import json, sys
