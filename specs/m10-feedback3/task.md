@@ -1,13 +1,14 @@
 # M10 第三轮使用反馈 · 任务清单
 
-- **状态**：**todo**（2026-10-10 用户在 M9 审查期间提出 9 条，决策者拆成 F10.1–F10.8，之后追加 F10.9、F10.10；翻页键改 `<lt>` / `>`、`c` 开 COLS 只是用户自己的 keymaps.toml，不算 feature）。M9 全部 passed 之后开工。
-- **目标**：表格的多选（标记删除、复制 JSON）、flash 式跳转、树去掉 pane 层、连接分组、WHERE 下拉撑满、新建 session 先要名字、console 结果 500 行并翻页、COLS 调列顺序、侧栏去掉键位文字、删开着的 console 直接关 tab。
+- **状态**：**todo**（2026-10-10 用户在 M9 审查期间提出 9 条，决策者拆成 F10.1–F10.8，之后追加 F10.9–F10.11；翻页键改 `<lt>` / `>`、`c` 开 COLS 只是用户自己的 keymaps.toml，不算 feature）。M9 全部 passed 之后开工。
+- **目标**：表格的多选（标记删除、复制 JSON）、flash 式跳转、树去掉 pane 层、连接分组、WHERE 下拉撑满、新建 session 先要名字、console 结果 500 行并翻页、COLS 调列顺序、侧栏去掉键位文字、删开着的 console 直接关 tab；最后把 console 改名叫 query。
 - **范围**：tech-design §6.4（作用域）、§6.8（键位表）、§6.10（跳转，新）、§7.6（表格选择）、§7.8（树、COLS、session 列表、连接表单）、§9.6（WHERE 下拉）、§11（结果翻页）、§14（`group`、`max_rows`）。
 - **依赖**：M9 F9.1–F9.10 passed。
-- **完成标准**：F10.1–F10.10 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m10`。
+- **完成标准**：F10.1–F10.11 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m10`。
 - **审查节点**：
   1. F10.5 之后：F10.1–F10.5、F10.9、F10.10 一批（小改：WHERE 下拉、session 名字、COLS 顺序、结果翻页、树去掉 pane 层、侧栏的键位文字、删开着的 console）；
-  2. F10.8 之后：F10.6–F10.8 一批（连接分组、选择模式、跳转）。
+  2. F10.8 之后：F10.6–F10.8 一批（连接分组、选择模式、跳转）；
+  3. F10.11 之后：F10.11 单独一批（console 改名 query，纯改名，单独审、单独测）。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
 
@@ -175,3 +176,20 @@
 **验收**
 - [ ] 单测：两个 session 各开着这个 console，删除后两处 tab 都没了、文件没了、state.json 没有它。
 - [ ] e2e：树里 `dd` 删开着的 console，`y` 后 tab 消失、没有 toast。
+
+## F10.11 console 改名叫 query · 状态：todo
+
+用户 2026-10-10：新版 DataGrip 已经不用 console 这个词，目录叫 queries、文件叫 `Query_1.sql`；等前面的都做完，单独一个 feature 改名、单独测。纯改名，不改任何行为。
+
+- **依赖**：F10.1–F10.10 passed
+- **涉及**：全仓库：`internal/app`、`internal/ui`、`internal/config`、`internal/keymap/default.toml`、`internal/i18n`、golden、e2e（tester 改）；spec 由决策者在开工时一次改完
+
+**开发**（开工时决策者先把 tech-design、task.md 里的用词改掉，再写代码）
+- [ ] 用户看得见的词全部从 console 改成 query：树的 `Consoles` 节点 → `Queries`；tab 和 pane 标题；命令标题（「新建 console」→「新建 query」等）和 Action ID（`console.*` → `query.*`，`console.new` / `console.format` / `console.schema` / `console.conn` / `console.rename` 等）；keymap 作用域 `[keys.console]` → `[keys.query]`、`[map.console.visual]` → `[map.query.visual]`；config `[console] max_rows` → `[query] max_rows`；state.json 和布局文件里的 tab 类型和键；i18n 的中英文文案；toast 和确认框文案；`sqlmux keys` 的输出。
+- [ ] 文件：目录 `consoles/` → `queries/`，默认文件名 `console_<n>.sql` → `query_<n>.sql`。启动时一次性迁移：没有 `queries/` 而有 `consoles/` 就把目录改名，目录里 `console_<n>.sql` 改成 `query_<n>.sql`（用户改过名的文件不动），state.json 里的键跟着改；布局文件里旧的类型名照新的读。
+- [ ] 不留旧 Action ID 的别名：v0.1.0 还没推送，没有外部用户；用户自己的 keymaps.toml 和 config.toml 由决策者改。代码里的标识符（`consoleTab` 这类）一并改，commit 说明注明是 rename。
+- [ ] 细节（已定）：不改 `internal/editor` 的包名和编辑器行为；commit 前缀、e2e 脚本文件名随 tester。
+
+**验收**
+- [ ] `just check` 全绿，golden 只有文字变化；单测：从只有 `consoles/console_2.sql` 的数据目录启动后，`queries/query_2.sql` 存在、树里 Queries 节点列出它、state.json 里的键是新名字。
+- [ ] e2e：原有 console 相关脚本改用新词后全过；旧的 `[keys.console]` 配置段启动时报未知作用域（和今天写错段名一样）。
