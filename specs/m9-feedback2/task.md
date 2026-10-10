@@ -1,12 +1,12 @@
 # M9 第二轮使用反馈 · 任务清单
 
-- **状态**：**todo**（2026-10-10 用户在 M8 验收期间提出 10 条，决策者拆成 F9.1–F9.8；另外两条只改用户自己的配置：`SPC p` 改成 session 列表、表格默认转置 `[grid] transpose = true`）。M8 全部 passed 之后开工。
+- **状态**：**todo**（2026-10-10 用户在 M8 验收期间提出 10 条，决策者拆成 F9.1–F9.9；另外两条只改用户自己的配置：`SPC p` 改成 session 列表、表格默认转置 `[grid] transpose = true`）。M8 全部 passed 之后开工。
 - **目标**：WHERE 历史 / 收藏的几处顺手操作，表格的 `^`、`C-r`、复制为 JSON，缩放提示，DDL 的查看（面板预览可滚动、表格里看列 / 表的定义）。
 - **范围**：tech-design §7.5（表格键）、§7.8（pane 标题、WHERE）、§9.6（历史 / 收藏下拉）、§12（DDL 预览）。
 - **依赖**：M8 F8.1–F8.23 passed。
 - **完成标准**：F9.1–F9.8 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m9`。
 - **审查节点**：
-  1. F9.5 之后：F9.1–F9.5 一批（WHERE 和表格的小改动）；
+  1. F9.5 之后：F9.1–F9.5、F9.9 一批（WHERE 和表格的小改动，加一个面板入口）；
   2. F9.8 之后：F9.6–F9.8 一批（缩放提示、DDL 查看）。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
@@ -128,3 +128,16 @@
 - [ ] golden：列定义浮窗、表 DDL 浮窗。
 - [ ] 单测：列定义浮窗的内容（有 default、有索引、有注释各一例）；浮窗滚动。
 - [ ] e2e：keymaps 绑 `fh` / `fH`，表格上按下 → 浮窗，`esc` 关。
+
+## F9.9 `palette.session`：直接打开面板的 session 范围 · 状态：todo
+
+用户 2026-10-10：`SPC p` 想切 session，旧的 session 列表（M5）只有 `j` / `k`、不能搜，面板的 session 范围更合适。
+
+- **依赖**：F5.19、F8.13
+- **涉及**：`internal/app`
+
+**开发**（§6.8）
+- [ ] `palette.session`「命令面板：session」= 打开面板并输入 `$`，同 `palette.window` / `palette.tab` / `palette.table`。不带默认键。旧的 session 列表（`session.list`，`SPC s`）保留，以后要不要去掉由决策者另定。
+
+**验收**
+- [ ] 单测：执行后面板打开、范围是 session。
