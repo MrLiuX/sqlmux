@@ -1,6 +1,6 @@
 # M10 第三轮使用反馈 · 任务清单
 
-- **状态**：**完成**（F10.1–F10.12 passed；最后一个 commit 08d9009 上完整回归 2982 项加 f10.11 全过，2026-10-11；`go install` 的确认等 v0.2.0 推送。原文：2026-10-10 用户在 M9 审查期间提出 9 条，决策者拆成 F10.1–F10.8，之后追加 F10.9–F10.12；翻页键改 `<lt>` / `>`、`c` 开 COLS 只是用户自己的 keymaps.toml，不算 feature）。M9 全部 passed（2026-10-10，93e9d8c），可以开工。节点 1 passed（2026-10-11，ae3dd16；e2e 3c23daa，全量 2900 过，18 败全是节点 2 的脚本）。节点 2 passed（2026-10-11，c5d6abe；e2e 508b591，全量 2987 项全过）。节点 3 passed（2026-10-11，08d9009；e2e 6a24c4f）。
+- **状态**：**完成**（F10.1–F10.12 passed；最后一个 commit 08d9009 上完整回归 2982 项加 f10.11 全过，2026-10-11；`go install` 2026-10-11 在 v0.2.0 上确认。原文：2026-10-10 用户在 M9 审查期间提出 9 条，决策者拆成 F10.1–F10.8，之后追加 F10.9–F10.12；翻页键改 `<lt>` / `>`、`c` 开 COLS 只是用户自己的 keymaps.toml，不算 feature）。M9 全部 passed（2026-10-10，93e9d8c），可以开工。节点 1 passed（2026-10-11，ae3dd16；e2e 3c23daa，全量 2900 过，18 败全是节点 2 的脚本）。节点 2 passed（2026-10-11，c5d6abe；e2e 508b591，全量 2987 项全过）。节点 3 passed（2026-10-11，08d9009；e2e 6a24c4f）。
 - **目标**：表格的多选（标记删除、复制 JSON）、flash 式跳转、树去掉 pane 层、连接分组、WHERE 下拉撑满、新建 session 先要名字、console 结果 500 行并翻页、COLS 调列顺序、侧栏去掉键位文字、删开着的 console 直接关 tab；最后把 console 改名叫 query。
 - **范围**：tech-design §6.4（作用域）、§6.8（键位表）、§6.10（跳转，新）、§7.6（表格选择）、§7.8（树、COLS、session 列表、连接表单）、§9.6（WHERE 下拉）、§11（结果翻页）、§14（`group`、`max_rows`）。
 - **依赖**：M9 F9.1–F9.10 passed。
@@ -206,4 +206,4 @@
 - [x] 细节（已定）：二进制名、配置目录、`sqlmux keys` 等用户可见的东西都不变；README 的「Build」节由决策者加一行 `go install github.com/kackerx/sqlmux/cmd/sqlmux@latest`（下一个 tag 起才有效）。
 
 **验收**
-- [ ] `just check` 全绿；在仓库外的临时目录 `GOFLAGS=-mod=mod go install github.com/kackerx/sqlmux/cmd/sqlmux@<这个 commit 的 sha>` 能装（推送之后由决策者在下一个 tag 上确认）。
+- [x] `just check` 全绿；在仓库外的临时目录 `GOFLAGS=-mod=mod go install github.com/kackerx/sqlmux/cmd/sqlmux@<这个 commit 的 sha>` 能装（决策者 2026-10-11 在 `v0.2.0` 上确认：装出的二进制 `keys --check` 通过；推送后几分钟内 sum.golang.org 还没收录，先用 `GONOSUMDB` 验的）。
