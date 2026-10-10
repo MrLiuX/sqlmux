@@ -11,6 +11,7 @@ import (
 	"net/http"
 	_ "net/http/pprof" // registers on DefaultServeMux: only served when SQLMUX_PPROF is set
 	"os"
+	"runtime/debug"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -19,6 +20,33 @@ import (
 	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/keymap"
 )
+
+// version, commit and date are what the build says (ldflags -X, F11.1);
+// a build without them, `go install`'s, asks what Go recorded.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
+// versionLine is what --version prints: "sqlmux v0.2.0 (3f2a1b9, 2026-10-11)".
+func versionLine() string {
+	v, c, d := version, commit, date
+	if info, ok := debug.ReadBuildInfo(); ok && v == "dev" {
+		if mv := info.Main.Version; mv != "" && mv != "(devel)" {
+			v = mv // go install ...@v0.2.0
+		}
+		for _, s := range info.Settings {
+			switch {
+			case s.Key == "vcs.revision" && c == "none":
+				c = s.Value[:min(len(s.Value), 7)]
+			case s.Key == "vcs.time" && d == "unknown":
+				d = s.Value
+			}
+		}
+	}
+	return fmt.Sprintf("sqlmux %s (%s, %s)", v, c, d)
+}
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "keys" {
@@ -43,8 +71,13 @@ func main() {
 func run(args []string) error {
 	flags := flag.NewFlagSet("sqlmux", flag.ContinueOnError)
 	layout := flags.String("layout", "", "open this layout (a name or a path)")
+	showVersion := flags.Bool("version", false, "print the version and exit")
 	if err := flags.Parse(args); err != nil {
 		return err
+	}
+	if *showVersion {
+		fmt.Println(versionLine())
+		return nil
 	}
 	name := ""
 	switch flags.NArg() {

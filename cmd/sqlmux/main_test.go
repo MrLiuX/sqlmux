@@ -218,3 +218,19 @@ func TestStartSessionWithoutConnections(t *testing.T) {
 		}
 	}
 }
+
+// --version says what the build put in, and dev for one with nothing: a
+// test binary has no version of Go's recording either (F11.1).
+func TestVersionLine(t *testing.T) {
+	if got := versionLine(); !strings.HasPrefix(got, "sqlmux dev (") {
+		t.Errorf("unset: %q", got)
+	}
+	defer func(v, c, d string) { version, commit, date = v, c, d }(version, commit, date)
+	version, commit, date = "v1.2.3", "abc1234", "2026-10-11"
+	if got := versionLine(); got != "sqlmux v1.2.3 (abc1234, 2026-10-11)" {
+		t.Errorf("injected: %q", got)
+	}
+	if err := run([]string{"--version"}); err != nil {
+		t.Errorf("--version: %v", err)
+	}
+}

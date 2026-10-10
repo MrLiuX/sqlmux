@@ -10,9 +10,14 @@ export SQLMUX_TEST_MYSQL := env("SQLMUX_TEST_MYSQL", "sqlmux:sqlmux@tcp(localhos
 default:
     @just --list
 
+# GoReleaser's config is valid and builds the four binaries into dist/ (needs goreleaser)
+release-check:
+    goreleaser check
+    goreleaser build --snapshot --clean
+
 # build bin/sqlmux
 build:
-    go build -o bin/sqlmux ./cmd/sqlmux
+    go build -ldflags "-X main.version=$(git describe --tags --always --dirty) -X main.commit=$(git rev-parse --short HEAD) -X main.date=$(date -u +%Y-%m-%d)" -o bin/sqlmux ./cmd/sqlmux
 
 # run sqlmux from source
 run *args:
