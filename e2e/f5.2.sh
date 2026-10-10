@@ -79,7 +79,7 @@ cmd window.rename; e2e_type zz; e2e_click "$(( $(e2e_find "0: data" "$(H)" | cut
 check "改名时点状态栏上的 0: data：等于 esc，名字没变，也没切过去" eval 'wins_are "0: data  1: report*  2: data-3" && mode_is NORMAL'
 f0=$(focused); cmd window.rename; e2e_type zz; g=($(geom 1)); e2e_click $((g[0] + 3)) $((g[1] + 2)); sleep 0.4
 check "改名时点 ① 里面：等于 esc，焦点也没动" eval '[[ $f0 != 1 ]] && wins_are "0: data  1: report*  2: data-3" && mode_is NORMAL && focus_is "$f0"'
-leader s; key n; wait_for 6 eval '[[ $(bar) == " 1 ▾"* ]]'; sleep 0.4
+leader s; key n; sleep 0.4; key Enter; wait_for 6 eval '[[ $(bar) == " 1 ▾"* ]]'; sleep 0.4
 cmd window.rename; e2e_type zz; key C-p; e2e_type '$doraemon'; sleep 0.3; key Enter
 check "在另一个 session 里改名，中途从面板切回 doraemon：等于 esc，doraemon 的 window 名都没变" eval '[[ $(bar) == " doraemon ▾"* ]] && wins_are "0: data  1: report*  2: data-3" && mode_is NORMAL'
 pal '$^1'; key Enter

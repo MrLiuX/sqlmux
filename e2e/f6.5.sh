@@ -104,7 +104,7 @@ e2e_stop
 # ---- 两个 session：退出再打开，两个都在，当前的是退出时的那个
 rm -f "$D/st/sqlmux/last.toml" "$D/st/sqlmux/last.toml.broken"
 sname() { bar | sed 's/^ //; s/ ▾.*//'; }
-startl; open_table t_order; e2e_keys Space; e2e_type s; sleep 0.4; key n; wait_for 8 eval '[[ $(sname) == 1 ]]'; sleep 1.5; open_table t_user
+startl; open_table t_order; e2e_keys Space; e2e_type s; sleep 0.4; key n; sleep 0.4; key Enter; wait_for 8 eval '[[ $(sname) == 1 ]]'; sleep 1.5; open_table t_user
 quit_all; e2e_stop
 startl; sleep 1.5
 check "两个 session（doraemon 和 1）恢复，当前是退出时的 1，里面开着 t_user" eval '[[ $(sname) == 1 && $(tabbar 1) == *t_user* ]] && e2e_keys Space && e2e_type s && sleep 0.5 && e2e_plain | grep -q "doraemon  1 windows" && e2e_plain | grep -q "1  1 windows"'

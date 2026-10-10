@@ -129,7 +129,7 @@ check "80×24：表单整个在屏幕里（上下左右都不出界），按钮�
 e2e_stop
 mkdir -p "$D/ascii"; printf 'icons = "ascii"\n' >"$D/ascii/config.toml"
 E2E_NOCONN=1 e2e_start -C "$D/ascii" "$E2E_BIN"; sleep 1.5
-check "ascii 图标：每行字段名前面是替代字符（name # / host @ / port : / user ~ / database = / 高级 +），没有 Nerd Font 字形" eval 'r=$(frows_raw); [[ $(grep -c "^# *name" <<<"$r") == 1 && $(grep -c "^@ *host" <<<"$r") == 1 && $(grep -c "^: *port" <<<"$r") == 1 && $(grep -c "^~ *user" <<<"$r") == 1 && $(grep -c "^= *database" <<<"$r") == 1 && $(grep -c "^+ *高级" <<<"$r") == 1 ]] || { echo "$r"; false; }'
+check "ascii 图标：每行字段名前面是替代字符（name # / group % / host @ / port : / user ~ / database = / 高级 +），没有 Nerd Font 字形" eval 'r=$(frows_raw); [[ $(grep -c "^# *name" <<<"$r") == 1 && $(grep -c "^@ *host" <<<"$r") == 1 && $(grep -c "^: *port" <<<"$r") == 1 && $(grep -c "^~ *user" <<<"$r") == 1 && $(grep -c "^= *database" <<<"$r") == 1 && $(grep -c "^+ *高级" <<<"$r") == 1 && $(grep -c "^% *group" <<<"$r") == 1 ]] || { echo "$r"; false; }'
 e2e_stop
 
 e2e_done
