@@ -1,12 +1,12 @@
 # M10 第三轮使用反馈 · 任务清单
 
-- **状态**：**todo**（2026-10-10 用户在 M9 审查期间提出 9 条，决策者拆成 F10.1–F10.8，之后追加 F10.9–F10.11；翻页键改 `<lt>` / `>`、`c` 开 COLS 只是用户自己的 keymaps.toml，不算 feature）。M9 全部 passed（2026-10-10，93e9d8c），可以开工。
+- **状态**：**todo**（2026-10-10 用户在 M9 审查期间提出 9 条，决策者拆成 F10.1–F10.8，之后追加 F10.9–F10.12；翻页键改 `<lt>` / `>`、`c` 开 COLS 只是用户自己的 keymaps.toml，不算 feature）。M9 全部 passed（2026-10-10，93e9d8c），可以开工。
 - **目标**：表格的多选（标记删除、复制 JSON）、flash 式跳转、树去掉 pane 层、连接分组、WHERE 下拉撑满、新建 session 先要名字、console 结果 500 行并翻页、COLS 调列顺序、侧栏去掉键位文字、删开着的 console 直接关 tab；最后把 console 改名叫 query。
 - **范围**：tech-design §6.4（作用域）、§6.8（键位表）、§6.10（跳转，新）、§7.6（表格选择）、§7.8（树、COLS、session 列表、连接表单）、§9.6（WHERE 下拉）、§11（结果翻页）、§14（`group`、`max_rows`）。
 - **依赖**：M9 F9.1–F9.10 passed。
-- **完成标准**：F10.1–F10.11 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m10`。
+- **完成标准**：F10.1–F10.12 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m10`。
 - **审查节点**：
-  1. F10.5 之后：F10.1–F10.5、F10.9、F10.10 一批（小改：WHERE 下拉、session 名字、COLS 顺序、结果翻页、树去掉 pane 层、侧栏的键位文字、删开着的 console）；
+  1. F10.5 之后：F10.1–F10.5、F10.9、F10.10、F10.12 一批（小改：WHERE 下拉、session 名字、COLS 顺序、结果翻页、树去掉 pane 层、侧栏的键位文字、删开着的 console、module 路径）；
   2. F10.8 之后：F10.6–F10.8 一批（连接分组、选择模式、跳转）；
   3. F10.11 之后：F10.11 单独一批（console 改名 query，纯改名，单独审、单独测）。
 
@@ -193,3 +193,17 @@
 **验收**
 - [ ] `just check` 全绿，golden 只有文字变化；单测：从只有 `consoles/console_2.sql` 的数据目录启动后，`queries/query_2.sql` 存在、树里 Queries 节点列出它、state.json 里的键是新名字。
 - [ ] e2e：原有 console 相关脚本改用新词后全过；旧的 `[keys.console]` 配置段启动时报未知作用域（和今天写错段名一样）。
+
+## F10.12 module 路径改成 `github.com/kackerx/sqlmux` · 状态：todo
+
+2026-10-10 推送 v0.1.0 后发现：go.mod 的 module 是 `sqlmux`，`go install github.com/kackerx/sqlmux/cmd/sqlmux@v0.1.0` 装不了，而「`go install` 能装」是 plan.md 里定的发布目标。纯机械改动，放节点 1。
+
+- **依赖**：无
+- **涉及**：`go.mod`、全部 Go 文件的 import（281 处 `sqlmux/internal/…`）、README 的安装说明
+
+**开发**
+- [ ] `go.mod` 的 `module github.com/kackerx/sqlmux`，所有 import 改成 `github.com/kackerx/sqlmux/internal/…`（`gofmt -r` 或 sed 一次改完），`go mod tidy`。
+- [ ] 细节（已定）：二进制名、配置目录、`sqlmux keys` 等用户可见的东西都不变；README 的「Build」节由决策者加一行 `go install github.com/kackerx/sqlmux/cmd/sqlmux@latest`（下一个 tag 起才有效）。
+
+**验收**
+- [ ] `just check` 全绿；在仓库外的临时目录 `GOFLAGS=-mod=mod go install github.com/kackerx/sqlmux/cmd/sqlmux@<这个 commit 的 sha>` 能装（推送之后由决策者在下一个 tag 上确认）。

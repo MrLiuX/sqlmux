@@ -18,7 +18,7 @@
 
 ## 发布
 
-2026-10-10 推送：`m5`–`m9` 打在各自最后一个产品 commit 上，`v0.1.0` 打在 ffbcec5（m9 之后只多一个让 keychain 测试在 Linux 上过的 commit；93e9d8c 的首次 CI 是红的，tag 打在绿的那个），`go install github.com/kackerx/sqlmux/cmd/sqlmux@v0.1.0` 能装；GitHub Release、GoReleaser / Homebrew 等用户要再说。每个里程碑的 tag 在用户验收通过后由 worker 打并推送（M5–M9 由用户 10-10 定为先打 tag 再慢慢验收）。
+2026-10-10 推送：`m5`–`m9` 打在各自最后一个产品 commit 上，`v0.1.0` 打在 ffbcec5（m9 之后只多一个让 keychain 测试在 Linux 上过的 commit；93e9d8c 的首次 CI 是红的，tag 打在绿的那个），`go install` 还装不了：go.mod 的 module 是 `sqlmux` 而不是 `github.com/kackerx/sqlmux`，M10 F10.12 改掉后下一个 tag 才能 `go install github.com/kackerx/sqlmux/cmd/sqlmux@latest`；GitHub Release、GoReleaser / Homebrew 等用户要再说。每个里程碑的 tag 在用户验收通过后由 worker 打并推送（M5–M9 由用户 10-10 定为先打 tag 再慢慢验收）。
 
 ## 任务文件的格式
 
