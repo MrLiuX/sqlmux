@@ -1,6 +1,6 @@
 # M8 第一轮使用反馈 · 任务清单
 
-- **状态**：**验收中**（2026-10-08）。用户验收时追加的 F8.17、F8.18（节点 5）passed（708de5c；e2e 9461fda，全量 110 个脚本 2595 项全过）；F8.19 断线重连（节点 6）passed（76a713d；e2e e89e90b，全量 113 个脚本 2659 项全过）；F8.20 性能（节点 7）、F8.21 console 文件（节点 8）、F8.22–F8.23 侧栏宽度与右键菜单（节点 9）排队。F8.1–F8.16 全部 passed（31c5f56；e2e f512b23，完整回归 108 个脚本 2533 项全过，`just check` 全绿）。2026-10-07 用户照 WALKTHROUGH 走完 M5–M7 的验收版后提出 20 条意见，决策者拆成 F8.1–F8.16。验收通过后和 M5–M7 一起打 tag `m5` … `m8`、`v0.1.0`。
+- **状态**：**开发完成，等用户验收**（2026-10-10）。F8.1–F8.23 全部 passed；最后一批（节点 7–9，含 F8.19 的双写修复）在 0c023d2 通过，e2e cee6ad4，完整回归 118 个脚本 2713 项（3 项失败都是脚本时序 / 机器忙的判定，已改）；`just check` 全绿。验收通过后和 M5–M7 一起打 tag `m5` … `m8`、`v0.1.0`。
 - **目标**：把用户实际使用时碰到的 bug 修掉，补齐几处配置项和命令，连接可以修改、删除。
 - **范围**：tech-design §5（window 名）、§6.5（前缀）、§6.8（新命令）、§7.5（列宽）、§7.8（WHERE 下拉、连接管理）、§9.7（补全）、§14（配置项）。
 - **依赖**：M7 F7.6 passed。
@@ -342,7 +342,7 @@
 - [x] 集成测试（PG、MySQL）：杀后端后取数 / 计数 / 补全 / 快速 SQL 都自动恢复，用户看不到错误；console 的 `select` 自动恢复，`update` 报错 + toast、不重跑；手动事务里被杀 → 事务状态回空闲、模式仍是手动、toast 事务丢失；重连后 console 的 search_path 还是选过的 schema。
 - [x] e2e：用 docker `pause` / `unpause` 或 `pg_terminate_backend` 模拟断开，表格 `R` 刷新后数据回来、树节点不变红；库停掉时刷新 → 节点变红、toast，库起来后再 `R` 恢复。
 
-## F8.20 性能：profile 开关、指针移动的测量与优化 · 状态：todo
+## F8.20 性能：profile 开关、指针移动的测量与优化 · 状态：passed（0c023d2；e2e cee6ad4）
 
 用户 2026-10-08：在表格上用鼠标上下拖动指针（不是滚轮）会卡顿，悬停行的底色延迟明显；活动监视器里 sqlmux 44%、tmux 40%、kitty 33%，闲置 CPU 不到 1%。问是不是选 Go 的问题。决策者判断：不是语言，是全量移动上报下每个事件都做一次完整的 Update + View，频率乘开销；先量再改。
 
@@ -350,18 +350,18 @@
 - **涉及**：`cmd/sqlmux`（pprof 开关）、`internal/app`（benchmark、热点）、`internal/ui`（绘制的热点）、`justfile`
 
 **开发**（§2「性能」、§15「性能」）
-- [ ] `SQLMUX_PPROF=<addr>` 开 `net/http/pprof`，不设时运行零开销（二进制多约 2.4 MB，接受）；`just profile` 起实例并打印取 CPU / heap profile 的命令。
-- [ ] benchmark：默认布局、160×45、t_order 一页 100 行（用测试里现成的假数据），喂指针在表格上来回扫过的移动事件，每个事件一次 Update + View；报告 ns/op 和 allocs/op，先记下优化前的数字。
-- [ ] 用真实终端复现一次（tmux 里 `send-keys` 喂 SGR 移动序列，或用户的操作），取 CPU profile，找出热点。可能的嫌疑（只是提示，以 profile 为准）：每帧重算整个表格每个单元格的字素宽度和截断、每帧重建样式字符串和命中表、指针停在同一行时也重画整帧、事件在队列里堆积没有合并。
-- [ ] 按热点优化到目标：每事件 < 1ms；指针停在同一个命中目标上时不做多余的工作；先做改动最小、收益最大的那一两处，不为了数字重写绘制。
-- [ ] 优化前后的数字写进 §15「性能」；没达到目标就把差距和原因写明，由决策者决定要不要继续。
-- [ ] 细节（worker 2026-10-08 测量后提议，已定）：优化前 1.33–1.41 ms / 1.35 MB / 7557 allocs 每事件，热点是整帧序列化 44%、Grid.Draw 31%（列宽重算 15%）、整块 buffer 分配的 GC 12–17%；改法 A 行缓存 → B 悬停没变就不重画 → C 列宽缓存（达标就不做），每项一个 commit；数字由决策者写进 §15（优化后：跨行 0.54 ms、行内 1.2 µs，真实终端约 10.5% 核，§15）。e2e 的 CPU 采样用 `ps -o cputime` 前后差，不用 `%cpu`（macOS 上是衰减平均）。
+- [x] `SQLMUX_PPROF=<addr>` 开 `net/http/pprof`，不设时运行零开销（二进制多约 2.4 MB，接受）；`just profile` 起实例并打印取 CPU / heap profile 的命令。
+- [x] benchmark：默认布局、160×45、t_order 一页 100 行（用测试里现成的假数据），喂指针在表格上来回扫过的移动事件，每个事件一次 Update + View；报告 ns/op 和 allocs/op，先记下优化前的数字。
+- [x] 用真实终端复现一次（tmux 里 `send-keys` 喂 SGR 移动序列，或用户的操作），取 CPU profile，找出热点。可能的嫌疑（只是提示，以 profile 为准）：每帧重算整个表格每个单元格的字素宽度和截断、每帧重建样式字符串和命中表、指针停在同一行时也重画整帧、事件在队列里堆积没有合并。
+- [x] 按热点优化到目标：每事件 < 1ms；指针停在同一个命中目标上时不做多余的工作；先做改动最小、收益最大的那一两处，不为了数字重写绘制。
+- [x] 优化前后的数字写进 §15「性能」；没达到目标就把差距和原因写明，由决策者决定要不要继续。
+- [x] 细节（worker 2026-10-08 测量后提议，已定）：优化前 1.33–1.41 ms / 1.35 MB / 7557 allocs 每事件，热点是整帧序列化 44%、Grid.Draw 31%（列宽重算 15%）、整块 buffer 分配的 GC 12–17%；改法 A 行缓存 → B 悬停没变就不重画 → C 列宽缓存（达标就不做），每项一个 commit；数字由决策者写进 §15（优化后：跨行 0.54 ms、行内 1.2 µs，真实终端约 10.5% 核，§15）。e2e 的 CPU 采样用 `ps -o cputime` 前后差，不用 `%cpu`（macOS 上是衰减平均）。
 
 **验收**
-- [ ] benchmark 在 CI 的 `go test` 里能跑（短跑一次即可），数字记在 §15。
-- [ ] e2e：tmux 里每秒 100 个移动事件扫过表格 3 秒，悬停行跟着指针（最后一个事件后 100ms 内底色在正确的行），期间 sqlmux 的 CPU 用 `ps -o cputime` 前后差算，不超过一个核的 10%（机器忙时放宽到 20%，写明）。
+- [x] benchmark 在 CI 的 `go test` 里能跑（短跑一次即可），数字记在 §15。
+- [x] e2e：tmux 里每秒 100 个移动事件扫过表格 3 秒，悬停行跟着指针（最后一个事件后 100ms 内底色在正确的行），期间 sqlmux 的 CPU 用 `ps -o cputime` 前后差算，不超过一个核的 10%（机器忙时放宽到 20%，写明）。
 
-## F8.21 console 文件：编号递增、树里的文件列表、删除 · 状态：todo
+## F8.21 console 文件：编号递增、树里的文件列表、删除 · 状态：passed（0c023d2；e2e cee6ad4）
 
 用户 2026-10-08：关掉 console_3 的 tab 再新建，又是 console_3 而且带着旧内容；console 也没和 session / pane 绑定。参考 DataGrip：新建查询文件编号递增，关 tab 不删文件，文件列表里明确删掉 Query_11 之后再新建才会再用 11。用户要的：树里加一个共享的文件列表；console 1、2、3 存在时关掉 3 再新建是 4；删掉 2 再新建是全新的 2。
 
@@ -369,17 +369,17 @@
 - **涉及**：`internal/app`（编号、树的新节点、删除）、`internal/config`（console 文件列表、删除）
 
 **开发**（§11、§7.8「Consoles 节点」）
-- [ ] 新建 console 的编号：取没有文件、也没在任何 session 里打开的最小 n。
-- [ ] 树里加「Consoles」根节点（工作区节点下面），列出 `consoles/*.sql`：名字、右端 `dim` 色的最后一次连接名，开着的用 `focus` 色；`↵` / 单击打开或聚焦（已开着就聚焦 / attach，没开就在当前 data pane 新开 tab）；新建、关闭、改名、删除后跟着变。
-- [ ] `tree.delete`「删除 console 文件」，默认键 `dd`（`[keys.tree]`，只对 Consoles 下的项有效，别处无事）：确认框，删文件和 state.json 的记录；开着的拒绝并 toast「先关掉它的 tab」。
-- [ ] 细节（worker 2026-10-08 提议，已定）：列表 = `consoles/*.sql` ∪ 当前所有 session 里开着的 console（没打过字的没有文件但占着编号，要列出来，否则树里没有、新建又跳号），`console_<n>` 按 n 排、改过名的按字母排在后面；0 字节的文件照常列；右端是 state.json 记的最后一次连接名，不在 connections.toml 了也照显示；目录列表按目录 mtime 缓存（每帧 stat 一次、变了才重读；审查时定，比在 5 处显式失效省事，外部改动也能看到）；`↵` / 单击 / `l`：开着的聚焦（别的 session 开着就 attach，走 `tab.reopen` 的路径），没开着的在 `openTarget()` 的 data pane 新开；`tree.delete` 默认 `dd`（novim 层不绑），确认框「删除 console_3？」，删文件 + state 记录 + 刷新缓存，开着的拒绝，不是 Consoles 下的项无事，删失败 toast；绘制复用 `ui.TreeNode`（Aside 放连接名、开着的 TextFg 用 focus），图标用 console tab 的；`nextConsoleName()` 加「目录下没有 `console_<n>.sql`」；树的 `/` 过滤不管 Consoles。
+- [x] 新建 console 的编号：取没有文件、也没在任何 session 里打开的最小 n。
+- [x] 树里加「Consoles」根节点（工作区节点下面），列出 `consoles/*.sql`：名字、右端 `dim` 色的最后一次连接名，开着的用 `focus` 色；`↵` / 单击打开或聚焦（已开着就聚焦 / attach，没开就在当前 data pane 新开 tab）；新建、关闭、改名、删除后跟着变。
+- [x] `tree.delete`「删除 console 文件」，默认键 `dd`（`[keys.tree]`，只对 Consoles 下的项有效，别处无事）：确认框，删文件和 state.json 的记录；开着的拒绝并 toast「先关掉它的 tab」。
+- [x] 细节（worker 2026-10-08 提议，已定）：列表 = `consoles/*.sql` ∪ 当前所有 session 里开着的 console（没打过字的没有文件但占着编号，要列出来，否则树里没有、新建又跳号），`console_<n>` 按 n 排、改过名的按字母排在后面；0 字节的文件照常列；右端是 state.json 记的最后一次连接名，不在 connections.toml 了也照显示；目录列表按目录 mtime 缓存（每帧 stat 一次、变了才重读；审查时定，比在 5 处显式失效省事，外部改动也能看到）；`↵` / 单击 / `l`：开着的聚焦（别的 session 开着就 attach，走 `tab.reopen` 的路径），没开着的在 `openTarget()` 的 data pane 新开；`tree.delete` 默认 `dd`（novim 层不绑），确认框「删除 console_3？」，删文件 + state 记录 + 刷新缓存，开着的拒绝，不是 Consoles 下的项无事，删失败 toast；绘制复用 `ui.TreeNode`（Aside 放连接名、开着的 TextFg 用 focus），图标用 console tab 的；`nextConsoleName()` 加「目录下没有 `console_<n>.sql`」；树的 `/` 过滤不管 Consoles。
 
 **验收**
-- [ ] 单测：有 console_1、_2、_3 文件时新建得 _4；删掉 _2 再新建得全新的 _2（空内容）；开着 _3 没文件（没打过字）时新建得 _4。
-- [ ] golden：树里的 Consoles 节点（一个开着的、一个关着的、一个改过名的）。
-- [ ] e2e：关掉 console_3 → 树的 Consoles 里还在、`↵` 重新打开内容还在；`dd` 删掉 → 确认后消失，再 `c` 新建得到空的 console_3；开着的 `dd` 被拒绝。
+- [x] 单测：有 console_1、_2、_3 文件时新建得 _4；删掉 _2 再新建得全新的 _2（空内容）；开着 _3 没文件（没打过字）时新建得 _4。
+- [x] golden：树里的 Consoles 节点（一个开着的、一个关着的、一个改过名的）。
+- [x] e2e：关掉 console_3 → 树的 Consoles 里还在、`↵` 重新打开内容还在；`dd` 删掉 → 确认后消失，再 `c` 新建得到空的 console_3；开着的 `dd` 被拒绝。
 
-## F8.22 侧栏宽度配置 `[tree] width` · 状态：todo
+## F8.22 侧栏宽度配置 `[tree] width` · 状态：passed（0c023d2；e2e cee6ad4）
 
 用户 2026-10-08：树要稍微宽一点，300px 左右，给个配置。
 
@@ -387,12 +387,12 @@
 - **涉及**：`internal/config`、`internal/app`
 
 **开发**（§7.8「schema 侧栏」、§14）
-- [ ] `[tree] width`，默认 32（列，含边框），夹在 16 到窗口宽度一半之间；布局文件的 `sidebar_width` 优先；拖动照旧记在 window 上。
+- [x] `[tree] width`，默认 32（列，含边框），夹在 16 到窗口宽度一半之间；布局文件的 `sidebar_width` 优先；拖动照旧记在 window 上。
 
 **验收**
-- [ ] 单测：`width = 38` 时新 window 的侧栏 38 列；写 8 得 16；布局文件里有 `sidebar_width` 时用布局的。
+- [x] 单测：`width = 38` 时新 window 的侧栏 38 列；写 8 得 16；布局文件里有 `sidebar_width` 时用布局的。
 
-## F8.23 树的右键菜单：打开、重命名、删除 console 文件，删除表 · 状态：todo
+## F8.23 树的右键菜单：打开、重命名、删除 console 文件，删除表 · 状态：passed（0c023d2；e2e cee6ad4）
 
 用户 2026-10-08：树里右键给菜单，能删 console 和表，删除要有二次确认的危险警告。
 
@@ -400,16 +400,16 @@
 - **涉及**：`internal/ui`（菜单组件）、`internal/app`（菜单项、删表）、`internal/keymap`（`menu` 作用域）、`internal/db`（DROP）
 
 **开发**（§7.8「右键菜单」、§13）
-- [ ] 右键（SGR 按钮 2）在树节点上弹出菜单：贴着指针，`menu` 作用域（`menu.up` / `menu.down` / `menu.run` / `menu.close`，默认 `j` `k` `↑` `↓` / `↵` / `esc`），可点击，点别处关闭；键位文字从 keymap 读。
-- [ ] 菜单项：console 文件 → 打开 / 重命名… / 删除…；表、视图 → 打开 / 在新 tab 打开 / 删除表…（视图「删除视图…」）；其他节点不弹。
-- [ ] 删除表：危险确认框（§13 的样式，正文是要执行的 `DROP TABLE <引号表名>`），`confirm_dangerous = false` 也问；在所在连接的 `Main` 上执行（`Engine.Quote`），成功后关掉所有 session 里这张表的 tab、重载 catalog、toast「已删除 <表>」；失败进 toast。只读连接拒绝。表 / 视图节点上 `dd` 等于菜单里的「删除表…」。
-- [ ] 先看 lazysql 有没有 drop table 的做法（它的 tree 有删除吗）；没有就按上面做。
-- [ ] 细节（worker 2026-10-08 提议，已定）：`ui.Menu` 用 Block 画、左上角贴指针、放不下向左 / 上翻，每项一个命中、整窗一个 backdrop（点别处关、不透传），右键同时把树光标移到被点的节点；`menu` 作用域 4 个 Action，默认 `k` `↑` / `j` `↓` / `↵` / `esc`（novim 层只方向键），菜单开着时别的键吞掉，菜单里不画键位文字；菜单项都转成已有的 Action（tree.open / tree.open.tab / console 改名 / tree.delete）；删表 SQL 按 `Table.Kind`：表和分区表 `DROP TABLE`、视图 `DROP VIEW`、PG 物化视图 `DROP MATERIALIZED VIEW`、外部表 `DROP FOREIGN TABLE`，不带 CASCADE（被依赖时错误原文进 toast，用户去 console 写）；**手动事务模式下拒绝删表**，toast「手动事务模式下不能删表：先提交或回滚，或切回自动」（PG 里 DROP 进了事务 catalog 和 tab 都不知道该怎么办，MySQL 隐式提交会把 pending 一起提交；要在事务里删表去 console 写）；删表不碰 `Conn.tx`。`[tree] width`：配置值夹在 16 到 w/2，窗口 < 100 列时只往小缩到 24，拖过的 / 布局文件的宽度优先，类型不对报配置错误、越界只夹。
-- [ ] 审查时定（7 条，都照 reviewer 的倾向）：删表的守卫是 `c.Manual || c.inTx()`，自动模式下在事务里 toast「事务中不能删表：先提交或回滚」（真库实测 MySQL 隐式提交、PG 进事务后 tab 和 catalog 对不上）；菜单框从指针下一行开始、放不下翻到上一行结束，被点的节点不被盖住；菜单开着时再右键先关再按新位置处理；`j` / `k` 留在 default.toml 的 `[keys.menu]`（措辞改，不是「novim 层只方向键」）；F6.7 的危险确认框标题也用 `error` 色（§13 补写，补测试）；被删表的 tab 里未保存的修改随 tab 丢弃、不另提示；`width ≤ 0` 只夹到 16、不报错。
-- [ ] F8.19 的 bug（审查时在真库复现，并进这一轮）：pgconn 读回复出错时先关连接再报 `conn closed`，它的 SafeToRetry 恒为 true，被当成「没发出去」重跑，已提交的 insert 写了两行；`conn closed` 归「不知道执行了没有」那一档（§8.2 已改措辞），补一个真错误样本的单测。
+- [x] 右键（SGR 按钮 2）在树节点上弹出菜单：贴着指针，`menu` 作用域（`menu.up` / `menu.down` / `menu.run` / `menu.close`，默认 `j` `k` `↑` `↓` / `↵` / `esc`），可点击，点别处关闭；键位文字从 keymap 读。
+- [x] 菜单项：console 文件 → 打开 / 重命名… / 删除…；表、视图 → 打开 / 在新 tab 打开 / 删除表…（视图「删除视图…」）；其他节点不弹。
+- [x] 删除表：危险确认框（§13 的样式，正文是要执行的 `DROP TABLE <引号表名>`），`confirm_dangerous = false` 也问；在所在连接的 `Main` 上执行（`Engine.Quote`），成功后关掉所有 session 里这张表的 tab、重载 catalog、toast「已删除 <表>」；失败进 toast。只读连接拒绝。表 / 视图节点上 `dd` 等于菜单里的「删除表…」。
+- [x] 先看 lazysql 有没有 drop table 的做法（它的 tree 有删除吗）；没有就按上面做。
+- [x] 细节（worker 2026-10-08 提议，已定）：`ui.Menu` 用 Block 画、左上角贴指针、放不下向左 / 上翻，每项一个命中、整窗一个 backdrop（点别处关、不透传），右键同时把树光标移到被点的节点；`menu` 作用域 4 个 Action，默认 `k` `↑` / `j` `↓` / `↵` / `esc`（novim 层只方向键），菜单开着时别的键吞掉，菜单里不画键位文字；菜单项都转成已有的 Action（tree.open / tree.open.tab / console 改名 / tree.delete）；删表 SQL 按 `Table.Kind`：表和分区表 `DROP TABLE`、视图 `DROP VIEW`、PG 物化视图 `DROP MATERIALIZED VIEW`、外部表 `DROP FOREIGN TABLE`，不带 CASCADE（被依赖时错误原文进 toast，用户去 console 写）；**手动事务模式下拒绝删表**，toast「手动事务模式下不能删表：先提交或回滚，或切回自动」（PG 里 DROP 进了事务 catalog 和 tab 都不知道该怎么办，MySQL 隐式提交会把 pending 一起提交；要在事务里删表去 console 写）；删表不碰 `Conn.tx`。`[tree] width`：配置值夹在 16 到 w/2，窗口 < 100 列时只往小缩到 24，拖过的 / 布局文件的宽度优先，类型不对报配置错误、越界只夹。
+- [x] 审查时定（7 条，都照 reviewer 的倾向）：删表的守卫是 `c.Manual || c.inTx()`，自动模式下在事务里 toast「事务中不能删表：先提交或回滚」（真库实测 MySQL 隐式提交、PG 进事务后 tab 和 catalog 对不上）；菜单框从指针下一行开始、放不下翻到上一行结束，被点的节点不被盖住；菜单开着时再右键先关再按新位置处理；`j` / `k` 留在 default.toml 的 `[keys.menu]`（措辞改，不是「novim 层只方向键」）；F6.7 的危险确认框标题也用 `error` 色（§13 补写，补测试）；被删表的 tab 里未保存的修改随 tab 丢弃、不另提示；`width ≤ 0` 只夹到 16、不报错。
+- [x] F8.19 的 bug（审查时在真库复现，并进这一轮）：pgconn 读回复出错时先关连接再报 `conn closed`，它的 SafeToRetry 恒为 true，被当成「没发出去」重跑，已提交的 insert 写了两行；`conn closed` 归「不知道执行了没有」那一档（§8.2 已改措辞），补一个真错误样本的单测。
 
 **验收**
-- [ ] golden：表节点上的右键菜单；删表的确认框。
-- [ ] 单测：菜单项按节点类型；`dd` 在表节点上弹确认、在 schema 节点上无事。
-- [ ] 集成测试：PG / MySQL 各建一张临时表，菜单删除后 catalog 里没有、tab 关了；只读连接被拒。
-- [ ] e2e：右键 console 文件 → 菜单 → 删除 → 确认 → 列表里消失；右键表 → 删除表 → 确认框是红色、正文带 DROP TABLE → `y` 后树里消失。
+- [x] golden：表节点上的右键菜单；删表的确认框。
+- [x] 单测：菜单项按节点类型；`dd` 在表节点上弹确认、在 schema 节点上无事。
+- [x] 集成测试：PG / MySQL 各建一张临时表，菜单删除后 catalog 里没有、tab 关了；只读连接被拒。
+- [x] e2e：右键 console 文件 → 菜单 → 删除 → 确认 → 列表里消失；右键表 → 删除表 → 确认框是红色、正文带 DROP TABLE → `y` 后树里消失。
