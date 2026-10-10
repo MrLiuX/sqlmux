@@ -1,6 +1,6 @@
 # M11 分发 · 任务清单
 
-- **状态**：**todo**（2026-10-10 用户定：go install 之外还要 Homebrew 和 npm / npx；brew 走源码编译的 formula）。M10 passed 之后开工；F11.1 可以在 F10.12 落地、打 v0.1.1 时先做。
+- **状态**：**todo**（2026-10-10 用户定：go install 之外还要 Homebrew 和 npm / npx；brew 走源码编译的 formula）。M10 全部 passed 之后开工，第一个 GitHub Release 也等那时一起发（用户 2026-10-10 定：M10 之后发一个小版本，不随 F10.12 先发）。
 - **目标**：打 `v*` tag 就自动出 GitHub Release（压缩包、校验和、说明），`brew install kackerx/tap/sqlmux` 和 `npx sqlmux` 都能用。
 - **范围**：tech-design §15「发布与分发」、§4。
 - **依赖**：M10 F10.12（module 路径）。
