@@ -22,12 +22,12 @@
 │        Views (0)            │ │                                                       新建 console c                                                       │
 │ ▾  工作区                   │ │                                                                                                                             │
 │   ▾  data                   │ │                                                                                                                             │
-│     ▾  pane-1               │ │                                                                                                                             │
-│            t_order          │ │                                                                                                                             │
-│            console_1        │ │                                                                                                                             │
-│             新 tab           │ │                                                                                                                             │
+│       ①  t_order            │ │                                                                                                                             │
+│       ①  console_1          │ │                                                                                                                             │
+│       ①   新 tab             │ │                                                                                                                             │
 │ ▾  Consoles                 │ │                                                                                                                             │
 │      console_1     doraemon │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │

@@ -21,9 +21,9 @@
 │       ▸  t_user_profile 38k │ │                                                       Open a table t                                                       │
 │        Views (0)            │ │                                                       New console c                                                        │
 │ ▾  Workspace                │ │                                                                                                                             │
-│   ▾  data                   │ │                                                                                                                             │
-│        pane-1               │ │                                                                                                                             │
+│      data                   │ │                                                                                                                             │
 │ ▾  Consoles                 │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │

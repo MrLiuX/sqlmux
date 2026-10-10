@@ -16,6 +16,7 @@ import (
 type TreeNode struct {
 	Depth        int
 	Branch, Open bool
+	Prefix       string // dim, before the icon: a tab's pane number (F10.5)
 	Icon         Icon
 	IconFg       color.Color
 	Text         string
@@ -123,6 +124,9 @@ func (t Tree) Draw(f *Frame, in uv.Rectangle) uv.Position {
 			f.Text(x, row, right, fold, uv.Style{Fg: th.Dim, Bg: bg})
 		}
 		x += 2
+		if n.Prefix != "" {
+			x = f.Text(x, row, right, n.Prefix+" ", uv.Style{Fg: th.Dim, Bg: bg})
+		}
 		if n.Icon.Text != "" {
 			x = f.Text(x, row, right, n.Icon.Text, n.Icon.On(icon))
 			x = f.Text(x, row, right, " ", icon) // a space after every icon (§7.7)

@@ -21,9 +21,9 @@
 │       ▸  t_user_profile 38k│   meta jsonb,                                                                                    │                             │
 │        Views (0)           │   raw json,                                                                                      │                             │
 │ ▾  工作区                  │   note text,                                                                                     │                             │
-│   ▾  data                  │   created_at timestamp with time zone not null default now(),                                    │                             │
-│        pane-1              │   deleted_at timestamp with time zone,                                                           │                             │
-│ ▾  Consoles                │ …                                                                                                │                             │
+│      data                  │   created_at timestamp with time zone not null default now(),                                    │                             │
+│ ▾  Consoles                │   deleted_at timestamp with time zone,                                                           │                             │
+│                             │ …                                                                                                │                             │
 │                             │──────────────────────────────────────────────────────────────────────────────────────────────────│                             │
 │                             │ ↑/↓ 移动 · C-b/C-f 滚动预览 · Tab/S-Tab 范围 · esc 关闭                                   ↵ 打开 │                             │
 │                             └──────────────────────────────────────────────────────────────────────────────────────────────────┘                             │

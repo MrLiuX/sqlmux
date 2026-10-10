@@ -34,6 +34,9 @@ func treeTexts(a *App) string {
 		if n.Branch {
 			mark = map[bool]string{false: "▸ ", true: "▾ "}[n.Open]
 		}
+		if n.Prefix != "" {
+			mark += n.Prefix + " "
+		}
 		out = append(out, strings.Repeat("  ", n.Depth)+mark+n.Text)
 	}
 	return strings.Join(out, "\n")
@@ -82,7 +85,7 @@ func TestTreeNodes(t *testing.T) {
 	if !slices.Equal(got[:6], want) {
 		t.Fatalf("top:\n%s", strings.Join(got[:6], "\n"))
 	}
-	if tail := strings.Join(got[18:], "|"); tail != "    ▸ Views (2)|▾ 工作区|  ▾ data|      pane-1|    ▾ pane-2|          console_1|▾ Consoles|    console_1" { // a pane is pane-<n>, no type (§7.8); a tab a level under it (F3.30)
+	if tail := strings.Join(got[18:], "|"); tail != "    ▸ Views (2)|▾ 工作区|  ▾ data|      ② console_1|▾ Consoles|    console_1" { // a tab straight under its window, marked with its pane's number (F10.5)
 		t.Errorf("tail %q", tail)
 	}
 	ns, _ := a.treeNodes()
@@ -396,9 +399,9 @@ func TestTreeColumnOpens(t *testing.T) {
 	}
 }
 
-// The workspace lists this window's panes and their tabs, the one ↵ on a
-// table lands on in focus color; ↵ on a pane opens or closes it, on a tab
-// switches to it (§7.8).
+// The workspace lists this window's tabs, by pane, each marked with its
+// pane's number, the one ↵ on a table lands on in focus color; a pane with
+// no tab is not there; ↵ on a tab switches to it (§7.8, F10.5).
 func TestTreeWorkspace(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	data := a.focused()
@@ -412,7 +415,7 @@ func TestTreeWorkspace(t *testing.T) {
 		}
 		return "▾ 工作区" + ws
 	}
-	if ws := workspace(); ws != "▾ 工作区\n  ▾ data\n    ▾ pane-1\n          t_user\n          t_sku\n    ▾ pane-2\n          console_1\n▾ Consoles\n    console_1" {
+	if ws := workspace(); ws != "▾ 工作区\n  ▾ data\n      ① t_user\n      ① t_sku\n      ② console_1\n▾ Consoles\n    console_1" {
 		t.Fatalf("workspace:\n%s", ws)
 	}
 	ns, _ := a.treeNodes()
@@ -421,21 +424,27 @@ func TestTreeWorkspace(t *testing.T) {
 			t.Errorf("%s: current %v aside %q", n.Text, n.Current, n.Aside)
 		}
 	}
-	treeTo(t, a, "pane-1")
-	if feed(t, a, "<CR>"); a.win().Focus != 0 || !strings.Contains(workspace(), "▸ pane-1\n    ▾ pane-2") {
-		t.Fatalf("↵ on a pane closes it, the focus stays: %d\n%s", a.win().Focus, workspace())
+	// a pane of two tabs of its own, and another with none: ①①②②③ in the order of the panes, the empty one left out
+	feed(t, a, `<C-l><Space>"<C-p>@t_order<CR><C-p>@t_payment<C-t><Space>"<C-h>`)
+	want := "▾ 工作区\n  ▾ data\n      ① t_user\n      ① t_sku\n      ② t_order\n      ② t_payment\n      ④ console_1\n▾ Consoles\n    console_1"
+	if ws := workspace(); ws != want {
+		t.Fatalf("two panes of two tabs:\n%s", ws)
 	}
-	pane := slices.IndexFunc(func() []node { ns, _ := a.treeNodes(); return ns }(), func(n node) bool { return n.Text == "pane-1" })
-	if click(a, find(t, a, ui.Target{Kind: ui.KindNode, Pane: 0, I: pane}).Min); a.win().Focus != 0 || !strings.Contains(workspace(), "▾ pane-1") {
-		t.Fatalf("a click on it opens it again, the focus stays: %d", a.win().Focus)
-	}
-	feed(t, a, "j<CR>")
+	a.win().focus(0)
+	ns, _ = a.treeNodes()
+	a.treeGo(slices.IndexFunc(ns, func(n node) bool { return n.kind == nodeTab && n.Text == "t_user" }))
+	feed(t, a, "<CR>")
 	if a.win().Focus != data.ID || data.Cur != 0 {
 		t.Fatalf("↵ on t_user: focus %d cur %d", a.win().Focus, data.Cur)
 	}
 	feed(t, a, "x")
 	if strings.Contains(workspace(), "t_user") {
 		t.Error("a closed tab stays in the workspace")
+	}
+	// a window with no tab has nothing to open
+	feed(t, a, "<Space>c")
+	if ws := workspace(); !strings.Contains(ws, "\n    data-2\n") {
+		t.Errorf("a window of one empty pane:\n%s", ws)
 	}
 }
 

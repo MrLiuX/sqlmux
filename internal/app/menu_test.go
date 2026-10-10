@@ -72,7 +72,7 @@ func TestMenuItemsByNode(t *testing.T) {
 		{"public", nil},
 		{"Tables (14)", nil},
 		{"Consoles", nil},
-		{"pane-1", nil},
+		{"data", nil},
 	} {
 		a.menu = nil
 		a.View()

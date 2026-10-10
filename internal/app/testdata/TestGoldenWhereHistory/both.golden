@@ -22,12 +22,12 @@
 │        Views (0)            │ │  17 │   17 │ running │  17.99 │ t    │ {"n": 17, "tags": ["a│ │                                                             │
 │ ▾  工作区                   │ │  18 │   18 │ done    │  18.99 │ t    │ {"n": 18, "tags": ["a│ │                                                             │
 │   ▾  data                   │ │  19 │   19 │ failed  │  19.99 │ t    │ {"n": 19, "tags": ["a│ │                                                             │
-│     ▾  pane-1               │ │  20 │   20 │ pending │  20.99 │ t    │ {"n": 20, "tags": ["a│ │                                                             │
-│            t_order          │ │  21 │   21 │ running │  21.99 │ t    │ {"n": 21, "tags": ["a│ │                                                             │
-│     ▾  pane-2               │ │  22 │   22 │ done    │  22.99 │ t    │ {"n": 22, "tags": ["a│ │                                                             │
-│            console_1        │ │  23 │   23 │ failed  │  23.99 │ t    │ {"n": 23, "tags": ["a│ │                                                             │
-│ ▾  Consoles                 │ │  24 │   24 │ pending │  24.99 │ t    │ {"n": 24, "tags": ["a│ │                                                             │
-│      console_1              │ │  25 │   25 │ running │  25.99 │ t    │ {"n": 25, "tags": ["a│ │                                                             │
+│       ①  t_order            │ │  20 │   20 │ pending │  20.99 │ t    │ {"n": 20, "tags": ["a│ │                                                             │
+│       ②  console_1          │ │  21 │   21 │ running │  21.99 │ t    │ {"n": 21, "tags": ["a│ │                                                             │
+│ ▾  Consoles                 │ │  22 │   22 │ done    │  22.99 │ t    │ {"n": 22, "tags": ["a│ │                                                             │
+│      console_1              │ │  23 │   23 │ failed  │  23.99 │ t    │ {"n": 23, "tags": ["a│ │                                                             │
+│                              │ │  24 │   24 │ pending │  24.99 │ t    │ {"n": 24, "tags": ["a│ │                                                             │
+│                              │ │  25 │   25 │ running │  25.99 │ t    │ {"n": 25, "tags": ["a│ │                                                             │
 │                              │ │  26 │   26 │ done    │  26.99 │ t    │ {"n": 26, "tags": ["a│ │                                                             │
 │                              │ │  27 │   27 │ failed  │  27.99 │ t    │ {"n": 27, "tags": ["a│ │                                                             │
 │                              │ │  28 │   28 │ pending │  28.99 │ t    │ {"n": 28, "tags": ["a│ │                                                             │

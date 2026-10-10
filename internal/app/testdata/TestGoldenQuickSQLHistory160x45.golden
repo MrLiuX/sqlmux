@@ -21,9 +21,9 @@
 │       ▸  t_user_profile 38k │ │                                                       打开表 t                                                             │
 │        Views (0)            │ │                                                       新建 console c                                                       │
 │ ▾  工作区                   │ │                                                                                                                             │
-│   ▾  data                   │ │                                                                                                                             │
-│        pane-1               │ │                                                                                                                             │
+│      data                   │ │                                                                                                                             │
 │ ▾  Consoles                 │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │

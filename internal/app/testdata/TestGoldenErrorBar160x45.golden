@@ -22,9 +22,9 @@
 │        Views (0)            │ │ 17 │   17 │ running │  17.99 │ t    │ {"n": 17, "tags": ["a", "… │ line one↵line two after tab [3… │ 2026-09-01 00:17:00+00 │
 │ ▾  工作区                   │ │ 18 │   18 │ done    │  18.99 │ t    │ {"n": 18, "tags": ["a", "… │ <null>                          │ 2026-09-01 00:18:00+00 │
 │   ▾  data                   │ │ 19 │   19 │ failed  │  19.99 │ t    │ {"n": 19, "tags": ["a", "… │ note 19                         │ 2026-09-01 00:19:00+00 │
-│     ▾  pane-1               │ │ 20 │   20 │ pending │  20.99 │ t    │ {"n": 20, "tags": ["a", "… │ line one↵line two after tab [3… │ 2026-09-01 00:20:00+00 │
-│            t_order          │ │                                                                                                                             │
+│       ①  t_order            │ │ 20 │   20 │ pending │  20.99 │ t    │ {"n": 20, "tags": ["a", "… │ line one↵line two after tab [3… │ 2026-09-01 00:20:00+00 │
 │ ▾  Consoles                 │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │

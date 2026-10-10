@@ -144,7 +144,8 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 }
 
 // connNode is connection c's node ID; schemaNode, groupNode and tableNode
-// those under it, windowNode and paneNode the workspace's.
+// those under it, windowNode and paneNode the workspace's: a tab's ID has
+// its pane's in it.
 func connNode(c *Conn) string { return "conn:" + c.Spec.Name }
 
 func tableNode(c *Conn, t db.Table) string {
@@ -173,7 +174,7 @@ func (a *App) revealTab(p *Pane) {
 	if tab == nil || p == a.win().Tree {
 		return
 	}
-	path := []string{"workspace", windowNode(a.win()), paneNode(a.win(), p)}
+	path := []string{"workspace", windowNode(a.win())}
 	is := func(n node) bool { return n.kind == nodeTab && n.pane == p && n.tab == p.Cur && n.win == a.sess.Active }
 	if t := tab.Data; t != nil {
 		path = []string{connNode(t.conn), schemaNode(t.conn, t.table.Schema), groupNode(t.conn, t.table.Schema, t.table.View())}
@@ -202,7 +203,6 @@ const (
 	nodeColumn
 	nodeWorkspace
 	nodeWindow
-	nodePane
 	nodeTab
 	nodeConsoles    // the root over the console files
 	nodeConsoleFile // one of them
@@ -373,8 +373,8 @@ func (a *App) treeNodes() (ns []node, matches int) {
 	return ns, len(pos)
 }
 
-// workspaceNodes adds the windows, panes and tabs under the workspace
-// root.
+// workspaceNodes adds the windows and their tabs under the workspace root,
+// the tabs of a window by pane number, each marked with its pane's (F10.5).
 func (a *App) workspaceNodes(add func(node) bool, target *Pane) {
 	s, th, ic := a.sess, a.theme, a.icons
 	for wi, w := range s.Windows {
@@ -382,15 +382,15 @@ func (a *App) workspaceNodes(add func(node) bool, target *Pane) {
 		if w.Root != nil {
 			leaves = w.Root.Leaves()
 		}
+		tabs := 0
+		for _, p := range leaves {
+			tabs += len(p.Tabs)
+		}
 		wid := windowNode(w)
-		if !add(node{id: wid, kind: nodeWindow, win: wi, TreeNode: ui.TreeNode{Depth: 1, Branch: len(leaves) > 0, Open: a.sess.opened(wid, true), Icon: ic.Window, IconFg: th.Info, Text: w.Name}}) {
+		if !add(node{id: wid, kind: nodeWindow, win: wi, TreeNode: ui.TreeNode{Depth: 1, Branch: tabs > 0, Open: a.sess.opened(wid, true), Icon: ic.Window, IconFg: th.Info, Text: w.Name}}) {
 			continue
 		}
-		for n, p := range leaves { // pane-<n> by ⟨n⟩: the sidebar is 0 (§7.8)
-			pid := paneNode(w, p)
-			if !add(node{id: pid, kind: nodePane, win: wi, pane: p, TreeNode: ui.TreeNode{Depth: 2, Branch: len(p.Tabs) > 0, Open: a.sess.opened(pid, true), Icon: ic.Pane, IconFg: th.Info, Text: fmt.Sprintf("pane-%d", n+1)}}) {
-				continue
-			}
+		for n, p := range leaves { // ⟨n⟩ by order: the sidebar is 0 (§7.8)
 			for i, tb := range p.Tabs {
 				icon, _ := a.tabIcon(&p.Tabs[i])
 				// a blank for a landing tab's: its name in line with the others'
@@ -399,8 +399,8 @@ func (a *App) workspaceNodes(add func(node) bool, target *Pane) {
 				if tb.Data != nil {
 					fg = th.Func
 				}
-				tn := node{id: fmt.Sprintf("%s/tab:%d", pid, i), kind: nodeTab, win: wi, pane: p, tab: i, TreeNode: ui.TreeNode{
-					Depth: 4, Icon: icon, IconFg: fg, Text: tb.Name, // a level under its pane's: that has no icon (F3.30)
+				tn := node{id: fmt.Sprintf("%s/tab:%d", paneNode(w, p), i), kind: nodeTab, win: wi, pane: p, tab: i, TreeNode: ui.TreeNode{
+					Depth: 2, Prefix: ic.Number(n + 1), Icon: icon, IconFg: fg, Text: tb.Name,
 					Current: wi == s.Active && p == target && i == p.Cur,
 				}}
 				if tb.Data != nil {
@@ -563,8 +563,8 @@ func (a *App) treeCollapse() tea.Cmd {
 
 // treeOpen is ↵ (and t, tablesOnly) on the cursor's node (§7.8): a table
 // opens, a column opens its table on that column, a tab is switched to, a
-// window too; the rest, panes too, open and close. t only opens tables,
-// as ↵ does since a pane has a tab of a table at most (F3.37).
+// window too; the rest open and close. t only opens tables, as ↵ does
+// since a pane has a tab of a table at most (F3.37).
 func (a *App) treeOpen(tablesOnly bool) tea.Cmd {
 	n, ok := a.treeNode()
 	switch {
