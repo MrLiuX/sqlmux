@@ -38,6 +38,11 @@ type gridState struct {
 	row, col  int       // the cursor
 	top, left int       // the first record and field shown
 	transpose bool
+	// the records marked with m, or by VISUAL from anchor to the cursor, by
+	// position among the rows shown (F10.7); a new page or row puts them back
+	marked map[int]bool
+	visual bool
+	anchor int
 }
 
 // dataTab is a table open in a tab (§5, §7.6, §7.8「查询条」); its grid
@@ -234,6 +239,7 @@ func (a *App) gotPage(m pageMsg) tea.Cmd {
 	}
 	clearBar(&t.bar, "fetch")
 	t.cols, t.page, t.next, t.shown = m.cols, m.page, m.next, t.request
+	t.deselect()                                                        // the rows are others
 	t.colOrder = slices.DeleteFunc(t.colOrder, func(name string) bool { // a column that is gone (F10.3)
 		return !slices.ContainsFunc(t.page.Cols, func(c db.Col) bool { return c.Name == name })
 	})
@@ -316,8 +322,8 @@ func (t *dataTab) pages() (int64, bool) {
 // page has them, so a column that came with a refresh goes last (F10.3).
 func (t *dataTab) ordered() []int {
 	at := make(map[string]int, len(t.page.Cols))
-	for i := len(t.page.Cols) - 1; i >= 0; i-- { // the first of a name that comes twice
-		at[t.page.Cols[i].Name] = i
+	for i, c := range t.page.Cols {
+		at[c.Name] = i
 	}
 	out, seen := make([]int, 0, len(t.page.Cols)), make([]bool, len(t.page.Cols))
 	for _, name := range t.colOrder {
@@ -412,7 +418,7 @@ func gridRect(r uv.Rectangle, t *dataTab) uv.Rectangle {
 func (a *App) grid(p *Pane, t *dataTab) ui.Grid {
 	g := ui.Grid{
 		Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose, FullWidth: a.fullWidth, First: t.shown.pageNo * t.shown.limit,
-		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID,
+		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Selected: t.selected(), FlashNums: a.flashNums(p),
 	}
 	shown := t.shownCols()
 	for _, i := range shown {
@@ -489,8 +495,20 @@ func (a *App) grid(p *Pane, t *dataTab) ui.Grid {
 	return g
 }
 
+// flashNums are the numbers of the records of a selection yanked in pane p,
+// while it flashes (F10.7).
+func (a *App) flashNums(p *Pane) map[int]bool {
+	if f := a.flash; f != nil && f.pane == p.ID {
+		return f.nums
+	}
+	return nil
+}
+
 // gridFlash is what a yank flashes of pane p's grid, if anything.
 func (a *App) gridFlash(p *Pane) *[2]int {
+	if f := a.flash; f != nil && f.nums != nil {
+		return nil
+	}
 	if f := a.flash; f != nil && f.pane == p.ID && f.text.Mode == ui.SelNone {
 		return &f.cell
 	}
@@ -542,7 +560,7 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 		rows = "~" + ui.Magnitude(float64(t.count))
 	case counting: // the placeholder stays
 	}
-	right := i18n.T("auto · %s 行", rows)
+	right := i18n.T("auto · %s 行", rows) + t.selectedNote()
 	if t.page.Cols != nil {
 		right += " · " + t.page.Took.Round(time.Millisecond).String()
 	}
@@ -702,7 +720,7 @@ func (a *App) gridOf(p *Pane) (s *gridState, g ui.Grid, area uv.Rectangle, ok bo
 func (a *App) resultGrid(p *Pane, t *resultTab) ui.Grid {
 	g := ui.Grid{
 		Rows: t.page.Rows, Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose, FullWidth: a.fullWidth,
-		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Yank: a.gridFlash(p),
+		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Yank: a.gridFlash(p), Selected: t.selected(), FlashNums: a.flashNums(p),
 	}
 	for _, c := range t.page.Cols {
 		g.Cols = append(g.Cols, ui.GridCol{Name: c.Name, Type: colType(c.Type)})

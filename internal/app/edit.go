@@ -134,15 +134,19 @@ func (t *dataTab) changes() int {
 }
 
 // cursor is the grid's current row, and the row key of a page's one.
-func (t *dataTab) cursor() (shownRow, string, bool) {
+func (t *dataTab) cursor() (shownRow, string, bool) { return t.recordAt(t.row) }
+
+// recordAt is the row at position row among the rows shown, and its key, ""
+// for one added.
+func (t *dataTab) recordAt(row int) (shownRow, string, bool) {
 	rows := t.shownRows()
-	if t.row >= len(rows) || len(t.shownCols()) == 0 {
+	if row < 0 || row >= len(rows) || len(t.shownCols()) == 0 {
 		return shownRow{}, "", false
 	}
-	if sr := rows[t.row]; sr.add == nil {
+	if sr := rows[row]; sr.add == nil {
 		return sr, t.rowKey(sr.rec), true
 	}
-	return rows[t.row], "", true
+	return rows[row], "", true
 }
 
 // put makes e the change of column col of row sr, a row added's or a
@@ -487,6 +491,7 @@ func (a *App) revertCell() {
 
 // dropAdded takes row r added out of the grid, the cursor staying in it.
 func (t *dataTab) dropAdded(r *newRow) {
+	t.deselect() // the positions of the rows after it move
 	t.added = slices.DeleteFunc(t.added, func(o *newRow) bool { return o == r })
 	t.row = max(min(t.row, len(t.shownRows())-1), 0)
 }
@@ -506,6 +511,7 @@ func (a *App) addRow() tea.Cmd {
 	// ponytail: at the last page's end the rows of pages before it, a LIMIT
 	// cut since, show after this page's though they sort before; sort by
 	// where shownRows puts them if 新增的第 N 行 is ever read off there
+	t.deselect() // the positions of the rows after it move
 	r := &newRow{page: t.shown.pageNo, after: -1}
 	at := len(t.added)
 	if sr, _, ok := t.cursor(); ok && sr.add != nil {
@@ -759,6 +765,9 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 			delete(t.deleted, k)
 		}
 		t.added = slices.DeleteFunc(t.added, func(r *newRow) bool { return slices.Contains(m.adds, r) })
+		if len(m.adds) > 0 {
+			t.deselect() // the positions of the rows after them move
+		}
 		if p := a.paneShowing(t); closing && t.changes() == 0 && t.cell == nil && p != nil { // :wq, and nothing changed since, nor being typed
 			a.closeTab(p, p.Cur)
 			return nil

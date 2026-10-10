@@ -20,14 +20,12 @@ type pageDone struct {
 }
 
 // canPage is whether the result tab can go d pages on, 1 or -1: its
-// statement was given its LIMIT and has no OFFSET of its own, nothing of it
-// is on its way, the next page is only there when this one was cut at
-// max_rows, the one before when this is not the first.
+// statement was given its LIMIT and has no OFFSET of its own (a tab that is
+// pageable has its rows in, its run being done), nothing of it is on its
+// way, the next page is only there when this one was cut at max_rows, the
+// one before when this is not the first.
 func (rt *resultTab) canPage(d int) bool {
-	if rt.run == nil || !rt.run.done || !rt.pageable || rt.paging || rt.page.Cols == nil {
-		return false
-	}
-	return d > 0 && rt.page.Truncated || d < 0 && rt.offset > 0
+	return rt.pageable && !rt.paging && (d > 0 && rt.page.Truncated || d < 0 && rt.offset > 0)
 }
 
 // resultPage is ] (d 1) and [ on the result tab shown: its statement asked
@@ -55,9 +53,10 @@ func (a *App) resultPage(d int) tea.Cmd {
 }
 
 // gotResultPage puts the page in its tab, a line of the log saying so; one
-// that failed or was cancelled is logged as a run's is and the log shows,
-// the tab as it was. A tab closed or rerun meanwhile takes it all the same,
-// unseen.
+// that failed is logged as a run's is and the log shows, the tab as it was;
+// one cancelled is logged and told in a toast, the tab as it was and shown
+// still, as a rerun cancelled leaves it (F10.4). A tab closed or rerun
+// meanwhile takes the page all the same, unseen.
 func (a *App) gotResultPage(m pageDone) tea.Cmd {
 	rt, r := m.rt, m.m.r
 	if a.sessionOf(r.conn) == nil { // its session closed, its connection with it (F5.1)

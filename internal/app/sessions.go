@@ -165,14 +165,14 @@ func (a *App) gotSessionDialed(m sessionDialed) tea.Cmd {
 	if m.err != nil {
 		return a.showToast(i18n.T("%s：%s", m.spec.Name, m.err), toastTTL)
 	}
+	if a.sessionNamed(m.name) { // another session took it while this one dialed
+		return tea.Batch(a.showToast(i18n.T("已有同名 session"), toastTTL), m.d.discard())
+	}
 	conns, start := make([]*Conn, len(a.sess.Conns)), 0
 	for i, c := range a.sess.Conns {
 		if conns[i] = newConn(c.Spec); c.Spec.Name == m.spec.Name {
 			start = i
 		}
-	}
-	if a.sessionNamed(m.name) { // another session took it while this one dialed
-		return tea.Batch(a.showToast(i18n.T("已有同名 session"), toastTTL), func() tea.Msg { m.d.main.Close(); m.d.meta.Close(); return nil })
 	}
 	conns[start].take(m.d)
 	s := bareSession(m.name, conns, conns[start])

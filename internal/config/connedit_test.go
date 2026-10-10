@@ -464,6 +464,58 @@ func TestUpdateConnectionClearsAndAdds(t *testing.T) {
 	}
 }
 
+// A group is a line of the block like any other key: added after the block's
+// last line, rewritten, and taken out when cleared (F10.6).
+func TestUpdateConnectionGroup(t *testing.T) {
+	connectionsFile(t, oneConn+"\n[[connection]]\nname = \"b\"\nengine = \"mysql\"\ndsn = \"u@tcp(h:3306)/b\"\n")
+	was := connA("postgres://h/a", false)
+	to := was
+	to.Group = "prod"
+	got, err := UpdateConnection("a", was, to)
+	if err != nil || got.Group != "prod" {
+		t.Fatalf("added: %+v %v", got, err)
+	}
+	if want := "[[connection]]\nname = \"a\"\nengine = \"postgres\"\ndsn = \"postgres://h/a\"\ngroup = \"prod\"\n\n[[connection]]\nname = \"b\""; !strings.HasPrefix(readFile(t, connectionsPath()), want) {
+		t.Errorf("file:\n%s", readFile(t, connectionsPath()))
+	}
+	was = to
+	to.Group = "dev"
+	if _, err := UpdateConnection("a", was, to); err != nil || !strings.Contains(readFile(t, connectionsPath()), "group = \"dev\"\n\n[[connection]]") {
+		t.Fatalf("rewritten: %v\n%s", err, readFile(t, connectionsPath()))
+	}
+	was = to
+	to.Group = ""
+	if _, err := UpdateConnection("a", was, to); err != nil || strings.Contains(readFile(t, connectionsPath()), "group") {
+		t.Fatalf("cleared: %v\n%s", err, readFile(t, connectionsPath()))
+	}
+}
+
+// A group has the characters of a name; a new connection's is written under
+// its name (F10.6).
+func TestConnectionGroupCheck(t *testing.T) {
+	c := Connection{Name: "a", Group: "prod/eu", Engine: "postgres", DSN: "x"}
+	if field, problem := c.Check(nil); field != "group" || !strings.Contains(problem, "group") {
+		t.Errorf("a slash: %q %q", field, problem)
+	}
+	c.Group = ".hidden"
+	if field, _ := c.Check(nil); field != "group" {
+		t.Errorf("a dot first: %q", field)
+	}
+	c.Group = "prod eu"
+	if field, problem := c.Check(nil); problem != "" {
+		t.Errorf("a space is fine: %q %q", field, problem)
+	}
+	connectionsFile(t, oneConn)
+	c.Name, c.DSN = "b", "postgres://h/b"
+	if err := AppendConnection(c); err != nil || !strings.Contains(readFile(t, connectionsPath()), "name = \"b\"\ngroup = \"prod eu\"\nengine") {
+		t.Errorf("appended: %v\n%s", err, readFile(t, connectionsPath()))
+	}
+	got, _, err := LoadConnections("b")
+	if err != nil || got[1].Group != "prod eu" {
+		t.Errorf("read back: %+v %v", got, err)
+	}
+}
+
 // The checks before a write leave nothing in the directory (F8.16).
 func TestChecksLeaveNothing(t *testing.T) {
 	connectionsFile(t, oneConn)

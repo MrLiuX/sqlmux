@@ -36,6 +36,7 @@ type yankFlash struct {
 	pane int
 	cell [2]int
 	text ui.Sel
+	nums map[int]bool // the numbers of the records of a selection yanked (F10.7)
 	seq  int
 }
 
@@ -211,10 +212,10 @@ func jsonValue(c ui.ColType, v db.Val) any {
 	return v.S
 }
 
-// rowJSON is a row as a JSON object, in two spaces' indents (F9.5): its keys
-// in the order of the columns, which a map would not keep, so the braces and
-// commas are written here and each key and value by encoding/json.
-func rowJSON(fs []jsonField) (string, error) {
+// rowRaw is a row as a JSON object on one line: its keys in the order of the
+// columns, which a map would not keep, so the braces and commas are written
+// here and each key and value by encoding/json.
+func rowRaw(fs []jsonField) ([]byte, error) {
 	var raw bytes.Buffer
 	raw.WriteByte('{')
 	for i, f := range fs {
@@ -223,41 +224,39 @@ func rowJSON(fs []jsonField) (string, error) {
 		}
 		k, err := jsonOf(f.name)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		v, err := jsonOf(jsonValue(f.class, f.val))
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		raw.Write(k)
 		raw.WriteByte(':')
 		raw.Write(v)
 	}
 	raw.WriteByte('}')
+	return raw.Bytes(), nil
+}
+
+// indentJSON is raw in two spaces' indents (F9.5).
+func indentJSON(raw []byte) (string, error) {
 	var out bytes.Buffer
-	if err := json.Indent(&out, raw.Bytes(), "", "  "); err != nil {
+	if err := json.Indent(&out, raw, "", "  "); err != nil {
 		return "", err
 	}
 	return out.String(), nil
 }
 
-// yankJSON is Y on the focused grid (§7.5「复制为 JSON」, F9.5): the row, a
-// table's or a result's, as a JSON object of every column it has, shown ones
-// or not, as it shows, changes in; a DEFAULT cell has no key. To the
-// clipboard, flashing.
-func (a *App) yankJSON() tea.Cmd {
-	p := a.focused()
-	gs, _, _, ok := a.gridOf(p)
-	if !ok {
-		return nil
-	}
-	var fs []jsonField
-	switch tab := p.tab(); {
+// jsonFields is record row of tab, a table's or a result's, as the fields of
+// a JSON object: every column it has, shown ones or not, in COLS's order for
+// a table, as it shows, changes in; a DEFAULT cell has none (F9.5).
+func jsonFields(tab *Tab, row int) (fs []jsonField, ok bool) {
+	switch {
 	case tab.Data != nil:
 		t := tab.Data
-		sr, key, ok := t.cursor()
+		sr, key, ok := t.recordAt(row)
 		if !ok {
-			return nil
+			return nil, false
 		}
 		for _, f := range t.ordered() {
 			c := t.page.Cols[f]
@@ -265,14 +264,33 @@ func (a *App) yankJSON() tea.Cmd {
 				fs = append(fs, jsonField{c.Name, colType(cmp.Or(t.typeOf(c.Name), c.Type)), v})
 			}
 		}
-	case tab.Result != nil && gs.row < len(tab.Result.page.Rows):
+		return fs, true
+	case tab.Result != nil && row >= 0 && row < len(tab.Result.page.Rows):
 		for i, c := range tab.Result.page.Cols {
-			fs = append(fs, jsonField{c.Name, colType(c.Type), tab.Result.page.Rows[gs.row][i]})
+			fs = append(fs, jsonField{c.Name, colType(c.Type), tab.Result.page.Rows[row][i]})
 		}
-	default:
+		return fs, true
+	}
+	return nil, false
+}
+
+// yankJSON is Y on the focused grid (§7.5「复制为 JSON」, F9.5): the row as a
+// JSON object, to the clipboard, flashing.
+func (a *App) yankJSON() tea.Cmd {
+	p := a.focused()
+	gs, _, _, ok := a.gridOf(p)
+	if !ok {
 		return nil
 	}
-	text, err := rowJSON(fs)
+	fs, ok := jsonFields(p.tab(), gs.row)
+	if !ok {
+		return nil
+	}
+	raw, err := rowRaw(fs)
+	text := ""
+	if err == nil {
+		text, err = indentJSON(raw)
+	}
 	if err != nil {
 		return a.showToast(err.Error(), toastTTL)
 	}

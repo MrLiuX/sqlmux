@@ -285,7 +285,9 @@ func (a *App) startRun(t *consoleTab, conn *Conn, schema, name, sql string, base
 	texts := make([]string, len(stmts))
 	r.pageable = make([]bool, len(stmts))
 	// ponytail: select set_config('search_path', …) goes by unseen (its first
-	// word is select): the next run then trusts mainPath still
+	// word is select): the next run then trusts mainPath still, and a page of
+	// a statement after it is asked with the console's schema again, which may
+	// be another table
 	resets := false // what search_path, or MySQL's database, is past this run is not known (§8.6)
 	for i, s := range stmts {
 		texts[i], r.pageable[i] = sqlkit.AutoLimit(sql[s.Start:s.End], d, a.maxRows+1, 0)
@@ -559,6 +561,9 @@ func (a *App) exportResult() tea.Cmd {
 	name := fmt.Sprintf("%s-%d", rt.run.name, rt.run.seq)
 	if rt.part > 1 {
 		name += fmt.Sprintf("-%d", rt.part)
+	}
+	if rt.offset > 0 { // the page shown is what is written, so the file says which (F10.4)
+		name += fmt.Sprintf("-p%d", rt.offset/a.maxRows+1)
 	}
 	path, err := filepath.Abs(name + ".csv")
 	if err == nil {

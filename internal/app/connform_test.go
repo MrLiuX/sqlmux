@@ -96,7 +96,7 @@ func TestConnFormPassword(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	pw := keychain(t, "ok")
 	a, _ := withSessions()
-	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab>h<Tab><Tab>u<Tab>secret")
+	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab>h<Tab><Tab>u<Tab>secret")
 	if view := a.render().String(); strings.Contains(view, "secret") || !strings.Contains(view, "******") {
 		t.Errorf("the password is on screen:\n%s", view)
 	}
@@ -118,7 +118,7 @@ func TestConnFormPasswordElsewhere(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	keychain(t, "none")
 	a, _ := withSessions()
-	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<CR>")
+	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<CR>")
 	info, err := os.Stat(filepath.Join(config.Dir(), "connections.toml"))
 	if err != nil || a.form != nil || !strings.Contains(connections(), `password = "secret"`) || info.Mode().Perm() != 0o600 || a.toast != "没有钥匙串工具，密码以明文存进了 connections.toml" {
 		t.Errorf("no tool: form %v, err %v, toast %q, file:\n%s", a.form, err, a.toast, connections())
@@ -127,7 +127,7 @@ func TestConnFormPasswordElsewhere(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	keychain(t, "locked")
 	a, _ = withSessions()
-	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<CR>")
+	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<CR>")
 	if a.form == nil || !strings.HasSuffix(a.form.err, ": locked") || connections() != "" || len(a.sess.Conns) != 1 {
 		t.Errorf("a keychain that fails: form %v, file:\n%s", a.form, connections())
 	}
@@ -139,7 +139,7 @@ func TestConnFormPasswordElsewhere(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	keychain(t, "ok")
 	a, _ = withSessions()
-	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<Tab><Tab> <Tab><Tab>pass show x<CR>")
+	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<Tab><Tab> <Tab><Tab>pass show x<CR>")
 	if a.form == nil || a.form.sel != fieldPassword || a.form.err != "password 和 password_cmd 填一个就够了" || connections() != "" {
 		t.Errorf("two sources: form %+v, file:\n%s", a.form, connections())
 	}
@@ -153,7 +153,7 @@ func TestConnFormFields(t *testing.T) {
 	keychain(t, "none")
 	a, _ := withSessions()
 	port := func() string { return a.form.fields[fieldPort].Input.Text }
-	feed(t, a, "<C-p>conn.new<CR>play<Tab><Space>")
+	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Space>")
 	if port() != "3306" {
 		t.Errorf("mysql: port %q", port())
 	}
@@ -204,8 +204,12 @@ func TestConnFormAdvanced(t *testing.T) {
 		t.Errorf("Tab round the end: on %d", a.form.sel)
 	}
 	feed(t, a, "<Tab>")
+	if a.form.sel != fieldGroup {
+		t.Errorf("name, then the group: on %d", a.form.sel)
+	}
+	feed(t, a, "<Tab>")
 	if a.form.sel != fieldEngine {
-		t.Errorf("name, then the engine: on %d", a.form.sel)
+		t.Errorf("then the engine: on %d", a.form.sel)
 	}
 	feed(t, a, "<Tab>")
 	if a.form.sel != fieldPassword {
@@ -238,7 +242,7 @@ func TestConnFormHostAndPlainPassword(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	keychain(t, "none")
 	a, _ := withSessions()
-	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab>db.internal:5433<Tab><Tab>u<Tab>pa${ss}<Tab>d<CR>")
+	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab>db.internal:5433<Tab><Tab>u<Tab>pa${ss}<Tab>d<CR>")
 	if a.form == nil || a.form.sel != fieldHost || a.form.err != "host 里不要带端口，端口在下面" {
 		t.Fatalf("host with a port: %+v", a.form)
 	}
@@ -261,7 +265,7 @@ func TestNoConnectionFirstConsoles(t *testing.T) {
 	a.form = nil
 	feed(t, a, "<Space>c<Space>c") // two more windows
 	a.run("conn.new", 0)
-	feed(t, a, "play<Tab><Tab>h<Tab><Tab>u<Tab><Tab>d<CR>")
+	feed(t, a, "play<Tab><Tab><Tab>h<Tab><Tab>u<Tab><Tab>d<CR>")
 	if len(a.sess.Windows) != 3 {
 		t.Fatalf("%d windows", len(a.sess.Windows))
 	}
@@ -290,7 +294,7 @@ func TestConnFormKeychainAfterCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 	a, _ := withSessions() // the tree never had play
-	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<CR>")
+	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<CR>")
 	if _, err := os.Stat(pw); err == nil || a.form == nil || !strings.Contains(a.form.err, "play") || connections() != theirs {
 		t.Errorf("keychain written (%v) or file changed, form %v:\n%s", err, a.form, connections())
 	}
@@ -313,7 +317,7 @@ func TestConnFormPlainPasswordMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	a, _ := withSessions()
-	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<CR>")
+	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<CR>")
 	if info, err := os.Stat(path); err != nil || a.form != nil || info.Mode().Perm() != 0o644 {
 		t.Errorf("mode %v, %v, form %v", info.Mode(), err, a.form)
 	}
@@ -327,7 +331,7 @@ func TestConnFormPortFollows(t *testing.T) {
 	keychain(t, "none")
 	a, _ := withSessions()
 	port := func() string { return a.form.fields[fieldPort].Input.Text }
-	feed(t, a, "<C-p>conn.new<CR><Tab>") // on the engine
+	feed(t, a, "<C-p>conn.new<CR><Tab><Tab>") // on the engine
 	for _, c := range []struct{ keys, want, what string }{
 		{"<Space>", "3306", "mysql's"},
 		{"<Tab><Tab><C-u>3307<S-Tab><S-Tab><Left>", "3307", "a typed port stays"},
@@ -338,7 +342,7 @@ func TestConnFormPortFollows(t *testing.T) {
 			t.Fatalf("%s: %q", c.what, port())
 		}
 	}
-	feed(t, a, "<Tab>h<Tab><C-u>+5432<Tab>u<Tab><Tab>d<S-Tab><S-Tab><S-Tab><S-Tab><S-Tab><S-Tab>play<CR>")
+	feed(t, a, "<Tab>h<Tab><C-u>+5432<Tab>u<Tab><Tab>d<S-Tab><S-Tab><S-Tab><S-Tab><S-Tab><S-Tab><S-Tab>play<CR>")
 	if a.form != nil || !strings.Contains(connections(), `dsn = "postgres://u@h:5432/d?sslmode=prefer"`) {
 		t.Errorf("form %v, file:\n%s", a.form, connections())
 	}
@@ -379,7 +383,7 @@ func TestConnFormColors(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	keychain(t, "none")
 	a, _ := withSessions()
-	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab>")
+	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab><Tab>")
 	th := a.theme
 	row := func(field int) int { return find(t, a, ui.Target{Kind: ui.KindRow, I: field}).Min.Y }
 	f := a.render()
@@ -459,7 +463,7 @@ func TestConnFormClosedFoldIgnored(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	keychain(t, "none")
 	a, _ := withSessions()
-	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab>h<Tab><Tab>u<Tab><Tab>d<Tab><Tab> ")
+	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab>h<Tab><Tab>u<Tab><Tab>d<Tab><Tab> ")
 	feed(t, a, "<Tab>mysql://x@y/z<Tab>pass show x<S-Tab><S-Tab> ") // typed, then closed again
 	if a.form.advanced() {
 		t.Fatal("the fold did not close")
@@ -480,7 +484,7 @@ func TestConnFormUnwritableFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.form = nil
-	feed(t, a, "<C-p>conn.new<CR>ro1<Tab><Tab>h<Tab><Tab>u<Tab>pw-ro<Tab>d<CR>")
+	feed(t, a, "<C-p>conn.new<CR>ro1<Tab><Tab><Tab>h<Tab><Tab>u<Tab>pw-ro<Tab>d<CR>")
 	if a.form == nil || a.form.err == "" || connections() != managerFile || len(kcCalled("add-generic-password", "store")) != 0 {
 		t.Errorf("form %v, file changed %v, keychain asked %q", a.form != nil, connections() != managerFile, kcLog())
 	}

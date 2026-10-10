@@ -117,6 +117,24 @@ func connectOnOpen(t *testing.T, eng, dsn string) {
 	}
 }
 
+// The connection started on is the one dialed, the order of the groups
+// moving it in the session (F10.6).
+func TestOpenGroupedStart(t *testing.T) { eachEngine(t, openGroupedStart) }
+
+func openGroupedStart(t *testing.T, eng, dsn string) {
+	sess, err := Open(context.Background(), []config.Connection{
+		{Name: "grouped", Group: "g", Engine: eng, DSN: dsn},
+		{Name: "plain", Engine: eng, DSN: dsn},
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sess.Close()
+	if s, p := sess.Conns[1], sess.Conns[0]; sess.start != s || s.Spec.Name != "grouped" || s.State != connReady || p.State != connIdle {
+		t.Errorf("start %s; %s %v, %s %v", sess.start.Spec.Name, s.Spec.Name, s.State, p.Spec.Name, p.State)
+	}
+}
+
 // password_cmd runs once for a connection however often it is dialed,
 // again only after a dial failed (§13).
 func TestSecretCached(t *testing.T) {
@@ -471,7 +489,7 @@ func TestNewSessionTakesNewConn(t *testing.T) {
 	a.Update(teaKey("n"))
 	_, cmd := a.Update(teaKey("<CR>"))
 	a.run("conn.new", 0)
-	feed(t, a, "extra<Tab><Tab>localhost<Tab><Tab>u<Tab><Tab>x<CR>")
+	feed(t, a, "extra<Tab><Tab><Tab>localhost<Tab><Tab>u<Tab><Tab>x<CR>")
 	if settle(a, cmd); a.sess.Name != "1" || len(a.sess.Conns) != 2 || a.sess.Conns[1].Spec.Name != "extra" {
 		t.Errorf("session %s: %d connections", a.sess.Name, len(a.sess.Conns))
 	}

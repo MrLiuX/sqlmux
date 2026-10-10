@@ -579,12 +579,14 @@ func Open(ctx context.Context, specs []config.Connection, start int) (*Session, 
 	for i, spec := range specs {
 		conns[i] = newConn(spec)
 	}
+	first := conns[start] // before groupOrder moves it
+	groupOrder(conns)
 	d, err := dial(ctx, specs[start])
 	if err != nil {
 		return nil, err
 	}
-	conns[start].take(d)
-	return newSession(specs[start].Name, conns, conns[start], config.ConsoleName(1)), nil
+	first.take(d)
+	return newSession(specs[start].Name, conns, first, config.ConsoleName(1)), nil
 }
 
 // dialed is a connection's Main and Meta as dial connected them, where
@@ -595,6 +597,12 @@ type dialed struct {
 	main, meta db.Conn
 	info       db.Info
 	spec       config.Connection
+}
+
+// discard is a Cmd that closes the two connections of d, one that came when
+// nothing wants it any more.
+func (d dialed) discard() tea.Cmd {
+	return func() tea.Msg { d.main.Close(); d.meta.Close(); return nil }
 }
 
 // secrets caches what a connection's password source gave, by its name

@@ -185,6 +185,14 @@ func TestNewSessionFails(t *testing.T) {
 	}
 }
 
+// closing is a connection that counts its Close.
+type closing struct {
+	noDB
+	n *int
+}
+
+func (c closing) Close() error { *c.n++; return nil }
+
 // session.new and n in the list ask for the name first, with the least free
 // number in the box, which a blank ↵ takes; a name another session has is
 // refused and the input stays, esc makes none; one taken while the
@@ -219,10 +227,14 @@ func TestNewSessionAsksName(t *testing.T) {
 	if a.Update(answer("ops")); a.sess.Name != "ops" || len(a.sessions) != 4 {
 		t.Errorf("made %q, %d sessions", a.sess.Name, len(a.sessions))
 	}
-	// another named "late" while this dialed: none is made, the dialed ones close
-	_, cmd = a.Update(answer("ops"))
-	if len(a.sessions) != 4 || a.toast != "已有同名 session" || cmd == nil {
-		t.Errorf("a name taken meanwhile: %d sessions, toast %q", len(a.sessions), a.toast)
+	// "ops" taken while this one dialed: none is made, the two connections dialed close
+	closed := 0
+	late := answer("ops")
+	late.d.main, late.d.meta = closing{n: &closed}, closing{n: &closed}
+	_, cmd = a.Update(late)
+	deliver(a, cmd)
+	if len(a.sessions) != 4 || a.toast != "已有同名 session" || closed != 2 {
+		t.Errorf("a name taken meanwhile: %d sessions, toast %q, %d closed", len(a.sessions), a.toast, closed)
 	}
 }
 
@@ -270,7 +282,7 @@ func TestNewSessionIsOneEmptyPane(t *testing.T) {
 func TestConnForm(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	a, report := withSessions()
-	feed(t, a, "<C-p>conn.new<CR><Tab><Space><Tab>db.example<Tab><C-u>3307<Tab>app<Tab><Tab>shop<Tab> <CR>")
+	feed(t, a, "<C-p>conn.new<CR><Tab><Tab><Space><Tab>db.example<Tab><C-u>3307<Tab>app<Tab><Tab>shop<Tab> <CR>")
 	if a.form == nil || a.form.sel != 0 || a.form.err != "缺少 name" || a.form.fields[fieldReadOnly].On != 1 {
 		t.Fatalf("no name: %+v", a.form)
 	}

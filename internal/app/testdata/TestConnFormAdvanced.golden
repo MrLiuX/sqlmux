@@ -11,10 +11,10 @@
 │       ▸  mt_task        812 │ │                                                             │ │                                                             │
 │       ▸  mt_task_log    96k │ │                                                             │ │                                                             │
 │       ▸  schema_migrations  │ │                                                             │ │                                                             │
-│       ▸  t_order       1.2m │ │                                                             │ │                                                             │
-│       ▸  t_order_item  3.4m┌─ 连接 ───────────────────────────────────────────────────────────────────────────────────────────┐                             │
-│       ▸  t_payment     410k│  doraemon               │          name play                                                   │                             │
-│       ▸  t_refund       12k│  新建                   │        engine  postgres │ mysql                                      │                             │
+│       ▸  t_order       1.2m┌─ 连接 ───────────────────────────────────────────────────────────────────────────────────────────┐                             │
+│       ▸  t_order_item  3.4m│  doraemon               │          name play                                                   │                             │
+│       ▸  t_payment     410k│  新建                   │         group                                                        │                             │
+│       ▸  t_refund       12k│                          │        engine  postgres │ mysql                                      │                             │
 │       ▸  t_sku         8.1k│                          │          host                                                        │                             │
 │       ▸  t_user         38k│                          │          port 5432                                                   │                             │
 │       ▸  t_user_address 52k│                          │          user                                                        │                             │

@@ -822,7 +822,11 @@ func TestPaneNumbers(t *testing.T) {
 func TestFoldSidebar(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	a.win().Focus = 0
-	click(a, find(t, a, ui.Target{Kind: ui.KindHint, Pane: 0, Action: "tree.toggle"}).Min)
+	at := find(t, a, ui.Target{Kind: ui.KindHint, Pane: 0, Action: "tree.toggle"}).Min
+	if cell := a.render().Buf.CellAt(at.X, at.Y); cell == nil || cell.Content != "«" || cell.Style.Fg != a.theme.Dim {
+		t.Errorf("the « on the title is %+v, want dim", cell)
+	}
+	click(a, at)
 	if r := a.layout()[0]; r.Dx() != 3 {
 		t.Fatalf("a click on «: bar %v", r)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"image/color"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -423,6 +424,35 @@ func TestColsMove(t *testing.T) {
 	a.Update(pageMsg{tab: tab, seq: tab.seq, cols: tab.cols, page: page})
 	if got := strings.Join(tab.colOrder, " "); got != "id status paid amount note created_at" || names() != "id paid amount note created_at extra" {
 		t.Errorf("refreshed: order %q, shown %q", got, names())
+	}
+}
+
+// A column hidden has the cursor go to the next one shown in COLS's order,
+// not the page's: amount moved to the front and hidden leaves the cursor on
+// id, which is after it now, not on paid (F10.3).
+func TestColsHiddenInOrder(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	feed(t, a, "llgcjjKK") // on amount, which goes to the front
+	if tab.page.Cols[tab.fieldAt(tab.col)].Name != "amount" || tab.col != 0 {
+		t.Fatalf("amount first, the cursor on it: %d", tab.col)
+	}
+	feed(t, a, "<Space>")
+	if got := tab.page.Cols[tab.fieldAt(tab.col)].Name; got != "id" || tab.col != 0 {
+		t.Errorf("amount hidden: the cursor is on %q", got)
+	}
+}
+
+// J and K with the list's selection past what the table has left, a refresh
+// having taken a column, do nothing (F10.3).
+func TestColsShiftAfterShrink(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	feed(t, a, "gcjjjjjj") // the last of 7
+	page := db.Result{Cols: slices.Clone(tab.page.Cols[:6])}
+	a.Update(pageMsg{tab: tab, seq: tab.seq, cols: tab.cols, page: page})
+	feed(t, a, "K")
+	feed(t, a, "J")
+	if len(tab.colOrder) != 0 || a.cols == nil {
+		t.Errorf("the order %v, the list %v", tab.colOrder, a.cols != nil)
 	}
 }
 

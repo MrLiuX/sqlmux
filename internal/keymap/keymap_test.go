@@ -169,6 +169,34 @@ func TestPurePrefixWaits(t *testing.T) {
 	}
 }
 
+// A Firm scope's complete binding does not wait for a longer sequence of a
+// lower scope that starts with it: select's d beside grid's dd, y beside yy,
+// yl, yi. Without the scope as Firm they wait, as any shorter binding does;
+// what the Firm scope does not bind is as it was (F10.7).
+func TestFirmScope(t *testing.T) {
+	m := mustLoad(t, "")
+	sel := Context{Focus: []string{"select", "grid"}, Pane: "grid"}
+	firm := sel
+	firm.Firm = "select"
+	for _, c := range []struct{ key, want string }{{"d", "grid.select.delete"}, {"y", "grid.select.yank"}} {
+		if out, wait := press(t, NewResolver(m), firm, c.key); wait || !reflect.DeepEqual(actions(out), []string{c.want}) {
+			t.Errorf("firm %s: %v wait %v", c.key, actions(out), wait)
+		}
+		if out, wait := press(t, NewResolver(m), sel, c.key); len(out) != 0 || !wait {
+			t.Errorf("not firm %s: %v wait %v", c.key, actions(out), wait)
+		}
+	}
+	for in, want := range map[string][]string{"gg": {"grid.top"}, "j": {"grid.down"}, "<Esc>": {"grid.select.clear"}} {
+		if out, _ := press(t, NewResolver(m), firm, in); !reflect.DeepEqual(actions(out), want) {
+			t.Errorf("firm %s: %v, want %v", in, actions(out), want)
+		}
+	}
+	// a key of a lower scope that does not start with a firm one stays
+	if out, _ := press(t, NewResolver(m), firm, "T"); !reflect.DeepEqual(actions(out), []string{"grid.transpose"}) {
+		t.Errorf("T: %v", actions(out))
+	}
+}
+
 func TestAmbiguousNodeTimesOut(t *testing.T) {
 	m, ps := load(t, "[keys.normal]\ng = \"my.g\"")
 	if len(ps) != 0 {

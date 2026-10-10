@@ -41,6 +41,10 @@ type Form struct {
 	Save, Cancel string // the buttons' words
 	Delete       string // a third button's word, when a connection there already is can go (F8.16); "" for none
 	Hints        []Hint
+	// Pick is a list opened under the input of field PickAt, drawn over what
+	// is below it (the connection form's groups, F10.6); nil for none
+	Pick   *Complete
+	PickAt int
 }
 
 // buttons are the buttons' words and what they run.
@@ -96,6 +100,7 @@ func (fm Form) drawIn(f *Frame, area uv.Rectangle, focus bool) uv.Position {
 		iconW, labelW = max(iconW, Width(fd.Icon.Text)), max(labelW, Width(fd.Label)) // the hidden ones too: nothing shifts as the fold opens
 	}
 	y := area.Min.Y
+	var pickAt uv.Position
 	for i, fd := range fm.Fields {
 		if fd.Hidden {
 			continue
@@ -118,6 +123,9 @@ func (fm Form) drawIn(f *Frame, area uv.Rectangle, focus bool) uv.Position {
 		}
 		if fd.Dim {
 			in.Fg = th.Dim
+		}
+		if i == fm.PickAt {
+			pickAt = uv.Pos(r.Min.X, y)
 		}
 		switch fd.Kind {
 		case FormInput:
@@ -174,6 +182,15 @@ func (fm Form) drawIn(f *Frame, area uv.Rectangle, focus bool) uv.Position {
 		hintRow(f, max(hx, x0), y+1, x1, fm.Hints, dim, Target{Kind: KindButton})
 	} else {
 		hintRow(f, hx, y, x1, fm.Hints, dim, Target{Kind: KindButton})
+	}
+	if fm.Pick != nil && len(fm.Pick.Items) > 0 {
+		w := 20
+		for _, it := range fm.Pick.Items {
+			w = max(w, Width(it.Text)+4)
+		}
+		box, rows := CompleteBox(f.Bounds(), pickAt, min(w, area.Max.X-pickAt.X), len(fm.Pick.Items), 0, CompleteRows)
+		fm.Pick.Top = max(0, fm.Pick.Sel-rows+1)
+		fm.Pick.Draw(f, box, rows)
 	}
 	return cursor
 }

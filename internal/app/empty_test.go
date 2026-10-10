@@ -98,7 +98,7 @@ func TestNoConnectionStart(t *testing.T) {
 	if a.form == nil {
 		t.Error("the line does not open the form")
 	}
-	feed(t, a, "play<Tab><Tab>h<Tab><Tab>u<Tab><Tab>d<CR>")
+	feed(t, a, "play<Tab><Tab><Tab>h<Tab><Tab>u<Tab><Tab>d<CR>")
 	conn := a.sess.start
 	if a.form != nil || conn == nil || a.sess.Name != "play" || a.conn() != conn || conn.State != connConnecting {
 		t.Fatalf("saved: form %v, start %v, session %q", a.form, conn, a.sess.Name)

@@ -172,7 +172,18 @@ func init() {
 		"tx.commit":   {Title: i18n.N("提交"), Run: func(a *App, _ Args) tea.Cmd { return a.endTx(a.conn(), "commit") }},
 		"tx.rollback": {Title: i18n.N("回滚"), Run: func(a *App, _ Args) tea.Cmd { return a.endTx(a.conn(), "rollback") }},
 		// The result area's (§11).
-		"result.rerun":     {Title: i18n.N("重跑"), Run: func(a *App, _ Args) tea.Cmd { return a.rerun() }},
+		"result.rerun": {Title: i18n.N("重跑"), Run: func(a *App, _ Args) tea.Cmd { return a.rerun() }},
+		// records selected on a table (F10.7): m marks one, v and V begin and end VISUAL
+		"grid.select.toggle": {Title: i18n.N("标记 / 取消标记这条记录"), Run: do(func(a *App, _ Args) { a.selectToggle() })},
+		"grid.select.visual": {Title: i18n.N("VISUAL 扩选记录"), Run: do(func(a *App, _ Args) { a.selectVisual() })},
+		"grid.select.clear":  {Title: i18n.N("清除选中 / 结束 VISUAL"), Local: true, Run: do(func(a *App, _ Args) { a.selectClear() })},
+		"grid.select.delete": {Title: i18n.N("标记删除选中的记录"), Local: true, Run: func(a *App, _ Args) tea.Cmd { return a.selectDelete() }},
+		"grid.select.yank":   {Title: i18n.N("复制选中的记录为 JSON"), Local: true, Run: func(a *App, _ Args) tea.Cmd { return a.selectYank() }},
+		// the flash-style jump (§6.10, F10.8)
+		"jump.start":       {Title: i18n.N("跳转到屏幕上的字符"), Run: func(a *App, _ Args) tea.Cmd { return a.jumpStart() }},
+		"jump.cancel":      {Title: i18n.N("退出跳转"), Local: true, Run: do(func(a *App, _ Args) { a.jump = nil })},
+		"jump.back":        {Title: i18n.N("跳转：删一个字符"), Local: true, Run: do(func(a *App, _ Args) { a.jumpBack() })},
+		"jump.confirm":     {Title: i18n.N("跳到最近的匹配"), Local: true, Run: func(a *App, _ Args) tea.Cmd { return a.jumpConfirm() }},
 		"result.page.next": {Title: i18n.N("结果下一页"), Run: func(a *App, _ Args) tea.Cmd { return a.resultPage(1) }},
 		"result.page.prev": {Title: i18n.N("结果上一页"), Run: func(a *App, _ Args) tea.Cmd { return a.resultPage(-1) }},
 		"result.export":    {Title: i18n.N("导出 CSV"), Run: func(a *App, _ Args) tea.Cmd { return a.exportResult() }},
@@ -302,6 +313,22 @@ func init() {
 		"form.prev":   {Title: i18n.N("上一项"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formMove(-1); return nil })},
 		"form.save":   {Title: i18n.N("保存"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { return a.saveConnForm() })},
 		"form.cancel": {Title: i18n.N("取消"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formCancel(); return nil })},
+		// the group field's list of the groups there are (F10.6): Tab and ↵ take the one selected, or do what they do without it
+		"form.group.tab": {Title: i18n.N("接受分组 / 下一项"), Local: true, Run: when(inForm, func(a *App) tea.Cmd {
+			if !a.groupAccept() {
+				a.formMove(1)
+			}
+			return nil
+		})},
+		"form.group.enter": {Title: i18n.N("接受分组 / 保存"), Local: true, Run: when(inForm, func(a *App) tea.Cmd {
+			if a.groupAccept() {
+				return nil
+			}
+			return a.saveConnForm()
+		})},
+		"form.group.next":  {Title: i18n.N("分组下一项"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.groupMove(1); return nil })},
+		"form.group.prev":  {Title: i18n.N("分组上一项"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.groupMove(-1); return nil })},
+		"form.group.close": {Title: i18n.N("关闭分组列表"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.form.groupOff = true; return nil })},
 		// the connection manager's list (F8.16)
 		"conns.down":   {Title: i18n.N("下移"), Local: true, Run: when(inConns, func(a *App) tea.Cmd { a.connsMove(1); return nil })},
 		"conns.up":     {Title: i18n.N("上移"), Local: true, Run: when(inConns, func(a *App) tea.Cmd { a.connsMove(-1); return nil })},
@@ -464,6 +491,7 @@ func init() {
 			}
 			return a.unlessLost(t.changes(), "", nil, verbRefresh, func() tea.Cmd { // R drops the changes (§10.4)
 				t.edits, t.added, t.deleted = nil, nil, nil
+				t.deselect() // the rows are others
 				return a.fetch(t, true)
 			})
 		}},
@@ -570,6 +598,9 @@ func (a *App) run(action string, count int) tea.Cmd {
 	}
 	if !strings.HasPrefix(id, "cell.") && id != "cancel" && !a.endEdit() { // cancel is esc here, which ends it itself
 		return nil
+	}
+	if a.jump != nil && !strings.HasPrefix(id, "jump.") { // a global key (C-p, C-s) ends it and does what it does
+		a.jump = nil
 	}
 	if !strings.HasPrefix(id, "keyhelp.") && id != "cancel" { // a global key (C-p) goes past the ? help: it closes (§6.5)
 		a.keyHelp = nil

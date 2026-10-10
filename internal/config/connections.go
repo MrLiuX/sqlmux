@@ -19,6 +19,7 @@ import (
 // Connection is one [[connection]] in connections.toml (§14).
 type Connection struct {
 	Name        string `toml:"name"`
+	Group       string `toml:"group,omitempty"` // the tree and the manager divide the connections by it (F10.6)
 	Engine      string `toml:"engine"`
 	DSN         string `toml:"dsn"`
 	PasswordCmd string `toml:"password_cmd,omitempty"`
@@ -105,6 +106,9 @@ func (c Connection) Check(names []string) (field, problem string) {
 	}
 	if slices.Contains(names, c.Name) { // the tree's roots go by it too (§5)
 		return "name", fmt.Sprintf(i18n.T("name = %q 重复了"), c.Name)
+	}
+	if c.Group != "" && checkFileName(c.Group) != nil { // the characters of a name (F10.6)
+		return "group", fmt.Sprintf(i18n.T(`group = %q：不能含 / 或 \，也不能以 . 开头`), c.Group)
 	}
 	if c.Engine != "postgres" && c.Engine != "mysql" {
 		return "engine", fmt.Sprintf(i18n.T("engine = %q：只能是 postgres 或 mysql"), c.Engine)
