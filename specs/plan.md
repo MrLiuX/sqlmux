@@ -15,10 +15,11 @@
 | M8 第一轮使用反馈 | [m8-feedback/task.md](m8-feedback/task.md) | 用户照 WALKTHROUGH 走完 M5–M7 后的 20 条意见：补全和格式化的 bug、列宽、边框样式、默认排序、window / session / console 改名、连接的修改与删除 | 完成（F8.1–F8.23 passed，0c023d2，完整回归 118 个脚本全过，2026-10-10；tag `m8`） |
 | M9 第二轮使用反馈 | [m9-feedback2/task.md](m9-feedback2/task.md) | 用户 2026-10-10 在 M8 验收期间提的 10 条：WHERE 历史 / 收藏的顺手操作、表格 `^` / `C-r` / 复制为 JSON、缩放提示、DDL 查看 | 完成（F9.1–F9.10 passed，93e9d8c，完整回归 130 个脚本全过，2026-10-10；tag `m9`，`v0.1.0` 在 ffbcec5；用户 10-10 定：先打 tag，之后自己慢慢验收） |
 | M10 第三轮使用反馈 | [m10-feedback3/task.md](m10-feedback3/task.md) | 用户 2026-10-10 在 M9 审查期间提的 9 条：表格多选、flash 式跳转、树去掉 pane 层、连接分组、WHERE 下拉撑满、新建 session 先要名字、console 结果 500 行并翻页、COLS 调列顺序、侧栏去掉键位文字、删开着的 console；最后 console 改名 query（单独一个节点） | 开发中（2026-10-10，M9 passed 后开工） |
+| M11 分发 | [m11-distribution/task.md](m11-distribution/task.md) | GoReleaser 与 release workflow、`--version`、Homebrew tap（源码编译的 formula）、npm / npx（壳包加平台子包） | todo（2026-10-10 用户定；M10 之后，F11.1 可随 v0.1.1 先做） |
 
 ## 发布
 
-2026-10-10 推送：`m5`–`m9` 打在各自最后一个产品 commit 上，`v0.1.0` 打在 ffbcec5（m9 之后只多一个让 keychain 测试在 Linux 上过的 commit；93e9d8c 的首次 CI 是红的，tag 打在绿的那个），`go install` 还装不了：go.mod 的 module 是 `sqlmux` 而不是 `github.com/kackerx/sqlmux`，M10 F10.12 改掉后下一个 tag 才能 `go install github.com/kackerx/sqlmux/cmd/sqlmux@latest`；GitHub Release、GoReleaser / Homebrew 等用户要再说。每个里程碑的 tag 在用户验收通过后由 worker 打并推送（M5–M9 由用户 10-10 定为先打 tag 再慢慢验收）。
+2026-10-10 推送：`m5`–`m9` 打在各自最后一个产品 commit 上，`v0.1.0` 打在 ffbcec5（m9 之后只多一个让 keychain 测试在 Linux 上过的 commit；93e9d8c 的首次 CI 是红的，tag 打在绿的那个），`go install` 还装不了：go.mod 的 module 是 `sqlmux` 而不是 `github.com/kackerx/sqlmux`，M10 F10.12 改掉后下一个 tag 才能 `go install github.com/kackerx/sqlmux/cmd/sqlmux@latest`；GitHub Release 等 F10.12 之后的 v0.1.1 再发（用户 10-10 定）；GoReleaser、Homebrew、npm 是 M11。每个里程碑的 tag 在用户验收通过后由 worker 打并推送（M5–M9 由用户 10-10 定为先打 tag 再慢慢验收）。
 
 ## 任务文件的格式
 

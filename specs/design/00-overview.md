@@ -112,6 +112,9 @@ sqlmux/
 ├─ justfile                   常规操作的入口
 ├─ .golangci.yml              golangci-lint v2 的规则
 ├─ .github/workflows/ci.yml   GitHub Actions：lint、vet、单测、集成测试
+├─ .github/workflows/release.yml  打 v* tag 时发布（M11）
+├─ .goreleaser.yaml           交叉编译、压缩包、校验和、Release（M11）
+├─ npm/                       npm 壳包和平台子包的模板（M11）
 ├─ bin/                       构建产物，不入库
 └─ .handoff/                  会话交接文档，不入库
 ```
