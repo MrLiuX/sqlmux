@@ -165,6 +165,9 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 	if a.menu != nil {
 		a.drawMenu(f)
 	}
+	if a.ddl != nil {
+		a.drawDDL(f)
+	}
 	if a.cols != nil {
 		d := a.colsView()
 		box, rows := a.colsBox(d)
@@ -216,12 +219,14 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 		icon, word = a.icons.Result, "result"
 	}
 	b := ui.Block{
-		Num:     a.icons.Number(n),
-		Icon:    icon,
-		Title:   a.label(word),
-		Object:  p.Object(),
-		Focused: a.win().Focus == p.ID,
-		Pane:    p.ID,
+		Num:      a.icons.Number(n),
+		Icon:     icon,
+		Title:    a.label(word),
+		Object:   p.Object(),
+		Focused:  a.win().Focus == p.ID,
+		Zoomed:   a.win().Zoom == p.ID,
+		ZoomIcon: a.icons.Zoom,
+		Pane:     p.ID,
 	}
 	var tabHints []ui.Hint
 	switch rt := resultOf(p); {

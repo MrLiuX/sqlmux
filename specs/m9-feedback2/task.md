@@ -76,10 +76,10 @@
 - **依赖**：F3.32、F8.7
 - **涉及**：`internal/app`、`internal/keymap/default.toml`
 
-**开发**（§7.5「复制为 JSON」）
+**开发**（§7.5「复制为 JSON」，§6.x 键位表）
 - [ ] `grid.yank.json`「复制为 JSON」，默认 `Y`：一个对象，键是列名、按列顺序（含隐藏的列）；值按列类型：数字类型 → JSON 数字（文本不是合法 JSON 数字时退回字符串），布尔 → `true` / `false`（MySQL 的 `1` / `0` 也转），NULL → `null`，json / jsonb → 原文嵌入，其余（含时间、数组、uuid）→ 字符串；2 空格缩进、多行；值取显示的（含未保存修改），成功后整行闪一下，同 `yy`；结果 tab 的行也能复制（有列类型就行）。转置视图里同样是当前记录。
 - [ ] 用 `encoding/json`，不手拼。
-- [ ] 细节（worker 2026-10-10 提议，已定）：数字按 F8.7 的 `number` 正则（不合法退回字符串）；布尔认 PG `bool` 的 `t` / `f` / `true` / `false` 和 MySQL `tinyint(1)` 的 `1` / `0`；json / jsonb `json.Valid` 才原文嵌入；二进制列照屏幕上的 `<binary N bytes>` 当字符串，不拒绝；外层对象按列顺序用有序键值对写、再 `json.Indent`；新增行里 DEFAULT 的格整个键省略；结果 tab 的行同样。默认键 `Y`（`[keys.grid]`，之前空着）。
+- [ ] 细节（worker 2026-10-10 提议，已定）：数字列的文本是合法的 JSON 数字（`json.Valid`）才写成数字，否则字符串（审查时定：F8.7 的正则放过 zerofill 的 `007`，起作用的只有 json.Valid，去掉正则）；结果 tab 里 MySQL 的布尔列（驱动只报 `tinyint`）复制成 `1` / `0`，已知上限；布尔认 PG `bool` 的 `t` / `f` / `true` / `false` 和 MySQL `tinyint(1)` 的 `1` / `0`；json / jsonb `json.Valid` 才原文嵌入；二进制列照屏幕上的 `<binary N bytes>` 当字符串，不拒绝；外层对象按列顺序用有序键值对写、再 `json.Indent`；新增行里 DEFAULT 的格整个键省略；结果 tab 的行同样。默认键 `Y`（`[keys.grid]`，之前空着）。
 
 **验收**
 - [ ] 单测：含 int、bool、null、jsonb、text、timestamptz 的一行 → 期望的 JSON；非法数字文本退回字符串。
@@ -93,7 +93,7 @@
 - **涉及**：`internal/ui`（Frame 的 pane 边框）、`internal/app`
 
 **开发**（§5「缩放」、§7.1）
-- [ ] 缩放中的 pane：标题的编号后面加 `zoom` 图标（nf-md-arrow_expand_all，ascii `[Z]`，可在 `[icon]` 覆盖），边框用主题的 `zoom` 色（新 token，默认 = `warn`，§7.2 的表里加一行；焦点 / 非焦点都用它）。退出缩放恢复。同 tmux 在 window 名后标 `Z`。
+- [ ] 缩放中的 pane：标题的编号后面加 `zoom` 图标（nf-fa-expand，BMP 私用区；worker 指出清单原写的 nf-md 在补充平面、宽度不稳；ascii `[Z]`，可在 `[icon]` 覆盖），边框用主题的 `zoom` 色（新 token，默认 = `warn`，§7.2 的表里加一行；焦点 / 非焦点都用它）。退出缩放恢复。同 tmux 在 window 名后标 `Z`。
 
 **验收**
 - [ ] golden：缩放中的 pane。
@@ -126,6 +126,7 @@
 - [ ] `grid.ddl.column`「列的定义」：当前单元格下方（放不下在上方）的小浮窗：第一行 `列名 类型 [not null] [default …]`（从 DDL 里取这一列那一行），下面是含这一列的索引语句、列的注释（有的话）；`esc` / 任意移动键关。
 - [ ] `grid.ddl.table`「表的 DDL」：居中浮窗，宽取窗口的 2/3、高取 2/3，内容同面板预览（含索引），着色同面板；作用域 `ddl`：`j` / `k` / `↓` / `↑` 一行、`C-d` / `C-u` 半页、`gg` / `G`、`esc` 关；复用 keyhelp 那套滚动浮层的绘制，不另写。
 - [ ] 两个都不带默认键，面板里能用；DDL 从面板预览的同一份缓存取（§12），没取过就先取、浮窗先显示「…」。
+- [ ] 细节（worker 2026-10-10 提议，已定）：抽 `ui.TextView`（行、颜色、Top、两头 `…`），面板预览和两个浮窗共用；表 DDL 浮窗宽高各取窗口 2/3（最小 40×8）、标题写表名、作用域 `ddl`、滚轮能滚、点浮窗外关；列定义浮窗按行首列名从 DDL 里取那一行，索引按标识符边界匹配列名，最多 8 行、超出画 `…` 不滚；PG 的列 / 表注释加进 `DDL` 文本末尾（`comment on … is`，pg_dump 的写法，面板预览也会多出这几行），MySQL 的注释本来在列行里；结果 tab 上两个动作无事、不 toast。F9.7：各滚半页、到末尾停住、换候选回顶，提示「滚动预览」只在 DDL 超出预览区时显示；PG / MySQL 集成测试各断言一次 DDL 里有 `create index` 且主键索引不重复。
 
 **验收**
 - [ ] golden：列定义浮窗、表 DDL 浮窗。

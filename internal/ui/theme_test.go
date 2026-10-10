@@ -51,6 +51,21 @@ sort_asc = { fg = "#ff0000" }
 	}
 }
 
+// The zoomed pane's border color is the theme's zoom, which a theme without one
+// takes from its own warn, not from tokyonight's (F9.6).
+func TestThemeZoomDefaultsToWarn(t *testing.T) {
+	for _, tc := range []struct{ file, want string }{
+		{"", "#e0af68"}, // tokyonight's own
+		{`warn = "#112233"`, "#112233"},
+		{`warn = "#112233"` + "\n" + `zoom = "#445566"`, "#445566"},
+	} {
+		th, _, err := ParseTheme(tc.file, ASCIIIcons)
+		if err != nil || th.Zoom != c(tc.want) {
+			t.Errorf("%q: zoom %v, want %s (%v)", tc.file, th.Zoom, tc.want, err)
+		}
+	}
+}
+
 func TestParseThemeErrors(t *testing.T) {
 	for data, want := range map[string]string{
 		`rwo = "#000000"`:                        "rwo",

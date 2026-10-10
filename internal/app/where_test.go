@@ -414,6 +414,16 @@ func TestWhereHistoryEdit(t *testing.T) {
 	if tab.applied != "status = 'new'" || tab.order != "" {
 		t.Errorf("edited, then ↵: applied %q order %q", tab.applied, tab.order)
 	}
+	// an empty list: nothing to put in
+	b, btab, _ := withRecorder(t)
+	feed(t, b, "/id > 5<C-r>")
+	if es, _ := b.histEntries(btab); len(es) != 0 {
+		t.Fatalf("history of a table never run: %+v", es)
+	}
+	feed(t, b, "<C-e>")
+	if btab.where.Text != "id > 5" || btab.typing != "where" {
+		t.Errorf("C-e on nothing: input %q", btab.where.Text)
+	}
 	// the hint of the key, in the list's foot
 	feed(t, a, "/<C-r>")
 	if f := a.render().String(); !strings.Contains(f, "C-e 填入") {

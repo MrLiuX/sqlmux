@@ -231,6 +231,10 @@ func TestRowJSON(t *testing.T) {
 		{"zeros", ui.ColNumber, db.Val{S: "007"}},
 		{"neg", ui.ColNumber, db.Val{S: "-1.5e3"}},
 		{"paid", ui.ColBool, db.Val{S: "t"}},
+		{"one", ui.ColBool, db.Val{S: "1"}},    // MySQL's tinyint(1)
+		{"yes", ui.ColBool, db.Val{S: "true"}}, // a cell edited
+		{"f", ui.ColBool, db.Val{S: "f"}},
+		{"no", ui.ColBool, db.Val{S: "false"}},
 		{"off", ui.ColBool, db.Val{S: "0"}},
 		{"odd", ui.ColBool, db.Val{S: "maybe"}},
 		{"gone", ui.ColString, db.Val{Null: true}},
@@ -252,6 +256,10 @@ func TestRowJSON(t *testing.T) {
   "zeros": "007",
   "neg": -1.5e3,
   "paid": true,
+  "one": true,
+  "yes": true,
+  "f": false,
+  "no": false,
   "off": false,
   "odd": "maybe",
   "gone": null,
@@ -329,6 +337,37 @@ func TestYankJSON(t *testing.T) {
 	b.win().focus(b.win().Result.ID)
 	if cmd := keys(t, b, "Y"); !clipped(cmd, "{\n  \"n\": 5,\n  \"ok\": false,\n  \"j\": [\n    1\n  ]\n}") {
 		t.Errorf("a result's row")
+	}
+
+	// the catalog's types not in yet: the page's own
+	d := wide(160, 45)
+	dt := loadOrders(t, d, 3)
+	dt.cols.Cols = nil
+	dt.page.Cols[0].Type, dt.page.Cols[3].Type = "int4", "bool"
+	wantPage := `{
+  "id": 1,
+  "status": "running",
+  "amount": "1.99",
+  "paid": true,
+  "meta": "{\"n\": 1, \"tags\": [\"a\", \"b\"]}",
+  "note": "note 1",
+  "created_at": "2026-09-01 00:01:00+00"
+}`
+	if cmd := keys(t, d, "Y"); !clipped(cmd, wantPage) {
+		t.Errorf("types from the page")
+	}
+
+	// nothing to copy: no row of a result, no row of a table
+	e, _ := inRun(t, &execDB{res: map[string]db.Result{"select 1": {Cols: []db.Col{{Name: "n", Type: "int4"}}}}}, "select 1;")
+	press(t, e, "<CR>")
+	e.win().focus(e.win().Result.ID)
+	if keys(t, e, "Y"); e.flash != nil {
+		t.Errorf("an empty result")
+	}
+	f := wide(160, 45)
+	loadOrders(t, f, 0)
+	if keys(t, f, "Y"); f.flash != nil {
+		t.Errorf("an empty table")
 	}
 
 	c := wide(160, 45)

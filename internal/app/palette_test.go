@@ -647,3 +647,85 @@ func TestPaletteTableCommand(t *testing.T) {
 		t.Errorf("the tables of both connections: %v", names)
 	}
 }
+
+// C-d and C-u scroll the DDL preview by half its rows, stopping at the ends, a
+// … in its first row when lines are above and in its last when more are below;
+// another table has it at the top; with nothing to scroll the keys are the
+// input's: C-u clears it (F9.7).
+func TestPalettePreviewScroll(t *testing.T) {
+	a := wide(160, 45)
+	long := ddlOrder + "\n" + strings.Repeat("create index i on t_order (id);\n", 20) + "create index last_one on t_order (note);"
+	feed(t, a, "<C-p>@t_order")
+	rest(a)
+	a.Update(ddlMsg{conn: a.sess.Conns[0], table: tableNamed(a, "t_order"), text: long})
+	pv := a.palettePreview()
+	_, ms := a.paletteMatches()
+	_, _, grid := a.paletteBox(len(ms))
+	rows, lines := grid.Dy(), pv.Lines()
+	if rows != 12 || lines != 35 {
+		t.Fatalf("rows %d, lines %d", rows, lines)
+	}
+	row := func(i int) string { // the preview's i-th row
+		f, line := a.render(), ""
+		for x := grid.Min.X; x < grid.Max.X; x++ {
+			line += f.Buf.CellAt(x, grid.Min.Y+i).String()
+		}
+		return strings.TrimSpace(line)
+	}
+	if !strings.Contains(a.render().String(), "C-u/C-d 滚动预览") || row(rows-1) != "…" || row(0) != "create table public.t_order (" {
+		t.Fatalf("at the top: first %q, last %q", row(0), row(rows-1))
+	}
+	feed(t, a, "<C-d>")
+	if a.palette.pvTop != 6 || row(0) != "…" || row(1) == "create table public.t_order (" || row(rows-1) != "…" {
+		t.Errorf("C-d: top %d, first %q, last %q", a.palette.pvTop, row(0), row(rows-1))
+	}
+	feed(t, a, "<C-d><C-d><C-d><C-d><C-d><C-d>")
+	if a.palette.pvTop != lines-rows || row(rows-1) != "create index last_one on t_order (note);" || row(0) != "…" {
+		t.Errorf("at the end: top %d, last %q", a.palette.pvTop, row(rows-1))
+	}
+	feed(t, a, "<C-u>")
+	if a.palette.pvTop != lines-rows-6 {
+		t.Errorf("C-u: top %d", a.palette.pvTop)
+	}
+	feed(t, a, "<C-u><C-u><C-u><C-u><C-u><C-u><C-u>")
+	if a.palette.pvTop != 0 || row(0) != "create table public.t_order (" {
+		t.Errorf("back at the top: %d, %q", a.palette.pvTop, row(0))
+	}
+	// another candidate: the top again, and typing more
+	feed(t, a, "<C-d><C-d>")
+	if a.palette.pvTop == 0 {
+		t.Fatal("not scrolled")
+	}
+	feed(t, a, "<C-n><C-p>")
+	if pv := a.palettePreview(); pv == nil || pv.Top != 0 {
+		t.Errorf("another candidate and back: %+v", pv)
+	}
+	feed(t, a, "<C-d><BS>r") // the same table is selected again
+	if pv := a.palettePreview(); pv == nil || pv.Top != 0 || a.palette.input.Text != "@t_order" {
+		t.Errorf("typing: %+v, input %q", pv, a.palette.input.Text)
+	}
+
+	// a DDL that fits: nothing to scroll, no hint, and C-u is the input's
+	b := wide(160, 45)
+	feed(t, b, "<C-p>@t_order")
+	rest(b)
+	b.Update(ddlMsg{conn: b.sess.Conns[0], table: tableNamed(b, "t_order"), text: "create table t_order (id int);"})
+	feed(t, b, "<C-d>")
+	if b.palette.pvTop != 0 || b.palette.input.Text != "@t_order" || strings.Contains(b.render().String(), "滚动预览") {
+		t.Errorf("nothing to scroll: top %d, input %q", b.palette.pvTop, b.palette.input.Text)
+	}
+	feed(t, b, "<C-u>")
+	if b.palette.input.Text != "@" && b.palette.input.Text != "" {
+		t.Errorf("C-u is the input's: %q", b.palette.input.Text)
+	}
+}
+
+// A scrolled preview has a dim … at both ends (F9.7).
+func TestGoldenPalettePreviewScrolled(t *testing.T) {
+	a := wide(160, 45)
+	feed(t, a, "<C-p>@t_order")
+	rest(a)
+	a.Update(ddlMsg{conn: a.sess.Conns[0], table: tableNamed(a, "t_order"), text: ddlOrder + "\n" + strings.Repeat("create index i on t_order (id);\n", 8) + "create index last_one on t_order (note);"})
+	feed(t, a, "<C-d>")
+	golden.RequireEqual(t, a.render().String())
+}

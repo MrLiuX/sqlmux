@@ -136,9 +136,10 @@ order by 1, 3`, db.Val{S: schema}, db.Val{S: table})
 // identity), its constraints by pg_get_constraintdef, primary key, unique,
 // foreign keys, checks, then its indexes by pg_get_indexdef but those a
 // constraint of it makes; a view's and a materialized view's query by
-// pg_get_viewdef, the latter's indexes too.
+// pg_get_viewdef, the latter's indexes too; last the comments, the relation's
+// and its columns', as comment on statements.
 // ponytail: no generated column's expression, partitioning, inheritance,
-// comments, owner or grants, and a foreign table reads as a table; add them
+// owner or grants, and a foreign table reads as a table; add them
 // when the preview is read as a script
 func (Engine) DDL(ctx context.Context, c db.Conn, schema, name string) (string, error) {
 	rel := db.Val{S: pgx.Identifier{schema, name}.Sanitize()}
@@ -153,7 +154,7 @@ where c.oid = $1::regclass`, rel)
 	var b strings.Builder
 	switch kind {
 	case "v":
-		return "create view " + qualified + " as\n" + query, nil
+		b.WriteString("create view " + qualified + " as\n" + query)
 	case "m":
 		b.WriteString("create materialized view " + qualified + " as\n" + query)
 	default:
@@ -211,6 +212,29 @@ order by i.indexrelid::regclass::text`, rel)
 	}
 	for _, row := range idx.Rows {
 		b.WriteString("\n" + row[0].S + ";")
+	}
+	// comments, as pg_dump writes them: the relation's, then each column's (F9.8)
+	notes, err := c.Query(ctx, `
+select null::text, quote_literal(obj_description($1::regclass, 'pg_class')), 0
+where obj_description($1::regclass, 'pg_class') is not null
+union all
+select quote_ident(a.attname), quote_literal(col_description(a.attrelid, a.attnum)), a.attnum
+from pg_attribute a
+where a.attrelid = $1::regclass and a.attnum > 0 and not a.attisdropped and col_description(a.attrelid, a.attnum) is not null
+order by 3`, rel)
+	if err != nil {
+		return "", err
+	}
+	object := map[string]string{"v": "view", "m": "materialized view"}[kind]
+	if object == "" {
+		object = "table"
+	}
+	for _, n := range notes.Rows {
+		if n[0].Null {
+			b.WriteString("\ncomment on " + object + " " + qualified + " is " + n[1].S + ";")
+		} else {
+			b.WriteString("\ncomment on column " + qualified + "." + n[0].S + " is " + n[1].S + ";")
+		}
 	}
 	return b.String(), nil
 }

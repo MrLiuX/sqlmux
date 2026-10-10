@@ -45,6 +45,7 @@ type Icons struct {
 	Result, Pin, Export, Log Icon // the result area's (§11)
 	Close                    Icon
 	Star, History            Icon // a WHERE's favorites and history (§9.7)
+	Zoom                     Icon // after the number of the pane zoomed (F9.6)
 	// The connection form's rows (F7.4); it also has Postgres, MySQL, Key,
 	// Lock and Console
 	Tag, Host, Port, User Icon
@@ -88,6 +89,7 @@ var NerdIcons = &Icons{
 	Close:       Icon{Text: "\uf00d"}, // nf-fa-times
 	Log:         Icon{Text: "\uf0f6"}, // nf-fa-file_text_o
 	Star:        Icon{Text: "\uf005"}, // nf-fa-star
+	Zoom:        Icon{Text: "\uf065"}, // nf-fa-expand
 	History:     Icon{Text: "\uf1da"}, // nf-fa-history
 	Tag:         Icon{Text: "\uf02b"}, // nf-fa-tag
 	Host:        Icon{Text: "\uf233"}, // nf-fa-server
@@ -128,6 +130,7 @@ var ASCIIIcons = &Icons{
 	Close:       Icon{Text: "x"},
 	Log:         Icon{Text: "L"},
 	Star:        Icon{Text: "*"},
+	Zoom:        Icon{Text: "[Z]"},
 	History:     Icon{Text: "h"},
 	Tag:         Icon{Text: "#"},
 	Host:        Icon{Text: "@"},
@@ -178,7 +181,7 @@ func (ic *Icons) byName() map[string]*Icon {
 		"row_add": &ic.RowAdd, "row_delete": &ic.RowDelete, "auto_refresh": &ic.AutoRefresh, "stop": &ic.Stop,
 		"sort_asc": &ic.SortAsc, "sort_desc": &ic.SortDesc, "view": &ic.View, "column": &ic.Column, "lock": &ic.Lock,
 		"result": &ic.Result, "pin": &ic.Pin, "export": &ic.Export, "close": &ic.Close,
-		"pane": &ic.Pane, "log": &ic.Log, "star": &ic.Star, "history": &ic.History,
+		"pane": &ic.Pane, "log": &ic.Log, "star": &ic.Star, "history": &ic.History, "zoom": &ic.Zoom,
 		"tag": &ic.Tag, "host": &ic.Host, "port": &ic.Port, "user": &ic.User, "database": &ic.Database,
 		"advanced": &ic.Advanced, "link": &ic.Link,
 	}

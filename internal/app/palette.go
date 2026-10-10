@@ -34,8 +34,12 @@ type palette struct {
 	// palette closes (F4.2).
 	preview    string
 	previewSeq int
-	fetches    context.Context
-	stop       context.CancelFunc
+	// pvTop is how far the preview of the table pvFor is scrolled (F9.7); a
+	// selection on another table has it at the top.
+	pvTop   int
+	pvFor   string
+	fetches context.Context
+	stop    context.CancelFunc
 
 	// Quick SQL's (§12).
 	comp  *completion
@@ -276,8 +280,17 @@ func (a *App) paletteView() ui.Palette {
 		p.Rows = append(p.Rows, ui.PaletteRow{Icon: it.icon, Name: it.name, Where: it.where, Pos: m.Pos, Right: right, Tag: i18n.T(itemTags[it.kind])})
 	}
 	scopeKeys := a.hints("palette", "/", "palette.scope.next", "palette.scope.prev")
+	p.Preview = a.palettePreview()
+	scrollKeys := ""
+	if pv := p.Preview; pv != nil && pv.Err == "" && !a.quickShows() { // the hint where there is something to scroll
+		_, _, grid := a.paletteBox(len(ms))
+		if pv.Lines() > grid.Dy() {
+			scrollKeys = a.hints("palette", "/", "palette.preview.up", "palette.preview.down")
+		}
+	}
 	p.Footer = bound(
 		ui.Hint{Key: a.hints("palette", "/", "palette.up", "palette.down"), Label: i18n.T("移动")},
+		ui.Hint{Key: scrollKeys, Label: i18n.T("滚动预览")},
 		ui.Hint{Key: scopeKeys, Label: i18n.T("范围")},
 		ui.Hint{Key: a.keys.Hint("palette.close", "palette"), Label: i18n.T("关闭"), Action: "palette.close"},
 	)
@@ -299,7 +312,6 @@ func (a *App) paletteView() ui.Palette {
 	if a.quickShows() {
 		p.Result = a.quickView(a.palette.quick)
 	}
-	p.Preview = a.palettePreview()
 	return p
 }
 
@@ -318,7 +330,7 @@ func (a *App) keyFor(id string) string {
 func (a *App) paletteMove(d int) {
 	_, ms := a.paletteMatches()
 	p := a.palette
-	p.sel = max(min(p.sel+d, len(ms)-1), 0)
+	p.sel, p.pvTop = max(min(p.sel+d, len(ms)-1), 0), 0
 	_, rows, _ := a.paletteBox(len(ms))
 	p.top = max(min(p.top, p.sel), p.sel-rows+1)
 }
@@ -418,7 +430,28 @@ func (a *App) palettePreview() *ui.PalettePreview {
 	} else {
 		names, _ = a.sqlNames(c, d.text, "", &cols)
 	}
-	return &ui.PalettePreview{Text: d.text, Err: d.err, Names: names, Dialect: c.eng.Dialect()}
+	pv := &ui.PalettePreview{Text: d.text, Err: d.err, Names: names, Dialect: c.eng.Dialect()}
+	if id, _, _, _ := a.previewed(); id == a.palette.pvFor {
+		pv.Top = a.palette.pvTop
+	}
+	return pv
+}
+
+// scrollPreview is C-d (d 1) and C-u (-1) over the preview: half its rows,
+// held to what there is to scroll; the key goes to the input as it was when
+// there is nothing to scroll, as C-u clearing it (F9.7).
+func (a *App) scrollPreview(d int) tea.Cmd {
+	id, _, _, _ := a.previewed()
+	pv := a.palettePreview()
+	_, ms := a.paletteMatches()
+	_, _, grid := a.paletteBox(len(ms))
+	if pv == nil || pv.Err != "" || pv.Lines() <= grid.Dy() {
+		return a.paletteKey(map[int]keymap.Key{1: "<C-d>", -1: "<C-u>"}[d])
+	}
+	rows := grid.Dy()
+	top := pv.Top + d*max(rows/2, 1)
+	a.palette.pvFor, a.palette.pvTop = id, max(min(top, pv.Lines()-rows), 0)
+	return nil
 }
 
 // wantDDL times the preview: the selection moved to a table whose DDL is
@@ -466,7 +499,13 @@ func (a *App) fetchDDL(m previewDue) tea.Cmd {
 		m.p.fetches, m.p.stop = context.WithCancel(context.Background())
 		a.fetching = m.p
 	}
-	meta, eng, ctx := conn.Meta, conn.eng, m.p.fetches
+	return a.ddlCmd(m.p.fetches, conn, t)
+}
+
+// ddlCmd reads t's DDL, and a table's columns, on conn's Meta, in ctx and for
+// countTimeout at most.
+func (a *App) ddlCmd(ctx context.Context, conn *Conn, t db.Table) tea.Cmd {
+	meta, eng := conn.Meta, conn.eng
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, countTimeout)
 		defer cancel()
@@ -618,7 +657,7 @@ func (a *App) paletteKey(k keymap.Key) tea.Cmd {
 		p.comp = nil
 		return nil
 	}
-	p.sel, p.top = 0, 0
+	p.sel, p.top, p.pvTop = 0, 0, 0
 	return a.completeSQL()
 }
 

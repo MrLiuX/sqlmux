@@ -72,6 +72,7 @@ type App struct {
 	cols      *colsMenu    // non-nil while the COLS list is open (Q-04)
 	confirm   *confirmBox  // non-nil while it asks before changes go (§10.5)
 	menu      *menu        // non-nil while the tree's right-click menu is open (F8.23)
+	ddl       *ddlPopup    // non-nil while a table's or a column's DDL is shown over the grid (F9.8)
 	whichKey  bool         // the which-key overlay is up (§6.5)
 	keyHelp   *keyHelp     // non-nil while the ? help is open (§6.5)
 	// paneNumbers is SPC q's overlay: the next key picks a pane by its ⟨n⟩.
@@ -237,7 +238,10 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.w, a.h = msg.Width, msg.Height
-		a.menu = nil // it was placed by the pointer, on a tree that is laid out again
+		a.menu = nil                         // it was placed by the pointer, on a tree that is laid out again
+		if a.ddl != nil && a.ddl.col != "" { // under a cell that has moved
+			a.ddl = nil
+		}
 	case connected:
 		return a, a.gotConnected(msg)
 	case sessionDialed:
@@ -364,6 +368,11 @@ func (a *App) press(k keymap.Key) tea.Cmd { return a.feed(k, true) }
 // back from the resolver to go in here key by key, maps off (noremap), each
 // meeting the editor as it then is (§6.6).
 func (a *App) feed(k keymap.Key, maps bool) tea.Cmd {
+	if a.ddl != nil && a.ddl.col != "" { // a column's DDL goes with the next key, which is then pressed as it is; esc is no more (F9.8)
+		if a.ddl = nil; k == keymap.Esc {
+			return nil
+		}
+	}
 	a.plainConsoles() // one a key before it made, by a mapping, has no modes as this one meets it
 	if a.paneNumbers {
 		a.jumpToPane(k)
@@ -428,7 +437,7 @@ func (a *App) click(p uv.Position) tea.Cmd {
 	case ui.KindNumber:
 		a.jumpToPane(keymap.Key(strconv.Itoa(t.I)))
 	case ui.KindBackdrop: // outside an overlay: close it; outside a confirm box: no
-		a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.confirm, a.keyHelp, a.sessList, a.menu = false, false, nil, nil, nil, nil, nil, nil, nil
+		a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.confirm, a.keyHelp, a.sessList, a.menu, a.ddl = false, false, nil, nil, nil, nil, nil, nil, nil, nil
 		a.res.Reset()
 	case ui.KindSegment:
 		if a.form != nil {
@@ -531,6 +540,12 @@ func (a *App) click(p uv.Position) tea.Cmd {
 // Shift turns the vertical wheel horizontal, as does a touchpad's sideways
 // swipe (buttons 6 and 7).
 func (a *App) wheel(m tea.Mouse) {
+	if a.ddl != nil { // the table's DDL scrolls; the column's is cut, and goes with the next key (F9.8)
+		if a.ddl.col == "" {
+			a.scrollDDL(map[tea.MouseButton]int{tea.MouseWheelUp: -wheelStep, tea.MouseWheelDown: wheelStep}[m.Button], false)
+		}
+		return
+	}
 	if a.menu != nil { // the menu is of the node the cursor is on: the wheel goes no further (F8.23)
 		return
 	}
@@ -614,7 +629,7 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 		}
 		for _, k := range r.Keys { // unbound keys go to the input that has them
 			switch t := a.typingTab(); {
-			case a.menu != nil: // no text to type: the key is none of its
+			case a.menu != nil || a.ddl != nil: // no text to type: the key is none of theirs
 			case a.keyHelp != nil:
 				cmds = append(cmds, a.keyHelpKey(k))
 			case a.palette != nil:
@@ -669,6 +684,8 @@ func (a *App) context() keymap.Context {
 		return keymap.Context{Overlay: "confirm", Mode: keymap.Command}
 	case a.menu != nil:
 		return keymap.Context{Overlay: "menu", Mode: keymap.Command}
+	case a.ddl != nil:
+		return keymap.Context{Overlay: "ddl", Mode: keymap.Command}
 	case a.keyHelp != nil: // the keys it lists come to keyHelpKey
 		return keymap.Context{Overlay: "keyhelp", Mode: keymap.Command}
 	case a.palette != nil && a.palette.comp != nil: // the palette's keys under the list's: its ↵ and esc see to the list first (§9.7)

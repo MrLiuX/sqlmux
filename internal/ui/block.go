@@ -54,6 +54,8 @@ type Block struct {
 	// that does not fit, however narrow (the result area's buttons, §11).
 	StrictHints bool
 	Focused     bool
+	Zoomed      bool // the pane is zoomed: ZoomIcon after the number, the border in the zoom color (F9.6)
+	ZoomIcon    Icon
 	Pane        int
 	// TitleAction makes the drawn title a button (the sidebar's schema, §7.8).
 	TitleAction string
@@ -70,6 +72,9 @@ func (b Block) Draw(f *Frame, r uv.Rectangle) uv.Rectangle {
 	if b.Focused {
 		bc, tc = th.Focus, th.Focus
 	}
+	if b.Zoomed {
+		bc = th.Zoom
+	}
 	bs := uv.Style{Fg: bc, Bg: th.PaneBg}
 	border := f.Border.Style(bs)
 	border.Draw(f.Buf, r)
@@ -85,8 +90,13 @@ func (b Block) Draw(f *Frame, r uv.Rectangle) uv.Rectangle {
 			st.Bg = th.Select
 		}
 		f.Text(x0+2, y0, x1, " "+title+" ", st)
-		// An icon with its own color keeps it (§7.7).
-		if n := b.Num + " "; b.Icon.Fg != nil && strings.HasPrefix(title, n+b.Icon.Text) {
+		// An icon with its own color keeps it (§7.7); the zoom's is the zoom color's.
+		n := b.Num + " "
+		if b.Zoomed && strings.HasPrefix(title, n+b.ZoomIcon.Text) {
+			f.Text(x0+3+Width(n), y0, x1, b.ZoomIcon.Text, b.ZoomIcon.On(uv.Style{Fg: th.Zoom, Bg: st.Bg}))
+			n += b.ZoomIcon.Text + " "
+		}
+		if b.Icon.Fg != nil && strings.HasPrefix(title, n+b.Icon.Text) {
 			f.Text(x0+3+Width(n), y0, x1, b.Icon.Text, b.Icon.On(st))
 		}
 	}
@@ -110,6 +120,9 @@ func (b Block) Draw(f *Frame, r uv.Rectangle) uv.Rectangle {
 func (b Block) fit(room int) (string, []Hint) {
 	n := b.Num
 	head := n
+	if b.Zoomed {
+		head += " " + b.ZoomIcon.Text
+	}
 	for _, s := range []string{b.Icon.Text, b.Title} {
 		if s != "" {
 			head += " " + s

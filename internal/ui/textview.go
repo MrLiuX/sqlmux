@@ -1,0 +1,76 @@
+package ui
+
+import (
+	"image/color"
+	"strings"
+
+	uv "github.com/charmbracelet/ultraviolet"
+)
+
+// TextView is a text seen through a window of rows (§12「预览」, F9.7): Top
+// lines scrolled past, a "…" in place of the window's first row when there
+// are lines above it and of its last row when there are more below. Colors
+// are the text's, a color to each byte (SQLColors); none is an error, drawn
+// in its color.
+type TextView struct {
+	Text   string
+	Colors []color.Color
+	Top    int
+}
+
+// Lines is how many rows the text takes whole.
+func (v TextView) Lines() int { return strings.Count(v.Text, "\n") + 1 }
+
+// Fit is Top held to what there is to scroll in a window of rows.
+func (v TextView) Fit(rows int) int { return max(min(v.Top, v.Lines()-rows), 0) }
+
+// Draw paints the window in area, over bg.
+func (v TextView) Draw(f *Frame, area uv.Rectangle, bg uv.Style) {
+	th := f.Theme
+	lines, top := strings.Split(v.Text, "\n"), v.Fit(area.Dy())
+	at := 0 // the byte the line starts at
+	for _, l := range lines[:top] {
+		at += len(l) + 1
+	}
+	for i := range min(area.Dy(), len(lines)-top) {
+		l, r := lines[top+i], uv.Rect(area.Min.X, area.Min.Y+i, area.Dx(), 1)
+		switch {
+		case i == 0 && top > 0, i == area.Dy()-1 && top+i < len(lines)-1:
+			f.Text(r.Min.X, r.Min.Y, r.Max.X, "…", uv.Style{Fg: th.Dim, Bg: bg.Bg})
+		case v.Colors == nil:
+			f.Text(r.Min.X, r.Min.Y, r.Max.X, l, uv.Style{Fg: th.Error, Bg: bg.Bg})
+		default:
+			Input{Text: l}.draw(f, r, bg, v.Colors[at:at+len(l)])
+		}
+		at += len(l) + 1
+	}
+}
+
+// TextBox is a TextView in a box of its own, a title on its top border, over
+// everything else: a click outside it is a click on the backdrop (F9.8).
+type TextBox struct {
+	Title string
+	View  TextView
+}
+
+// Inner is where the text goes in a box: inside the border and a column of
+// padding.
+func (TextBox) Inner(box uv.Rectangle) uv.Rectangle {
+	return uv.Rect(box.Min.X+2, box.Min.Y+1, max(box.Dx()-4, 0), max(box.Dy()-2, 0))
+}
+
+func (b TextBox) Draw(f *Frame, box uv.Rectangle) {
+	th := f.Theme
+	f.Region(f.Bounds(), Target{Kind: KindBackdrop})
+	if box.Dx() < 6 || box.Dy() < 3 {
+		return
+	}
+	f.Region(box, Target{}) // inside, a click is not outside
+	f.Fill(box, uv.Style{Bg: th.PaneBg})
+	border := f.Border.Style(uv.Style{Fg: th.Focus, Bg: th.PaneBg})
+	border.Draw(f.Buf, box)
+	if b.Title != "" {
+		f.Text(box.Min.X+2, box.Min.Y, box.Max.X-1, " "+b.Title+" ", uv.Style{Fg: th.Focus, Bg: th.PaneBg, Attrs: uv.AttrBold})
+	}
+	b.View.Draw(f, b.Inner(box), uv.Style{Fg: th.Fg, Bg: th.PaneBg})
+}
