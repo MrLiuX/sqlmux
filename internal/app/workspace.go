@@ -421,10 +421,12 @@ func (a *App) renameWindowKey(k keymap.Key) tea.Cmd {
 
 // nameAsk is a name typed in the status bar, over its left: label says
 // what for, ↵ gives the trimmed name, never blank, to done, which is told to
-// keep the input when the name was refused with a toast (esc drops it).
+// keep the input when the name was refused with a toast (esc drops it). A
+// blank name is blank's when it has one, else it drops the input.
 type nameAsk struct {
 	label string
 	in    ui.Input
+	blank string
 	done  func(a *App, name string) (cmd tea.Cmd, keep bool)
 }
 
@@ -434,6 +436,9 @@ func (a *App) askNameKey(k keymap.Key) tea.Cmd {
 	name, done := typeName(&n.in, k)
 	if !done {
 		return nil
+	}
+	if name == "" {
+		name = n.blank
 	}
 	if name == "" {
 		a.askName = nil
@@ -461,7 +466,12 @@ func (a *App) askSessionName() {
 
 // sessionNameTaken is whether name is another session's than s's.
 func (a *App) sessionNameTaken(s *Session, name string) bool {
-	return name != s.Name && slices.ContainsFunc(a.sessions, func(o *Session) bool { return o.Name == name })
+	return name != s.Name && a.sessionNamed(name)
+}
+
+// sessionNamed is whether a session is called name.
+func (a *App) sessionNamed(name string) bool {
+	return slices.ContainsFunc(a.sessions, func(o *Session) bool { return o.Name == name })
 }
 
 // askConsoleName is console.rename: the focused console's name typed in the

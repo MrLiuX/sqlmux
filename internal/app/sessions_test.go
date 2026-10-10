@@ -175,12 +175,53 @@ func TestSessionKill(t *testing.T) {
 func TestNewSessionFails(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	feed(t, a, "<Space>s")
-	_, cmd := a.Update(teaKey("n"))
+	feed(t, a, "n")
+	_, cmd := a.Update(teaKey("<CR>"))
 	if cmd == nil || a.sessList != nil || a.toast != "正在连接 doraemon…" {
 		t.Fatalf("n: list %v, toast %q", a.sessList, a.toast)
 	}
-	if a.Update(sessionDialed{spec: a.sess.Conns[0].Spec, err: errors.New("refused")}); len(a.sessions) != 1 || a.toast != "doraemon：refused" {
+	if a.Update(sessionDialed{name: "1", spec: a.sess.Conns[0].Spec, err: errors.New("refused")}); len(a.sessions) != 1 || a.toast != "doraemon：refused" {
 		t.Errorf("failed: %d sessions, toast %q", len(a.sessions), a.toast)
+	}
+}
+
+// session.new and n in the list ask for the name first, with the least free
+// number in the box, which a blank ↵ takes; a name another session has is
+// refused and the input stays, esc makes none; one taken while the
+// connection dials makes none (F10.2).
+func TestNewSessionAsksName(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a, _ := withSessions() // doraemon and report
+	answer := func(name string) sessionDialed {
+		spec := a.sess.Conns[0].Spec
+		return sessionDialed{name: name, spec: spec, d: dialed{main: noDB{}, meta: noDB{}, spec: spec}}
+	}
+	feed(t, a, "<C-p>session.new<CR>")
+	if a.askName == nil || a.askName.in.Text != "1" || a.sessList != nil {
+		t.Fatalf("the input: %+v", a.askName)
+	}
+	if feed(t, a, "<C-u>report<CR>"); a.askName == nil || a.toast != "已有同名 session" || len(a.sessions) != 2 {
+		t.Errorf("a name taken: input %v, toast %q", a.askName, a.toast)
+	}
+	if feed(t, a, "<Esc>"); a.askName != nil || len(a.sessions) != 2 {
+		t.Error("esc makes none")
+	}
+	feed(t, a, "<Space>sn<C-u>")
+	_, cmd := a.Update(teaKey("<CR>")) // blank: the number in the box to begin with
+	if a.askName != nil || cmd == nil || a.toast != "正在连接 doraemon…" {
+		t.Fatalf("blank ↵: input %v, toast %q", a.askName, a.toast)
+	}
+	if a.Update(answer("1")); a.sess.Name != "1" || len(a.sessions) != 3 {
+		t.Errorf("made %q, %d sessions", a.sess.Name, len(a.sessions))
+	}
+	feed(t, a, "<C-p>session.new<CR><C-u>ops<CR>")
+	if a.Update(answer("ops")); a.sess.Name != "ops" || len(a.sessions) != 4 {
+		t.Errorf("made %q, %d sessions", a.sess.Name, len(a.sessions))
+	}
+	// another named "late" while this dialed: none is made, the dialed ones close
+	_, cmd = a.Update(answer("ops"))
+	if len(a.sessions) != 4 || a.toast != "已有同名 session" || cmd == nil {
+		t.Errorf("a name taken meanwhile: %d sessions, toast %q", len(a.sessions), a.toast)
 	}
 }
 
@@ -203,7 +244,7 @@ func TestNewWindowSplitNumbering(t *testing.T) {
 func TestNewSessionIsOneEmptyPane(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sized(160, 45, "nerd")
-	_, cmd := a.Update(sessionDialed{spec: a.sess.Conns[0].Spec, d: dialed{main: noDB{}, meta: noDB{}, spec: a.sess.Conns[0].Spec}})
+	_, cmd := a.Update(sessionDialed{name: "1", spec: a.sess.Conns[0].Spec, d: dialed{main: noDB{}, meta: noDB{}, spec: a.sess.Conns[0].Spec}})
 	s := a.sess
 	if m, ok := cmd().(catalogMsg); !ok || m.conn != s.start { // its connections are its own: the tree needs the catalog of this one
 		t.Errorf("the session loads the catalog of its start: %T", cmd())

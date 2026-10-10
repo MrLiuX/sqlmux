@@ -114,24 +114,48 @@ func (a *App) attach(s *Session) {
 // sessionDialed answers dialSession's dial: the new session's connection to
 // the current one's spec, connected, or why not.
 type sessionDialed struct {
+	name string // the new session's, asked for first (F10.2)
 	spec config.Connection
 	d    dialed
 	err  error
 }
 
-// dialSession is n (§7.8「新建 session」): a session of its own connections,
-// once the one current here is connected for it, attached then; the list
-// closes. One not connecting makes none, the session staying the one it
-// is (F5.1).
-func (a *App) dialSession() tea.Cmd {
+// askNewSession is session.new and n in the list (§7.8「新建 session」): the
+// name typed first in the status bar, tmux's least number free in it to
+// begin with, which a blank ↵ takes; the list closes. A name another
+// session has is refused with the input left (F10.2).
+func (a *App) askNewSession() tea.Cmd {
 	a.sessList = nil
 	if a.conn() == nil {
 		return a.noConnection()
 	}
+	pre := a.freeSessionName()
+	a.askName = &nameAsk{label: i18n.T("session 名："), in: ui.Input{Text: pre, Pos: len(pre)}, blank: pre, done: func(a *App, name string) (tea.Cmd, bool) {
+		if a.sessionNamed(name) {
+			return a.showToast(i18n.T("已有同名 session"), toastTTL), true
+		}
+		return a.dialSession(name), false
+	}}
+	return nil
+}
+
+// freeSessionName is tmux's: the least number no session is named.
+func (a *App) freeSessionName() string {
+	n := 1
+	for a.sessionNamed(strconv.Itoa(n)) {
+		n++
+	}
+	return strconv.Itoa(n)
+}
+
+// dialSession makes a session called name of its own connections, once the
+// one current here is connected for it, attached then. One not connecting
+// makes none, the session staying the one it is (F5.1).
+func (a *App) dialSession(name string) tea.Cmd {
 	spec := a.conn().Spec
 	return tea.Batch(a.showToast(i18n.T("正在连接 %s…", spec.Name), toastTTL), func() tea.Msg {
 		d, err := dial(context.Background(), spec)
-		return sessionDialed{spec, d, err}
+		return sessionDialed{name, spec, d, err}
 	})
 }
 
@@ -147,12 +171,11 @@ func (a *App) gotSessionDialed(m sessionDialed) tea.Cmd {
 			start = i
 		}
 	}
-	conns[start].take(m.d)
-	n := 1 // tmux's: the least number no session is named
-	for slices.ContainsFunc(a.sessions, func(s *Session) bool { return s.Name == strconv.Itoa(n) }) {
-		n++
+	if a.sessionNamed(m.name) { // another session took it while this one dialed
+		return tea.Batch(a.showToast(i18n.T("已有同名 session"), toastTTL), func() tea.Msg { m.d.main.Close(); m.d.meta.Close(); return nil })
 	}
-	s := bareSession(strconv.Itoa(n), conns, conns[start])
+	conns[start].take(m.d)
+	s := bareSession(m.name, conns, conns[start])
 	s.Windows = []*Window{s.blankWindow()} // no console: one is made when it is wanted (F8.18)
 	a.sessions = append(a.sessions, s)
 	a.attach(s)

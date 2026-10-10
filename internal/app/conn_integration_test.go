@@ -218,7 +218,8 @@ func newSessionOn(t *testing.T, eng, dsn string) {
 	settle(a, a.loadCatalog(sess.Conns[0]))
 	a.Update(teaKey("<Space>"))
 	a.Update(teaKey("s"))
-	_, cmd := a.Update(teaKey("n"))
+	a.Update(teaKey("n"))
+	_, cmd := a.Update(teaKey("<CR>"))
 	settle(a, cmd)
 	s := a.sess
 	if len(a.sessions) != 2 || s == sess || s.Name != "1" || s.Conns[0] == sess.Conns[0] || s.Conns[0].State != connReady || len(s.Conns[0].Tables) == 0 || s.Conns[1].State != connIdle {
@@ -434,7 +435,8 @@ func TestKillSessionUnderWay(t *testing.T) {
 	a := opened(t, config.Connection{Name: "play", Engine: "postgres", DSN: dsn},
 		config.Connection{Name: "seed", Engine: "postgres", DSN: dsn + "&application_name=" + app})
 	feed(t, a, "<Space>s")
-	_, cmd := a.Update(teaKey("n"))
+	a.Update(teaKey("n"))
+	_, cmd := a.Update(teaKey("<CR>"))
 	settle(a, cmd)
 	seed := a.sess.Conns[1]
 	dial := a.connect(seed) // seed opened in session 1's tree
@@ -466,7 +468,8 @@ func TestNewSessionTakesNewConn(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	a := opened(t, config.Connection{Name: "play", Engine: "postgres", DSN: postgres.IntegrationDSN(t)})
 	feed(t, a, "<Space>s")
-	_, cmd := a.Update(teaKey("n"))
+	a.Update(teaKey("n"))
+	_, cmd := a.Update(teaKey("<CR>"))
 	a.run("conn.new", 0)
 	feed(t, a, "extra<Tab><Tab>localhost<Tab><Tab>u<Tab><Tab>x<CR>")
 	if settle(a, cmd); a.sess.Name != "1" || len(a.sess.Conns) != 2 || a.sess.Conns[1].Spec.Name != "extra" {

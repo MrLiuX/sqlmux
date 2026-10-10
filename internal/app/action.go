@@ -269,7 +269,7 @@ func init() {
 		// The WHERE input in its vim's NORMAL (F3.39).
 		"where.run":   {Title: i18n.N("执行"), Local: true, Run: when(inWhere, func(a *App) tea.Cmd { return a.runWhere(a.typingTab()) })},
 		"where.leave": {Title: i18n.N("回到表格"), Local: true, Run: when(inWhere, func(a *App) tea.Cmd { a.typingTab().stopTyping(); return nil })},
-		"session.new": {Title: i18n.N("新建 session"), Run: func(a *App, _ Args) tea.Cmd { return a.dialSession() }},
+		"session.new": {Title: i18n.N("新建 session"), Run: func(a *App, _ Args) tea.Cmd { return a.askNewSession() }},
 		"console.format": {Title: i18n.N("格式化整个 console"), Run: func(a *App, _ Args) tea.Cmd {
 			if t := a.focusedConsole(); t != nil {
 				return a.formatAll(t)
@@ -307,7 +307,7 @@ func init() {
 		"conns.delete": {Title: i18n.N("删除连接"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { return a.deleteConn() })},
 		"conns.close":  {Title: i18n.N("关闭"), Local: true, Run: when(inConns, func(a *App) tea.Cmd { a.form = nil; return nil })},
 		// the session list's (§7.8)
-		"sessions.new":      {Title: i18n.N("新建 session"), Local: true, Run: when(inSessions, func(a *App) tea.Cmd { return a.dialSession() })},
+		"sessions.new":      {Title: i18n.N("新建 session"), Local: true, Run: when(inSessions, func(a *App) tea.Cmd { return a.askNewSession() })},
 		"sessions.down":     {Title: i18n.N("下移"), Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsMove(1); return nil })},
 		"sessions.up":       {Title: i18n.N("上移"), Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsMove(-1); return nil })},
 		"sessions.expand":   {Title: i18n.N("展开"), Local: true, Run: when(inSessions, func(a *App) tea.Cmd { a.sessionsFold(true); return nil })},
