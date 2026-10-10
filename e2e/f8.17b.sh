@@ -18,8 +18,9 @@ fresh() { key Escape; key Escape; key g g; key d G; key i; }
 
 # ---- 多表：列名是后到的（第一次用到的表要先取列），按下 Tab 之后到的列不能把选中冲掉
 start -K "$D/k.toml"; key C-l; key i
-e2e_type "select * from t_order a join t_user b on "; e2e_keys Tab; sleep 2
-check "多表 on ␠ 之后马上 Tab：列名到齐后选中还在（有选中项）" eval '[[ -n $(sel) && -n $(names) ]] || { echo "  names=$(names) sel=[$(sel)]"; false; }'
+e2e_type "select * from t_order "; sleep 1                       # t_order 的列先取回来（整串一次发出去时 Tab 会先于任何列表到达，那时没有候选，Tab 就是插入 Tab 键）
+e2e_type "a join t_user b on "; e2e_keys Tab; sleep 2                # on ␠ 时已有 t_order 的列表，Tab 选中第一项；t_user 的列是后到的
+check "多表 on ␠ 之后马上 Tab（列表里只有先到的 t_order 的列）：t_user 的列后到，选中还在（有选中项）" eval '[[ -n $(sel) && -n $(names) ]] || { echo "  names=$(names) sel=[$(sel)]"; false; }'
 first=$(sel); key Enter; sleep 0.5
 check "↵ 接受选中的那一项，补一个空格" eval '[[ $(line 1) == "select * from t_order a join t_user b on $first" || $(line 1) == "select * from t_order a join t_user b on "*"$first" ]] && [[ -z $(pop) ]] || { echo "  [$(line 1)] first=$first"; false; }'
 
