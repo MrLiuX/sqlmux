@@ -30,6 +30,43 @@ func withSessions() (*App, *Session) {
 	return a, s
 }
 
+// session.next and session.prev go round the list; session.last goes back to
+// the one attached before; with one session they do nothing (F9.10).
+func TestSessionNextPrevLast(t *testing.T) {
+	a, report := withSessions()
+	third := newSession("third", []*Conn{readyConn("doraemon")}, nil, a.freeConsole())
+	a.sessions = append(a.sessions, third)
+	doraemon := a.sess
+	if a.sessions[0] != doraemon {
+		t.Fatal("the first is not the one shown")
+	}
+	for _, c := range []struct {
+		keys string
+		want *Session
+	}{
+		{"<Space>)", report}, {"<Space>)", third}, {"<Space>)", doraemon}, // round the end
+		{"<Space>(", third}, {"<Space>(", report}, {"<Space>(", doraemon}, // and the start
+		{"<Space>L", report}, {"<Space>L", doraemon}, {"<Space>L", report}, // between the last two
+	} {
+		if feed(t, a, c.keys); a.sess != c.want {
+			t.Fatalf("%s: on %s, want %s", c.keys, a.sess.Name, c.want.Name)
+		}
+	}
+	// a session closed is not gone back to
+	a.sessions = []*Session{doraemon, third}
+	a.attach(doraemon)
+	a.lastSess = report
+	if feed(t, a, "<Space>L"); a.sess != doraemon {
+		t.Errorf("last, closed: on %s", a.sess.Name)
+	}
+	a.sessions = []*Session{doraemon}
+	for _, keys := range []string{"<Space>)", "<Space>(", "<Space>L"} {
+		if feed(t, a, keys); a.sess != doraemon {
+			t.Errorf("%s with one session: on %s", keys, a.sess.Name)
+		}
+	}
+}
+
 // The session list (§7.8): open on the session attached; l shows a
 // session's windows, h hides them; ↵ attaches, on a window switching to
 // it too; a click on a row is ↵ on it; the status bar's session block and

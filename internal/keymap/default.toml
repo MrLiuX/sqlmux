@@ -18,6 +18,9 @@ leader = "<Space>"
 # Only the common keys (§6.8). Everything else runs from the palette, or
 # gets a key in keymaps.toml: "<Leader>h" = "pane.focus.left".
 "<Leader>s" = "session.list"
+"<Leader>)" = "session.next"
+"<Leader>(" = "session.prev"
+"<Leader>L" = "session.last"
 "<Leader>c" = "window.new"
 "<Leader>n" = "window.next"
 "<Leader>p" = "window.prev"

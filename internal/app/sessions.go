@@ -83,9 +83,28 @@ func (a *App) sessionsAttach(i int) {
 	a.sessList = nil
 }
 
+// cycleSession is session.next (d 1) and session.prev: the session after or
+// before the one shown, in the list's order, round the ends (F9.10).
+func (a *App) cycleSession(d int) {
+	if n := len(a.sessions); n > 1 {
+		a.attach(a.sessions[((slices.Index(a.sessions, a.sess)+d)%n+n)%n])
+	}
+}
+
+// attachLast is session.last: the session attached before this one, if it is
+// still there (F9.10).
+func (a *App) attachLast() {
+	if s := a.lastSess; s != nil && s != a.sess && slices.Contains(a.sessions, s) {
+		a.attach(s)
+	}
+}
+
 // attach makes s the session shown; every overlay goes, a question or a
 // name being typed in the one left among them (F5.1).
 func (a *App) attach(s *Session) {
+	if s != a.sess {
+		a.lastSess = a.sess
+	}
 	a.sess = s
 	a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.keyHelp = false, false, nil, nil, nil, nil
 	a.confirm, a.form, a.winRename, a.askName, a.sessList, a.menu = nil, nil, nil, nil, nil, nil

@@ -46,6 +46,7 @@ type App struct {
 	res       *keymap.Resolver
 	// sess is the session attached, one of sessions (§5, F5.1).
 	sess     *Session
+	lastSess *Session // the one attached before sess (F9.10)
 	sessions []*Session
 
 	tabWidth     int       // the consoles' (§14)
