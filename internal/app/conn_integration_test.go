@@ -471,7 +471,7 @@ func TestNewSessionTakesNewConn(t *testing.T) {
 	a.Update(teaKey("n"))
 	_, cmd := a.Update(teaKey("<CR>"))
 	a.run("conn.new", 0)
-	feed(t, a, "extra<Tab><Tab>localhost<Tab><Tab>u<Tab><Tab>x<CR>")
+	feed(t, a, "extra<Tab><Tab><Tab>localhost<Tab><Tab>u<Tab><Tab>x<CR>")
 	if settle(a, cmd); a.sess.Name != "1" || len(a.sess.Conns) != 2 || a.sess.Conns[1].Spec.Name != "extra" {
 		t.Errorf("session %s: %d connections", a.sess.Name, len(a.sess.Conns))
 	}

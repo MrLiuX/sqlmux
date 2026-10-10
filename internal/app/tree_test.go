@@ -37,6 +37,11 @@ func treeTexts(a *App) string {
 		if n.Prefix != "" {
 			mark += n.Prefix + " "
 		}
+		if n.kind == nodeSep {
+			mark = strings.TrimSpace("── " + n.Text)
+			out = append(out, mark)
+			continue
+		}
 		out = append(out, strings.Repeat("  ", n.Depth)+mark+n.Text)
 	}
 	return strings.Join(out, "\n")

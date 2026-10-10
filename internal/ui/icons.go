@@ -50,7 +50,7 @@ type Icons struct {
 	// Lock and Console
 	Tag, Host, Port, User Icon
 	Database              Icon
-	Advanced, Link        Icon
+	Advanced, Link, Group Icon
 	// Labeled sets (ascii) say nothing by themselves, so the words beside
 	// the icons stay: pane types in titles, C-p, the filter's / (§7.7).
 	Labeled bool
@@ -97,6 +97,7 @@ var NerdIcons = &Icons{
 	User:        Icon{Text: "\uf007"}, // nf-fa-user
 	Database:    Icon{Text: "\uf1c0"}, // nf-fa-database
 	Advanced:    Icon{Text: "\uf013"}, // nf-fa-cog
+	Group:       Icon{Text: "\uf02c"}, // nf-fa-tags
 	Link:        Icon{Text: "\uf0c1"}, // nf-fa-link
 }
 
@@ -138,6 +139,7 @@ var ASCIIIcons = &Icons{
 	User:        Icon{Text: "~"},
 	Database:    Icon{Text: "="},
 	Advanced:    Icon{Text: "+"},
+	Group:       Icon{Text: "#"},
 	Link:        Icon{Text: "&"},
 	Labeled:     true,
 }
@@ -183,6 +185,6 @@ func (ic *Icons) byName() map[string]*Icon {
 		"result": &ic.Result, "pin": &ic.Pin, "export": &ic.Export, "close": &ic.Close,
 		"pane": &ic.Pane, "log": &ic.Log, "star": &ic.Star, "history": &ic.History, "zoom": &ic.Zoom,
 		"tag": &ic.Tag, "host": &ic.Host, "port": &ic.Port, "user": &ic.User, "database": &ic.Database,
-		"advanced": &ic.Advanced, "link": &ic.Link,
+		"advanced": &ic.Advanced, "link": &ic.Link, "group": &ic.Group,
 	}
 }

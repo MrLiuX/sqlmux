@@ -34,12 +34,14 @@ var (
 )
 
 // connFields are the keys of a connection, in the order they are written.
-var connFields = []string{"name", "engine", "dsn", "password_cmd", "password_env", "password", "read_only"}
+var connFields = []string{"name", "group", "engine", "dsn", "password_cmd", "password_env", "password", "read_only"}
 
 func (c Connection) field(key string) any {
 	switch key {
 	case "name":
 		return c.Name
+	case "group":
+		return c.Group
 	case "engine":
 		return c.Engine
 	case "dsn":
@@ -59,6 +61,8 @@ func (c Connection) with(key string, from Connection) Connection {
 	switch key {
 	case "name":
 		c.Name = from.Name
+	case "group":
+		c.Group = from.Group
 	case "engine":
 		c.Engine = from.Engine
 	case "dsn":

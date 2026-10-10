@@ -204,6 +204,7 @@ const (
 	nodeWorkspace
 	nodeWindow
 	nodeTab
+	nodeSep         // a rule between the groups of connections, no node (F10.6)
 	nodeConsoles    // the root over the console files
 	nodeConsoleFile // one of them
 )
@@ -270,7 +271,12 @@ func (a *App) treeNodes() (ns []node, matches int) {
 		return n.Branch && n.Open
 	}
 
+	group := "" // the one the connections so far are in: a rule marks where another begins (F10.6)
 	for _, c := range s.Conns {
+		if g := c.Spec.Group; g != group && !filtering {
+			group = g
+			add(node{id: "sep:" + g, kind: nodeSep, TreeNode: ui.TreeNode{Sep: true, Text: g}})
+		}
 		cid := connNode(c)
 		cn := node{id: cid, kind: nodeConn, conn: c, TreeNode: ui.TreeNode{Branch: true, Open: c.State == connReady && open(cid, true), Icon: ic.Engine(c.Spec.Engine), IconFg: th.Info, Text: c.Spec.Name}}
 		if c.readOnly { // dim after the name, as … (§7.8)
@@ -356,6 +362,9 @@ func (a *App) treeNodes() (ns []node, matches int) {
 	}
 	if filtering { // the workspace isn't what a filter looks for (§7.8)
 		return ns, len(pos)
+	}
+	if len(a.groupNames()) > 0 { // a rule with no title between the connections and the rest
+		add(node{id: "sep:", kind: nodeSep, TreeNode: ui.TreeNode{Sep: true}})
 	}
 	if add(node{id: "workspace", kind: nodeWorkspace, TreeNode: ui.TreeNode{Branch: true, Open: a.sess.opened("workspace", true), Icon: ic.Window, IconFg: th.Info, Text: i18n.T("工作区")}}) {
 		a.workspaceNodes(add, target)
@@ -444,6 +453,10 @@ func (a *App) clampTree() {
 	ns, _ := a.treeNodes()
 	t := &a.win().tree
 	t.cursor, t.top = a.treeAt(ns)
+	for t.cursor < len(ns)-1 && ns[t.cursor].kind == nodeSep { // a rule is not where the cursor rests (F10.6)
+		t.cursor++
+	}
+	t.cursor, t.top = treeView(t.cursor, t.top, len(ns), a.treeRows())
 	if t.cursor < len(ns) {
 		n := ns[t.cursor]
 		if t.at = n.id; n.schema != "" {
@@ -459,10 +472,25 @@ func (a *App) treeGo(i int) {
 	a.clampTree()
 }
 
+// treeMove moves the cursor d nodes, a rule not counting, and stops at the ends.
 func (a *App) treeMove(d int) {
 	ns, _ := a.treeNodes()
 	cur, _ := a.treeAt(ns)
-	a.treeGo(cur + d)
+	step := 1
+	if d < 0 {
+		step = -1
+	}
+	for ; d != 0; d -= step {
+		i := cur + step
+		for i >= 0 && i < len(ns) && ns[i].kind == nodeSep {
+			i += step
+		}
+		if i < 0 || i >= len(ns) {
+			break
+		}
+		cur = i
+	}
+	a.treeGo(cur)
 }
 
 // treeNode is the node under the cursor.

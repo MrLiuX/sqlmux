@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
@@ -11,6 +13,10 @@ type ConnRow struct {
 	Icon Icon
 	Name string
 	Lock Icon // Text "" for none
+	// Rule is a line drawn above the row, Group the dim title on it, "" for
+	// none: where a group begins (F10.6)
+	Rule  bool
+	Group string
 }
 
 // ConnManager is the connections as a list on the left and the form of the
@@ -35,12 +41,38 @@ func managerWidth(screen int) (box, form int) {
 	return box, box - 2 - connListWidth - 1
 }
 
-// ListRows is how many rows of the list show on a screen width wide: the
+// ListRows is how many lines of the list show on a screen width wide: the
 // form's height, which does not grow with the connections (F8.16).
 func (m ConnManager) ListRows(screen int) int {
 	_, fw := managerWidth(screen)
 	return m.Form.heightIn(fw) - 2
 }
+
+// lines is how many lines rows i to j-1 take: one each, and one more for a
+// rule above a row.
+func (m ConnManager) lines(i, j int) (n int) {
+	for _, r := range m.Rows[i:j] {
+		n++
+		if r.Rule {
+			n++
+		}
+	}
+	return n
+}
+
+// top is the first row the list shows in rows lines: Top, or a later one
+// when the selection would be out of sight.
+func (m ConnManager) top(rows int) int {
+	top := max(min(m.Top, m.Sel), 0)
+	for top < m.Sel && m.lines(top, m.Sel+1) > rows {
+		top++
+	}
+	return top
+}
+
+// ScrollTop is the first row to show on a screen width wide, the selection
+// in sight, as Draw does.
+func (m ConnManager) ScrollTop(screen int) int { return m.top(m.ListRows(screen)) }
 
 // Draw dims what is behind, paints the manager centered and returns where
 // the form's input has the cursor, else (-1, -1).
@@ -61,10 +93,24 @@ func (m ConnManager) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 	f.Text(box.Min.X+2, box.Min.Y, box.Max.X-1, " "+m.Title+" ", uv.Style{Fg: th.Focus, Bg: th.PaneBg, Attrs: uv.AttrBold})
 	in := uv.Rect(box.Min.X+1, box.Min.Y+1, box.Dx()-2, box.Dy()-2)
 	rule := in.Min.X + connListWidth
-	top := max(min(m.Top, m.Sel), m.Sel-in.Dy()+1, 0) // the selection in sight, whatever Top says
-	for i := top; i < min(len(m.Rows), top+in.Dy()); i++ {
+	top := m.top(in.Dy()) // the selection in sight, whatever Top says
+	y := in.Min.Y
+	for i := top; i < len(m.Rows) && y < in.Max.Y; i++ {
 		r := m.Rows[i]
-		line := uv.Rect(in.Min.X, in.Min.Y+i-top, connListWidth, 1)
+		if r.Rule {
+			rule, x, right := uv.Style{Fg: th.Sep, Bg: th.PaneBg}, in.Min.X+1, in.Min.X+connListWidth-1
+			if r.Group != "" {
+				x = f.Text(x, y, right, "── ", rule)
+				x = f.Text(x, y, right, r.Group, uv.Style{Fg: th.Dim, Bg: th.PaneBg})
+				x = f.Text(x, y, right, " ", rule)
+			}
+			f.Text(x, y, right, strings.Repeat("─", max(right-x, 0)), rule)
+			if y++; y >= in.Max.Y {
+				break
+			}
+		}
+		line := uv.Rect(in.Min.X, y, connListWidth, 1)
+		y++
 		st := bg
 		switch hover := f.Region(line, Target{Kind: KindConn, I: i}); {
 		case i == m.Sel && m.ListFocus:

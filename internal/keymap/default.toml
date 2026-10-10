@@ -228,6 +228,15 @@ leader = "<Space>"
 "<C-s>" = "form.save"
 "<Esc>" = "form.cancel"
 
+[keys.groups] # the connection form's group field with its list of the groups there are (F10.6): the form's keys come after
+"<Tab>" = "form.group.tab"
+"<CR>" = "form.group.enter"
+"<Down>" = "form.group.next"
+"<C-n>" = "form.group.next"
+"<Up>" = "form.group.prev"
+"<C-p>" = "form.group.prev"
+"<Esc>" = "form.group.close"
+
 [keys.confirm] # §10.5: before changes are thrown away
 "y" = "confirm.yes"
 "<CR>" = "confirm.yes"

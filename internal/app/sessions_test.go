@@ -270,7 +270,7 @@ func TestNewSessionIsOneEmptyPane(t *testing.T) {
 func TestConnForm(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	a, report := withSessions()
-	feed(t, a, "<C-p>conn.new<CR><Tab><Space><Tab>db.example<Tab><C-u>3307<Tab>app<Tab><Tab>shop<Tab> <CR>")
+	feed(t, a, "<C-p>conn.new<CR><Tab><Tab><Space><Tab>db.example<Tab><C-u>3307<Tab>app<Tab><Tab>shop<Tab> <CR>")
 	if a.form == nil || a.form.sel != 0 || a.form.err != "缺少 name" || a.form.fields[fieldReadOnly].On != 1 {
 		t.Fatalf("no name: %+v", a.form)
 	}

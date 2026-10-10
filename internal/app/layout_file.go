@@ -144,7 +144,9 @@ func Restore(specs []config.Connection, l *config.Layout) *Restored {
 			r.Warnings = append(r.Warnings, i18n.T("没有名为 %s 的连接，session %s 用 %s 开始", ls.Connection, ls.Name, conns[0].Spec.Name))
 			start = 0
 		}
-		s := bareSession(ls.Name, conns, conns[start])
+		first := conns[start]
+		groupOrder(conns)
+		s := bareSession(ls.Name, conns, first)
 		for _, lw := range ls.Windows {
 			s.winID++
 			w, warns := restoreWindow(s, lw, used)

@@ -579,6 +579,7 @@ func Open(ctx context.Context, specs []config.Connection, start int) (*Session, 
 	for i, spec := range specs {
 		conns[i] = newConn(spec)
 	}
+	groupOrder(conns)
 	d, err := dial(ctx, specs[start])
 	if err != nil {
 		return nil, err

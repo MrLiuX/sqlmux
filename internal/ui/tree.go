@@ -26,6 +26,9 @@ type TreeNode struct {
 	Note         string
 	NoteFg       color.Color
 	Current      bool // the table ↵ lands on, the focused tab: in focus color
+	// Sep is a rule across the tree, Text its title in dim, "" for none: it
+	// is no node, the cursor never rests on it and a click is not on it (F10.6)
+	Sep bool
 }
 
 // Tree is the ⟨0⟩ sidebar inside its border (§7.8): the filter row, the
@@ -98,6 +101,16 @@ func (t Tree) Draw(f *Frame, in uv.Rectangle) uv.Position {
 	}
 	for i := t.Top; i < min(t.Top+list.Dy(), len(t.Nodes)); i++ {
 		n, row := t.Nodes[i], list.Min.Y+i-t.Top
+		if n.Sep {
+			rule, x := uv.Style{Fg: th.Sep, Bg: th.PaneBg}, list.Min.X+1
+			if n.Text != "" {
+				x = f.Text(x, row, right, "── ", rule)
+				x = f.Text(x, row, right, n.Text, uv.Style{Fg: th.Dim, Bg: th.PaneBg})
+				x = f.Text(x, row, right, " ", rule)
+			}
+			f.Text(x, row, right, strings.Repeat("─", max(right-x, 0)), rule)
+			continue
+		}
 		line := uv.Rect(list.Min.X, row, list.Dx(), 1)
 		bg := th.PaneBg
 		switch hover := f.Region(line, Target{Kind: KindNode, Pane: t.Pane, I: i}); {

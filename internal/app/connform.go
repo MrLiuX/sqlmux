@@ -28,11 +28,16 @@ type connForm struct {
 	list   bool               // the list has the keys, not the form
 	direct bool               // opened on a new connection by conn.new, not by going down the list to it: esc closes it
 	was    *config.Connection // the connection the form edits, as connections.toml said it when it was selected; nil for a new one
+	// the group field's list of the groups there are (F10.6): the one picked
+	// with ↓ and ↑, -1 for none; esc closes it till something is typed
+	groupSel int
+	groupOff bool
 }
 
 // The form's fields, in order; the last two are in the 高级 fold.
 const (
 	fieldName = iota
+	fieldGroup
 	fieldEngine
 	fieldHost
 	fieldPort
@@ -47,7 +52,7 @@ const (
 
 // connFields are the form's rows by the names they carry, which are the
 // toml keys they write (§14).
-var connFields = []string{fieldName: "name", fieldEngine: "engine", fieldHost: "host", fieldPort: "port", fieldUser: "user",
+var connFields = []string{fieldName: "name", fieldGroup: "group", fieldEngine: "engine", fieldHost: "host", fieldPort: "port", fieldUser: "user",
 	fieldPassword: "password", fieldDatabase: "database", fieldReadOnly: "read_only", fieldAdvanced: "", fieldDSN: "dsn", fieldPasswordCmd: "password_cmd"}
 
 // defaultPort is the port of an engine's server.
@@ -80,14 +85,14 @@ func blankFields() []ui.FormField {
 // openConnForm is conn.new: the manager on its last row, a new connection,
 // the form having the keys on name.
 func (a *App) openConnForm() {
-	a.form = &connForm{fields: blankFields(), cur: len(a.sess.Conns), direct: true}
+	a.form = &connForm{fields: blankFields(), cur: len(a.sess.Conns), direct: true, groupSel: -1}
 	a.keepConnInSight()
 }
 
 // openConnManager is conn.manage: the manager on the connection in use, the
 // list having the keys (F8.16).
 func (a *App) openConnManager() {
-	a.form = &connForm{list: true}
+	a.form = &connForm{list: true, groupSel: -1}
 	cur := slices.Index(a.sess.Conns, a.conn())
 	a.selectConn(max(cur, 0))
 }
@@ -100,7 +105,7 @@ func (a *App) openConnManager() {
 // what a dsn with its own parameters (?sslmode=…) does not survive.
 func (a *App) selectConn(i int) {
 	f, specs := a.form, a.specs()
-	f.cur, f.err, f.sel, f.direct = i, "", 0, false
+	f.cur, f.err, f.sel, f.direct, f.groupSel, f.groupOff = i, "", 0, false, -1, false
 	defer a.keepConnInSight()
 	if i >= len(specs) {
 		f.fields, f.was = blankFields(), nil
@@ -113,6 +118,7 @@ func (a *App) selectConn(i int) {
 	f.was, f.fields = &c, blankFields()
 	text := func(field int, s string) { f.fields[field].Input = ui.Input{Text: s, Pos: len(s)} }
 	text(fieldName, c.Name)
+	text(fieldGroup, c.Group)
 	f.fields[fieldEngine].On = slices.Index(f.fields[fieldEngine].Choices, c.Engine)
 	host, port, user, database := splitDSN(c.Engine, c.DSN)
 	text(fieldHost, host)
@@ -182,6 +188,7 @@ func (f *connForm) clearErr() {
 func (a *App) formMove(d int) {
 	f := a.form
 	f.clearErr()
+	f.groupSel, f.groupOff = -1, false
 	for range f.fields {
 		f.sel = (f.sel + d + len(f.fields)) % len(f.fields)
 		if !f.skipped(f.sel) {
@@ -198,7 +205,9 @@ func (a *App) formKey(k keymap.Key) {
 	fd := &f.fields[f.sel]
 	switch fd.Kind {
 	case ui.FormInput:
-		editInput(&fd.Input, k)
+		if editInput(&fd.Input, k); f.sel == fieldGroup {
+			f.groupSel, f.groupOff = -1, false
+		}
 	case ui.FormSegments:
 		switch k {
 		case "<Space>", "<Right>":
@@ -284,7 +293,7 @@ func (a *App) connsMove(d int) {
 // keepConnInSight scrolls the list to its selection.
 func (a *App) keepConnInSight() {
 	f := a.form
-	f.top = max(min(f.top, f.cur), f.cur-a.managerView().ListRows(a.w)+1, 0)
+	f.top = a.managerView().ScrollTop(a.w)
 }
 
 // connInUse is whether a session has a tab on the connection called name, a
@@ -358,7 +367,7 @@ func (a *App) saveEditedConn() tea.Cmd {
 	fs, was := f.fields, *f.was
 	text := func(i int) string { return strings.TrimSpace(fs[i].Input.Text) }
 	c := was
-	c.Name, c.Engine, c.DSN = text(fieldName), fs[fieldEngine].Choices[fs[fieldEngine].On], text(fieldDSN)
+	c.Name, c.Group, c.Engine, c.DSN = text(fieldName), text(fieldGroup), fs[fieldEngine].Choices[fs[fieldEngine].On], text(fieldDSN)
 	c.PasswordCmd, c.ReadOnly = text(fieldPasswordCmd), fs[fieldReadOnly].On == 1
 	var names []string
 	for _, s := range a.specs() {
@@ -416,8 +425,8 @@ func (a *App) saveEditedConn() tea.Cmd {
 	}
 	secrets.Delete(was.Name) // a changed password, or a name's, is asked for again
 	secrets.Delete(saved.Name)
-	rest := saved // the name is the tree's at once, it is no news
-	rest.Name = was.Name
+	rest := saved // the name and the group are the tree's at once, they are no news
+	rest.Name, rest.Group = was.Name, was.Group
 	changed, told := rest != was, false
 	for _, s := range a.sessions {
 		for _, conn := range s.Conns {
@@ -439,7 +448,8 @@ func (a *App) saveEditedConn() tea.Cmd {
 	if told {
 		toast = tea.Batch(toast, a.showToast(i18n.T("下次连接时生效"), toastTTL))
 	}
-	a.selectConn(f.cur)
+	a.regroup()
+	a.selectConn(slices.IndexFunc(a.sess.Conns, func(c *Conn) bool { return c.Spec.Name == saved.Name }))
 	return toast
 }
 
@@ -455,7 +465,7 @@ func (a *App) saveConnForm() tea.Cmd {
 	}
 	fs := f.fields
 	text := func(i int) string { return strings.TrimSpace(fs[i].Input.Text) }
-	c := config.Connection{Name: text(fieldName), Engine: fs[fieldEngine].Choices[fs[fieldEngine].On], DSN: "-", ReadOnly: fs[fieldReadOnly].On == 1}
+	c := config.Connection{Name: text(fieldName), Group: text(fieldGroup), Engine: fs[fieldEngine].Choices[fs[fieldEngine].On], DSN: "-", ReadOnly: fs[fieldReadOnly].On == 1}
 	if f.advanced() {
 		c.PasswordCmd = text(fieldPasswordCmd)
 	}
@@ -513,6 +523,7 @@ func (a *App) saveConnForm() tea.Cmd {
 	first := len(a.sess.Conns) == 0
 	for _, s := range a.sessions {
 		s.Conns = append(s.Conns, newConn(c))
+		groupOrder(s.Conns)
 	}
 	a.form = nil
 	if first {
@@ -547,14 +558,18 @@ func (a *App) startFirst(conn *Conn) tea.Cmd {
 func (a *App) managerView() ui.ConnManager {
 	ic, f := a.icons, a.form
 	m := ui.ConnManager{Title: i18n.T("连接"), Sel: f.cur, Top: f.top, ListFocus: f.list, Form: a.formView()}
+	group := ""
 	for _, c := range a.sess.Conns {
 		row := ui.ConnRow{Icon: ic.Engine(c.Spec.Engine), Name: c.Spec.Name}
+		if g := c.Spec.Group; g != group { // a rule where a group begins, as in the tree (F10.6)
+			group, row.Rule, row.Group = g, true, g
+		}
 		if c.readOnly {
 			row.Lock = ic.Lock
 		}
 		m.Rows = append(m.Rows, row)
 	}
-	m.Rows = append(m.Rows, ui.ConnRow{Icon: ic.RowAdd, Name: i18n.T("新建")})
+	m.Rows = append(m.Rows, ui.ConnRow{Icon: ic.RowAdd, Name: i18n.T("新建"), Rule: group != ""})
 	return m
 }
 
@@ -569,7 +584,7 @@ func (a *App) formView() ui.Form {
 	if f.was != nil {
 		del = i18n.T("删除")
 	}
-	icons := []ui.Icon{fieldName: ic.Tag, fieldEngine: ic.Engine(fields[fieldEngine].Choices[fields[fieldEngine].On]), fieldHost: ic.Host,
+	icons := []ui.Icon{fieldName: ic.Tag, fieldGroup: ic.Group, fieldEngine: ic.Engine(fields[fieldEngine].Choices[fields[fieldEngine].On]), fieldHost: ic.Host,
 		fieldPort: ic.Port, fieldUser: ic.User, fieldPassword: ic.Key, fieldDatabase: ic.Database, fieldReadOnly: ic.Lock,
 		fieldAdvanced: ic.Advanced, fieldDSN: ic.Link, fieldPasswordCmd: ic.Console}
 	for i := range fields {
@@ -589,5 +604,73 @@ func (a *App) formView() ui.Form {
 			ui.Hint{Key: a.keys.Hint("conns.close", "conns"), Label: i18n.T("关闭"), Action: "conns.close"},
 		)
 	}
-	return ui.Form{Fields: fields, Sel: f.sel, Err: f.err, Save: i18n.T("保存"), Cancel: i18n.T("取消"), Delete: del, Hints: hints}
+	form := ui.Form{Fields: fields, Sel: f.sel, Err: f.err, Save: i18n.T("保存"), Cancel: i18n.T("取消"), Delete: del, Hints: hints, PickAt: fieldGroup}
+	if cands := a.groupCands(); len(cands) > 0 { // under the group field (F10.6)
+		form.Pick = &ui.Complete{Sel: f.groupPick(len(cands))}
+		for _, g := range cands {
+			form.Pick.Items = append(form.Pick.Items, ui.CompleteItem{Text: g})
+		}
+	}
+	return form
+}
+
+// groupCands are the groups the group field's list offers: those that start
+// as what is typed does, in either case, but not what is typed; all of them
+// before anything is. None when the field has no keys or the list is closed
+// (F10.6).
+func (a *App) groupCands() (out []string) {
+	f := a.form
+	if f == nil || f.list || f.sel != fieldGroup || f.groupOff {
+		return nil
+	}
+	typed := strings.ToLower(strings.TrimSpace(f.fields[fieldGroup].Input.Text))
+	for _, g := range a.groupNames() {
+		if lg := strings.ToLower(g); strings.HasPrefix(lg, typed) && lg != typed {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+// groupPick is the candidate of n the list has selected: the first once a
+// prefix is typed, none (-1) before, till ↓ or ↑ picks one.
+func (f *connForm) groupPick(n int) int {
+	switch {
+	case f.groupSel >= 0 && f.groupSel < n:
+		return f.groupSel
+	case strings.TrimSpace(f.fields[fieldGroup].Input.Text) != "":
+		return 0
+	}
+	return -1
+}
+
+// groupMove is ↓ (d 1) and ↑ on the group list, round the ends.
+func (a *App) groupMove(d int) {
+	f, n := a.form, len(a.groupCands())
+	if n == 0 {
+		return
+	}
+	switch cur := f.groupPick(n); {
+	case cur < 0 && d > 0:
+		f.groupSel = 0
+	case cur < 0:
+		f.groupSel = n - 1
+	default:
+		f.groupSel = (cur + d + n) % n
+	}
+}
+
+// groupAccept puts the candidate selected in the field, and is whether one
+// was: Tab and ↵ take it, or, with none selected, do what they do without
+// the list (F10.6).
+func (a *App) groupAccept() bool {
+	f, cands := a.form, a.groupCands()
+	i := f.groupPick(len(cands))
+	if i < 0 {
+		return false
+	}
+	g := cands[i]
+	f.fields[fieldGroup].Input = ui.Input{Text: g, Pos: len(g)}
+	f.groupSel = -1
+	return true
 }

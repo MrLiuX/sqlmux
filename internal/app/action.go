@@ -302,6 +302,22 @@ func init() {
 		"form.prev":   {Title: i18n.N("上一项"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formMove(-1); return nil })},
 		"form.save":   {Title: i18n.N("保存"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { return a.saveConnForm() })},
 		"form.cancel": {Title: i18n.N("取消"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formCancel(); return nil })},
+		// the group field's list of the groups there are (F10.6): Tab and ↵ take the one selected, or do what they do without it
+		"form.group.tab": {Title: i18n.N("接受分组 / 下一项"), Local: true, Run: when(inForm, func(a *App) tea.Cmd {
+			if !a.groupAccept() {
+				a.formMove(1)
+			}
+			return nil
+		})},
+		"form.group.enter": {Title: i18n.N("接受分组 / 保存"), Local: true, Run: when(inForm, func(a *App) tea.Cmd {
+			if a.groupAccept() {
+				return nil
+			}
+			return a.saveConnForm()
+		})},
+		"form.group.next":  {Title: i18n.N("分组下一项"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.groupMove(1); return nil })},
+		"form.group.prev":  {Title: i18n.N("分组上一项"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.groupMove(-1); return nil })},
+		"form.group.close": {Title: i18n.N("关闭分组列表"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.form.groupOff = true; return nil })},
 		// the connection manager's list (F8.16)
 		"conns.down":   {Title: i18n.N("下移"), Local: true, Run: when(inConns, func(a *App) tea.Cmd { a.connsMove(1); return nil })},
 		"conns.up":     {Title: i18n.N("上移"), Local: true, Run: when(inConns, func(a *App) tea.Cmd { a.connsMove(-1); return nil })},

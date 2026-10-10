@@ -704,6 +704,8 @@ func (a *App) context() keymap.Context {
 		return keymap.Context{Overlay: "sessions", Mode: keymap.Command}
 	case a.form != nil && a.form.list: // the list of connections (F8.16)
 		return keymap.Context{Overlay: "conns", Mode: keymap.Command}
+	case a.form != nil && len(a.groupCands()) > 0: // the group field's list over the form's keys (F10.6)
+		return keymap.Context{Overlay: "groups", Under: "form", Mode: keymap.Insert}
 	case a.form != nil: // its inputs: unbound keys are text
 		return keymap.Context{Overlay: "form", Mode: keymap.Insert}
 	case a.winRename != nil, a.askName != nil:
