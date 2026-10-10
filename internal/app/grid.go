@@ -560,7 +560,7 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 		rows = "~" + ui.Magnitude(float64(t.count))
 	case counting: // the placeholder stays
 	}
-	right := i18n.T("auto · %s 行", rows) + t.selectedNote()
+	right := i18n.T("auto · %s 行", rows)
 	if t.page.Cols != nil {
 		right += " · " + t.page.Took.Round(time.Millisecond).String()
 	}
@@ -572,7 +572,12 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 			where.Yank = f.text
 		}
 	}
+	var selected string // a segment of its own, not the row count's (F10.7)
+	if n := len(t.selected()); n > 0 {
+		selected = i18n.T("已选 %d", n)
+	}
 	return ui.QueryBar{
+		Selected: selected, SelectedStay: staySelected,
 		Where: where, Typing: t.typing == "where", Pane: p.ID, Right: right, Note: t.note, Names: names, Dialect: t.conn.eng.Dialect(),
 		History: ic.History, HistKey: a.keys.Hint("where.history", "input"),
 		Chips: []ui.Chip{
@@ -587,12 +592,13 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 
 // What gives way on the query bar's second row, the least first (§7.8「第二行
 // 放不下时谁让位」), the only place that says: transpose, auto refresh and stop,
-// + −, then COLS, PAGE, LIMIT, then save and refresh, which has the changes'
+// + −, then the count of records selected, COLS, PAGE, LIMIT, then save and refresh, which has the changes'
 // count, then ORDER.
 const (
 	stayTranspose = iota
 	stayAuto
 	stayRows
+	staySelected
 	stayCols
 	stayPage
 	stayLimit
@@ -650,7 +656,7 @@ func autoTick(t *dataTab) tea.Cmd {
 
 // gotAuto refreshes t as R does, keeping what the last save said, when it
 // shows in a pane on screen as its current tab, with no changes, no cell being
-// edited and nothing on its way; else it skips a turn. The ticking stops
+// edited, nothing on its way and no record selected; else it skips a turn. The ticking stops
 // with its interval set anew, or the tab closed (§7.8「自动刷新」).
 func (a *App) gotAuto(m autoMsg) tea.Cmd {
 	t := m.tab
@@ -662,7 +668,7 @@ func (a *App) gotAuto(m autoMsg) tea.Cmd {
 	if p != nil {
 		_, shown = a.layout()[p.ID] // not behind a zoomed pane
 	}
-	if shown && t.changes() == 0 && t.cell == nil && t.out == 0 {
+	if shown && t.changes() == 0 && t.cell == nil && t.out == 0 && !t.selecting() {
 		note, failed := t.note, t.failed
 		cmd = a.fetch(t, true)
 		t.note, t.failed = note, failed

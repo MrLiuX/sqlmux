@@ -197,6 +197,27 @@ func TestFirmScope(t *testing.T) {
 	}
 }
 
+// Only the Firm scope's bindings stay complete: what the user adds to the
+// select scope itself is a longer sequence as any, d and dd ambiguous, yj
+// instead of y and then j; a longer one a lower scope adds under a binding of
+// another scope hangs, T waiting for Tx (F10.7).
+func TestFirmOnlyOverLowerScopes(t *testing.T) {
+	m := mustLoad(t, "[keys.select]\n\"dd\" = \"grid.select.delete\"\n\"yj\" = \"grid.down\"\n[keys.normal]\n\"Tx\" = \"grid.up\"\n")
+	firm := Context{Focus: []string{"select", "grid"}, Pane: "grid", Firm: "select"}
+	if out, wait := press(t, NewResolver(m), firm, "d"); len(out) != 0 || !wait {
+		t.Errorf("d with dd beside it: %v wait %v", actions(out), wait)
+	}
+	if out, _ := press(t, NewResolver(m), firm, "dd"); !reflect.DeepEqual(actions(out), []string{"grid.select.delete"}) {
+		t.Errorf("dd: %v", actions(out))
+	}
+	if out, _ := press(t, NewResolver(m), firm, "yj"); !reflect.DeepEqual(actions(out), []string{"grid.down"}) {
+		t.Errorf("yj: %v", actions(out))
+	}
+	if out, wait := press(t, NewResolver(m), firm, "T"); len(out) != 0 || !wait {
+		t.Errorf("T with Tx under it: %v wait %v", actions(out), wait)
+	}
+}
+
 func TestAmbiguousNodeTimesOut(t *testing.T) {
 	m, ps := load(t, "[keys.normal]\ng = \"my.g\"")
 	if len(ps) != 0 {

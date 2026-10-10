@@ -769,10 +769,14 @@ func (a *App) context() keymap.Context {
 	if s := gridStateOf(a.focused()); s != nil && s.selecting() && (scope == "grid" || scope == "result") {
 		over, firm = []string{"select"}, "select"
 	}
-	if scope == "result" { // over grid's keys, which its tables move by (§6.4)
-		return keymap.Context{Focus: append(over, "result", "grid"), Pane: "grid", Mode: a.mode(), Firm: firm}
+	mode := a.mode()
+	if scope != "console" && mode == keymap.Visual { // a table's VISUAL is NORMAL with the select scope over it (F10.7)
+		mode = keymap.Normal
 	}
-	return keymap.Context{Focus: append(over, scope), Pane: scope, Mode: a.mode(), Plain: a.plain && scope == "console", Firm: firm}
+	if scope == "result" { // over grid's keys, which its tables move by (§6.4)
+		return keymap.Context{Focus: append(over, "result", "grid"), Pane: "grid", Mode: mode, Firm: firm}
+	}
+	return keymap.Context{Focus: append(over, scope), Pane: scope, Mode: mode, Plain: a.plain && scope == "console", Firm: firm}
 }
 
 // paneScope is the keymap scope of the focused pane: its current tab's.
