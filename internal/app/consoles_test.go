@@ -317,6 +317,84 @@ func TestDeleteOpenConsoleAsks(t *testing.T) {
 	}
 }
 
+// moreConsole opens console name in session s on its first console's connection.
+func moreConsole(t *testing.T, s *Session, name string) *consoleTab {
+	t.Helper()
+	cons, err := openConsole(s.consoles()[0].conn, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	putTab(s.Windows[0].pane(2), Tab{Name: name, Console: cons}, false)
+	return cons
+}
+
+// A session has connections of its own: deleting a console of another session
+// asks about its transaction only when that was the connection's last console
+// there, and rolls it back then, not while another console of that session is
+// on it; a console of another session that is running, in any case of its
+// name, keeps the delete from happening (F10.10).
+func TestDeleteConsoleOfAnotherSession(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	a, report := withSessions()
+	first := report.consoles()[0]
+	first.name = "console_77"
+	main := &saveDB{}
+	first.conn.Main, first.conn.tx = db.NewWorker(main), 'T'
+	moreConsole(t, report, "console_88")
+	consoleNode(t, a, "console_77")
+	feed(t, a, "dd<CR>")
+	if a.confirm != nil || slices.ContainsFunc(report.consoles(), func(c *consoleTab) bool { return c.name == "console_77" }) || slices.Contains(main.sqls, "rollback []") {
+		t.Fatalf("another console on the connection: asked %+v, rolled back %q", a.confirm, main.sqls)
+	}
+	consoleNode(t, a, "console_88") // the last of them
+	feed(t, a, "dd<CR>")
+	if a.confirm == nil || !strings.Contains(a.confirm.text, "有未提交的事务") || len(report.consoles()) != 1 {
+		t.Fatalf("the last one asks: %+v", a.confirm)
+	}
+	feed(t, a, "y")
+	if len(report.consoles()) != 0 || !slices.Contains(main.sqls, "rollback []") {
+		t.Errorf("y: %d consoles, sent %q", len(report.consoles()), main.sqls)
+	}
+
+	// running there, as Console_1: the file called console_1 stays
+	a, report = withSessions()
+	r := report.consoles()[0]
+	r.name, r.running = "Console_1", &run{}
+	consoleFile(t, "console_1", "x\n")
+	consoleNode(t, a, "console_1")
+	feed(t, a, "dd<CR>")
+	if a.toast != "正在执行，结束后再关闭" || !config.ConsoleExists("console_1") || len(report.consoles()) != 1 {
+		t.Errorf("running elsewhere: toast %q, file %v, %d consoles", a.toast, config.ConsoleExists("console_1"), len(report.consoles()))
+	}
+}
+
+// A file that cannot be deleted keeps its tab, and the transaction of its
+// console's connection is not rolled back for it (F10.10).
+func TestDeleteConsoleFailsKeepsTransaction(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	if os.Geteuid() == 0 {
+		t.Skip("root deletes in a read-only directory")
+	}
+	a, report := withSessions()
+	first := report.consoles()[0]
+	first.name = "console_77"
+	main := &saveDB{}
+	first.conn.Main, first.conn.tx = db.NewWorker(main), 'T'
+	consoleFile(t, "console_77", "x\n")
+	dir := filepath.Dir(config.ConsolePath("x"))
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(dir, 0o700) //nolint:errcheck // the temp dir goes next
+	consoleNode(t, a, "console_77")
+	feed(t, a, "dd<CR>y")
+	if a.toast == "" || len(report.consoles()) != 1 || slices.Contains(main.sqls, "rollback []") || !config.ConsoleExists("console_77") {
+		t.Errorf("toast %q, %d consoles, sent %q", a.toast, len(report.consoles()), main.sqls)
+	}
+}
+
 // The Consoles node: one open, one closed, one renamed (F8.21).
 func TestGoldenConsolesNode(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())

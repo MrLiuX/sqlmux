@@ -54,7 +54,7 @@ func TestResultPaging(t *testing.T) {
 	a.win().focus(p.ID)
 	selectTab(p, 1)
 	tab := func(i int) *resultTab { return p.Tabs[i].Result }
-	title := func() string { return resultText(tab(p.Cur).page, tab(p.Cur).offset) }
+	title := func() string { return a.resultHints(tab(p.Cur))[0].Label } // as the result area's title says it
 	if len(p.Tabs) != 4 || !tab(1).pageable || !tab(2).pageable || tab(3).pageable || tab(2).stmt != 1 || tab(3).stmt != 2 {
 		t.Fatalf("%d tabs, pageable %v %v %v", len(p.Tabs), tab(1).pageable, tab(2).pageable, tab(3).pageable)
 	}
@@ -197,5 +197,68 @@ func TestResultTextPages(t *testing.T) {
 		if got := resultText(c.r, c.offset); got != c.want {
 			t.Errorf("%d rows, offset %d: %q, want %q", len(c.r.Rows), c.offset, got, c.want)
 		}
+	}
+}
+
+// A page is sent as the run of the console is: in the manual mode in a
+// transaction begun before it, the connection's status taken from where it
+// comes back, the connection busy meanwhile; a cancel is logged and told, the
+// tab as it was; a deadlock says so; a connection not up runs nothing; the
+// transposed view stays and the arrival is of the page (F10.4).
+func TestResultPageAsARunIs(t *testing.T) {
+	const q = "select * from t order by id"
+	d := &pagesDB{pages: map[string]db.Result{q + "\nLIMIT 4": cut(rows(3)), q + "\nLIMIT 4 OFFSET 3": rows(2)}}
+	a, c := inRun(t, &d.execDB, "")
+	conn := a.sess.Conns[0]
+	conn.Main = db.NewWorker(d)
+	a.maxRows = 3
+	c.ed.Load(q + ";")
+	press(t, a, "<CR>")
+	p := a.win().Result
+	a.win().focus(p.ID)
+	rt := resultOf(p)
+	rt.transpose = true
+	arrived := rt.arrived
+
+	// busy from the request to the page
+	conn.Manual, conn.tx = true, 'T' // what it was; the server says it is 'I' now
+	ran := len(d.ran)
+	_, cmd := a.Update(teaKey("]"))
+	if conn.busy != 1 || !rt.paging {
+		t.Fatalf("on its way: busy %d, paging %v", conn.busy, rt.paging)
+	}
+	deliver(a, cmd)
+	if conn.busy != 0 || rt.paging || rt.offset != 3 || conn.tx != 'I' || !rt.transpose || !rt.arrived.After(arrived) {
+		t.Errorf("came: busy %d, paging %v, offset %d, tx %c, transposed %v", conn.busy, rt.paging, rt.offset, conn.tx, rt.transpose)
+	}
+	if got := d.ran[ran:]; len(got) != 2 || got[0] != "begin" || got[1] != q+"\nLIMIT 4 OFFSET 3" {
+		t.Errorf("sent %q, a begin first in the manual mode", got)
+	}
+	conn.Manual = false
+
+	// cancelled: logged, told, the rows and the tab as they were
+	rt.offset, rt.page = 0, cut(rows(3))
+	d.fail = context.Canceled
+	press(t, a, "]")
+	if got := logText(a); !strings.HasSuffix(got, "已取消") || a.toast != "查询已取消" || rt.offset != 0 || len(rt.page.Rows) != 3 || rt.paging || p.Tabs[p.Cur].Result != rt {
+		t.Errorf("cancelled: log\n%s\ntoast %q offset %d paging %v", got, a.toast, rt.offset, rt.paging)
+	}
+
+	// a deadlock
+	a.toast = ""
+	d.fail = db.RolledBack{Err: errors.New("deadlock")}
+	press(t, a, "]")
+	if a.toast != "死锁，整个事务已回滚" {
+		t.Errorf("deadlock: toast %q", a.toast)
+	}
+	d.fail = nil
+
+	// a connection that is not up runs nothing
+	selectTab(p, 1) // the deadlock showed the log
+	a.toast, conn.State = "", connIdle
+	ran = len(d.ran)
+	press(t, a, "]")
+	if a.toast != "连接还没连上" || len(d.ran) != ran || rt.paging {
+		t.Errorf("not up: toast %q, sent %q, paging %v", a.toast, d.ran[ran:], rt.paging)
 	}
 }

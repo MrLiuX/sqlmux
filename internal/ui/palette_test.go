@@ -163,4 +163,14 @@ func TestCompleteBoxLimit(t *testing.T) {
 	if box, rows := CompleteBox(screen, uv.Pos(10, 5), 20, 20, 0, 20); rows != 16 || box.Max.Y != 24 {
 		t.Errorf("limit 20, the room below is 16: %v %d rows", box, rows)
 	}
+	// near the bottom, the list goes above the input, to the limit, or the top of the screen
+	if box, rows := CompleteBox(screen, uv.Pos(10, 18), 20, 20, 0, 20); rows != 16 || box.Min.Y != 0 || box.Max.Y != 18 {
+		t.Errorf("above, limit 20: %v %d rows", box, rows)
+	}
+	if box, rows := CompleteBox(screen, uv.Pos(10, 18), 20, 20, 0, CompleteRows); rows != 8 || box.Max.Y != 18 {
+		t.Errorf("above, limit 8: %v %d rows", box, rows)
+	}
+	if box, rows := CompleteBox(screen, uv.Pos(10, 18), 20, 12, 1, 20); rows != 12 || box.Max.Y != 18 || box.Dy() != 15 {
+		t.Errorf("above, 12 items and a foot: %v %d rows", box, rows)
+	}
 }

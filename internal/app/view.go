@@ -348,7 +348,7 @@ func (a *App) drawSidebar(f *ui.Frame, r uv.Rectangle) {
 		Icon:        a.icons.Conn,
 		Object:      a.sess.Name,
 		ObjectFirst: true,
-		Hints:       []ui.Hint{{Label: "«", Action: "tree.toggle", Color: a.theme.Dim}},
+		Hints:       []ui.Hint{{Label: "«", Action: "tree.toggle"}},
 		Focused:     win.Focus == win.Tree.ID,
 		Pane:        win.Tree.ID,
 	}

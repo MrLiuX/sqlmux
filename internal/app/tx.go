@@ -150,11 +150,12 @@ func (a *App) deadlocked(c *Conn, err error) tea.Cmd {
 	return tea.Batch(append(a.txEnded(c), a.showToast(i18n.T("死锁，整个事务已回滚"), toastTTL))...)
 }
 
-// orphaned is the session's connections in a transaction that closing the
-// consoles cs leaves with no console on them: closing asks first, and
-// rolls them back (§10.5).
+// orphaned is the connections in a transaction that closing the consoles cs
+// leaves with no console on them: closing asks first, and rolls them back
+// (§10.5). A session has connections of its own, so the consoles of every
+// session are what is left to look at.
 func (a *App) orphaned(cs []*consoleTab) []*Conn {
-	rest := slices.DeleteFunc(a.sess.consoles(), func(t *consoleTab) bool { return slices.Contains(cs, t) })
+	rest := slices.DeleteFunc(a.consoles(), func(t *consoleTab) bool { return slices.Contains(cs, t) })
 	var out []*Conn
 	for _, t := range cs {
 		c := t.conn
@@ -178,7 +179,7 @@ func (a *App) closeAsking(n int, what string, cs []*consoleTab, shut func() tea.
 	return a.unlessLost(n, what, lost, verbClose, func() tea.Cmd {
 		cmds := []tea.Cmd{shut()}
 		for _, c := range lost {
-			if !slices.ContainsFunc(a.sess.consoles(), func(t *consoleTab) bool { return t.conn == c }) {
+			if !slices.ContainsFunc(a.consoles(), func(t *consoleTab) bool { return t.conn == c }) { // none left, the shut one gone
 				cmds = append(cmds, a.endTx(c, "rollback"))
 			}
 		}

@@ -322,8 +322,8 @@ func (t *dataTab) pages() (int64, bool) {
 // page has them, so a column that came with a refresh goes last (F10.3).
 func (t *dataTab) ordered() []int {
 	at := make(map[string]int, len(t.page.Cols))
-	for i := len(t.page.Cols) - 1; i >= 0; i-- { // the first of a name that comes twice
-		at[t.page.Cols[i].Name] = i
+	for i, c := range t.page.Cols {
+		at[c.Name] = i
 	}
 	out, seen := make([]int, 0, len(t.page.Cols)), make([]bool, len(t.page.Cols))
 	for _, name := range t.colOrder {

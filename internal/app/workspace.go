@@ -598,6 +598,12 @@ type dialed struct {
 	spec       config.Connection
 }
 
+// discard is a Cmd that closes the two connections of d, one that came when
+// nothing wants it any more.
+func (d dialed) discard() tea.Cmd {
+	return func() tea.Msg { d.main.Close(); d.meta.Close(); return nil }
+}
+
 // secrets caches what a connection's password source gave, by its name
 // (§13): the keychain asks once a run, not once a session; a failed dial
 // drops it, the next one asks again.

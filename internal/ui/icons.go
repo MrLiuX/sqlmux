@@ -33,7 +33,8 @@ type Icons struct {
 	Conn          Icon
 	Key           Icon // primary key columns
 	Command       Icon // palette rows (K-03)
-	Window, Pane  Icon // the tree's workspace (§7.8)
+	Window        Icon // the tree's workspace (§7.8)
+	Pane          Icon // not drawn since F10.5; a theme file that names it still loads (§7.7)
 	// The query bar's buttons (Q-05) and ORDER's direction; nil Fg: info
 	// and warn (§7.7)
 	Save, Refresh, Transpose Icon
@@ -70,7 +71,6 @@ var NerdIcons = &Icons{
 	Key:         Icon{Text: "\uf084"}, // nf-fa-key
 	Command:     Icon{Text: "\uf0e7"}, // nf-fa-bolt
 	Window:      Icon{Text: "\uf2d2"}, // nf-fa-window_restore
-	Pane:        Icon{Text: "\uf0db"}, // nf-fa-columns
 	Save:        Icon{Text: "\uf0c7"}, // nf-fa-save
 	Refresh:     Icon{Text: "\uf021"}, // nf-fa-refresh
 	Transpose:   Icon{Text: "\uf0ec"}, // nf-fa-exchange
@@ -112,7 +112,6 @@ var ASCIIIcons = &Icons{
 	Key:         Icon{Text: "*"},
 	Command:     Icon{Text: ":"},
 	Window:      Icon{Text: "[]"},
-	Pane:        Icon{Text: "|"},
 	Save:        Icon{Text: "[S]"},
 	Refresh:     Icon{Text: "[R]"},
 	Transpose:   Icon{Text: "[T]"},

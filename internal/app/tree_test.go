@@ -429,7 +429,24 @@ func TestTreeWorkspace(t *testing.T) {
 			t.Errorf("%s: current %v aside %q", n.Text, n.Current, n.Aside)
 		}
 	}
-	// a pane of two tabs of its own, and another with none: ①①②②③ in the order of the panes, the empty one left out
+	// the pane's number before a tab is dim
+	f := a.render()
+	found := false
+	for y := 0; y < a.h && !found; y++ {
+		for x := range a.sidebarRect().Dx() { // the sidebar's, not the panes' titles
+			if cell := f.Buf.CellAt(x, y); cell != nil && cell.Content == "①" {
+				found = true
+				if cell.Style.Fg != a.theme.Dim {
+					t.Errorf("a tab's pane number is %v, want dim %v", cell.Style.Fg, a.theme.Dim)
+				}
+				break
+			}
+		}
+	}
+	if !found {
+		t.Error("no pane number in the sidebar")
+	}
+	// a pane of two tabs of its own, and another with none: ①①②②④, numbered by pane, the empty ③ left out
 	feed(t, a, `<C-l><Space>"<C-p>@t_order<CR><C-p>@t_payment<C-t><Space>"<C-h>`)
 	want := "▾ 工作区\n  ▾ data\n      ① t_user\n      ① t_sku\n      ② t_order\n      ② t_payment\n      ④ console_1\n▾ Consoles\n    console_1"
 	if ws := workspace(); ws != want {

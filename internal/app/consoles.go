@@ -95,14 +95,7 @@ func (a *App) deleteConsole() tea.Cmd {
 	a.confirm = &confirmBox{text: i18n.T("删除 %s？", name), yes: i18n.T("删除"), then: func() tea.Cmd {
 		// closing its tabs is asked about as any close is, when a transaction
 		// would be left with no console, or refused while it runs
-		var open []*consoleTab
-		for _, s := range a.sessions {
-			for _, t := range s.consoles() {
-				if strings.EqualFold(t.name, name) {
-					open = append(open, t)
-				}
-			}
-		}
+		open := slices.DeleteFunc(a.consoles(), func(t *consoleTab) bool { return !strings.EqualFold(t.name, name) })
 		return a.closeAsking(0, "", open, func() tea.Cmd {
 			if err := config.DeleteConsole(name); err != nil {
 				return a.showToast(err.Error(), toastTTL)
@@ -123,7 +116,7 @@ func (a *App) deleteConsole() tea.Cmd {
 // (F10.10).
 func (a *App) dropConsoleTabs(name string) {
 	for _, s := range a.sessions {
-		s.closed = slices.DeleteFunc(s.closed, func(c closedTab) bool { return c.console != "" && strings.EqualFold(c.console, name) })
+		s.closed = slices.DeleteFunc(s.closed, func(c closedTab) bool { return strings.EqualFold(c.console, name) })
 		for _, p := range s.panes() {
 			for i := len(p.Tabs) - 1; i >= 0; i-- {
 				if t := p.Tabs[i].Console; t != nil && strings.EqualFold(t.name, name) {

@@ -57,7 +57,7 @@ func (a *App) gotConnected(m connected) tea.Cmd {
 		if m.err != nil {
 			return nil
 		}
-		return func() tea.Msg { m.d.main.Close(); m.d.meta.Close(); return nil }
+		return m.d.discard()
 	}
 	var waiting []*consoleTab
 	for _, t := range a.consoles() {

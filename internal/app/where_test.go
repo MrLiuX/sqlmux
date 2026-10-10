@@ -696,14 +696,14 @@ func TestWhereHistoryFillsThePane(t *testing.T) {
 	a, tab, _ := withRecorder(t)
 	at := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
 	st := a.tableState(tab)
-	for i := range 20 {
+	for i := range 60 { // more than the pane holds
 		st.History = append(st.History, config.Query{Where: fmt.Sprintf("id > %d", i), At: at})
 	}
 	feed(t, a, "/<C-r>")
 	p := a.focused()
 	in, pane := a.whereAt(p, tab), a.layout()[p.ID]
 	_, box, rows := a.histView(p, tab)
-	if want := min(20, pane.Max.Y-1-in.Y-4); rows != want || rows <= ui.CompleteRows || box.Max.Y != in.Y+1+rows+3 || box.Max.Y > pane.Max.Y-1 {
+	if want := pane.Max.Y - 1 - in.Y - 4; rows != want || rows >= 60 || box.Max.Y != pane.Max.Y-1 {
 		t.Errorf("a tall pane: %d rows, want %d; box %v in pane %v", rows, want, box, pane)
 	}
 	if _, _, rows := a.completeView(&completion{items: make([]candidate, 20)}, in); rows != ui.CompleteRows {
@@ -716,6 +716,31 @@ func TestWhereHistoryFillsThePane(t *testing.T) {
 	pane = a.layout()[p.ID]
 	if _, box, rows = a.histView(p, tab); rows != ui.CompleteRows || box.Max.Y <= pane.Max.Y-1 {
 		t.Errorf("a short pane: %d rows, box %v over pane %v", rows, box, pane)
+	}
+}
+
+// A pane in the lower half has the history open above its input, as far up as
+// the entries need, as the box is not to leave the screen: the box ends on the
+// input's row, 20 entries and not 8 (F10.1).
+func TestWhereHistoryFlipsUp(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	at := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	for i := range 20 {
+		a.tableState(tab).History = append(a.tableState(tab).History, config.Query{Where: fmt.Sprintf("id > %d", i), At: at})
+	}
+	feed(t, a, `<Space>"<C-p>@t_order<CR>`) // below ①, a data pane with the table
+	p := a.focused()
+	low := dataOf(p)
+	_, cols, page := ordersTable(5)
+	a.Update(pageMsg{tab: low, seq: low.seq, cols: cols, page: page})
+	feed(t, a, "/<C-r>")
+	in := a.whereAt(p, low)
+	if in.Y < 20 {
+		t.Fatalf("the pane is not in the lower half: input at %v", in)
+	}
+	_, box, rows := a.histView(p, low)
+	if rows != 20 || box.Max.Y != in.Y || box.Min.Y < 0 {
+		t.Errorf("above the input at %v: %d rows, box %v", in, rows, box)
 	}
 }
 

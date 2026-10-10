@@ -10,7 +10,7 @@ func TestIconSetsComplete(t *testing.T) {
 	for name, set := range map[string]*Icons{"nerd": NerdIcons, "ascii": ASCIIIcons} {
 		v := reflect.ValueOf(*set)
 		for i := range v.NumField() {
-			if icon, ok := v.Field(i).Interface().(Icon); ok && icon.Text == "" {
+			if icon, ok := v.Field(i).Interface().(Icon); ok && icon.Text == "" && v.Type().Field(i).Name != "Pane" { // Pane is no longer drawn, a theme may still set it
 				t.Errorf("%s icons: %s is empty", name, v.Type().Field(i).Name)
 			}
 		}
