@@ -14,8 +14,8 @@
 | M7 工程质量 | [m7-quality/task.md](m7-quality/task.md) | golangci-lint 与 CI、justfile、凭据不落明文、分字段的新建连接表单与无连接启动（用户 2026-10-05 提出） | F7.1–F7.5 passed（99781fc，2026-10-07）；F7.6 默认英文 passed（ec4aaad，2026-10-07）；和 M5、M6 一起验收，通过后打 tag `m7`、`v0.1.0`，CI 首次运行等推送 |
 
 | M8 第一轮使用反馈 | [m8-feedback/task.md](m8-feedback/task.md) | 用户照 WALKTHROUGH 走完 M5–M7 后的 20 条意见：补全和格式化的 bug、列宽、边框样式、默认排序、window / session / console 改名、连接的修改与删除 | 完成（F8.1–F8.23 passed，0c023d2，完整回归 118 个脚本全过，2026-10-10）；等用户验收，通过后和 M5–M7 一起打 tag `m8`、`v0.1.0` |
-| M9 第二轮使用反馈 | [m9-feedback2/task.md](m9-feedback2/task.md) | 用户 2026-10-10 在 M8 验收期间提的 10 条：WHERE 历史 / 收藏的顺手操作、表格 `^` / `C-r` / 复制为 JSON、缩放提示、DDL 查看 | 开发中（2026-10-10，M8 完成后开工） |
-| M10 第三轮使用反馈 | [m10-feedback3/task.md](m10-feedback3/task.md) | 用户 2026-10-10 在 M9 审查期间提的 9 条：表格多选、flash 式跳转、树去掉 pane 层、连接分组、WHERE 下拉撑满、新建 session 先要名字、console 结果 500 行并翻页、COLS 调列顺序、侧栏去掉键位文字、删开着的 console；最后 console 改名 query（单独一个节点） | todo（M9 passed 之后开工） |
+| M9 第二轮使用反馈 | [m9-feedback2/task.md](m9-feedback2/task.md) | 用户 2026-10-10 在 M8 验收期间提的 10 条：WHERE 历史 / 收藏的顺手操作、表格 `^` / `C-r` / 复制为 JSON、缩放提示、DDL 查看 | 完成（F9.1–F9.10 passed，93e9d8c，完整回归 130 个脚本全过，2026-10-10）；等用户验收，通过后打 tag `m9` |
+| M10 第三轮使用反馈 | [m10-feedback3/task.md](m10-feedback3/task.md) | 用户 2026-10-10 在 M9 审查期间提的 9 条：表格多选、flash 式跳转、树去掉 pane 层、连接分组、WHERE 下拉撑满、新建 session 先要名字、console 结果 500 行并翻页、COLS 调列顺序、侧栏去掉键位文字、删开着的 console；最后 console 改名 query（单独一个节点） | 开发中（2026-10-10，M9 passed 后开工） |
 
 ## 发布（用户 2026-10-07 定）
 
