@@ -63,7 +63,7 @@ key Escape; sleep 0.3
 check "再 esc：关闭浮层" eval '! mgr_open'
 
 # ---- 改 seed 的 read_only：保存后文件只变一行
-cmdp conn.manage; key j; key Tab; key Tab; key Tab; key Tab; sleep 0.3
+cmdp conn.manage; key j; key Tab; key Tab; key Tab; key Tab; key Tab; sleep 0.3
 check "（准备）Tab 到 read_only（seed 的 dsn 非空，host / port / user / database 灰着，跳过）" eval '[[ $(fval read_only) == "[x]" ]]'
 e2e_keys Space; sleep 0.3
 check "空格翻开关：read_only 变成 [ ]" eval '[[ $(fval read_only) == "[ ]" ]]'
@@ -72,7 +72,7 @@ check "C-s 保存：浮层还开着，connections.toml 里只有 read_only 这�
 check "权限没变（仍是 0600）" eval '[[ $(stat -f %Lp "$(ct)") == 600 ]]'
 # 已连上的连接改了：toast 下次连接时生效
 key Escape; key Escape; sleep 0.3
-cmdp conn.manage; key Tab; key Tab; key Tab; key Tab; e2e_keys Space; key C-s; sleep 1
+cmdp conn.manage; key Tab; key Tab; key Tab; key Tab; key Tab; e2e_keys Space; key C-s; sleep 1
 check "改的是已连上的 doraemon（read_only 勾上）：toast「下次连接时生效」，连接没重连、表还能编辑" eval 'toast_text | grep -q "下次连接时生效"'
 key Escape; key Escape; sleep 0.3
 write_conns   # 还原，下面从原文开始
@@ -110,7 +110,7 @@ check "conn.new 进的表单：esc 直接关闭浮层" eval '! mgr_open'
 # ---- 新建一个（带密码）：追加在文件末尾，前面的字节不动；密码进钥匙串，文件里没有明文
 read -r PG_USER PG_PW PG_HOST PG_PORT PG_DB < <(python3 -c 'import sys, urllib.parse as u; p = u.urlsplit(sys.argv[1]); print(p.username, p.password, p.hostname, p.port, p.path[1:])' "$SQLMUX_TEST_PG")
 clr() { local i; for ((i = 0; i < 40; i++)); do e2e_keys BSpace; done; sleep 0.2; }
-fill() { e2e_type "$1"; key Tab; key Tab; e2e_type "$2"; key Tab; clr; e2e_type "$3"; key Tab; e2e_type "$4"; key Tab; e2e_type "$5"; key Tab; e2e_type "$6"; sleep 0.3; }
+fill() { e2e_type "$1"; key Tab; key Tab; key Tab; e2e_type "$2"; key Tab; clr; e2e_type "$3"; key Tab; e2e_type "$4"; key Tab; e2e_type "$5"; key Tab; e2e_type "$6"; sleep 0.3; }
 write_conns
 SOLO= start -C "$D/c" -S "$ST"; sleep 0.5
 cmdp conn.new; fill kc "$PG_HOST" "$PG_PORT" "$PG_USER" "$PG_PW" "$PG_DB"; key Enter; sleep 1.2

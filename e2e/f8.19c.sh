@@ -22,7 +22,7 @@ rows() { e2e_plain | grep -cE "│ +[0-9]+ │ +[0-9]+ │ user_"; }
 SOLO= start -x 200 -C "$D/c"; e2e_record "$D/rec"; open_table t_user; wait_for 8 settled
 check "（准备）rw 用 application_name=$APP 连着，两条" eval '[[ $(conns "$APP") == 2 ]]'
 pal ">conn.manage"; key Enter; sleep 0.7
-key Tab; for i in 1 2 3 4 5; do key Tab; done; key End; e2e_type b; sleep 0.3
+key Tab; for i in 1 2 3 4 5 6; do key Tab; done; key End; e2e_type b; sleep 0.3
 check "（准备）连接管理里高级的 dsn 末尾改成 …${APP}b" eval 'e2e_plain | grep -q "application_name=${APP}b"'
 key Enter; sleep 1
 check "保存：toast「下次连接时生效」，连接没有马上重连（旧名字的两条还在）" eval 'grep -qF "下次连接时生效" "$D/rec" && [[ $(conns "$APP") == 2 ]]'
