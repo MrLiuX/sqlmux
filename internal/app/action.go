@@ -375,6 +375,7 @@ func init() {
 		"grid.row.add":     {Title: i18n.N("新增一行"), Run: func(a *App, _ Args) tea.Cmd { return a.addRow() }},
 		"grid.yank":        {Title: i18n.N("复制单元格"), Run: func(a *App, _ Args) tea.Cmd { return a.yankGrid(false) }},
 		"grid.yank.row":    {Title: i18n.N("复制整行"), Run: func(a *App, _ Args) tea.Cmd { return a.yankGrid(true) }},
+		"grid.yank.json":   {Title: i18n.N("复制为 JSON"), Run: func(a *App, _ Args) tea.Cmd { return a.yankJSON() }},
 		"grid.yank.insert": {Title: i18n.N("复制为 INSERT"), Run: func(a *App, _ Args) tea.Cmd { return a.yankInsert() }},
 		"grid.paste":       {Title: i18n.N("粘贴成新行"), Run: func(a *App, _ Args) tea.Cmd { return a.pasteRow() }},
 		"grid.row.delete":  {Title: i18n.N("标记 / 取消删除这一行"), Run: func(a *App, _ Args) tea.Cmd { return a.deleteRow() }},

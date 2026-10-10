@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -216,5 +217,128 @@ func TestYankInsertAddedAndBinary(t *testing.T) {
 	n := len(bt.added)
 	if keys(t, b, "p"); len(bt.added) != n || b.toast != "有二进制列，复制不了" {
 		t.Errorf("p: %d rows added, toast %q", len(bt.added), b.toast)
+	}
+}
+
+// A row as a JSON object: columns in order, a number for numeric columns whose
+// text is one (else the text), true and false for booleans, null, json as
+// itself, the rest as strings, nothing HTML-escaped (F9.5).
+func TestRowJSON(t *testing.T) {
+	got, err := rowJSON([]jsonField{
+		{"id", ui.ColNumber, db.Val{S: "7"}},
+		{"big", ui.ColNumber, db.Val{S: "12345678901234567890.5"}},
+		{"nan", ui.ColNumber, db.Val{S: "NaN"}},
+		{"zeros", ui.ColNumber, db.Val{S: "007"}},
+		{"neg", ui.ColNumber, db.Val{S: "-1.5e3"}},
+		{"paid", ui.ColBool, db.Val{S: "t"}},
+		{"off", ui.ColBool, db.Val{S: "0"}},
+		{"odd", ui.ColBool, db.Val{S: "maybe"}},
+		{"gone", ui.ColString, db.Val{Null: true}},
+		{"meta", ui.ColJSON, db.Val{S: `{"a": [1, 2], "b": null}`}},
+		{"bad", ui.ColJSON, db.Val{S: `{"a": `}},
+		{"scalar", ui.ColJSON, db.Val{S: `"x"`}},
+		{"at", ui.ColTime, db.Val{S: "2026-09-01 00:00:00+00"}},
+		{"num_as_text", ui.ColString, db.Val{S: "42"}},
+		{"html", ui.ColString, db.Val{S: "<a href=\"x\">&</a>"}},
+		{"id", ui.ColNumber, db.Val{S: "8"}}, // a result may have a name twice
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{
+  "id": 7,
+  "big": 12345678901234567890.5,
+  "nan": "NaN",
+  "zeros": "007",
+  "neg": -1.5e3,
+  "paid": true,
+  "off": false,
+  "odd": "maybe",
+  "gone": null,
+  "meta": {
+    "a": [
+      1,
+      2
+    ],
+    "b": null
+  },
+  "bad": "{\"a\": ",
+  "scalar": "x",
+  "at": "2026-09-01 00:00:00+00",
+  "num_as_text": "42",
+  "html": "<a href=\"x\">&</a>",
+  "id": 8
+}`
+	if got != want {
+		t.Errorf("got\n%s\nwant\n%s", got, want)
+	}
+	var back map[string]any
+	if err := json.Unmarshal([]byte(got), &back); err != nil {
+		t.Errorf("not JSON: %v", err)
+	}
+}
+
+// Y copies the row as JSON, every column of the table, the hidden ones too, a
+// number a number, the jsonb an object, changes in; a result's row too; a
+// DEFAULT cell has no key, and flashes as yy does (F9.5).
+func TestYankJSON(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	feed(t, a, "jlli9<Esc>") // row 2's amount, changed
+	want := `{
+  "id": 2,
+  "status": "done",
+  "amount": 9,
+  "paid": true,
+  "meta": {
+    "n": 2,
+    "tags": [
+      "a",
+      "b"
+    ]
+  },
+  "note": "line one\nline two\tafter tab \u001b[31mred",
+  "created_at": "2026-09-01 00:02:00+00"
+}`
+	if cmd := keys(t, a, "Y"); !clipped(cmd, want) || a.flash == nil || a.flash.cell != [2]int{1, -1} {
+		t.Fatalf("Y: flash %+v", a.flash)
+	}
+	tab.hidden = map[string]bool{"id": true, "note": true} // the columns shown do not decide
+	want3 := `{
+  "id": 3,
+  "status": "failed",
+  "amount": 3.99,
+  "paid": true,
+  "meta": {
+    "n": 3,
+    "tags": [
+      "a",
+      "b"
+    ]
+  },
+  "note": null,
+  "created_at": "2026-09-01 00:03:00+00"
+}`
+	if cmd := keys(t, a, "jY"); !clipped(cmd, want3) {
+		t.Errorf("row 3, two columns hidden, a NULL")
+	}
+
+	r := db.Result{Cols: []db.Col{{Name: "n", Type: "int4"}, {Name: "ok", Type: "bool"}, {Name: "j", Type: "json"}}, Rows: [][]db.Val{{{S: "5"}, {S: "f"}, {S: `[1]`}}}}
+	b, _ := inRun(t, &execDB{res: map[string]db.Result{"select 1": r}}, "select 1;")
+	press(t, b, "<CR>")
+	b.win().focus(b.win().Result.ID)
+	if cmd := keys(t, b, "Y"); !clipped(cmd, "{\n  \"n\": 5,\n  \"ok\": false,\n  \"j\": [\n    1\n  ]\n}") {
+		t.Errorf("a result's row")
+	}
+
+	c := wide(160, 45)
+	loadOrders(t, c, 3)
+	feed(t, c, "o<Esc>")
+	if cmd := keys(t, c, "Y"); !clipped(cmd, "{}") {
+		t.Errorf("an added row, all DEFAULT")
+	}
+	feed(t, c, "i9<Esc>")
+	if cmd := keys(t, c, "Y"); !clipped(cmd, "{\n  \"id\": 9\n}") {
+		t.Errorf("an added row, one cell")
 	}
 }

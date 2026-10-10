@@ -70,6 +70,7 @@ leader = "<Space>"
 "yl" = "grid.yank"
 "p" = "grid.paste"
 "yi" = "grid.yank.insert"
+"Y" = "grid.yank.json"
 # not in normal: a console's : and ; are its vim's (§6.8)
 ":" = "palette.open"
 ";" = "palette.sql"

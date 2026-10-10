@@ -1,7 +1,10 @@
 package app
 
 import (
+	"bytes"
+	"cmp"
 	"encoding/csv"
+	"encoding/json"
 	"maps"
 	"os"
 	"os/exec"
@@ -165,6 +168,121 @@ func (a *App) yankInsert() tea.Cmd {
 	text := db.DefaultRow(eng, t.table.Schema, t.table.Name, a.keyword) + ";"
 	if len(names) > 0 {
 		text = a.keyword("insert into") + " " + eng.Quote(t.table.Schema, t.table.Name) + " (" + strings.Join(names, ", ") + ") " + a.keyword("values") + " (" + strings.Join(vals, ", ") + ");"
+	}
+	return tea.Batch(clipCopy(text), a.flashYank(yankFlash{pane: p.ID, cell: [2]int{gs.row, -1}}))
+}
+
+// jsonField is a column of a row yanked as JSON: its name, the class of its
+// type, its value (F9.5).
+type jsonField struct {
+	name  string
+	class ui.ColType
+	val   db.Val
+}
+
+// jsonOf encodes v, HTML left as it is: this is for people to read.
+func jsonOf(v any) ([]byte, error) {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	err := enc.Encode(v)
+	return bytes.TrimRight(b.Bytes(), "\n"), err
+}
+
+// jsonValue is what a value of a column of class c is in JSON: a number for a
+// numeric column when its text is a JSON number, true or false for a boolean
+// (PG's t and f, MySQL's 1 and 0), json and jsonb as they are when they are
+// JSON, NULL as null; any other value, and one that is not what its column
+// says, its text.
+func jsonValue(c ui.ColType, v db.Val) any {
+	switch {
+	case v.Null:
+		return nil
+	case c == ui.ColNumber && number.MatchString(v.S) && json.Valid([]byte(v.S)):
+		return json.RawMessage(v.S)
+	case c == ui.ColBool && slices.Contains([]string{"t", "true", "1"}, v.S):
+		return true
+	case c == ui.ColBool && slices.Contains([]string{"f", "false", "0"}, v.S):
+		return false
+	case c == ui.ColJSON && json.Valid([]byte(v.S)):
+		return json.RawMessage(v.S)
+	}
+	return v.S
+}
+
+// fields is an object with its keys in the order they were given, which a
+// map would not keep.
+type fields []jsonField
+
+func (fs fields) MarshalJSON() ([]byte, error) {
+	var b bytes.Buffer
+	b.WriteByte('{')
+	for i, f := range fs {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		k, err := jsonOf(f.name)
+		if err != nil {
+			return nil, err
+		}
+		v, err := jsonOf(jsonValue(f.class, f.val))
+		if err != nil {
+			return nil, err
+		}
+		b.Write(k)
+		b.WriteByte(':')
+		b.Write(v)
+	}
+	b.WriteByte('}')
+	return b.Bytes(), nil
+}
+
+// rowJSON is a row as a JSON object, in two spaces' indents (F9.5).
+func rowJSON(fs []jsonField) (string, error) {
+	raw, err := jsonOf(fields(fs))
+	if err != nil {
+		return "", err
+	}
+	var out bytes.Buffer
+	if err := json.Indent(&out, raw, "", "  "); err != nil {
+		return "", err
+	}
+	return out.String(), nil
+}
+
+// yankJSON is Y on the focused grid (§7.5「复制为 JSON」, F9.5): the row, a
+// table's or a result's, as a JSON object of every column it has, shown ones
+// or not, as it shows, changes in; a DEFAULT cell has no key. To the
+// clipboard, flashing.
+func (a *App) yankJSON() tea.Cmd {
+	p := a.focused()
+	gs, _, _, ok := a.gridOf(p)
+	if !ok {
+		return nil
+	}
+	var fs []jsonField
+	switch tab := p.tab(); {
+	case tab.Data != nil:
+		t := tab.Data
+		sr, key, ok := t.cursor()
+		if !ok {
+			return nil
+		}
+		for _, c := range t.page.Cols {
+			if v, set := t.value(sr, key, c.Name); set {
+				fs = append(fs, jsonField{c.Name, colType(cmp.Or(t.typeOf(c.Name), c.Type)), v})
+			}
+		}
+	case tab.Result != nil && gs.row < len(tab.Result.page.Rows):
+		for i, c := range tab.Result.page.Cols {
+			fs = append(fs, jsonField{c.Name, colType(c.Type), tab.Result.page.Rows[gs.row][i]})
+		}
+	default:
+		return nil
+	}
+	text, err := rowJSON(fs)
+	if err != nil {
+		return a.showToast(err.Error(), toastTTL)
 	}
 	return tea.Batch(clipCopy(text), a.flashYank(yankFlash{pane: p.ID, cell: [2]int{gs.row, -1}}))
 }
