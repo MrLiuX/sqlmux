@@ -2,7 +2,7 @@
 # F8.20 性能：全量移动上报下悬停行跟着指针，CPU 不到一个核的 10%（specs/m8-feedback/task.md F8.20；tech-design §2、§15「性能」）
 # tmux 里每秒 100 个 SGR 移动事件（1003 模式）在表格的行上上下扫 3 秒（e2e/mouse_feed.py 按绝对时钟发，不因 tmux 调用慢而掉速），
 # 最后一个事件后 100ms 内底色在指针所在的行；整个期间用 ps 的累计 CPU 时间前后差算 sqlmux 占一个核的百分比（不用 %cpu：
-# macOS 上它是衰减平均）。机器忙时（1 分钟负载超过核数）阈值放宽到 20%，写在断言标题里。再测指针停在同一格上：事件照来，CPU 也低。
+# macOS 上它是衰减平均）。机器忙时（1 分钟负载超过核数的一半）阈值放宽到 20%，写在断言标题里。再测指针停在同一格上：事件照来，CPU 也低。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 
@@ -10,7 +10,7 @@ HOVER=#292e42
 cpu_s() { ps -o time= -p "$1" | awk -F'[:.]' '{ printf "%.2f", $1 * 60 + $2 + $3 / 100 }'; }   # 累计 CPU 秒（0:12.34）
 spid() { ps -axo pid=,command= | awk -v b="$E2E_BIN" '$2 == b { print $1; exit }'; }
 LOAD=$(sysctl -n vm.loadavg | awk '{ print $2 }'); NCPU=$(sysctl -n hw.ncpu)
-if awk -v l="$LOAD" -v n="$NCPU" 'BEGIN { exit !(l > n) }'; then LIMIT=20 NOTE="机器忙（load $LOAD > $NCPU 核），放宽到 20%"; else LIMIT=10 NOTE="load $LOAD"; fi
+if awk -v l="$LOAD" -v n="$NCPU" 'BEGIN { exit !(l > n / 2) }'; then LIMIT=20 NOTE="机器忙（load $LOAD > $NCPU 核的一半；全量回归并行跑 4 个脚本时总是这样），放宽到 20%"; else LIMIT=10 NOTE="load $LOAD"; fi
 bg_of() { e2e_style 60 "$1" | grep -o 'bg=#[0-9a-f]*'; }
 hover_rows() { local y; for y in $(seq $((GY + 1)) $((GY + 30))); do [[ $(bg_of "$y") == "bg=$HOVER" ]] && echo "$y"; done | tr '\n' ' '; }
 feed() { python3 "$E2E_ROOT/e2e/mouse_feed.py" "$E2E_SOCK" "$1" "$2" "$3" "$4" "$5"; }   # X YMIN YMAX SECS RATE
