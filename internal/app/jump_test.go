@@ -442,3 +442,19 @@ func TestJumpNearestInTreeConsoleResult(t *testing.T) {
 		t.Errorf("the result's first match is %s", got)
 	}
 }
+
+// The letter after a match is no label in either case, the capitals of the
+// second round too: more matches than letters, one followed by X (F10.8).
+func TestJumpNoCapitalLabelAfterMatch(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	loadOrders(t, a, 3)
+	c := consoleOf(a.win().Root.B.Pane)
+	a.focusPane(a.win().Root.B.Pane.ID)
+	line := strings.Repeat("sel ", 14)
+	c.ed.Load(strings.Repeat(line+"\n", 4) + "selX")
+	feed(t, a, "ssel")
+	labels, _ := matchLabels(a)
+	if len(labels) < 47 || slices.Contains(labels, "x") || slices.Contains(labels, "X") || !slices.ContainsFunc(labels, func(l string) bool { return l != strings.ToLower(l) }) {
+		t.Errorf("%d labels: %v", len(labels), labels)
+	}
+}
