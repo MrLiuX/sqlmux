@@ -29,6 +29,11 @@ type Context struct {
 	Focus   []string // focused widget scopes, most specific first: {"result", "grid"}
 	Pane    string   // pane type for [map.<pane>.<mode>]: console | grid | tree
 	Mode    Mode
+	// Firm is a scope whose complete bindings stay complete: a longer
+	// sequence of a lower scope that starts with one is not bound (select: d
+	// does not wait for dd, F10.7). The others keep the first to bind an
+	// exact sequence winning and a longer one hanging under it.
+	Firm string
 	// Plain is the modeless editor (§6.9): typed keys are text, so of the
 	// pane's and NORMAL's bindings only the Ctrl ones apply, as C-h and C-e.
 	Plain bool
@@ -75,6 +80,7 @@ type node struct {
 	action string
 	rhs    []Key
 	table  string // the scope that put it there first, the highest (§6.5)
+	firm   bool   // bound by the Firm scope of the context (F10.7)
 }
 
 // trie merges the scopes of c into one trie, cached per context. The first
@@ -106,8 +112,12 @@ func (m *Map) trie(c Context, maps bool) *node {
 			}
 		}
 		for _, b := range bs {
-			n := root
+			n, longer := root, false
 			for _, k := range m.expand(b.Keys) {
+				if n.firm { // a complete binding of the Firm scope: nothing hangs under it
+					longer = true
+					break
+				}
 				if n.next == nil {
 					n.next = map[Key]*node{}
 				}
@@ -117,8 +127,8 @@ func (m *Map) trie(c Context, maps bool) *node {
 				}
 				n = n.next[k]
 			}
-			if !n.bound {
-				n.bound, n.action, n.rhs = true, b.Action, b.RHS
+			if !longer && !n.bound {
+				n.bound, n.action, n.rhs, n.firm = true, b.Action, b.RHS, c.Firm != "" && t == "keys."+c.Firm
 			}
 		}
 	}

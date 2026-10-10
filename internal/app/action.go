@@ -172,10 +172,16 @@ func init() {
 		"tx.commit":   {Title: i18n.N("提交"), Run: func(a *App, _ Args) tea.Cmd { return a.endTx(a.conn(), "commit") }},
 		"tx.rollback": {Title: i18n.N("回滚"), Run: func(a *App, _ Args) tea.Cmd { return a.endTx(a.conn(), "rollback") }},
 		// The result area's (§11).
-		"result.rerun":     {Title: i18n.N("重跑"), Run: func(a *App, _ Args) tea.Cmd { return a.rerun() }},
-		"result.page.next": {Title: i18n.N("结果下一页"), Run: func(a *App, _ Args) tea.Cmd { return a.resultPage(1) }},
-		"result.page.prev": {Title: i18n.N("结果上一页"), Run: func(a *App, _ Args) tea.Cmd { return a.resultPage(-1) }},
-		"result.export":    {Title: i18n.N("导出 CSV"), Run: func(a *App, _ Args) tea.Cmd { return a.exportResult() }},
+		"result.rerun": {Title: i18n.N("重跑"), Run: func(a *App, _ Args) tea.Cmd { return a.rerun() }},
+		// records selected on a table (F10.7): m marks one, v and V begin and end VISUAL
+		"grid.select.toggle": {Title: i18n.N("标记 / 取消标记这条记录"), Run: do(func(a *App, _ Args) { a.selectToggle() })},
+		"grid.select.visual": {Title: i18n.N("VISUAL 扩选记录"), Run: do(func(a *App, _ Args) { a.selectVisual() })},
+		"grid.select.clear":  {Title: i18n.N("清除选中 / 结束 VISUAL"), Local: true, Run: do(func(a *App, _ Args) { a.selectClear() })},
+		"grid.select.delete": {Title: i18n.N("标记删除选中的记录"), Local: true, Run: func(a *App, _ Args) tea.Cmd { return a.selectDelete() }},
+		"grid.select.yank":   {Title: i18n.N("复制选中的记录为 JSON"), Local: true, Run: func(a *App, _ Args) tea.Cmd { return a.selectYank() }},
+		"result.page.next":   {Title: i18n.N("结果下一页"), Run: func(a *App, _ Args) tea.Cmd { return a.resultPage(1) }},
+		"result.page.prev":   {Title: i18n.N("结果上一页"), Run: func(a *App, _ Args) tea.Cmd { return a.resultPage(-1) }},
+		"result.export":      {Title: i18n.N("导出 CSV"), Run: func(a *App, _ Args) tea.Cmd { return a.exportResult() }},
 		"result.pin": {Title: i18n.N("固定结果"), Run: do(func(a *App, _ Args) {
 			if rt := resultOf(a.focused()); rt != nil && rt.run != nil && rt.run.done {
 				rt.pinned = !rt.pinned

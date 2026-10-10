@@ -246,7 +246,7 @@ func TestYankInsertAddedAndBinary(t *testing.T) {
 // text is one (else the text), true and false for booleans, null, json as
 // itself, the rest as strings, nothing HTML-escaped (F9.5).
 func TestRowJSON(t *testing.T) {
-	got, err := rowJSON([]jsonField{
+	raw, err := rowRaw([]jsonField{
 		{"id", ui.ColNumber, db.Val{S: "7"}},
 		{"big", ui.ColNumber, db.Val{S: "12345678901234567890.5"}},
 		{"nan", ui.ColNumber, db.Val{S: "NaN"}},
@@ -268,6 +268,10 @@ func TestRowJSON(t *testing.T) {
 		{"html", ui.ColString, db.Val{S: "<a href=\"x\">&</a>"}},
 		{"id", ui.ColNumber, db.Val{S: "8"}}, // a result may have a name twice
 	})
+	got := ""
+	if err == nil {
+		got, err = indentJSON(raw)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

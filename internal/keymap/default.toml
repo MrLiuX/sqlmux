@@ -66,6 +66,9 @@ leader = "<Space>"
 "gc" = "grid.cols"
 "]" = "grid.page.next"
 "[" = "grid.page.prev"
+"m" = "grid.select.toggle" # mark the record; space is the leader, so not yazi's (F10.7)
+"v" = "grid.select.visual"
+"V" = "grid.select.visual"
 "yy" = "grid.yank.row"
 "yl" = "grid.yank"
 "p" = "grid.paste"
@@ -74,6 +77,11 @@ leader = "<Space>"
 # not in normal: a console's : and ; are its vim's (§6.8)
 ":" = "palette.open"
 ";" = "palette.sql"
+
+[keys.select] # records marked, or VISUAL on a table: over grid, whose dd and yy do not make d and y wait (F10.7)
+"d" = "grid.select.delete"
+"y" = "grid.select.yank"
+"<Esc>" = "grid.select.clear"
 
 [keys.result] # stacked above grid, which the rest goes to (§6.4)
 "P" = "result.pin"

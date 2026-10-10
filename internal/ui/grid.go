@@ -63,6 +63,10 @@ type Grid struct {
 	Nums           []int
 
 	Yank *[2]int // the record and field a yank flashes, field -1 for all of it (F3.32)
+
+	// Selected are the records selected: their numbers on the visual
+	// background; FlashNums those whose numbers a yank of them flashes (F10.7)
+	Selected, FlashNums map[int]bool
 }
 
 // maxColWidth caps a column's wish (§7.6).
@@ -379,6 +383,7 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 			rowNo(uv.Rect(cellX(i)-1, y, ws[c]+2, 1), c)
 			st := num(c == cc, th.PaneBg)
 			st.Fg = g.recColor(th, c, st.Fg)
+			g.markNumber(f, &st, uv.Rect(cellX(i)-1, y, ws[c]+2, 1).Intersect(area), c)
 			f.Text(cellX(i), y, right, h, st)
 		default:
 			f.Text(cellX(i), y, right, h, name)
@@ -421,6 +426,7 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 			st := num(r == cr, bg)
 			rec, _ := v.data(r, 0)
 			st.Fg = g.recColor(th, rec, st.Fg)
+			g.markNumber(f, &st, uv.Rect(area.Min.X, y, labelW+2, 1), rec)
 			f.Text(area.Min.X+1+labelW-Width(label), y, labelEnd, label, st)
 		}
 		for i, c := range cols {
@@ -537,6 +543,21 @@ func drawCell(f *Frame, x, y, right int, s string, st, mark uv.Style) {
 		}
 		x = f.Text(x, y, right, part, st)
 	}
+}
+
+// markNumber paints the cell of record rec's number, whose text is drawn in
+// st: on the visual background when the record is selected, in the yank's
+// colors while its yank flashes (F10.7).
+func (g Grid) markNumber(f *Frame, st *uv.Style, cell uv.Rectangle, rec int) {
+	switch {
+	case g.FlashNums[rec]:
+		st.Fg, st.Bg = f.Theme.Bg, f.Theme.Yank
+	case g.Selected[rec]:
+		st.Bg = f.Theme.Visual
+	default:
+		return
+	}
+	f.Fill(cell, uv.Style{Bg: st.Bg})
 }
 
 // recColor is record rec's number's color: error where a save failed on
