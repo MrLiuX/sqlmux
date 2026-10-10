@@ -62,10 +62,12 @@ func init() {
 		// Keys inside the palette. Like every overlay's own actions they are
 		// Local, which the palette does not list (§12); bound elsewhere in
 		// config, they do nothing.
-		"palette.up":       {Title: i18n.N("上移"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { a.paletteMove(-1); return nil })},
-		"palette.down":     {Title: i18n.N("下移"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { a.paletteMove(1); return nil })},
-		"palette.run":      {Title: i18n.N("执行"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { return a.paletteEnter() })},
-		"palette.open.tab": {Title: i18n.N("打开"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { return a.paletteRun(a.palette.sel, true) })},
+		"palette.preview.up":   {Title: i18n.N("向上滚动预览"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { return a.scrollPreview(-1) })},
+		"palette.preview.down": {Title: i18n.N("向下滚动预览"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { return a.scrollPreview(1) })},
+		"palette.up":           {Title: i18n.N("上移"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { a.paletteMove(-1); return nil })},
+		"palette.down":         {Title: i18n.N("下移"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { a.paletteMove(1); return nil })},
+		"palette.run":          {Title: i18n.N("执行"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { return a.paletteEnter() })},
+		"palette.open.tab":     {Title: i18n.N("打开"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { return a.paletteRun(a.palette.sel, true) })},
 		"palette.close": {Title: i18n.N("关闭命令面板"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { // quick SQL's candidates first (§9.7)
 			if a.palette.comp != nil {
 				a.palette.comp = nil

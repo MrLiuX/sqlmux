@@ -41,6 +41,7 @@ type PalettePreview struct {
 	Text, Err string
 	Names     SQLNames
 	Dialect   sqlkit.Dialect
+	Top       int // the rows scrolled past (F9.7)
 }
 
 // Lines is how many rows p takes whole.
@@ -48,7 +49,7 @@ func (p *PalettePreview) Lines() int {
 	if p.Err != "" {
 		return 1
 	}
-	return strings.Count(p.Text, "\n") + 1
+	return TextView{Text: p.Text}.Lines()
 }
 
 // PaletteResult is quick SQL's result area, under the list (§12): a title
@@ -198,24 +199,11 @@ func (p Palette) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 	}
 	if pv := p.Preview; pv != nil && grid.Dy() > 0 {
 		rule(y)
-		lines, colors := strings.Split(pv.Text, "\n"), SQLColors(th, pv.Text, pv.Dialect, pv.Names)
+		v := TextView{Text: pv.Text, Colors: SQLColors(th, pv.Text, pv.Dialect, pv.Names), Top: pv.Top}
 		if pv.Err != "" {
-			lines, colors = []string{pv.Err}, nil
+			v.Text, v.Colors = strings.ReplaceAll(pv.Err, "\n", " "), nil
 		}
-		at := 0
-		for i, l := range lines[:min(len(lines), grid.Dy())] {
-			r := uv.Rect(x0, grid.Min.Y+i, x1-x0, 1)
-			switch {
-			case i == grid.Dy()-1 && i < len(lines)-1: // cut
-				// ponytail: a DDL longer than the preview is cut, not scrolled
-				f.Text(r.Min.X, r.Min.Y, r.Max.X, "…", dim)
-			case colors == nil:
-				f.Text(r.Min.X, r.Min.Y, r.Max.X, l, uv.Style{Fg: th.Error, Bg: th.PaneBg})
-			default:
-				Input{Text: l}.draw(f, r, bg, colors[at:at+len(l)])
-			}
-			at += len(l) + 1
-		}
+		v.Draw(f, uv.Rect(x0, grid.Min.Y, x1-x0, grid.Dy()), bg)
 		y = grid.Max.Y
 	}
 	if r := p.Result; r != nil {
