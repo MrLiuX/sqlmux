@@ -343,12 +343,12 @@ func (a *App) drawSidebar(f *ui.Frame, r uv.Rectangle) {
 		return
 	}
 	paneRegions(f, win.Tree.ID, r)
-	b := ui.Block{ // the session's: the name goes before SPC b (§7.8)
+	b := ui.Block{ // the session's: the name goes before the « that folds it (§7.8)
 		Num:         a.icons.Number(0),
 		Icon:        a.icons.Conn,
 		Object:      a.sess.Name,
 		ObjectFirst: true,
-		Hints:       bound(ui.Hint{Key: a.keys.Hint("tree.toggle", "normal"), Action: "tree.toggle"}),
+		Hints:       []ui.Hint{{Label: "«", Action: "tree.toggle", Color: a.theme.Dim}},
 		Focused:     win.Focus == win.Tree.ID,
 		Pane:        win.Tree.ID,
 	}
@@ -602,29 +602,12 @@ func whichKeyItems(next []keymap.Next) []ui.WhichKeyItem {
 	return items
 }
 
-// drawThinBar is the folded sidebar (§7.8): "»" on top, then "schema · SPC b"
-// down the middle column, one character per row.
+// drawThinBar is the folded sidebar (§7.8): a "»" on top and nothing else.
 func (a *App) drawThinBar(f *ui.Frame, r uv.Rectangle) {
-	th := f.Theme
 	f.Region(r, ui.Target{Kind: ui.KindButton, Action: "tree.toggle"}) // a click unfolds it
 	in := ui.Block{Pane: a.win().Tree.ID}.Draw(f, r)
-	if in.Empty() {
-		return
-	}
-	text := "»schema"
-	if k := a.keys.Hint("tree.toggle", "normal"); k != "" {
-		text += " · " + k
-	}
-	y := in.Min.Y
-	for _, ch := range text {
-		st := uv.Style{Fg: th.Dim, Bg: th.PaneBg}
-		if y == in.Min.Y {
-			st.Fg = th.Focus
-		}
-		f.Text(in.Min.X, y, in.Max.X, string(ch), st)
-		if y++; y >= in.Max.Y {
-			break
-		}
+	if !in.Empty() {
+		f.Text(in.Min.X, in.Min.Y, in.Max.X, "»", uv.Style{Fg: f.Theme.Focus, Bg: f.Theme.PaneBg})
 	}
 }
 

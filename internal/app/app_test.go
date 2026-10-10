@@ -817,8 +817,19 @@ func TestPaneNumbers(t *testing.T) {
 	}
 }
 
+// The « on the sidebar's title folds it, the » on the folded bar unfolds
+// it, a click each; the bar says nothing else (§7.8, F10.9).
 func TestFoldSidebar(t *testing.T) {
 	a := sized(160, 45, "nerd")
+	a.win().Focus = 0
+	click(a, find(t, a, ui.Target{Kind: ui.KindHint, Pane: 0, Action: "tree.toggle"}).Min)
+	if r := a.layout()[0]; r.Dx() != 3 {
+		t.Fatalf("a click on «: bar %v", r)
+	}
+	click(a, uv.Pos(1, 1))
+	if r := a.layout()[0]; r.Dx() != 32 {
+		t.Fatalf("a click on »: bar %v", r)
+	}
 	a.win().Focus = 0
 	feed(t, a, "<Space>b")
 	if r := a.layout()[0]; r.Dx() != 3 || a.win().Focus == 0 {
@@ -829,7 +840,7 @@ func TestFoldSidebar(t *testing.T) {
 	for y := 1; y <= 15; y++ {
 		down += col(y)
 	}
-	if down != "»schema · SPC b" {
+	if down != "»"+strings.Repeat(" ", 14) {
 		t.Errorf("thin bar reads %q", down)
 	}
 	feed(t, a, "<C-h><C-h>")

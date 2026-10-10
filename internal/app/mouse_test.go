@@ -251,7 +251,7 @@ func TestDragSidebarEdge(t *testing.T) {
 }
 
 // The sidebar's title is the session (§7.8): a click only focuses it; a
-// narrow one keeps ⓪ <icon>, drops SPC b and then cuts the name.
+// narrow one keeps ⓪ <icon>, drops the « that folds it and then cuts the name.
 func TestSidebarTitle(t *testing.T) {
 	conn := ui.NerdIcons.Conn.Text
 	for _, c := range []struct {
@@ -261,8 +261,8 @@ func TestSidebarTitle(t *testing.T) {
 	}{
 		{"nerd", 16, "┌─ ⓪ " + conn + " dorae… ─┐"},
 		{"nerd", 20, "┌─ ⓪ " + conn + " doraemon ───┐"},
-		{"nerd", 28, "┌─ ⓪ " + conn + " doraemon ─── SPC b ─┐"},
-		{"ascii", 24, "┌─ ⟨0⟩ @ doraemon ─────┐"},
+		{"nerd", 28, "┌─ ⓪ " + conn + " doraemon ─────── « ─┐"},
+		{"ascii", 24, "┌─ ⟨0⟩ @ doraemon ─ « ─┐"},
 	} {
 		a := sized(160, 45, c.icons)
 		a.win().TreeW = c.w
