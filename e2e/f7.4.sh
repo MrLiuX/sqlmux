@@ -13,12 +13,12 @@ read -r PG_USER PG_PW PG_HOST PG_PORT PG_DB < <(python3 -c 'import sys, urllib.p
 box() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5; exit }'; }
 frows() { local g y; g=($(box)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 28)) $((g[0] + g[2] - 2)) "$y" | noicon | sed 's/^ *//; s/ *$//'; done; }   # 每行前面有字段的图标，noicon 去掉
 form_open() { e2e_plain | grep -q "┌─ 连接"; }
-field_y() { local g; g=($(box)); echo $(( g[1] + 1 + $1 )); }              # N：0 name 1 engine 2 host 3 port 4 user 5 password 6 database 7 read_only 8 高级（展开后 9 dsn 10 password_cmd）
+field_y() { local g; g=($(box)); echo $(( g[1] + 1 + $1 )); }              # N：0 name 1 group 2 engine 3 host 4 port 5 user 6 password 7 database 8 read_only 9 高级（展开后 10 dsn 11 password_cmd）
 # on_field N：焦点在第 N 个字段上：输入框有终端光标；engine（1）、高级（8）是开关，光标隐藏；read_only（7）的值是 select 底
-ro_x() { e2e_find "[" "$(field_y 7)" | cut -d" " -f1; }                       # read_only 的 [ ] 开关的列（标签列的宽度会随字段名变）
+ro_x() { e2e_find "[" "$(field_y 8)" | cut -d" " -f1; }                       # read_only 的 [ ] 开关的列（标签列的宽度会随字段名变）
 on_field() { local g; g=($(box)); case $1 in
-  1|8) [[ $(e2e_flag cursor_flag) == 0 ]] || { echo "  cursor visible on a switch ($1)"; false; } ;;
-  7) style_has "$(ro_x)" "$(field_y 7)" bg=#364a82 ;;
+  2|9) [[ $(e2e_flag cursor_flag) == 0 ]] || { echo "  cursor visible on a switch ($1)"; false; } ;;
+  8) style_has "$(ro_x)" "$(field_y 8)" bg=#364a82 ;;
   *) [[ $(( $(e2e_flag cursor_y) + 1 )) == $(field_y "$1") ]] || { echo "  cursor on row $(( $(e2e_flag cursor_y) + 1 )), field $1 is on $(field_y "$1")"; false; } ;;
   esac; }
 fsep() { local g y; g=($(box)); for ((y = g[1] + 1; y < g[1] + g[3]; y++)); do [[ $(e2e_text $((g[0] + 28)) $((g[0] + 30)) $y) == "───" ]] && { echo "$y"; return; }; done; }
@@ -26,7 +26,7 @@ ferr() { local g; g=($(box)); e2e_text $((g[0] + 28)) $((g[0] + g[2] - 2)) $(( $
 ferr_is() { local g; g=($(box)); [[ $(ferr) == "$1" ]] && style_has $((g[0] + 29)) $(( $(fsep) - 1 )) fg=$ERROR || { echo "  error row: '$(ferr)', want '$1'"; false; }; }
 clr() { local i; for ((i = 0; i < 40; i++)); do e2e_keys BSpace; done; sleep 0.2; }
 # fill NAME HOST PORT USER PW DB：焦点在 name 上，一路 Tab 填下去（port 先清掉预填的）
-fill() { e2e_type "$1"; key Tab; key Tab; e2e_type "$2"; key Tab; clr; e2e_type "$3"; key Tab; e2e_type "$4"; key Tab; e2e_type "$5"; key Tab; e2e_type "$6"; sleep 0.3; }
+fill() { e2e_type "$1"; key Tab; key Tab; key Tab; e2e_type "$2"; key Tab; clr; e2e_type "$3"; key Tab; e2e_type "$4"; key Tab; e2e_type "$5"; key Tab; e2e_type "$6"; sleep 0.3; }
 CT() { echo "$E2E_TMP/config/sqlmux/connections.toml"; }
 nrow() { local y; for y in $(seq 3 30); do [[ $(e2e_text 1 32 "$y") == *" $1 "* ]] && { echo "$y"; return; }; done; }   # 侧栏里 NAME 的行
 toast_row() { e2e_text 1 "$(e2e_flag pane_width)" $(( $(H) - 1 )); }
@@ -35,7 +35,7 @@ toast_row() { e2e_text 1 "$(e2e_flag pane_width)" $(( $(H) - 1 )); }
 E2E_NOCONN=1 e2e_start "$E2E_BIN"; wait_for 6 flag_is alternate_on 1; sleep 1.5
 check "没有 connections.toml 启动：界面出来（不退出），表单自动打开" eval 'running && form_open'
 check "树里是一行「还没有连接，按 ＋ 新建」" eval 'e2e_plain | sed -n 1,6p | grep -q "还没有连接，按"'
-check "表单：分字段 name / engine / host / port 5432 / user / password / database / read_only [ ] / 高级 ▸，底栏有保存、取消和键位提示" eval '[[ $(frows | sed -n 1,9p | tr -s " " | tr "\n" ";") == "name;engine postgres │ mysql;host;port 5432;user;password;database;read_only [ ];高级 ▸;" ]] && frows | tail -1 | grep -q "Tab 下一项 · ↵ 保存 · esc 取消" && frows | tail -1 | grep -q "\[ 保存 \] \[ 取消 \]"'
+check "表单：分字段 name / group / engine / host / port 5432 / user / password / database / read_only [ ] / 高级 ▸，底栏有保存、取消和键位提示" eval '[[ $(frows | sed -n 1,10p | tr -s " " | tr "\n" ";") == "name;group;engine postgres │ mysql;host;port 5432;user;password;database;read_only [ ];高级 ▸;" ]] && frows | tail -1 | grep -q "Tab 下一项 · ↵ 保存 · esc 取消" && frows | tail -1 | grep -q "\[ 保存 \] \[ 取消 \]"'
 check "光标在 name 上" on_field 0
 key Escape; sleep 0.3
 check "esc 关掉表单，没有连接也能用（面板能打开）" eval '! form_open && running && { e2e_keys C-p; sleep 0.4; palette_open; }'
@@ -49,7 +49,7 @@ check "单击侧栏第一行右端的 ＋：打开表单" form_open
 
 # ---- 填好保存：密码画 *，进钥匙串，connections.toml 里没有明文密码，保存后连上并展开
 fill first "$PG_HOST" "$PG_PORT" "$PG_USER" "$PG_PW" "$PG_DB"
-check "密码字段输入画成 *（不是明文）：这一行有 ${#PG_PW} 个 *，没有密码本身" eval 'r=$(frows | sed -n 6p); [[ $r == *"$(printf "*%.0s" $(seq 1 ${#PG_PW}))"* && $r != *"$PG_PW"* ]] || { echo "  [$r]"; false; }'
+check "密码字段输入画成 *（不是明文）：这一行有 ${#PG_PW} 个 *，没有密码本身" eval 'r=$(frows | sed -n 7p); [[ $r == *"$(printf "*%.0s" $(seq 1 ${#PG_PW}))"* && $r != *"$PG_PW"* ]] || { echo "  [$r]"; false; }'
 key Enter; sleep 2.5
 check "↵ 保存：表单关掉，connections.toml 新建、权限 0600、只有这一条" eval '! form_open && f=$(CT) && [[ -f $f && $(stat -f %Lp "$f") == 600 && $(grep -c "^\[\[connection\]\]" "$f") == 1 ]] && grep -q "name = \"first\"" "$f"'
 check "dsn 是拼出来的（密码不进 dsn）：postgres://$PG_USER@$PG_HOST:$PG_PORT/$PG_DB…" eval 'grep -q "dsn = \"postgres://$PG_USER@$PG_HOST:$PG_PORT/$PG_DB" "$(CT)" && ! grep -q "$PG_USER:" "$(CT)"'
@@ -72,45 +72,45 @@ check "name 以 . 开头：报名字的规则，焦点在 name" eval 'ferr_is "n
 clr; e2e_type doraemon; key Enter
 check "和已有的连接重名：「name = \"doraemon\" 重复了」" eval 'ferr_is "name = \"doraemon\" 重复了" && on_field 0'
 clr; e2e_type v; key Enter
-check "填了 name、没填 host：「缺少 host」，焦点跳到 host" eval 'ferr_is "缺少 host" && on_field 2'
+check "填了 name、没填 host：「缺少 host」，焦点跳到 host" eval 'ferr_is "缺少 host" && on_field 3'
 e2e_type localhost; key Enter
-check "再没填 user：「缺少 user」，焦点跳到 user" eval 'ferr_is "缺少 user" && on_field 4'
+check "再没填 user：「缺少 user」，焦点跳到 user" eval 'ferr_is "缺少 user" && on_field 5'
 e2e_type u; key Enter
-check "再没填 database：「缺少 database」，焦点跳到 database" eval 'ferr_is "缺少 database" && on_field 6'
+check "再没填 database：「缺少 database」，焦点跳到 database" eval 'ferr_is "缺少 database" && on_field 7'
 e2e_type d; key BTab; key BTab; key BTab; clr; e2e_type "12x"; key Enter
-check "port 不是数字：报错，焦点跳到 port" eval 'on_field 3 && [[ -n $(ferr) ]] && ferr | grep -q port'
+check "port 不是数字：报错，焦点跳到 port" eval 'on_field 4 && [[ -n $(ferr) ]] && ferr | grep -q port'
 check "校验没通过：connections.toml 一字没变" eval 'cmp -s "$(CT)" "$D/orig.toml"'
 key Escape; sleep 0.3
 
 # ---- engine 切换时没改过的 port 跟着变；改过的不动；mysql 的 dsn 是 mysql://
-pal ">conn.new"; key Enter; key Tab; key Right; sleep 0.3
-check "engine 上按 →：选中 mysql，port 没改过，跟着变成 3306" eval 'frows | sed -n 2p | grep -q "postgres │ mysql" && [[ $(frows | sed -n 4p) == "port 3306" ]]'
+pal ">conn.new"; key Enter; key Tab; key Tab; key Right; sleep 0.3
+check "engine 上按 →：选中 mysql，port 没改过，跟着变成 3306" eval 'frows | sed -n 3p | grep -q "postgres │ mysql" && [[ $(frows | sed -n 5p) == "port 3306" ]]'
 key Left; sleep 0.3
-check "← 切回 postgres：port 回到 5432" eval '[[ $(frows | sed -n 4p) == "port 5432" ]]'
+check "← 切回 postgres：port 回到 5432" eval '[[ $(frows | sed -n 5p) == "port 5432" ]]'
 key Tab; key Tab; clr; e2e_type 1234; key BTab; key BTab; key Space; sleep 0.3
-check "改过 port（1234）之后再切 engine（space）：port 不动" eval '[[ $(frows | sed -n 4p) == "port 1234" ]] && frows | sed -n 2p | grep -q mysql'
+check "改过 port（1234）之后再切 engine（space）：port 不动" eval '[[ $(frows | sed -n 5p) == "port 1234" ]] && frows | sed -n 3p | grep -q mysql'
 key Escape; sleep 0.3
 
 # ---- 开关：read_only 上 space；高级展开后 dsn / password_cmd；S-Tab 从 name 绕回高级
 pal ">conn.new"; key Enter; key BTab
-check "S-Tab 从 name 绕回最后一个字段「高级」" on_field 8
+check "S-Tab 从 name 绕回最后一个字段「高级」" on_field 9
 key Tab
 check "Tab 从「高级」绕回 name" on_field 0
-for i in 1 2 3 4 5 6 7; do key Tab; done
-check "Tab 七次到 read_only（值是 select 底）" on_field 7
+for i in 1 2 3 4 5 6 7 8; do key Tab; done
+check "Tab 八次到 read_only（值是 select 底）" on_field 8
 key Space
-check "read_only 上 space：切成 [x]" eval '[[ $(frows | sed -n 8p) == "read_only [x]" ]]'
+check "read_only 上 space：切成 [x]" eval '[[ $(frows | sed -n 9p) == "read_only [x]" ]]'
 key Tab; key Space
-check "「高级」上 space：展开（▾），多出 dsn 和 password_cmd 两行" eval '[[ $(frows | sed -n 9p) == "高级 ▾" ]] && frows | grep -qx "dsn" && frows | grep -qx "password_cmd"'
+check "「高级」上 space：展开（▾），多出 dsn 和 password_cmd 两行" eval '[[ $(frows | sed -n 10p) == "高级 ▾" ]] && frows | grep -qx "dsn" && frows | grep -qx "password_cmd"'
 key Tab
-check "Tab：到 dsn（输入框有光标）" on_field 9
+check "Tab：到 dsn（输入框有光标）" on_field 10
 key Escape; sleep 0.3
 
 # ---- 高级里直接填 dsn（host / port / user / database 不参与）：保存追加一段，原文一字不动、末尾没换行的最后一行补了换行
 read -r NOPW PW < <(python3 -c 'import sys, urllib.parse as u; p = u.urlsplit(sys.argv[1]); print(p._replace(netloc=p.netloc.replace(":" + p.password + "@", "@")).geturl(), p.password)' "$SQLMUX_TEST_PG")
 DSN2="$NOPW&application_name=$APP2"
 pal ">conn.new"; key Enter; e2e_type extra
-for i in 1 2 3 4 5 6 7; do key Tab; done; key Space; key Tab; key Space
+for i in 1 2 3 4 5 6 7 8; do key Tab; done; key Space; key Tab; key Space
 key Tab; e2e_type "$DSN2"; key Tab; e2e_type "echo \"$PW\""; key BTab; key BTab; key BTab; sleep 0.2
 key Enter; sleep 0.4
 check "↵ 保存：表单关掉；原来的内容一字不差留在前面（注释、末尾没换行的最后一行补了换行）" eval '! form_open && n=$(wc -c < "$D/orig.toml") && cmp -s <(head -c $n "$(CT)") "$D/orig.toml" && [[ $(tail -c +$((n + 1)) "$(CT)" | head -c 1 | xxd -p) == 0a ]]'
@@ -133,9 +133,9 @@ check "esc：表单关掉，什么都没写" eval '! form_open && [[ $(md5 -q "$
 pal ">conn.new"; key Enter; e2e_type zzz; key C-c
 check "C-c 等同 esc" eval '! form_open && running && [[ $(md5 -q "$(CT)") == "$sum" ]]'
 rm "$(CT)"
-pal ">conn.new"; key Enter; e2e_type fresh2; key Tab; key Tab; e2e_type "$PG_HOST"; key Tab; clr; e2e_type "$PG_PORT"; key Tab; e2e_type "$PG_USER"; key Tab; key Tab; e2e_type "$PG_DB"
-g=($(box)); e2e_click "$(ro_x)" "$(field_y 7)"; sleep 0.3
-check "单击 read_only 的值：切成 [x]，焦点到它上面" eval '[[ $(frows | sed -n 8p) == "read_only [x]" ]] && on_field 7'
+pal ">conn.new"; key Enter; e2e_type fresh2; key Tab; key Tab; key Tab; e2e_type "$PG_HOST"; key Tab; clr; e2e_type "$PG_PORT"; key Tab; e2e_type "$PG_USER"; key Tab; key Tab; e2e_type "$PG_DB"
+g=($(box)); e2e_click "$(ro_x)" "$(field_y 8)"; sleep 0.3
+check "单击 read_only 的值：切成 [x]，焦点到它上面" eval '[[ $(frows | sed -n 9p) == "read_only [x]" ]] && on_field 8'
 x=$(e2e_find "保存" $(( g[1] + g[3] - 2 )) | cut -d' ' -f1); e2e_click "$x" $(( g[1] + g[3] - 2 )); sleep 0.5
 check "单击底栏的「保存」：connections.toml 不存在就新建，权限 0600，里面只有这一条；密码没填：不写 password_cmd，钥匙串里没有 sqlmux-fresh2" eval '! form_open && f=$(CT) && [[ -f $f && $(stat -f %Lp "$f") == 600 && $(grep -c "^\[\[connection\]\]" "$f") == 1 ]] && grep -q "name = \"fresh2\"" "$f" && grep -q "read_only = true" "$f" && ! grep -q password_cmd "$f" && [[ ! -e "$E2E_TMP/keychain/sqlmux-fresh2" ]]'
 e2e_stop

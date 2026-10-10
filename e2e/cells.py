@@ -8,6 +8,7 @@
   cells.py rows X1 X2 Y1 Y2 BX -> per row Y1..Y2: "<text of X1..X2>|<bg at column BX>"
   cells.py panes          -> one line per pane box: "N X Y W H focused" (1-based; N from ⟨N⟩, - if none)
   cells.py find TEXT Y    -> start columns of TEXT on row Y, space-separated
+  cells.py bgcells #HEX   -> "X Y CHAR" of every non-blank cell with that background
 
 Widths follow tmux: East Asian W/F = 2 columns, combining marks / ZWJ / VS16 /
 skin tones = 0 (they join the previous cell), everything else (incl. the Nerd
@@ -143,6 +144,11 @@ def main():
                 m = re.search(r"⟨(\d+)⟩|([⓪①-⑳])", title)
                 num = m[1] if m and m[1] else (str(CIRCLED.index(m[2])) if m else "-")
                 print(num, x + 1, y + 1, x2 - x + 1, y2 - y + 1, int(c[1] == "#9ece6a" or (c[1] == "#e0af68" and x == 0 and y == 0)))   # F9.6: a zoomed pane (alone, from the corner) has the zoom color (default warn) and is the focused one
+    elif cmd == "bgcells":  # every cell with this background: "X Y CHAR" (F10.8 jump labels)
+        for y, row in enumerate(g):
+            for x, c in enumerate(row):
+                if c[2] == sys.argv[2] and c[0].strip():
+                    print(x + 1, y + 1, c[0])
     elif cmd == "width":
         for row in g:
             print(len(row))

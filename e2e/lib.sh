@@ -162,6 +162,7 @@ e2e_widths() { _cells width; }                     # display width of each row
 e2e_plain() { _cells plain; }                      # screen text with tabs expanded
 e2e_rows()  { _cells rows "$@"; }                  # X1 X2 Y1 Y2 BX -> "text|bg" per row
 e2e_panes() { _cells panes; }                      # "N X Y W H focused" per pane box
+e2e_bgcells() { _cells bgcells "$1"; }            # #HEX -> "X Y CHAR" per non-blank cell with that background
 e2e_find()  { _cells find "$1" "$2"; }            # TEXT Y -> start columns
 
 # wait_for SECS CMD... — poll CMD every 0.1s until it succeeds or SECS pass.
@@ -271,8 +272,8 @@ hy() { echo $(( $(grid_y) - 1 )); }                                     # the gr
 # form_dsn NAME DSN [PASSWORD_CMD [mysql]]: with the new-connection form open and the focus on name (M7 F7.4), fill name and
 # engine, open 高级, type the dsn (and the password_cmd), ↵ to save. The scripts that only need a connection added use this.
 form_dsn() { local i; e2e_type "$1"; sleep 0.2
-  if [[ $4 == mysql ]]; then e2e_keys Tab; sleep 0.2; e2e_keys Space; sleep 0.2; e2e_keys BTab; sleep 0.2; fi
-  for i in 1 2 3 4 5 6 7 8; do e2e_keys Tab; sleep 0.15; done; e2e_keys Space; sleep 0.2; e2e_keys Tab; sleep 0.2; e2e_type "$2"
+  if [[ $4 == mysql ]]; then e2e_keys Tab; sleep 0.2; e2e_keys Tab; sleep 0.2; e2e_keys Space; sleep 0.2; e2e_keys BTab; sleep 0.2; e2e_keys BTab; sleep 0.2; fi
+  for i in 1 2 3 4 5 6 7 8 9; do e2e_keys Tab; sleep 0.15; done; e2e_keys Space; sleep 0.2; e2e_keys Tab; sleep 0.2; e2e_type "$2"
   if [[ -n $3 ]]; then e2e_keys Tab; sleep 0.2; e2e_type "$3"; fi
   sleep 0.2; e2e_keys Enter; sleep 0.4; }
 e2e_done() { echo "== $E2E_PASS passed, $E2E_FAIL failed"; e2e_stop; ((E2E_FAIL == 0)); }

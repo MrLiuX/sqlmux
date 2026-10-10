@@ -15,7 +15,7 @@ cmdp() { pal ">$1"; key Enter; sleep 0.7; }
 frows() { local g y; g=($(box)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 28)) $((g[0] + g[2] - 2)) "$y" | noicon | sed 's/^ *//; s/ *$//'; done; }
 read -r PG_USER PG_PW PG_HOST PG_PORT PG_DB < <(python3 -c 'import sys, urllib.parse as u; p = u.urlsplit(sys.argv[1]); print(p.username, p.password, p.hostname, p.port, p.path[1:])' "$SQLMUX_TEST_PG")
 # 英文下的 fill：同 f7.4 的 fill（name→engine→host→port→user→password→database）
-fill() { e2e_type "$1"; key Tab; key Tab; e2e_type "$2"; key Tab; clr; e2e_type "$3"; key Tab; e2e_type "$4"; key Tab; e2e_type "$5"; key Tab; e2e_type "$6"; sleep 0.3; }
+fill() { e2e_type "$1"; key Tab; key Tab; key Tab; e2e_type "$2"; key Tab; clr; e2e_type "$3"; key Tab; e2e_type "$4"; key Tab; e2e_type "$5"; key Tab; e2e_type "$6"; sleep 0.3; }
 
 # ---- 英文 80×24：新建（零连接启动，浮层自动开）
 E2E_NOLANG=1 E2E_NOCONN=1 start -x 80 -y 24; sleep 1.5
@@ -53,7 +53,7 @@ write_one
 cmdp conn.new; fill pr1 "$PG_HOST" "$PG_PORT" "$PG_USER" "$PG_PW" "$PG_DB"; key Enter; sleep 1.2
 check "新建保存成功：connections.toml 里有 pr1，配置目录里没有 probe-* 文件" eval 'grep -q "^name = \"pr1\"" "$(ct)" && [[ -z $(ls -A "$E2E_TMP/config/sqlmux" | grep "^probe") ]] || { ls -A "$E2E_TMP/config/sqlmux"; false; }'
 key Escape; key Escape; sleep 0.3
-cmdp conn.manage; key Tab; key Tab; key Tab; key Tab; e2e_keys Space; key C-s; sleep 1.2
+cmdp conn.manage; key Tab; key Tab; key Tab; key Tab; key Tab; e2e_keys Space; key C-s; sleep 1.2
 check "修改保存成功（doraemon 勾上 read_only）：配置目录里仍没有 probe-* 文件" eval 'grep -q "^read_only = true" "$(ct)" && [[ -z $(ls -A "$E2E_TMP/config/sqlmux" | grep "^probe") ]]'
 key Escape; key Escape; sleep 0.3
 
