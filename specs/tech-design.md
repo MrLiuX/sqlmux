@@ -525,6 +525,7 @@ time    = "#fc9867"
 | `border` | #3b4261 | 未聚焦的边框 |
 | `focus` | #9ece6a | 焦点、NORMAL、执行 |
 | `warn` | #e0af68 | 待提交修改、键位、INSERT |
+| `zoom` | = `warn` | 缩放中的 pane 的边框和标题里的缩放图标（M9 F9.6；没写就跟 `warn`） |
 | `match` | #ff9e64 | 模糊匹配到的字符：只改前景色，不加底色，行的底色照旧（M1 用户反馈：黄底太重，参考 fzf / telescope 的效果）。补全、命令面板、树的过滤、COLS、WHERE 历史都用它 |
 | `cursor` / `cursor_blur` | #3d59a1 / #2f3549 | 单元格光标（pane 聚焦 / 失焦） |
 | `select` / `row` | #364a82 / #292e42 | 选中项 / 当前行 |
@@ -873,7 +874,7 @@ type Result struct {
 | 列属性：类型、可空、默认值、主键 | `pg_attribute`（`format_type`、`attnotnull`、`pg_get_expr(adbin, adrelid)`）+ `pg_constraint` | `information_schema.COLUMNS` + `KEY_COLUMN_USAGE` |
 | 所有列都不可空的唯一索引（用于定位行，见 §10.1） | `pg_index`，条件见表下 | `information_schema.STATISTICS` 中 `NON_UNIQUE = 0`，并要求每列的 `IS_NULLABLE = 'NO'` |
 | 枚举值（§10.2） | `pg_type.typtype = 'e'` 时查 `pg_enum` | 解析 `COLUMN_TYPE`，如 `enum('a','b')` |
-| DDL 预览（K-05） | 用 `format_type`、`pg_get_constraintdef`、`pg_get_indexdef` 拼出，不要求与 pg_dump 一致 | `SHOW CREATE TABLE` |
+| DDL 预览（K-05） | 用 `format_type`、`pg_get_constraintdef`、`pg_get_indexdef` 拼出，末尾带 `comment on table / column … is '…';`（`obj_description` / `col_description`，M9 F9.8），不要求与 pg_dump 一致 | `SHOW CREATE TABLE` |
 
 PG 的几处细节（M1 核对时对照 lazysql、pgtui 确认，两者各有问题）：
 
