@@ -14,10 +14,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"sqlmux/internal/app"
-	"sqlmux/internal/config"
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/app"
+	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/keymap"
 )
 
 func main() {

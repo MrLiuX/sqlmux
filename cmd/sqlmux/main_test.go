@@ -11,8 +11,8 @@ import (
 	"testing"
 	"unicode"
 
-	"sqlmux/internal/app"
-	"sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/app"
+	"github.com/kackerx/sqlmux/internal/config"
 )
 
 // writeConfig makes a config dir of the test's own with file name in it.

@@ -19,11 +19,11 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 
-	"sqlmux/internal/config"
-	"sqlmux/internal/db"
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/keymap"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // testData is the data directory of the tests that set none of their own:

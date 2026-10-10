@@ -8,11 +8,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"sqlmux/internal/config"
-	"sqlmux/internal/db"
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/keymap"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // sessionList is the open session list (§7.8「session 列表」): the row

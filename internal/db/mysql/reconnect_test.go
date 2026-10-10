@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db"
 )
 
 // redialing is a Worker over a connection of dsn that dials again, with

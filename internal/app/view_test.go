@@ -11,8 +11,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
 
-	"sqlmux/internal/config"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // Run `go test ./internal/app -update` to regenerate.

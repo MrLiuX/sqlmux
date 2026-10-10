@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db"
 )
 
 func TestPage(t *testing.T) {

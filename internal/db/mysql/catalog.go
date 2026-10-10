@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
 // Catalog queries (§8.4), over information_schema as lazysql's

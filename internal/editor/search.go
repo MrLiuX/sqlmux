@@ -7,7 +7,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
 // Search and the : line (§11): patterns are Go's RE2, which reads close to

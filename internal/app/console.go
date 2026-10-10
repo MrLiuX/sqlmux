@@ -12,11 +12,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 
-	"sqlmux/internal/config"
-	"sqlmux/internal/editor"
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/keymap"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/editor"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // consoleTab is a console open in a pane (§5, §11): its editor and the

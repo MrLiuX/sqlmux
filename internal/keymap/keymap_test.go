@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"sqlmux/internal/config"
-	"sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
 // The tests below read the Chinese texts: the language they run in is not the

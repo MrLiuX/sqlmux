@@ -193,7 +193,7 @@ func TestT(t *testing.T) {
 // mark are outside it.
 func TestScanSeesWhatItShould(t *testing.T) {
 	src := `package x
-import ("fmt"; "sqlmux/internal/i18n")
+import ("fmt"; "github.com/kackerx/sqlmux/internal/i18n")
 func f(x string) {
 	_ = i18n.T("前缀" + x)
 	_ = i18n.T(fmt.Sprintf("中文 %s", x))

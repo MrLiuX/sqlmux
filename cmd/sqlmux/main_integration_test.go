@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"sqlmux/internal/db/postgres"
+	"github.com/kackerx/sqlmux/internal/db/postgres"
 )
 
 // testDB is the integration database split into a DSN without its

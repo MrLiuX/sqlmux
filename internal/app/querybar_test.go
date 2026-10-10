@@ -11,9 +11,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/keymap"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // recDB records the SQL it is sent and answers with nothing.

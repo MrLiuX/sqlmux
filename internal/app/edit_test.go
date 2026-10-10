@@ -13,10 +13,10 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/db/mysql"
-	"sqlmux/internal/keymap"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db/mysql"
+	"github.com/kackerx/sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // editsOf is tab's changes as "row/col=value", DEFAULT as <default>.

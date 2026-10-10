@@ -5,9 +5,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // errorBar is a tab's error bar (§7.8「错误栏」) and the kind of request

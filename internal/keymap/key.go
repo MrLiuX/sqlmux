@@ -11,7 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
 // Key is one keystroke in canonical vim notation: a single character ("a",

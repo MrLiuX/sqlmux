@@ -16,11 +16,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"sqlmux/internal/config"
-	"sqlmux/internal/db"
-	"sqlmux/internal/db/mysql"
-	"sqlmux/internal/db/postgres"
-	"sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db/mysql"
+	"github.com/kackerx/sqlmux/internal/db/postgres"
+	"github.com/kackerx/sqlmux/internal/keymap"
 )
 
 // settle delivers what connecting, the catalog, a run, a page, a save and a

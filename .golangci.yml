@@ -60,7 +60,7 @@ formatters:
     - goimports # imports in three groups: standard, others, sqlmux
   settings:
     goimports:
-      local-prefixes: [sqlmux]
+      local-prefixes: [github.com/kackerx/sqlmux]
 
 issues:
   max-issues-per-linter: 0 # all of them, not the first 50

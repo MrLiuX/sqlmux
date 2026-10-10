@@ -12,7 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db"
 )
 
 // pg is the engine the tests go through.

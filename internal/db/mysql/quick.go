@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // Quick runs sql, one statement IsRead takes, for the palette's quick SQL

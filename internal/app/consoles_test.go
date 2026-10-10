@@ -9,7 +9,7 @@ import (
 
 	"github.com/charmbracelet/x/exp/golden"
 
-	"sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/config"
 )
 
 // consoleFile writes a console file with text in it.

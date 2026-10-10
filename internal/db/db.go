@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"time"
 
-	"sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // Val is one value as the database's text, or NULL (§8.1).

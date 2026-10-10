@@ -10,9 +10,9 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/exp/golden"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/sqlkit"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // A column's line of a table's DDL, then the lines that make an index or a key

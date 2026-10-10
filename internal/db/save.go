@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // Row is one row's changes to save (§10.3): its row identity's values as

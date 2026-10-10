@@ -11,9 +11,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/db/mysql"
-	"sqlmux/internal/db/postgres"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db/mysql"
+	"github.com/kackerx/sqlmux/internal/db/postgres"
 )
 
 // clipText is the text cmd, or one it batches, puts on the clipboard.

@@ -9,8 +9,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/editor"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/editor"
 )
 
 // ran is what the console sent the database, the reads without the LIMIT

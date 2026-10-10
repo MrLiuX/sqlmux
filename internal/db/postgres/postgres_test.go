@@ -12,8 +12,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 func connect(t *testing.T, readOnly bool) *Conn {

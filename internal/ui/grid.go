@@ -9,7 +9,7 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
-	"sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db"
 )
 
 // GridCol is one column of a Grid.

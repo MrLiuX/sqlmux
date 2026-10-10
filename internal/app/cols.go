@@ -6,9 +6,9 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/keymap"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // colsMenu is the open COLS list (Q-04, §7.8): which of a table's columns

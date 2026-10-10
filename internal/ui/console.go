@@ -10,7 +10,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 
-	"sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // Console is a console tab's text as its editor has it (§7.8, §9.2, §11):

@@ -15,11 +15,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/editor"
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/sqlkit"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/editor"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // copiedRow is the row yy took, for p (§10.6): its table, and each

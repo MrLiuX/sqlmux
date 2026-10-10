@@ -12,8 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn/ctxwatch"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 type Conn struct {

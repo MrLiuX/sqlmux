@@ -12,7 +12,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
 // Layout is the working set as it is saved (§14「布局文件」): the sessions,

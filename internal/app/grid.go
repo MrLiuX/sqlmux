@@ -12,12 +12,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/editor"
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/keymap"
-	"sqlmux/internal/sqlkit"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/editor"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // Tab is one tab of a pane (§5): a table's carries it, a console's the

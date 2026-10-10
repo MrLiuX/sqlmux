@@ -11,9 +11,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"sqlmux/internal/editor"
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/editor"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 type formatDone struct {

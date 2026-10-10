@@ -11,7 +11,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
-	"sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db"
 )
 
 func TestBroken(t *testing.T) {

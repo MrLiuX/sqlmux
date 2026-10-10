@@ -6,7 +6,7 @@ import (
 	"io"
 	"net"
 
-	"sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
 // Lost says whether a request's error is a lost connection, and what the

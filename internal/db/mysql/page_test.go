@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db"
 )
 
 // Pages as PG's (§8.5): by the row identity, a composite one in key order,

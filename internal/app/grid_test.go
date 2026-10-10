@@ -14,9 +14,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/editor"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/editor"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // ordersTable is the t_order the grid tests open: n rows, a NULL, an enum,

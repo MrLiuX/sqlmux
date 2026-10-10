@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	"sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/keymap"
 )
 
 // The editor is checked against nvim (tech-design §15). testdata/cases.txt

@@ -6,8 +6,8 @@ import (
 	"context"
 	"testing"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/db/postgres"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db/postgres"
 )
 
 // PG 17 takes what cellCases say it takes: cellCheck follows its input

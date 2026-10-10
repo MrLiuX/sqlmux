@@ -7,7 +7,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 
-	"sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // Input is a single-line text field (the palette's, a WHERE, a cell being

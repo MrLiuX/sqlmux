@@ -8,9 +8,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/sqlkit"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // ddlPopup is the DDL of a table, or what it says of one of its columns,

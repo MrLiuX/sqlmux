@@ -14,9 +14,9 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/exp/golden"
 
-	"sqlmux/internal/config"
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // keychain puts a fake security and secret-tool first on PATH: what they

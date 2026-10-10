@@ -10,10 +10,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/sqlkit"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // quickSQL is the palette's quick SQL (§12): the statement whose result

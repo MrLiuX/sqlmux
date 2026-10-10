@@ -15,8 +15,8 @@ import (
 	"github.com/BurntSushi/toml"
 	uv "github.com/charmbracelet/ultraviolet"
 
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 type Config struct {

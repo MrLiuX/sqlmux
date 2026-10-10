@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // The tests read the Chinese texts: the language they run in is not the

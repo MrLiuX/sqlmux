@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db"
 )
 
 func TestQuick(t *testing.T) {

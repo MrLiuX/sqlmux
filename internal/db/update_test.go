@@ -4,9 +4,9 @@ import (
 	"reflect"
 	"testing"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/db/mysql"
-	"sqlmux/internal/db/postgres"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db/mysql"
+	"github.com/kackerx/sqlmux/internal/db/postgres"
 )
 
 // One UPDATE a row: DEFAULT as the keyword, the row identity with =, every

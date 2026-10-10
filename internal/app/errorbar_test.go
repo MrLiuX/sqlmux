@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // PG's Position, a character of the statement from 1, as a line and a

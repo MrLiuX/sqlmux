@@ -15,9 +15,9 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/editor"
-	"sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/editor"
+	"github.com/kackerx/sqlmux/internal/keymap"
 )
 
 // execDB answers console runs: a statement's result by its SQL, the

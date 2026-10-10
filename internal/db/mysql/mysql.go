@@ -19,8 +19,8 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
-	"sqlmux/internal/db"
-	"sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // The driver logs what goes wrong on a connection, one the server dropped,

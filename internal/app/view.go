@@ -9,10 +9,10 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
-	"sqlmux/internal/editor"
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/keymap"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/editor"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // sidebarWidth is the ⟨0⟩ schema sidebar's default width, borders included

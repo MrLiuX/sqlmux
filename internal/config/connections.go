@@ -13,7 +13,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
 // Connection is one [[connection]] in connections.toml (§14).

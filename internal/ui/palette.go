@@ -6,8 +6,8 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
-	"sqlmux/internal/i18n"
-	"sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // PaletteRow is one candidate (K-03): icon, name, where it lives in dim, its

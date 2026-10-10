@@ -7,7 +7,7 @@ import (
 
 	uv "github.com/charmbracelet/ultraviolet"
 
-	"sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // Chip is one of the query bar's second row (Q-03): " LABEL value ". With

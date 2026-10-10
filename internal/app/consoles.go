@@ -9,8 +9,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"sqlmux/internal/config"
-	"sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
 // consoleDir is the console files' names as the directory last read held

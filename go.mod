@@ -1,4 +1,4 @@
-module sqlmux
+module github.com/kackerx/sqlmux
 
 go 1.26.3
 

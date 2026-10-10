@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db"
 )
 
 // saver is a Worker on a database of the test's own, a second session on

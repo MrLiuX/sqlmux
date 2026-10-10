@@ -11,7 +11,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/exp/golden"
 
-	"sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // consoleTheme gives every token the console draws a color of its own, so

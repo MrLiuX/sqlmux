@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // render is the frame drawn alone, over a fresh buffer and with no line

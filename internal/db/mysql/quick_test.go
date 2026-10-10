@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db"
 )
 
 // Quick SQL reads in a read-only transaction, in the tree's database, a

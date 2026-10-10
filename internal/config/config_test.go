@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 func TestParse(t *testing.T) {

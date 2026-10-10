@@ -14,9 +14,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"sqlmux/internal/config"
-	"sqlmux/internal/db"
-	"sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/keymap"
 )
 
 var layoutSpecs = []config.Connection{{Name: "doraemon", Engine: "postgres"}, {Name: "play", Engine: "postgres"}}

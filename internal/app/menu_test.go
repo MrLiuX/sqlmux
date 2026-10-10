@@ -13,9 +13,9 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"sqlmux/internal/config"
-	"sqlmux/internal/db"
-	"sqlmux/internal/ui"
+	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // menuApp is a tree with a view and a materialized view in public, console_1

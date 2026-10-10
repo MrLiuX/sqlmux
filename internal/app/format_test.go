@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"sqlmux/internal/editor"
-	"sqlmux/internal/keymap"
-	"sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/editor"
+	"github.com/kackerx/sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // gqIn presses keys in console c, the last starting a format, and

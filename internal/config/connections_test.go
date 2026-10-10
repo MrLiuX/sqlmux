@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
 // connections_test.go and keychain_test.go read the Chinese texts: the

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"sqlmux/internal/config"
-	"sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
 //go:embed default.toml
