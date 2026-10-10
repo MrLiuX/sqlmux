@@ -32,7 +32,7 @@
 
 **验收**
 - [x] `golangci-lint run ./...` 零报告；`go test ./...`、集成测试、全量 e2e 都过且期望值没改（tester 对比 e2e 分支）。
-- [ ] 在 GitHub 上跑过一次绿的 CI（推送要等用户验收打 tag 之后，所以这一项在 M6/M7 验收通过、推送后由决策者确认）。
+- [x] 在 GitHub 上跑过一次绿的 CI（2026-10-10 首次推送：9cda783 红，keychain 的三处测试只在 macOS 过；ffbcec5 修了测试后 integration / lint / test 全绿，run 38054162949）。
 
 ## F7.2 justfile · 状态：passed（5b76c68；e2e 5b76c68）
 
