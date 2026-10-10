@@ -24,6 +24,11 @@ paging_body() {
   paged "]" "501–1000+ 行"
   check "] 翻到第 2 页：标题 501–1000+ 行，第一行 id 501" eval 'title_has "501–1000+ 行" && [[ $(firstid) == 501 ]]'
   check "只换了这一个 tab：结果区的 tab 栏不变（${tabs0}）" eval '[[ $(rtabs) == "$tabs0" ]]'
+  # ---- 第 2 页导出 CSV：文件名加 -p2（F10.4 导出加页号），内容是这一页的 500 行
+  seq_n=$(rtitle | grep -oE '#[0-9]+' | tr -d '#')
+  read -r x y <<<"$(g=($(geom $RP)); echo $((g[0] + g[2] - 9)) "${g[1]}")"
+  e2e_click "$x" "$y"; sleep 0.8; key C-k; key C-j
+  check "第 2 页点导出：当前目录下是 console_1-${seq_n}-p2.csv，500 行数据 + 表头，第一行数据是 501" eval 'f=$E2E_TMP/console_1-${seq_n}-p2.csv; [[ -f $f && $(wc -l <"$f" | tr -d " ") == 501 && $(sed -n 2p "$f" | tr -d "\r\" ") == 501 ]] || { ls $E2E_TMP | head; false; }'
   paged "]" "1001–1203 行"
   check "再 ]：第 3 页（最后一页）：标题 1001–1203 行，第一行 id 1001" eval 'title_has "1001–1203 行" && [[ $(firstid) == 1001 ]]'
   check "最后一页再按 ]：无事" eval 'key "]"; sleep 0.8; title_has "1001–1203 行" && [[ $(firstid) == 1001 ]]'
