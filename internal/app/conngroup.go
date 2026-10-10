@@ -34,7 +34,7 @@ func (a *App) groupNames() (names []string) {
 
 // regroup puts every session's connections in the file's order and then in
 // the tree's, as a group edited moves a connection to the place the file
-// gives it (F10.6). A file that does not read leaves the order as it is.
+// gives it (F10.6). A file that does not read gives only the tree's order.
 func (a *App) regroup() {
 	at := map[string]int{}
 	if cs, _, err := config.LoadConnections(""); err == nil {
