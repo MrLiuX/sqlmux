@@ -21,6 +21,7 @@
 - **涉及**：`internal/app`、`internal/keymap/default.toml`
 
 **开发**（§9.6）
+- [ ] 细节（已定）：底部提示「填入」排在「应用」后面；空列表时无事。
 - [ ] `where.edit`「填入输入框」，默认 `C-e`（`[keys.where]`）：关掉下拉，输入框换成选中项的 WHERE 文字（ORDER / LIMIT 不动——收藏项附带的 ORDER / LIMIT 只在 `↵` 应用时才换），INSERT 模式、光标在末尾；不执行。底部提示加上它。
 
 **验收**
@@ -36,6 +37,7 @@
 
 **开发**（§9.6）
 - [ ] `where.star` 也绑在 WHERE 输入框（`[keys.input]` 的 `<C-f>`，只在 WHERE 里起作用，同 `<C-r>`）：收藏 / 取消收藏输入框里的文字（连同当前 ORDER / LIMIT，同下拉里的规则），toast「已收藏」/「已取消收藏」；输入为空无事。
+- [ ] 细节（已定）：下拉开着时 `where.star` 照旧收藏选中项、不 toast；输入框文字 trim 后为空无事；已有同样一条（`sameQuery`）就取消；不在输入框里画「已收藏」标记。
 
 **验收**
 - [ ] 单测：收藏后 state 里有、再按一次没有；toast 文字。
@@ -77,6 +79,7 @@
 **开发**（§7.5「复制为 JSON」）
 - [ ] `grid.yank.json`「复制为 JSON」，默认 `Y`：一个对象，键是列名、按列顺序（含隐藏的列）；值按列类型：数字类型 → JSON 数字（文本不是合法 JSON 数字时退回字符串），布尔 → `true` / `false`（MySQL 的 `1` / `0` 也转），NULL → `null`，json / jsonb → 原文嵌入，其余（含时间、数组、uuid）→ 字符串；2 空格缩进、多行；值取显示的（含未保存修改），成功后整行闪一下，同 `yy`；结果 tab 的行也能复制（有列类型就行）。转置视图里同样是当前记录。
 - [ ] 用 `encoding/json`，不手拼。
+- [ ] 细节（worker 2026-10-10 提议，已定）：数字按 F8.7 的 `number` 正则（不合法退回字符串）；布尔认 PG `bool` 的 `t` / `f` / `true` / `false` 和 MySQL `tinyint(1)` 的 `1` / `0`；json / jsonb `json.Valid` 才原文嵌入；二进制列照屏幕上的 `<binary N bytes>` 当字符串，不拒绝；外层对象按列顺序用有序键值对写、再 `json.Indent`；新增行里 DEFAULT 的格整个键省略；结果 tab 的行同样。默认键 `Y`（`[keys.grid]`，之前空着）。
 
 **验收**
 - [ ] 单测：含 int、bool、null、jsonb、text、timestamptz 的一行 → 期望的 JSON；非法数字文本退回字符串。
