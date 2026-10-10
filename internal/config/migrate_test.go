@@ -37,14 +37,14 @@ func listed(t *testing.T, dir string) []string {
 // renamed file or one that only starts like one staying; done once (F10.11).
 func TestMigrateConsoles(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
-	writeFiles(t, filepath.Join(DataDir(), "consoles"), "console_2.sql", "mine.sql", "console_x.sql", "console_3.sql")
+	writeFiles(t, filepath.Join(DataDir(), "consoles"), "console_2.sql", "mine.sql", "console_x.sql", "console_3.sql", "notes.txt", "console_4.sql.bak")
 	if err := MigrateConsoles(); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(DataDir(), "consoles")); err == nil {
 		t.Error("consoles/ is still there")
 	}
-	want := []string{"console_x.sql", "mine.sql", "query_2.sql", "query_3.sql"}
+	want := []string{"console_4.sql.bak", "console_x.sql", "mine.sql", "notes.txt", "query_2.sql", "query_3.sql"} // what is no .sql file stays
 	if got := listed(t, filepath.Join(DataDir(), "queries")); !slices.Equal(got, want) {
 		t.Errorf("queries/: %v, want %v", got, want)
 	}
@@ -145,5 +145,17 @@ n = 2
 	}
 	if want := []string{"query query_4", "query report", "query query_2"}; !slices.Equal(got, want) {
 		t.Errorf("tabs %v, want %v", got, want)
+	}
+}
+
+// A data directory with no consoles/ and no queries/, a new install's, has
+// nothing to migrate and nothing made (F10.11).
+func TestMigrateConsolesNothingThere(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	if err := MigrateConsoles(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(DataDir(), "queries")); err == nil {
+		t.Error("queries/ was made")
 	}
 }
