@@ -16,6 +16,7 @@ cline() { local g; g=($(geom 2)); e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $(
 
 SOLO= start; key C-l
 key i; e2e_type "select 1 as marker"; key Escape; sleep 0.4
+key C-h; sleep 0.3                                                            # 焦点到 ①（空 pane），表格开在这里
 open_table t_order; wait_for 8 settled
 check "（准备）焦点在 ① 的表格上，console 里是 select 1 as marker" eval 'focus_is 1 && [[ $(cline) == *"select 1 as marker"* ]]'
 
@@ -23,7 +24,7 @@ check "（准备）焦点在 ① 的表格上，console 里是 select 1 as marke
 key s; e2e_type marker; sleep 0.5
 check "表格里 s、marker：屏幕上只有 console 里那一处匹配，一个标签" eval 'mode_is JUMP && [[ $(nlabels) == 1 ]]'
 l=$(labels | awk '{ print $1 }'); e2e_type "$l"; sleep 0.5
-check "按标签：焦点到 ② console，回到 NORMAL，光标在 marker 的第一个字符（第 1 行第 13 列）" eval 'focus_is 2 && mode_is NORMAL && pos_is 1,13 || { echo "  focus $(focused) pos $(pos)"; false; }'
+check "按标签：焦点到 ② console，回到 NORMAL，光标在 marker 的第一个字符（从 0 数的第 12 列）" eval 'focus_is 2 && mode_is NORMAL && (( $(e2e_flag cursor_x) - 103 == 12 )) || { echo "  focus $(focused) cursor_x $(e2e_flag cursor_x)"; false; }'
 
 # ---- console 里 s 跳到表格的单元格
 key s; e2e_type pen; sleep 0.5
@@ -53,7 +54,7 @@ key Escape; sleep 0.3
 check "esc 退出 JUMP 后 console 文字还是原样" eval '[[ $(cline) == *"select 1 as marker"* ]]'
 
 # ---- 结果区的单元格也能跳
-key C-l; key i; key Escape; key g g; key d G; key i; paste "select 'zzq' as k"; key Escape; key g g; key Enter; done_run
+key C-l; key i; key Escape; key g g; key d G; key i; paste "select 'zz' || 'q' as k"; key Escape; key g g; key Enter; done_run
 check "（准备）执行后底部出现结果区 ③" eval '[[ -n $(geom 3) ]]'
 key s; e2e_type zzq; sleep 0.5
 check "s、zzq：结果区里那一格出现标签" eval 'mode_is JUMP && [[ $(nlabels) == 1 ]]'

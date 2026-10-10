@@ -83,9 +83,11 @@ key Escape; sleep 0.3
 e2e_stop; SOLO= start -C "$D/c" -S "$D/st2"; sleep 0.5
 cmdp conn.new; e2e_type neo; key Tab; sleep 0.5
 check "焦点刚进 group：不弹列表" eval '! e2e_plain | grep -qE "│ (prod|Prod-eu) *│"'
+e2e_keys C-p; sleep 0.5
+check "焦点刚进 group（列表没弹）：C-p 开命令面板，没有被列表截走" palette_open
+key Escape; sleep 0.3
 e2e_type PR; sleep 0.5
 check "打了 PR（不分大小写）：弹出 prod 和 Prod-eu" eval 'e2e_plain | grep -qE "│ prod *│" && e2e_plain | grep -qE "│ Prod-eu *│"'
-e2e_keys C-p; sleep 0.5
-check "列表弹着时 C-p：命令面板照样打开（列表没截走）" palette_open
-key Escape; sleep 0.3
+key Tab; sleep 0.3
+check "Tab 接受第一项：group 变成 prod" eval '[[ $(fval group) == prod ]]'
 e2e_done
