@@ -437,21 +437,19 @@ func (a *App) palettePreview() *ui.PalettePreview {
 	return pv
 }
 
-// scrollPreview is C-d (d 1) and C-u (-1) over the preview: half its rows,
-// held to what there is to scroll; the key goes to the input as it was when
-// there is nothing to scroll, as C-u clearing it (F9.7).
-func (a *App) scrollPreview(d int) tea.Cmd {
+// scrollPreview is C-f (d 1) and C-b (-1) over the preview: half its rows,
+// held to what there is to scroll (F9.7).
+func (a *App) scrollPreview(d int) {
 	id, _, _, _ := a.previewed()
 	pv := a.palettePreview()
+	if pv == nil || pv.Err != "" {
+		return
+	}
 	_, ms := a.paletteMatches()
 	_, _, grid := a.paletteBox(len(ms))
-	if pv == nil || pv.Err != "" || pv.Lines() <= grid.Dy() {
-		return a.paletteKey(map[int]keymap.Key{1: "<C-d>", -1: "<C-u>"}[d])
-	}
 	rows := grid.Dy()
 	top := pv.Top + d*max(rows/2, 1)
 	a.palette.pvFor, a.palette.pvTop = id, max(min(top, pv.Lines()-rows), 0)
-	return nil
 }
 
 // wantDDL times the preview: the selection moved to a table whose DDL is

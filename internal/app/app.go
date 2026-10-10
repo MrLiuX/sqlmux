@@ -208,7 +208,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	a.plainConsoles()
 	a.sess.last = a.conn() // where the focus goes next may name none (§5)
 	a.sess.touch(a.focused().tab())
-	return a, tea.Batch(cmd, a.wantCols(), a.wantDDL())
+	return a, tea.Batch(cmd, a.wantCols(), a.wantDDL(), a.wantPopupDDL())
 }
 
 // stillOver is whether msg changed nothing the last frame shows: a pointer

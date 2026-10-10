@@ -207,6 +207,36 @@ func TestDDLPopupNeedsATable(t *testing.T) {
 	}
 }
 
+// R drops the DDL cache: a popup that is open asks for it again with the next
+// message, and shows it once it is in, however often that happens (F9.8).
+func TestDDLPopupAsksAgainAfterTheCacheGoes(t *testing.T) {
+	a, tab := ddlApp(t, ddlOrderWith)
+	c := a.sess.Conns[0]
+	keys(t, a, "fh")
+	c.dropCols()
+	if _, asked := c.ddl[idOf(tab.table)]; asked {
+		t.Fatal("the cache is still there")
+	}
+	if _, cmd := a.Update(tea.MouseMotionMsg{X: 1, Y: 1}); cmd == nil {
+		t.Fatal("no request")
+	}
+	if _, asked := c.ddl[idOf(tab.table)]; !asked {
+		t.Error("not asked for")
+	}
+	if text, _, _ := a.ddlContent(); text != "…" {
+		t.Errorf("before it is in: %q", text)
+	}
+	a.Update(ddlMsg{conn: c, table: tab.table, text: ddlOrderWith})
+	if text, _, _ := a.ddlContent(); !strings.Contains(text, "id bigint not null") {
+		t.Errorf("after: %q", text)
+	}
+	// and again, as often as it goes
+	c.dropCols()
+	if _, cmd := a.Update(tea.MouseMotionMsg{X: 2, Y: 1}); cmd == nil {
+		t.Error("not asked the second time")
+	}
+}
+
 // A DDL not read yet is fetched, shown as … till it is in; one cached is not
 // fetched again (F9.8).
 func TestDDLPopupFetches(t *testing.T) {

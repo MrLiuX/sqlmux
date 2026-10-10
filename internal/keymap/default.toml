@@ -118,8 +118,8 @@ leader = "<Space>"
 "<S-Tab>" = "palette.scope.prev"
 "<C-t>" = "palette.open.tab"
 "<C-y>" = "quicksql.copy"
-"<C-d>" = "palette.preview.down" # the preview of a table; with nothing to scroll the key is the input's
-"<C-u>" = "palette.preview.up"
+"<C-f>" = "palette.preview.down" # the DDL preview of a table (F9.7)
+"<C-b>" = "palette.preview.up"
 "<C-e>" = "quicksql.edit"
 
 [keys.dropdown] # schema, ORDER, LIMIT (§6.8): typing goes to the filter, so no j/k

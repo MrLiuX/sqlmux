@@ -61,6 +61,15 @@ func (a *App) askDDL(c *Conn, t db.Table) tea.Cmd {
 	return a.ddlCmd(context.Background(), c, t)
 }
 
+// wantPopupDDL asks again for the DDL of an open popup whose cache is gone (R
+// drops it, a fetch out of time is not kept), as often as that happens (F9.8).
+func (a *App) wantPopupDDL() tea.Cmd {
+	if d := a.ddl; d != nil {
+		return a.askDDL(d.conn, d.table)
+	}
+	return nil
+}
+
 // ddlContent is what the popup shows: its text, "…" until the DDL is in, in
 // SQL's colors, none for an error; and the title.
 func (a *App) ddlContent() (text string, colors []color.Color, title string) {

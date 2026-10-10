@@ -62,8 +62,8 @@ func init() {
 		// Keys inside the palette. Like every overlay's own actions they are
 		// Local, which the palette does not list (§12); bound elsewhere in
 		// config, they do nothing.
-		"palette.preview.up":   {Title: i18n.N("向上滚动预览"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { return a.scrollPreview(-1) })},
-		"palette.preview.down": {Title: i18n.N("向下滚动预览"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { return a.scrollPreview(1) })},
+		"palette.preview.up":   {Title: i18n.N("向上滚动预览"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { a.scrollPreview(-1); return nil })},
+		"palette.preview.down": {Title: i18n.N("向下滚动预览"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { a.scrollPreview(1); return nil })},
 		"palette.up":           {Title: i18n.N("上移"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { a.paletteMove(-1); return nil })},
 		"palette.down":         {Title: i18n.N("下移"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { a.paletteMove(1); return nil })},
 		"palette.run":          {Title: i18n.N("执行"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { return a.paletteEnter() })},

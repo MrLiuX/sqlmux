@@ -648,7 +648,7 @@ func TestPaletteTableCommand(t *testing.T) {
 	}
 }
 
-// C-d and C-u scroll the DDL preview by half its rows, stopping at the ends, a
+// C-f and C-b scroll the DDL preview by half its rows, stopping at the ends, a
 // … in its first row when lines are above and in its last when more are below;
 // another table has it at the top; with nothing to scroll the keys are the
 // input's: C-u clears it (F9.7).
@@ -672,27 +672,27 @@ func TestPalettePreviewScroll(t *testing.T) {
 		}
 		return strings.TrimSpace(line)
 	}
-	if !strings.Contains(a.render().String(), "C-u/C-d 滚动预览") || row(rows-1) != "…" || row(0) != "create table public.t_order (" {
+	if !strings.Contains(a.render().String(), "C-b/C-f 滚动预览") || row(rows-1) != "…" || row(0) != "create table public.t_order (" {
 		t.Fatalf("at the top: first %q, last %q", row(0), row(rows-1))
 	}
-	feed(t, a, "<C-d>")
+	feed(t, a, "<C-f>")
 	if a.palette.pvTop != 6 || row(0) != "…" || row(1) == "create table public.t_order (" || row(rows-1) != "…" {
 		t.Errorf("C-d: top %d, first %q, last %q", a.palette.pvTop, row(0), row(rows-1))
 	}
-	feed(t, a, "<C-d><C-d><C-d><C-d><C-d><C-d>")
+	feed(t, a, "<C-f><C-f><C-f><C-f><C-f><C-f>")
 	if a.palette.pvTop != lines-rows || row(rows-1) != "create index last_one on t_order (note);" || row(0) != "…" {
 		t.Errorf("at the end: top %d, last %q", a.palette.pvTop, row(rows-1))
 	}
-	feed(t, a, "<C-u>")
+	feed(t, a, "<C-b>")
 	if a.palette.pvTop != lines-rows-6 {
 		t.Errorf("C-u: top %d", a.palette.pvTop)
 	}
-	feed(t, a, "<C-u><C-u><C-u><C-u><C-u><C-u><C-u>")
+	feed(t, a, "<C-b><C-b><C-b><C-b><C-b><C-b><C-b>")
 	if a.palette.pvTop != 0 || row(0) != "create table public.t_order (" {
 		t.Errorf("back at the top: %d, %q", a.palette.pvTop, row(0))
 	}
 	// another candidate: the top again, and typing more
-	feed(t, a, "<C-d><C-d>")
+	feed(t, a, "<C-f><C-f>")
 	if a.palette.pvTop == 0 {
 		t.Fatal("not scrolled")
 	}
@@ -700,7 +700,7 @@ func TestPalettePreviewScroll(t *testing.T) {
 	if pv := a.palettePreview(); pv == nil || pv.Top != 0 {
 		t.Errorf("another candidate and back: %+v", pv)
 	}
-	feed(t, a, "<C-d><BS>r") // the same table is selected again
+	feed(t, a, "<C-f><BS>r") // the same table is selected again
 	if pv := a.palettePreview(); pv == nil || pv.Top != 0 || a.palette.input.Text != "@t_order" {
 		t.Errorf("typing: %+v, input %q", pv, a.palette.input.Text)
 	}
@@ -710,7 +710,7 @@ func TestPalettePreviewScroll(t *testing.T) {
 	feed(t, b, "<C-p>@t_order")
 	rest(b)
 	b.Update(ddlMsg{conn: b.sess.Conns[0], table: tableNamed(b, "t_order"), text: "create table t_order (id int);"})
-	feed(t, b, "<C-d>")
+	feed(t, b, "<C-f>")
 	if b.palette.pvTop != 0 || b.palette.input.Text != "@t_order" || strings.Contains(b.render().String(), "滚动预览") {
 		t.Errorf("nothing to scroll: top %d, input %q", b.palette.pvTop, b.palette.input.Text)
 	}
@@ -726,6 +726,6 @@ func TestGoldenPalettePreviewScrolled(t *testing.T) {
 	feed(t, a, "<C-p>@t_order")
 	rest(a)
 	a.Update(ddlMsg{conn: a.sess.Conns[0], table: tableNamed(a, "t_order"), text: ddlOrder + "\n" + strings.Repeat("create index i on t_order (id);\n", 8) + "create index last_one on t_order (note);"})
-	feed(t, a, "<C-d>")
+	feed(t, a, "<C-f>")
 	golden.RequireEqual(t, a.render().String())
 }
