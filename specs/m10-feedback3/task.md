@@ -1,6 +1,6 @@
 # M10 第三轮使用反馈 · 任务清单
 
-- **状态**：**todo**（2026-10-10 用户在 M9 审查期间提出 9 条，决策者拆成 F10.1–F10.8，之后追加 F10.9–F10.12；翻页键改 `<lt>` / `>`、`c` 开 COLS 只是用户自己的 keymaps.toml，不算 feature）。M9 全部 passed（2026-10-10，93e9d8c），可以开工。节点 1 passed（2026-10-11，ae3dd16；e2e 3c23daa，全量 2900 过，18 败全是节点 2 的脚本）。节点 2 passed（2026-10-11，c5d6abe；e2e 508b591，全量 2987 项全过）。
+- **状态**：**完成**（F10.1–F10.12 passed；最后一个 commit 08d9009 上完整回归 2982 项加 f10.11 全过，2026-10-11；`go install` 的确认等 v0.2.0 推送。原文：2026-10-10 用户在 M9 审查期间提出 9 条，决策者拆成 F10.1–F10.8，之后追加 F10.9–F10.12；翻页键改 `<lt>` / `>`、`c` 开 COLS 只是用户自己的 keymaps.toml，不算 feature）。M9 全部 passed（2026-10-10，93e9d8c），可以开工。节点 1 passed（2026-10-11，ae3dd16；e2e 3c23daa，全量 2900 过，18 败全是节点 2 的脚本）。节点 2 passed（2026-10-11，c5d6abe；e2e 508b591，全量 2987 项全过）。节点 3 passed（2026-10-11，08d9009；e2e 6a24c4f）。
 - **目标**：表格的多选（标记删除、复制 JSON）、flash 式跳转、树去掉 pane 层、连接分组、WHERE 下拉撑满、新建 session 先要名字、console 结果 500 行并翻页、COLS 调列顺序、侧栏去掉键位文字、删开着的 console 直接关 tab；最后把 console 改名叫 query。
 - **范围**：tech-design §6.4（作用域）、§6.8（键位表）、§6.10（跳转，新）、§7.6（表格选择）、§7.8（树、COLS、session 列表、连接表单）、§9.6（WHERE 下拉）、§11（结果翻页）、§14（`group`、`max_rows`）。
 - **依赖**：M9 F9.1–F9.10 passed。
@@ -177,7 +177,7 @@
 - [x] 单测：两个 session 各开着这个 console，删除后两处 tab 都没了、文件没了、state.json 没有它。
 - [x] e2e：树里 `dd` 删开着的 console，`y` 后 tab 消失、没有 toast。
 
-## F10.11 console 改名叫 query · 状态：todo
+## F10.11 console 改名叫 query · 状态：passed（08d9009；e2e 6a24c4f）
 
 用户 2026-10-10：新版 DataGrip 已经不用 console 这个词，目录叫 queries、文件叫 `Query_1.sql`；等前面的都做完，单独一个 feature 改名、单独测。纯改名，不改任何行为。
 
@@ -185,14 +185,14 @@
 - **涉及**：全仓库：`internal/app`、`internal/ui`、`internal/config`、`internal/keymap/default.toml`、`internal/i18n`、golden、e2e（tester 改）；spec 由决策者在开工时一次改完
 
 **开发**（tech-design 的用词决策者已在开工前改完：`design/11-console.md` → `11-query.md`，各章 console → query，`consoles` 键 → `queries`；task.md 前面各 feature 的名字是历史，不改）
-- [ ] 用户看得见的词全部从 console 改成 query：树的 `Consoles` 节点 → `Queries`；tab 和 pane 标题；命令标题（「新建 console」→「新建 query」等）和 Action ID（`console.*` → `query.*`，`console.new` / `console.format` / `console.schema` / `console.conn` / `console.rename` 等）；keymap 作用域 `[keys.console]` → `[keys.query]`、`[map.console.visual]` → `[map.query.visual]`；config `[console] max_rows` → `[query] max_rows`；state.json 和布局文件里的 tab 类型和键；i18n 的中英文文案；toast 和确认框文案；`sqlmux keys` 的输出。
-- [ ] 文件：目录 `consoles/` → `queries/`，默认文件名 `console_<n>.sql` → `query_<n>.sql`。启动时一次性迁移：没有 `queries/` 而有 `consoles/` 就把目录改名，目录里 `console_<n>.sql` 改成 `query_<n>.sql`（用户改过名的文件不动），state.json 里的键跟着改；布局文件里旧的类型名照新的读。
-- [ ] 不留旧配置键的别名和兼容读取（`console.*` 动作、`[keys.console]`、`[map.console.*]`、`[console]`、`[icon] console` 都按未知键的现有处理走）：v0.1.0 推送了但没有外部用户（`go install` 都装不了）；用户自己的 keymaps.toml 和 config.toml 由决策者改。`[icon]` 的 `console` 键改 `query`，字形不变。迁移只做目录、文件名、state.json 的键、布局文件里旧的 kind 和 `console_<n>` 名字（读时转换，不回写）；`queries/` 已存在就不动、不合并，目标文件已存在就跳过那一个；「用户改过名的文件不动」按名字前缀 `console_<数字>` 判定。代码里的标识符（`consoleTab` 这类）一并改，commit 说明注明是 rename。
-- [ ] 细节（已定）：不改 `internal/editor` 的包名和编辑器行为；commit 前缀、e2e 脚本文件名随 tester。
+- [x] 用户看得见的词全部从 console 改成 query：树的 `Consoles` 节点 → `Queries`；tab 和 pane 标题；命令标题（「新建 console」→「新建 query」等）和 Action ID（`console.*` → `query.*`，`console.new` / `console.format` / `console.schema` / `console.conn` / `console.rename` 等）；keymap 作用域 `[keys.console]` → `[keys.query]`、`[map.console.visual]` → `[map.query.visual]`；config `[console] max_rows` → `[query] max_rows`；state.json 和布局文件里的 tab 类型和键；i18n 的中英文文案；toast 和确认框文案；`sqlmux keys` 的输出。
+- [x] 文件：目录 `consoles/` → `queries/`，默认文件名 `console_<n>.sql` → `query_<n>.sql`。启动时一次性迁移：没有 `queries/` 而有 `consoles/` 就把目录改名，目录里 `console_<n>.sql` 改成 `query_<n>.sql`（用户改过名的文件不动），state.json 里的键跟着改；布局文件里旧的类型名照新的读。
+- [x] 不留旧配置键的别名和兼容读取（`console.*` 动作、`[keys.console]`、`[map.console.*]`、`[console]`、`[icon] console` 都按未知键的现有处理走）：v0.1.0 推送了但没有外部用户（`go install` 都装不了）；用户自己的 keymaps.toml 和 config.toml 由决策者改。`[icon]` 的 `console` 键改 `query`，字形不变。迁移只做目录、文件名、state.json 的键、布局文件里旧的 kind 和 `console_<n>` 名字（读时转换，不回写）；`queries/` 已存在就不动、不合并，目标文件已存在就跳过那一个；「用户改过名的文件不动」按名字前缀 `console_<数字>` 判定。代码里的标识符（`consoleTab` 这类）一并改，commit 说明注明是 rename。
+- [x] 细节（已定）：不改 `internal/editor` 的包名和编辑器行为；commit 前缀、e2e 脚本文件名随 tester。
 
 **验收**
-- [ ] `just check` 全绿，golden 只有文字变化；单测：从只有 `consoles/console_2.sql` 的数据目录启动后，`queries/query_2.sql` 存在、树里 Queries 节点列出它、state.json 里的键是新名字。
-- [ ] e2e：原有 console 相关脚本改用新词后全过；旧的 `[keys.console]` 配置段启动时报未知作用域（和今天写错段名一样）。
+- [x] `just check` 全绿，golden 只有文字变化；单测：从只有 `consoles/console_2.sql` 的数据目录启动后，`queries/query_2.sql` 存在、树里 Queries 节点列出它、state.json 里的键是新名字。
+- [x] e2e：原有 console 相关脚本改用新词后全过；旧的 `[keys.console]` 配置段启动时报未知作用域（和今天写错段名一样）。
 
 ## F10.12 module 路径改成 `github.com/kackerx/sqlmux` · 状态：passed（ae3dd16；e2e 3c23daa）
 

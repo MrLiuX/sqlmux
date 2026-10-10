@@ -17,7 +17,7 @@ A terminal database client organized the way tmux is: sessions, windows, panes a
 
 ## Build
 
-Requires Go 1.26+. With [just](https://github.com/casey/just) installed, `just build` puts the binary in `bin/`; `just --list` shows the other recipes (tests, lint, e2e, the sample databases). Without it:
+Requires Go 1.26+. `go install github.com/kackerx/sqlmux/cmd/sqlmux@latest` installs the latest tagged version (v0.2.0 and later). To build from a checkout: with [just](https://github.com/casey/just) installed, `just build` puts the binary in `bin/`; `just --list` shows the other recipes (tests, lint, e2e, the sample databases). Without it:
 
 ```sh
 go build -o bin/sqlmux ./cmd/sqlmux
