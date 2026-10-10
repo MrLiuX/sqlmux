@@ -32,7 +32,7 @@ check "⓪ 侧栏未聚焦：边框 border、标题 dim" eval 'style_has 1 1 fg=
 
 # ---- 标题与提示（§7.2 §7.8）
 check "标题从左上角右 1 列起、前留 1 空格（F0.16：nerd 下编号为 ⓪①②）" eval 'text_is 1 4 1 "┌─ ⓪" && text_is 34 37 1 "┌─ ①"'
-check "侧栏提示 SPC b，离右上角 1 列" text_ends 1 32 1 " SPC b ─┐"
+check "侧栏标题右侧是收起图标 «（F10.9），离右上角 1 列" text_ends 1 32 1 " « ─┐"
 
 # ---- tab 栏（§7.8）
 check "tab 栏在内容区最后一行（第 43 行），F3.7 起编号后面是类型图标" eval '[[ $(e2e_text 34 160 43 | noicon) == *"│ 1:t_user- │ 2:t_order* │"* ]]'

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F8.21 console 文件：编号递增、树里的 Consoles 节点、↵ 打开、dd 删除（specs/m8-feedback/task.md F8.21；tech-design §11、§7.8「Consoles 节点」）
 # 关掉的 console 文件留着、树里 Consoles 下还有它，↵ 重新打开内容还在；新建的编号跳过有文件的和开着的；dd 删文件（确认）之后再新建得到空的
-# 同号 console；开着的 dd 被拒绝；别的节点上 dd 无事；改名后树跟着变。节点的画法由 golden 覆盖。只读，用共用库（console 只写自己的文件）。
+# 同号 console；开着的 dd 也能删（F10.10，关掉它的 tab）；别的节点上 dd 无事；改名后树跟着变。节点的画法由 golden 覆盖。只读，用共用库（console 只写自己的文件）。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 . "$(dirname "$0")/palette.sh"
@@ -13,7 +13,7 @@ paste() { t set-buffer -b e2e "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4;
 # 侧栏：「工作区」下面的 console 名（窗口里开着的，排序后）和「Consoles」下面的 名字:连接名，各一行
 sections() { local y; for y in $(seq 3 43); do e2e_text 2 31 "$y"; done | python3 -c '
 import re, sys
-rows = [re.sub(r"^[\s▾▸-]+|\s+$", "", l) for l in sys.stdin.read().split("\n")]
+rows = [re.sub(r"^[⓪①②③④⑤⑥⑦⑧⑨]\s+", "", re.sub(r"^[\s▾▸-]+|\s+$", "", l)) for l in re.sub(r"[\ue000-\uf8ff]", "", sys.stdin.read()).split("\n")]
 def part(a, b):
     if a not in rows: return []
     r = rows[rows.index(a) + 1:]
@@ -63,7 +63,9 @@ check "y：文件删了，Consoles 下没有 console_3 了" eval '[[ $(files) ==
 newcon
 check "再新建：得到全新的 console_3（空内容，没有文件）" eval 'ws_is "console_1 console_2 console_3" && [[ $(files) == "console_1 console_2 console_4 " ]] && l1=$(g=($(geom $(focused))); e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $((g[1] + 1)) | tr -d " ▶"); [[ $l1 == 1 ]] || { echo "  line 1: [$l1]"; false; }'
 tree_to console_1; key d; key d; sleep 0.6
-check "开着的 console_1 上 dd：拒绝，toast「先关掉它的 tab」，没有确认框，文件还在" eval '[[ -z $(box) && -n $(cat_f console_1) ]] && toast_is "先关掉它的 tab"'
+check "开着的 console_1 上 dd（F10.10 起不再拒绝）：照样弹确认「删除 console_1？」" eval '[[ $(box) == "删除 console_1？" ]] || { echo "  box: [$(box)]"; false; }'
+key y; sleep 0.8
+check "y：文件删了，它的 tab 关掉了，工作区和 Consoles 下都没有 console_1，没有「先关掉」的 toast" eval '[[ $(files) == "console_2 console_4 " ]] && ws_is "console_2 console_3" && co_is "console_2:doraemon console_3:doraemon console_4:doraemon" && ! screen_has "先关掉"'
 tree_to public; key d; key d; sleep 0.5
 check "schema 节点（public）上 dd：什么都不发生（没有确认框；F8.23 起表节点上 dd 是删表，见 f8.23）" eval '[[ -z $(box) ]] && ! e2e_plain | grep -q "不能撤销"'
 
@@ -71,7 +73,7 @@ check "schema 节点（public）上 dd：什么都不发生（没有确认框；
 key C-l; key C-l 2>/dev/null
 check "（准备）焦点在 console_3 上" eval '[[ $(tabbar $(focused)) == *console_3* ]]'
 pal ">console.rename"; key Enter; sleep 0.4; for i in $(seq 12); do e2e_keys BSpace; done; e2e_type "mine"; key Enter; sleep 1
-check "console.rename 改成 mine：工作区和 Consoles 下都是 mine，console_N 的排在前面，改过名的排在后面" eval 'ws_is "console_1 console_2 mine" || ws_is "console_1 mine console_2"; co_is "console_1:doraemon console_2:doraemon console_4:doraemon mine:doraemon" || { sections; false; }'
+check "console.rename 改成 mine：工作区和 Consoles 下都是 mine，console_N 的排在前面，改过名的排在后面（console_1 已在上面删掉）" eval 'ws_is "console_2 mine" || ws_is "mine console_2"; co_is "console_2:doraemon console_4:doraemon mine:doraemon" || { sections; false; }'
 # ---- 读不了的文件：树里 ↵ 打开它，toast 读取失败，不开 tab（F8.21 起 C-e 不再读旧文件，读失败只剩这一条路）
 key Escape; key Escape
 printf 'secret' >"$E2E_TMP/data/sqlmux/consoles/console_9.sql"; chmod 000 "$E2E_TMP/data/sqlmux/consoles/console_9.sql"; sleep 0.5

@@ -14,7 +14,7 @@ cmd() { pal ">$1"; key Enter; }
 # 侧栏里「工作区」下面的树：每个 window 和它的 pane / tab，一行一项，去掉缩进和展开符，用 / 连成一行
 tree() { local y; for y in $(seq 3 43); do e2e_text 2 31 "$y"; done | python3 -c '
 import re, sys
-rows = [re.sub(r"^[\s▾▸\ue000-\uf8ff]+|\s+$", "", l) for l in sys.stdin.read().split("\n")]
+rows = [re.sub(r"\s+", " ", re.sub(r"^[\s▾▸\ue000-\uf8ff]+|\s+$", "", l)) for l in re.sub(r"[\ue000-\uf8ff]", "", sys.stdin.read()).split("\n")]
 rest = rows[rows.index("工作区") + 1:] if "工作区" in rows else []
 print("/".join(r for r in rest[:next((i for i, r in enumerate(rest) if r.startswith("──") or r.startswith("Consoles")), len(rest))] if r))'; }
 tree_is() { [[ $(tree) == "$1" ]] || { echo "  tree: '$(tree)', want '$1'"; false; }; }
@@ -23,7 +23,7 @@ cdir() { ls "$E2E_TMP/data/sqlmux/consoles" 2>/dev/null | tr '\n' ' '; }
 # ---- 启动：默认布局不变（左树、引导页、console）
 start
 check "启动：侧栏、① 引导页、② console_1（默认布局不变）" eval 'panes_are "0 1 2 " && tabs_are 2 "1:console_1*" && e2e_plain | grep -q "打开表"'
-check "工作区树：window data 下是 pane-1 和带 console_1 的 pane-2" tree_is "data/pane-1/pane-2/console_1"
+check "工作区树：window data 下直接是 ② console_1（F10.5：没有 pane 层，空 pane ① 不列）" tree_is "data/② console_1"
 before=$(cdir)
 
 # ---- window.new：一个空 pane
@@ -31,10 +31,10 @@ leader c
 check "SPC c：新 window data-2，放在最后并切过去" wins_are "0: data  1: data-2*"
 check "新 window 只有侧栏和一个 pane ①，焦点在 ①，是引导页（有「打开表」）" eval 'panes_are "0 1 " && focus_is 1 && e2e_plain | grep -q "打开表"'
 check "① 里没有 console（没有 tab 条上的 console_n）" eval '[[ $(tabbar 1) != *console* ]]'
-check "工作区树：新 window 下只有 pane-1（window 0 原样）" tree_is "data/pane-1/pane-2/console_1/data-2/pane-1"
+check "工作区树：新 window 下没有 tab（window 0 原样）" tree_is "data/② console_1/data-2"
 check "没有建 console 文件：consoles 目录和 SPC c 之前一样" eval '[[ $(cdir) == "$before" ]] || { echo "  [$(cdir)] was [$before]"; false; }'
 leader c
-check "再 SPC c：data-3，同样只有 pane-1" eval 'wins_are "0: data  1: data-2  2: data-3*" && panes_are "0 1 " && tree_is "data/pane-1/pane-2/console_1/data-2/pane-1/data-3/pane-1"'
+check "再 SPC c：data-3，同样没有 tab" eval 'wins_are "0: data  1: data-2  2: data-3*" && panes_are "0 1 " && tree_is "data/② console_1/data-2/data-3"'
 
 # ---- 没有 console 时引导页上的 c 照旧新建（取最小没用过的 console_n，原地替换引导页）
 key c; sleep 0.8
@@ -51,15 +51,15 @@ check "SPC %：分成两个 pane（新的那个是引导页）" panes_are "0 1 2
 
 # ---- session.new：一个 window、一个空 pane、不建 console 文件
 before=$(cdir)
-cmd session.new; wait_for 8 eval '[[ $(bar) == " 1 ▾"* ]]'; sleep 0.6
+cmd session.new; sleep 0.4; key Enter; wait_for 8 eval '[[ $(bar) == " 1 ▾"* ]]'; sleep 0.6
 check "session.new：新 session 1，一个 window 0: data*" eval '[[ $(bar) == " 1 ▾"* ]] && wins_are "0: data*"'
 check "新 session：侧栏和一个空 pane ①（引导页），没有 console" eval 'panes_are "0 1 " && focus_is 1 && e2e_plain | grep -q "打开表" && [[ $(tabbar 1) != *console* ]]'
-check "工作区树：只有一个 window，下面只有 pane-1" tree_is "data/pane-1"
+check "工作区树：只有一个 window，下面没有 tab" tree_is "data"
 check "连着当前连接并展开（侧栏有 Tables (6)），没有建 console 文件" eval 'e2e_plain | head -12 | grep -q "Tables (6)" && [[ $(cdir) == "$before" ]] || { echo "  [$(cdir)] was [$before]"; false; }'
 
 # ---- session 列表里的 n：同样
-leader s; key n; wait_for 8 eval '[[ $(bar) == " 2 ▾"* ]]'; sleep 0.6
-check "session 列表里按 n：新 session 2，同样一个 window、一个空 pane、没有 console 文件" eval '[[ $(bar) == " 2 ▾"* ]] && wins_are "0: data*" && panes_are "0 1 " && tree_is "data/pane-1" && [[ $(cdir) == "$before" ]] && [[ $(tabbar 1) != *console* ]]'
+leader s; key n; sleep 0.4; key Enter; wait_for 8 eval '[[ $(bar) == " 2 ▾"* ]]'; sleep 0.6
+check "session 列表里按 n：新 session 2，同样一个 window、一个空 pane、没有 console 文件" eval '[[ $(bar) == " 2 ▾"* ]] && wins_are "0: data*" && panes_are "0 1 " && tree_is "data" && [[ $(cdir) == "$before" ]] && [[ $(tabbar 1) != *console* ]]'
 check "新 session 里 c 新建 console：取最小没用过的 console_n（console_1 在 doraemon 里、console_2 在 doraemon 的 data-3 里），所以是 console_3" eval 'key c; sleep 0.8; tabs_are 1 "1:console_3*" && panes_are "0 1 "'
 
 # ---- 原来的 session 不受影响

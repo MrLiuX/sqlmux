@@ -36,7 +36,7 @@ cmd session.rename
 check "session.rename：状态栏变成输入框「session 名：doraemon」" eval '[[ $(bar) == *"session 名：doraemon"* ]] && mode_is INSERT'
 clr; e2e_type "work"; key Enter; sleep 0.4
 check "改成 work：状态栏上的 session 名是 work" eval '[[ $(sname) == work ]] && mode_is NORMAL'
-cmd session.new; sleep 2
+cmd session.new; sleep 0.4; key Enter; sleep 2
 check "（准备）session.new：新 session 叫 1，已经切过去" eval '[[ $(sname) == 1 ]]'
 cmd session.rename; clr; e2e_type "work"; key Enter; sleep 0.4
 check "改成已有的 session 名 work：toast「已有同名 session」，输入框留着" eval 'toast_text | grep -q "已有同名 session" && [[ $(bar) == *"session 名："* ]]'

@@ -21,7 +21,7 @@ check "SPC z 缩放：pane 占满整个窗口，边框（四角和边）是 warn
 check "标题里编号 ① 后面有 zoom 图标（U+F065）" eval '[[ $(hasz) == 1 && $(title) == "┌─ ①"* ]] || { echo "  title=[$(title)]"; false; }'
 check "zoom 图标是 warn 色" eval 'z=$(e2e_text 1 12 1 | python3 -c "import sys; print(sys.stdin.read().index(chr(0xf065)) + 1)"); style_has "$z" 1 fg=$WARN'
 zoom
-check "再 SPC z 退出缩放：边框恢复 focus 色，缩放图标没了，侧栏回来" eval 'style_has 34 1 fg=$FOCUS && [[ $(hasz) == 0 ]] && e2e_plain | grep -q "SPC b"'
+check "再 SPC z 退出缩放：边框恢复 focus 色，缩放图标没了，侧栏回来" eval 'style_has 34 1 fg=$FOCUS && [[ $(hasz) == 0 ]] && e2e_plain | sed -n 1p | grep -q "«"'
 
 # ---- icons = "ascii"：[Z]
 conf 'icons = "ascii"\n'; SOLO= start -C "$D/c"; open_table t_order; wait_for 8 settled

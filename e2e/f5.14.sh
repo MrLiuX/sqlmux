@@ -21,9 +21,9 @@ key A; key Enter; e2e_type "select * from t_log\;"; sleep 0.5; key Escape; sleep
 check "console：* 和 ; 是运算符色" eval 'is_op "*" 3 && is_op ";" 3'
 key d G
 
-# ---- 树的 pane 节点
-check "树的工作区：pane-1、pane-2 前面有 pane 图标，图标后留一格" eval 'p=$(e2e_plain | grep -E "pane-[12]"); [[ $(grep -c "$PANE_ICON pane-" <<<"$p") == 2 ]] || { echo "$p"; false; }'
-check "pane 图标行：图标和 pane-n 之间正好一个空格（没有原来的留空对齐）" eval 'e2e_plain | grep -q "▾  *$PANE_ICON pane-2\|  $PANE_ICON pane-1"'
+# ---- 树的工作区（F10.5：没有 pane 节点，tab 行首是所属 pane 的编号）
+check "树的工作区：没有 pane-n 节点" eval '! e2e_plain | grep -qE "pane-[0-9]"'
+check "工作区里 console_1 的行首是 ②（它所在的 pane）" eval 'e2e_plain | grep -qE "② .*console_1"'
 
 # ---- WHERE 输入框
 e2e_stop; SOLO=1 start; open_table t_order; wait_for 8 settled

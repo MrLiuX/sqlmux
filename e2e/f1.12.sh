@@ -78,17 +78,10 @@ check "中键 t_log：在 ① 新开 tab，焦点到 ①" eval '[[ $(title) == *
 # ---- 工作区：tab 节点跟着变；单击或 ↵ 切到对应的 pane 和 tab
 key C-h
 ws_tabs() { tree | cut -d"|" -f1 | sed -n "/工作区/,\$p" | grep -cE " (agent|t_order|t_log)( |$)"; }   # 工作区里 tab 节点的个数
-check "工作区的 pane-1 下有三个 tab 节点 agent、t_order、t_log" eval '[[ $(ws_tabs) == 3 ]] || tree'
+check "工作区的 window 下有三个 tab 节点 agent、t_order、t_log" eval '[[ $(ws_tabs) == 3 ]] || tree'
 wsy() { tree | cut -d'|' -f1 | grep -n '' | sed -n '/工作区/,$p' | grep -E " $1( |$)" | head -1 | cut -d: -f1 | awk '{ print $1 + 3 }'; }
-# F3.19：pane 节点叫 pane-1，单击 / ↵ 只展开折叠；单击时焦点和点别的节点一样到树上，不跳到 ①
-key C-l; e2e_click "$(x_of pane-1)" "$(y_of pane-1)"; sleep 0.4
-check "焦点在 ① 时单击 pane-1：折叠（tab 节点隐藏），焦点到树上，不跳到 ①" eval '[[ $(focused) == 0 && $(ws_tabs) == 0 ]] && ! open_mark pane-1'
-e2e_click "$(x_of pane-1)" "$(y_of pane-1)"; sleep 0.4
-check "再单击 pane-1：展开，焦点仍在树上" eval '[[ $(focused) == 0 && $(ws_tabs) == 3 ]] && open_mark pane-1'
-goto pane-1; key Enter
-check "↵ pane-1：折叠，焦点不动" eval '[[ $(focused) == 0 && $(ws_tabs) == 0 ]] && cur_is pane-1'
-key Enter
-check "再 ↵：展开" eval '[[ $(focused) == 0 && $(ws_tabs) == 3 ]] && cur_is pane-1'
+# F10.5：工作区里没有 pane 这一层，tab 节点直接挂在 window 下，行首是所属 pane 的编号 ①
+check "工作区里没有 pane-1 节点；agent、t_order、t_log 三个 tab 节点行首都是 ①" eval '! shown pane-1 && [[ $(tree | cut -d"|" -f1 | sed -n "/工作区/,\$p" | grep -cE "① .*(agent|t_order|t_log)( |$)") == 3 ]] || tree'
 e2e_click "$(e2e_find t_order "$(wsy t_order)" | cut -d' ' -f1)" "$(wsy t_order)"; sleep 0.4
 check "单击工作区的 t_order 节点：焦点到 ①，切到 tab 2" eval '[[ $(focused) == 1 && $(e2e_text 34 160 43 | noicon) == *"2:t_order*"* ]]'
 key C-h; goto "工作区"; for ((i = 0; i < 6; i++)); do [[ $(cur) == *t_log* ]] && break; key j; done; key Enter

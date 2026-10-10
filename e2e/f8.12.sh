@@ -13,7 +13,7 @@ box() { e2e_plain | grep -oE '[^│]*处修改未保存[^│]*' | head -1 | sed 
 cmd() { pal ">$1"; key Enter; }
 SOLO= start -K "$D/k.toml"; open_table t_order; wait_for 8 settled
 check "（准备）一个 session doraemon，① 里 t_order" eval '[[ $(sname) == doraemon ]]'
-cmd session.new; sleep 2
+cmd session.new; sleep 0.4; key Enter; sleep 2
 check "（准备）session.new：新 session 1，已经切过去" eval '[[ $(sname) == 1 ]]'
 key F8; sleep 1
 check "两个 session 时在 1 里按 F8（session.close）：关掉 1，attach 到 doraemon（它的 t_order 还在）" eval '[[ $(sname) == doraemon ]] && e2e_plain | head -1 | grep -q "t_order"'
@@ -21,11 +21,11 @@ key Escape
 
 # ---- 有未保存的修改：先问（同 session 列表里的 x）
 key o; sleep 0.3
-cmd session.new; sleep 2
+cmd session.new; sleep 0.4; key Enter; sleep 2
 check "（准备）doraemon 里 t_order 有一条新增行没保存；新开了 session 1，已经切过去" eval '[[ $(sname) == 1 ]]'
 cmd session.close; sleep 0.5
 check "关一个没有修改的 session（1）：不问，直接关，回到 doraemon" eval '[[ $(sname) == doraemon ]] && [[ -z $(box) ]]'
-cmd session.new; sleep 2; pal '$doraemon'; key Enter; sleep 0.8
+cmd session.new; sleep 0.4; key Enter; sleep 2; pal '$doraemon'; key Enter; sleep 0.8
 check "（准备）又开了 session 1，再切回 doraemon（1 个 session 在后台）" eval '[[ $(sname) == doraemon ]]'
 key F8; sleep 0.6
 check "doraemon 里有 1 处修改没保存：F8 先问「doraemon 里有 1 处修改未保存，关闭会丢弃。」" eval '[[ $(box) == "doraemon 里有 1 处修改未保存，关闭会丢弃。" ]] || { echo "  [$(box)]"; false; }'

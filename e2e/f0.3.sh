@@ -80,9 +80,9 @@ tuic() { printf "$1" >| "$CFG/config.toml"; e2e_start -c "$CFG/config.toml" "$E2
 pua() { e2e_plain | python3 -c 'import sys; sys.exit(0 if any(0xE000 <= ord(c) <= 0xF8FF for c in sys.stdin.read()) else 1)'; }
 tui ''; check "默认 nerd：画面有私有区码点（对照）" pua
 tuic 'icons = "ascii"\n'; check "icons = \"ascii\"：画面没有私有区码点" eval '! pua'
-tui '[keys.normal]\n"<Space>b" = ""\n"<C-b>" = "tree.toggle"\n'; check "改绑 tree.toggle 为 C-b：侧栏标题显示 C-b" text_ends 1 32 1 " C-b ─┐"
-tui '[keys]\nleader = "<C-a>"\n'; check "leader = <C-a>：侧栏标题显示 C-a b" text_ends 1 32 1 " C-a b ─┐"
-tui '[keys.normal]\n"<Leader>b" = ""\n'; check "解绑 tree.toggle：侧栏标题不显示提示" eval '[[ $(e2e_text 1 32 1) == *"doraemon ───"*"─┐" && $(e2e_text 1 32 1) != *SPC* ]]'
+tui '[keys.normal]\n"<Space>b" = ""\n"<C-b>" = "tree.toggle"\n'; check "改绑 tree.toggle 为 C-b：侧栏标题仍只有 «，不写键位（F10.9）" eval '[[ $(e2e_text 1 32 1) == *" « ─┐" && $(e2e_text 1 32 1) != *C-b* ]]'
+tui '[keys]\nleader = "<C-a>"\n'; check "leader = <C-a>：侧栏标题仍只有 «" eval '[[ $(e2e_text 1 32 1) == *" « ─┐" && $(e2e_text 1 32 1) != *C-a* ]]'
+tui '[keys.normal]\n"<Leader>b" = ""\n'; check "解绑 tree.toggle：侧栏标题照样是 «（点击还能收起）" eval '[[ $(e2e_text 1 32 1) == *"doraemon ───"*" « ─┐" && $(e2e_text 1 32 1) != *SPC* ]]'
 tui '[keys.console]\n"<CR>" = ""\n"R" = "console.run"\n'; e2e_resize 200 45; sleep 0.4   # 160 宽下 F5.3 的事务控件把键位文字挤掉了
 check "改绑 console.run 为 R：② console 标题显示 ▶ run R" text_ends 1 200 1 "▶ run  R ─┐"
 tui '[keys.grid]\n"T" = ""\n'; two_tabs; check "解绑 grid.transpose：tab 栏不显示「转置」" eval '[[ $(e2e_text 34 160 43) != *转置* && $(e2e_text 34 160 43) == *"↵ edit"* ]]'

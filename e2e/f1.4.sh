@@ -132,7 +132,7 @@ key BSpace; key BSpace; e2e_type 1; key Enter; wait_for 8 settled; key g g; key 
 # ---- COLS（gc）：焦点在列表；j/k、space、a/A；/ 进过滤框；esc 两步；隐藏列按 tab 记住
 key 2 l                                          # 光标在 status（第 3 列）
 key gc
-check "gc：列表打开，COMMAND，右上角 10/10，每行 [x] 列名 … 类型，底部 a 全选 · A 全不选" eval 'mode_is COMMAND && g=($(dd)) && [[ $(e2e_text ${g[0]} $((g[0] + g[2] - 1)) $((g[1] + 1))) == *"10/10 │" && $(dd_rows | head -1) == "[x] id"*bigint* && $(dd_rows | grep -c "^\[x\]") == 10 && $(dd_rows | tail -1) == "a 全选 · A 全不选" ]] || { echo "  $(dd_rows | tr "\n" ,)"; false; }'
+check "gc：列表打开，COMMAND，右上角 10/10，每行 [x] 列名 … 类型，底部 J/K 移动 · a 全选 · A 全不选（F10.3）" eval 'mode_is COMMAND && g=($(dd)) && [[ $(e2e_text ${g[0]} $((g[0] + g[2] - 1)) $((g[1] + 1))) == *"10/10 │" && $(dd_rows | head -1) == "[x] id"*bigint* && $(dd_rows | grep -c "^\[x\]") == 10 && $(dd_rows | tail -1) == "J/K 移动 · a 全选 · A 全不选" ]] || { echo "  $(dd_rows | tr "\n" ,)"; false; }'
 key j; key j; key Space
 check "j j space：取消 status，表格里 status 列消失，chip COLS 9/10" eval '[[ $(dd_rows | sed -n 3p) == "[ ] status"* && $(header) != *" status "* ]] && qb_has "COLS 9/10"'
 cur_col() { local x y=$(row_y 1); for ((x = 35; x < 160; x++)); do style_has $x $y bg=#3d59a1 >/dev/null && { e2e_text $x $((x + 12)) "$(hy)" | awk '{ print $1 }'; return; }; done; }   # 光标格所在列的表头
@@ -149,7 +149,7 @@ key Escape
 check "esc 第二次：关闭" eval '[[ -z $(dd) ]] && mode_is NORMAL'
 key gc; g=($(dd)); e2e_click $((g[0] + 6)) $((g[1] + 3 + 4)); sleep 0.3   # 第 5 行：paid
 check "点击一行：切换这一列（paid），COLS 9/10" eval '[[ $(dd_rows | sed -n 5p) == "[ ] paid"* ]] && qb_has "COLS 9/10"'
-e2e_click $((g[0] + 3)) $((g[1] + g[3] - 2)); sleep 0.3
+e2e_click $((g[0] + 14)) $((g[1] + g[3] - 2)); sleep 0.3
 check "点击底部的 a 全选：10/10" qb_has "COLS 10/10"
 key /; e2e_type paid; key Enter; key Space; key Escape; key Escape   # 隐藏 paid
 key C-p; e2e_type "@t_user"; sleep 0.3; key C-t; wait_for 8 settled

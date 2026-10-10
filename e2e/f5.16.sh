@@ -68,7 +68,7 @@ key Escape
 # ---- session.new：和 session 列表里的 n 一样，用当前连接
 begin
 check "（准备）一个 session doraemon" eval '[[ $(sname) == doraemon ]]'
-key F5; wait_for 8 eval '[[ $(sname) == 1 ]]'; sleep 0.5
+key F5; sleep 0.4; key Enter; wait_for 8 eval '[[ $(sname) == 1 ]]'; sleep 0.5
 check "F5 session.new：新 session 1，一个 window 0: data*，一个空 pane（F8.18），连着当前连接（侧栏有 Tables (6)）" eval '[[ $(sname) == 1 && $(wins) == "0: data*" && $(panes) == "0 1 " ]] && e2e_plain | head -12 | grep -q "Tables (6)"'
 
 # ---- tab.quit：关 tab；pane 空了关 pane；window 里只剩这个空 pane 就关 window；最后一个 window 不关

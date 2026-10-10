@@ -77,10 +77,10 @@ setsql "select e2e_hint()"
 run
 check "DETAIL / HINT 另起一行" eval 'l=$(logs); [[ $l == *"ERROR: bad"* && $l == *"the detail"* && $l == *"the hint"* ]] || { echo "$l"; false; }'
 
-# ---- 截断：最多 max_rows（1000）行，多取一行判断还有没有
-setsql "select g from generate_series(1, 1001) g"
+# ---- 截断：最多 max_rows（F10.4 起 500）行，多取一行判断还有没有
+setsql "select g from generate_series(1, 501) g"
 run
-check "1001 行的查询：显示 1000+ 行" eval '[[ $(rtitle) == *" 1000+ 行 · "* ]] || { echo "  $(rtitle)"; false; }'
+check "501 行的查询：显示 500+ 行" eval '[[ $(rtitle) == *" 500+ 行 · "* ]] || { echo "  $(rtitle)"; false; }'
 
 # ---- DDL 之后重新加载 catalog（§11「执行」）
 setsql "create table t_e2e (id int primary key)"

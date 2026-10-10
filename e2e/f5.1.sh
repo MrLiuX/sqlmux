@@ -25,7 +25,7 @@ srows() { local g; slist_open || return 0; g=($(box))
 rows_are() { local got; got=$(srows | tr '\n' ';'); [[ $got == "$1" ]] || { echo "  rows: '$got'"; echo "  want  '$1'"; false; }; }
 sl() { e2e_keys Space; e2e_type s; sleep 0.4; }                             # SPC s
 layout() { e2e_keys Space; e2e_type %; sleep 0.4; key c; }   # F8.18 起新 session 只有一个空 pane：分一个出来、c 新建 console，回到旧的默认布局
-new_session() { key n; wait_for 6 eval '[[ $(sname) == "$1" ]]'; sleep 0.5; }   # NAME：列表里按 n，等它 attach
+new_session() { key n; sleep 0.4; key Enter; wait_for 6 eval '[[ $(sname) == "$1" ]]'; sleep 0.5; }   # NAME：列表里按 n，等它 attach
 clr() { local i; for ((i = 0; i < 30; i++)); do e2e_keys BSpace; done; sleep 0.2; }
 title1() { e2e_plain | head -1; }
 nrow() { local y; for y in $(seq 3 30); do [[ $(e2e_text 1 32 "$y") == *" $1 "* ]] && { echo "$y"; return; }; done; }   # 侧栏里 NAME 的行
@@ -40,8 +40,8 @@ start -C "$D/c"; open_table t_order; key 3 j; key l
 check "启动：一个 session doraemon，它的连接有 Meta、Main 两条" eval 'sname_is doraemon && [[ $(conns) == 2 ]]'
 sl
 check "SPC s：session 列表，一行「doraemon  1 windows」，光标在当前 session 上" eval 'slist_open && rows_are "doraemon  1 windows|1;"'
-key n
-check "n：列表关掉，toast「正在连接 doraemon…」" eval '! slist_open && toast_is "正在连接 doraemon…"'
+key n; sleep 0.4; key Enter
+check "n 再 ↵（F10.2：先要名字，预填 1）：列表关掉，toast「正在连接 doraemon…」" eval '! slist_open && toast_is "正在连接 doraemon…"'
 wait_for 6 eval '[[ $(sname) == 1 ]]'; sleep 0.5
 check "连上之后 attach 新 session：名字 1（最小的没用过的数字），一个 window 0: data*" eval 'sname_is 1 && [[ $(wins) == "0: data*" ]]'
 check "新 session 只有侧栏和一个空 pane ①（引导页），没有 console（F8.18）" eval '[[ $(e2e_panes | awk "\$1 != \"-\" { print \$1 }" | tr "\n" " ") == "0 1 " ]] && [[ $(tabbar 1) != *console* ]] && e2e_plain | grep -q "打开表"'
@@ -170,7 +170,7 @@ key Escape
 
 # ---- 新 session 连不上：toast，不建
 psql "$SQLMUX_TEST_PG" -qAt -c "alter database sqlmux_e2e_$$ allow_connections false"
-sl; key n; wait_for 6 eval 'e2e_text 1 160 $(($(H) - 1)) | grep -q "doraemon："'
+sl; key n; sleep 0.4; key Enter; wait_for 6 eval 'e2e_text 1 160 $(($(H) - 1)) | grep -q "doraemon："'
 check "库不让连：toast「doraemon：<驱动的错误>」，不建 session" eval 'e2e_text 1 160 $(($(H) - 1)) | grep -q "doraemon：.*FATAL: database \"sqlmux_e2e_$$\" is not curr" && sname_is doraemon && { sl; rows_are "doraemon  1 windows|1;"; }'
 psql "$SQLMUX_TEST_PG" -qAt -c "alter database sqlmux_e2e_$$ allow_connections true"
 key Escape
@@ -180,7 +180,7 @@ key Escape
 psql "$E2E_DB" -q -c "create table public.e2e_slow (secs float)" \
   -c "create function public.e2e_slow_login() returns event_trigger language plpgsql as \$\$ begin if current_setting('application_name') = '$APP2' then perform pg_sleep(coalesce((select max(secs) from public.e2e_slow), 0)); end if; end \$\$" \
   -c "create event trigger e2e_slow_login on login execute function public.e2e_slow_login()" -c "insert into public.e2e_slow values (3)"
-sl; key n; pal ">conn.new"; key Enter; form_dsn late "$SQLMUX_TEST_PG"; key C-p
+sl; key n; sleep 0.4; key Enter; pal ">conn.new"; key Enter; form_dsn late "$SQLMUX_TEST_PG"; key C-p
 check "（准备）建连还没回来：还是 doraemon；建连期间新加了 late；面板开着" eval 'sname_is doraemon && [[ -n $(nrow late) ]] && palette_open'
 wait_for 12 eval '[[ $(sname) == 1 ]]'; sleep 0.5
 check "建连回来 attach 新 session 1：面板关掉（attach 关掉所有浮层）" eval 'sname_is 1 && ! palette_open'
