@@ -102,13 +102,7 @@ func (t Tree) Draw(f *Frame, in uv.Rectangle) uv.Position {
 	for i := t.Top; i < min(t.Top+list.Dy(), len(t.Nodes)); i++ {
 		n, row := t.Nodes[i], list.Min.Y+i-t.Top
 		if n.Sep {
-			rule, x := uv.Style{Fg: th.Sep, Bg: th.PaneBg}, list.Min.X+1
-			if n.Text != "" {
-				x = f.Text(x, row, right, "── ", rule)
-				x = f.Text(x, row, right, n.Text, uv.Style{Fg: th.Dim, Bg: th.PaneBg})
-				x = f.Text(x, row, right, " ", rule)
-			}
-			f.Text(x, row, right, strings.Repeat("─", max(right-x, 0)), rule)
+			drawRule(f, list.Min.X+1, row, right, n.Text)
 			continue
 		}
 		line := uv.Rect(list.Min.X, row, list.Dx(), 1)
@@ -190,4 +184,17 @@ func Magnitude(n float64) string {
 		}
 	}
 	return strconv.FormatInt(v, 10)
+}
+
+// drawRule is a rule across row y from x to right, with title in it at the
+// start when there is one: a group's, in the tree and in the manager (F10.6).
+func drawRule(f *Frame, x, y, right int, title string) {
+	th := f.Theme
+	rule := uv.Style{Fg: th.Sep, Bg: th.PaneBg}
+	if title != "" {
+		x = f.Text(x, y, right, "── ", rule)
+		x = f.Text(x, y, right, title, uv.Style{Fg: th.Dim, Bg: th.PaneBg})
+		x = f.Text(x, y, right, " ", rule)
+	}
+	f.Text(x, y, right, strings.Repeat("─", max(right-x, 0)), rule)
 }

@@ -205,7 +205,7 @@ func (a *App) formKey(k keymap.Key) {
 	fd := &f.fields[f.sel]
 	switch fd.Kind {
 	case ui.FormInput:
-		if editInput(&fd.Input, k); f.sel == fieldGroup {
+		if editInput(&fd.Input, k) && f.sel == fieldGroup {
 			f.groupSel, f.groupOff = -1, false
 		}
 	case ui.FormSegments:
@@ -248,7 +248,7 @@ func (a *App) formClick(i int) {
 	}
 	f.list = false
 	f.clearErr()
-	f.sel = i
+	f.sel, f.groupSel, f.groupOff = i, -1, false
 	if k := f.fields[i].Kind; k == ui.FormCheck || k == ui.FormFold {
 		a.formKey("<Space>")
 	}
@@ -606,7 +606,7 @@ func (a *App) formView() ui.Form {
 	}
 	form := ui.Form{Fields: fields, Sel: f.sel, Err: f.err, Save: i18n.T("保存"), Cancel: i18n.T("取消"), Delete: del, Hints: hints, PickAt: fieldGroup}
 	if cands := a.groupCands(); len(cands) > 0 { // under the group field (F10.6)
-		form.Pick = &ui.Complete{Sel: f.groupPick(len(cands))}
+		form.Pick = &ui.Complete{Sel: f.groupPick(len(cands)), Act: "form.pick"}
 		for _, g := range cands {
 			form.Pick.Items = append(form.Pick.Items, ui.CompleteItem{Text: g})
 		}
@@ -615,7 +615,7 @@ func (a *App) formView() ui.Form {
 }
 
 // groupCands are the groups the group field's list offers: those that start
-// as what is typed does, in either case, but not what is typed; all of them
+// as what is typed does, in either case, but not what is typed exactly; all of them
 // before anything is. None when the field has no keys or the list is closed
 // (F10.6).
 func (a *App) groupCands() (out []string) {
@@ -623,9 +623,10 @@ func (a *App) groupCands() (out []string) {
 	if f == nil || f.list || f.sel != fieldGroup || f.groupOff {
 		return nil
 	}
-	typed := strings.ToLower(strings.TrimSpace(f.fields[fieldGroup].Input.Text))
+	text := strings.TrimSpace(f.fields[fieldGroup].Input.Text)
+	typed := strings.ToLower(text)
 	for _, g := range a.groupNames() {
-		if lg := strings.ToLower(g); strings.HasPrefix(lg, typed) && lg != typed {
+		if strings.HasPrefix(strings.ToLower(g), typed) && g != text {
 			out = append(out, g)
 		}
 	}

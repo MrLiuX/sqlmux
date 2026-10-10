@@ -211,3 +211,25 @@ func TestGoldenSelect(t *testing.T) {
 		})
 	}
 }
+
+// The marks are positions among the rows shown: a save that takes the added
+// rows out of them and a refresh that fetches others leave none (F10.7).
+func TestSelectClearedAsRowsMove(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	a.sess.Conns[0].Main = db.NewWorker(&tagDB{})
+	feed(t, a, "olli5<Esc>jm") // a row added under the first; the record under it marked
+	if !tab.selecting() {
+		t.Fatal("not marked")
+	}
+	_, cmd := a.Update(teaKey("<C-s>"))
+	a.Update(cmd())
+	if tab.selecting() {
+		t.Errorf("saved, the marks stay: %v", markedOf(&tab.gridState))
+	}
+	feed(t, a, "m")
+	a.run("grid.refresh", 0)
+	if tab.selecting() {
+		t.Errorf("refreshed, the marks stay: %v", markedOf(&tab.gridState))
+	}
+}

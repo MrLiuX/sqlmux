@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"strings"
-
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
@@ -98,13 +96,7 @@ func (m ConnManager) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 	for i := top; i < len(m.Rows) && y < in.Max.Y; i++ {
 		r := m.Rows[i]
 		if r.Rule {
-			rule, x, right := uv.Style{Fg: th.Sep, Bg: th.PaneBg}, in.Min.X+1, in.Min.X+connListWidth-1
-			if r.Group != "" {
-				x = f.Text(x, y, right, "── ", rule)
-				x = f.Text(x, y, right, r.Group, uv.Style{Fg: th.Dim, Bg: th.PaneBg})
-				x = f.Text(x, y, right, " ", rule)
-			}
-			f.Text(x, y, right, strings.Repeat("─", max(right-x, 0)), rule)
+			drawRule(f, in.Min.X+1, y, in.Min.X+connListWidth-1, r.Group)
 			if y++; y >= in.Max.Y {
 				break
 			}

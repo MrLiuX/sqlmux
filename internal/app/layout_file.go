@@ -156,7 +156,7 @@ func Restore(specs []config.Connection, l *config.Layout) *Restored {
 		}
 		if len(s.Windows) == 0 { // a session with no window is one with the default
 			name := freeConsoleName(func(name string) bool { return used[name] })
-			w, warning := s.newWindow(conns[start], name)
+			w, warning := s.newWindow(first, name)
 			if warning != "" {
 				r.Warnings = append(r.Warnings, warning)
 			} else {

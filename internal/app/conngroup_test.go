@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -47,10 +48,13 @@ dsn = "postgres://u@h/misc"
 
 // grouped is managed over groupedFile, the connections of the session in the
 // order the tree has them.
-func grouped(t *testing.T) *App {
+func grouped(t *testing.T) *App { return groupedIn(t, groupedFile) }
+
+// groupedIn is that over file.
+func groupedIn(t *testing.T, file string) *App {
 	t.Helper()
 	a := managed(t)
-	if err := os.WriteFile(filepath.Join(config.Dir(), "connections.toml"), []byte(groupedFile), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(config.Dir(), "connections.toml"), []byte(file), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	specs, _, err := config.LoadConnections("")
@@ -298,4 +302,73 @@ func TestFormGroupList(t *testing.T) {
 		t.Errorf("typing opens it again: %q", cands())
 	}
 	golden.RequireEqual(t, a.render().String())
+}
+
+// A session that starts on a connection of a group starts on that one, the
+// order the tree has moving it: the console of a layout with no window is on
+// it (F10.6).
+func TestRestoreStartsOnItsConnection(t *testing.T) {
+	grouped(t) // the file
+	specs, _, err := config.LoadConnections("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	r := Restore(specs, &config.Layout{Sessions: []config.LayoutSession{{Name: "s", Connection: "stage"}}})
+	s := r.Sessions[0]
+	if got := s.start.Spec.Name; got != "stage" {
+		t.Errorf("start %s", got)
+	}
+	if cs := s.consoles(); len(cs) != 1 || cs[0].conn != s.start {
+		t.Errorf("console of %+v", cs)
+	}
+}
+
+// A click on a group of the list takes it, as ↵ does; the list scrolls to
+// the group ↓ has picked past its rows; typing a group in the other case still
+// offers it; the arrows that only move the cursor do not open the list again
+// after esc closed it, a click on a field does (F10.6).
+func TestFormGroupListMouseScrollCase(t *testing.T) {
+	a := grouped(t)
+	feed(t, a, "<C-p>conn.new<CR>n<Tab>")
+	click(a, find(t, a, ui.Target{Kind: ui.KindRow, I: 1, Action: "form.pick"}).Min)
+	if fieldText(a, fieldGroup) != "dev" || a.form.sel != fieldGroup || len(a.groupCands()) != 0 {
+		t.Errorf("click: %q on %d", fieldText(a, fieldGroup), a.form.sel)
+	}
+	feed(t, a, "<C-u>Prod")
+	if got := strings.Join(a.groupCands(), " "); got != "prod" {
+		t.Errorf("Prod offers the group in its own case: %q", got)
+	}
+	feed(t, a, "<Esc><Left>")
+	if len(a.groupCands()) != 0 {
+		t.Errorf("a cursor move opens the list again")
+	}
+	click(a, find(t, a, ui.Target{Kind: ui.KindRow, I: fieldName}).Min)
+	click(a, find(t, a, ui.Target{Kind: ui.KindRow, I: fieldGroup}).Min)
+	if got := strings.Join(a.groupCands(), " "); got != "prod" {
+		t.Errorf("back on the field by a click: %q", got)
+	}
+
+	var many strings.Builder
+	for i := range 10 {
+		fmt.Fprintf(&many, "[[connection]]\nname = \"c%d\"\ngroup = \"g%d\"\nengine = \"postgres\"\ndsn = \"postgres://u@h/d\"\n\n", i, i)
+	}
+	a = groupedIn(t, many.String())
+	feed(t, a, "<C-p>conn.new<CR>n<Tab>"+strings.Repeat("<Down>", 9))
+	find(t, a, ui.Target{Kind: ui.KindRow, I: 8, Action: "form.pick"}) // the ninth is drawn
+}
+
+// With every connection in a group the tree begins with a rule: the cursor of
+// a window with nothing done is not on it (F10.6).
+func TestTreeCursorStartsOnANode(t *testing.T) {
+	a := groupedIn(t, `[[connection]]
+name = "stage"
+group = "prod"
+engine = "postgres"
+dsn = "postgres://u@h/s"
+`)
+	a.win().focus(0)
+	if n, ok := a.treeNode(); !ok || n.kind != nodeConn {
+		t.Errorf("the cursor is on %+v", n)
+	}
 }

@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/exp/golden"
 
+	"github.com/kackerx/sqlmux/internal/editor"
 	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
@@ -201,5 +202,33 @@ func TestJumpLeftByClickAndWheel(t *testing.T) {
 	a.Update(tea.WindowSizeMsg{Width: 150, Height: 40})
 	if a.jump != nil {
 		t.Error("a resize ends it")
+	}
+}
+
+// What is not the jump's own ends it: a global key does what it does (the
+// palette opens and has the keys), a right click goes where it is; the
+// palette's jump on a console in INSERT begins one and types nothing (F10.8).
+func TestJumpEndedByOthers(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	loadOrders(t, a, 3)
+	feed(t, a, "s<C-p>")
+	if a.jump != nil || a.palette == nil {
+		t.Errorf("C-p in a jump: jump %v, palette %v", a.jump, a.palette != nil)
+	}
+	feed(t, a, "<Esc>s")
+	a.Update(tea.MouseClickMsg{X: 1, Y: 1, Button: tea.MouseRight})
+	if a.jump != nil {
+		t.Error("a right click leaves the jump")
+	}
+	c := consoleOf(a.win().Root.B.Pane)
+	a.focusPane(a.win().Root.B.Pane.ID)
+	c.ed.Load("select 1;")
+	feed(t, a, "i")
+	if c.ed.Mode() != editor.Insert {
+		t.Fatalf("mode %v", c.ed.Mode())
+	}
+	a.run("jump.start", 0)
+	if a.jump == nil || strings.Join(c.ed.Lines(), "\n") != "select 1;" {
+		t.Errorf("jump %v, text %q", a.jump, c.ed.Lines())
 	}
 }

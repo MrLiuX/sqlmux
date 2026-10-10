@@ -20,6 +20,7 @@ type CompleteItem struct {
 type Complete struct {
 	Items    []CompleteItem
 	Sel, Top int    // Sel -1: nothing picked yet
+	Act      string // the Action of a click on a row, for a list the click has to tell from other rows (F10.6)
 	Foot     []Hint // a last row of dim hints in the box, "Key Label · …", when there are some (F8.14)
 }
 
@@ -61,7 +62,7 @@ func (c Complete) Draw(f *Frame, box uv.Rectangle, rows int) {
 		// picked on select, the one under the pointer on row: which ↵ takes
 		// shows apart from where the pointer is (§10.2)
 		st := uv.Style{Fg: th.Fg, Bg: th.PaneBg}
-		switch hover := f.Region(line, Target{Kind: KindRow, I: i}); {
+		switch hover := f.Region(line, Target{Kind: KindRow, I: i, Action: c.Act}); {
 		case i == c.Sel:
 			st.Bg = th.Select
 		case hover:

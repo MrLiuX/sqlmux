@@ -189,6 +189,7 @@ func (fm Form) drawIn(f *Frame, area uv.Rectangle, focus bool) uv.Position {
 			w = max(w, Width(it.Text)+4)
 		}
 		box, rows := CompleteBox(f.Bounds(), pickAt, min(w, area.Max.X-pickAt.X), len(fm.Pick.Items), 0, CompleteRows)
+		fm.Pick.Top = max(0, fm.Pick.Sel-rows+1)
 		fm.Pick.Draw(f, box, rows)
 	}
 	return cursor

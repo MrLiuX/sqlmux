@@ -765,6 +765,9 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 			delete(t.deleted, k)
 		}
 		t.added = slices.DeleteFunc(t.added, func(r *newRow) bool { return slices.Contains(m.adds, r) })
+		if len(m.adds) > 0 {
+			t.deselect() // the positions of the rows after them move
+		}
 		if p := a.paneShowing(t); closing && t.changes() == 0 && t.cell == nil && p != nil { // :wq, and nothing changed since, nor being typed
 			a.closeTab(p, p.Cur)
 			return nil

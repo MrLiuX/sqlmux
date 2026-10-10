@@ -491,6 +491,7 @@ func init() {
 			}
 			return a.unlessLost(t.changes(), "", nil, verbRefresh, func() tea.Cmd { // R drops the changes (§10.4)
 				t.edits, t.added, t.deleted = nil, nil, nil
+				t.deselect() // the rows are others
 				return a.fetch(t, true)
 			})
 		}},
@@ -597,6 +598,9 @@ func (a *App) run(action string, count int) tea.Cmd {
 	}
 	if !strings.HasPrefix(id, "cell.") && id != "cancel" && !a.endEdit() { // cancel is esc here, which ends it itself
 		return nil
+	}
+	if a.jump != nil && !strings.HasPrefix(id, "jump.") { // a global key (C-p, C-s) ends it and does what it does
+		a.jump = nil
 	}
 	if !strings.HasPrefix(id, "keyhelp.") && id != "cancel" { // a global key (C-p) goes past the ? help: it closes (§6.5)
 		a.keyHelp = nil

@@ -495,7 +495,6 @@ func (a *App) grid(p *Pane, t *dataTab) ui.Grid {
 	return g
 }
 
-// gridFlash is what a yank flashes of pane p's grid, if anything.
 // flashNums are the numbers of the records of a selection yanked in pane p,
 // while it flashes (F10.7).
 func (a *App) flashNums(p *Pane) map[int]bool {
@@ -505,6 +504,7 @@ func (a *App) flashNums(p *Pane) map[int]bool {
 	return nil
 }
 
+// gridFlash is what a yank flashes of pane p's grid, if anything.
 func (a *App) gridFlash(p *Pane) *[2]int {
 	if f := a.flash; f != nil && f.nums != nil {
 		return nil

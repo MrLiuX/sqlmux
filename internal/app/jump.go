@@ -10,7 +10,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 
-	"github.com/kackerx/sqlmux/internal/editor"
 	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
@@ -94,10 +93,11 @@ func findIn(cs []cluster, pat []rune, fold bool, from int) int {
 	return -1
 }
 
-// jumpStart is s: a jump begins, on a console in NORMAL only, as a console's
-// VISUAL has its own s (F10.8).
+// jumpStart is s: a jump begins, but on a console's VISUAL, which has its own
+// s the keymap lets through (F10.8). The palette's does not come from a key,
+// and in INSERT no key comes here: it begins one.
 func (a *App) jumpStart() tea.Cmd {
-	if c := a.focusedConsole(); c != nil && c.ed.Mode() != editor.Normal {
+	if c := a.focusedConsole(); c != nil && vimMode(c.ed.Mode()) == keymap.Visual {
 		return a.consoleKey(a.focused(), c, "s")
 	}
 	a.jump = &jumpState{}

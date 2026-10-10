@@ -339,6 +339,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseReleaseMsg:
 		a.drag, a.dragTree, a.dragText, a.dragWhere = nil, false, 0, 0
 	case tea.MouseClickMsg:
+		a.jump = nil // a click goes where it is, the jump over (F10.8)
 		switch m := msg.Mouse(); m.Button {
 		case tea.MouseLeft:
 			return a, a.click(uv.Pos(m.X, m.Y))
@@ -411,9 +412,6 @@ func (a *App) feed(k keymap.Key, maps bool) tea.Cmd {
 // click turns a left click into what its target stands for (§7.4): the
 // same actions keys run.
 func (a *App) click(p uv.Position) tea.Cmd {
-	if a.jump != nil { // a click goes where it is, the jump over (F10.8)
-		a.jump = nil
-	}
 	t, ok := ui.HitAt(a.hits, p)
 	if a.askName != nil { // so is a click off the name's (F6.5)
 		a.askName = nil
@@ -470,6 +468,9 @@ func (a *App) click(p uv.Position) tea.Cmd {
 			return a.paletteRun(t.I, false)
 		case a.sessList != nil: // a row: there, then ↵ (§7.8)
 			a.sessionsAttach(t.I)
+		case a.form != nil && t.Action == "form.pick": // a group of the list (F10.6)
+			a.form.groupSel = t.I
+			a.groupAccept()
 		case a.form != nil:
 			a.formClick(t.I)
 		case tab != nil && tab.hist != nil:

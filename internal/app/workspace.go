@@ -579,13 +579,14 @@ func Open(ctx context.Context, specs []config.Connection, start int) (*Session, 
 	for i, spec := range specs {
 		conns[i] = newConn(spec)
 	}
+	first := conns[start] // before groupOrder moves it
 	groupOrder(conns)
 	d, err := dial(ctx, specs[start])
 	if err != nil {
 		return nil, err
 	}
-	conns[start].take(d)
-	return newSession(specs[start].Name, conns, conns[start], config.ConsoleName(1)), nil
+	first.take(d)
+	return newSession(specs[start].Name, conns, first, config.ConsoleName(1)), nil
 }
 
 // dialed is a connection's Main and Meta as dial connected them, where

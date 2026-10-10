@@ -438,11 +438,15 @@ func treeView(cursor, top, n, rows int) (int, int) {
 }
 
 // treeAt is where the cursor is among ns, on its node while that shows,
-// else on the row it was on; and the first row the view shows.
+// else on the row it was on, a rule not being where it rests (F10.6); and
+// the first row the view shows.
 func (a *App) treeAt(ns []node) (cursor, top int) {
 	t := a.win().tree
 	if i := slices.IndexFunc(ns, func(n node) bool { return n.id == t.at }); i >= 0 {
 		t.cursor = i
+	}
+	for t.cursor < len(ns)-1 && ns[t.cursor].kind == nodeSep {
+		t.cursor++
 	}
 	return treeView(t.cursor, t.top, len(ns), a.treeRows())
 }
@@ -453,10 +457,6 @@ func (a *App) clampTree() {
 	ns, _ := a.treeNodes()
 	t := &a.win().tree
 	t.cursor, t.top = a.treeAt(ns)
-	for t.cursor < len(ns)-1 && ns[t.cursor].kind == nodeSep { // a rule is not where the cursor rests (F10.6)
-		t.cursor++
-	}
-	t.cursor, t.top = treeView(t.cursor, t.top, len(ns), a.treeRows())
 	if t.cursor < len(ns) {
 		n := ns[t.cursor]
 		if t.at = n.id; n.schema != "" {
