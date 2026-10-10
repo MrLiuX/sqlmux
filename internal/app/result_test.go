@@ -85,7 +85,7 @@ func deliver(a *App, cmd tea.Cmd) {
 		for _, c := range m {
 			deliver(a, c)
 		}
-	case runDone:
+	case runDone, pageDone:
 		a.Update(m)
 	}
 }
@@ -143,7 +143,7 @@ func TestRunFirst(t *testing.T) {
 	if tabNames(res) != "日志 console_1 #1" || res.Cur != 1 || a.focused() != console || c.running != nil {
 		t.Fatalf("tabs %v cur %d, focus %d", tabNames(res), res.Cur, a.win().Focus)
 	}
-	if len(d.ran) != 1 || d.ran[0] != "select 1\nLIMIT 1001" {
+	if len(d.ran) != 1 || d.ran[0] != "select 1\nLIMIT 501" {
 		t.Errorf("ran %q", d.ran)
 	}
 	if got := logText(a); got != "console_1  select 1  3 行 · 0s" {
@@ -281,7 +281,7 @@ func TestRunSchema(t *testing.T) {
 	c.schema = "agentable"
 	setA := `search_path "agentable" "$user", public`
 	press(t, a, "<CR><CR>")
-	if strings.Join(d.ran, "; ") != setA+"; select 1\nLIMIT 1001; select 1\nLIMIT 1001" || strings.Contains(logText(a), "search_path") {
+	if strings.Join(d.ran, "; ") != setA+"; select 1\nLIMIT 501; select 1\nLIMIT 501" || strings.Contains(logText(a), "search_path") {
 		t.Fatalf("ran %q, log %q", d.ran, logText(a))
 	}
 	d.ran = nil
@@ -332,7 +332,7 @@ func TestRunWhat(t *testing.T) {
 	d := &execDB{}
 	a, c := inRun(t, d, "select '中', 2;\nselect 3;\nselect 4;")
 	deliver(a, a.run("console.run 3", 0))
-	if len(d.ran) != 1 || d.ran[0] != "select 4\nLIMIT 1001" || c.ed.Cursor() != (editor.Pos{}) {
+	if len(d.ran) != 1 || d.ran[0] != "select 4\nLIMIT 501" || c.ed.Cursor() != (editor.Pos{}) {
 		t.Fatalf("▶ 3: ran %q, cursor %v", d.ran, c.ed.Cursor())
 	}
 	for _, k := range []struct{ keys, span string }{
@@ -349,7 +349,7 @@ func TestRunWhat(t *testing.T) {
 		}
 	}
 	d.ran = nil
-	if press(t, a, "gg0wvj<CR>"); strings.Join(d.ran, ";") != "'中', 2;select 3\nLIMIT 1001" || c.ed.Cursor() != (editor.Pos{Line: 1, Col: 7}) {
+	if press(t, a, "gg0wvj<CR>"); strings.Join(d.ran, ";") != "'中', 2;select 3\nLIMIT 501" || c.ed.Cursor() != (editor.Pos{Line: 1, Col: 7}) {
 		t.Errorf("v then ↵: ran %q, cursor %v", d.ran, c.ed.Cursor())
 	}
 }

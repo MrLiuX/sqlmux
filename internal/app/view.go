@@ -432,7 +432,7 @@ func (a *App) resultHints(rt *resultTab) []ui.Hint {
 		return ui.Hint{Label: " " + i.Text + " ", Action: action, Color: cmp.Or(i.Fg, a.theme.Info), Prio: prio}
 	}
 	return []ui.Hint{
-		{Label: resultText(rt.page), Prio: 5},
+		{Label: resultText(rt.page, rt.offset), Prio: 5},
 		button(ic.Refresh, "result.rerun", 1),
 		button(ic.Transpose, "grid.transpose", 3),
 		button(ic.Pin, "result.pin", 2),

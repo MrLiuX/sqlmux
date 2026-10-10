@@ -174,7 +174,7 @@ func (a *App) quickToResult() tea.Cmd {
 	a.sess.RunSeq++
 	r := &run{conn: q.conn, schema: q.schema, name: "quick", sql: q.ran, seq: a.sess.RunSeq, start: time.Now(), win: a.win(), done: true}
 	p := a.showResult(r.win)
-	a.log(r, r.sql, resultText(q.res), false)
+	a.log(r, r.sql, resultText(q.res, 0), false)
 	p.Tabs = append(p.Tabs, Tab{Name: r.label(1), Result: &resultTab{gridState: gridState{page: q.res}, run: r, part: 1, pinned: true, arrived: r.start}})
 	selectTab(p, len(p.Tabs)-1)
 	a.capResults(p)
@@ -221,7 +221,7 @@ func (a *App) gotQuickRerun(m quickRerun) tea.Cmd {
 		return nil
 	}
 	rt.gridState, rt.arrived = gridState{page: m.res, transpose: rt.transpose}, time.Now()
-	a.log(r, r.sql, resultText(m.res), false)
+	a.log(r, r.sql, resultText(m.res, 0), false)
 	return nil
 }
 

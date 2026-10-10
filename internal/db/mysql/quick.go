@@ -28,7 +28,8 @@ func (e Engine) Quick(ctx context.Context, w *db.Worker, sql, schema string, max
 			}
 		}
 		start := time.Now()
-		r, err = c.Query(ctx, sqlkit.AutoLimit(sql, sqlkit.MySQL, maxRows+1))
+		text, _ := sqlkit.AutoLimit(sql, sqlkit.MySQL, maxRows+1, 0)
+		r, err = c.Query(ctx, text)
 		if len(r.Rows) > maxRows {
 			r.Rows, r.Truncated = r.Rows[:maxRows], true
 		}

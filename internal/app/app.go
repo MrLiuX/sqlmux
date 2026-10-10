@@ -282,6 +282,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.gotExternal(msg)
 	case runDone:
 		return a, a.gotRun(msg)
+	case pageDone:
+		return a, a.gotResultPage(msg)
 	case formatDone:
 		return a, a.gotFormat(msg)
 	case runTick:

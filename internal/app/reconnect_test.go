@@ -66,7 +66,7 @@ func TestRunAfterLostConnection(t *testing.T) {
 	}
 	// nothing sent: the run goes again, the schema set first
 	a, _, d2 := run("select 1", map[string]error{"select 1": errUnsent}, "<CR>")
-	if strings.Join(d2.ran, "; ") != `search_path "agentable" "$user", public; select 1`+"\nLIMIT 1001" || strings.Contains(logText(a), "write failed") {
+	if strings.Join(d2.ran, "; ") != `search_path "agentable" "$user", public; select 1`+"\nLIMIT 501" || strings.Contains(logText(a), "write failed") {
 		t.Fatalf("on the new connection: %q, log %q", d2.ran, logText(a))
 	}
 	if len(*evs) != 1 || !(*evs)[0].Rerun || (*evs)[0].Err != nil {

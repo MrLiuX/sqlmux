@@ -325,20 +325,23 @@ var queryWords = map[string]bool{"select": true, "with": true, "table": true, "v
 // opening parentheses.
 func IsQuery(s string, d Dialect) bool { return queryWords[FirstWord(s, d)] }
 
-// AutoLimit is s with LIMIT n after it (§9.4) when it is a query that
-// reads, select, with, table or values, with no LIMIT or FETCH at its top
-// level; a ; at its end goes. When the whole query is in parentheses, or
-// the one after a WITH list is, its top level is in them. The LIMIT is on
-// a line of its own, so a -- comment at the end does not take it in.
-func AutoLimit(s string, d Dialect, n int) string {
+// AutoLimit is s with LIMIT n after it (§9.4), and OFFSET offset when that is
+// above 0, when it is a query that reads, select, with, table or values,
+// with no LIMIT or FETCH at its top level; a ; at its end goes. When the
+// whole query is in parentheses, or the one after a WITH list is, its top
+// level is in them. The LIMIT is on a line of its own, so a -- comment at
+// the end does not take it in. pageable is whether the LIMIT was put there
+// and an OFFSET of its own is not in the way: a statement that is, can be
+// asked for the next page with another offset (F10.4).
+func AutoLimit(s string, d Dialect, n, offset int) (out string, pageable bool) {
 	ts, depth := words(s, d)
 	if !isRead(s, ts, depth) {
-		return s
+		return s, false
 	}
 	if !queryWords[lower(s, ts, first(s, ts))] {
-		return s
+		return s, false
 	}
-	out := s
+	out = s
 	if last := ts[len(ts)-1]; s[last.Start:last.End] == ";" {
 		out, ts = s[:last.Start]+s[last.End:], ts[:len(ts)-1]
 	}
@@ -354,12 +357,21 @@ func AutoLimit(s string, d Dialect, n int) string {
 		}
 		lo, hi, top = j+1, hi-1, depth[j]+1
 	}
+	pageable = true
 	for j := lo; j <= hi; j++ {
-		if w := lower(s, ts, j); depth[j] == top && (w == "limit" || w == "fetch") {
-			return s
+		switch w := lower(s, ts, j); {
+		case depth[j] != top:
+		case w == "limit" || w == "fetch":
+			return s, false
+		case w == "offset":
+			pageable = false
 		}
 	}
-	return out + "\nLIMIT " + strconv.Itoa(n)
+	out += "\nLIMIT " + strconv.Itoa(n)
+	if offset > 0 {
+		out += " OFFSET " + strconv.Itoa(offset)
+	}
+	return out, pageable
 }
 
 // NoBegin is whether statement s goes without the BEGIN the manual

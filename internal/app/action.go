@@ -172,8 +172,10 @@ func init() {
 		"tx.commit":   {Title: i18n.N("提交"), Run: func(a *App, _ Args) tea.Cmd { return a.endTx(a.conn(), "commit") }},
 		"tx.rollback": {Title: i18n.N("回滚"), Run: func(a *App, _ Args) tea.Cmd { return a.endTx(a.conn(), "rollback") }},
 		// The result area's (§11).
-		"result.rerun":  {Title: i18n.N("重跑"), Run: func(a *App, _ Args) tea.Cmd { return a.rerun() }},
-		"result.export": {Title: i18n.N("导出 CSV"), Run: func(a *App, _ Args) tea.Cmd { return a.exportResult() }},
+		"result.rerun":     {Title: i18n.N("重跑"), Run: func(a *App, _ Args) tea.Cmd { return a.rerun() }},
+		"result.page.next": {Title: i18n.N("结果下一页"), Run: func(a *App, _ Args) tea.Cmd { return a.resultPage(1) }},
+		"result.page.prev": {Title: i18n.N("结果上一页"), Run: func(a *App, _ Args) tea.Cmd { return a.resultPage(-1) }},
+		"result.export":    {Title: i18n.N("导出 CSV"), Run: func(a *App, _ Args) tea.Cmd { return a.exportResult() }},
 		"result.pin": {Title: i18n.N("固定结果"), Run: do(func(a *App, _ Args) {
 			if rt := resultOf(a.focused()); rt != nil && rt.run != nil && rt.run.done {
 				rt.pinned = !rt.pinned

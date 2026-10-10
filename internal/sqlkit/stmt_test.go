@@ -117,12 +117,37 @@ func TestAutoLimit(t *testing.T) {
 		{"with x as (delete from t returning *) select * from x", "with x as (delete from t returning *) select * from x"},
 		{"select 'limit'", "select 'limit'\nLIMIT 101"},
 	} {
-		if got := AutoLimit(c.in, PG, 101); got != c.want {
+		if got, _ := AutoLimit(c.in, PG, 101, 0); got != c.want {
 			t.Errorf("%q: %q, want %q", c.in, got, c.want)
 		}
 	}
-	if got := AutoLimit("/*! select 5 */ /*! limit 1 */", MySQL, 101); got != "/*! select 5 */ /*! limit 1 */" {
+	if got, _ := AutoLimit("/*! select 5 */ /*! limit 1 */", MySQL, 101, 0); got != "/*! select 5 */ /*! limit 1 */" {
 		t.Errorf("a LIMIT in /*! */: %q", got)
+	}
+}
+
+// A page is asked for with an OFFSET after the LIMIT; only a statement the
+// LIMIT was put on, with no OFFSET of its own, can be paged (F10.4).
+func TestAutoLimitOffset(t *testing.T) {
+	for _, c := range []struct {
+		in, want string
+		pageable bool
+	}{
+		{"select * from t order by id;", "select * from t order by id\nLIMIT 501 OFFSET 500", true},
+		{"with x as (select 1) select * from x", "with x as (select 1) select * from x\nLIMIT 501 OFFSET 500", true},
+		{"select * from t where id in (select id from u offset 3)", "select * from t where id in (select id from u offset 3)\nLIMIT 501 OFFSET 500", true},
+		{"select * from t offset 5", "select * from t offset 5\nLIMIT 501 OFFSET 500", false},
+		{"select * from t limit 5", "select * from t limit 5", false},
+		{"select * from t offset 5 fetch first 3 rows only", "select * from t offset 5 fetch first 3 rows only", false},
+		{"delete from t", "delete from t", false},
+		{"show search_path", "show search_path", false},
+	} {
+		if got, ok := AutoLimit(c.in, PG, 501, 500); got != c.want || ok != c.pageable {
+			t.Errorf("%q: %q %v, want %q %v", c.in, got, ok, c.want, c.pageable)
+		}
+	}
+	if got, ok := AutoLimit("select 1", MySQL, 501, 0); got != "select 1\nLIMIT 501" || !ok {
+		t.Errorf("the first page has no OFFSET: %q %v", got, ok)
 	}
 }
 

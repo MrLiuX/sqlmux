@@ -31,6 +31,12 @@ type resultTab struct {
 	part      int // which of the run's result sets, from 1
 	pinned    bool
 	arrived   time.Time // when the run's rows came in, or a rerun's: what the cap goes by (§11)
+	// the page (F10.4): which statement of the run it is of, how many rows
+	// come before it, whether the statement can be paged, a page on its way
+	stmt     int
+	offset   int
+	pageable bool
+	paging   bool
 }
 
 // run is one run of a console's SQL (§11「执行」), or a quick SQL's rows
@@ -47,8 +53,10 @@ type run struct {
 	start  time.Time
 	win    *Window
 	stmts  []sqlkit.Stmt
-	done   bool
-	prev   []Tab // the tabs it took the place of, back when it has no result set
+	// whether each statement was given its LIMIT and can be asked for the next page (F10.4)
+	pageable []bool
+	done     bool
+	prev     []Tab // the tabs it took the place of, back when it has no result set
 }
 
 // label is the name of the run's part-th result tab: console_1 #42, then #42·2.
@@ -275,64 +283,74 @@ func (a *App) startRun(t *consoleTab, conn *Conn, schema, name, sql string, base
 	a.capResults(p)
 	r.conn.busy++
 	texts := make([]string, len(stmts))
+	r.pageable = make([]bool, len(stmts))
 	// ponytail: select set_config('search_path', …) goes by unseen (its first
 	// word is select): the next run then trusts mainPath still
 	resets := false // what search_path, or MySQL's database, is past this run is not known (§8.6)
 	for i, s := range stmts {
-		texts[i] = sqlkit.AutoLimit(sql[s.Start:s.End], d, a.maxRows+1)
+		texts[i], r.pageable[i] = sqlkit.AutoLimit(sql[s.Start:s.End], d, a.maxRows+1, 0)
 		switch sqlkit.FirstWord(texts[i], d) {
 		case "set", "reset", "discard", "use":
 			resets = true
 		}
 	}
-	s, schema, maxRows, manual := r.conn, r.schema, a.maxRows, r.conn.Manual
+	maxRows, manual := a.maxRows, r.conn.Manual
+	return tea.Batch(func() tea.Msg { return mainRun(r, texts, maxRows, manual, resets) }, a.runTick(r))
+}
+
+// mainRun runs texts in r's connection's Main, as one request: schema first
+// on search_path, a statement at a time, each committing on its own, in the
+// manual mode in a transaction begun before one when there is none. resets
+// is whether what is run leaves search_path or the database not known. It
+// is what a run and a page of a result are sent as (F10.4); it goes on the
+// request's goroutine, so r and what it holds are read, not changed.
+func mainRun(r *run, texts []string, maxRows int, manual, resets bool) runDone {
+	s, schema, d := r.conn, r.schema, r.conn.eng.Dialect()
 	set := "set search_path to " // as the log names it when it fails (§8.6)
 	if d == sqlkit.MySQL {
 		set = "use "
 	}
-	return tea.Batch(func() tea.Msg {
-		m := runDone{r: r}
-		m.err = s.Main.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
-			// mainPath is read and written in Main's requests only, one at
-			// a time: runs of two consoles may queue in either order. It is
-			// kept out of transactions only: in a failed one a SET fails too
-			// and the user's rollback would never run; in one going on, a
-			// rollback may take the SET back.
-			defer func() { m.tx = db.TxStatus(c) }()
-			if s.mainOn != c { // a connection dialed again has the search_path it started with (F8.19)
-				s.mainPath, s.mainOn = "", c
-			}
-			switch tx := db.TxStatus(c); {
-			case schema == "":
-			case tx == 'E':
-				s.mainPath = ""
-			case s.mainPath != schema:
-				if err := db.Setup(c, func() error { return s.eng.UseSchema(ctx, c, schema, s.startedPath) }); err != nil {
-					s.mainPath, m.set = "", set+schema
-					return err
-				}
-				s.mainPath = ""
-				if tx == 'I' { // set in a transaction, the run's rollback may take it back
-					s.mainPath = schema
-				}
-			}
-			var begin func(string) bool // after the SET, which is kept so
-			if manual {
-				begin = func(stmt string) bool { return !sqlkit.NoBegin(stmt, d) }
-			}
-			var err error
-			m.rs, err = db.ExecEach(ctx, c, texts, maxRows, begin)
-			if resets || db.TxStatus(c) != 'I' {
-				s.mainPath = ""
-			}
-			return err
-		})
-		if errors.As(m.err, new(db.TxLost)) { // it is the user's statement that was not run, not the SET
-			m.set = ""
+	m := runDone{r: r}
+	m.err = s.Main.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
+		// mainPath is read and written in Main's requests only, one at
+		// a time: runs of two consoles may queue in either order. It is
+		// kept out of transactions only: in a failed one a SET fails too
+		// and the user's rollback would never run; in one going on, a
+		// rollback may take the SET back.
+		defer func() { m.tx = db.TxStatus(c) }()
+		if s.mainOn != c { // a connection dialed again has the search_path it started with (F8.19)
+			s.mainPath, s.mainOn = "", c
 		}
-		m.rs, m.err = runTxLost(m.rs, m.err, texts, d)
-		return m
-	}, a.runTick(r))
+		switch tx := db.TxStatus(c); {
+		case schema == "":
+		case tx == 'E':
+			s.mainPath = ""
+		case s.mainPath != schema:
+			if err := db.Setup(c, func() error { return s.eng.UseSchema(ctx, c, schema, s.startedPath) }); err != nil {
+				s.mainPath, m.set = "", set+schema
+				return err
+			}
+			s.mainPath = ""
+			if tx == 'I' { // set in a transaction, the run's rollback may take it back
+				s.mainPath = schema
+			}
+		}
+		var begin func(string) bool // after the SET, which is kept so
+		if manual {
+			begin = func(stmt string) bool { return !sqlkit.NoBegin(stmt, d) }
+		}
+		var err error
+		m.rs, err = db.ExecEach(ctx, c, texts, maxRows, begin)
+		if resets || db.TxStatus(c) != 'I' {
+			s.mainPath = ""
+		}
+		return err
+	})
+	if errors.As(m.err, new(db.TxLost)) { // it is the user's statement that was not run, not the SET
+		m.set = ""
+	}
+	m.rs, m.err = runTxLost(m.rs, m.err, texts, d)
+	return m
 }
 
 // runTickEvery is how often a placeholder's time is redrawn while its run
@@ -416,9 +434,9 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 	ddl := false
 	for i, res := range m.rs {
 		stmt := r.sql[r.stmts[i].Start:r.stmts[i].End]
-		a.log(r, stmt, resultText(res), false)
+		a.log(r, stmt, resultText(res, 0), false)
 		if res.Cols != nil {
-			tabs = append(tabs, Tab{Name: r.label(len(tabs) + 1), Result: &resultTab{gridState: gridState{page: res}, run: r, part: len(tabs) + 1}})
+			tabs = append(tabs, Tab{Name: r.label(len(tabs) + 1), Result: &resultTab{gridState: gridState{page: res}, run: r, part: len(tabs) + 1, stmt: i, pageable: r.pageable[i]}})
 		}
 		switch sqlkit.FirstWord(stmt, r.conn.eng.Dialect()) {
 		case "create", "alter", "drop", "rename": // MySQL's RENAME TABLE
@@ -498,12 +516,18 @@ func (a *App) logError(r *run, stmt string, err error) db.ServerError {
 }
 
 // resultText is what a result says in the log and on the result area's
-// title: its rows, or its tag, and the time it took (§11).
-func resultText(r db.Result) string {
+// title: its rows, or its tag, and the time it took (§11). A page that is
+// not the first, offset rows in, says which rows it has: 501–1000+ for one
+// with more after it, 1001–1203 for the last (F10.4).
+func resultText(r db.Result, offset int) string {
 	took := r.Took.Round(time.Millisecond).String()
 	switch {
 	case r.Cols == nil:
 		return r.Tag + " · " + took
+	case offset > 0 && r.Truncated: // there are rows then
+		return fmt.Sprintf(i18n.T("%d–%d+ 行 · %s"), offset+1, offset+len(r.Rows), took)
+	case offset > 0 && len(r.Rows) > 0:
+		return fmt.Sprintf(i18n.T("%d–%d 行 · %s"), offset+1, offset+len(r.Rows), took)
 	case r.Truncated:
 		return fmt.Sprintf(i18n.T("%d+ 行 · %s"), len(r.Rows), took)
 	}

@@ -80,6 +80,8 @@ leader = "<Space>"
 "q" = "result.close"
 "x" = "result.close"
 "R" = "result.rerun"
+"]" = "result.page.next" # a console's result, cut at max_rows: the next page of its statement (F10.4)
+"[" = "result.page.prev"
 
 [keys.tree]
 "j" = "tree.down"
