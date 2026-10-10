@@ -73,3 +73,16 @@ func TestBlockFitObjectFirst(t *testing.T) {
 		t.Errorf("hints first: %q %v", title, hints)
 	}
 }
+
+// A zoomed pane whose zoom icon a theme has emptied has no blank where it was,
+// as any icon left out (F9.6).
+func TestBlockZoomIconEmpty(t *testing.T) {
+	b := Block{Num: "①", Icon: Icon{Text: "T"}, Title: "data", Zoomed: true, ZoomIcon: Icon{Text: "Z"}}
+	if got, _ := b.fit(40); got != "① Z T data" {
+		t.Errorf("with the icon: %q", got)
+	}
+	b.ZoomIcon = Icon{}
+	if got, _ := b.fit(40); got != "① T data" {
+		t.Errorf("without it: %q", got)
+	}
+}

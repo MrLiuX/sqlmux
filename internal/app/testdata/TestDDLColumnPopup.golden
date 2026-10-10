@@ -1,14 +1,14 @@
 ┌─ ⓪  doraemon ─────── SPC b ─┐ ┌─ ①  t_order ───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-┌─ status ────────────────────────────────────────────────────────────────┐                                                                             C-r ▾ │
-│ status order_status not null default 'pending'::order_status            │S 7/7       │    │    │                                     auto · … 行 · 0s │
-│ CREATE INDEX t_order_status ON public.t_order USING btree (status, id); │a                       │ note                             │ created_at             │
-│ comment on column public.t_order.status is 'where the order is';        │────────────────────────┼──────────────────────────────────┼────────────────────────│
-└─────────────────────────────────────────────────────────────────────────┘": 1, "tags": ["a", "b… │ note 1                           │ 2026-09-01 00:01:00+00 │
-│     ▾  Tables (14)          │ │ 2 │    2 │ done    │   2.99 │ t    │ {"n": 2, "tags": ["a", "b… │ line one↵line two after tab [31… │ 2026-09-01 00:02:00+00 │
-│       ▸  agent          124 │ │ 3 │    3 │ failed  │   3.99 │ t    │ {"n": 3, "tags": ["a", "b… │ <null>                           │ 2026-09-01 00:03:00+00 │
-│       ▸  agent_version  530 │ │ 4 │    4 │ pending │   4.99 │ t    │ {"n": 4, "tags": ["a", "b… │ note 4                           │ 2026-09-01 00:04:00+00 │
-│       ▸  goal            57 │ │ 5 │    5 │ running │   5.99 │ t    │ {"n": 5, "tags": ["a", "b… │ line one↵line two after tab [31… │ 2026-09-01 00:05:00+00 │
-│       ▸  mt_task        812 │ │                                                                                                                             │
+│  15 tables                 │ │ WHERE                                                                                                                C-r ▾ │
+│──────────────────────────────│ │  ORDER id    LIMIT 100   PAGE 1/?   COLS 7/7       │    │    │                                     auto · … 行 · 0s │
+│ ▾  doraemon                 │ │   │  id │ status  │ amount │ paid │ meta                       │ note                             │ created_at             │
+│   ▸  agentable              │ │───┼──────┼─────────┼────────┼──────┼────────────────────────────┼──────────────────────────────────┼────────────────────────│
+│   ▾  public                 │ │ 1 │    1 │ running │   1.99 │ t    │ {"n": 1, "tags": ["a", "b… │ note 1                           │ 2026-09-01 00:01:00+00 │
+│     ▾  Tables (14)          │ │ 2 │    2 │┌─ status ────────────────────────────────────────────────────────────────┐fter tab [31… │ 2026-09-01 00:02:00+00 │
+│       ▸  agent          124 │ │ 3 │    3 ││ status order_status not null default 'pending'::order_status            │              │ 2026-09-01 00:03:00+00 │
+│       ▸  agent_version  530 │ │ 4 │    4 ││ CREATE INDEX t_order_status ON public.t_order USING btree (status, id); │              │ 2026-09-01 00:04:00+00 │
+│       ▸  goal            57 │ │ 5 │    5 ││ comment on column public.t_order.status is 'where the order is';        │fter tab [31… │ 2026-09-01 00:05:00+00 │
+│       ▸  mt_task        812 │ │           └─────────────────────────────────────────────────────────────────────────┘                                       │
 │       ▸  mt_task_log    96k │ │                                                                                                                             │
 │       ▸  schema_migrations  │ │                                                                                                                             │
 │       ▸  t_order       1.2m │ │                                                                                                                             │

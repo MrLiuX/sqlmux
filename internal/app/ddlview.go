@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"image/color"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -11,6 +9,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"sqlmux/internal/db"
+	"sqlmux/internal/sqlkit"
 	"sqlmux/internal/ui"
 )
 
@@ -33,10 +32,12 @@ func inDDL(a *App) bool { return a.ddl != nil }
 
 // openDDL is grid.ddl.table (column false) and grid.ddl.column on the focused
 // table: the DDL the palette's preview keeps, fetched when it is not there yet.
+// The table's needs a table tab; the column's a column to stand on, so a page
+// read (F9.8).
 func (a *App) openDDL(column bool) tea.Cmd {
 	p := a.focused()
 	t := dataOf(p)
-	if t == nil || t.page.Cols == nil {
+	if t == nil {
 		return nil
 	}
 	d := &ddlPopup{conn: t.conn, table: t.table}
@@ -45,7 +46,7 @@ func (a *App) openDDL(column bool) tea.Cmd {
 		if !ok {
 			return nil
 		}
-		d.col, d.at = t.page.Cols[t.shownCols()[gs.col]].Name, g.EditRect(area).Min
+		d.col, d.at = t.page.Cols[t.shownCols()[gs.col]].Name, g.CellRect(area).Min
 	}
 	a.ddl = d
 	return a.askDDL(t.conn, t.table)
@@ -70,158 +71,273 @@ func (a *App) wantPopupDDL() tea.Cmd {
 	return nil
 }
 
-// ddlContent is what the popup shows: its text, "…" until the DDL is in, in
-// SQL's colors, none for an error; and the title.
-func (a *App) ddlContent() (text string, colors []color.Color, title string) {
+// ddlContent is what the popup shows, without its scroll, and its title: "…"
+// in dim until the DDL is in, the error as it came, the DDL in SQL's colors
+// (the palette's preview has the same).
+func (a *App) ddlContent() (ui.TextView, string) {
 	d := a.ddl
 	c, t := d.conn, d.table
-	title = t.Schema + "." + t.Name
+	title := t.Schema + "." + t.Name
 	got := c.ddl[idOf(t)]
 	switch {
 	case !got.got:
-		return "…", nil, title
+		return ui.TextView{Text: "…", Fg: a.theme.Dim}, title
 	case got.err != "":
-		return strings.ReplaceAll(got.err, "\n", " "), nil, title
+		return ui.TextView{Text: strings.ReplaceAll(got.err, "\n", " ")}, title
 	}
-	text = got.text
-	var names ui.SQLNames
-	switch cols := c.cols[idOf(t)]; {
-	case d.col != "":
+	text, names := got.text, a.ddlNames(c, t, got.text)
+	if d.col != "" {
 		cat := db.Column{}
-		if i := slices.IndexFunc(cols.Cols, func(x db.Column) bool { return x.Name == d.col }); i >= 0 {
-			cat = cols.Cols[i]
+		for _, x := range c.cols[idOf(t)].Cols {
+			if x.Name == d.col {
+				cat = x
+			}
 		}
-		title, text = d.col, strings.Join(ddlColumnLines(got.text, d.col, cat), "\n")
-	case t.View():
-		names, _ = a.sqlNames(c, text, t.Schema, nil)
-	default:
-		names, _ = a.sqlNames(c, text, "", &cols)
+		title, text = d.col, strings.Join(ddlColumnLines(got.text, d.col, cat, c.eng.Dialect()), "\n")
 	}
-	return text, ui.SQLColors(a.theme, text, c.eng.Dialect(), names), title
+	return ui.TextView{Text: text, Colors: ui.SQLColors(a.theme, text, c.eng.Dialect(), names)}, title
 }
 
 // ddlRect is where the popup is: the table's in the middle, two thirds of the
-// window each way; the column's under its cell, or over it, as wide as its text.
-func (a *App) ddlRect(text string) uv.Rectangle {
+// window each way and 40 by 8 at least; the column's under its cell, or over
+// it, as wide as its text.
+func (a *App) ddlRect(v ui.TextView) uv.Rectangle {
 	win := a.window()
 	if a.ddl.col == "" {
 		w, h := max(win.Dx()*2/3, min(win.Dx(), 40)), max(win.Dy()*2/3, min(win.Dy(), 8))
 		return uv.Rect(win.Min.X+(win.Dx()-w)/2, win.Min.Y+(win.Dy()-h)/2, w, h)
 	}
 	w := 0
-	for _, l := range strings.Split(text, "\n") {
+	for _, l := range strings.Split(v.Text, "\n") {
 		w = max(w, ui.Width(l))
 	}
-	box, _ := ui.CompleteBox(win, a.ddl.at, min(w+4, max(win.Dx()*2/3, 20)), min(strings.Count(text, "\n")+1, ddlColumnRows), 0)
+	box, _ := ui.CompleteBox(win, a.ddl.at, min(w+4, max(win.Dx()*2/3, 20)), min(v.Lines(), ddlColumnRows), 0)
 	return box
 }
 
-// drawDDL paints the popup over the frame.
+// drawDDL paints the popup over the frame; a column's that is long is cut by
+// its box, with the ellipsis the view puts there, not scrolled.
 func (a *App) drawDDL(f *ui.Frame) {
-	text, colors, title := a.ddlContent()
-	d := a.ddl
-	if d.col != "" { // a long one is cut, not scrolled: the table's DDL has the rest
-		if lines := strings.Split(text, "\n"); len(lines) > ddlColumnRows {
-			text = strings.Join(lines[:ddlColumnRows-1], "\n") + "\n…" // its colors are the whole text's, whose start it is
-		}
-	}
-	box := a.ddlRect(text)
-	ui.TextBox{Title: title, View: ui.TextView{Text: text, Colors: colors, Top: d.top}}.Draw(f, box)
+	v, title := a.ddlContent()
+	v.Top = a.ddl.top
+	ui.TextBox{Title: title, View: v}.Draw(f, a.ddlRect(v))
 }
 
-// scrollDDL moves the table's popup by d rows, or d half pages, to the ends and no
-// further; the top and the bottom are d -1 and 1 of "the whole text".
+// scrollDDL moves the table's popup by d rows, or d half pages, from where it
+// is held now, to the ends and no further.
 func (a *App) scrollDDL(d int, pages bool) {
-	text, _, _ := a.ddlContent()
-	rows := ui.TextBox{}.Inner(a.ddlRect(text)).Dy()
+	v, _ := a.ddlContent()
+	rows := ui.TextBox{}.Inner(a.ddlRect(v)).Dy()
 	if pages {
 		d *= max(rows/2, 1)
 	}
-	a.ddl.top = max(min(a.ddl.top+d, strings.Count(text, "\n")+1-rows), 0)
+	v.Top = a.ddl.top
+	a.ddl.top = v.Scroll(rows, d)
 }
 
-// ddlEdge is gg (false) and G: the first rows, or the last.
+// ddlEdge is gg (bottom false) and G: the first rows, or the last.
 func (a *App) ddlEdge(bottom bool) {
-	text, _, _ := a.ddlContent()
+	v, _ := a.ddlContent()
 	a.ddl.top = 0
 	if bottom {
-		a.ddl.top = strings.Count(text, "\n") + 1
-		a.scrollDDL(0, false)
+		a.ddl.top = v.Scroll(ui.TextBox{}.Inner(a.ddlRect(v)).Dy(), v.Lines())
 	}
 }
 
-// ddlColumnLines is what a table's DDL says of column col, for its popup
-// (F9.8): the column's own line, then the lines that make an index or a key of
-// it, then its comment. A column the DDL has no line for, a view's, has its
-// name and what the catalog says of it.
-func ddlColumnLines(ddl, col string, c db.Column) []string {
-	mention := regexp.MustCompile("(?i)(^|[^\\w])[\"`]?" + regexp.QuoteMeta(col) + "[\"`]?([^\\w]|$)")
-	var line string
-	var rest, notes []string
-	for _, l := range strings.Split(ddl, "\n") {
-		t := strings.TrimSpace(l)
-		low := strings.ToLower(t)
-		switch {
-		case strings.HasPrefix(low, "create ") && strings.Contains(low, " index ") || isKeyLine(low):
-			if i := strings.Index(t, "("); i >= 0 && mention.MatchString(t[i:]) {
-				rest = append(rest, strings.TrimSuffix(t, ","))
-			}
-		case strings.HasPrefix(low, "comment on column "):
-			// the column's name is what follows the last dot before " is "
-			if target, _, ok := strings.Cut(t, " is "); ok {
-				if i := strings.LastIndex(target, "."); i >= 0 && mention.MatchString(target[i:]) {
-					notes = append(notes, t)
-				}
-			}
-		case strings.HasPrefix(l, "  ") && !strings.HasPrefix(l, "   ") && line == "":
-			if name := firstName(t); strings.EqualFold(name, col) {
-				line = strings.TrimSuffix(t, ",")
-			}
-		}
-	}
-	if line == "" {
-		line = col + " " + c.Type
-		if c.NotNull {
-			line += " not null"
-		}
-		if c.Default != "" {
-			line += " default " + c.Default
-		}
-	}
-	return append(append([]string{line}, rest...), notes...)
+// ddlItem is a token of a DDL statement and its text.
+type ddlItem struct {
+	kind       sqlkit.Kind
+	text       string
+	start, end int
 }
 
-// isKeyLine is whether a line of a table's definition, lower case and trimmed,
-// makes a key or an index: PG's primary key and unique constraints, MySQL's
-// KEY lines.
-func isKeyLine(low string) bool {
-	if strings.HasPrefix(low, "constraint ") {
-		return strings.Contains(low, " primary key") || strings.Contains(low, " unique")
+// ddlTokens are the tokens of statement s that are neither a blank nor a comment.
+func ddlTokens(s string, d sqlkit.Dialect) (out []ddlItem) {
+	for _, t := range sqlkit.Scan(s, d) {
+		if t.Kind != sqlkit.Space && t.Kind != sqlkit.Comment {
+			out = append(out, ddlItem{t.Kind, s[t.Start:t.End], t.Start, t.End})
+		}
 	}
-	for _, p := range []string{"primary key", "unique key", "unique index", "key ", "index ", "fulltext ", "spatial "} {
-		if strings.HasPrefix(low, p) {
+	return out
+}
+
+// is reports whether it is the unquoted word w, in any case.
+func (t ddlItem) is(w string) bool {
+	return (t.kind == sqlkit.Ident || t.kind == sqlkit.Keyword) && strings.EqualFold(t.text, w)
+}
+
+// name is the name it is, a quoted one without its quotes; "" for a token
+// that is no name.
+func (t ddlItem) name() string {
+	if t.kind == sqlkit.Quoted {
+		q := t.text[:1]
+		return strings.ReplaceAll(t.text[1:len(t.text)-1], q+q, q)
+	}
+	if t.kind == sqlkit.Ident || t.kind == sqlkit.Keyword {
+		return t.text
+	}
+	return ""
+}
+
+// mentions is whether the tokens ts name col, as a name and not as a string or
+// a part of a longer name; before a ( it is a function called, in an index's
+// expression, but a key's column with its prefix length (calls false, true).
+func mentions(ts []ddlItem, col string, prefix bool) bool {
+	for i, t := range ts {
+		if t.name() == col && (prefix || i+1 == len(ts) || ts[i+1].text != "(") {
 			return true
 		}
 	}
 	return false
 }
 
-// firstName is the name a line of a table's definition starts with, the
-// quotes of PG's and MySQL's off; "" for a line that starts with a word of the
-// definition's (constraint, key …) and not a name.
-func firstName(line string) string {
-	if line == "" {
-		return ""
-	}
-	if q := line[0]; q == '"' || q == '`' {
-		if end := strings.IndexByte(line[1:], q); end >= 0 {
-			return strings.ReplaceAll(line[1:1+end], string(q)+string(q), string(q))
+// ddlColumnLines is what a table's DDL says of column col, for its popup
+// (F9.8): the column's own line, then the statements and lines that make an
+// index or a key of it (CREATE INDEX, PG's primary key and unique
+// constraints, MySQL's KEY lines), then its comment on. Names are compared as
+// the DDL spells them, for both engines put the catalog's in it. A column the
+// DDL has no line for, a view's, has its name and what the catalog says of it.
+func ddlColumnLines(ddl, col string, cat db.Column, d sqlkit.Dialect) []string {
+	var own string
+	var keys, notes []string
+	for _, st := range sqlkit.Statements(ddl, d) {
+		text := ddl[st.Start:st.End]
+		ts := ddlTokens(text, d)
+		switch {
+		case len(ts) >= 3 && ts[0].is("comment") && ts[1].is("on") && ts[2].is("column"):
+			var target []ddlItem // schema.table.column up to is
+			for _, t := range ts[3:] {
+				if t.is("is") {
+					break
+				}
+				if t.name() != "" {
+					target = append(target, t)
+				}
+			}
+			if n := len(target); n > 0 && target[n-1].name() == col {
+				notes = append(notes, text+";")
+			}
+		case len(ts) >= 2 && ts[0].is("create") && ts[1].is("table"):
+			var items []string
+			own, items = tableLines(text, ts, col, d)
+			keys = append(keys, items...)
+		case len(ts) >= 2 && ts[0].is("create"):
+			if i := indexOn(ts); i >= 0 && mentions(afterParen(ts[i:]), col, false) {
+				keys = append(keys, text+";")
+			}
 		}
-		return ""
 	}
-	word, _, _ := strings.Cut(line, " ")
-	if isKeyLine(strings.ToLower(word)+" ") || strings.EqualFold(word, "constraint") || strings.EqualFold(word, "foreign") || strings.EqualFold(word, "check") {
-		return ""
+	if own == "" {
+		own = col + " " + cat.Type
+		if cat.NotNull {
+			own += " not null"
+		}
+		if cat.Default != "" && !strings.HasPrefix(cat.Default, "generated ") { // an identity: how it is generated
+			own += " default " + cat.Default
+		} else if cat.Default != "" {
+			own += " " + cat.Default
+		}
 	}
-	return word
+	return append(append([]string{own}, keys...), notes...)
+}
+
+// indexOn is the position of the ON of a CREATE [UNIQUE] INDEX, -1 when ts is
+// no such statement.
+func indexOn(ts []ddlItem) int {
+	isIndex := false
+	for i, t := range ts {
+		switch {
+		case t.is("index"):
+			isIndex = true
+		case t.is("on") && isIndex:
+			return i
+		}
+	}
+	return -1
+}
+
+// afterParen is what follows the first ( of ts, to the end.
+func afterParen(ts []ddlItem) []ddlItem {
+	for i, t := range ts {
+		if t.text == "(" && t.kind == sqlkit.Punct {
+			return ts[i+1:]
+		}
+	}
+	return nil
+}
+
+// tableLines goes through the items of a CREATE TABLE's parentheses: the line
+// of column col, and the lines of the keys that name it.
+func tableLines(text string, ts []ddlItem, col string, d sqlkit.Dialect) (own string, keys []string) {
+	open := slices.IndexFunc(ts, func(t ddlItem) bool { return t.kind == sqlkit.Punct && t.text == "(" })
+	if open < 0 {
+		return "", nil
+	}
+	depth, from := 0, open+1
+	emit := func(to int) {
+		if to <= from {
+			return
+		}
+		item := ts[from:to]
+		line := strings.TrimSpace(text[item[0].start:item[len(item)-1].end])
+		switch isKey, isDef := keyItem(item, d); {
+		case isKey:
+			if mentions(afterParen(item), col, true) {
+				keys = append(keys, line)
+			}
+		case !isDef && own == "" && item[0].name() == col:
+			own = line
+		}
+	}
+	for i := open; i < len(ts); i++ {
+		if ts[i].kind != sqlkit.Punct {
+			continue
+		}
+		switch ts[i].text {
+		case "(":
+			depth++
+		case ")":
+			if depth--; depth == 0 {
+				emit(i)
+				return own, keys
+			}
+		case ",":
+			if depth == 1 {
+				emit(i)
+				from = i + 1
+			}
+		}
+	}
+	return own, keys
+}
+
+// keyItem classifies an item of a table's definition: whether it makes a key
+// or an index, and whether it is a definition of the table and not a column.
+// PG's all begin with constraint, so a column called key or index there is a
+// column (not reserved); MySQL's KEY lines are bare, its columns of those names
+// quoted.
+func keyItem(item []ddlItem, d sqlkit.Dialect) (isKey, isDef bool) {
+	w := item[0]
+	switch {
+	case w.is("constraint"): // [name], then what it is
+		i := 1
+		if len(item) > 2 && !slices.ContainsFunc(item[1:2], func(t ddlItem) bool {
+			return t.is("primary") || t.is("unique") || t.is("foreign") || t.is("check")
+		}) {
+			i = 2
+		}
+		if i >= len(item) {
+			return false, true
+		}
+		w = item[i]
+	}
+	switch {
+	case w.is("primary"), w.is("unique"):
+		return true, true
+	case d == sqlkit.MySQL && (w.is("key") || w.is("index") || w.is("fulltext") || w.is("spatial")):
+		return true, true
+	case w.is("foreign"), w.is("check"), w.is("exclude"):
+		return false, true
+	}
+	return false, w.is("constraint")
 }

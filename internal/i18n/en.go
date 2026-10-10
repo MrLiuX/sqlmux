@@ -273,7 +273,7 @@ var en = map[string]string{
 	"复制为 JSON":                 "Copy as JSON",
 	"向上滚动预览":                   "Scroll the preview up",
 	"向下滚动预览":                   "Scroll the preview down",
-	"滚动预览":                     "Preview",
+	"滚动预览":                     "Scroll preview",
 	"列的定义":                     "Column definition",
 	"表的 DDL":                   "Table DDL",
 	"到顶":                       "To the top",

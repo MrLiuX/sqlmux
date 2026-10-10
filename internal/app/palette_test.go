@@ -650,8 +650,10 @@ func TestPaletteTableCommand(t *testing.T) {
 
 // C-f and C-b scroll the DDL preview by half its rows, stopping at the ends, a
 // … in its first row when lines are above and in its last when more are below;
-// another table has it at the top; with nothing to scroll the keys are the
-// input's: C-u clears it (F9.7).
+// another table has it at the top, hovered over or keyed to, or the scope
+// changed, or more typed; with nothing to scroll the keys do nothing, and there
+// is no hint of them, not where the palette has no room for the preview either;
+// C-u is the input's, as it was (F9.7).
 func TestPalettePreviewScroll(t *testing.T) {
 	a := wide(160, 45)
 	long := ddlOrder + "\n" + strings.Repeat("create index i on t_order (id);\n", 20) + "create index last_one on t_order (note);"
@@ -677,7 +679,7 @@ func TestPalettePreviewScroll(t *testing.T) {
 	}
 	feed(t, a, "<C-f>")
 	if a.palette.pvTop != 6 || row(0) != "…" || row(1) == "create table public.t_order (" || row(rows-1) != "…" {
-		t.Errorf("C-d: top %d, first %q, last %q", a.palette.pvTop, row(0), row(rows-1))
+		t.Errorf("C-f: top %d, first %q, last %q", a.palette.pvTop, row(0), row(rows-1))
 	}
 	feed(t, a, "<C-f><C-f><C-f><C-f><C-f><C-f>")
 	if a.palette.pvTop != lines-rows || row(rows-1) != "create index last_one on t_order (note);" || row(0) != "…" {
@@ -685,7 +687,7 @@ func TestPalettePreviewScroll(t *testing.T) {
 	}
 	feed(t, a, "<C-b>")
 	if a.palette.pvTop != lines-rows-6 {
-		t.Errorf("C-u: top %d", a.palette.pvTop)
+		t.Errorf("C-b: top %d", a.palette.pvTop)
 	}
 	feed(t, a, "<C-b><C-b><C-b><C-b><C-b><C-b><C-b>")
 	if a.palette.pvTop != 0 || row(0) != "create table public.t_order (" {
@@ -705,7 +707,7 @@ func TestPalettePreviewScroll(t *testing.T) {
 		t.Errorf("typing: %+v, input %q", pv, a.palette.input.Text)
 	}
 
-	// a DDL that fits: nothing to scroll, no hint, and C-u is the input's
+	// a DDL that fits: nothing to scroll, no hint, and C-u is the input's still
 	b := wide(160, 45)
 	feed(t, b, "<C-p>@t_order")
 	rest(b)
@@ -728,4 +730,52 @@ func TestGoldenPalettePreviewScrolled(t *testing.T) {
 	a.Update(ddlMsg{conn: a.sess.Conns[0], table: tableNamed(a, "t_order"), text: ddlOrder + "\n" + strings.Repeat("create index i on t_order (id);\n", 8) + "create index last_one on t_order (note);"})
 	feed(t, a, "<C-f>")
 	golden.RequireEqual(t, a.render().String())
+}
+
+// Hovering to another table and back, or the scope away and back, has the
+// preview at the top: the selection that changed is what counts, whoever
+// changed it (F9.7).
+func TestPalettePreviewTopWhenTheSelectionMoves(t *testing.T) {
+	long := ddlOrder + "\n" + strings.Repeat("create index i on t_order (id);\n", 20) + "create index last_one on t_order (note);"
+	a := wide(160, 45)
+	feed(t, a, "<C-p>@t_o")
+	rest(a)
+	a.Update(ddlMsg{conn: a.sess.Conns[0], table: tableNamed(a, "t_order"), text: long})
+	first := a.palette.sel
+	feed(t, a, "<C-f><C-f>")
+	if a.palette.pvTop == 0 {
+		t.Fatal("not scrolled")
+	}
+	other := find(t, a, ui.Target{Kind: ui.KindRow, I: first + 1})
+	a.Update(tea.MouseMotionMsg{X: other.Min.X + 4, Y: other.Min.Y}) // the pointer takes the selection
+	if a.palette.sel == first {
+		t.Fatal("the pointer did not move the selection")
+	}
+	back := find(t, a, ui.Target{Kind: ui.KindRow, I: first})
+	a.Update(tea.MouseMotionMsg{X: back.Min.X + 4, Y: back.Min.Y})
+	if a.palette.sel != first || a.palette.pvTop != 0 {
+		t.Errorf("hovered away and back: row %d, top %d", a.palette.sel, a.palette.pvTop)
+	}
+	feed(t, a, "<C-f><C-f>")
+	feed(t, a, "<Tab><S-Tab>") // the scope away and back
+	if a.palette.pvTop != 0 {
+		t.Errorf("the scope away and back: top %d", a.palette.pvTop)
+	}
+}
+
+// Where the palette has no room for the preview there is none to scroll: no
+// hint, and the keys do nothing (§12「预览」, F9.7).
+func TestPalettePreviewHiddenIsNotScrolled(t *testing.T) {
+	long := ddlOrder + "\n" + strings.Repeat("create index i on t_order (id);\n", 20)
+	a := sized(100, 12, "nerd")
+	feed(t, a, "<C-p>@t_order")
+	rest(a)
+	a.Update(ddlMsg{conn: a.sess.Conns[0], table: tableNamed(a, "t_order"), text: long})
+	if pv, rows := a.previewWindow(); pv == nil || rows != 0 {
+		t.Fatalf("the preview is shown: %d rows", rows)
+	}
+	feed(t, a, "<C-f><C-f>")
+	if a.palette.pvTop != 0 || strings.Contains(a.render().String(), "滚动预览") {
+		t.Errorf("a preview not shown: top %d", a.palette.pvTop)
+	}
 }
