@@ -212,7 +212,7 @@ Window
 - **调整大小**：修改该方向上最近的祖先分割节点的 `Ratio`。
   - 每按一次移动 5%，乘以次数前缀（`3 SPC L` 移动 15%）；比例限制在 10%–90%。
   - 方向与 tmux 的 resize-pane 相同：`H` 把分割线往左移，与当前 pane 在分割线的哪一侧无关。
-- **缩放**：pane 占满状态栏以上的整个 window，侧栏的位置也被占用（P-03「缩放至整个 window」）。分割、关闭、按编号跳转都会退出缩放。从命令面板聚焦 pane、或者把表打开到某个 pane 时也一样：目标 pane 被缩放遮住时，先退出缩放再聚焦；目标就是正在缩放的 pane 时，保持缩放。
+- **缩放**：pane 占满状态栏以上的整个 window，侧栏的位置也被占用（P-03「缩放至整个 window」）。缩放中的 pane 要看得出来（M9 F9.6，用户：放大后以为只开了一个 pane）：标题的编号后面画 `zoom` 图标（nf-fa-expand U+F065，ascii `[Z]`），边框用主题的 `zoom` 色（§7.2，缺省 = `warn`），焦点与否都是；只有缩放中的那个 pane 画，退出恢复。同 tmux 在 window 名后标 `Z`。分割、关闭、按编号跳转都会退出缩放。从命令面板聚焦 pane、或者把表打开到某个 pane 时也一样：目标 pane 被缩放遮住时，先退出缩放再聚焦；目标就是正在缩放的 pane 时，保持缩放。
 - **按方向切焦点**：用上一帧的 pane 矩形，在该方向上找相邻、且有重叠的 pane。
   - 有多个候选时，选最近获得过焦点的那个；都没获得过焦点时，选遍历顺序靠前的（上 / 左）。这与 tmux 的 `window_pane_choose_best`（取 `active_point` 最大者）一致。
   - 选它而不选「重叠最长」，是因为这样 C-l 之后再 C-h 总能回到原处。更重要的是默认布局：从底部全宽的结果区按 C-k，会回到刚才执行查询的 console，而不是更宽的 data。
@@ -270,7 +270,7 @@ type Action struct {                // 注册表是 map[id]Action，id 如 "pane
 
 | 作用域 | 何时生效 |
 |---|---|
-| `palette` / `where` / `cols` / `dropdown` / `sessions` / `form` / `complete` / `options` / `segments` / `confirm` / `keyhelp` | 对应的浮层打开时，取最上层的一个。`options` 是单元格的选项浮层，`segments` 是时间列的分段浮层，都只在展开时生效（§10.2）；`keyhelp` 是 `?` 的键位帮助（§6.5）；`sessions` 是 session 列表，`form` 是新建连接的表单（M5 F5.1，§7.8）。which-key 浮层不是作用域（§6.5） |
+| `palette` / `where` / `cols` / `dropdown` / `sessions` / `form` / `complete` / `options` / `segments` / `confirm` / `keyhelp` / `menu` / `conns` / `ddl` | 对应的浮层打开时，取最上层的一个。`menu` 是树的右键菜单（M8 F8.23）、`conns` 是连接管理的列表（M8 F8.16）、`ddl` 是表 DDL 浮窗（M9 F9.8：`j` / `↓`、`k` / `↑` 一行，`C-d` / `C-u` 半页，`gg` / `G`，`esc` / `C-c` 关；滚轮也滚它，点浮窗外关）。`options` 是单元格的选项浮层，`segments` 是时间列的分段浮层，都只在展开时生效（§10.2）；`keyhelp` 是 `?` 的键位帮助（§6.5）；`sessions` 是 session 列表，`form` 是新建连接的表单（M5 F5.1，§7.8）。which-key 浮层不是作用域（§6.5） |
 | `wherenormal` | WHERE 输入框在 NORMAL 下（F3.39）：`↵` 执行、`/` 历史 / 收藏、`esc` 回表格，其余交给编辑器；`normal` 照常在它下面 |
 | `newrow` | 编辑还没保存的新行的格时生效（F3.33），叠在 `options` / `segments` 之上：浮层层级里它在最上，没绑的键再落到下面那层浮层。默认只有 `Tab` / `S-Tab`（`cell.field.next` / `cell.field.prev`） |
 | `cell` | 正在编辑单元格（INSERT） |
@@ -635,7 +635,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
 - 写了 `fg` 的图标在任何位置都用这个颜色；没写时跟随所在位置的颜色，比如标题聚焦时是 `focus` 色。
 - **图标后面留 1 个空格再接文字**（M1 用户反馈）：树、面板的搜索行与候选、pane 标题、侧栏标题、状态栏、查询条都一样。Nerd Font 图标按 1 列计算（§7.1），但不少终端和字体把它画得比 1 列宽，溢出到后一格，紧挨着文字时看起来贴在一起，悬停底色也只盖住半个。留一格空白正好接住溢出的部分。
 - 默认颜色：`save`、`refresh`、`transpose` 用 `info` 色，`sort_asc` / `sort_desc` 和 WHERE 历史下拉里的 `star` 用 `warn` 色（收藏和历史只靠图标区分，黄星一眼能认出）；都可以在 `[icon]` 里用 `fg` 覆盖。
-- 可以覆盖的图标：`schema`、`table`、`data`、`console`、`filter`、`search`、`keys`、`conn`、`key`、`postgres`，以及命令面板用的 `command`（nf-fa-bolt，U+F0E7，ascii 为 `:`）和 `window`（nf-fa-window_restore，U+F2D2，ascii 为 `[]`）；查询条的 `save`（U+F0C7，ascii `[S]`）、`refresh`（U+F021，ascii `[R]`）、`transpose`（U+F0EC，ascii `[T]`）、`sort_asc`（nf-fa-sort_amount_asc，U+F160，ascii `↑`）、`sort_desc`（nf-fa-sort_amount_desc，U+F161，ascii `↓`）；树的 `view`（nf-fa-eye，U+F06E，ascii `v`）、`column`（nf-cod-symbol_field，U+EB5F，ascii `-`）、只读连接的 `lock`（nf-fa-lock，U+F023，ascii `RO`，M5 F5.3）；查询条新增的 `row_add`（nf-fa-plus，U+F067，ascii `+`）、`row_delete`（nf-fa-minus，U+F068，ascii `-`）、`auto_refresh`（nf-fa-clock_o，U+F017，ascii `@`）、`stop`（nf-fa-stop，U+F04D，ascii `#`）；结果区的 `result`（nf-fa-list_alt，U+F022，ascii `=`）、`pin`（nf-oct-pin，U+F435，ascii `*`）、`export`（nf-fa-download，U+F019，ascii `>`）、`close`（nf-fa-times，U+F00D，ascii `x`）、日志 tab 的 `log`（nf-fa-file_text_o，U+F0F6，ascii `L`）；WHERE 历史下拉的 `star`（nf-fa-star，U+F005，ascii `*`）、`history`（nf-fa-history，U+F1DA，ascii `h`）；树的工作区里 pane 节点的 `pane`（nf-fa-columns，U+F0DB，ascii `|`，M5 F5.15）；新建连接表单的 `tag`（U+F02B，ascii `#`）、`host`（U+F233，ascii `@`）、`port`（U+F1E6，ascii `:`）、`user`（U+F007，ascii `~`）、`database`（U+F1C0，ascii `=`）、`advanced`（U+F013，ascii `+`）、`link`（U+F0C1，ascii `&`）（M7 F7.4；ascii 都是一个字符，不和 key / pin / star 的 `*` 撞）。M3 起去掉 `data`：表 tab 在 pane 标题、tab 栏、树的工作区、面板的 pane 行里一律用 `table` 图标，console tab 用 `console`，引导 tab 不画图标。`mysql`（nf-dev-mysql，U+E704，ascii `my`，M5 F5.4）。以后新增的图标也按名字加入。名字写错时启动报错。
+- 可以覆盖的图标：`schema`、`table`、`data`、`console`、`filter`、`search`、`keys`、`conn`、`key`、`postgres`，以及命令面板用的 `command`（nf-fa-bolt，U+F0E7，ascii 为 `:`）和 `window`（nf-fa-window_restore，U+F2D2，ascii 为 `[]`）、缩放中 pane 的 `zoom`（nf-fa-expand，U+F065，ascii 为 `[Z]`，M9 F9.6）；查询条的 `save`（U+F0C7，ascii `[S]`）、`refresh`（U+F021，ascii `[R]`）、`transpose`（U+F0EC，ascii `[T]`）、`sort_asc`（nf-fa-sort_amount_asc，U+F160，ascii `↑`）、`sort_desc`（nf-fa-sort_amount_desc，U+F161，ascii `↓`）；树的 `view`（nf-fa-eye，U+F06E，ascii `v`）、`column`（nf-cod-symbol_field，U+EB5F，ascii `-`）、只读连接的 `lock`（nf-fa-lock，U+F023，ascii `RO`，M5 F5.3）；查询条新增的 `row_add`（nf-fa-plus，U+F067，ascii `+`）、`row_delete`（nf-fa-minus，U+F068，ascii `-`）、`auto_refresh`（nf-fa-clock_o，U+F017，ascii `@`）、`stop`（nf-fa-stop，U+F04D，ascii `#`）；结果区的 `result`（nf-fa-list_alt，U+F022，ascii `=`）、`pin`（nf-oct-pin，U+F435，ascii `*`）、`export`（nf-fa-download，U+F019，ascii `>`）、`close`（nf-fa-times，U+F00D，ascii `x`）、日志 tab 的 `log`（nf-fa-file_text_o，U+F0F6，ascii `L`）；WHERE 历史下拉的 `star`（nf-fa-star，U+F005，ascii `*`）、`history`（nf-fa-history，U+F1DA，ascii `h`）；树的工作区里 pane 节点的 `pane`（nf-fa-columns，U+F0DB，ascii `|`，M5 F5.15）；新建连接表单的 `tag`（U+F02B，ascii `#`）、`host`（U+F233，ascii `@`）、`port`（U+F1E6，ascii `:`）、`user`（U+F007，ascii `~`）、`database`（U+F1C0，ascii `=`）、`advanced`（U+F013，ascii `+`）、`link`（U+F0C1，ascii `&`）（M7 F7.4；ascii 都是一个字符，不和 key / pin / star 的 `*` 撞）。M3 起去掉 `data`：表 tab 在 pane 标题、tab 栏、树的工作区、面板的 pane 行里一律用 `table` 图标，console tab 用 `console`，引导 tab 不画图标。`mysql`（nf-dev-mysql，U+E704，ascii `my`，M5 F5.4）。以后新增的图标也按名字加入。名字写错时启动报错。
 
 ### 7.8 默认尺寸与样式（取自设计稿）
 
@@ -1231,6 +1231,10 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 ### 10.6 新增与删除行（M2/M3 验收时定）
 
 - **新增**：`o` 或查询条的 `+`，在光标所在行的下面插入一个新行，光标移到它的第一列。新行的行号显示为 `warn` 色的 `+`，每一格先显示 `<default>`（写入时用 DEFAULT），照常编辑。新行只在当前页里，翻页之后仍保留，回到这一页时在原处：记的是「第几页、页里第几行后面」，改 WHERE / ORDER / LIMIT 或刷新后照样放回去，页或行不够时挂到最后一页末尾。没改过的格用 `dim` 色画 `<default>`。
+- **查看 DDL**（M9 F9.8，用户要 `fh` / `fH`；两个都不带默认键，面板里有）：
+  - `grid.ddl.table`「表的 DDL」：居中浮窗，宽高各取窗口的 2/3（最小 40×8），标题写表名，内容和着色同面板预览（含索引，PG 的末尾还有 `comment on … is`），作用域 `ddl`（键见 §6.4 的作用域表）。只要焦点是表 tab 就能开，不要求数据页已经读到（DDL 走 `Meta`，和取数无关，F9.8 审查时定）；DDL 没取过（含 `R` 清掉之后）就先取、浮窗先显示 `…`。
+  - `grid.ddl.column`「列的定义」：当前单元格下方（放不下在上方，同补全列表的位置算法）的小浮窗，宽取内容、上限窗口 2/3：第一行是 DDL 里这一列那一行（按行首列名匹配，去掉末尾逗号），下面是含这一列的 `create index` 语句（按标识符边界匹配列名），再下面是列注释；最多 8 行、超出画 `…` 不滚，要看全用表 DDL。要求当前列已经读到。`esc` / `C-c` 只关浮窗；其他任何键、滚轮、粘贴都是先关浮窗再照常处理（`hjkl` 照常移动、滚轮照常滚表格、粘贴照常进编辑；F9.8 审查时定：`C-c` 不能透传，否则两次 `C-c` 就退出了）。
+  - 结果 tab 上两个都无事、不 toast。
 - **复制为 JSON**（`Y`，`grid.yank.json`，M9 F9.5）：当前行（转置视图里是当前记录，结果 tab 的行也行）写成一个 JSON 对象，键是列名、按列顺序（含隐藏的列），2 空格缩进；值按列类型：数字类型的文本是合法的 JSON 数字才写成数字（`json.Valid`，MySQL zerofill 的 `007` 不是），否则字符串；布尔（PG `bool` 的 `t` / `f` / `true` / `false`，MySQL `tinyint(1)` 的 `1` / `0`）→ `true` / `false`；NULL → `null`；json / jsonb 合法时原文嵌入；其余（时间、数组、uuid、bytea、`<binary N bytes>`）→ 字符串；新增行里 DEFAULT 的格整个键省略。已知上限：结果 tab 的列类型来自驱动，MySQL 的 `tinyint(1)` 只报 `tinyint`，结果 tab 里的布尔列复制成 `1` / `0`。用 `encoding/json`。成功后整行闪一下。
 - **复制为 INSERT**（`yi`，M8 F8.7 才真正实现；F3.32 只留了占位）：当前行拼成一条 `insert into <schema>.<表> (<全部列，去掉 generated>) values (…);` 写进剪贴板，标识符走 `Engine.Quote`，关键字跟 `keyword_case`，数字不加引号、其余单引号（PG `'` 加倍，MySQL 另转义 `\`），值取显示的（含未保存的修改）；结果 tab 上 toast「只有表里的行能复制为 INSERT」；行里有显示成 `<binary N bytes>` 的格（MySQL 非 UTF-8 的二进制，原始字节不在内存里）时 `yi` 和 `p` 都不做、toast「有二进制列，复制不了」；新增行每一格都是 DEFAULT 时写成和保存一样的 `insert into t default values;`（MySQL `insert into t () values ();`）。
 - **复制成新行**（F3.32）：`yy` 复制整行，`p` 在光标下面粘贴成一个新行，各格取复制的值；行标识列里有默认值的（serial / identity）填 `<default>`，其余照抄。
@@ -1418,7 +1422,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - window：切换（M5 F5.2；之前只列出，`↵` 只关闭面板）。
   - tab：切过去；在别的 window 里时先切 window，再选这个 tab、聚焦它的 pane（F5.2 补上 F4.3 留下的这一半）。
   - session：attach（F5.1）。
-- **预览（K-05）**：光标在某张表上停留 150ms 后，从这张表所在连接的 `Meta` 获取 DDL，获取后缓存。窗口高度不够时先压缩预览区：列表和预览各自最多 12 行，放不下时先把预览压到 3 行，还放不下再把列表压到 3 行，还放不下就不显示预览；预览被压到不足 3 行时不显示（DDL 本身只有 1–2 行的照它自己的行数显示），底部提示始终显示（M4 F4.2 审查时定：80×24 下原来的「预览只拿剩下的」让「所有」范围一直看不到预览，或只剩一个 `…`）。
+- **预览（K-05）**：光标在某张表上停留 150ms 后，从这张表所在连接的 `Meta` 获取 DDL，获取后缓存。窗口高度不够时先压缩预览区：列表和预览各自最多 12 行，放不下时先把预览压到 3 行，还放不下再把列表压到 3 行，还放不下就不显示预览；预览被压到不足 3 行时不显示（DDL 本身只有 1–2 行的照它自己的行数显示），底部提示始终显示（M4 F4.2 审查时定：80×24 下原来的「预览只拿剩下的」让「所有」范围一直看不到预览，或只剩一个 `…`）。预览可以滚动（M9 F9.7）：`C-f` / `C-b`（`palette.preview.down` / `up`）各滚可见行数的一半、至少 1 行，到末尾停住；上面还有行时第一行画 `…`、下面还有时最后一行画 `…`（`…` 占行）；换了候选回到顶部；底部提示的「滚动预览」只在 DDL 超出预览区时显示。预览、表 DDL 浮窗和列定义浮窗共用 `ui.TextView`（行、颜色、Top、两头 `…`）。
 - **快速 SQL**（`;` 前缀或「SQL」标签）：NORMAL 下按 `;` 直接打开面板的 SQL 范围，输入框预填 `;`，与 `palette.command` 预填 `>` 同理（M1 用户反馈）。核心部分在 M1 F1.7 实现，用户体验 M0 时要求提前；依赖 console 的部分随 M3 补上。
   - **结果区**：执行后，结果显示在面板的下半部分，用和 table pane 相同的表格组件和网格样式（§7.6）；结果区的标题行显示行数、耗时和「只读」。SQL 范围下面板向下扩展，结果区至少 8 行。
   - **补全**：M1 用 catalog 里的表名、列名和 SQL 关键字做模糊补全，复用 F1.5 的补全列表；能看懂别名、CTE、子查询的补全要等 M3 F3.7。关键字取 lazysql `builtinKeywords` 里常用的约 40 个（小写）；表名取当前连接的 Schema 的；列名按 §9.7「第一次用到时才获取」：输入里出现和某张表同名的标识符时，取那张表的列并缓存（与打开表共用列缓存），不预拉全库的列。顺序为列 → 表 → 关键字，组内按 fzf 分数；右侧注释是列的类型和所属表、「表」、「关键字」。补全状态从 data tab 挪出来，面板和 WHERE 共用。
