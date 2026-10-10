@@ -101,7 +101,7 @@ func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, d
 	}
 	c := &Conn{pool: pool, c: conn, kill: kill, tx: 'I'}
 	// MySQL's schemas are its databases: no database before them on
-	// console titles (§8.6)
+	// query titles (§8.6)
 	info := db.Info{Addr: cfg.User + "@" + cfg.Addr}
 	r, err := c.Query(ctx, "select connection_id()")
 	if err == nil && readOnly {

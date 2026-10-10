@@ -20,13 +20,13 @@ type Theme struct {
 	Border, Focus, Warn      color.Color
 	Cursor, CursorBlur       color.Color
 	Select, Row, RowAlt      color.Color // RowAlt: the grid's zebra rows (§7.6)
-	Visual                   color.Color // a console's VISUAL, an input all selected
+	Visual                   color.Color // a query's VISUAL, an input all selected
 	EditedBg                 color.Color
 	Keyword, Info            color.Color
 	Error, ErrorBg           color.Color // ErrorBg: the error bar's (§7.8「错误栏」)
 	Number, PK, Func         color.Color
 	String, Time, Bool, JSON color.Color // grid values by column type (§7.6)
-	SQLString, Comment       color.Color // the console's SQL (§7.3)
+	SQLString, Comment       color.Color // the query's SQL (§7.3)
 	Bar                      color.Color // status bar and toast background
 	Sep                      color.Color // separators and tab dividers (§7.8)
 	Match                    color.Color // fuzzy-matched characters' foreground, on the row's own background

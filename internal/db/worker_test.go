@@ -226,7 +226,7 @@ func TestWorkerRedialsAndRunsAgain(t *testing.T) {
 
 // A request that may write runs again only if nothing of it went through:
 // with a statement done before the one that failed unsent (autocommitted,
-// in a console run), it would be done twice (F8.19).
+// in a query run), it would be done twice (F8.19).
 func TestWorkerRunWithAStatementDoneIsNotRunAgain(t *testing.T) {
 	l := newLostWorker(errUnsent)
 	l.first.lives = 1

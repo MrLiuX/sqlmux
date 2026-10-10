@@ -19,7 +19,7 @@ func TestBlockLeftOut(t *testing.T) {
 	}
 }
 
-// Block is what the console draws a VISUAL BLOCK from.
+// Block is what the query draws a VISUAL BLOCK from.
 func TestBlock(t *testing.T) {
 	for _, c := range []struct {
 		keys                  string

@@ -3,7 +3,7 @@ package editor
 // Scrolling follows nvim's move.c for a window without folds or wrapping,
 // where every line is one row, and 'scrolloff' 0, 'scrolljump' 1.
 
-// rows is how many lines the console shows; the whole text before the
+// rows is how many lines the query shows; the whole text before the
 // first draw.
 func (e *Editor) rows() int {
 	if e.height > 0 {

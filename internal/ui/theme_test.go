@@ -30,7 +30,7 @@ match = "#00ff00"
 visual = "#6c6a6d"
 sql_column = "#010203"
 [icon]
-console = { text = "C", fg = "#ff0000" }
+query = { text = "C", fg = "#ff0000" }
 table = { fg = "#a9dc76" }
 sort_asc = { fg = "#ff0000" }
 `, ASCIIIcons)
@@ -43,10 +43,10 @@ sort_asc = { fg = "#ff0000" }
 	if th.Bar != TokyonightStorm.Bar || th.Fg != TokyonightStorm.Fg {
 		t.Error("tokens the file doesn't name must stay")
 	}
-	if ic.Console != (Icon{"C", c("#ff0000")}) || ic.Table != (Icon{"+", c("#a9dc76")}) || ic.Schema != ASCIIIcons.Schema || ic.SortAsc != (Icon{"↑", c("#ff0000")}) {
-		t.Errorf("icons: console %v table %v schema %v", ic.Console, ic.Table, ic.Schema)
+	if ic.Query != (Icon{"C", c("#ff0000")}) || ic.Table != (Icon{"+", c("#a9dc76")}) || ic.Schema != ASCIIIcons.Schema || ic.SortAsc != (Icon{"↑", c("#ff0000")}) {
+		t.Errorf("icons: query %v table %v schema %v", ic.Query, ic.Table, ic.Schema)
 	}
-	if ASCIIIcons.Console.Text != ">" || TokyonightStorm.Row == th.Row {
+	if ASCIIIcons.Query.Text != ">" || TokyonightStorm.Row == th.Row {
 		t.Error("the built-in sets must not change")
 	}
 }
@@ -68,12 +68,12 @@ func TestThemeZoomDefaultsToWarn(t *testing.T) {
 
 func TestParseThemeErrors(t *testing.T) {
 	for data, want := range map[string]string{
-		`rwo = "#000000"`:                        "rwo",
-		`row = "red"`:                            "row",
-		`row = 1`:                                "row",
-		"[icon]\nconsol = { text = \"C\" }":      "consol",
-		"[icon]\nconsole = { fg = \"#f00\" }":    "icon.console.fg",
-		"[icon]\nconsole = { bg = \"#ff0000\" }": "icon.console.bg",
+		`rwo = "#000000"`:                      "rwo",
+		`row = "red"`:                          "row",
+		`row = 1`:                              "row",
+		"[icon]\nconsol = { text = \"C\" }":    "consol",
+		"[icon]\nquery = { fg = \"#f00\" }":    "icon.query.fg",
+		"[icon]\nquery = { bg = \"#ff0000\" }": "icon.query.bg",
 	} {
 		if _, _, err := ParseTheme(data, NerdIcons); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%q: error %v should name %s", data, err, want)

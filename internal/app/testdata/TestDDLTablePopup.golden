@@ -23,7 +23,7 @@
 │ ▾  工作区               │ CREATE INDEX t_order_status ON public.t_order USING btree (status, id);                                │                          │
 │   ▾  data               │ comment on column public.t_order.status is 'where the order is';                                       │                          │
 │       ①  t_order        │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
-│ ▾  Consoles             │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
+│ ▾  Queries              │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
 │                          │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
 │                          │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
 │                          │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │

@@ -134,7 +134,7 @@ func (a *App) jumpConfirm() tea.Cmd {
 
 // jumpTo is the click the match stands for, the jump over: a cell is
 // focused and gone to, a tree node is where the cursor goes, neither
-// opened nor unfolded, a console's cursor is put on the character (§6.10).
+// opened nor unfolded, a query's cursor is put on the character (§6.10).
 func (a *App) jumpTo(m jumpMatch) tea.Cmd {
 	a.jump = nil
 	t := m.target
@@ -146,7 +146,7 @@ func (a *App) jumpTo(m jumpMatch) tea.Cmd {
 		a.treeGo(t.I)
 	case t.Kind == ui.KindText:
 		a.focusPane(t.Pane)
-		if c, n, v := a.consoleAt(t.Pane, m.at); c != nil {
+		if c, n, v := a.queryAt(t.Pane, m.at); c != nil {
 			c.ed.Click(n, v)
 			c.comp = nil
 		}
@@ -155,7 +155,7 @@ func (a *App) jumpTo(m jumpMatch) tea.Cmd {
 }
 
 // jumpScan reads the matches of the pattern off a frame of the screen as it
-// is: in the cells and tree rows, the first of each, in a console's text all
+// is: in the cells and tree rows, the first of each, in a query's text all
 // of them, then gives them labels (§6.10).
 func (a *App) jumpScan() {
 	j := a.jump
@@ -175,14 +175,14 @@ func (a *App) jumpScan() {
 		case k == ui.KindCell || k == ui.KindNode:
 			rect = h.Rect
 		case k == ui.KindText:
-			if p := a.win().pane(h.Target.Pane); p != nil && consoleOf(p) != nil {
-				view, body := a.consoleView(p, consoleOf(p))
+			if p := a.win().pane(h.Target.Pane); p != nil && queryOf(p) != nil {
+				view, body := a.queryView(p, queryOf(p))
 				rect = view.TextArea(body)
 			}
 		}
 		for y := rect.Min.Y; y < rect.Max.Y; y++ {
 			cs := clustersOf(f, y, rect.Min.X, rect.Max.X)
-			end := 0 // where the last match ends: those of a console do not overlap, a cell or a row has its first
+			end := 0 // where the last match ends: those of a query do not overlap, a cell or a row has its first
 			for from := 0; ; {
 				i := findIn(cs, pat, fold, from)
 				if i < 0 {
@@ -243,7 +243,7 @@ func (a *App) jumpScan() {
 func abs(n int) int { return max(n, -n) }
 
 // jumpCursor is where the focused pane's cursor is on the frame f: a
-// table's cell, the tree's node, the console's cursor.
+// table's cell, the tree's node, the query's cursor.
 func (a *App) jumpCursor(f *ui.Frame) (uv.Position, bool) {
 	p := a.focused()
 	find := func(want ui.Target) (uv.Position, bool) {
@@ -259,7 +259,7 @@ func (a *App) jumpCursor(f *ui.Frame) (uv.Position, bool) {
 		ns, _ := a.treeNodes()
 		cur, _ := a.treeAt(ns)
 		return find(ui.Target{Kind: ui.KindNode, Pane: p.ID, I: cur})
-	case consoleOf(p) != nil:
+	case queryOf(p) != nil:
 		if f.Cursor != nil {
 			return uv.Pos(f.Cursor.X, f.Cursor.Y), true
 		}

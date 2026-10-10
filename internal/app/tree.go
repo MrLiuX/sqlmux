@@ -48,8 +48,8 @@ func (a *App) connect(c *Conn) tea.Cmd {
 	}
 }
 
-// gotConnected takes c's connections in, or marks it failed; the consoles
-// waiting on it go over, or stay (§7.8「console 标题」). One of a session
+// gotConnected takes c's connections in, or marks it failed; the queries
+// waiting on it go over, or stay (§7.8「query 标题」). One of a session
 // closed meanwhile closes them again: nothing would.
 func (a *App) gotConnected(m connected) tea.Cmd {
 	c := m.conn
@@ -59,8 +59,8 @@ func (a *App) gotConnected(m connected) tea.Cmd {
 		}
 		return m.d.discard()
 	}
-	var waiting []*consoleTab
-	for _, t := range a.consoles() {
+	var waiting []*queryTab
+	for _, t := range a.queries() {
 		if t.want == c {
 			t.want, waiting = nil, append(waiting, t)
 		}
@@ -128,10 +128,10 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 		c.Schema = c.home
 	}
 	cmds := a.resolvePending(c)
-	for _, t := range a.consoles() { // opened before the tree had a schema, or in one gone: the connection's (§8.6)
+	for _, t := range a.queries() { // opened before the tree had a schema, or in one gone: the connection's (§8.6)
 		if t.conn == c && t.want == nil && !slices.Contains(c.Schemas, t.schema) { // one waiting for another connection has its schema
 			t.schema = c.Schema
-			cmds = append(cmds, a.keepConsole(t))
+			cmds = append(cmds, a.keepQuery(t))
 		}
 	}
 	a.clampTree()
@@ -204,24 +204,24 @@ const (
 	nodeWorkspace
 	nodeWindow
 	nodeTab
-	nodeSep         // a rule between the groups of connections, no node (F10.6)
-	nodeConsoles    // the root over the console files
-	nodeConsoleFile // one of them
+	nodeSep       // a rule between the groups of connections, no node (F10.6)
+	nodeQueries   // the root over the query files
+	nodeQueryFile // one of them
 )
 
 // node is one of the tree's rows: what it stands for, and how it draws.
 type node struct {
 	ui.TreeNode
-	id      string // stable while the node exists: expansion and the cursor go by it
-	kind    nodeKind
-	conn    *Conn    // the connection it is under; nil in the workspace
-	schema  string   // the schema it is under; "" outside them
-	table   db.Table // a table's, or a column's table
-	column  string
-	console string // a console file's name
-	win     int
-	pane    *Pane
-	tab     int
+	id     string // stable while the node exists: expansion and the cursor go by it
+	kind   nodeKind
+	conn   *Conn    // the connection it is under; nil in the workspace
+	schema string   // the schema it is under; "" outside them
+	table  db.Table // a table's, or a column's table
+	column string
+	query  string // a query file's name
+	win    int
+	pane   *Pane
+	tab    int
 }
 
 // opened is whether node id of s's tree shows its children: as the user
@@ -369,12 +369,12 @@ func (a *App) treeNodes() (ns []node, matches int) {
 	if add(node{id: "workspace", kind: nodeWorkspace, TreeNode: ui.TreeNode{Branch: true, Open: a.sess.opened("workspace", true), Icon: ic.Window, IconFg: th.Info, Text: i18n.T("工作区")}}) {
 		a.workspaceNodes(add, target)
 	}
-	if add(node{id: "consoles", kind: nodeConsoles, TreeNode: ui.TreeNode{Branch: true, Open: a.sess.opened("consoles", true), Icon: ic.Console, IconFg: th.Info, Text: "Consoles"}}) {
-		for _, name := range a.consoleList() {
-			open := a.consoleOpen(name, nil)
-			cn := node{id: "consoles/" + name, kind: nodeConsoleFile, console: name, TreeNode: ui.TreeNode{
-				Depth: 1, Icon: ic.Console, IconFg: th.Info, Text: name, Current: open,
-				Note: a.state.Consoles[name].Conn, NoteFg: th.Dim,
+	if add(node{id: "queries", kind: nodeQueries, TreeNode: ui.TreeNode{Branch: true, Open: a.sess.opened("queries", true), Icon: ic.Query, IconFg: th.Info, Text: "Queries"}}) {
+		for _, name := range a.queryList() {
+			open := a.queryOpen(name, nil)
+			cn := node{id: "queries/" + name, kind: nodeQueryFile, query: name, TreeNode: ui.TreeNode{
+				Depth: 1, Icon: ic.Query, IconFg: th.Info, Text: name, Current: open,
+				Note: a.state.Queries[name].Conn, NoteFg: th.Dim,
 			}}
 			add(cn)
 		}
@@ -404,7 +404,7 @@ func (a *App) workspaceNodes(add func(node) bool, target *Pane) {
 				icon, _ := a.tabIcon(&p.Tabs[i])
 				// a blank for a landing tab's: its name in line with the others'
 				icon.Text = cmp.Or(icon.Text, " ")
-				fg := th.Info // a console's
+				fg := th.Info // a query's
 				if tb.Data != nil {
 					fg = th.Func
 				}
@@ -604,8 +604,8 @@ func (a *App) treeOpen(tablesOnly bool) tea.Cmd {
 	case n.kind == nodeTable:
 		return a.openTable(n.conn, n.table)
 	case tablesOnly:
-	case n.kind == nodeConsoleFile:
-		return a.openConsoleFile(n.console)
+	case n.kind == nodeQueryFile:
+		return a.openQueryFile(n.query)
 	case n.kind == nodeColumn:
 		cmd := a.openTable(n.conn, n.table)
 		a.gotoColumn(n.conn, n.table, n.column)
@@ -713,7 +713,7 @@ func editInput(in *ui.Input, k keymap.Key) bool {
 
 // openTarget is the pane a table opens in (§5, §12): the focused one;
 // with the tree or the result area focused, the one focused most recently,
-// a console's too (F3.37); the first, if none ever was. Never the result
+// a query's too (F3.37); the first, if none ever was. Never the result
 // area.
 func (a *App) openTarget() *Pane {
 	win := a.win()

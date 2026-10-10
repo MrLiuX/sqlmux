@@ -172,12 +172,12 @@ func TestSecretCached(t *testing.T) {
 	}
 }
 
-// Two consoles on one connection share its Main, its transaction too: one
+// Two queries on one connection share its Main, its transaction too: one
 // begins, the other is in it and stays on the connection till it ends;
 // then it goes to another once that connects (§5, F5.11).
-func TestConsolesShareMain(t *testing.T) { eachEngine(t, consolesShareMain) }
+func TestQueriesShareMain(t *testing.T) { eachEngine(t, queriesShareMain) }
 
-func consolesShareMain(t *testing.T, eng, dsn string) {
+func queriesShareMain(t *testing.T, eng, dsn string) {
 	sess, err := Open(context.Background(), []config.Connection{
 		{Name: "play", Engine: eng, DSN: dsn},
 		{Name: "seed", Engine: eng, DSN: dsn},
@@ -192,19 +192,19 @@ func consolesShareMain(t *testing.T, eng, dsn string) {
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
 	settle(a, a.loadCatalog(sess.Conns[0]))
 	play, seed := sess.Conns[0], sess.Conns[1]
-	c1 := consoleOf(a.win().Root.B.Pane)
+	c1 := queryOf(a.win().Root.B.Pane)
 	a.win().focus(a.win().Root.B.Pane.ID)
-	a.run("console.new", 0)
-	c2 := consoleOf(a.focused())
-	run := func(c *consoleTab, sql string) {
+	a.run("query.new", 0)
+	c2 := queryOf(a.focused())
+	run := func(c *queryTab, sql string) {
 		t.Helper()
-		deliver(a, a.runSQL(c, c.conn, c.schema, "console", sql, 0, c.ver))
+		deliver(a, a.runSQL(c, c.conn, c.schema, "query", sql, 0, c.ver))
 	}
 	if run(c1, "begin"); play.tx != 'T' {
 		t.Fatalf("begin: %c", play.tx)
 	}
 	if run(c2, "select 1"); play.tx != 'T' || c2.conn != play {
-		t.Fatalf("the other console's run: %c", play.tx)
+		t.Fatalf("the other query's run: %c", play.tx)
 	}
 	if a.pickConn(c2, seed); c2.conn != play || c2.want != nil {
 		t.Error("left its connection in a transaction")
@@ -216,7 +216,7 @@ func consolesShareMain(t *testing.T, eng, dsn string) {
 }
 
 // n makes a session of its own connections, the current one connected for
-// it first, then attached: named 1, console_n the next free, the other
+// it first, then attached: named 1, query_n the next free, the other
 // connections not connected (§7.8「新建 session」).
 func TestNewSession(t *testing.T) { eachEngine(t, newSessionOn) }
 
@@ -243,8 +243,8 @@ func newSessionOn(t *testing.T, eng, dsn string) {
 	if len(a.sessions) != 2 || s == sess || s.Name != "1" || s.Conns[0] == sess.Conns[0] || s.Conns[0].State != connReady || len(s.Conns[0].Tables) == 0 || s.Conns[1].State != connIdle {
 		t.Fatalf("sessions %d, attached %s, %v / %v", len(a.sessions), s.Name, s.Conns[0].State, s.Conns[1].State)
 	}
-	if ps := s.Windows[0].Root.Leaves(); len(ps) != 1 || len(s.consoles()) != 0 {
-		t.Errorf("one empty pane, no console (F8.18): %d panes, %d consoles", len(ps), len(s.consoles()))
+	if ps := s.Windows[0].Root.Leaves(); len(ps) != 1 || len(s.queries()) != 0 {
+		t.Errorf("one empty pane, no query (F8.18): %d panes, %d queries", len(ps), len(s.queries()))
 	}
 }
 
@@ -281,12 +281,12 @@ func TestManualTx(t *testing.T) { eachEngine(t, manualTx) }
 
 func manualTx(t *testing.T, eng, _ string) {
 	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: ownDB(t, eng)})
-	play, c := a.sess.Conns[0], consoleOf(a.win().Root.B.Pane)
+	play, c := a.sess.Conns[0], queryOf(a.win().Root.B.Pane)
 	a.win().focus(a.win().Root.B.Pane.ID)
 	run := func(sql string) { // the whole text
 		t.Helper()
 		c.ed.Load(sql)
-		settle(a, a.runSQL(c, c.conn, c.schema, "console_1", sql, 0, c.ver))
+		settle(a, a.runSQL(c, c.conn, c.schema, "query_1", sql, 0, c.ver))
 	}
 	count := func(sql string) string {
 		t.Helper()
@@ -336,7 +336,7 @@ func TestReadOnlyMain(t *testing.T) { eachEngine(t, readOnlyMain) }
 
 func readOnlyMain(t *testing.T, eng, dsn string) {
 	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: dsn, ReadOnly: true})
-	c := consoleOf(a.win().Root.B.Pane)
+	c := queryOf(a.win().Root.B.Pane)
 	a.win().focus(a.win().Root.B.Pane.ID)
 	err := c.conn.Main.Run(context.Background(), func(ctx context.Context, conn db.Conn) error {
 		_, err := conn.Query(ctx, "update t_user set name = name where id = 1")
@@ -346,24 +346,24 @@ func readOnlyMain(t *testing.T, eng, dsn string) {
 		t.Errorf("a write on Main: %+v", e)
 	}
 	c.ed.Load("start transaction read write")
-	if settle(a, a.consoleRun("")); lastLog(a) != "console_1  start transaction read write  play 是只读连接，整次都没有执行" || c.conn.tx == 'T' {
+	if settle(a, a.queryRun("")); lastLog(a) != "query_1  start transaction read write  play 是只读连接，整次都没有执行" || c.conn.tx == 'T' {
 		t.Errorf("start transaction read write: %s, %c", lastLog(a), c.conn.tx)
 	}
 }
 
 // A run that sets where unqualified names go, PG's SET or MySQL's USE,
-// leaves the console's schema to be set again before the next (§8.6);
+// leaves the query's schema to be set again before the next (§8.6);
 // MySQL's /*! … */ runs as code, its statements split around it (F5.4).
 func TestRunSetsSchemaAgain(t *testing.T) { eachEngine(t, runSetsSchemaAgain) }
 
 func runSetsSchemaAgain(t *testing.T, eng, dsn string) {
 	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: dsn})
-	c := consoleOf(a.win().Root.B.Pane)
+	c := queryOf(a.win().Root.B.Pane)
 	a.win().focus(a.win().Root.B.Pane.ID)
 	run := func(sql string) {
 		t.Helper()
 		c.ed.Load(sql)
-		settle(a, a.runSQL(c, c.conn, c.schema, "console_1", sql, 0, c.ver))
+		settle(a, a.runSQL(c, c.conn, c.schema, "query_1", sql, 0, c.ver))
 	}
 	away := map[string]string{"postgres": "set search_path to agentable", "mysql": "use agentable"}[eng]
 	if run(away + ";\nselect count(*) from agent"); strings.Contains(lastLog(a), "ERROR") {
@@ -418,8 +418,8 @@ func manualTxTable(t *testing.T, eng, _ string) {
 	}
 	// the auto mode, a transaction the user began: read on Main as well
 	play.Manual = false
-	c, data := a.sess.consoles()[0], a.paneShowing(tab)
-	settle(a, a.runSQL(c, play, c.schema, "console_1", "begin", 0, c.ver))
+	c, data := a.sess.queries()[0], a.paneShowing(tab)
+	settle(a, a.runSQL(c, play, c.schema, "query_1", "begin", 0, c.ver))
 	a.win().focus(data.ID)
 	tab.edits = map[editKey]edit{{tab.rowKey(0), "note"}: {val: db.Val{S: "again"}, orig: tab.page.Rows[0][note]}}
 	if settle(a, a.save()); play.tx != 'T' || tab.page.Rows[0][note].S != "again" {
@@ -458,8 +458,8 @@ func TestKillSessionUnderWay(t *testing.T) {
 	settle(a, cmd)
 	seed := a.sess.Conns[1]
 	dial := a.connect(seed) // seed opened in session 1's tree
-	a.run("console.new", 0) // a new session has none
-	con := a.sess.consoles()[0]
+	a.run("query.new", 0)   // a new session has none
+	con := a.sess.queries()[0]
 	run := a.runSQL(con, con.conn, con.schema, con.name, "select pg_sleep(3)", 0, con.ver)
 	ran := make(chan tea.Msg, 1)
 	go func() { ran <- run().(tea.BatchMsg)[0]() }()
@@ -521,9 +521,9 @@ func killBackends(t *testing.T, eng, dsn string, c *Conn) {
 }
 
 // A connection the server dropped comes back by itself on the next
-// request: the catalog without a word; a console run, which may write, says
+// request: the catalog without a word; a query run, which may write, says
 // the connection is back and to run it again, its error the first, and the
-// run after finds its schema as the console set it. A transaction is lost
+// run after finds its schema as the query set it. A transaction is lost
 // with the connection: a write in it is not run, a commit says it is not
 // known to have taken; the manual mode stays (§8.2「断线重连」, F8.19).
 func TestReconnect(t *testing.T) { eachEngine(t, reconnect) }
@@ -534,12 +534,12 @@ func reconnect(t *testing.T, eng, _ string) {
 	was := Send
 	Send = func(m tea.Msg) { a.Update(m) } // as the program's Send, in the order the events came in
 	t.Cleanup(func() { Send = was })
-	play, c := a.sess.Conns[0], consoleOf(a.win().Root.B.Pane)
+	play, c := a.sess.Conns[0], queryOf(a.win().Root.B.Pane)
 	a.win().focus(a.win().Root.B.Pane.ID)
 	run := func(sql string) {
 		t.Helper()
 		c.ed.Load(sql)
-		settle(a, a.runSQL(c, c.conn, c.schema, "console_1", sql, 0, c.ver))
+		settle(a, a.runSQL(c, c.conn, c.schema, "query_1", sql, 0, c.ver))
 	}
 	count := func() string {
 		t.Helper()
@@ -570,7 +570,7 @@ func reconnect(t *testing.T, eng, _ string) {
 		t.Fatalf("a run after the drop: %s, toast %q", lastLog(a), a.toast)
 	}
 	if run("select count(*) from agent"); failed() {
-		t.Fatalf("the run again, in the console's schema: %s", lastLog(a))
+		t.Fatalf("the run again, in the query's schema: %s", lastLog(a))
 	}
 	c.schema = home
 
@@ -690,11 +690,11 @@ func TestDropTableOnServer(t *testing.T) { eachEngine(t, dropTableOn) }
 
 func dropTableOn(t *testing.T, eng, dsn string) {
 	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: ownDB(t, eng)})
-	play, c := a.sess.Conns[0], consoleOf(a.win().Root.B.Pane)
+	play, c := a.sess.Conns[0], queryOf(a.win().Root.B.Pane)
 	a.win().focus(a.win().Root.B.Pane.ID)
 	sql := "create table probe (a int);\ncreate view v_probe as select a from probe;"
 	c.ed.Load(sql)
-	settle(a, a.runSQL(c, c.conn, c.schema, "console_1", sql, 0, c.ver))
+	settle(a, a.runSQL(c, c.conn, c.schema, "query_1", sql, 0, c.ver))
 	settle(a, a.loadCatalog(play))
 	has := func(name string) bool {
 		return slices.ContainsFunc(play.Tables, func(tb db.Table) bool { return tb.Name == name })

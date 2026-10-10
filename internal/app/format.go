@@ -17,21 +17,21 @@ import (
 )
 
 type formatDone struct {
-	t        *consoleTab
-	ver      int // the console's as gq was pressed
+	t        *queryTab
+	ver      int // the query's as gq was pressed
 	from, to editor.Pos
 	text     string
 	err      error
-	whole    bool // console.format's: the cursor stays where it is (F8.3)
+	whole    bool // query.format's: the cursor stays where it is (F8.3)
 }
 
-// consoleFormat lays out what gq covered in console t (§9.5): a selection
+// queryFormat lays out what gq covered in query t (§9.5): a selection
 // as it is, its line break at the end left out; the statement at the
 // cursor for gqq; else the statements the motion touches, the first's
 // start to the last's end. It is formatted in a Cmd by sql-formatter or
 // formatprg; what comes back after the text changed, or with the editor
 // no longer in NORMAL, is dropped.
-func (a *App) consoleFormat(t *consoleTab, f editor.FormatSpan, whole bool) tea.Cmd {
+func (a *App) queryFormat(t *queryTab, f editor.FormatSpan, whole bool) tea.Cmd {
 	lines := t.ed.Lines()
 	text := strings.Join(lines, "\n")
 	from, to := offsetOf(lines, f.From), offsetOf(lines, f.To)
@@ -109,7 +109,7 @@ func runPrg(sql, prg string) (string, error) {
 
 func (a *App) gotFormat(m formatDone) tea.Cmd {
 	switch {
-	case !slices.Contains(a.consoles(), m.t): // closed meanwhile, or closed and opened again on its file
+	case !slices.Contains(a.queries(), m.t): // closed meanwhile, or closed and opened again on its file
 		return nil
 	case m.t.ver != m.ver, m.t.ed.Mode() != editor.Normal && !m.t.ed.Plain(): // the text changed meanwhile, or is being typed
 		return nil
@@ -123,20 +123,20 @@ func (a *App) gotFormat(m formatDone) tea.Cmd {
 	if m.whole {
 		m.t.ed.Goto(cur) // as it is, or the nearest character when the text got shorter
 	}
-	return a.consoleDid(m.t, eff)
+	return a.queryDid(m.t, eff)
 }
 
-// formatAll is console.format: all the statements of console t laid out as
+// formatAll is query.format: all the statements of query t laid out as
 // gq does (§9.5, F5.16).
-func (a *App) formatAll(t *consoleTab) tea.Cmd {
+func (a *App) formatAll(t *queryTab) tea.Cmd {
 	if t.ed.Mode() != editor.Normal && !t.ed.Plain() {
 		return nil
 	}
 	if from, to, ok := t.ed.SelectionSpan(); ok && t.ed.Plain() { // a selection: as it is, as gq in VISUAL does
-		return a.consoleFormat(t, editor.FormatSpan{From: from, To: to, Selected: true}, false)
+		return a.queryFormat(t, editor.FormatSpan{From: from, To: to, Selected: true}, false)
 	}
 	lines := t.ed.Lines()
-	return a.consoleFormat(t, editor.FormatSpan{To: editor.Pos{Line: len(lines) - 1, Col: len(lines[len(lines)-1])}}, true)
+	return a.queryFormat(t, editor.FormatSpan{To: editor.Pos{Line: len(lines) - 1, Col: len(lines[len(lines)-1])}}, true)
 }
 
 // offsetOf is where pos is in lines joined by line breaks; posOf the

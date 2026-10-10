@@ -44,7 +44,7 @@ func TestFocusNext(t *testing.T) {
 		t.Errorf("sidebar folded: %v", got)
 	}
 	a.toggleTree()
-	// the default layout and the result area below the panes: 树 → data → console → 结果区 → 树
+	// the default layout and the result area below the panes: 树 → data → query → 结果区 → 树
 	b := sized(160, 45, "nerd")
 	bw := b.win()
 	res := b.resultPane(bw)
@@ -88,20 +88,20 @@ func TestFocusNext(t *testing.T) {
 	}
 }
 
-// console.format lays out every statement, as one undo step, the cursor
+// query.format lays out every statement, as one undo step, the cursor
 // where it was, line and column, clamped when the text got shorter; not in
 // INSERT (F5.16, F8.3).
-func TestConsoleFormatAll(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQueryFormatAll(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	format := func() {
 		t.Helper()
-		cmd := a.run("console.format", 0)
+		cmd := a.run("query.format", 0)
 		if cmd == nil {
 			t.Fatal("formats nothing")
 		}
 		a.Update(cmd())
 	}
-	a.consoleDid(c, c.ed.Load("select 1;\nselect a,b from t;"))
+	a.queryDid(c, c.ed.Load("select 1;\nselect a,b from t;"))
 	feed(t, a, "jfb")
 	format()
 	if got := text(c); got != "select\n  1;\n\nselect\n  a,\n  b\nfrom\n  t;" || c.ed.Cursor() != (editor.Pos{Line: 1, Col: 3}) {
@@ -110,7 +110,7 @@ func TestConsoleFormatAll(t *testing.T) {
 	if feed(t, a, "u"); text(c) != "select 1;\nselect a,b from t;" {
 		t.Errorf("u: %q", text(c))
 	}
-	a.consoleDid(c, c.ed.Load("select 1;\n\n\n\nselect 2 from t;"))
+	a.queryDid(c, c.ed.Load("select 1;\n\n\n\nselect 2 from t;"))
 	feed(t, a, "G$")
 	a.formatPrg = "printf 'select 1;\\nselect 2'" // fewer lines than the cursor's; the last statement's ; is not part of it
 	format()
@@ -118,31 +118,31 @@ func TestConsoleFormatAll(t *testing.T) {
 		t.Errorf("past the end: cursor %v, want the last line, the nearest character", got)
 	}
 	a.formatPrg = ""
-	a.consoleDid(c, c.ed.Load("select 1;\n\n\nselect 2;"))
+	a.queryDid(c, c.ed.Load("select 1;\n\n\nselect 2;"))
 	feed(t, a, "3G")
 	format()
 	if got := c.ed.Cursor(); got != (editor.Pos{Line: 2, Col: 0}) {
 		t.Errorf("a line that is there still: cursor %v", got)
 	}
 	feed(t, a, "i")
-	if a.run("console.format", 0) != nil {
+	if a.run("query.format", 0) != nil {
 		t.Error("formats in INSERT")
 	}
 }
 
-// What the formatter brings back for a console closed meanwhile is dropped,
+// What the formatter brings back for a query closed meanwhile is dropped,
 // the file's text is the one reopened (F5.16).
 func TestFormatAllClosedMeanwhile(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
-	a, c := inConsole(t, "", "")
-	a.consoleDid(c, c.ed.Load("select 1;"))
-	cmd := a.run("console.format", 0)
+	a, c := inQuery(t, "", "")
+	a.queryDid(c, c.ed.Load("select 1;"))
+	cmd := a.run("query.format", 0)
 	a.win().focus(2)
 	a.run("tab.close", 0)
 	a.run("tab.reopen", 0)
 	a.Update(cmd())
-	if c2 := a.focusedConsole(); c2 == nil || c2 == c || text(c) != "select 1;" {
-		t.Errorf("the closed console %q was formatted", text(c))
+	if c2 := a.focusedQuery(); c2 == nil || c2 == c || text(c) != "select 1;" {
+		t.Errorf("the closed query %q was formatted", text(c))
 	}
 }
 
@@ -157,7 +157,7 @@ func TestTabQuit(t *testing.T) {
 	win.focus(2)
 	a.run("tab.quit", 0)
 	if len(a.sess.Windows) != 2 || win.pane(2) != nil || len(win.Root.Leaves()) != 1 {
-		t.Fatalf("a console's tab, its pane left empty: %d windows, panes %d", len(a.sess.Windows), len(win.Root.Leaves()))
+		t.Fatalf("a query's tab, its pane left empty: %d windows, panes %d", len(a.sess.Windows), len(win.Root.Leaves()))
 	}
 	win.focus(1)
 	if dataOf(a.focused()) != tab {
@@ -193,7 +193,7 @@ func TestTabQuit(t *testing.T) {
 }
 
 // tab.reopen brings back the tabs closed last, newest first, a table with
-// its WHERE, ORDER and LIMIT, a console on its file and schema; a table
+// its WHERE, ORDER and LIMIT, a query on its file and schema; a table
 // open already is only shown; 20 are kept; landing tabs and results are
 // not recorded (F5.16).
 func TestTabReopen(t *testing.T) {
@@ -206,8 +206,8 @@ func TestTabReopen(t *testing.T) {
 	tab.applied, tab.order, tab.desc, tab.limit = "id > 1", "amount", true, 500
 	win := a.win()
 	win.focus(2)
-	consoleOf(a.focused()).schema = "agentable"
-	a.run("tab.close", 0) // the console, its pane gone
+	queryOf(a.focused()).schema = "agentable"
+	a.run("tab.close", 0) // the query, its pane gone
 	win.focus(1)
 	a.run("tab.close", 0) // the table, the pane the window's only one
 	if win.pane(2) != nil || len(a.sess.closed) != 2 {
@@ -218,10 +218,10 @@ func TestTabReopen(t *testing.T) {
 	if d == nil || d.table.Name != "t_order" || d.applied != "id > 1" || d.order != "amount" || !d.desc || d.limit != 500 || d.where.Text != "id > 1" {
 		t.Fatalf("table: %+v", d)
 	}
-	a.run("tab.reopen", 0) // the console: its pane is gone, so the current one
+	a.run("tab.reopen", 0) // the query: its pane is gone, so the current one
 	p := a.focused()
-	if c := consoleOf(p); c == nil || c.name != "console_1" || c.schema != "agentable" || len(p.Tabs) != 2 {
-		t.Fatalf("console: %+v in pane %d", c, p.ID)
+	if c := queryOf(p); c == nil || c.name != "query_1" || c.schema != "agentable" || len(p.Tabs) != 2 {
+		t.Fatalf("query: %+v in pane %d", c, p.ID)
 	}
 	selectTab(p, 0)
 	a.run("tab.close", 0) // the table
@@ -244,27 +244,27 @@ func TestTabReopen(t *testing.T) {
 	}
 }
 
-// A console open in another session is shown there: that session
+// A query open in another session is shown there: that session
 // attached, its tab current, the record gone (§6.8, F5.16).
-func TestTabReopenConsoleElsewhere(t *testing.T) {
+func TestTabReopenQueryElsewhere(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sized(160, 45, "nerd")
 	first := a.sess
-	second := newSession("2", []*Conn{first.Conns[0]}, first.Conns[0], config.ConsoleName(2))
+	second := newSession("2", []*Conn{first.Conns[0]}, first.Conns[0], config.QueryName(2))
 	a.sessions = append(a.sessions, second)
-	first.recordClosed(1, 2, Tab{Name: "console_2", Console: consoleOf(second.Windows[0].pane(2))})
+	first.recordClosed(1, 2, Tab{Name: "query_2", Query: queryOf(second.Windows[0].pane(2))})
 	if a.run("tab.reopen", 0); a.sess != second || a.focused().ID != 2 || len(first.closed) != 0 {
 		t.Errorf("session %q, focus %d, %d recorded", a.sess.Name, a.focused().ID, len(first.closed))
 	}
-	if n := len(first.consoles()); n != 1 {
-		t.Errorf("opened again in the first: %d consoles", n)
+	if n := len(first.queries()); n != 1 {
+		t.Errorf("opened again in the first: %d queries", n)
 	}
 }
 
 // A key held with Cmd types nothing and does nothing the plain key would,
 // in NORMAL or INSERT; bound in [keys.global] it runs (F5.17).
 func TestSuperKeys(t *testing.T) {
-	a, c := inConsole(t, "", "[keys.global]\n\"<D-w>\" = \"tree.toggle\"\n")
+	a, c := inQuery(t, "", "[keys.global]\n\"<D-w>\" = \"tree.toggle\"\n")
 	feed(t, a, "iselect abc<Esc>")
 	open := a.win().TreeOpen
 	press := func(code rune) { a.Update(tea.KeyPressMsg{Code: code, Mod: tea.ModSuper}) }
@@ -435,11 +435,11 @@ func shiftArrow(a *App, code rune, n int) {
 	}
 }
 
-// vim = false: a console is typed into at once, ↵ makes a line, Esc and the
+// vim = false: a query is typed into at once, ↵ makes a line, Esc and the
 // vim keys are text or nothing, there is no mode to name, and the pane focus
 // keys still go (§6.9, F6.6a).
-func TestPlainConsole(t *testing.T) {
-	a, c := inConsole(t, "vim = false", "")
+func TestPlainQuery(t *testing.T) {
+	a, c := inQuery(t, "vim = false", "")
 	feed(t, a, "select 1<CR>gt<Space>x<Esc>")
 	if text(c) != "select 1\ngt x" || c.ed.Mode() != editor.Insert {
 		t.Fatalf("typed: %q in %v", text(c), c.ed.Mode())

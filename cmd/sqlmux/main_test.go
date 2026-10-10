@@ -20,7 +20,7 @@ func writeConfig(t *testing.T, name, toml string) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	t.Setenv("XDG_DATA_HOME", t.TempDir()) // open() reads the consoles there
+	t.Setenv("XDG_DATA_HOME", t.TempDir()) // open() reads the queries there
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	if err := os.MkdirAll(filepath.Join(dir, "sqlmux"), 0o755); err != nil {
 		t.Fatal(err)

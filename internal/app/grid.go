@@ -20,14 +20,14 @@ import (
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
-// Tab is one tab of a pane (§5): a table's carries it, a console's the
-// console, the result area's its result (§11); one with none is a landing
+// Tab is one tab of a pane (§5): a table's carries it, a query's the
+// query, the result area's its result (§11); one with none is a landing
 // tab.
 type Tab struct {
-	Name    string
-	Data    *dataTab
-	Console *consoleTab
-	Result  *resultTab
+	Name   string
+	Data   *dataTab
+	Query  *queryTab
+	Result *resultTab
 }
 
 // gridState is a grid's rows and where it is (§7.6): a table tab's, a

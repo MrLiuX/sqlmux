@@ -34,7 +34,7 @@ read_only = true
 `
 
 // managed is an App over two connections of a connections.toml of its own:
-// doraemon, connected and with the console on it, and second.
+// doraemon, connected and with the query on it, and second.
 func managed(t *testing.T) *App { return managedWith(t, "ok") }
 
 // managedWith is managed over the fake keychain of mode (keychain): PATH
@@ -142,13 +142,13 @@ func TestConnManagerEdit(t *testing.T) {
 	}
 
 	a.state.Tables = map[string]*config.TableState{"doraemon/public.t": {}}
-	a.state.Consoles = map[string]config.ConsoleState{"console_1": {Conn: "doraemon"}}
+	a.state.Queries = map[string]config.QueryState{"query_1": {Conn: "doraemon"}}
 	feed(t, a, "<Esc>k<Tab><C-u>pg<C-s>")
 	if got := connections(); !strings.Contains(got, `name = "pg"`) || strings.Contains(got, `name = "doraemon"`) {
 		t.Fatalf("a rename:\n%s", got)
 	}
-	if a.sess.Conns[0].Spec.Name != "pg" || a.state.Tables["pg/public.t"] == nil || a.state.Consoles["console_1"].Conn != "pg" {
-		t.Errorf("the state follows: %v %v", a.state.Tables, a.state.Consoles)
+	if a.sess.Conns[0].Spec.Name != "pg" || a.state.Tables["pg/public.t"] == nil || a.state.Queries["query_1"].Conn != "pg" {
+		t.Errorf("the state follows: %v %v", a.state.Tables, a.state.Queries)
 	}
 	if a.toast != "" {
 		t.Errorf("a name is the tree's at once: toast %q", a.toast)
@@ -170,7 +170,7 @@ func TestConnManagerDelete(t *testing.T) {
 	a.run("conn.manage", 0)
 	feed(t, a, "x")
 	if a.confirm != nil || a.toast != "先关掉用它的 tab" || len(a.sess.Conns) != 2 {
-		t.Fatalf("doraemon has the console: confirm %v, toast %q", a.confirm != nil, a.toast)
+		t.Fatalf("doraemon has the query: confirm %v, toast %q", a.confirm != nil, a.toast)
 	}
 	feed(t, a, "jx")
 	if a.confirm == nil || len(a.sess.Conns) != 2 {
@@ -540,7 +540,7 @@ func TestConnManagerDeleteTakesWhatIsItsOwn(t *testing.T) {
 	}
 }
 
-// A connection is in use by a tab on it, a console that waits for it, the
+// A connection is in use by a tab on it, a query that waits for it, the
 // result of a run on it, or being what the session started with (F8.16).
 func TestConnInUse(t *testing.T) {
 	a := managed(t)
@@ -552,9 +552,9 @@ func TestConnInUse(t *testing.T) {
 		t.Error("the start")
 	}
 	a.sess.start = a.sess.Conns[0]
-	c := consoleOf(a.win().pane(2))
+	c := queryOf(a.win().pane(2))
 	if c.want = second; !a.connInUse("second") {
-		t.Error("a console on its way")
+		t.Error("a query on its way")
 	}
 	c.want = nil
 	tab := loadOrders(t, a, 3)
@@ -834,7 +834,7 @@ func TestConnManagerToastOnlyForWhatWaits(t *testing.T) {
 
 // A connected or connecting connection that is edited dials as the edit says
 // once dialed again, the engine and the lock with the rest; the tree's lock
-// is the dial's; a console on a connection keeps it in use (F8.16).
+// is the dial's; a query on a connection keeps it in use (F8.16).
 func TestConnManagerDialAfterEdit(t *testing.T) {
 	a := managed(t)
 	second := a.sess.Conns[1]
@@ -860,9 +860,9 @@ func TestConnManagerDialAfterEdit(t *testing.T) {
 	}
 
 	a = managed(t)
-	consoleOf(a.win().pane(2)).conn = a.sess.Conns[1]
+	queryOf(a.win().pane(2)).conn = a.sess.Conns[1]
 	if !a.connInUse("second") {
-		t.Error("a console on it")
+		t.Error("a query on it")
 	}
 }
 

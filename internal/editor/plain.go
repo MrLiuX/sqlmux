@@ -138,7 +138,7 @@ func (e *Editor) plainKey(k string) {
 		e.step(k == "<Right>")
 		return
 	case "<C-a>", "<C-e>":
-		// A console never gets C-e: default-novim.toml binds it to console.run
+		// A query never gets C-e: default-novim.toml binds it to query.run
 		// and the line end has no key there (§6.9); a WHERE has no such binding.
 		was := e.cur
 		e.anchor = nil

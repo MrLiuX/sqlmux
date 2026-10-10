@@ -161,7 +161,7 @@ func TestComplete(t *testing.T) {
 	}
 }
 
-// gq is an operator: it asks the console to lay out what its motion
+// gq is an operator: it asks the query to lay out what its motion
 // covers, the statement for gqq and gqgq, the selection in VISUAL (a
 // block's lines); the text stays as it is (§9.5).
 func TestFormatOperator(t *testing.T) {

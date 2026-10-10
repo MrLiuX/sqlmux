@@ -22,22 +22,22 @@ func DataDir() string {
 	return filepath.Join(home, ".local", "share", "sqlmux")
 }
 
-// ConsoleName is what the nth console is called until it is renamed (§11).
-func ConsoleName(n int) string { return fmt.Sprintf("console_%d", n) }
+// QueryName is what the nth query is called until it is renamed (§11).
+func QueryName(n int) string { return fmt.Sprintf("query_%d", n) }
 
-// ConsolePath is the file of the console called name (§11), whatever
+// QueryPath is the file of the query called name (§11), whatever
 // connection it is on.
-func ConsolePath(name string) string {
-	return filepath.Join(DataDir(), "consoles", name+".sql")
+func QueryPath(name string) string {
+	return filepath.Join(DataDir(), "queries", name+".sql")
 }
 
-// CheckConsoleName is why name is no name for a console: it is a file's,
+// CheckQueryName is why name is no name for a query: it is a file's,
 // so the rule is a connection's (F8.11). The caller has trimmed it, and not
 // asked for a blank one.
-func CheckConsoleName(name string) error { return checkFileName(name) }
+func CheckQueryName(name string) error { return checkFileName(name) }
 
-// ReadConsole is the console file at path; "" when there is none yet.
-func ReadConsole(path string) (string, error) {
+// ReadQuery is the query file at path; "" when there is none yet.
+func ReadQuery(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return "", nil
@@ -45,15 +45,15 @@ func ReadConsole(path string) (string, error) {
 	return string(data), err
 }
 
-// WriteConsole writes a console's text to path, the user's only (§11, §13).
-func WriteConsole(path, text string) error { return writeFile(path, []byte(text)) }
+// WriteQuery writes a query's text to path, the user's only (§11, §13).
+func WriteQuery(path, text string) error { return writeFile(path, []byte(text)) }
 
-// ConsoleFiles is the names of the console files (the .sql files of
-// consoles/, without it), console_<n> by n first, the others by name (§7.8
-// 「Consoles 节点」); and when the directory last changed, for a cache of it
+// QueryFiles is the names of the query files (the .sql files of
+// queries/, without it), query_<n> by n first, the others by name (§7.8
+// 「Queries 节点」); and when the directory last changed, for a cache of it
 // to know. None, no time, when there is no directory yet.
-func ConsoleFiles() (names []string, changed time.Time, err error) {
-	dir := filepath.Dir(ConsolePath("x"))
+func QueryFiles() (names []string, changed time.Time, err error) {
+	dir := filepath.Dir(QueryPath("x"))
 	fi, err := os.Stat(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, time.Time{}, nil
@@ -70,14 +70,14 @@ func ConsoleFiles() (names []string, changed time.Time, err error) {
 			names = append(names, name)
 		}
 	}
-	SortConsoles(names)
+	SortQueries(names)
 	return names, fi.ModTime(), nil
 }
 
-// SortConsoles puts console_<n> by n first, the renamed ones by name after.
-func SortConsoles(names []string) {
+// SortQueries puts query_<n> by n first, the renamed ones by name after.
+func SortQueries(names []string) {
 	number := func(name string) int {
-		if n, ok := strings.CutPrefix(name, "console_"); ok {
+		if n, ok := strings.CutPrefix(name, "query_"); ok {
 			if i, err := strconv.Atoi(n); err == nil && i >= 0 && strconv.Itoa(i) == n {
 				return i
 			}
@@ -98,16 +98,16 @@ func SortConsoles(names []string) {
 	})
 }
 
-// ConsoleExists is whether the console called name has a file: it is
+// QueryExists is whether the query called name has a file: it is
 // written once there is a word in it, and not deleted by closing it (§11).
-func ConsoleExists(name string) bool {
-	_, err := os.Stat(ConsolePath(name))
+func QueryExists(name string) bool {
+	_, err := os.Stat(QueryPath(name))
 	return !errors.Is(err, fs.ErrNotExist) // a file we cannot stat is there, its number not free
 }
 
-// DeleteConsole deletes the console file called name; none is no error.
-func DeleteConsole(name string) error {
-	if err := os.Remove(ConsolePath(name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+// DeleteQuery deletes the query file called name; none is no error.
+func DeleteQuery(name string) error {
+	if err := os.Remove(QueryPath(name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	return nil

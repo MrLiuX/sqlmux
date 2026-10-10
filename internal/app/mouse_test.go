@@ -37,7 +37,7 @@ func TestClickFocusesPane(t *testing.T) {
 	r := a.layout()[2]
 	click(a, uv.Pos(r.Min.X+5, r.Min.Y+5))
 	if a.win().Focus != 2 {
-		t.Fatalf("focus %d after clicking the console", a.win().Focus)
+		t.Fatalf("focus %d after clicking the query", a.win().Focus)
 	}
 }
 
@@ -127,7 +127,7 @@ func TestClickOutsideOverlayCloses(t *testing.T) {
 
 func TestHover(t *testing.T) {
 	a := twoPanes(160, 45)
-	run := find(t, a, ui.Target{Kind: ui.KindHint, Pane: 2, Action: "console.run"})
+	run := find(t, a, ui.Target{Kind: ui.KindHint, Pane: 2, Action: "query.run"})
 	before := a.render().Buf.CellAt(run.Min.X, run.Min.Y).Style.Bg
 	a.Update(tea.MouseMotionMsg{X: run.Min.X, Y: run.Min.Y})
 	if after := a.render().Buf.CellAt(run.Min.X, run.Min.Y).Style.Bg; after == before {
@@ -160,7 +160,7 @@ func TestWheelScrollsPaneUnderPointer(t *testing.T) {
 	for range 4 {
 		wheel(0, tea.MouseWheelDown)
 	}
-	if tree.top != 24-11 { // 22 nodes, and the Consoles root with its one
+	if tree.top != 24-11 { // 22 nodes, and the Queries root with its one
 		t.Fatalf("the last node stops at the bottom: top %d", tree.top)
 	}
 	a.treeGo(23)
@@ -181,7 +181,7 @@ func TestClickUnderPaneNumbers(t *testing.T) {
 		at    func(a *App) uv.Position
 		focus int
 	}{
-		{"console", func(a *App) uv.Position { r := a.layout()[2]; return uv.Pos(r.Min.X+5, r.Min.Y+5) }, 2},
+		{"query", func(a *App) uv.Position { r := a.layout()[2]; return uv.Pos(r.Min.X+5, r.Min.Y+5) }, 2},
 		{"sidebar", func(_ *App) uv.Position { return uv.Pos(5, 10) }, 0},
 		{"status bar", func(*App) uv.Position { return statusBar }, 1},
 		{"a window on the status bar", func(a *App) uv.Position {

@@ -1,6 +1,6 @@
 package editor
 
-// The mouse (tech-design §11, F3.6): the console turns a click, a drag or
+// The mouse (tech-design §11, F3.6): the query turns a click, a drag or
 // the wheel over its text into a line and a display column.
 
 // Click puts the cursor where a click on line n at display column vcol

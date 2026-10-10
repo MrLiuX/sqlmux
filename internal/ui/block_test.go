@@ -9,27 +9,27 @@ import (
 
 // §7.8: head first, hints greedily by priority, then the object name.
 func TestBlockFit(t *testing.T) {
-	b := Block{Num: "⟨2⟩", Title: "> console", Object: "console_1", Hints: []Hint{
+	b := Block{Num: "⟨2⟩", Title: "> query", Object: "query_1", Hints: []Hint{
 		{Label: "doraemon.public ▾", Prio: 1},
 		{Label: "▶ run", Button: true},
 		{Key: "↵", Prio: 2, Attached: true},
 	}}
 	run, drop, enter := b.Hints[1], b.Hints[0], b.Hints[2]
-	// head "⟨2⟩ > console" 13, full 25; hints take 1+w each: dropdown 18, " ▶ run " 8, ↵ 2.
+	// head "⟨2⟩ > query" 11, full 21; hints take 1+w each: dropdown 18, " ▶ run " 8, ↵ 2.
 	for _, c := range []struct {
 		room  int
 		title string
 		hints []Hint
 	}{
-		{54, "⟨2⟩ > console · console_1", []Hint{drop, run, enter}}, // everything fits
-		{50, "⟨2⟩ > console · cons…", []Hint{drop, run, enter}},     // hints first, the object is cut
-		{42, "⟨2⟩ > console", []Hint{drop, run, enter}},             // …down to the head
-		{41, "⟨2⟩ > console", []Hint{drop, run}},                    // ↵ is the lowest priority
-		{39, "⟨2⟩ > console · console_1", []Hint{run, enter}},       // the dropdown doesn't fit: skipped, ↵ still tried
-		{24, "⟨2⟩ > console", []Hint{run, enter}},
-		{23, "⟨2⟩ > console", []Hint{run}},
-		{21, "⟨2⟩ > console · cons…", nil}, // ↵ would fit, but never without ▶ run
-		{12, "⟨2⟩", nil},                   // the head doesn't fit: only ⟨n⟩
+		{50, "⟨2⟩ > query · query_1", []Hint{drop, run, enter}}, // everything fits
+		{47, "⟨2⟩ > query · que…", []Hint{drop, run, enter}},    // hints first, the object is cut
+		{42, "⟨2⟩ > query", []Hint{drop, run, enter}},           // …down to the head
+		{39, "⟨2⟩ > query", []Hint{drop, run}},                  // ↵ is the lowest priority
+		{36, "⟨2⟩ > query · query_1", []Hint{run, enter}},       // the dropdown doesn't fit: skipped, ↵ still tried
+		{24, "⟨2⟩ > query", []Hint{run, enter}},
+		{21, "⟨2⟩ > query", []Hint{run}},
+		{17, "⟨2⟩ > query · qu…", nil}, // ↵ would fit, but never without ▶ run
+		{10, "⟨2⟩", nil},               // the head doesn't fit: only ⟨n⟩
 		{2, "⟨…", nil},
 	} {
 		title, hints := b.fit(c.room)
@@ -42,8 +42,8 @@ func TestBlockFit(t *testing.T) {
 // With a Nerd icon there is no type (§7.7): the object follows the icon, and
 // the shortest title is "⟨n⟩ <icon>".
 func TestBlockFitWithoutType(t *testing.T) {
-	b := Block{Num: "⟨2⟩", Icon: Icon{Text: ">"}, Object: "console_1"}
-	for room, want := range map[int]string{20: "⟨2⟩ > console_1", 8: "⟨2⟩ > c…", 5: "⟨2⟩ >", 4: "⟨2⟩"} {
+	b := Block{Num: "⟨2⟩", Icon: Icon{Text: ">"}, Object: "query_1"}
+	for room, want := range map[int]string{20: "⟨2⟩ > query_1", 8: "⟨2⟩ > q…", 5: "⟨2⟩ >", 4: "⟨2⟩"} {
 		if title, _ := b.fit(room); title != want {
 			t.Errorf("room %d: %q, want %q", room, title, want)
 		}

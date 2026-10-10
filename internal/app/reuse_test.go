@@ -173,7 +173,7 @@ func dragFrames(t *testing.T, a *App, name string, p uv.Position, dx, dy, n int)
 
 // The four drags, none of which a pointer inside what it is over may leave
 // to a frame reused: a border (out of the screen too), the sidebar's edge, a
-// selection in a console, one in the WHERE (F8.20).
+// selection in a query, one in the WHERE (F8.20).
 func TestDragsAreDrawnFresh(t *testing.T) {
 	a := sized(110, 32, "nerd")
 	for _, d := range []struct {
@@ -195,7 +195,7 @@ func TestDragsAreDrawnFresh(t *testing.T) {
 		a.Update(tea.MouseReleaseMsg{X: p.X, Y: p.Y, Button: tea.MouseLeft})
 	}
 
-	c, _ := inConsole(t, "", "")
+	c, _ := inQuery(t, "", "")
 	c.Update(tea.WindowSizeMsg{Width: 110, Height: 32})
 	feed(t, c, "iselect id, status, amount from t_order where id = 1<CR>and status = 'done'<Esc>")
 	c.View()
@@ -206,10 +206,10 @@ func TestDragsAreDrawnFresh(t *testing.T) {
 		}
 	}
 	if r.Empty() {
-		t.Fatal("no console text")
+		t.Fatal("no query text")
 	}
-	dragFrames(t, c, "console text", uv.Pos(r.Min.X+2, r.Min.Y), 1, 0, 30)
-	dragFrames(t, c, "console text down", uv.Pos(r.Min.X+2, r.Min.Y), 1, 1, 20)
+	dragFrames(t, c, "query text", uv.Pos(r.Min.X+2, r.Min.Y), 1, 0, 30)
+	dragFrames(t, c, "query text down", uv.Pos(r.Min.X+2, r.Min.Y), 1, 1, 20)
 
 	w := sizedWith(110, 32, userConfig(t, "vim = false", ""))
 	w.win().focus(1)

@@ -256,10 +256,10 @@ func TestConnFormHostAndPlainPassword(t *testing.T) {
 	}
 }
 
-// The first connection gives its console to the window the program started
+// The first connection gives its query to the window the program started
 // with; the windows made before it are one empty pane each, as any new one
 // (F7.4, F8.18).
-func TestNoConnectionFirstConsoles(t *testing.T) {
+func TestNoConnectionFirstQueries(t *testing.T) {
 	keychain(t, "none")
 	a := emptyApp(t)
 	a.form = nil
@@ -269,12 +269,12 @@ func TestNoConnectionFirstConsoles(t *testing.T) {
 	if len(a.sess.Windows) != 3 {
 		t.Fatalf("%d windows", len(a.sess.Windows))
 	}
-	if c := consoleOf(a.sess.Windows[0].pane(2)); c == nil || c.conn != a.sess.start {
-		t.Errorf("the first window without its console: %+v", c)
+	if c := queryOf(a.sess.Windows[0].pane(2)); c == nil || c.conn != a.sess.start {
+		t.Errorf("the first window without its query: %+v", c)
 	}
 	for _, w := range a.sess.Windows[1:] {
-		if len(w.Root.Leaves()) != 1 || len(consolesIn(w.Root.Leaves()...)) != 0 {
-			t.Errorf("a window made before has %d panes and %d consoles", len(w.Root.Leaves()), len(consolesIn(w.Root.Leaves()...)))
+		if len(w.Root.Leaves()) != 1 || len(queriesIn(w.Root.Leaves()...)) != 0 {
+			t.Errorf("a window made before has %d panes and %d queries", len(w.Root.Leaves()), len(queriesIn(w.Root.Leaves()...)))
 		}
 	}
 }

@@ -115,7 +115,7 @@ const recentRows = 50
 
 // exAliases rank their command first when typed exactly in the all or
 // the command scope, so :q↵ and :qa↵ work as they always have, : opening
-// either (§12); a console's editor runs its : commands by them (§11).
+// either (§12); a query's editor runs its : commands by them (§11).
 var exAliases = map[string]string{"q": "tab.close", "qa": "quit", "w": "save", "wq": "tab.save.close"}
 
 func (a *App) openPalette(text string) {
@@ -190,7 +190,7 @@ func (a *App) paletteItems() []paletteItem {
 	}
 	if cur != nil {
 		for _, sql := range a.state.SQL[cur.Spec.Name] {
-			items = append(items, paletteItem{itemSQL, sql, a.icons.Console, sql, ""})
+			items = append(items, paletteItem{itemSQL, sql, a.icons.Query, sql, ""})
 		}
 	}
 	recent := func(it paletteItem) int {
@@ -413,7 +413,7 @@ func (a *App) previewedView() (c *Conn, text, schema string) {
 
 // palettePreview is the preview of the table selected, once its DDL is in:
 // in SQL's colors, a table's own columns among them, fetched with it; a
-// view's by the tables its query names, as a console's (F3.27).
+// view's by the tables its query names, as a query's (F3.27).
 func (a *App) palettePreview() *ui.PalettePreview {
 	_, c, t, ok := a.previewed()
 	if !ok || !c.ddl[idOf(t)].got {

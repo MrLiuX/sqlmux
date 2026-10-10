@@ -18,8 +18,8 @@
 │                             │                          │        engine  postgres │ mysql                                      │                             │
 │                             │                          │          host                                                        │                             │
 │                             │                          │          port 5432                                                   │                             │
-│                             │                          │          user                                                        │                             │
-│                             │                          │      password                                                        │sole c                       │
+│                             │                          │          user                                                        │t                            │
+│                             │                          │      password                                                        │ery c                        │
 │                             │                          │      database                                                        │                             │
 │                             │                          │     read_only [ ]                                                    │                             │
 │                             │                          │          高级 ▸                                                      │                             │

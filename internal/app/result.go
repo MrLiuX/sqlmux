@@ -39,16 +39,16 @@ type resultTab struct {
 	paging   bool
 }
 
-// run is one run of a console's SQL (§11「执行」), or a quick SQL's rows
-// C-t put in the result area, from no console (§12).
+// run is one run of a query's SQL (§11「执行」), or a quick SQL's rows
+// C-t put in the result area, from no query (§12).
 type run struct {
-	from   *consoleTab
+	from   *queryTab
 	conn   *Conn  // where it ran, and runs again (§5)
 	schema string // first on search_path as it ran
-	name   string // the console's tab name as it ran: console_1
+	name   string // the query's tab name as it ran: query_1
 	sql    string // what ran, for 重跑
-	base   int    // where sql is in the console's text, for the red ▶
-	ver    int    // the console's version base is of: a ▶ goes red only while the text is still that
+	base   int    // where sql is in the query's text, for the red ▶
+	ver    int    // the query's version base is of: a ▶ goes red only while the text is still that
 	seq    int    // Session.RunSeq: #42
 	start  time.Time
 	win    *Window
@@ -59,7 +59,7 @@ type run struct {
 	prev     []Tab // the tabs it took the place of, back when it has no result set
 }
 
-// label is the name of the run's part-th result tab: console_1 #42, then #42·2.
+// label is the name of the run's part-th result tab: query_1 #42, then #42·2.
 func (r *run) label(part int) string {
 	s := fmt.Sprintf("%s #%d", r.name, r.seq)
 	if part > 1 {
@@ -138,27 +138,27 @@ type (
 	runTick struct{ r *run }
 )
 
-// consoleRun is ↵ in a console (§11「执行」), a click on a ▶ on line arg:
-// what consoleSpan says.
-func (a *App) consoleRun(arg string) tea.Cmd {
+// queryRun is ↵ in a query (§11「执行」), a click on a ▶ on line arg:
+// what querySpan says.
+func (a *App) queryRun(arg string) tea.Cmd {
 	p := a.focused()
-	t := consoleOf(p)
-	if t == nil || t.running != nil { // a run at a time a console
+	t := queryOf(p)
+	if t == nil || t.running != nil { // a run at a time a query
 		return nil
 	}
-	text, from, to := consoleSpan(t, arg)
+	text, from, to := querySpan(t, arg)
 	if from < 0 {
 		return nil
 	}
 	return a.runSQL(t, t.conn, t.schema, p.Object(), text[from:to], from, t.ver)
 }
 
-// consoleSpan is what ↵ takes of console t (§11): the statement under the
+// querySpan is what ↵ takes of query t (§11): the statement under the
 // cursor, the one a ▶ on line arg starts, or what VISUAL selects, a block
 // by its whole lines as V-LINE; VISUAL then ends, the cursor where it is.
 // from and to are offsets into text, the lines joined; from is -1 for
 // nothing.
-func consoleSpan(t *consoleTab, arg string) (text string, from, to int) {
+func querySpan(t *queryTab, arg string) (text string, from, to int) {
 	ed := t.ed
 	lines := ed.Lines()
 	text = strings.Join(lines, "\n")
@@ -200,23 +200,23 @@ func consoleSpan(t *consoleTab, arg string) (text string, from, to int) {
 	return text, from, to
 }
 
-// runSQL runs sql of console t, named name, which is at base in its text
+// runSQL runs sql of query t, named name, which is at base in its text
 // at version ver: in conn's Main, schema first on search_path, a statement
 // at a time, each committing on its own, stopping at the first that fails
 // (§11); in the manual mode in a transaction, begun before a statement
 // when there is none, as psql's AUTOCOMMIT off (F5.3). Reads get a LIMIT
 // a row past max_rows, to tell there are more. The result area shows a
-// placeholder meanwhile; the console's red ▶ goes until this run fails.
+// placeholder meanwhile; the query's red ▶ goes until this run fails.
 // On a read-only connection a statement it keeps back keeps the whole run
 // back, the log saying so (§13); on any other, dangerous statements are
 // asked about, once for the run, before it begins.
-func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, ver int) tea.Cmd {
+func (a *App) runSQL(t *queryTab, conn *Conn, schema, name, sql string, base, ver int) tea.Cmd {
 	d := conn.eng.Dialect()
 	stmts := sqlkit.Statements(sql, d)
 	if len(stmts) == 0 || t.running != nil {
 		return nil
 	}
-	if conn.State != connReady { // a layout's console, its connection not up yet (F6.5)
+	if conn.State != connReady { // a layout's query, its connection not up yet (F6.5)
 		return a.showToast(i18n.T("连接还没连上"), toastTTL)
 	}
 	if conn.readOnly {
@@ -235,10 +235,10 @@ func (a *App) runSQL(t *consoleTab, conn *Conn, schema, name, sql string, base, 
 			}
 		}
 		if len(risky) > 0 { // no run is begun, no log line made, till the answer is yes (§13)
-			asked := t.conn // a connection that lands meanwhile may take the console over
+			asked := t.conn // a connection that lands meanwhile may take the query over
 			a.confirm = &confirmBox{text: dangerText(risky), yes: i18n.T("执行"), danger: true, then: func() tea.Cmd {
 				if t.conn != asked {
-					return a.showToast(i18n.T("确认时 console 换了连接，没有执行"), toastTTL)
+					return a.showToast(i18n.T("确认时 query 换了连接，没有执行"), toastTTL)
 				}
 				return a.startRun(t, conn, schema, name, sql, base, ver, stmts) // the overlay had the keys: nothing began a run meanwhile
 			}}
@@ -271,7 +271,7 @@ func dangerText(risky []string) string {
 
 // startRun is runSQL once it is settled that the statements go: the run
 // begun, its placeholder shown, the statements sent.
-func (a *App) startRun(t *consoleTab, conn *Conn, schema, name, sql string, base, ver int, stmts []sqlkit.Stmt) tea.Cmd {
+func (a *App) startRun(t *queryTab, conn *Conn, schema, name, sql string, base, ver int, stmts []sqlkit.Stmt) tea.Cmd {
 	d := conn.eng.Dialect()
 	a.sess.RunSeq++
 	r := &run{from: t, conn: conn, schema: schema, name: name, sql: sql, base: base, ver: ver, seq: a.sess.RunSeq, start: time.Now(), win: a.win(), stmts: stmts}
@@ -286,7 +286,7 @@ func (a *App) startRun(t *consoleTab, conn *Conn, schema, name, sql string, base
 	r.pageable = make([]bool, len(stmts))
 	// ponytail: select set_config('search_path', …) goes by unseen (its first
 	// word is select): the next run then trusts mainPath still, and a page of
-	// a statement after it is asked with the console's schema again, which may
+	// a statement after it is asked with the query's schema again, which may
 	// be another table
 	resets := false // what search_path, or MySQL's database, is past this run is not known (§8.6)
 	for i, s := range stmts {
@@ -316,7 +316,7 @@ func mainRun(r *run, texts []string, maxRows int, manual, resets bool) runDone {
 	m := runDone{r: r}
 	m.err = s.Main.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
 		// mainPath is read and written in Main's requests only, one at
-		// a time: runs of two consoles may queue in either order. It is
+		// a time: runs of two queries may queue in either order. It is
 		// kept out of transactions only: in a failed one a SET fails too
 		// and the user's rollback would never run; in one going on, a
 		// rollback may take the SET back.
@@ -365,7 +365,7 @@ func (a *App) runTick(r *run) tea.Cmd {
 }
 
 // placeRun puts tabs in the result area of r's window in place of the
-// tabs of r's console there not pinned, where the first of those was
+// tabs of r's query there not pinned, where the first of those was
 // (§11); the tab that was current stays so, or the log. It returns where
 // tabs went and the tabs taken out.
 func (a *App) placeRun(r *run, tabs []Tab) (at int, old []Tab) {
@@ -464,7 +464,7 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 					at = append(at, errorAt(text, r.base+s.Start, stmt, e.Position))
 				}
 			}
-			if slices.Contains(a.consoles(), r.from) { // closed, the log has it alone
+			if slices.Contains(a.queries(), r.from) { // closed, the log has it alone
 				r.from.bar = newErrorBar("run", e, "", "", at...)
 			}
 			cmds = append(cmds, a.deadlocked(r.conn, m.err))
@@ -496,7 +496,7 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 var clock = time.Now
 
 // log adds a line for statement stmt of run r to its window's log, and
-// the log follows it (§11): the time, the console, the statement's first
+// the log follows it (§11): the time, the query, the statement's first
 // line, what it did.
 func (a *App) log(r *run, stmt, did string, failed bool) {
 	first, _, _ := strings.Cut(stmt, "\n")
@@ -538,7 +538,7 @@ func resultText(r db.Result, offset int) string {
 }
 
 // rerun is 重跑: the SQL of the result tab's run, as a new run of its
-// console, or as the quick SQL runs it for a quick #n.
+// query, or as the quick SQL runs it for a quick #n.
 func (a *App) rerun() tea.Cmd {
 	rt := resultOf(a.focused())
 	if rt == nil || rt.run == nil {
@@ -551,7 +551,7 @@ func (a *App) rerun() tea.Cmd {
 	return a.runSQL(r.from, r.conn, r.schema, r.name, r.sql, r.base, r.ver) // base holds only while the text is still r.ver
 }
 
-// exportResult writes the result tab to <console>-<n>.csv in the current
+// exportResult writes the result tab to <query>-<n>.csv in the current
 // directory (§11): the header and every row, NULL as nothing.
 func (a *App) exportResult() tea.Cmd {
 	rt := resultOf(a.focused())

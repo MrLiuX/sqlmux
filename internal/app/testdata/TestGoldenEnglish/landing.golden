@@ -19,10 +19,10 @@
 │       ▸  t_user         38k │ │                                                                                                                             │
 │       ▸  t_user_address 52k │ │                                                                                                                             │
 │       ▸  t_user_profile 38k │ │                                                       Open a table t                                                       │
-│        Views (0)            │ │                                                       New console c                                                        │
+│        Views (0)            │ │                                                       New query c                                                          │
 │ ▾  Workspace                │ │                                                                                                                             │
 │      data                   │ │                                                                                                                             │
-│ ▾  Consoles                 │ │                                                                                                                             │
+│ ▾  Queries                  │ │                                                                                                                             │
 │                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │

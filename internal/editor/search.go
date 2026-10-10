@@ -13,7 +13,7 @@ import (
 // Search and the : line (§11): patterns are Go's RE2, which reads close to
 // vim's \v; ignorecase with smartcase, and searches wrap around the end.
 
-// cmdline is the / ? or : line being typed, drawn on the console's last
+// cmdline is the / ? or : line being typed, drawn on the query's last
 // row.
 type cmdline struct {
 	prompt string // "/", "?" or ":"
@@ -328,7 +328,7 @@ func star(back bool) motion {
 var badRange = i18n.N("范围无效") // shown through i18n.T where it is set
 
 // ex runs a : line: {n} goes to line n and s substitutes; the rest is the
-// console's (:w, :q), handed on as Effect.Ex. Lines of the text are from 0
+// query's (:w, :q), handed on as Effect.Ex. Lines of the text are from 0
 // here, so line 0 of an ex range is -1.
 func (e *Editor) ex(line string) {
 	line = strings.TrimSpace(line)

@@ -645,7 +645,7 @@ type saveMsg struct {
 // rows added, in the order they show.
 func (a *App) save() tea.Cmd {
 	p := a.focused()
-	if c := consoleOf(p); c != nil { // its file (§11)
+	if c := queryOf(p); c != nil { // its file (§11)
 		if err := c.flush(); err != nil {
 			return a.saveFailed(err)
 		}
@@ -887,7 +887,7 @@ func (a *App) quit() tea.Cmd {
 		ps = append(ps, s.panes()...)
 	}
 	return a.unlessLost(unsaved(ps...), "", txConns(a.sessions...), verbQuit, func() tea.Cmd {
-		if cmd, ok := a.flushAll(ps...); !ok { // the consoles' text is not lost (§11)
+		if cmd, ok := a.flushAll(ps...); !ok { // the queries' text is not lost (§11)
 			return cmd
 		}
 		a.saveLast()

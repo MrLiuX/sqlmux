@@ -27,7 +27,7 @@ import (
 )
 
 // testData is the data directory of the tests that set none of their own:
-// sizedWith gives each App a fresh one, for the files of consoles are listed
+// sizedWith gives each App a fresh one, for the files of queries are listed
 // and numbered after (F8.21).
 var testData string
 
@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 	dir, _ := os.MkdirTemp("", "sqlmux-app-test")
 	testData = dir
 	os.Setenv("XDG_STATE_HOME", dir)  // saves the state from the Cmds tests run go here, not the user's
-	os.Setenv("XDG_DATA_HOME", dir)   // and the consoles
+	os.Setenv("XDG_DATA_HOME", dir)   // and the queries
 	os.Setenv("XDG_CONFIG_HOME", dir) // and a form's connection
 	code := m.Run()
 	os.RemoveAll(dir)
@@ -59,8 +59,8 @@ func (noDB) Close() error                                                { retur
 func testSession() *Session {
 	c := readyConn("doraemon")
 	c.Schema, c.Schemas, c.home, c.DB = "public", []string{"agentable", "public"}, "public", "doraemon"
-	s := newSession("doraemon", []*Conn{c}, c, config.ConsoleName(1))
-	consoleOf(s.Windows[0].Root.B.Pane).schema = "public" // as the catalog's coming sets it
+	s := newSession("doraemon", []*Conn{c}, c, config.QueryName(1))
+	queryOf(s.Windows[0].Root.B.Pane).schema = "public" // as the catalog's coming sets it
 	c.Tables = []db.Table{{Schema: "agentable", Name: "planner", Rows: 3}}
 	for _, t := range []struct {
 		name string
@@ -85,7 +85,7 @@ func readyConn(name string) *Conn {
 }
 
 // m0Layout puts M0's layout into a, for the tests of panes, tabs and windows:
-// ⟨1⟩ data with the tabs t_order and t_user beside the default console_1
+// ⟨1⟩ data with the tabs t_order and t_user beside the default query_1
 // (§5), and a second window.
 func m0Layout(a *App) *App {
 	data := a.win().Root.A.Pane
@@ -110,7 +110,7 @@ func tabNames(p *Pane) string {
 // twoPanes is sized with m0Layout.
 func twoPanes(w, h int) *App { return m0Layout(sized(w, h, "nerd")) }
 
-// wide is sized with no console: M1's layout, the data pane to the edge,
+// wide is sized with no query: M1's layout, the data pane to the edge,
 // which the tests of the grid were written at.
 func wide(w, h int) *App {
 	a := sized(w, h, "nerd")
@@ -296,8 +296,8 @@ func TestCloseTab(t *testing.T) {
 		t.Fatalf("after :q: tabs %v cur %d", tabNames(data), data.Cur)
 	}
 	feed(t, a, ":q<CR>")
-	if leaves := a.win().Root.Leaves(); len(leaves) != 1 || consoleOf(leaves[0]) == nil || a.win().Focus != leaves[0].ID {
-		t.Fatalf("closing the last tab should close the pane and focus the console: %v focus %d", leaves, a.win().Focus)
+	if leaves := a.win().Root.Leaves(); len(leaves) != 1 || queryOf(leaves[0]) == nil || a.win().Focus != leaves[0].ID {
+		t.Fatalf("closing the last tab should close the pane and focus the query: %v focus %d", leaves, a.win().Focus)
 	}
 	feed(t, a, ":q<CR>")
 	if leaves := a.win().Root.Leaves(); len(leaves) != 1 || len(leaves[0].Tabs) != 0 {
@@ -334,19 +334,19 @@ func TestKeysRunActions(t *testing.T) {
 }
 
 // With the palette open, keys go to it, not to the focused pane's scope: ↵
-// runs the command instead of console.run.
+// runs the command instead of query.run.
 func TestPaletteShadowsPaneKeys(t *testing.T) {
 	a := twoPanes(160, 45)
-	a.win().Focus = 2 // console
-	if ctx := a.context(); ctx.Mode != keymap.Normal || ctx.Focus[0] != "console" {
-		t.Fatalf("console context %+v", ctx)
+	a.win().Focus = 2 // query
+	if ctx := a.context(); ctx.Mode != keymap.Normal || ctx.Focus[0] != "query" {
+		t.Fatalf("query context %+v", ctx)
 	}
 	feed(t, a, "<C-p>")
 	if ctx := a.context(); ctx.Overlay != "palette" || ctx.Focus != nil || ctx.Mode != keymap.Command {
 		t.Fatalf("palette context %+v", ctx)
 	}
 	if !feed(t, a, ">qa<CR>") {
-		t.Fatal(":qa typed over the console did not quit")
+		t.Fatal(":qa typed over the query did not quit")
 	}
 }
 
@@ -463,7 +463,7 @@ func TestTabCycle(t *testing.T) {
 // Opening a table goes to the target pane's tab of it, fetching nothing,
 // a pane having one at most; another pane opens its own, to compare them.
 // C-t and the tree's t do as ↵. The target is the pane focused last, a
-// console's too (§7.8「打开已有的表」, §12, F3.37).
+// query's too (§7.8「打开已有的表」, §12, F3.37).
 func TestOpenExistingTab(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	left := a.focused()
@@ -477,19 +477,19 @@ func TestOpenExistingTab(t *testing.T) {
 	if feed(t, a, "<C-p>@t_user"); len(a.paletteView().Enter) != 1 { // ↵ 打开 alone
 		t.Errorf("the footer: %v", a.paletteView().Enter)
 	}
-	feed(t, a, "<Esc><C-l><C-p>@t_user<CR>") // ⟨2⟩ is console_1's: it opens there too, its own
+	feed(t, a, "<Esc><C-l><C-p>@t_user<CR>") // ⟨2⟩ is query_1's: it opens there too, its own
 	right := a.focused()
-	if tabNames(right) != "console_1 t_user" || a.sess.Conns[0].busy != 3 {
+	if tabNames(right) != "query_1 t_user" || a.sess.Conns[0].busy != 3 {
 		t.Fatalf("another pane's: tabs %v, %d fetches", tabNames(right), a.sess.Conns[0].busy)
 	}
 	a.win().focus(0)
 	treeTo(t, a, "t_user")
-	if feed(t, a, "t"); a.win().Focus != right.ID || tabNames(right) != "console_1 t_user" || a.sess.Conns[0].busy != 3 {
+	if feed(t, a, "t"); a.win().Focus != right.ID || tabNames(right) != "query_1 t_user" || a.sess.Conns[0].busy != 3 {
 		t.Errorf("the tree's t, in the pane focused last: tabs %v, %d fetches", tabNames(right), a.sess.Conns[0].busy)
 	}
 	a.sess.Conns[0].Tables = append(a.sess.Conns[0].Tables, db.Table{Schema: "agentable", Name: "t_user"})
 	feed(t, a, "<C-p>@t_user agentable<CR>") // the same name in another schema is another table
-	if tabNames(right) != "console_1 t_user t_user" || dataOf(right).table.Schema != "agentable" {
+	if tabNames(right) != "query_1 t_user t_user" || dataOf(right).table.Schema != "agentable" {
 		t.Errorf("agentable.t_user: tabs %v, schema %s", tabNames(right), dataOf(right).table.Schema)
 	}
 }
@@ -514,8 +514,8 @@ func TestClickTab(t *testing.T) {
 
 // + opens a landing tab and switches to it. Its 打开表 puts the table
 // picked in its place, with ↵ or C-t, or, one this pane has open, goes to
-// that tab, the landing tab closed (F3.37); its 新建 console a console,
-// the least console_n not open (§5「引导页」). x closes it.
+// that tab, the landing tab closed (F3.37); its 新建 query a query,
+// the least query_n not open (§5「引导页」). x closes it.
 func TestLandingTab(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	left := a.focused()
@@ -548,12 +548,12 @@ func TestLandingTab(t *testing.T) {
 		t.Fatalf("打开表 C-t: tabs %v cur %d", tabNames(left), left.Cur)
 	}
 	plus()
-	feed(t, a, "c") // console_1 is open in ⟨2⟩
-	if tabNames(left) != "t_user t_sku console_2" || consoleOf(left) == nil || a.paneScope() != "console" {
+	feed(t, a, "c") // query_1 is open in ⟨2⟩
+	if tabNames(left) != "t_user t_sku query_2" || queryOf(left) == nil || a.paneScope() != "query" {
 		t.Fatalf("c: tabs %v scope %s", tabNames(left), a.paneScope())
 	}
 	plus()
-	if feed(t, a, "x"); tabNames(left) != "t_user t_sku console_2" || a.confirm != nil {
+	if feed(t, a, "x"); tabNames(left) != "t_user t_sku query_2" || a.confirm != nil {
 		t.Errorf("x on a landing tab: tabs %v", tabNames(left))
 	}
 }
@@ -572,34 +572,34 @@ func TestTreeTabOverLanding(t *testing.T) {
 	}
 }
 
-// console.new from the palette opens a console in a new tab of the focused
+// query.new from the palette opens a query in a new tab of the focused
 // pane, or openTarget's from the tree.
-func TestNewConsole(t *testing.T) {
+func TestNewQuery(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sized(160, 45, "nerd")
 	left := a.focused()
 	feed(t, a, "<C-p>@t_user<CR>")
-	a.run("console.new", 0)
-	if tabNames(left) != "t_user console_2" || left.Cur != 1 {
+	a.run("query.new", 0)
+	if tabNames(left) != "t_user query_2" || left.Cur != 1 {
 		t.Fatalf("from ⟨1⟩: %v", tabNames(left))
 	}
 	a.win().focus(0)
-	a.run("console.new", 0) // the tree: the pane focused last whose current tab is no console, else the last
-	if tabNames(left) != "t_user console_2 console_3" || a.win().Focus != left.ID {
+	a.run("query.new", 0) // the tree: the pane focused last whose current tab is no query, else the last
+	if tabNames(left) != "t_user query_2 query_3" || a.win().Focus != left.ID {
 		t.Fatalf("from the tree: %v, focus %d", tabNames(left), a.win().Focus)
 	}
 }
 
-// From the tree a table goes to the pane focused last, a console's too:
-// beside console_1 in the default layout (§5, F3.37).
-func TestOpenTargetConsoles(t *testing.T) {
+// From the tree a table goes to the pane focused last, a query's too:
+// beside query_1 in the default layout (§5, F3.37).
+func TestOpenTargetQueries(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	feed(t, a, "<C-l><C-h><C-h>") // ⟨2⟩, then ⟨1⟩, then the tree
 	a.win().focus(2)
 	a.win().focus(0)
 	treeTo(t, a, "t_user")
 	feed(t, a, "<CR>")
-	if p := a.focused(); p.ID != 2 || tabNames(p) != "console_1 t_user" {
+	if p := a.focused(); p.ID != 2 || tabNames(p) != "query_1 t_user" {
 		t.Fatalf("opened in ⟨%d⟩: %v", p.ID, tabNames(p))
 	}
 }
@@ -670,7 +670,7 @@ func TestWhichKeyKeys(t *testing.T) {
 // the palette must not list (§12).
 func TestEveryDefaultActionHasATitle(t *testing.T) {
 	keys, _ := keymap.New(config.Default())
-	anywhere := []string{"global", "normal", "grid", "tree", "console", "landing", "result"}
+	anywhere := []string{"global", "normal", "grid", "tree", "query", "landing", "result"}
 	for _, id := range keys.Actions() {
 		listed := slices.ContainsFunc(anywhere, func(s string) bool { return keys.Hint(id, s) != "" })
 		if actions[id].Title == "" || listed == actions[id].Local {
@@ -696,7 +696,7 @@ func titles(a *App) []string {
 func TestSplitAndClosePanes(t *testing.T) {
 	a := twoPanes(160, 45)
 	feed(t, a, `<Space>"`) // split ⟨1⟩ data below
-	if got := strings.Join(titles(a), " "); got != "⟨1⟩table ⟨2⟩ ⟨3⟩console" {
+	if got := strings.Join(titles(a), " "); got != "⟨1⟩table ⟨2⟩ ⟨3⟩query" {
 		t.Fatalf("after SPC \": %s", got)
 	}
 	if p := a.focused(); len(p.Tabs) != 0 || a.win().Focus != 3 {
@@ -707,7 +707,7 @@ func TestSplitAndClosePanes(t *testing.T) {
 		t.Errorf("stacked halves: %v %v", top, bot)
 	}
 	feed(t, a, "<Space>%") // and the new one right
-	if got := strings.Join(titles(a), " "); got != "⟨1⟩table ⟨2⟩ ⟨3⟩ ⟨4⟩console" {
+	if got := strings.Join(titles(a), " "); got != "⟨1⟩table ⟨2⟩ ⟨3⟩ ⟨4⟩query" {
 		t.Fatalf("after SPC %%: %s", got)
 	}
 
@@ -724,7 +724,7 @@ func TestSplitAndClosePanes(t *testing.T) {
 
 func TestFocusFollowsGeometry(t *testing.T) {
 	a := twoPanes(160, 45)
-	feed(t, a, `<Space>"`) // 1 over 3, console 2 on the right
+	feed(t, a, `<Space>"`) // 1 over 3, query 2 on the right
 	for _, c := range []struct {
 		keys string
 		want int
@@ -753,7 +753,7 @@ func TestZoom(t *testing.T) {
 	if r := a.layout(); len(r) != 1 || r[1] != uv.Rect(0, 0, 160, 44) {
 		t.Fatalf("zoomed layout: %v", r)
 	}
-	if strings.Contains(a.render().String(), "console") {
+	if strings.Contains(a.render().String(), "query") {
 		t.Error("other panes must not be drawn while zoomed")
 	}
 	feed(t, a, "<Space>z")
@@ -859,7 +859,7 @@ func TestFoldSidebar(t *testing.T) {
 
 // SPC b unfolding the tree puts the focus on it, its cursor on the node of
 // the tab focused before, the nodes above it opened: a table's under its
-// schema, a console's in the workspace (F3.29). Filtered out, nothing
+// schema, a query's in the workspace (F3.29). Filtered out, nothing
 // opens.
 func TestFoldSidebarReveals(t *testing.T) {
 	a := sized(160, 45, "nerd")
@@ -874,9 +874,9 @@ func TestFoldSidebarReveals(t *testing.T) {
 	if n, _ := a.treeNode(); a.win().Focus != 0 || n.kind != nodeTable || n.table.Name != "t_order" {
 		t.Fatalf("t_order's: focus %d, node %+v", a.win().Focus, n.TreeNode)
 	}
-	feed(t, a, "<Space>b<C-l><Space>b") // console_1
-	if n, _ := a.treeNode(); n.kind != nodeTab || n.Text != "console_1" {
-		t.Errorf("console_1's: node %+v", n.TreeNode)
+	feed(t, a, "<Space>b<C-l><Space>b") // query_1
+	if n, _ := a.treeNode(); n.kind != nodeTab || n.Text != "query_1" {
+		t.Errorf("query_1's: node %+v", n.TreeNode)
 	}
 }
 
@@ -885,7 +885,7 @@ func TestFoldSidebarReveals(t *testing.T) {
 func TestCloseZoomedPane(t *testing.T) {
 	a := twoPanes(160, 45)
 	feed(t, a, "<Space>z:q<CR>:q<CR>")
-	if a.win().Zoom != 0 || len(a.layout()) != 2 || !strings.Contains(a.render().String(), "console") {
+	if a.win().Zoom != 0 || len(a.layout()) != 2 || !strings.Contains(a.render().String(), "query") {
 		t.Fatalf("zoom %d, layout %v", a.win().Zoom, a.layout())
 	}
 }
@@ -947,7 +947,7 @@ func TestStartupWarningIsAToast(t *testing.T) {
 // x, :, ; are then its text, not the page's keys (F8.15).
 func TestKeyAfterBoundPrefixMeetsWhatItRan(t *testing.T) {
 	for keys, want := range map[string]string{"tx": "@x", "t:": "@:", "t;": "@;"} {
-		a := configured(t, 160, 45, "[keys.normal]\ntc = \"console.new\"")
+		a := configured(t, 160, 45, "[keys.normal]\ntc = \"query.new\"")
 		if feed(t, a, keys); a.palette == nil || a.palette.input.Text != want {
 			t.Errorf("%s: palette %+v, want its input %q", keys, a.palette, want)
 		}

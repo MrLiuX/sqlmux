@@ -25,7 +25,7 @@ func (i Icon) On(st uv.Style) uv.Style {
 // Icons are the glyphs used in titles and the sidebar (§7.7).
 type Icons struct {
 	Schema, Table Icon
-	Console       Icon
+	Query         Icon
 	Filter        Icon
 	Postgres      Icon
 	MySQL         Icon
@@ -48,7 +48,7 @@ type Icons struct {
 	Star, History            Icon // a WHERE's favorites and history (§9.7)
 	Zoom                     Icon // after the number of the pane zoomed (F9.6)
 	// The connection form's rows (F7.4); it also has Postgres, MySQL, Key,
-	// Lock and Console
+	// Lock and Query
 	Tag, Host, Port, User Icon
 	Database              Icon
 	Advanced, Link, Group Icon
@@ -61,7 +61,7 @@ type Icons struct {
 var NerdIcons = &Icons{
 	Schema:      Icon{Text: "\uf0e8"}, // nf-fa-sitemap
 	Table:       Icon{Text: "\uf0ce"}, // nf-fa-table
-	Console:     Icon{Text: "\uf489"}, // nf-oct-terminal
+	Query:       Icon{Text: "\uf489"}, // nf-oct-terminal
 	Filter:      Icon{Text: "\uf0b0"}, // nf-fa-filter
 	Postgres:    Icon{Text: "\ue76e"}, // nf-dev-postgresql
 	MySQL:       Icon{Text: "\ue704"}, // nf-dev-mysql
@@ -102,7 +102,7 @@ var NerdIcons = &Icons{
 }
 
 var ASCIIIcons = &Icons{
-	Schema: Icon{Text: "#"}, Table: Icon{Text: "+"}, Console: Icon{Text: ">"},
+	Schema: Icon{Text: "#"}, Table: Icon{Text: "+"}, Query: Icon{Text: ">"},
 	Filter:      Icon{Text: "?"},
 	Postgres:    Icon{Text: "pg"},
 	MySQL:       Icon{Text: "my"},
@@ -175,7 +175,7 @@ func (ic *Icons) Number(n int) string {
 // byName names the icons the way a theme file's [icon] table does (§7.7).
 func (ic *Icons) byName() map[string]*Icon {
 	return map[string]*Icon{
-		"schema": &ic.Schema, "table": &ic.Table, "console": &ic.Console,
+		"schema": &ic.Schema, "table": &ic.Table, "query": &ic.Query,
 		"filter": &ic.Filter, "search": &ic.Search, "keys": &ic.Keys, "conn": &ic.Conn,
 		"key": &ic.Key, "postgres": &ic.Postgres, "mysql": &ic.MySQL, "command": &ic.Command, "window": &ic.Window,
 		"save": &ic.Save, "refresh": &ic.Refresh, "transpose": &ic.Transpose,

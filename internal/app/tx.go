@@ -12,7 +12,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
-// txOpen is why a connection's transaction keeps it as it is: a console on
+// txOpen is why a connection's transaction keeps it as it is: a query on
 // it, or the auto mode (§5).
 var txOpen = i18n.N("当前连接有未提交的事务，先提交或回滚")
 
@@ -83,7 +83,7 @@ func txLost(sql string, err error) error {
 	return db.ErrNotCommitted
 }
 
-// runTxLost is what a console run says when it failed with the transaction
+// runTxLost is what a query run says when it failed with the transaction
 // lost: at a COMMIT or a ROLLBACK the user typed, what txLost says of it, a
 // rollback ending the run as done.
 func runTxLost(rs []db.Result, err error, texts []string, d sqlkit.Dialect) ([]db.Result, error) {
@@ -121,7 +121,7 @@ func (a *App) gotTx(m txDone) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// txEnded is what follows c's transaction ending (§7.8「console 标题」):
+// txEnded is what follows c's transaction ending (§7.8「query 标题」):
 // the catalog anew, its columns dropped, as tree.refresh, a DDL in it no
 // longer unseen; each table on c fetched again, as the manual mode reads
 // them on Main.
@@ -150,36 +150,36 @@ func (a *App) deadlocked(c *Conn, err error) tea.Cmd {
 	return tea.Batch(append(a.txEnded(c), a.showToast(i18n.T("死锁，整个事务已回滚"), toastTTL))...)
 }
 
-// orphaned is the connections in a transaction that closing the consoles cs
-// leaves with no console on them: closing asks first, and rolls them back
-// (§10.5). A session has connections of its own, so the consoles of every
+// orphaned is the connections in a transaction that closing the queries cs
+// leaves with no query on them: closing asks first, and rolls them back
+// (§10.5). A session has connections of its own, so the queries of every
 // session are what is left to look at.
-func (a *App) orphaned(cs []*consoleTab) []*Conn {
-	rest := slices.DeleteFunc(a.consoles(), func(t *consoleTab) bool { return slices.Contains(cs, t) })
+func (a *App) orphaned(cs []*queryTab) []*Conn {
+	rest := slices.DeleteFunc(a.queries(), func(t *queryTab) bool { return slices.Contains(cs, t) })
 	var out []*Conn
 	for _, t := range cs {
 		c := t.conn
-		if c.inTx() && !slices.Contains(out, c) && !slices.ContainsFunc(rest, func(o *consoleTab) bool { return o.conn == c }) {
+		if c.inTx() && !slices.Contains(out, c) && !slices.ContainsFunc(rest, func(o *queryTab) bool { return o.conn == c }) {
 			out = append(out, c)
 		}
 	}
 	return out
 }
 
-// closeAsking runs shut, which closes the consoles cs and tabs holding n
+// closeAsking runs shut, which closes the queries cs and tabs holding n
 // changes, of what (§10.5): asked first when they or the transactions
-// orphaned would be lost, those rolled back once their consoles are gone
-// indeed. A console running keeps it all open: a begin in its run would
-// come in after, a connection left in a transaction with no console.
-func (a *App) closeAsking(n int, what string, cs []*consoleTab, shut func() tea.Cmd) tea.Cmd {
-	if slices.ContainsFunc(cs, func(t *consoleTab) bool { return t.running != nil }) {
+// orphaned would be lost, those rolled back once their queries are gone
+// indeed. A query running keeps it all open: a begin in its run would
+// come in after, a connection left in a transaction with no query.
+func (a *App) closeAsking(n int, what string, cs []*queryTab, shut func() tea.Cmd) tea.Cmd {
+	if slices.ContainsFunc(cs, func(t *queryTab) bool { return t.running != nil }) {
 		return a.showToast(i18n.T("正在执行，结束后再关闭"), toastTTL)
 	}
 	lost := a.orphaned(cs)
 	return a.unlessLost(n, what, lost, verbClose, func() tea.Cmd {
 		cmds := []tea.Cmd{shut()}
 		for _, c := range lost {
-			if !slices.ContainsFunc(a.consoles(), func(t *consoleTab) bool { return t.conn == c }) { // none left, the shut one gone
+			if !slices.ContainsFunc(a.queries(), func(t *queryTab) bool { return t.conn == c }) { // none left, the shut one gone
 				cmds = append(cmds, a.endTx(c, "rollback"))
 			}
 		}

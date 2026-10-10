@@ -1,4 +1,4 @@
-┌─ ⓪  doraemon ─────────── « ─┐ ┌─ ① ───────────────────────────┐ ┌─ ②  co…  doraemon  ▶ run  ↵ ─┐
+┌─ ⓪  doraemon ─────────── « ─┐ ┌─ ① ───────────────────────────┐ ┌─ ②  qu…  doraemon  ▶ run  ↵ ─┐
 │  15 tables                 │ │                               │ │▶  1 delete from t_log;        │
 │──────────────────────────────│ │                               │ │▶  2 select 1;                 │
 │ ▾  doraemon                 │ │                               │ │▶  3 drop table if exists archi│
@@ -22,9 +22,9 @@
 │        Views (0)            │ │                               │ │                               │
 │ ▾  Workspace                │ │                               │ │                               │
 │   ▾  data                   │ │                               │ │                               │
-│       ②  console_1          │ │                               │ │                               │
-│ ▾  Consoles                 │ │                               │ │                               │
+│       ②  query_1            │ │                               │ │                               │
+│ ▾  Queries                  │ │                               │ │                               │
 │──────────────────────────────│ │                               │ │                               │
-│ j/k move · ↵ open            │ │ +                             │ │ 1: console_1* │ +      gt/gT │
+│ j/k move · ↵ open            │ │ +                             │ │ 1: query_1* │ +        gt/gT │
 └──────────────────────────────┘ └───────────────────────────────┘ └───────────────────────────────┘
  doraemon ▾  0: data*                                ·     doraemon · pg@localhost:5432  COMMAND 

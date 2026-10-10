@@ -72,7 +72,7 @@ func (e RolledBack) Unwrap() error { return e.Err }
 
 // Engine is what PG and MySQL each do their own way above a Conn (§8.1):
 // connecting, writing names and arguments into SQL, the catalog (§8.4),
-// quick SQL (§12), a console's schema (§8.6) and what an error says.
+// quick SQL (§12), a query's schema (§8.6) and what an error says.
 type Engine interface {
 	// Connect opens one connection; readOnly makes its transactions read
 	// only, as Meta's are (§8.2).
@@ -105,7 +105,7 @@ type Engine interface {
 }
 
 // Info is where a connection landed: user@host:port for the status bar,
-// the database for console titles, the schema path it started with
+// the database for query titles, the schema path it started with
 // (§7.8, §8.6).
 type Info struct {
 	Addr, Database, Path string

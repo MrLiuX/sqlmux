@@ -22,7 +22,7 @@
 │        Views (0)           │  t_order                                   doraemon.public                                Table │                             │
 │ ▾  Workspace               │  t_order_item                              doraemon.public                                Table │                             │
 │      data                  │──────────────────────────────────────────────────────────────────────────────────────────────────│                             │
-│ ▾  Consoles                │ ↑/↓ Move · Tab/S-Tab Scope · esc Close                                                  ↵ Switch │                             │
+│ ▾  Queries                 │ ↑/↓ Move · Tab/S-Tab Scope · esc Close                                                  ↵ Switch │                             │
 │                             └──────────────────────────────────────────────────────────────────────────────────────────────────┘                             │
 │                              │ │                                                                                                                             │
 │                              │ │                                                                                                                             │

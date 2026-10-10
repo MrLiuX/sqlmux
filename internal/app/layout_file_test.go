@@ -57,7 +57,7 @@ func table(conn, schema, name string) config.LayoutTab {
 
 // A layout is the sessions as they were: snapshot, file, read back, restore,
 // snapshot again, and the two snapshots are the same, the first being what
-// the layout said (§14「布局文件」, F6.5). A console waiting for a connection
+// the layout said (§14「布局文件」, F6.5). A query waiting for a connection
 // is kept as it is going there; a session keeps the connection it started on,
 // not the one the focus last named.
 func TestLayoutRoundTrip(t *testing.T) {
@@ -69,7 +69,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 				Name: "a", Focus: 3, Zoom: 3, SidebarOpen: true, SidebarWidth: 40, ResultHeight: 0.25,
 				Layout: &config.LayoutNode{Split: "h", Ratio: 0.25, A: leafNode(1), B: &config.LayoutNode{Split: "v", Ratio: 0.75, A: leafNode(2), B: leafNode(3)}},
 				Panes: []config.LayoutPane{
-					{ID: 1, Current: 1, Tabs: []config.LayoutTab{order, {Kind: "console", Connection: "play", Schema: "s_play", Name: "console_1"}}},
+					{ID: 1, Current: 1, Tabs: []config.LayoutTab{order, {Kind: "query", Connection: "play", Schema: "s_play", Name: "query_1"}}},
 					{ID: 2, Tabs: []config.LayoutTab{{Kind: "table", Connection: "doraemon", Schema: "agentable", Table: "planner", Limit: 100}}},
 					{ID: 3},
 				},
@@ -78,7 +78,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 		}},
 		{Name: "two", Connection: "play", Windows: []config.LayoutWindow{{
 			Name: "c", Focus: 1, Layout: leafNode(1),
-			Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{{Kind: "console", Connection: "doraemon", Schema: "agentable", Name: "console_2"}}}},
+			Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{{Kind: "query", Connection: "doraemon", Schema: "agentable", Name: "query_2"}}}},
 		}}},
 	}}
 	a := layoutApp(restoredFrom(t, want))
@@ -136,11 +136,11 @@ func TestWindowLayoutResult(t *testing.T) {
 
 // What cannot be built is left out and said; the rest is built (§14「恢复」).
 func TestLayoutRestoreGaps(t *testing.T) {
-	console := func(n int, conn string) config.LayoutTab {
-		return config.LayoutTab{Kind: "console", N: n, Connection: conn}
+	query := func(n int, conn string) config.LayoutTab {
+		return config.LayoutTab{Kind: "query", N: n, Connection: conn}
 	}
-	consoles := func(s *Session) (ns []string) {
-		for _, c := range s.consoles() {
+	queries := func(s *Session) (ns []string) {
+		for _, c := range s.queries() {
 			ns = append(ns, c.name)
 		}
 		slices.Sort(ns)
@@ -151,18 +151,18 @@ func TestLayoutRestoreGaps(t *testing.T) {
 		r := restoredFrom(t, oneWindow(config.LayoutWindow{
 			Name: "a", Layout: &config.LayoutNode{Split: "h", Ratio: 3, A: leafNode(1), B: &config.LayoutNode{Split: "v", A: leafNode(0), B: leafNode(7)}},
 			Panes: []config.LayoutPane{
-				{ID: 0, Tabs: []config.LayoutTab{console(8, "")}}, // not a pane
-				{ID: 9, Tabs: []config.LayoutTab{console(1, "")}}, // not in the tree: no tab of it is made, nor a number taken
-				{ID: 1, Tabs: []config.LayoutTab{console(1, ""), table("doraemon", "public", "t"), table("doraemon", "public", "t"), table("gone", "public", "u"), table("play", "public", "t")}},
-				{ID: 1, Tabs: []config.LayoutTab{console(6, "")}}, // a second entry is not read
+				{ID: 0, Tabs: []config.LayoutTab{query(8, "")}}, // not a pane
+				{ID: 9, Tabs: []config.LayoutTab{query(1, "")}}, // not in the tree: no tab of it is made, nor a number taken
+				{ID: 1, Tabs: []config.LayoutTab{query(1, ""), table("doraemon", "public", "t"), table("doraemon", "public", "t"), table("gone", "public", "u"), table("play", "public", "t")}},
+				{ID: 1, Tabs: []config.LayoutTab{query(6, "")}}, // a second entry is not read
 			},
 		}))
 		w := r.Sessions[0].Windows[0]
 		if len(w.Root.Leaves()) != 2 || w.pane(7) == nil || w.pane(9) != nil || len(w.pane(1).Tabs) != 3 || w.lastID != 7 || w.Root.Ratio != 0.5 {
 			t.Errorf("panes %d, tabs %d, last %d, ratio %v", len(w.Root.Leaves()), len(w.pane(1).Tabs), w.lastID, w.Root.Ratio)
 		}
-		if c := consoleOf(w.pane(1)); c == nil || c.name != "console_1" {
-			t.Errorf("the pane the tree has gets console_1: %+v", c)
+		if c := queryOf(w.pane(1)); c == nil || c.name != "query_1" {
+			t.Errorf("the pane the tree has gets query_1: %+v", c)
 		}
 		if tb := w.pane(1).Tabs[2]; tb.Data == nil || tb.Data.conn.Spec.Name != "play" {
 			t.Errorf("the same table on another connection stays: %+v", tb)
@@ -180,65 +180,65 @@ func TestLayoutRestoreGaps(t *testing.T) {
 	})
 
 	t.Run("no tree", func(t *testing.T) {
-		r := restoredFrom(t, oneWindow(config.LayoutWindow{Name: "a", Panes: []config.LayoutPane{{ID: 0}, {ID: 4, Tabs: []config.LayoutTab{console(1, "")}}, {ID: 5, Tabs: []config.LayoutTab{console(2, "")}}}}))
+		r := restoredFrom(t, oneWindow(config.LayoutWindow{Name: "a", Panes: []config.LayoutPane{{ID: 0}, {ID: 4, Tabs: []config.LayoutTab{query(1, "")}}, {ID: 5, Tabs: []config.LayoutTab{query(2, "")}}}}))
 		w := r.Sessions[0].Windows[0]
-		if leaves := w.Root.Leaves(); len(leaves) != 1 || leaves[0].ID != 4 || len(leaves[0].Tabs) != 1 || !slices.Equal(consoles(r.Sessions[0]), []string{"console_1"}) {
+		if leaves := w.Root.Leaves(); len(leaves) != 1 || leaves[0].ID != 4 || len(leaves[0].Tabs) != 1 || !slices.Equal(queries(r.Sessions[0]), []string{"query_1"}) {
 			t.Errorf("the first pane there is: %+v", w.Root.Leaves())
 		}
 	})
 
-	t.Run("console numbers", func(t *testing.T) {
+	t.Run("query numbers", func(t *testing.T) {
 		t.Setenv("XDG_DATA_HOME", t.TempDir())
-		if err := os.MkdirAll(filepath.Dir(config.ConsolePath("console_1")), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(config.QueryPath("query_1")), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(config.ConsolePath("console_1"), []byte("one\n"), 0o600); err != nil {
+		if err := os.WriteFile(config.QueryPath("query_1"), []byte("one\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(config.ConsolePath("console_2"), []byte("two\n"), 0o600); err != nil {
+		if err := os.WriteFile(config.QueryPath("query_2"), []byte("two\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		win := func(n int) []config.LayoutWindow {
-			return []config.LayoutWindow{{Name: "w", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{console(n, "")}}}}}
+			return []config.LayoutWindow{{Name: "w", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{query(n, "")}}}}}
 		}
 		r := readyStart(Restore(layoutSpecs, &config.Layout{Version: 1, Sessions: []config.LayoutSession{
 			{Name: "1", Connection: "doraemon", Windows: win(1)},
-			{Name: "2", Connection: "nowhere", Windows: win(1)}, // the number is taken: the next with no file, which console_2 has (F8.21)
+			{Name: "2", Connection: "nowhere", Windows: win(1)}, // the number is taken: the next with no file, which query_2 has (F8.21)
 			{Name: "3", Connection: "play"},                     // no window: the default, on the next free number
 			{Name: "4", Connection: "play"},                     // and the next one's the one after
 		}}))
-		text := func(s *Session) string { return strings.Join(s.consoles()[0].ed.Lines(), "\n") }
-		if text(r.Sessions[0]) != "one" || r.Sessions[1].consoles()[0].name != "console_3" || text(r.Sessions[1]) != "" {
-			t.Errorf("consoles %v %v", r.Sessions[0].consoles(), r.Sessions[1].consoles())
+		text := func(s *Session) string { return strings.Join(s.queries()[0].ed.Lines(), "\n") }
+		if text(r.Sessions[0]) != "one" || r.Sessions[1].queries()[0].name != "query_3" || text(r.Sessions[1]) != "" {
+			t.Errorf("queries %v %v", r.Sessions[0].queries(), r.Sessions[1].queries())
 		}
-		if got := consoles(r.Sessions[2]); !slices.Equal(got, []string{"console_4"}) || r.Sessions[2].start.Spec.Name != "play" || len(r.Sessions[2].Windows) != 1 {
-			t.Errorf("the default window: consoles %v", got)
+		if got := queries(r.Sessions[2]); !slices.Equal(got, []string{"query_4"}) || r.Sessions[2].start.Spec.Name != "play" || len(r.Sessions[2].Windows) != 1 {
+			t.Errorf("the default window: queries %v", got)
 		}
 		if r.Sessions[1].start.Spec.Name != "doraemon" || len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "nowhere") {
 			t.Errorf("a connection that is not there: starts on %s, warnings %q", r.Sessions[1].start.Spec.Name, r.Warnings)
 		}
-		if got := consoles(r.Sessions[3]); !slices.Equal(got, []string{"console_5"}) {
-			t.Errorf("a second default window: consoles %v", got)
+		if got := queries(r.Sessions[3]); !slices.Equal(got, []string{"query_5"}) {
+			t.Errorf("a second default window: queries %v", got)
 		}
 	})
 
-	t.Run("console file unreadable", func(t *testing.T) {
+	t.Run("query file unreadable", func(t *testing.T) {
 		t.Setenv("XDG_DATA_HOME", t.TempDir())
 		// a file that does not read
-		if err := os.MkdirAll(config.ConsolePath("console_1"), 0o755); err != nil {
+		if err := os.MkdirAll(config.QueryPath("query_1"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 		r := Restore(layoutSpecs, &config.Layout{Version: 1, Sessions: []config.LayoutSession{
-			{Name: "2", Connection: "doraemon", Windows: []config.LayoutWindow{{Name: "w", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{console(1, "")}}}}}},
+			{Name: "2", Connection: "doraemon", Windows: []config.LayoutWindow{{Name: "w", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{query(1, "")}}}}}},
 		}})
-		if len(r.Sessions) != 1 || len(r.Warnings) != 1 || len(r.Sessions[0].Windows) != 1 || len(consoles(r.Sessions[0])) != 0 {
+		if len(r.Sessions) != 1 || len(r.Warnings) != 1 || len(r.Sessions[0].Windows) != 1 || len(queries(r.Sessions[0])) != 0 {
 			t.Errorf("sessions %d, warnings %q", len(r.Sessions), r.Warnings)
 		}
 	})
 
 	t.Run("fields a hand left out", func(t *testing.T) {
 		r := restoredFrom(t, oneWindow(config.LayoutWindow{Name: "a", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{
-			{Kind: "chart"}, console(0, ""),
+			{Kind: "chart"}, query(0, ""),
 			{Kind: "table", Table: "a", Limit: -5}, {Kind: "table", Table: "b", Limit: 5_000_000}, {Kind: "table", Table: "c"}, {Kind: "table", Table: "d", Limit: 500},
 		}}}}))
 		s := r.Sessions[0]
@@ -246,8 +246,8 @@ func TestLayoutRestoreGaps(t *testing.T) {
 		if len(r.Warnings) != 1 || r.Warnings[0] != "不认识的 tab" || len(tabs) != 5 {
 			t.Fatalf("warnings %q, %d tabs", r.Warnings, len(tabs))
 		}
-		if c := tabs[0].Console; c == nil || c.conn != s.start || c.want != nil {
-			t.Errorf("a console with no connection is on the start: %+v", c)
+		if c := tabs[0].Query; c == nil || c.conn != s.start || c.want != nil {
+			t.Errorf("a query with no connection is on the start: %+v", c)
 		}
 		for i, want := range []int{100, maxLimit, 100, 500} {
 			if got := tabs[i+1].Data.limit; got != want || tabs[i+1].Data.shown.limit != want {
@@ -282,12 +282,12 @@ func TestLayoutRestoreGaps(t *testing.T) {
 // there it fetches (a schema it did not name is the connection's home),
 // without it the tab is closed and a toast says so; a connection that fails
 // takes its waiting tabs, the toast being its own. Until then nothing goes
-// out for it. A console waiting for another connection keeps where it is
+// out for it. A query waiting for another connection keeps where it is
 // going (§14「恢复」, F6.5).
 func TestLayoutPendingTabs(t *testing.T) {
 	l := oneWindow(config.LayoutWindow{Name: "a", Layout: &config.LayoutNode{Split: "h", A: leafNode(1), B: leafNode(2)}, Panes: []config.LayoutPane{
 		{ID: 1, Tabs: []config.LayoutTab{table("doraemon", "public", "t_order"), table("doraemon", "public", "dropped"), table("play", "public", "x"), table("", "", "t_user"), table("doraemon", "public", "t_user")}},
-		{ID: 2, Tabs: []config.LayoutTab{{Kind: "console", N: 3, Connection: "play", Schema: "s_play"}}},
+		{ID: 2, Tabs: []config.LayoutTab{{Kind: "query", N: 3, Connection: "play", Schema: "s_play"}}},
 	}})
 	r := restoredFrom(t, l)
 	a := layoutApp(r)
@@ -300,8 +300,8 @@ func TestLayoutPendingTabs(t *testing.T) {
 	if len(p.Tabs) != 5 {
 		t.Fatalf("tabs %d", len(p.Tabs))
 	}
-	if c := consoleOf(r.Sessions[0].Windows[0].pane(2)); c.want != play || c.wantSchema != "s_play" || c.schema != "" {
-		t.Errorf("a console on the start waiting for play: %+v", c)
+	if c := queryOf(r.Sessions[0].Windows[0].pane(2)); c.want != play || c.wantSchema != "s_play" || c.schema != "" {
+		t.Errorf("a query on the start waiting for play: %+v", c)
 	}
 	for _, i := range []int{0, 2} { // pending: not before the catalog, the connection ready or not
 		if d := p.Tabs[i].Data; a.fetch(d, true) != nil || d.seq != 0 || d.conn.busy != 0 {
@@ -318,10 +318,10 @@ func TestLayoutPendingTabs(t *testing.T) {
 	if !p.Tabs[1].Data.pending {
 		t.Error("play's waits")
 	}
-	if _, ok := a.state.Consoles["console_3"]; ok {
-		t.Error("a console on its way to play is not put on the start's in the state")
+	if _, ok := a.state.Queries["query_3"]; ok {
+		t.Error("a query on its way to play is not put on the start's in the state")
 	}
-	if c := consoleOf(r.Sessions[0].Windows[0].pane(2)); c.schema != "" {
+	if c := queryOf(r.Sessions[0].Windows[0].pane(2)); c.schema != "" {
 		t.Errorf("nor is the start's schema its: %q", c.schema)
 	}
 	a.Update(connected{conn: play, err: errors.New("refused")})
@@ -456,8 +456,8 @@ func TestLayoutSaveAndList(t *testing.T) {
 }
 
 // A pick of layout.open is done in the one Update: what is typed in the
-// consoles is written, the layout read and the sessions replaced, so what the
-// new consoles read is what was typed, and nothing is left to arrive late.
+// queries is written, the layout read and the sessions replaced, so what the
+// new queries read is what was typed, and nothing is left to arrive late.
 // Asked first when a transaction would go; an error changes nothing (§14).
 func TestPickLayout(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
@@ -469,7 +469,7 @@ func TestPickLayout(t *testing.T) {
 	old.Main, old.Meta = db.NewWorker(closeDB{n: closed}), db.NewWorker(closeDB{n: closed})
 	old.Spec.DSN = "postgres://u@127.0.0.1:1/db?connect_timeout=1" // the new sessions' connections: refused at once
 	next := &config.Layout{Version: 1, Active: 1, Sessions: []config.LayoutSession{
-		{Name: "x", Connection: "doraemon", Windows: []config.LayoutWindow{{Name: "w", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{{Kind: "console", N: 1}}}}}}},
+		{Name: "x", Connection: "doraemon", Windows: []config.LayoutWindow{{Name: "w", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{{Kind: "query", N: 1}}}}}}},
 		{Name: "y", Connection: "doraemon"},
 		{Name: "z", Connection: "gone"},
 	}}
@@ -489,17 +489,17 @@ func TestPickLayout(t *testing.T) {
 	conn.tx = 0
 	a.confirm = nil
 
-	console := consoleOf(a.win().pane(2))
-	if err := os.MkdirAll(console.path+"d", 0o755); err != nil {
+	query := queryOf(a.win().pane(2))
+	if err := os.MkdirAll(query.path+"d", 0o755); err != nil {
 		t.Fatal(err)
 	}
-	oldPath := console.path
-	console.path = oldPath + "d" // a console that cannot be written: nothing is replaced
+	oldPath := query.path
+	query.path = oldPath + "d" // a query that cannot be written: nothing is replaced
 	a.pickLayout("two")
 	if len(a.sessions) != 1 {
-		t.Fatal("replaced with a console unwritten")
+		t.Fatal("replaced with a query unwritten")
 	}
-	console.path = oldPath
+	query.path = oldPath
 
 	a.toast = ""
 	if a.pickLayout("nope"); len(a.sessions) != 1 || !strings.Contains(a.toast, "nope.toml") {
@@ -510,8 +510,8 @@ func TestPickLayout(t *testing.T) {
 	if cmd == nil || len(a.sessions) != 3 || a.sess.Name != "y" {
 		t.Fatalf("replaced: %d sessions, on %q", len(a.sessions), a.sess.Name)
 	}
-	if got := strings.Join(a.sessions[0].consoles()[0].ed.Lines(), "\n"); got != "abc" {
-		t.Errorf("the new console reads %q, what was typed", got)
+	if got := strings.Join(a.sessions[0].queries()[0].ed.Lines(), "\n"); got != "abc" {
+		t.Errorf("the new query reads %q, what was typed", got)
 	}
 	for _, s := range a.sessions {
 		if s.start.State != connConnecting {
@@ -556,7 +556,7 @@ func (d closeDB) Close() error { d.n.Add(1); return nil }
 func TestNewSessionStart(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	conns := []*Conn{readyConn("a"), readyConn("b")}
-	s := newSession("x", conns, conns[1], config.ConsoleName(1))
+	s := newSession("x", conns, conns[1], config.QueryName(1))
 	a.sessions, a.sess = []*Session{s}, s
 	if got := a.layoutOf().Sessions[0].Connection; got != "b" {
 		t.Errorf("started on b, saved %q", got)
@@ -609,22 +609,22 @@ func TestDropTab(t *testing.T) {
 	}
 }
 
-// A console tab's file is its name, or console_<n> in a layout of before
+// A query tab's file is its name, or query_<n> in a layout of before
 // the names; a name taken (files differing in case are one on some file
-// systems) or no file's (a hand-written ../../x would leave the consoles'
+// systems) or no file's (a hand-written ../../x would leave the queries'
 // directory) is replaced by the next free one, with a file of its own
 // (§11, F8.11).
-func TestLayoutConsoleNames(t *testing.T) {
-	tabs := []config.LayoutTab{{Kind: "console", Name: "Console_3"}, {Kind: "console", N: 3}, {Kind: "console", Name: "../../evil"}, {Kind: "console", Name: "keep"}, {Kind: "console", N: 5}, {Kind: "console", Name: "CONSOLE_5"}}
+func TestLayoutQueryNames(t *testing.T) {
+	tabs := []config.LayoutTab{{Kind: "query", Name: "Query_3"}, {Kind: "query", N: 3}, {Kind: "query", Name: "../../evil"}, {Kind: "query", Name: "keep"}, {Kind: "query", N: 5}, {Kind: "query", Name: "QUERY_5"}}
 	r := restoredFrom(t, oneWindow(config.LayoutWindow{Name: "a", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: tabs}}}))
 	var got []string
 	for _, tb := range r.Sessions[0].Windows[0].pane(1).Tabs {
-		if want := filepath.Join(config.DataDir(), "consoles"); filepath.Dir(tb.Console.path) != want {
-			t.Errorf("%s is at %s, not under %s", tb.Console.name, tb.Console.path, want)
+		if want := filepath.Join(config.DataDir(), "queries"); filepath.Dir(tb.Query.path) != want {
+			t.Errorf("%s is at %s, not under %s", tb.Query.name, tb.Query.path, want)
 		}
-		got = append(got, tb.Console.name)
+		got = append(got, tb.Query.name)
 	}
-	if want := []string{"Console_3", "console_1", "console_2", "keep", "console_5", "console_4"}; !slices.Equal(got, want) {
+	if want := []string{"Query_3", "query_1", "query_2", "keep", "query_5", "query_4"}; !slices.Equal(got, want) {
 		t.Errorf("names %v, want %v", got, want)
 	}
 }

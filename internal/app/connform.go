@@ -307,7 +307,7 @@ func (a *App) connInUse(name string) bool {
 		for _, p := range s.panes() {
 			for _, tb := range p.Tabs {
 				switch {
-				case tb.Data != nil && on(tb.Data.conn), tb.Console != nil && (on(tb.Console.conn) || on(tb.Console.want)),
+				case tb.Data != nil && on(tb.Data.conn), tb.Query != nil && (on(tb.Query.conn) || on(tb.Query.want)),
 					tb.Result != nil && tb.Result.run != nil && on(tb.Result.run.conn):
 					return true
 				}
@@ -457,7 +457,7 @@ func (a *App) saveEditedConn() tea.Cmd {
 // saveConnForm is ↵: the connection, checked as connections.toml is when
 // read, goes at its end and into every session's tree, not connected; one
 // that doesn't check says why, its field getting the keys (§7.8). The first
-// connection of a start with none is connected, shown and given a console
+// connection of a start with none is connected, shown and given a query
 // (F7.4).
 func (a *App) saveConnForm() tea.Cmd {
 	f := a.form
@@ -535,20 +535,20 @@ func (a *App) saveConnForm() tea.Cmd {
 
 // startFirst makes conn, the first connection of a start with none, what
 // the session started with, as if it had been named on the command line: it
-// connects, and console_1 opens beside the empty pane on it (F7.4).
+// connects, and query_1 opens beside the empty pane on it (F7.4).
 func (a *App) startFirst(conn *Conn) tea.Cmd {
 	s := a.sess
 	s.start, s.last, s.Name = conn, conn, conn.Spec.Name
 	cmds := []tea.Cmd{a.connect(conn)}
 	for _, w := range s.Windows { // each window made meanwhile had none either
 		if p := w.pane(2); p != nil && len(p.Tabs) == 0 {
-			cons, err := openConsole(conn, a.freeConsole())
+			cons, err := openQuery(conn, a.freeQuery())
 			if err != nil {
 				cmds = append(cmds, a.showToast(err.Error(), toastTTL))
 				break
 			}
-			putTab(p, Tab{Name: cons.name, Console: cons}, false)
-			cmds = append(cmds, a.keepConsole(cons))
+			putTab(p, Tab{Name: cons.name, Query: cons}, false)
+			cmds = append(cmds, a.keepQuery(cons))
 		}
 	}
 	return tea.Batch(cmds...)
@@ -587,7 +587,7 @@ func (a *App) formView() ui.Form {
 	}
 	icons := []ui.Icon{fieldName: ic.Tag, fieldGroup: ic.Group, fieldEngine: ic.Engine(fields[fieldEngine].Choices[fields[fieldEngine].On]), fieldHost: ic.Host,
 		fieldPort: ic.Port, fieldUser: ic.User, fieldPassword: ic.Key, fieldDatabase: ic.Database, fieldReadOnly: ic.Lock,
-		fieldAdvanced: ic.Advanced, fieldDSN: ic.Link, fieldPasswordCmd: ic.Console}
+		fieldAdvanced: ic.Advanced, fieldDSN: ic.Link, fieldPasswordCmd: ic.Query}
 	for i := range fields {
 		fields[i].Icon = icons[i]
 		fields[i].Hidden = (i == fieldDSN || i == fieldPasswordCmd) && !f.advanced()

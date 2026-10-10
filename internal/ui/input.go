@@ -17,7 +17,7 @@ type Input struct {
 	Text string
 	Pos  int  // byte offset of the cursor, on a grapheme boundary
 	All  bool // all of it selected, as a cell's edit starts (§10.1): typing replaces it
-	// A WHERE's vim (F3.39), as a console's line 0, drawn by DrawSQL: what
+	// A WHERE's vim (F3.39), as a query's line 0, drawn by DrawSQL: what
 	// VISUAL selects, and what a yank took, flashing (F3.32).
 	Sel, Yank Sel
 }

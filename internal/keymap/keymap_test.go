@@ -52,10 +52,10 @@ func loadNoVim(t *testing.T, toml string) *Map {
 }
 
 var (
-	grid    = Context{Focus: []string{"grid"}, Pane: "grid"}
-	tree    = Context{Focus: []string{"tree"}, Pane: "tree"}
-	console = Context{Focus: []string{"console"}, Pane: "console"}
-	input   = Context{Focus: []string{"input"}, Mode: Insert}
+	grid  = Context{Focus: []string{"grid"}, Pane: "grid"}
+	tree  = Context{Focus: []string{"tree"}, Pane: "tree"}
+	query = Context{Focus: []string{"query"}, Pane: "query"}
+	input = Context{Focus: []string{"input"}, Mode: Insert}
 )
 
 // press feeds a vim-notation string and flattens what came out, feeding a
@@ -120,25 +120,25 @@ func TestSequences(t *testing.T) {
 		{grid, "<Space>0", []string{"window.select 0"}}, // digits after a prefix are keys
 		{grid, "gz", []string{"keys gz"}},
 		{grid, "<C-p>", []string{"palette.open"}},
-		{console, "gg", []string{"keys gg"}}, // whole buffered prefix goes to vim
-		{console, "gq", []string{"keys gq"}}, // the editor's operator (§9.5)
-		{console, "<CR>", []string{"console.run"}},
+		{query, "gg", []string{"keys gg"}}, // whole buffered prefix goes to vim
+		{query, "gq", []string{"keys gq"}}, // the editor's operator (§9.5)
+		{query, "<CR>", []string{"query.run"}},
 		{Context{Focus: []string{"result", "grid"}, Pane: "grid"}, "qj", []string{"result.close", "grid.down"}},
 		{Context{Overlay: "palette", Focus: []string{"grid"}}, "<C-t>", []string{"palette.open.tab"}},
 		{input, "j", []string{"keys j"}},
 		{input, "<Space>", []string{"keys <Space>"}}, // SPC leader is NORMAL only
 		{input, "<C-p>", []string{"palette.open"}},
-		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert}, "<CR>gq", []string{"keys <CR>", "keys g", "keys q"}},
+		{Context{Focus: []string{"query"}, Pane: "query", Mode: Insert}, "<CR>gq", []string{"keys <CR>", "keys g", "keys q"}},
 		{Context{Focus: []string{"cell"}, Mode: Insert}, "<Tab>", []string{"keys <Tab>"}}, // the floats' keys (§10.2)
 		{Context{Overlay: "segments", Focus: []string{"cell"}, Mode: Insert}, "<Tab>", []string{"cell.segment.next"}},
 		{Context{Overlay: "options", Focus: []string{"cell"}, Mode: Insert}, "<Tab>", []string{"cell.option.next"}},
 		{Context{Overlay: "newrow", Under: "options", Focus: []string{"cell"}, Mode: Insert}, "<Tab><Down>", []string{"cell.field.next", "cell.option.next"}},
 		// the modeless editor (§6.9): Ctrl keys of the pane and NORMAL apply, the keys that are text do not
-		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<C-h>", []string{"keys <C-h>"}}, // Backspace there
-		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<C-j>", []string{"pane.focus.down"}},
-		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<C-p>", []string{"palette.open"}},
-		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<CR>", []string{"keys <CR>"}},
-		{Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}, "<Space>sgt", []string{"keys <Space>", "keys s", "keys g", "keys t"}},
+		{Context{Focus: []string{"query"}, Pane: "query", Mode: Insert, Plain: true}, "<C-h>", []string{"keys <C-h>"}}, // Backspace there
+		{Context{Focus: []string{"query"}, Pane: "query", Mode: Insert, Plain: true}, "<C-j>", []string{"pane.focus.down"}},
+		{Context{Focus: []string{"query"}, Pane: "query", Mode: Insert, Plain: true}, "<C-p>", []string{"palette.open"}},
+		{Context{Focus: []string{"query"}, Pane: "query", Mode: Insert, Plain: true}, "<CR>", []string{"keys <CR>"}},
+		{Context{Focus: []string{"query"}, Pane: "query", Mode: Insert, Plain: true}, "<Space>sgt", []string{"keys <Space>", "keys s", "keys g", "keys t"}},
 		{Context{Focus: []string{"input"}, Mode: Insert, Plain: true}, "<C-l>?", []string{"pane.focus.right", "keys ?"}},
 		// COMMAND is typing too: no counts, no widget keys, no user maps
 		{Context{Overlay: "palette", Mode: Command}, "5<CR>", []string{"keys 5", "palette.run"}},
@@ -299,7 +299,7 @@ func TestCounts(t *testing.T) {
 		{grid, "10j", []string{"grid.down ×10"}},
 		{tree, "3j", []string{"tree.down ×3"}},
 		{grid, "5<Esc>j", []string{"grid.down"}},
-		{console, "5j", []string{"keys 5j"}}, // the editor does its own counting
+		{query, "5j", []string{"keys 5j"}}, // the editor does its own counting
 		{input, "5", []string{"keys 5"}},
 	} {
 		got, _ := press(t, NewResolver(m), c.ctx, c.in)
@@ -326,7 +326,7 @@ J = "5j"
 [map.grid.normal]
 J = "3j"
 j = "jj"
-[map.console.normal]
+[map.query.normal]
 L = "5l"
 `)
 	for _, c := range []struct {
@@ -338,7 +338,7 @@ L = "5l"
 		{tree, "J", []string{"tree.down ×5"}},           // generic beats default
 		{grid, "j", []string{"grid.down", "grid.down"}}, // noremap: rhs j is not remapped
 		{grid, "2J", []string{"grid.down ×23"}},         // count goes in front, as in vim
-		{console, "L", []string{"keys 5l"}},
+		{query, "L", []string{"keys 5l"}},
 		{input, "J", []string{"keys J"}},                                      // no maps in INSERT
 		{Context{Overlay: "palette", Mode: Command}, "J", []string{"keys J"}}, // nor in COMMAND
 	} {
@@ -366,12 +366,12 @@ func TestCtrlLeaderWorksInInsert(t *testing.T) {
 }
 
 func TestHint(t *testing.T) {
-	m := mustLoad(t, "[keys.console]\n\"<CR>\" = \"\"\n[keys.normal]\n\"<C-b>\" = \"tree.toggle\"")
+	m := mustLoad(t, "[keys.query]\n\"<CR>\" = \"\"\n[keys.normal]\n\"<C-b>\" = \"tree.toggle\"")
 	for _, c := range []struct{ action, scope, want string }{
 		{"tree.toggle", "normal", "SPC b"}, // first binding in file order wins
 		{"palette.open", "global", "C-p"},
 		{"tab.next", "normal", "gt"},
-		{"console.run", "console", ""}, // unbound: no hint
+		{"query.run", "query", ""}, // unbound: no hint
 		{"nope", "normal", ""},
 	} {
 		if got := m.Hint(c.action, c.scope); got != c.want {
@@ -416,7 +416,7 @@ leader = "<C-a>"
 x = ""
 "<C-w>v" = "pane.split.right"
 R = "grid.page.prev"
-[map.console.normal]
+[map.query.normal]
 L = "5l"
 `)
 	titles := map[string]string{"tab.next": "下一个 tab", "pane.split.right": "左右分割", "grid.nope": "没绑的", "window.rename": "重命名 window"}
@@ -631,9 +631,9 @@ func TestMapNext(t *testing.T) {
 
 // vim = false lays default-novim.toml over the defaults: the arrow keys in
 // the grid and the tree, PgUp, PgDn and Delete in the grid, ↵ unbound in a
-// console and C-e running it; with vim on none of it is there (§6.9, F6.6b).
+// query and C-e running it; with vim on none of it is there (§6.9, F6.6b).
 func TestNoVimLayer(t *testing.T) {
-	plainConsole := Context{Focus: []string{"console"}, Pane: "console", Mode: Insert, Plain: true}
+	plainQuery := Context{Focus: []string{"query"}, Pane: "query", Mode: Insert, Plain: true}
 	off, on := mustLoad(t, ""), loadNoVim(t, "")
 	for _, c := range []struct {
 		ctx     Context
@@ -648,9 +648,9 @@ func TestNoVimLayer(t *testing.T) {
 		{grid, "j", []string{"grid.down"}, []string{"grid.down"}}, // the letters stay
 		{tree, "<Up>", []string{"keys <Up>"}, []string{"tree.up"}},
 		{tree, "<Left>", []string{"keys <Left>"}, []string{"tree.collapse"}},
-		{plainConsole, "<C-e>", []string{"keys <C-e>"}, []string{"console.run"}},
-		{plainConsole, "<CR>", []string{"keys <CR>"}, []string{"keys <CR>"}},
-		{console, "<CR>", []string{"console.run"}, []string{"keys <CR>"}},
+		{plainQuery, "<C-e>", []string{"keys <C-e>"}, []string{"query.run"}},
+		{plainQuery, "<CR>", []string{"keys <CR>"}, []string{"keys <CR>"}},
+		{query, "<CR>", []string{"query.run"}, []string{"keys <CR>"}},
 	} {
 		if got, _ := press(t, NewResolver(off), c.ctx, c.in); !reflect.DeepEqual(actions(got), c.off) {
 			t.Errorf("vim on, %v %q: got %v, want %v", c.ctx.Focus, c.in, actions(got), c.off)
@@ -675,10 +675,20 @@ func TestNoVimLayer(t *testing.T) {
 	if got, _ := press(t, NewResolver(m), grid, "<PageDown>"); !reflect.DeepEqual(actions(got), []string{"grid.bottom"}) {
 		t.Errorf("rebound: %v", actions(got))
 	}
-	if toml := on.TOML(map[string]string{}); !strings.Contains(toml, "# \"<Down>\" = \"grid.down\"") || !strings.Contains(toml, "# \"<C-e>\" = \"console.run\"") {
+	if toml := on.TOML(map[string]string{}); !strings.Contains(toml, "# \"<Down>\" = \"grid.down\"") || !strings.Contains(toml, "# \"<C-e>\" = \"query.run\"") {
 		t.Errorf("the export has them as defaults:\n%s", toml)
 	}
-	if !strings.Contains(on.TOML(nil), "console 的编辑器，只有 Ctrl 开头的键生效，C-h 除外") || strings.Contains(off.TOML(nil), "console 的编辑器") {
-		t.Error("the console's note tells of the editor with vim = false only")
+	if !strings.Contains(on.TOML(nil), "query 的编辑器，只有 Ctrl 开头的键生效，C-h 除外") || strings.Contains(off.TOML(nil), "query 的编辑器") {
+		t.Error("the query's note tells of the editor with vim = false only")
+	}
+}
+
+// The tables of before F10.11 are no tables now, as any misspelt one is: no
+// alias (F10.11).
+func TestOldConsoleTables(t *testing.T) {
+	for _, toml := range []string{"[keys.console]\n\"x\" = \"query.run\"\n", "[map.console.normal]\n\"x\" = \"j\"\n"} {
+		if _, ps := load(t, toml); len(ps) != 1 || !strings.Contains(ps[0].String(), "没有这个表") {
+			t.Errorf("%q: %v", toml, ps)
+		}
 	}
 }

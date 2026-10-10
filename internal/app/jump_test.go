@@ -153,15 +153,15 @@ func TestJumpInTree(t *testing.T) {
 	}
 }
 
-// A console's text is matched everywhere, a letter at a time, and a label puts
+// A query's text is matched everywhere, a letter at a time, and a label puts
 // the cursor on the character in its pane; s is the jump's in NORMAL and the
 // vim's in VISUAL (F10.8).
-func TestJumpInConsole(t *testing.T) {
+func TestJumpInQuery(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	loadOrders(t, a, 3)
-	c := consoleOf(a.win().Root.B.Pane)
+	c := queryOf(a.win().Root.B.Pane)
 	c.ed.Load("select 1;\nselect 2;")
-	feed(t, a, "sct") // from the table: matches in the console too
+	feed(t, a, "sct") // from the table: matches in the query too
 	var in []int
 	for _, m := range a.jump.matches {
 		if m.target.Kind == ui.KindText {
@@ -169,7 +169,7 @@ func TestJumpInConsole(t *testing.T) {
 		}
 	}
 	if len(in) != 2 {
-		t.Fatalf("matches of ct in the console: %d", len(in))
+		t.Fatalf("matches of ct in the query: %d", len(in))
 	}
 	feed(t, a, a.jump.matches[len(a.jump.matches)-1].label) // the last on the screen
 	cur := c.ed.Cursor()
@@ -177,7 +177,7 @@ func TestJumpInConsole(t *testing.T) {
 		t.Errorf("focus %d, the cursor at %+v", a.win().Focus, cur)
 	}
 	if feed(t, a, "<Esc>s"); a.jump == nil {
-		t.Fatal("s in the console's NORMAL begins a jump")
+		t.Fatal("s in the query's NORMAL begins a jump")
 	}
 	feed(t, a, "<Esc>")
 	feed(t, a, "vs") // VISUAL: the vim's s
@@ -209,7 +209,7 @@ func TestJumpLeftByClickAndWheel(t *testing.T) {
 
 // What is not the jump's own ends it: a global key does what it does (the
 // palette opens and has the keys), a right click goes where it is; the
-// palette's jump on a console in INSERT begins one and types nothing (F10.8).
+// palette's jump on a query in INSERT begins one and types nothing (F10.8).
 func TestJumpEndedByOthers(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	loadOrders(t, a, 3)
@@ -222,7 +222,7 @@ func TestJumpEndedByOthers(t *testing.T) {
 	if a.jump != nil {
 		t.Error("a right click leaves the jump")
 	}
-	c := consoleOf(a.win().Root.B.Pane)
+	c := queryOf(a.win().Root.B.Pane)
 	a.focusPane(a.win().Root.B.Pane.ID)
 	c.ed.Load("select 1;")
 	feed(t, a, "i")
@@ -237,7 +237,7 @@ func TestJumpEndedByOthers(t *testing.T) {
 
 // What follows an occurrence of the pattern anywhere on the screen is no label
 // as it goes on being typed, the occurrence being a match or not: a cell has
-// the one match, its first, and a console's overlap (F10.8).
+// the one match, its first, and a query's overlap (F10.8).
 func TestJumpSkipsAfterEveryOccurrence(t *testing.T) {
 	a := wide(160, 45)
 	loadOrders(t, a, 30)
@@ -248,7 +248,7 @@ func TestJumpSkipsAfterEveryOccurrence(t *testing.T) {
 	}
 	a = sized(160, 45, "nerd")
 	loadOrders(t, a, 3)
-	c := consoleOf(a.win().Root.B.Pane)
+	c := queryOf(a.win().Root.B.Pane)
 	a.focusPane(a.win().Root.B.Pane.ID)
 	c.ed.Load("select 'oooa';")
 	feed(t, a, "soo") // oo twice in ooo, one match, and what follows the second is a
@@ -278,11 +278,11 @@ func TestJumpCtrlC(t *testing.T) {
 }
 
 // What is pasted in a jump is the pattern's whatever has the focus, a
-// console's text left alone (F10.8).
+// query's text left alone (F10.8).
 func TestJumpPaste(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	loadOrders(t, a, 3)
-	c := consoleOf(a.win().Root.B.Pane)
+	c := queryOf(a.win().Root.B.Pane)
 	a.focusPane(a.win().Root.B.Pane.ID)
 	c.ed.Load("select 1;")
 	feed(t, a, "ssel")
@@ -292,12 +292,12 @@ func TestJumpPaste(t *testing.T) {
 	}
 }
 
-// The palette's jump on a console in VISUAL begins a jump and leaves the
+// The palette's jump on a query in VISUAL begins a jump and leaves the
 // selection; the key is the vim's (F10.8).
 func TestJumpFromPaletteInVisual(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	loadOrders(t, a, 3)
-	c := consoleOf(a.win().Root.B.Pane)
+	c := queryOf(a.win().Root.B.Pane)
 	a.focusPane(a.win().Root.B.Pane.ID)
 	c.ed.Load("select 1;")
 	feed(t, a, "vl<C-p>")
@@ -356,13 +356,13 @@ func TestJumpNearestByLines(t *testing.T) {
 	}
 }
 
-// The pattern is case-blind when it has no capital, in a console too, and the
+// The pattern is case-blind when it has no capital, in a query too, and the
 // letter after a match in capitals is no label either; a label of the second
 // round is a capital (F10.8).
 func TestJumpSmartcaseAndCapitals(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	loadOrders(t, a, 3)
-	c := consoleOf(a.win().Root.B.Pane)
+	c := queryOf(a.win().Root.B.Pane)
 	a.focusPane(a.win().Root.B.Pane.ID)
 	c.ed.Load(strings.TrimSpace(strings.Repeat("SELECT 1;\n", 14)))
 	feed(t, a, "ssel")
@@ -385,7 +385,7 @@ func TestJumpSmartcaseAndCapitals(t *testing.T) {
 	}
 }
 
-// A label on a table's cell, the jump begun from the console, puts the focus
+// A label on a table's cell, the jump begun from the query, puts the focus
 // on the table and the cursor on the cell (F10.8).
 func TestJumpToCellFocusesItsPane(t *testing.T) {
 	a := sized(160, 45, "nerd")
@@ -401,9 +401,9 @@ func TestJumpToCellFocusesItsPane(t *testing.T) {
 }
 
 // The first labels are the nearest to the cursor of the focused pane in the
-// tree, in a console and in a result as in a table: the cursor is found
+// tree, in a query and in a result as in a table: the cursor is found
 // there (F10.8).
-func TestJumpNearestInTreeConsoleResult(t *testing.T) {
+func TestJumpNearestInTreeQueryResult(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	loadOrders(t, a, 3)
 	a.win().focus(0)
@@ -418,7 +418,7 @@ func TestJumpNearestInTreeConsoleResult(t *testing.T) {
 		t.Errorf("the tree's matches: %v", ys)
 	}
 	feed(t, a, "<Esc>")
-	c := consoleOf(a.win().Root.B.Pane)
+	c := queryOf(a.win().Root.B.Pane)
 	a.focusPane(a.win().Root.B.Pane.ID)
 	c.ed.Load("select 1;\nselect 2;\nselect 3;")
 	feed(t, a, "Gssel") // the cursor on the last line
@@ -429,7 +429,7 @@ func TestJumpNearestInTreeConsoleResult(t *testing.T) {
 		}
 	}
 	if len(ys) != 3 || ys[0] != slices.Max(ys) {
-		t.Errorf("the console's matches: %v", ys)
+		t.Errorf("the query's matches: %v", ys)
 	}
 	feed(t, a, "<Esc>")
 
@@ -448,7 +448,7 @@ func TestJumpNearestInTreeConsoleResult(t *testing.T) {
 func TestJumpNoCapitalLabelAfterMatch(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	loadOrders(t, a, 3)
-	c := consoleOf(a.win().Root.B.Pane)
+	c := queryOf(a.win().Root.B.Pane)
 	a.focusPane(a.win().Root.B.Pane.ID)
 	line := strings.Repeat("sel ", 14)
 	c.ed.Load(strings.Repeat(line+"\n", 4) + "selX")

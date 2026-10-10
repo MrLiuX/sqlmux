@@ -111,7 +111,7 @@ func TestTreeGroups(t *testing.T) {
 				out = append(out, n.Text)
 			case nodeSep:
 				out = append(out, "── "+n.Text)
-			case nodeSchema, nodeGroup, nodeTable, nodeColumn, nodeWorkspace, nodeWindow, nodeTab, nodeConsoles, nodeConsoleFile:
+			case nodeSchema, nodeGroup, nodeTable, nodeColumn, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeQueryFile:
 			}
 		}
 		return strings.Join(out, "|")
@@ -521,7 +521,7 @@ func TestGroupRuleColors(t *testing.T) {
 }
 
 // A session that starts on a connection of a group starts on that one, the
-// order the tree has moving it: the console of a layout with no window is on
+// order the tree has moving it: the query of a layout with no window is on
 // it, and the connections are in the tree's order (F10.6).
 func TestRestoreStartsOnItsConnection(t *testing.T) {
 	grouped(t) // the file
@@ -535,8 +535,8 @@ func TestRestoreStartsOnItsConnection(t *testing.T) {
 	if got := s.start.Spec.Name; got != "stage" {
 		t.Errorf("start %s", got)
 	}
-	if cs := s.consoles(); len(cs) != 1 || cs[0].conn != s.start {
-		t.Errorf("console of %+v", cs)
+	if cs := s.queries(); len(cs) != 1 || cs[0].conn != s.start {
+		t.Errorf("query of %+v", cs)
 	}
 	var names []string
 	for _, c := range s.Conns {

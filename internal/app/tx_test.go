@@ -15,24 +15,24 @@ import (
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
-// Closing the last console on a connection in a transaction asks first,
+// Closing the last query on a connection in a transaction asks first,
 // and y rolls it back once it is closed; one of two closes as before.
 // Quitting asks for every connection in one, both sentences in one box
 // with changes too (§10.5).
 func TestCloseAsksForTx(t *testing.T) {
-	a, c := inConsole(t, "", "")
+	a, c := inQuery(t, "", "")
 	main := &saveDB{}
 	c.conn.Main, c.conn.tx = db.NewWorker(main), 'T'
-	a.run("console.new", 0)
-	if feed(t, a, "<Esc>"); a.run("tab.close", 0) != nil || a.confirm != nil || len(a.sess.consoles()) != 1 {
-		t.Fatalf("one of two: %+v, %d consoles", a.confirm, len(a.sess.consoles()))
+	a.run("query.new", 0)
+	if feed(t, a, "<Esc>"); a.run("tab.close", 0) != nil || a.confirm != nil || len(a.sess.queries()) != 1 {
+		t.Fatalf("one of two: %+v, %d queries", a.confirm, len(a.sess.queries()))
 	}
 	a.run("tab.close", 0)
 	if a.confirm == nil || a.confirm.text != "doraemon 有未提交的事务，关闭会回滚。" {
 		t.Fatalf("the last: %+v", a.confirm)
 	}
-	if feed(t, a, "y"); len(a.sess.consoles()) != 0 || !slices.Contains(main.sqls, "rollback []") {
-		t.Fatalf("y: %d consoles, sent %q", len(a.sess.consoles()), main.sqls)
+	if feed(t, a, "y"); len(a.sess.queries()) != 0 || !slices.Contains(main.sqls, "rollback []") {
+		t.Fatalf("y: %d queries, sent %q", len(a.sess.queries()), main.sqls)
 	}
 
 	a = sized(160, 45, "nerd")
@@ -73,10 +73,10 @@ func TestTxMode(t *testing.T) {
 		t.Error("a commit out of a transaction")
 	}
 
-	a, c := inConsole(t, "", "")
+	a, c := inQuery(t, "", "")
 	a.Update(tea.WindowSizeMsg{Width: 200, Height: 45})
 	c.conn.Manual, c.conn.tx = true, 'T'
-	click(a, find(t, a, ui.Target{Kind: ui.KindHint, Pane: a.focused().ID, Action: "console.tx"}).Min)
+	click(a, find(t, a, ui.Target{Kind: ui.KindHint, Pane: a.focused().ID, Action: "query.tx"}).Min)
 	if v := a.dropView(); strings.Join(v.Items, "|") != "自动|手动" || v.Mark != 1 {
 		t.Fatalf("the dropdown: %q, mark %d", v.Items, v.Mark)
 	}
@@ -90,22 +90,22 @@ func TestTxMode(t *testing.T) {
 // change (§10.1); the connection dropdown marks it with the lock, after
 // its engine's icon.
 func TestReadOnly(t *testing.T) {
-	a, c := inConsole(t, "", "")
+	a, c := inQuery(t, "", "")
 	c.conn.readOnly = true
 	seq := a.sess.RunSeq
 	feed(t, a, "iselect 1; delete from t_order<Esc>V")
-	a.run("console.run", 0)
+	a.run("query.run", 0)
 	log := a.win().log
 	if c.running != nil || a.sess.RunSeq != seq || len(log) == 0 || !log[len(log)-1].Err ||
 		!strings.HasSuffix(log[len(log)-1].Head, "delete from t_order  ") || log[len(log)-1].Tail != "doraemon 是只读连接，整次都没有执行" || resultOf(a.win().Result).run != nil {
 		t.Fatalf("kept back: running %v, seq %d → %d, log %+v", c.running, seq, a.sess.RunSeq, log)
 	}
 	feed(t, a, "<Esc>ggcGset search_path to public; select 1<Esc>V")
-	if a.run("console.run", 0); c.running == nil {
+	if a.run("query.run", 0); c.running == nil {
 		t.Error("set search_path is kept back")
 	}
 	c.conn.Spec.Engine = "mysql"
-	a.openConsoleDrop(dropConsoleConn)
+	a.openQueryDrop(dropQueryConn)
 	if v := a.dropView(); len(v.Notes) != 1 || v.Notes[0] != a.icons.Lock.Text || v.Icons[0] != a.icons.MySQL {
 		t.Errorf("the dropdown's notes %q, icons %v", v.Notes, v.Icons)
 	}
@@ -131,16 +131,16 @@ func TestReadOnly(t *testing.T) {
 	}
 }
 
-// A console's title shows its connection's mode, ✓ ↺ in the manual one,
+// A query's title shows its connection's mode, ✓ ↺ in the manual one,
 // dim out of a transaction, and a read-only one's lock; the status bar
 // says when Main is in a transaction, or a failed one (§7.8).
-func TestGoldenConsoleTx(t *testing.T) {
+func TestGoldenQueryTx(t *testing.T) {
 	var rows []string
 	for _, c := range []struct {
 		manual, readOnly bool
 		tx               byte
 	}{{true, false, 'I'}, {true, false, 'T'}, {false, true, 'E'}} {
-		a, con := inConsole(t, "", "")
+		a, con := inQuery(t, "", "")
 		a.Update(tea.WindowSizeMsg{Width: 200, Height: 20})
 		con.conn.Manual, con.conn.readOnly, con.conn.tx = c.manual, c.readOnly, c.tx
 		f := a.render()
@@ -161,16 +161,16 @@ func TestGoldenConsoleTx(t *testing.T) {
 	golden.RequireEqual(t, strings.Join(rows, "\n")+"\n")
 }
 
-// A console running is not closed, its tab, its pane or its window: a begin
+// A query running is not closed, its tab, its pane or its window: a begin
 // in its run would come in after (F5.3).
 func TestCloseRunning(t *testing.T) {
-	a, c := inConsole(t, "", "")
+	a, c := inQuery(t, "", "")
 	feed(t, a, "<Space>c<Space>p")
 	c.running = &run{}
 	for _, act := range []string{"tab.close", "pane.close", "window.close"} {
 		a.toast = ""
-		if a.run(act, 0); a.toast != "正在执行，结束后再关闭" || len(a.sess.consoles()) != 1 || len(a.sess.Windows) != 2 {
-			t.Errorf("%s: toast %q, %d consoles, %d windows", act, a.toast, len(a.sess.consoles()), len(a.sess.Windows))
+		if a.run(act, 0); a.toast != "正在执行，结束后再关闭" || len(a.sess.queries()) != 1 || len(a.sess.Windows) != 2 {
+			t.Errorf("%s: toast %q, %d queries, %d windows", act, a.toast, len(a.sess.queries()), len(a.sess.Windows))
 		}
 	}
 }
@@ -178,7 +178,7 @@ func TestCloseRunning(t *testing.T) {
 // A deadlock, MySQL taking the whole transaction back, says so; another
 // error does not (§8.2).
 func TestDeadlocked(t *testing.T) {
-	a, c := inConsole(t, "", "")
+	a, c := inQuery(t, "", "")
 	if a.deadlocked(c.conn, errors.New("Lock wait timeout exceeded")) != nil {
 		t.Error("a lock wait timeout")
 	}

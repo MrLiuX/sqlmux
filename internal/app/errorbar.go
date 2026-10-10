@@ -42,7 +42,7 @@ func clearBar(b **errorBar, kind string) {
 	}
 }
 
-// errorAt is where character pos (from 1) of stmt is in a console's text,
+// errorAt is where character pos (from 1) of stmt is in a query's text,
 // stmt starting at its byte off: 位置：第 3 行第 12 列.
 func errorAt(text string, off int, stmt string, pos int) string {
 	i := 0

@@ -47,7 +47,7 @@ func TestResultPaging(t *testing.T) {
 	a, _ := inRun(t, &d.execDB, "")
 	a.sess.Conns[0].Main = db.NewWorker(d)
 	a.maxRows = 3
-	c := consoleOf(a.focused())
+	c := queryOf(a.focused())
 	c.ed.Load(q + ";\nselect 2;\nselect * from u limit 5;")
 	press(t, a, "ggVG<CR>")
 	p := a.win().Result
@@ -73,7 +73,7 @@ func TestResultPaging(t *testing.T) {
 	// the export is of the page shown, its name saying which
 	t.Chdir(t.TempDir())
 	a.run("result.export", 0)
-	if data, err := os.ReadFile(fmt.Sprintf("console_1-%d-p2.csv", tab(1).run.seq)); err != nil || strings.Count(string(data), "\n") != 4 {
+	if data, err := os.ReadFile(fmt.Sprintf("query_1-%d-p2.csv", tab(1).run.seq)); err != nil || strings.Count(string(data), "\n") != 4 {
 		t.Errorf("export of page 2: %q %v, toast %q", data, err, a.toast)
 	}
 	if tab(2).page.Rows == nil || tab(2).offset != 0 {
@@ -141,7 +141,7 @@ func TestResultPaging(t *testing.T) {
 }
 
 // A statement after a SET of its run has no pages: asked alone, it would
-// run with the console's schema again and read another table; one before
+// run with the query's schema again and read another table; one before
 // the SET has (F10.4).
 func TestResultNoPagesAfterSet(t *testing.T) {
 	d := &pagesDB{pages: map[string]db.Result{
@@ -150,7 +150,7 @@ func TestResultNoPagesAfterSet(t *testing.T) {
 	a, _ := inRun(t, &d.execDB, "")
 	a.sess.Conns[0].Main = db.NewWorker(d)
 	a.maxRows = 3
-	consoleOf(a.focused()).ed.Load("select 1;\nset x to y;\nselect 2;")
+	queryOf(a.focused()).ed.Load("select 1;\nset x to y;\nselect 2;")
 	press(t, a, "ggVG<CR>")
 	p := a.win().Result
 	if len(p.Tabs) != 3 || !p.Tabs[1].Result.pageable || p.Tabs[2].Result.pageable {
@@ -158,7 +158,7 @@ func TestResultNoPagesAfterSet(t *testing.T) {
 	}
 }
 
-// A page whose console's schema cannot be set logs the SET as what failed,
+// A page whose query's schema cannot be set logs the SET as what failed,
 // as a run does, not the statement that never ran (§8.6, F10.4).
 func TestResultPageSetFails(t *testing.T) {
 	d := &pagesDB{pages: map[string]db.Result{"select 1\nLIMIT 4": cut(rows(3)), "select 1\nLIMIT 4 OFFSET 3": rows(1)}}
@@ -200,7 +200,7 @@ func TestResultTextPages(t *testing.T) {
 	}
 }
 
-// A page is sent as the run of the console is: in the manual mode in a
+// A page is sent as the run of the query is: in the manual mode in a
 // transaction begun before it, the connection's status taken from where it
 // comes back, the connection busy meanwhile; a cancel is logged and told, the
 // tab as it was; a deadlock says so; a connection not up runs nothing; the

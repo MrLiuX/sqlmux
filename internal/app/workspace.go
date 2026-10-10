@@ -22,7 +22,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
-// Pane is the sidebar or one of the split tree's: tables and consoles,
+// Pane is the sidebar or one of the split tree's: tables and queries,
 // side by side in its tabs (§5).
 type Pane struct {
 	ID        int // stable; the sidebar is 0
@@ -46,12 +46,12 @@ func (p *Pane) tab() *Tab {
 	return nil
 }
 
-// landing is what a new tab is until a table or a console takes its place
+// landing is what a new tab is until a table or a query takes its place
 // (§5「引导页」).
 func landing() Tab { return Tab{Name: i18n.T("新 tab")} }
 
 // landing reports whether t shows the landing page: a new tab, or no tab.
-func (t *Tab) landing() bool { return t == nil || t.Data == nil && t.Console == nil && t.Result == nil }
+func (t *Tab) landing() bool { return t == nil || t.Data == nil && t.Query == nil && t.Result == nil }
 
 // putTab puts tab in pane p: over the current tab, or after the last one,
 // which it becomes, the current one the previous.
@@ -137,7 +137,7 @@ type Session struct {
 	winID   int         // the highest window ID handed out
 	prevWin int         // the ID of the window used before the one shown, SPC l's; 0 for none
 	RunSeq  int         // the last run's number, #42 on its result tabs (§11)
-	warning string      // console_1's file could not be read: a toast on start (§11)
+	warning string      // query_1's file could not be read: a toast on start (§11)
 	closed  []closedTab // the tabs closed last, the newest last: tab.reopen's (F5.16)
 
 	// When each tab was last the focused pane's current one, a count by
@@ -148,15 +148,15 @@ type Session struct {
 	focused any
 }
 
-// tabKey is what a tab is known by: its table, console or result; nil for a
+// tabKey is what a tab is known by: its table, query or result; nil for a
 // landing tab, which none are.
 func tabKey(tb *Tab) any {
 	switch {
 	case tb == nil:
 	case tb.Data != nil:
 		return tb.Data
-	case tb.Console != nil:
-		return tb.Console
+	case tb.Query != nil:
+		return tb.Query
 	case tb.Result != nil:
 		return tb.Result
 	}
@@ -211,7 +211,7 @@ type Conn struct {
 	// nil once one went through (F8.19). The connection stays State
 	// connReady: its next request dials again.
 	downMain, downMeta error
-	// Manual is the transaction mode, its consoles' and its saves': a run
+	// Manual is the transaction mode, its queries' and its saves': a run
 	// or a save begins one, which stays till committed or rolled back
 	// (F5.3). Each connects in the auto mode.
 	Manual bool
@@ -224,9 +224,9 @@ type Conn struct {
 	colsAsked map[tableID]bool    // for names' colors (§7.3): asked once, till cols is dropped
 	ddl       map[tableID]ddlText // the palette's previews (F4.2), dropped with cols
 
-	// DB is the database, on console titles, "" for MySQL, whose schemas
+	// DB is the database, on query titles, "" for MySQL, whose schemas
 	// are its databases; startedPath Main's search_path as it connected;
-	// mainPath the schema a console's run last put first on it, "" when
+	// mainPath the schema a query's run last put first on it, "" when
 	// not known, touched in Main's requests only (§8.6).
 	DB                    string
 	startedPath, mainPath string
@@ -281,8 +281,8 @@ func (a *App) conn() *Conn {
 		switch {
 		case t.Data != nil:
 			c = t.Data.conn
-		case t.Console != nil:
-			c = t.Console.conn
+		case t.Query != nil:
+			c = t.Query.conn
 		case t.Result != nil && t.Result.run != nil:
 			c = t.Result.run.conn
 		}
@@ -315,13 +315,13 @@ func (c *Conn) dropCols() {
 
 // newSession is a session's default workspace (§5) over conns, start the
 // one connected: one window, data, with the sidebar, a pane with no tab
-// and console_n on start beside it at 1 : 1 (§5, F8.9), which has what its
+// and query_n on start beside it at 1 : 1 (§5, F8.9), which has what its
 // file kept (§11). A file that cannot be read leaves that pane with no tab
 // too: opened empty, the autosave would write over it.
-func newSession(name string, conns []*Conn, start *Conn, console string) *Session {
+func newSession(name string, conns []*Conn, start *Conn, query string) *Session {
 	s := bareSession(name, conns, start)
 	var w *Window
-	w, s.warning = s.newWindow(start, console)
+	w, s.warning = s.newWindow(start, query)
 	s.Windows = []*Window{w}
 	return s
 }
@@ -342,23 +342,23 @@ func (s *Session) freeWindowName() string {
 }
 
 // newWindow is a window of the default layout (§5): the sidebar, a pane
-// with no tab and console_n on conn beside it at 1 : 1 (§5, F8.9), named
-// by freeWindowName; warning says why the console's file could not be read.
-func (s *Session) newWindow(conn *Conn, console string) (w *Window, warning string) {
+// with no tab and query_n on conn beside it at 1 : 1 (§5, F8.9), named
+// by freeWindowName; warning says why the query's file could not be read.
+func (s *Session) newWindow(conn *Conn, query string) (w *Window, warning string) {
 	data := &Pane{ID: 1, Prev: -1}
-	consolePane := &Pane{ID: 2, Prev: -1}
-	if conn != nil { // a console is a connection's: none yet at a start with none (F7.4)
-		if cons, err := openConsole(conn, console); err != nil {
+	queryPane := &Pane{ID: 2, Prev: -1}
+	if conn != nil { // a query is a connection's: none yet at a start with none (F7.4)
+		if cons, err := openQuery(conn, query); err != nil {
 			warning = err.Error()
 		} else {
-			consolePane.Tabs = []Tab{{Name: console, Console: cons}}
+			queryPane.Tabs = []Tab{{Name: query, Query: cons}}
 		}
 	}
-	return s.window(&Node{Split: Horiz, Ratio: 0.5, A: leaf(data), B: leaf(consolePane)}, 2), warning
+	return s.window(&Node{Split: Horiz, Ratio: 0.5, A: leaf(data), B: leaf(queryPane)}, 2), warning
 }
 
 // blankWindow is the window window.new and session.new make: the sidebar and
-// one empty pane, the landing page, no console, as tmux's new-window (§5,
+// one empty pane, the landing page, no query, as tmux's new-window (§5,
 // F8.18).
 func (s *Session) blankWindow() *Window { return s.window(leaf(&Pane{ID: 1, Prev: -1}), 1) }
 
@@ -474,28 +474,28 @@ func (a *App) sessionNamed(name string) bool {
 	return slices.ContainsFunc(a.sessions, func(o *Session) bool { return o.Name == name })
 }
 
-// askConsoleName is console.rename: the focused console's name typed in the
+// askQueryName is query.rename: the focused query's name typed in the
 // status bar. Its name is its file's: the file is written, then renamed,
 // the state's and the tabs' names going with it. A name that is no file's,
-// or that another file, or another console open, has, is refused (F8.11).
-func (a *App) askConsoleName() {
-	t := consoleOf(a.focused())
+// or that another file, or another query open, has, is refused (F8.11).
+func (a *App) askQueryName() {
+	t := queryOf(a.focused())
 	if t == nil {
 		return
 	}
-	a.askName = &nameAsk{label: i18n.T("console 名："), in: ui.Input{Text: t.name, Pos: len(t.name)}, done: func(a *App, name string) (tea.Cmd, bool) {
+	a.askName = &nameAsk{label: i18n.T("query 名："), in: ui.Input{Text: t.name, Pos: len(t.name)}, done: func(a *App, name string) (tea.Cmd, bool) {
 		if name == t.name {
 			return nil, false
 		}
-		path := config.ConsolePath(name)
-		if err := config.CheckConsoleName(name); err != nil {
+		path := config.QueryPath(name)
+		if err := config.CheckQueryName(name); err != nil {
 			return a.showToast(err.Error(), toastTTL), true
 		}
 		fi, err := os.Stat(path)
 		old, _ := os.Stat(t.path)
 		switch {
-		case err == nil && !os.SameFile(fi, old) || a.consoleOpen(name, t): // a name of its own file only differing in case is its own
-			return a.showToast(i18n.T("已有同名 console"), toastTTL), true
+		case err == nil && !os.SameFile(fi, old) || a.queryOpen(name, t): // a name of its own file only differing in case is its own
+			return a.showToast(i18n.T("已有同名 query"), toastTTL), true
 		case err != nil && !errors.Is(err, fs.ErrNotExist):
 			return a.showToast(err.Error(), toastTTL), true
 		}
@@ -505,20 +505,20 @@ func (a *App) askConsoleName() {
 		if err := os.Rename(t.path, path); err != nil && !errors.Is(err, fs.ErrNotExist) { // no file yet: nothing typed
 			return a.showToast(err.Error(), toastTTL), true
 		}
-		delete(a.state.Consoles, t.name)
+		delete(a.state.Queries, t.name)
 		t.name, t.path = name, path
 		for _, s := range a.sessions {
 			for _, w := range s.Windows {
 				for _, p := range w.Root.Leaves() {
 					for i := range p.Tabs {
-						if p.Tabs[i].Console == t {
+						if p.Tabs[i].Query == t {
 							p.Tabs[i].Name = name
 						}
 					}
 				}
 			}
 		}
-		return a.keepConsole(t), false
+		return a.keepQuery(t), false
 	}}
 }
 
@@ -535,7 +535,7 @@ func typeName(in *ui.Input, k keymap.Key) (name string, done bool) {
 	return "", false
 }
 
-// closeWindow is window.close (§5): the window's consoles written, asked
+// closeWindow is window.close (§5): the window's queries written, asked
 // first when changes would go; the one used before it shown, else the one
 // before it. The last one stays, as the last pane.
 func (a *App) closeWindow() tea.Cmd {
@@ -548,7 +548,7 @@ func (a *App) closeWindow() tea.Cmd {
 	if w.Root != nil {
 		ps = w.Root.Leaves()
 	}
-	return a.closeAsking(unsaved(ps...), i18n.T("这个 window 里"), consolesIn(ps...), func() tea.Cmd {
+	return a.closeAsking(unsaved(ps...), i18n.T("这个 window 里"), queriesIn(ps...), func() tea.Cmd {
 		if cmd, ok := a.flushAll(ps...); !ok {
 			return cmd
 		}
@@ -563,11 +563,11 @@ func (a *App) closeWindow() tea.Cmd {
 }
 
 // OpenEmpty is the session of a start with no connection: the default
-// layout with no console, a console being a connection's, the connection
+// layout with no query, a query being a connection's, the connection
 // form open as the App begins (§14「启动时找不到连接」).
 func OpenEmpty() *Session {
 	s := &Session{Name: "sqlmux", open: map[string]bool{}}
-	w, _ := s.newWindow(nil, config.ConsoleName(1))
+	w, _ := s.newWindow(nil, config.QueryName(1))
 	s.Windows = []*Window{w}
 	return s
 }
@@ -586,7 +586,7 @@ func Open(ctx context.Context, specs []config.Connection, start int) (*Session, 
 		return nil, err
 	}
 	first.take(d)
-	return newSession(specs[start].Name, conns, first, config.ConsoleName(1)), nil
+	return newSession(specs[start].Name, conns, first, config.QueryName(1)), nil
 }
 
 // dialed is a connection's Main and Meta as dial connected them, where
@@ -751,28 +751,28 @@ func (a *App) newTab() {
 	putTab(p, landing(), false)
 }
 
-// newConsole is console.new (§5, §11): console_n, n the least no session
+// newQuery is query.new (§5, §11): query_n, n the least no session
 // has open, with what its file keeps, on conn, in its Schema, kept for the
 // file, in place of a landing tab or in a new tab of openTarget's pane.
-// ok is false when the file cannot be read: no console, a toast.
-func (a *App) newConsole(conn *Conn) (cmd tea.Cmd, ok bool) {
-	p, name := a.openTarget(), a.freeConsole()
-	c, err := openConsole(conn, name)
+// ok is false when the file cannot be read: no query, a toast.
+func (a *App) newQuery(conn *Conn) (cmd tea.Cmd, ok bool) {
+	p, name := a.openTarget(), a.freeQuery()
+	c, err := openQuery(conn, name)
 	if err != nil {
 		return a.showToast(err.Error(), toastTTL), false
 	}
 	a.showPane(p.ID)
-	putTab(p, Tab{Name: name, Console: c}, p.tab().landing())
-	return a.keepConsole(c), true
+	putTab(p, Tab{Name: name, Query: c}, p.tab().landing())
+	return a.keepQuery(c), true
 }
 
-// restoreConsole puts console t, console_1 of the layout started with, on
+// restoreQuery puts query t, query_1 of the layout started with, on
 // the connection and schema its file last ran on (§11): connected, now;
 // not yet, once it is, t staying where it opened meanwhile. One gone from
 // connections.toml leaves t as it is; a schema gone, gotCatalog's fallback
-// takes it back. New consoles go on the current connection (newConsole).
-func (a *App) restoreConsole(t *consoleTab) tea.Cmd {
-	st, ok := a.state.Consoles[t.name]
+// takes it back. New queries go on the current connection (newQuery).
+func (a *App) restoreQuery(t *queryTab) tea.Cmd {
+	st, ok := a.state.Queries[t.name]
 	i := slices.IndexFunc(a.sess.Conns, func(c *Conn) bool { return c.Spec.Name == st.Conn })
 	switch {
 	case !ok || i < 0:
@@ -785,11 +785,11 @@ func (a *App) restoreConsole(t *consoleTab) tea.Cmd {
 	return a.connect(t.want)
 }
 
-// pickConn is console t's connection dropdown taking c (§7.8「console
+// pickConn is query t's connection dropdown taking c (§7.8「query
 // 标题」): not while t's own is in a transaction, nor while t runs (a run
 // may begin one); one not connected connects first, t going over once it
 // is.
-func (a *App) pickConn(t *consoleTab, c *Conn) tea.Cmd {
+func (a *App) pickConn(t *queryTab, c *Conn) tea.Cmd {
 	t.want = nil
 	why := t.stayReason()
 	switch {
@@ -804,9 +804,9 @@ func (a *App) pickConn(t *consoleTab, c *Conn) tea.Cmd {
 	return a.connect(c)
 }
 
-// stayReason is why console t stays on its connection, "" for none: its
+// stayReason is why query t stays on its connection, "" for none: its
 // own in a transaction, or t running, a run that may begin one (§7.8).
-func (t *consoleTab) stayReason() string {
+func (t *queryTab) stayReason() string {
 	switch {
 	case t.running != nil:
 		return i18n.T("正在执行，结束后再换连接")
@@ -816,29 +816,29 @@ func (t *consoleTab) stayReason() string {
 	return ""
 }
 
-// switchConn puts console t on connection c and schema: its next run runs
+// switchConn puts query t on connection c and schema: its next run runs
 // there; its file keeps them (§11).
-func (a *App) switchConn(t *consoleTab, c *Conn, schema string) tea.Cmd {
+func (a *App) switchConn(t *queryTab, c *Conn, schema string) tea.Cmd {
 	t.conn, t.schema, t.comp, t.asked = c, schema, nil, nil
-	return a.keepConsole(t)
+	return a.keepQuery(t)
 }
 
-// keepConsole writes where console t runs to the state, by its file
+// keepQuery writes where query t runs to the state, by its file
 // (§11, §14).
-func (a *App) keepConsole(t *consoleTab) tea.Cmd {
-	if a.state.Consoles == nil {
-		a.state.Consoles = map[string]config.ConsoleState{}
+func (a *App) keepQuery(t *queryTab) tea.Cmd {
+	if a.state.Queries == nil {
+		a.state.Queries = map[string]config.QueryState{}
 	}
-	a.state.Consoles[t.name] = config.ConsoleState{Conn: t.conn.Spec.Name, Schema: t.schema}
+	a.state.Queries[t.name] = config.QueryState{Conn: t.conn.Spec.Name, Schema: t.schema}
 	return a.saveState()
 }
 
-// consoleOpen is whether a console of any session but except is open on the
+// queryOpen is whether a query of any session but except is open on the
 // file name is: two on one file would write over each other's autosaves
 // (§11). The file systems of macOS and Windows tell names apart by more
 // than case no better than that, so neither does this.
-func (a *App) consoleOpen(name string, except *consoleTab) bool {
-	return slices.ContainsFunc(a.consoles(), func(c *consoleTab) bool { return c != except && strings.EqualFold(c.name, name) })
+func (a *App) queryOpen(name string, except *queryTab) bool {
+	return slices.ContainsFunc(a.queries(), func(c *queryTab) bool { return c != except && strings.EqualFold(c.name, name) })
 }
 
 // sessionOf is the session c is a connection of: an answer may be for one
@@ -852,27 +852,27 @@ func (a *App) sessionOf(c *Conn) *Session {
 	return nil
 }
 
-// consoles is every session's consoles: an answer may be for a session not
+// queries is every session's queries: an answer may be for a session not
 // attached (F5.1).
-func (a *App) consoles() []*consoleTab {
-	var out []*consoleTab
+func (a *App) queries() []*queryTab {
+	var out []*queryTab
 	for _, s := range a.sessions {
-		out = append(out, s.consoles()...)
+		out = append(out, s.queries()...)
 	}
 	return out
 }
 
-// freeConsole is the first of console_1, console_2… no session has open and
-// no file keeps: a closed console stays in the Consoles list till it is
+// freeQuery is the first of query_1, query_2… no session has open and
+// no file keeps: a closed query stays in the Queries list till it is
 // deleted there (§11, F8.21).
-func (a *App) freeConsole() string {
-	return freeConsoleName(func(name string) bool { return a.consoleOpen(name, nil) })
+func (a *App) freeQuery() string {
+	return freeQueryName(func(name string) bool { return a.queryOpen(name, nil) })
 }
 
-// freeConsoleName is the first of console_1, console_2… taken says is not, and that has no file.
-func freeConsoleName(taken func(string) bool) string {
+// freeQueryName is the first of query_1, query_2… taken says is not, and that has no file.
+func freeQueryName(taken func(string) bool) string {
 	for n := 1; ; n++ {
-		if name := config.ConsoleName(n); !taken(name) && !config.ConsoleExists(name) {
+		if name := config.QueryName(n); !taken(name) && !config.QueryExists(name) {
 			return name
 		}
 	}
@@ -896,16 +896,16 @@ func (s *Session) panes() []*Pane {
 	return ps
 }
 
-// consoles is the session's consoles, in every window.
-func (s *Session) consoles() []*consoleTab { return consolesIn(s.panes()...) }
+// queries is the session's queries, in every window.
+func (s *Session) queries() []*queryTab { return queriesIn(s.panes()...) }
 
-// consolesIn is the consoles of panes.
-func consolesIn(panes ...*Pane) []*consoleTab {
-	var out []*consoleTab
+// queriesIn is the queries of panes.
+func queriesIn(panes ...*Pane) []*queryTab {
+	var out []*queryTab
 	for _, p := range panes {
 		for _, t := range p.Tabs {
-			if t.Console != nil {
-				out = append(out, t.Console)
+			if t.Query != nil {
+				out = append(out, t.Query)
 			}
 		}
 	}
@@ -962,7 +962,7 @@ func dropTab(p *Pane, i int) {
 	}
 }
 
-// closeTabAsking is x on pane p's tab i (F3.35): a console's is written
+// closeTabAsking is x on pane p's tab i (F3.35): a query's is written
 // first, asked about only when its connection's transaction would go with
 // it (§10.5, §11); a table's with changes asks first.
 func (a *App) closeTabAsking(p *Pane, i int) tea.Cmd {
@@ -974,8 +974,8 @@ func (a *App) closeTabThen(p *Pane, i int, after func() tea.Cmd) tea.Cmd {
 	if i < 0 || i >= len(p.Tabs) { // tab.close.at's i may come from a user's map
 		return nil
 	}
-	if t := p.Tabs[i].Console; t != nil {
-		return a.closeAsking(0, "", []*consoleTab{t}, func() tea.Cmd {
+	if t := p.Tabs[i].Query; t != nil {
+		return a.closeAsking(0, "", []*queryTab{t}, func() tea.Cmd {
 			if err := t.flush(); err != nil {
 				return a.saveFailed(err)
 			}
@@ -1195,9 +1195,9 @@ func (a *App) scrollPane(id, down, right int) {
 		a.scrollTree(down)
 	case p != nil && resultOf(p) != nil && resultOf(p).run == nil: // the log
 		a.logMove(p, func(r, c, _, _ int) (int, int) { return r + down*wheelStep, c })
-	case p != nil && consoleOf(p) != nil: // not sideways: nowrap scrolls with the cursor (§11)
-		c := consoleOf(p)
-		a.consoleView(p, c)
+	case p != nil && queryOf(p) != nil: // not sideways: nowrap scrolls with the cursor (§11)
+		c := queryOf(p)
+		a.queryView(p, c)
 		c.ed.Scroll(down * wheelStep)
 		c.comp = nil
 	case p != nil:
@@ -1205,14 +1205,14 @@ func (a *App) scrollPane(id, down, right int) {
 	}
 }
 
-// closedTab is a table or a console tab that was closed, as it was (F5.16).
+// closedTab is a table or a query tab that was closed, as it was (F5.16).
 type closedTab struct {
 	win, pane int // the window and pane it was in, by ID
 	conn      *Conn
 	table     db.Table // a table's, with the request it had
 	req       request
 	turned    bool   // a table's: it was turned
-	console   string // the console's name, "" for a table
+	query     string // the query's name, "" for a table
 	schema    string
 }
 
@@ -1220,15 +1220,15 @@ type closedTab struct {
 const closedKept = 20
 
 // recordClosed notes tab, closed in pane of window, for tab.reopen: a table
-// or a console, no landing tab or result.
+// or a query, no landing tab or result.
 func (s *Session) recordClosed(win, pane int, tab Tab) {
 	var c closedTab
 	switch {
 	case tab.Data != nil:
 		d := tab.Data
 		c = closedTab{conn: d.conn, table: d.table, req: request{applied: d.applied, order: d.order, desc: d.desc, limit: d.limit}, turned: d.transpose}
-	case tab.Console != nil:
-		c = closedTab{conn: tab.Console.conn, console: tab.Console.name, schema: tab.Console.schema}
+	case tab.Query != nil:
+		c = closedTab{conn: tab.Query.conn, query: tab.Query.name, schema: tab.Query.schema}
 	default:
 		return
 	}
@@ -1241,7 +1241,7 @@ func (s *Session) recordClosed(win, pane int, tab Tab) {
 
 // reopenTab is tab.reopen: the tab closed last, in its pane when it is
 // still there, else in the current one, a table with the WHERE, ORDER and
-// LIMIT it had, a console on its file, connection and schema. One that is
+// LIMIT it had, a query on its file, connection and schema. One that is
 // open already is only shown (F3.37, §11); no tab to reopen is no change.
 func (a *App) reopenTab() tea.Cmd {
 	s := a.sess
@@ -1250,7 +1250,7 @@ func (a *App) reopenTab() tea.Cmd {
 	}
 	c := s.closed[len(s.closed)-1]
 	s.closed = s.closed[:len(s.closed)-1]
-	if c.console != "" && a.focusConsole(c.console) {
+	if c.query != "" && a.focusQuery(c.query) {
 		return nil
 	}
 	p := a.openTarget()
@@ -1258,27 +1258,27 @@ func (a *App) reopenTab() tea.Cmd {
 		a.selectWindow(wi)
 		p = s.Windows[wi].pane(c.pane)
 	}
-	if c.console == "" {
+	if c.query == "" {
 		return a.openTableAs(p, c.conn, c.table, &c.req, c.turned)
 	}
-	t, err := openConsole(c.conn, c.console)
+	t, err := openQuery(c.conn, c.query)
 	if err != nil {
 		return a.showToast(err.Error(), toastTTL)
 	}
 	t.schema = c.schema
 	a.showPane(p.ID)
-	putTab(p, Tab{Name: c.console, Console: t}, p.tab().landing())
-	return a.keepConsole(t)
+	putTab(p, Tab{Name: c.query, Query: t}, p.tab().landing())
+	return a.keepQuery(t)
 }
 
-// focusConsole goes to the tab of the console called name, in whichever
+// focusQuery goes to the tab of the query called name, in whichever
 // window of whichever session has it open, that session attached; false when
 // none has (F5.16, F8.21).
-func (a *App) focusConsole(name string) bool {
+func (a *App) focusQuery(name string) bool {
 	for _, s := range a.sessions {
 		for wi, w := range s.Windows {
 			for _, p := range w.Root.Leaves() {
-				if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Console != nil && strings.EqualFold(tb.Console.name, name) }); i >= 0 {
+				if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Query != nil && strings.EqualFold(tb.Query.name, name) }); i >= 0 {
 					if s != a.sess {
 						a.attach(s)
 					}

@@ -32,9 +32,9 @@ leader = "<Space>"
 "<Leader>q" = "pane.number"
 "<Leader>b" = "tree.toggle"
 "<Leader>r" = "result.toggle"
-"?" = "keyhelp.open" # every pane in NORMAL: a console's VISUAL ? stays vim's (§6.5)
+"?" = "keyhelp.open" # every pane in NORMAL: a query's VISUAL ? stays vim's (§6.5)
 "<Leader>?" = "keyhelp.open" # anywhere
-"<Esc>" = "pane.error.close" # a console's VISUAL esc stays vim's: no normal scope there (§7.8)
+"<Esc>" = "pane.error.close" # a query's VISUAL esc stays vim's: no normal scope there (§7.8)
 "gt" = "tab.next"
 "gT" = "tab.prev"
 
@@ -75,7 +75,7 @@ leader = "<Space>"
 "p" = "grid.paste"
 "yi" = "grid.yank.insert"
 "Y" = "grid.yank.json"
-# not in normal: a console's : and ; are its vim's (§6.8)
+# not in normal: a query's : and ; are its vim's (§6.8)
 ":" = "palette.open"
 ";" = "palette.sql"
 
@@ -89,7 +89,7 @@ leader = "<Space>"
 "q" = "result.close"
 "x" = "result.close"
 "R" = "result.rerun"
-"]" = "result.page.next" # a console's result, cut at max_rows: the next page of its statement (F10.4)
+"]" = "result.page.next" # a query's result, cut at max_rows: the next page of its statement (F10.4)
 "[" = "result.page.prev"
 
 [keys.tree]
@@ -110,15 +110,15 @@ leader = "<Space>"
 
 [keys.landing] # a new tab, or a pane with none (§5)
 "t" = "tab.table"
-"c" = "console.new"
+"c" = "query.new"
 "x" = "tab.close"
 ":" = "palette.open"
 ";" = "palette.sql"
 
-[keys.console] # NORMAL / VISUAL; everything else goes to the vim engine
-"<CR>" = "console.run"
+[keys.query] # NORMAL / VISUAL; everything else goes to the vim engine
+"<CR>" = "query.run"
 "s" = "jump.start" # over vim's s in NORMAL; in VISUAL it is the vim's still (F10.8)
-"gs" = "console.schema"
+"gs" = "query.schema"
 
 [keys.palette] # quick SQL lives in the palette's SQL mode
 "<Up>" = "palette.up"

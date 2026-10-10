@@ -6,7 +6,7 @@ import (
 )
 
 // "+ and "* are the system clipboard (F3.38): a yank or a delete into it
-// gives the console its text, the unnamed register too, as vim's; a plain
+// gives the query its text, the unnamed register too, as vim's; a plain
 // one does not. "+p waits for the clipboard, then puts it as a register
 // charwise, or linewise with a newline at its end, nothing when it is
 // empty; the unnamed register is kept, but for one a "+ yank filled, which

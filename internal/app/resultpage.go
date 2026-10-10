@@ -29,7 +29,7 @@ func (rt *resultTab) canPage(d int) bool {
 }
 
 // resultPage is ] (d 1) and [ on the result tab shown: its statement asked
-// for again on its console's connection with the OFFSET of the next page or
+// for again on its query's connection with the OFFSET of the next page or
 // the one before, which then takes the place of the rows in this tab only,
 // the other tabs of its run and the pinned ones left as they are. The rows
 // shown stay until the page is in. A page of a read with no ORDER BY may

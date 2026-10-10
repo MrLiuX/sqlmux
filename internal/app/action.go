@@ -46,7 +46,7 @@ func init() {
 		"layout.save":     {Title: i18n.N("保存布局为…"), Run: do(func(a *App, _ Args) { a.askLayoutName() })},
 		"session.close":   {Title: i18n.N("关闭 session"), Run: func(a *App, _ Args) tea.Cmd { return a.closeSession(a.sess) }},
 		"session.rename":  {Title: i18n.N("重命名 session…"), Run: do(func(a *App, _ Args) { a.askSessionName() })},
-		"console.rename":  {Title: i18n.N("重命名 console…"), Run: do(func(a *App, _ Args) { a.askConsoleName() })},
+		"query.rename":    {Title: i18n.N("重命名 query…"), Run: do(func(a *App, _ Args) { a.askQueryName() })},
 		"layout.open": {Title: i18n.N("打开布局"), Run: func(a *App, _ Args) tea.Cmd {
 			if len(a.sess.Conns) == 0 { // a layout is of connections (F7.4)
 				return a.noConnection()
@@ -130,7 +130,7 @@ func init() {
 			return a.closeTabAsking(p, i)
 		}},
 		// :wq (§11): a table's changes are saved first, and it closes once
-		// they are; a console is written by closing it anyway.
+		// they are; a query is written by closing it anyway.
 		"tab.save.close": {Title: i18n.N("保存并关闭 tab"), Run: func(a *App, _ Args) tea.Cmd {
 			if t := dataOf(a.focused()); t != nil && t.changes() > 0 {
 				return a.saveTab(t, true)
@@ -150,19 +150,19 @@ func init() {
 				a.palette.into = p
 			}
 		})},
-		"console.new": {Title: i18n.N("新建 console"), Run: func(a *App, _ Args) tea.Cmd {
+		"query.new": {Title: i18n.N("新建 query"), Run: func(a *App, _ Args) tea.Cmd {
 			c := a.conn()
 			if c == nil {
 				return a.noConnection()
 			}
-			cmd, _ := a.newConsole(c)
+			cmd, _ := a.newQuery(c)
 			return cmd
 		}},
-		// "console.run <line>" is a click on a ▶ (§11「执行」).
-		"console.run":    {Title: i18n.N("执行"), Run: func(a *App, args Args) tea.Cmd { return a.consoleRun(args.Arg) }},
-		"console.schema": {Title: i18n.N("切换 schema"), Run: do(func(a *App, _ Args) { a.openConsoleDrop(dropSchema) })},
-		"console.conn":   {Title: i18n.N("切换连接…"), Run: do(func(a *App, _ Args) { a.openConsoleDrop(dropConsoleConn) })},
-		"console.tx":     {Run: do(func(a *App, _ Args) { a.openConsoleDrop(dropTx) })}, // a click on Tx: 自动 ▾; the palette has tx.mode (§7.8)
+		// "query.run <line>" is a click on a ▶ (§11「执行」).
+		"query.run":    {Title: i18n.N("执行"), Run: func(a *App, args Args) tea.Cmd { return a.queryRun(args.Arg) }},
+		"query.schema": {Title: i18n.N("切换 schema"), Run: do(func(a *App, _ Args) { a.openQueryDrop(dropSchema) })},
+		"query.conn":   {Title: i18n.N("切换连接…"), Run: do(func(a *App, _ Args) { a.openQueryDrop(dropQueryConn) })},
+		"query.tx":     {Run: do(func(a *App, _ Args) { a.openQueryDrop(dropTx) })}, // a click on Tx: 自动 ▾; the palette has tx.mode (§7.8)
 		// The current connection's transaction (§5, F5.3).
 		"tx.mode": {Title: i18n.N("手动提交事务"), Run: func(a *App, _ Args) tea.Cmd {
 			c := a.conn()
@@ -207,7 +207,7 @@ func init() {
 			if cmd, ok := a.flushAll(a.focused()); !ok {
 				return cmd
 			}
-			return a.closeAsking(unsaved(a.focused()), i18n.T("这个 pane 里"), consolesIn(a.focused()), func() tea.Cmd { a.closePane(); return nil })
+			return a.closeAsking(unsaved(a.focused()), i18n.T("这个 pane 里"), queriesIn(a.focused()), func() tea.Cmd { a.closePane(); return nil })
 		}},
 		"pane.zoom": {Title: i18n.N("缩放 / 还原"), Run: do(func(a *App, _ Args) { a.toggleZoom() }),
 			On: func(a *App) bool { return a.win().Zoom != 0 }},
@@ -224,7 +224,7 @@ func init() {
 		"tree.open.tab": {Title: i18n.N("打开"), Run: func(a *App, _ Args) tea.Cmd { return a.treeOpen(true) }},
 		"tree.filter":   {Title: i18n.N("过滤"), Run: do(func(a *App, _ Args) { a.treeFilter() })},
 		"tree.refresh":  {Title: i18n.N("刷新表列表"), Run: func(a *App, _ Args) tea.Cmd { return a.refreshTree() }},
-		"tree.delete":   {Title: i18n.N("删除 console 文件、表、视图"), Run: func(a *App, _ Args) tea.Cmd { return a.treeDelete() }},
+		"tree.delete":   {Title: i18n.N("删除 query 文件、表、视图"), Run: func(a *App, _ Args) tea.Cmd { return a.treeDelete() }},
 		// Keys inside the dropdowns and the COLS list (§6.8): untitled, like the palette's.
 		"grid.ddl.column": {Title: i18n.N("列的定义"), Run: func(a *App, _ Args) tea.Cmd { return a.openDDL(true) }},
 		"grid.ddl.table":  {Title: i18n.N("表的 DDL"), Run: func(a *App, _ Args) tea.Cmd { return a.openDDL(false) }},
@@ -283,8 +283,8 @@ func init() {
 		"where.run":   {Title: i18n.N("执行"), Local: true, Run: when(inWhere, func(a *App) tea.Cmd { return a.runWhere(a.typingTab()) })},
 		"where.leave": {Title: i18n.N("回到表格"), Local: true, Run: when(inWhere, func(a *App) tea.Cmd { a.typingTab().stopTyping(); return nil })},
 		"session.new": {Title: i18n.N("新建 session"), Run: func(a *App, _ Args) tea.Cmd { return a.askNewSession() }},
-		"console.format": {Title: i18n.N("格式化整个 console"), Run: func(a *App, _ Args) tea.Cmd {
-			if t := a.focusedConsole(); t != nil {
+		"query.format": {Title: i18n.N("格式化整个 query"), Run: func(a *App, _ Args) tea.Cmd {
+			if t := a.focusedQuery(); t != nil {
 				return a.formatAll(t)
 			}
 			return nil
@@ -363,8 +363,8 @@ func init() {
 			case p == nil:
 			case dataOf(p) != nil:
 				dataOf(p).bar = nil
-			case consoleOf(p) != nil:
-				consoleOf(p).bar = nil
+			case queryOf(p) != nil:
+				queryOf(p).bar = nil
 			}
 			return nil
 		}},
@@ -444,14 +444,14 @@ func init() {
 		"cell.segment.next": {Title: i18n.N("下一段"), Local: true, Run: onCell(func(t *dataTab) { t.moveSeg(1) })},
 		"cell.segment.prev": {Title: i18n.N("上一段"), Local: true, Run: onCell(func(t *dataTab) { t.moveSeg(-1) })},
 		// a time's parts clicked: "cell.seg 3" picks one, "cell.inc 3" / "cell.dec 3" step it
-		"cell.seg":         {Run: onSeg(func(t *dataTab, i int) { t.stepSeg(i, 0) })},
-		"cell.inc":         {Run: onSeg(func(t *dataTab, i int) { t.stepSeg(i, 1) })},
-		"cell.dec":         {Run: onSeg(func(t *dataTab, i int) { t.stepSeg(i, -1) })},
-		"cell.options":     {Run: onCell(func(t *dataTab) { t.cell.folded = !t.cell.folded })},
-		"cell.null":        {Title: i18n.N("设为 NULL"), Run: do(func(a *App, _ Args) { a.setSpecial(false) })},
-		"cell.default":     {Title: i18n.N("设为 DEFAULT"), Run: do(func(a *App, _ Args) { a.setSpecial(true) })},
-		"save":             {Title: i18n.N("保存"), Run: func(a *App, _ Args) tea.Cmd { return a.save() }},
-		"console.external": {Title: i18n.N("在 $EDITOR 中编辑"), Run: func(a *App, _ Args) tea.Cmd { return a.external() }},
+		"cell.seg":       {Run: onSeg(func(t *dataTab, i int) { t.stepSeg(i, 0) })},
+		"cell.inc":       {Run: onSeg(func(t *dataTab, i int) { t.stepSeg(i, 1) })},
+		"cell.dec":       {Run: onSeg(func(t *dataTab, i int) { t.stepSeg(i, -1) })},
+		"cell.options":   {Run: onCell(func(t *dataTab) { t.cell.folded = !t.cell.folded })},
+		"cell.null":      {Title: i18n.N("设为 NULL"), Run: do(func(a *App, _ Args) { a.setSpecial(false) })},
+		"cell.default":   {Title: i18n.N("设为 DEFAULT"), Run: do(func(a *App, _ Args) { a.setSpecial(true) })},
+		"save":           {Title: i18n.N("保存"), Run: func(a *App, _ Args) tea.Cmd { return a.save() }},
+		"query.external": {Title: i18n.N("在 $EDITOR 中编辑"), Run: func(a *App, _ Args) tea.Cmd { return a.external() }},
 		"confirm.yes": {Title: i18n.N("确定"), Local: true, Run: when(inConfirm, func(a *App) tea.Cmd {
 			then := a.confirm.then
 			a.confirm = nil
@@ -503,7 +503,7 @@ func init() {
 		"pane.resize.up":    {Title: i18n.N("向上调整大小"), Run: do(func(a *App, args Args) { a.resizePane(Vert, -1, args.Count) })},
 		"pane.resize.right": {Title: i18n.N("向右调整大小"), Run: do(func(a *App, args Args) { a.resizePane(Horiz, 1, args.Count) })},
 	}
-	actions["quicksql.edit"] = Action{Title: i18n.N("在 console 里编辑"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { return a.quickEdit() })}
+	actions["quicksql.edit"] = Action{Title: i18n.N("在 query 里编辑"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { return a.quickEdit() })}
 }
 
 // Titles maps each titled action ID to its title: the keymap export notes

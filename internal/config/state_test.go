@@ -24,9 +24,9 @@ func TestState(t *testing.T) {
 	}
 	at := time.Date(2026, 9, 24, 14, 5, 0, 0, time.UTC)
 	want := &State{
-		Recent:   []Recent{{Kind: "table", ID: "doraemon/public.t_order"}, {Kind: "table", ID: "public.t_order"}, {Kind: "command", ID: "quit"}},
-		SQL:      map[string][]string{"doraemon": {"select 2", "select 1"}},
-		Consoles: map[string]ConsoleState{"console_1": {Conn: "doraemon", Schema: "agentable"}, "console_2": {Conn: "play"}},
+		Recent:  []Recent{{Kind: "table", ID: "doraemon/public.t_order"}, {Kind: "table", ID: "public.t_order"}, {Kind: "command", ID: "quit"}},
+		SQL:     map[string][]string{"doraemon": {"select 2", "select 1"}},
+		Queries: map[string]QueryState{"query_1": {Conn: "doraemon", Schema: "agentable"}, "query_2": {Conn: "play"}},
 		Tables: map[string]*TableState{"doraemon/public.t_order": {
 			History:   []Query{{Where: "id > 5", At: at}},
 			Favorites: []Query{{Where: "status = 'done'", Order: "amount", Desc: true, Limit: 500, At: at}},
@@ -115,7 +115,7 @@ func TestLayoutFile(t *testing.T) {
 			Panes: []LayoutPane{
 				{ID: 1, Current: 1, Tabs: []LayoutTab{
 					{Kind: "table", Connection: "doraemon", Schema: "public", Table: "t_order", Where: "id > 5", Order: "amount", Desc: true, Limit: 500, Page: 2, Cols: []string{"meta", "note"}, Transpose: true},
-					{Kind: "console", Name: "console_1", Connection: "doraemon", Schema: "agentable"},
+					{Kind: "query", Name: "query_1", Connection: "doraemon", Schema: "agentable"},
 				}},
 				{ID: 2}, {ID: 3},
 			},
@@ -200,13 +200,13 @@ id = 2
 }
 
 // A connection renamed carries its picks, table histories, quick SQL and the
-// consoles that run on it with it; another's stay (F8.16).
+// queries that run on it with it; another's stay (F8.16).
 func TestStateRenameConnection(t *testing.T) {
 	s := &State{
-		Recent:   []Recent{{"table", "play/public.t"}, {"table", "playground/public.t"}, {"command", "play/x"}},
-		Tables:   map[string]*TableState{"play/public.t": {}, "playground/public.t": {}},
-		SQL:      map[string][]string{"play": {"select 1"}, "other": {"select 2"}},
-		Consoles: map[string]ConsoleState{"console_1": {Conn: "play"}, "console_2": {Conn: "other"}},
+		Recent:  []Recent{{"table", "play/public.t"}, {"table", "playground/public.t"}, {"command", "play/x"}},
+		Tables:  map[string]*TableState{"play/public.t": {}, "playground/public.t": {}},
+		SQL:     map[string][]string{"play": {"select 1"}, "other": {"select 2"}},
+		Queries: map[string]QueryState{"query_1": {Conn: "play"}, "query_2": {Conn: "other"}},
 	}
 	s.RenameConnection("play", "dev")
 	if s.Recent[0].ID != "dev/public.t" || s.Recent[1].ID != "playground/public.t" || s.Recent[2].ID != "play/x" {
@@ -218,8 +218,8 @@ func TestStateRenameConnection(t *testing.T) {
 	if s.SQL["dev"][0] != "select 1" || s.SQL["play"] != nil || s.SQL["other"][0] != "select 2" {
 		t.Errorf("sql %v", s.SQL)
 	}
-	if s.Consoles["console_1"].Conn != "dev" || s.Consoles["console_2"].Conn != "other" {
-		t.Errorf("consoles %v", s.Consoles)
+	if s.Queries["query_1"].Conn != "dev" || s.Queries["query_2"].Conn != "other" {
+		t.Errorf("queries %v", s.Queries)
 	}
 }
 

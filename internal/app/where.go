@@ -307,11 +307,11 @@ func (a *App) sqlNames(c *Conn, text, schema string, cols *db.Columns) (names ui
 	}, missing
 }
 
-// wantCols asks for the columns of the tables the consoles on screen name
+// wantCols asks for the columns of the tables the queries on screen name
 // that the cache lacks, and the palette's previewed view does, for their
 // names' colors (§7.3, F4.2): each once, till the cache is dropped.
-// ponytail: the consoles are scanned after every message, as they are
-// drawn; keep the tables a console names per change if a big file lags
+// ponytail: the queries are scanned after every message, as they are
+// drawn; keep the tables a query names per change if a big file lags
 func (a *App) wantCols() tea.Cmd {
 	var cmds []tea.Cmd
 	want := func(c *Conn, text, schema string) {
@@ -324,7 +324,7 @@ func (a *App) wantCols() tea.Cmd {
 		}
 	}
 	for id := range a.layout() {
-		if t := consoleOf(a.win().pane(id)); t != nil {
+		if t := queryOf(a.win().pane(id)); t != nil {
 			want(t.conn, strings.Join(t.ed.Lines(), "\n"), cmp.Or(t.schema, t.conn.Schema))
 		}
 	}
@@ -335,8 +335,8 @@ func (a *App) wantCols() tea.Cmd {
 }
 
 // sqlComplete is the candidates for the cursor at pos in sql on conn, a
-// console's or the quick SQL's (§9.7): by what CompletionContext says goes
-// there, tables of schema (the console's; the connection's for the quick
+// query's or the quick SQL's (§9.7): by what CompletionContext says goes
+// there, tables of schema (the query's; the connection's for the quick
 // SQL, §8.6), of
 // X. after a schema X, a table's columns
 // after its name or alias, else the statement's tables' columns, those at
@@ -473,12 +473,12 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 }
 
 // completing is the candidate list that is up, if any: the palette's quick
-// SQL's, else the focused console's or the WHERE's being typed.
+// SQL's, else the focused query's or the WHERE's being typed.
 func (a *App) completing() *completion {
 	if a.palette != nil {
 		return a.palette.comp
 	}
-	if t := a.focusedConsole(); t != nil {
+	if t := a.focusedQuery(); t != nil {
 		return t.comp
 	}
 	if t := a.typingTab(); t != nil {
@@ -489,7 +489,7 @@ func (a *App) completing() *completion {
 
 // acceptCompletion puts the selected candidate in place of what it
 // completes and closes the list. ↵ with the list up only ever does this,
-// whether or not the text changes (§9.7, M8 F8.1). A console's change is
+// whether or not the text changes (§9.7, M8 F8.1). A query's change is
 // saved as typing is (cmd).
 func (a *App) acceptCompletion() tea.Cmd {
 	if c := a.completing(); c == nil || c.sel < 0 {
@@ -504,8 +504,8 @@ func (a *App) acceptCompletion() tea.Cmd {
 		}
 		return nil
 	}
-	if t := a.focusedConsole(); t != nil {
-		return a.consoleAccept(t)
+	if t := a.focusedQuery(); t != nil {
+		return a.queryAccept(t)
 	}
 	a.whereAccept(a.typingTab())
 	return nil
@@ -611,7 +611,7 @@ func (t *dataTab) syncWhere() {
 
 // whereKey gives key k to the WHERE's vim (F3.39): in INSERT ↵ takes the
 // selected candidate when the list is up, else runs the WHERE (§9.7),
-// and esc leaves INSERT, the list closing with it, as a console's.
+// and esc leaves INSERT, the list closing with it, as a query's.
 func (a *App) whereKey(t *dataTab, k keymap.Key) tea.Cmd {
 	if m := t.ed.Mode(); k == "<CR>" && (m == editor.Insert || m == editor.Replace) {
 		if t.comp != nil && t.comp.sel >= 0 {
@@ -634,7 +634,7 @@ func (a *App) whereKey(t *dataTab, k keymap.Key) tea.Cmd {
 // whereDid acts on what the WHERE's vim did: the input shows it; in INSERT
 // the candidates follow the cursor, or the history list filters by the
 // text once typed into (§9.7); the clipboard and a yank's flash as a
-// console's. gq has nothing to lay out.
+// query's. gq has nothing to lay out.
 func (a *App) whereDid(t *dataTab, eff editor.Effect) tea.Cmd {
 	was := t.where.Text
 	t.syncWhere()

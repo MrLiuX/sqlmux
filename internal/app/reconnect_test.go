@@ -46,9 +46,9 @@ func heard(t *testing.T) *[]connEvent {
 	return &evs
 }
 
-// A console run goes again on the connection dialed anew only if nothing of
+// A query run goes again on the connection dialed anew only if nothing of
 // it was sent, a read as much as a write (a select may call a function that
-// writes); the new connection has its own search_path, which the console's
+// writes); the new connection has its own search_path, which the query's
 // schema is set on before. What is not run again keeps its error, and a toast
 // says to run it (F8.19).
 func TestRunAfterLostConnection(t *testing.T) {
@@ -106,10 +106,10 @@ func TestRunInLostTransaction(t *testing.T) {
 	a.sess.Conns[0].startedPath = `"$user", public`
 	press(t, a, "<CR>") // Main is in a transaction as this run ends
 	c.schema = "agentable"
-	a.consoleDid(c, c.ed.Load("update t set a = 1"))
+	a.queryDid(c, c.ed.Load("update t set a = 1"))
 	*evs = nil
 	press(t, a, "<CR>")
-	if len(d2.ran) != 0 || logText(a)[strings.LastIndex(logText(a), "\n")+1:] != "console_1  update t set a = 1  ERROR: 连接断开，事务已丢失，这条没有执行" {
+	if len(d2.ran) != 0 || logText(a)[strings.LastIndex(logText(a), "\n")+1:] != "query_1  update t set a = 1  ERROR: 连接断开，事务已丢失，这条没有执行" {
 		t.Fatalf("ran %q on the new connection, log %q", d2.ran, logText(a))
 	}
 	if len(*evs) != 1 || !(*evs)[0].TxLost {
@@ -117,10 +117,10 @@ func TestRunInLostTransaction(t *testing.T) {
 	}
 }
 
-// A COMMIT or a ROLLBACK the user types in the console says what the
+// A COMMIT or a ROLLBACK the user types in the query says what the
 // commit of the toolbar says: a commit not taken, or not known to have; a
 // rollback is done (F8.19).
-func TestConsoleEndLost(t *testing.T) {
+func TestQueryEndLost(t *testing.T) {
 	heard(t)
 	for _, tc := range []struct {
 		sql, key string
@@ -142,10 +142,10 @@ func TestConsoleEndLost(t *testing.T) {
 		a, c := inRun(t, d, "select 1")
 		redialed(a, &execDB{})
 		press(t, a, "<CR>") // Main is in a transaction as this run ends
-		a.consoleDid(c, c.ed.Load(tc.sql))
+		a.queryDid(c, c.ed.Load(tc.sql))
 		press(t, a, "<CR>")
 		log := logText(a)
-		if got := log[strings.LastIndex(log, "\n")+1:]; !strings.HasPrefix(got, "console_1  "+tc.sql+"  "+tc.want) {
+		if got := log[strings.LastIndex(log, "\n")+1:]; !strings.HasPrefix(got, "query_1  "+tc.sql+"  "+tc.want) {
 			t.Errorf("%s: %q", tc.sql, got)
 		}
 	}
@@ -153,13 +153,13 @@ func TestConsoleEndLost(t *testing.T) {
 
 // What a lost rollback leaves unrun of a run that goes on past it is told
 // as it is: the rollback was not run either (F8.19).
-func TestConsoleRollbackLostMidRun(t *testing.T) {
+func TestQueryRollbackLostMidRun(t *testing.T) {
 	heard(t)
 	d := &execDB{tx: 'T', fail: map[string]error{"rollback": errLost}}
 	a, c := inRun(t, d, "select 1")
 	redialed(a, &execDB{})
 	press(t, a, "<CR>")
-	a.consoleDid(c, c.ed.Load("rollback;\nselect 2"))
+	a.queryDid(c, c.ed.Load("rollback;\nselect 2"))
 	press(t, a, "ggVG<CR>")
 	if !strings.Contains(logText(a), "ERROR: 连接断开，事务已丢失，这条没有执行") {
 		t.Errorf("log %q", logText(a))

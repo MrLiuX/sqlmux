@@ -34,7 +34,7 @@ func TestFocusColors(t *testing.T) {
 	for id, want := range map[int][2]color.Color{
 		0: {th.Border, th.Dim},  // sidebar
 		1: {th.Focus, th.Focus}, // ⟨1⟩ data, focused
-		2: {th.Border, th.Dim},  // ⟨2⟩ console
+		2: {th.Border, th.Dim},  // ⟨2⟩ query
 	} {
 		r := rects[id]
 		border := f.Buf.CellAt(r.Min.X, r.Min.Y).Style.Fg
@@ -84,11 +84,11 @@ func TestSmallSizes(t *testing.T) {
 	}
 }
 
-// §7.8: at 160×45 the console title has "▶ run ↵", the connection and the
-// schema; its name, cut, the rest (no "console" beside its icon, §7.7).
-func TestConsoleTitleAt160(t *testing.T) {
+// §7.8: at 160×45 the query title has "▶ run ↵", the connection and the
+// schema; its name, cut, the rest (no "query" beside its icon, §7.7).
+func TestQueryTitleAt160(t *testing.T) {
 	top := strings.Split(twoPanes(160, 45).render().String(), "\n")[0]
-	for _, want := range []string{"② " + ui.NerdIcons.Console.Text + " c…  Tx: 自动 ▾ doraemon · doraemon.public ▾  ▶ run  ↵ ─┐"} {
+	for _, want := range []string{"② " + ui.NerdIcons.Query.Text + " q…  Tx: 自动 ▾ doraemon · doraemon.public ▾  ▶ run  ↵ ─┐"} {
 		if !strings.Contains(top, want) {
 			t.Errorf("top row lacks %q: %q", want, top)
 		}
@@ -96,16 +96,16 @@ func TestConsoleTitleAt160(t *testing.T) {
 }
 
 // §7.8: sidebar 32 cols (24 below 100), then a 1-col gap; data and the
-// console share the rest at 1 : 1, a 1-col gap between them (§5, F8.9).
+// query share the rest at 1 : 1, a 1-col gap between them (§5, F8.9).
 func TestLayoutSizes(t *testing.T) {
 	for _, c := range []struct{ w, side int }{{160, 32}, {100, 32}, {99, 24}, {80, 24}} {
 		r := sized(c.w, 45, "nerd").layout()
 		side, data, cons := r[0], r[1], r[2]
 		if len(r) != 3 || side.Min.X != 0 || side.Dx() != c.side || data.Min.X != side.Max.X+1 || cons.Min.X != data.Max.X+1 || cons.Max.X != c.w {
-			t.Errorf("w=%d: %v; want the sidebar %d wide, then data and the console to the edge", c.w, r, c.side)
+			t.Errorf("w=%d: %v; want the sidebar %d wide, then data and the query to the edge", c.w, r, c.side)
 		}
 		if d := data.Dx() - cons.Dx(); d < -1 || d > 1 {
-			t.Errorf("w=%d: data %d, console %d wide, not even", c.w, data.Dx(), cons.Dx())
+			t.Errorf("w=%d: data %d, query %d wide, not even", c.w, data.Dx(), cons.Dx())
 		}
 		if side.Dy() != 44 || data.Dy() != 44 || cons.Dy() != 44 {
 			t.Errorf("w=%d: panes must fill every row above the status bar", c.w)
@@ -146,7 +146,7 @@ func TestSidebarHintRow(t *testing.T) {
 // their keys, clickable, and a tab bar holding just a clickable + (§5).
 func TestEmptyPane(t *testing.T) {
 	a := twoPanes(160, 45)
-	feed(t, a, ":q<CR>:q<CR>:q<CR>") // both data tabs, then the console's
+	feed(t, a, ":q<CR>:q<CR>:q<CR>") // both data tabs, then the query's
 	p := a.win().Root.Leaves()[0]
 	if len(a.win().Root.Leaves()) != 1 || len(p.Tabs) != 0 {
 		t.Fatalf("expected one empty pane, got %v", a.win().Root.Leaves())
@@ -163,13 +163,13 @@ func TestEmptyPane(t *testing.T) {
 			body = append(body, got)
 		}
 	}
-	if want := []string{ui.NerdIcons.Table.Text + " 打开表 t", ui.NerdIcons.Console.Text + " 新建 console c"}; !slices.Equal(body, want) {
+	if want := []string{ui.NerdIcons.Table.Text + " 打开表 t", ui.NerdIcons.Query.Text + " 新建 query c"}; !slices.Equal(body, want) {
 		t.Errorf("landing page: %q", body)
 	}
 	if got := cells(r.Max.Y - 2); got != "+" {
 		t.Errorf("tab bar: %q, want just +", got)
 	}
-	for _, act := range []string{"tab.new", "tab.table", "console.new"} {
+	for _, act := range []string{"tab.new", "tab.table", "query.new"} {
 		find(t, a, ui.Target{Kind: ui.KindHint, Pane: p.ID, Action: act})
 	}
 }
@@ -272,7 +272,7 @@ func TestThemeColors(t *testing.T) {
 	th, ic, err := ui.ParseTheme(`
 row = "#6c6a6d"
 [icon]
-console = { text = "C", fg = "#ff0000" }
+query = { text = "C", fg = "#ff0000" }
 table = { fg = "#a9dc76" }
 `, ui.NerdIcons)
 	if err != nil {
@@ -295,18 +295,18 @@ table = { fg = "#a9dc76" }
 	if bg := f.Buf.CellAt(80, a.h-1).Style.Bg; bg != th.Bar || th.Bar == th.Row {
 		t.Errorf("status bar %v, want bar %v whatever row is", bg, th.Bar)
 	}
-	if st := cell(0, " C c…"); st.Fg != th.Dim {
+	if st := cell(0, " C q…"); st.Fg != th.Dim {
 		t.Fatal("the title around the icon keeps its color")
 	}
-	if st := cell(0, "C c…"); st.Fg != ic.Console.Fg {
-		t.Errorf("console icon %v, want %v", st.Fg, ic.Console.Fg)
+	if st := cell(0, "C q…"); st.Fg != ic.Query.Fg {
+		t.Errorf("query icon %v, want %v", st.Fg, ic.Query.Fg)
 	}
 	if st := cell(7, ui.NerdIcons.Table.Text); st.Fg != ic.Table.Fg { // the first table, under doraemon, public and Tables
 		t.Errorf("table icon %v, want %v", st.Fg, ic.Table.Fg)
 	}
 }
 
-// A pane holding a table, a console and a new tab (§5): each tab's icon in
+// A pane holding a table, a query and a new tab (§5): each tab's icon in
 // the tab bar, the current one's title and body; switching tabs switches
 // the title's icon, ▶ run and the keys' scope along.
 func TestGoldenMixedTabs160x45(t *testing.T) {
@@ -314,13 +314,13 @@ func TestGoldenMixedTabs160x45(t *testing.T) {
 	a := wide(160, 45)
 	p := a.focused()
 	loadOrders(t, a, 3)
-	a.run("console.new", 0)
+	a.run("query.new", 0)
 	a.run("tab.new", 0)
 	golden.RequireEqual(t, a.render().String())
 	for _, c := range []struct {
 		keys, scope string
 		run         bool
-	}{{"gt", "grid", false}, {"gt", "console", true}, {"gt", "landing", false}} {
+	}{{"gt", "grid", false}, {"gt", "query", true}, {"gt", "landing", false}} {
 		feed(t, a, c.keys)
 		top := strings.Split(a.render().String(), "\n")[0]
 		icon, _ := a.tabIcon(p.tab())
@@ -344,7 +344,7 @@ func TestGoldenBorders(t *testing.T) {
 	}
 }
 
-// The default layout's data and console are as wide as each other, give or
+// The default layout's data and query are as wide as each other, give or
 // take a column, with the sidebar open or folded to its thin bar (F8.9).
 func TestDefaultLayoutEven(t *testing.T) {
 	for _, open := range []bool{true, false} {
@@ -352,7 +352,7 @@ func TestDefaultLayoutEven(t *testing.T) {
 		a.win().TreeOpen = open
 		r := a.layout()
 		if d := r[1].Dx() - r[2].Dx(); d < -1 || d > 1 || r[2].Max.X != 160 {
-			t.Errorf("sidebar open %v: data %d, console %d wide", open, r[1].Dx(), r[2].Dx())
+			t.Errorf("sidebar open %v: data %d, query %d wide", open, r[1].Dx(), r[2].Dx())
 		}
 		if !open {
 			golden.RequireEqual(t, a.render().String())

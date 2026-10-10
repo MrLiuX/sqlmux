@@ -357,7 +357,7 @@ func TestQuickSQLWrite(t *testing.T) {
 		feed(t, a, "<C-p>;"+sql+"<Esc><CR>") // Esc closes the list ↵ would take
 		r := a.paletteView().Result
 		sent := slices.ContainsFunc(rec.sqls, func(s string) bool { return strings.Contains(s, "delete") }) // columns completion asked for aside
-		if a.sess.Conns[0].busy != 0 || sent || r == nil || r.Title != "只读" || r.Err != "写语句不在这里执行 · C-e 在 console 中打开" || !r.Warn {
+		if a.sess.Conns[0].busy != 0 || sent || r == nil || r.Title != "只读" || r.Err != "写语句不在这里执行 · C-e 在 query 中打开" || !r.Warn {
 			t.Fatalf("%s: busy %d, sent %q, %+v", sql, a.sess.Conns[0].busy, rec.sqls, r)
 		}
 		if a.state.SQL["doraemon"][0] != sql || enterOf(a) != "↵ 执行" {
@@ -373,7 +373,7 @@ func TestQuickSQLWrite(t *testing.T) {
 // C-t puts the rows shown in the result area as a pinned quick #n, n the
 // session's run count, a line in the log, the palette open; again, another
 // tab. With no rows nothing. R on it runs the SQL again as the quick SQL
-// does, its rows in place; failing, the log says so as a console's run's,
+// does, its rows in place; failing, the log says so as a query's run's,
 // and shows (§12「C-t 送到结果区」).
 func TestQuickSQLToResult(t *testing.T) {
 	a := sized(160, 45, "nerd")
@@ -418,19 +418,19 @@ func TestQuickSQLToResult(t *testing.T) {
 	}
 }
 
-// C-e puts the SQL scope's text, the ; off, in a new console in the pane a
+// C-e puts the SQL scope's text, the ; off, in a new query in the pane a
 // table would open in, which is empty, a number no file has (F8.21); the
-// palette goes, the console has the focus, its cursor on the SQL in NORMAL
+// palette goes, the query has the focus, its cursor on the SQL in NORMAL
 // (§12). The candidates up, it still does.
 func TestQuickSQLEdit(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sized(160, 45, "nerd")
-	if err := config.WriteConsole(config.ConsolePath("console_2"), "select 1\n"); err != nil { // a file: its number is not new
+	if err := config.WriteQuery(config.QueryPath("query_2"), "select 1\n"); err != nil { // a file: its number is not new
 		t.Fatal(err)
 	}
 	feed(t, a, "<C-p>;delete from t_order<Esc><CR><C-e>")
-	c := consoleOf(a.focused())
-	if a.palette != nil || c == nil || a.focused().Object() != "console_3" || text(c) != "delete from t_order" {
+	c := queryOf(a.focused())
+	if a.palette != nil || c == nil || a.focused().Object() != "query_3" || text(c) != "delete from t_order" {
 		t.Fatalf("C-e: palette %v, %v", a.palette, a.focused().Object())
 	}
 	if c.ed.Cursor() != (editor.Pos{}) || c.ed.Mode() != editor.Normal {
@@ -443,20 +443,20 @@ func TestQuickSQLEdit(t *testing.T) {
 	if a.palette == nil || a.palette.comp == nil {
 		t.Fatal("no candidates")
 	}
-	if feed(t, a, "<C-e>"); a.palette != nil || !strings.HasSuffix(text(consoleOf(a.focused())), "select * from t_or") {
+	if feed(t, a, "<C-e>"); a.palette != nil || !strings.HasSuffix(text(queryOf(a.focused())), "select * from t_or") {
 		t.Errorf("C-e over the candidates: palette %v", a.palette)
 	}
 }
 
 // The palette goes by the connection current as it opened (F5.11): its
-// quick SQL runs there, its history kept there, and C-e opens the console
+// quick SQL runs there, its history kept there, and C-e opens the query
 // there, kept for the file, whatever the file last ran on and whatever is
 // current meanwhile.
 func TestQuickSQLConn(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a, seed := withConns()
 	doraemon := a.sess.Conns[0]
-	a.state.Consoles = map[string]config.ConsoleState{"console_2": {Conn: "idle"}}
+	a.state.Queries = map[string]config.QueryState{"query_2": {Conn: "idle"}}
 	feed(t, a, "<C-p>;select 1")
 	a.win().focus(0)
 	treeTo(t, a, "seed")
@@ -465,9 +465,9 @@ func TestQuickSQLConn(t *testing.T) {
 	}
 	answerQuick(a, quickResult(1), nil)
 	feed(t, a, "<C-e>")
-	c := consoleOf(a.focused())
-	if a.palette != nil || c == nil || c.conn != doraemon || c.want != nil || a.state.Consoles["console_2"].Conn != "doraemon" {
-		t.Errorf("C-e: palette %v, console %+v, kept %+v", a.palette, c, a.state.Consoles)
+	c := queryOf(a.focused())
+	if a.palette != nil || c == nil || c.conn != doraemon || c.want != nil || a.state.Queries["query_2"].Conn != "doraemon" {
+		t.Errorf("C-e: palette %v, query %+v, kept %+v", a.palette, c, a.state.Queries)
 	}
 }
 

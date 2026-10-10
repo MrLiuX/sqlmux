@@ -22,7 +22,7 @@
 │        Views (0)           │   raw json,                                                                                      │                             │
 │ ▾  工作区                  │   note text,                                                                                     │                             │
 │      data                  │   created_at timestamp with time zone not null default now(),                                    │                             │
-│ ▾  Consoles                │   deleted_at timestamp with time zone,                                                           │                             │
+│ ▾  Queries                 │   deleted_at timestamp with time zone,                                                           │                             │
 │                             │ …                                                                                                │                             │
 │                             │──────────────────────────────────────────────────────────────────────────────────────────────────│                             │
 │                             │ ↑/↓ 移动 · C-b/C-f 滚动预览 · Tab/S-Tab 范围 · esc 关闭                                   ↵ 打开 │                             │

@@ -1,7 +1,7 @@
-// Package editor is the console's vim (tech-design §11): the text, the
+// Package editor is the query's vim (tech-design §11): the text, the
 // motions and commands, INSERT and REPLACE, undo. What it does is checked
 // against nvim itself (testdata/cases.txt, §15). It draws nothing: the
-// console is drawn by ui/console.go.
+// query is drawn by ui/query.go.
 package editor
 
 //go:generate go test -run TestNvim -update
@@ -36,15 +36,15 @@ func (m Mode) String() string {
 	return [...]string{"NORMAL", "INSERT", "REPLACE", "VISUAL", "V-LINE", "COMMAND", "V-BLOCK"}[m]
 }
 
-// Effect is what a key did that the console acts on.
+// Effect is what a key did that the query acts on.
 type Effect struct {
 	Changed bool        // the text changed: save it, drop the failed ▶ (§11)
 	Clip    *string     // what "+ (or "*) took: the system clipboard gets it (F3.38)
 	Paste   *ClipPut    // a "+p waiting for the system clipboard: PutClip it (F3.38)
 	Ex      string      // a : command the editor does not run itself (:w, :q)
 	Error   string      // what went wrong, for a toast: 找不到：foo
-	Format  *FormatSpan // gq asked to lay out this text, which the console does (§9.5)
-	Yank    *Yank       // what a yank took, not a delete: the console flashes it (F3.32)
+	Format  *FormatSpan // gq asked to lay out this text, which the query does (§9.5)
+	Yank    *Yank       // what a yank took, not a delete: the query flashes it (F3.32)
 }
 
 // Yank is what a yank took, as vim's TextYankPost has it: From to To, To
@@ -69,7 +69,7 @@ const (
 	wantEnd   = math.MaxInt // after $: the end of every line
 )
 
-// Editor is one console's text and vim state. Keys come in keymap's
+// Editor is one query's text and vim state. Keys come in keymap's
 // notation ("a", "<Esc>", "<C-d>", "<Space>").
 type Editor struct {
 	TabWidth int // tabstop and shiftwidth; Tab inserts spaces (expandtab)
@@ -141,7 +141,7 @@ func (e *Editor) Left() int       { return e.left }
 // Pending is the command typed so far, as nvim's showcmd shows it.
 func (e *Editor) Pending() string { return strings.Join(e.keys, "") }
 
-// SetHeight tells how many lines the console shows: H M L, C-d and the
+// SetHeight tells how many lines the query shows: H M L, C-d and the
 // scrolling that keeps the cursor on screen depend on it.
 func (e *Editor) SetHeight(n int) {
 	e.height = n

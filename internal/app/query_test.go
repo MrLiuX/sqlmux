@@ -22,27 +22,27 @@ import (
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
-// inConsole is the default layout with focus on console_1 (⟨2⟩), whose
+// inQuery is the default layout with focus on query_1 (⟨2⟩), whose
 // file is in a directory of the test's own, with the user's config.toml
 // conf and keymaps.toml keys.
-func inConsole(t *testing.T, conf, keys string) (*App, *consoleTab) {
+func inQuery(t *testing.T, conf, keys string) (*App, *queryTab) {
 	t.Helper()
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sizedWith(160, 45, userConfig(t, conf, keys))
 	feed(t, a, "<C-l>")
-	c := consoleOf(a.focused())
+	c := queryOf(a.focused())
 	if c == nil {
-		t.Fatal("C-l from ⟨1⟩ is not on the console")
+		t.Fatal("C-l from ⟨1⟩ is not on the query")
 	}
 	return a, c
 }
 
-func text(c *consoleTab) string { return strings.Join(c.ed.Lines(), "\n") }
+func text(c *queryTab) string { return strings.Join(c.ed.Lines(), "\n") }
 
 // Keys the keymap leaves go to the editor; one waiting for more takes the
 // next key itself, so f<Space>x is no SPC x (§6.4). : and ; are its vim's.
-func TestConsoleKeys(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQueryKeys(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	feed(t, a, "ione two three<CR>four<Esc>gg0f<Space>x")
 	if text(c) != "onetwo three\nfour" || len(a.win().Root.Leaves()) != 2 {
 		t.Fatalf("f<Space>x: %q, panes %d", text(c), len(a.win().Root.Leaves()))
@@ -69,11 +69,11 @@ func TestConsoleKeys(t *testing.T) {
 	}
 }
 
-// The user's maps for the console apply there, over the editor's own keys;
+// The user's maps for the query apply there, over the editor's own keys;
 // the right-hand side goes in as typed, meeting the editor as it then is
 // (§6.6): after i, a space is typed, no leader.
-func TestConsoleMaps(t *testing.T) {
-	a, c := inConsole(t, "tab_width = 4", "[map.console.normal]\nL = \"5l\"\nQ = \"iselect x<Esc>\"\nX = \"f<Space>\"\n[map.console.visual]\nH = \"2h\"\n")
+func TestQueryMaps(t *testing.T) {
+	a, c := inQuery(t, "tab_width = 4", "[map.query.normal]\nL = \"5l\"\nQ = \"iselect x<Esc>\"\nX = \"f<Space>\"\n[map.query.visual]\nH = \"2h\"\n")
 	feed(t, a, "Q")
 	if text(c) != "select x" || c.ed.Mode() != editor.Normal || len(a.win().Root.Leaves()) != 2 {
 		t.Fatalf("Q = iselect x<Esc>: %q in %v, panes %d", text(c), c.ed.Mode(), len(a.win().Root.Leaves()))
@@ -100,9 +100,9 @@ func TestConsoleMaps(t *testing.T) {
 // The file (§11): :w writes it, 0600; unchanged it is not written; :q
 // writes and closes; a new session has it back. The autosave writes only
 // for the latest change.
-func TestConsoleFile(t *testing.T) {
-	a, c := inConsole(t, "", "")
-	if c.path != config.ConsolePath("console_1") {
+func TestQueryFile(t *testing.T) {
+	a, c := inQuery(t, "", "")
+	if c.path != config.QueryPath("query_1") {
 		t.Fatalf("path %s", c.path)
 	}
 	feed(t, a, "iselect 1;<Esc>")
@@ -128,23 +128,23 @@ func TestConsoleFile(t *testing.T) {
 	if data, _ := os.ReadFile(c.path); string(data) != "select 1; -- one\n2\n" || len(a.win().Root.Leaves()) != 1 {
 		t.Fatalf(":wq: %q, panes %d", data, len(a.win().Root.Leaves()))
 	}
-	if s := soloSession(); text(consoleOf(s.Windows[0].Root.B.Pane)) != "select 1; -- one\n2" || s.warning != "" {
+	if s := soloSession(); text(queryOf(s.Windows[0].Root.B.Pane)) != "select 1; -- one\n2" || s.warning != "" {
 		t.Fatalf("a new session: %q", s.warning)
 	}
 }
 
-// A console runs on the connection its title's dropdown picks (§7.8
-// 「console 标题」): only that part lights under the pointer; a connected
+// A query runs on the connection its title's dropdown picks (§7.8
+// 「query 标题」): only that part lights under the pointer; a connected
 // one at once, in its Schema, kept for the file (§11); not while its own
-// is in a transaction; one not connected once it connects, the console
+// is in a transaction; one not connected once it connects, the query
 // staying meanwhile, and on, it failing.
-func TestConsoleConn(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQueryConn(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	seed := readyConn("seed")
 	seed.Schema, seed.Schemas, seed.DB = "s1", []string{"s1", "s2"}, "seeddb"
 	idle := newConn(config.Connection{Name: "idle", Engine: "postgres"})
 	a.sess.Conns = append(a.sess.Conns, seed, idle)
-	r := find(t, a, ui.Target{Kind: ui.KindHint, Pane: a.focused().ID, Action: "console.conn"})
+	r := find(t, a, ui.Target{Kind: ui.KindHint, Pane: a.focused().ID, Action: "query.conn"})
 	a.Update(tea.MouseMotionMsg{X: r.Min.X, Y: r.Min.Y})
 	if f := a.render(); f.Buf.CellAt(r.Max.X-1, r.Min.Y).Style.Bg != a.theme.Select || f.Buf.CellAt(r.Max.X+1, r.Min.Y).Style.Bg == a.theme.Select {
 		t.Error("the pointer on the connection lights it alone, not the ·")
@@ -154,28 +154,28 @@ func TestConsoleConn(t *testing.T) {
 		t.Fatalf("dropdown %+v", a.drop)
 	}
 	feed(t, a, "seed<CR>")
-	if c.conn != seed || c.schema != "s1" || a.state.Consoles["console_1"] != (config.ConsoleState{Conn: "seed", Schema: "s1"}) {
-		t.Fatalf("seed: on %s.%s, state %+v", c.conn.Spec.Name, c.schema, a.state.Consoles)
+	if c.conn != seed || c.schema != "s1" || a.state.Queries["query_1"] != (config.QueryState{Conn: "seed", Schema: "s1"}) {
+		t.Fatalf("seed: on %s.%s, state %+v", c.conn.Spec.Name, c.schema, a.state.Queries)
 	}
 	if top := strings.Split(a.render().String(), "\n")[r.Min.Y]; !strings.Contains(top, "seed · seeddb.s1 ▾") {
 		t.Errorf("title %q", top)
 	}
 	feed(t, a, "gs<C-n><CR>")
-	if c.schema != "s2" || a.state.Consoles["console_1"].Schema != "s2" {
-		t.Errorf("schema %s, kept %+v", c.schema, a.state.Consoles)
+	if c.schema != "s2" || a.state.Queries["query_1"].Schema != "s2" {
+		t.Errorf("schema %s, kept %+v", c.schema, a.state.Queries)
 	}
 	seed.tx = 'T'
-	a.run("console.conn", 0)
+	a.run("query.conn", 0)
 	if feed(t, a, "doraemon<CR>"); c.conn != seed || a.toast != "当前连接有未提交的事务，先提交或回滚" {
 		t.Errorf("in a transaction: on %s, toast %q", c.conn.Spec.Name, a.toast)
 	}
 	seed.tx, c.running = 'I', &run{}
-	a.run("console.conn", 0)
+	a.run("query.conn", 0)
 	if feed(t, a, "doraemon<CR>"); c.conn != seed || a.toast != "正在执行，结束后再换连接" {
 		t.Errorf("running: on %s, toast %q", c.conn.Spec.Name, a.toast)
 	}
 	c.running = nil
-	a.run("console.conn", 0)
+	a.run("query.conn", 0)
 	if feed(t, a, "idle<CR>"); c.conn != seed || c.want != idle || idle.State != connConnecting {
 		t.Fatalf("idle: on %s, want %v, %v", c.conn.Spec.Name, c.want, idle.State)
 	}
@@ -184,42 +184,42 @@ func TestConsoleConn(t *testing.T) {
 	}
 }
 
-// console_1 of the layout started with opens where its file last ran:
+// query_1 of the layout started with opens where its file last ran:
 // on a connection connected, now; on one not, once it connects; a schema
-// gone, the connection's once its catalog is in. A new console goes on the
+// gone, the connection's once its catalog is in. A new query goes on the
 // current connection, in its Schema, kept for its file (§11, F5.11).
-func TestConsoleRestore(t *testing.T) {
-	a, c1 := inConsole(t, "", "")
+func TestQueryRestore(t *testing.T) {
+	a, c1 := inQuery(t, "", "")
 	seed, idle := readyConn("seed"), newConn(config.Connection{Name: "idle", Engine: "postgres"})
 	seed.Schema = "s1"
 	a.sess.Conns = append(a.sess.Conns, seed, idle)
-	a.state.Consoles = map[string]config.ConsoleState{"console_1": {Conn: "seed", Schema: "dropped"}, "console_2": {Conn: "idle", Schema: "x"}}
+	a.state.Queries = map[string]config.QueryState{"query_1": {Conn: "seed", Schema: "dropped"}, "query_2": {Conn: "idle", Schema: "x"}}
 	if a.Init(); c1.conn != seed || c1.schema != "dropped" {
-		t.Errorf("console_1 at start: on %s.%s", c1.conn.Spec.Name, c1.schema)
+		t.Errorf("query_1 at start: on %s.%s", c1.conn.Spec.Name, c1.schema)
 	}
 	a.Update(catalogMsg{conn: seed, schemas: []string{"s1"}, current: "s1"})
-	if c1.schema != "s1" || a.state.Consoles["console_1"].Schema != "s1" {
-		t.Errorf("its schema gone: %s, kept %+v", c1.schema, a.state.Consoles["console_1"])
+	if c1.schema != "s1" || a.state.Queries["query_1"].Schema != "s1" {
+		t.Errorf("its schema gone: %s, kept %+v", c1.schema, a.state.Queries["query_1"])
 	}
-	a.run("console.new", 0)
-	c := consoleOf(a.focused())
-	if c.conn != seed || c.schema != "s1" || c.want != nil || idle.State != connIdle || a.state.Consoles["console_2"] != (config.ConsoleState{Conn: "seed", Schema: "s1"}) {
-		t.Errorf("console_2: on %s.%s, want %v, kept %+v", c.conn.Spec.Name, c.schema, c.want, a.state.Consoles["console_2"])
+	a.run("query.new", 0)
+	c := queryOf(a.focused())
+	if c.conn != seed || c.schema != "s1" || c.want != nil || idle.State != connIdle || a.state.Queries["query_2"] != (config.QueryState{Conn: "seed", Schema: "s1"}) {
+		t.Errorf("query_2: on %s.%s, want %v, kept %+v", c.conn.Spec.Name, c.schema, c.want, a.state.Queries["query_2"])
 	}
 }
 
 // soloSession is a new session over doraemon alone, not connected.
 func soloSession() *Session {
 	c := newConn(config.Connection{Name: "doraemon", Engine: "postgres"})
-	return newSession("doraemon", []*Conn{c}, c, config.ConsoleName(1))
+	return newSession("doraemon", []*Conn{c}, c, config.QueryName(1))
 }
 
-// A console file that cannot be read is not opened, empty or not: a toast
+// A query file that cannot be read is not opened, empty or not: a toast
 // says so and the rest starts (§11).
-func TestConsoleUnreadable(t *testing.T) {
+func TestQueryUnreadable(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	// a directory where the file goes
-	if err := os.MkdirAll(config.ConsolePath("console_1"), 0o700); err != nil {
+	if err := os.MkdirAll(config.QueryPath("query_1"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	s := soloSession()
@@ -233,34 +233,34 @@ func TestConsoleUnreadable(t *testing.T) {
 	}
 }
 
-// A console that cannot be written says so, and neither closes nor quits.
-func TestConsoleSaveFails(t *testing.T) {
-	a, c := inConsole(t, "", "")
-	c.path = filepath.Join(os.DevNull, "console_1.sql")
+// A query that cannot be written says so, and neither closes nor quits.
+func TestQuerySaveFails(t *testing.T) {
+	a, c := inQuery(t, "", "")
+	c.path = filepath.Join(os.DevNull, "query_1.sql")
 	feed(t, a, "ix<Esc>:w<CR>")
 	if !strings.HasPrefix(a.toast, "保存失败：") {
 		t.Fatalf("toast %q", a.toast)
 	}
-	if feed(t, a, ":q<CR>"); consoleOf(a.focused()) != c {
+	if feed(t, a, ":q<CR>"); queryOf(a.focused()) != c {
 		t.Error(":q closed what was not written")
 	}
 	if feed(t, a, "<C-p>>qa<CR>") {
-		t.Error("quit with the console not written")
+		t.Error("quit with the query not written")
 	}
-	c.path = filepath.Join(t.TempDir(), "console_1.sql")
+	c.path = filepath.Join(t.TempDir(), "query_1.sql")
 	if !feed(t, a, "<C-p>>qa<CR>") {
 		t.Fatal("quit")
 	}
 	if data, _ := os.ReadFile(c.path); string(data) != "x\n" {
-		t.Errorf("quitting writes the console: %q", data)
+		t.Errorf("quitting writes the query: %q", data)
 	}
 }
 
 // A paste is text in every mode, never keys (§11); a yank into "+ goes to
 // the clipboard, a plain one not; "+p asks the terminal for it and puts
 // what comes back (F3.38).
-func TestConsolePasteAndYank(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQueryPasteAndYank(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	feed(t, a, "iab<Esc>0")
 	a.Update(tea.PasteMsg{Content: "dd\r\nx"})
 	if text(c) != "add\nxb" || c.ed.Mode() != editor.Normal {
@@ -283,8 +283,8 @@ func TestConsolePasteAndYank(t *testing.T) {
 // The status bar: the editor's mode by name in VISUAL's or INSERT's color,
 // the selection's size with the key that runs it, what the editor waits
 // on (§7.8).
-func TestConsoleStatusBar(t *testing.T) {
-	a, _ := inConsole(t, "", "")
+func TestQueryStatusBar(t *testing.T) {
+	a, _ := inQuery(t, "", "")
 	feed(t, a, "iabc<CR>def<Esc>gg")
 	th := a.theme
 	for _, c := range []struct {
@@ -315,8 +315,8 @@ func TestConsoleStatusBar(t *testing.T) {
 
 // The terminal cursor is vim's: a block, a bar in INSERT, a line under in
 // REPLACE (§11).
-func TestConsoleCursorShape(t *testing.T) {
-	a, _ := inConsole(t, "", "")
+func TestQueryCursorShape(t *testing.T) {
+	a, _ := inQuery(t, "", "")
 	for _, c := range []struct {
 		keys string
 		want tea.CursorShape
@@ -329,9 +329,9 @@ func TestConsoleCursorShape(t *testing.T) {
 }
 
 // A click puts the cursor there, a drag selects, the wheel scrolls the
-// console under the pointer without taking the focus (§11).
-func TestConsoleMouse(t *testing.T) {
-	a, c := inConsole(t, "", "")
+// query under the pointer without taking the focus (§11).
+func TestQueryMouse(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	feed(t, a, "i"+strings.Repeat("select 1;<CR>", 60)+"<Esc>gg")
 	feed(t, a, "<C-h>") // focus back on ⟨1⟩
 	text := c.ed.Top()
@@ -342,7 +342,7 @@ func TestConsoleMouse(t *testing.T) {
 	if wheel(); c.ed.Top() != text+wheelStep || a.win().Focus != 1 {
 		t.Fatalf("wheel: top %d, focus %d", c.ed.Top(), a.win().Focus)
 	}
-	view, body := a.consoleView(a.win().pane(2), c)
+	view, body := a.queryView(a.win().pane(2), c)
 	at := view.TextArea(body).Min
 	click(a, uv.Pos(at.X+3, at.Y+1))
 	if a.win().Focus != 2 || c.ed.Cursor() != (editor.Pos{Line: c.ed.Top() + 1, Col: 3}) {
@@ -362,10 +362,10 @@ func TestConsoleMouse(t *testing.T) {
 
 // $EDITOR edits the file, written first; what it holds after is one undo
 // step (§11).
-func TestConsoleExternal(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQueryExternal(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	feed(t, a, "iselect 1<Esc>")
-	if a.run("console.external", 0) == nil {
+	if a.run("query.external", 0) == nil {
 		t.Fatal("no editor run")
 	}
 	if data, _ := os.ReadFile(c.path); string(data) != "select 1\n" {
@@ -383,12 +383,12 @@ func TestConsoleExternal(t *testing.T) {
 	}
 }
 
-// A keyword taken in a console gets a space, and the DML starts are
+// A keyword taken in a query gets a space, and the DML starts are
 // offered first (§9.7); a word typed out is the first, a table's name not
 // taking its place, a keyword of two words not put in twice; one undo takes
 // it back with the INSERT.
-func TestConsoleKeywordSpace(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQueryKeywordSpace(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	for in, first := range map[string]string{"ins": "insert into", "upd": "update", "del": "delete from"} {
 		feed(t, a, "<Esc>ggdGi"+in)
 		if c.comp == nil || c.comp.items[0].label != first {
@@ -427,8 +427,8 @@ func TestConsoleKeywordSpace(t *testing.T) {
 // INSERT INTO t ( lists the columns the parentheses lack, all of them first,
 // and a generated one never; taking all of them leaves the cursor before the
 // ) (§9.7).
-func TestConsoleInsertColumns(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQueryInsertColumns(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	table, cols, _ := ordersTable(0)
 	cols.Cols[2].Generated = true
 	for i, tb := range a.sess.Conns[0].Tables {
@@ -469,8 +469,8 @@ func TestConsoleInsertColumns(t *testing.T) {
 // With the candidates up ↵ only takes the selected one, though the text
 // does not change; a word takes a space, a function or a value or an
 // INSERT's column does not (§9.7, F8.1).
-func TestConsoleEnterOnlyAccepts(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQueryEnterOnlyAccepts(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	table, cols, _ := ordersTable(0)
 	for i, tb := range a.sess.Conns[0].Tables {
 		if tb.Name == "t_order" {
@@ -521,8 +521,8 @@ func TestConsoleEnterOnlyAccepts(t *testing.T) {
 
 // What comes after the cursor is not given a space before it: ) , ; . are
 // there already (§9.7, F8.1).
-func TestConsoleAcceptNoSpaceBeforePunct(t *testing.T) {
-	a, c := inConsole(t, "autopairs = false", "")
+func TestQueryAcceptNoSpaceBeforePunct(t *testing.T) {
+	a, c := inQuery(t, "autopairs = false", "")
 	table, cols, _ := ordersTable(0)
 	for i, tb := range a.sess.Conns[0].Tables {
 		if tb.Name == "t_order" {
@@ -548,8 +548,8 @@ func TestConsoleAcceptNoSpaceBeforePunct(t *testing.T) {
 // a blank is: the statement's tables' columns alone, none when the
 // statement names no table yet; esc closes them and typing filters them
 // (§9.7, F8.4).
-func TestConsoleColumnsAfterBlank(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQueryColumnsAfterBlank(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	table, cols, _ := ordersTable(0)
 	for i, tb := range a.sess.Conns[0].Tables {
 		if tb.Name == "t_order" {
@@ -626,14 +626,14 @@ func TestConsoleColumnsAfterBlank(t *testing.T) {
 	}
 }
 
-// In a console the candidates follow the cursor's place (§9.7): tables
+// In a query the candidates follow the cursor's place (§9.7): tables
 // after FROM; an alias's columns right after its ., fetched once and
 // completed again as they come; CTE names among the tables; C-n with
 // nothing typed. ↵ takes one as typing it would, part of the INSERT's undo
-// step, and nothing else (TestConsoleEnterOnlyAccepts); esc closes the list
+// step, and nothing else (TestQueryEnterOnlyAccepts); esc closes the list
 // and leaves INSERT, as nvim-cmp; a character not of a name closes it.
-func TestConsoleCompletion(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQueryCompletion(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	table, cols, _ := ordersTable(0)
 	for i, tb := range a.sess.Conns[0].Tables {
 		if tb.Name == "t_order" {
@@ -715,11 +715,11 @@ func TestSQLCompleteQualifier(t *testing.T) {
 	}
 }
 
-// A console's schema (§8.6): on its title, gs or a click opens the
-// dropdown there, its own schema marked, ↵ picks; a new console takes the
+// A query's schema (§8.6): on its title, gs or a click opens the
+// dropdown there, its own schema marked, ↵ picks; a new query takes the
 // tree's, then each keeps its own; completion lists its schema's tables.
-func TestConsoleSchema(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQuerySchema(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	title := func() string { return strings.Split(a.render().String(), "\n")[0] }
 	if !strings.Contains(title(), " doraemon.public ▾  ▶ run ") {
 		t.Fatalf("title %q", title())
@@ -732,8 +732,8 @@ func TestConsoleSchema(t *testing.T) {
 	if c.schema != "agentable" || a.drop != nil || !strings.Contains(title(), " doraemon.agentable ▾ ") {
 		t.Fatalf("picked: %q, title %q", c.schema, title())
 	}
-	click(a, find(t, a, ui.Target{Kind: ui.KindHint, Pane: a.focused().ID, Action: "console.schema"}).Min)
-	if a.drop == nil || a.drop.console != c {
+	click(a, find(t, a, ui.Target{Kind: ui.KindHint, Pane: a.focused().ID, Action: "query.schema"}).Min)
+	if a.drop == nil || a.drop.query != c {
 		t.Fatal("a click opens it")
 	}
 	// under the button as this frame draws it, to the pane's right border;
@@ -743,7 +743,7 @@ func TestConsoleSchema(t *testing.T) {
 		f, r := a.render(), a.layout()[a.focused().ID]
 		x, y := r.Max.X-16, r.Min.Y+1 // 16: its least width, more than its items need
 		for _, h := range f.Hits {
-			if h.Target.Action == "console.schema" {
+			if h.Target.Action == "query.schema" {
 				x = h.Rect.Min.X
 			}
 		}
@@ -752,9 +752,9 @@ func TestConsoleSchema(t *testing.T) {
 		}
 	}
 	feed(t, a, "<Esc>")
-	a.run("console.new", 0)
-	if c2 := consoleOf(a.focused()); c2 == c || c2.schema != "public" {
-		t.Fatalf("a new console: %q", c2.schema)
+	a.run("query.new", 0)
+	if c2 := queryOf(a.focused()); c2 == c || c2.schema != "public" {
+		t.Fatalf("a new query: %q", c2.schema)
 	}
 	selectTab(a.focused(), 0)
 	feed(t, a, "iselect * from pl")
@@ -763,10 +763,10 @@ func TestConsoleSchema(t *testing.T) {
 	}
 }
 
-// A console with no schema yet, or one gone, takes the tree's when the
+// A query with no schema yet, or one gone, takes the tree's when the
 // catalog comes in (§8.6).
-func TestConsoleSchemaFromCatalog(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQuerySchemaFromCatalog(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	for _, was := range []string{"", "gone"} {
 		c.schema = was
 		a.Update(catalogMsg{conn: a.sess.Conns[0], schemas: []string{"agentable", "public"}, current: "public", tables: a.sess.Conns[0].Tables})
@@ -780,13 +780,13 @@ func TestConsoleSchemaFromCatalog(t *testing.T) {
 	}
 }
 
-// The console's title as the window narrows: ▶ run stays longest, then
+// The query's title as the window narrows: ▶ run stays longest, then
 // the connection and the schema, together, then ↵ (§7.8); at 200 columns
 // everything and the name.
-func TestGoldenConsoleTitle(t *testing.T) {
+func TestGoldenQueryTitle(t *testing.T) {
 	var titles []string
 	for _, w := range []int{200, 160, 130, 110, 100, 90, 80} {
-		a, _ := inConsole(t, "", "")
+		a, _ := inQuery(t, "", "")
 		a.Update(tea.WindowSizeMsg{Width: w, Height: 20})
 		r := a.layout()[a.focused().ID]
 		titles = append(titles, ansi.Cut(strings.Split(a.render().String(), "\n")[r.Min.Y], r.Min.X, r.Max.X))
@@ -794,20 +794,20 @@ func TestGoldenConsoleTitle(t *testing.T) {
 	golden.RequireEqual(t, strings.Join(titles, "\n")+"\n")
 }
 
-// The console's candidates open under the word they complete (§9.7).
-func TestGoldenConsoleCompletion160x45(t *testing.T) {
-	a, _ := inConsole(t, "", "")
+// The query's candidates open under the word they complete (§9.7).
+func TestGoldenQueryCompletion160x45(t *testing.T) {
+	a, _ := inQuery(t, "", "")
 	feed(t, a, "iselect 1;<CR>select * from t_o")
 	golden.RequireEqual(t, a.render().String())
 }
 
-// What the console draws is the editor's state: the selection by kind,
+// What the query draws is the editor's state: the selection by kind,
 // the command line.
-func TestConsoleView(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQueryView(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	c.ed.Load("ab\nc\td")
 	feed(t, a, "Gfd")
-	view := func() ui.Console { v, _ := a.consoleView(a.focused(), c); return v }
+	view := func() ui.Query { v, _ := a.queryView(a.focused(), c); return v }
 	if v := view(); v.Cursor != (ui.TextPos{Line: 1, Col: 2}) || v.CursorCol != 2 || !v.Normal || v.Sel.Mode != ui.SelNone || v.Prompt != "" {
 		t.Errorf("NORMAL: %+v", v)
 	}
@@ -830,64 +830,64 @@ func TestConsoleView(t *testing.T) {
 	}
 }
 
-// console.rename names the focused console's file: it is written, then
+// query.rename names the focused query's file: it is written, then
 // renamed, the tab's name, the state's key and the layout's `name` going
-// with it; a name that is no file's, or one that another file or console
+// with it; a name that is no file's, or one that another file or query
 // has, is refused with the input left (§11, F8.11).
-func TestConsoleRename(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQueryRename(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	feed(t, a, "iselect 1")
 	if c.ver == c.saved {
 		t.Fatal("nothing to write yet")
 	}
-	a.keepConsole(c)
-	if _, ok := a.state.Consoles["console_1"]; !ok {
-		t.Fatal("the state knows console_1")
+	a.keepQuery(c)
+	if _, ok := a.state.Queries["query_1"]; !ok {
+		t.Fatal("the state knows query_1")
 	}
 	feed(t, a, "<Esc>")
-	a.run("console.rename", 0)
-	if a.askName == nil || a.askName.in.Text != "console_1" {
+	a.run("query.rename", 0)
+	if a.askName == nil || a.askName.in.Text != "query_1" {
 		t.Fatalf("not asking: %+v", a.askName)
 	}
-	if cmd, ok := a.newConsole(c.conn); !ok || cmd == nil { // console_2, taking the focus: back to the first
-		t.Fatal("a second console")
+	if cmd, ok := a.newQuery(c.conn); !ok || cmd == nil { // query_2, taking the focus: back to the first
+		t.Fatal("a second query")
 	}
 	a.askName.in = ui.Input{}
-	feed(t, a, "console_2<CR>")
-	if a.askName == nil || a.toast == "" || c.name != "console_1" {
-		t.Errorf("another console open: asking %v, toast %q, %q", a.askName != nil, a.toast, c.name)
+	feed(t, a, "query_2<CR>")
+	if a.askName == nil || a.toast == "" || c.name != "query_1" {
+		t.Errorf("another query open: asking %v, toast %q, %q", a.askName != nil, a.toast, c.name)
 	}
 	for _, bad := range []string{"a/b", ".hidden", `a\\b`} {
 		a.askName.in = ui.Input{}
-		if feed(t, a, bad+"<CR>"); a.askName == nil || c.name != "console_1" {
+		if feed(t, a, bad+"<CR>"); a.askName == nil || c.name != "query_1" {
 			t.Errorf("%q: asking %v, %q", bad, a.askName != nil, c.name)
 		}
 	}
-	if err := config.WriteConsole(config.ConsolePath("taken"), "x"); err != nil {
+	if err := config.WriteQuery(config.QueryPath("taken"), "x"); err != nil {
 		t.Fatal(err)
 	}
 	a.askName.in = ui.Input{}
-	if feed(t, a, "taken<CR>"); a.askName == nil || c.name != "console_1" {
+	if feed(t, a, "taken<CR>"); a.askName == nil || c.name != "query_1" {
 		t.Errorf("a file of that name: asking %v, %q", a.askName != nil, c.name)
 	}
 	a.askName.in = ui.Input{}
 	feed(t, a, "orders<CR>")
-	if a.askName != nil || c.name != "orders" || c.path != config.ConsolePath("orders") {
+	if a.askName != nil || c.name != "orders" || c.path != config.QueryPath("orders") {
 		t.Fatalf("renamed: asking %v, %q at %s", a.askName != nil, c.name, c.path)
 	}
-	if got, err := config.ReadConsole(config.ConsolePath("orders")); err != nil || got != "select 1\n" {
+	if got, err := config.ReadQuery(config.QueryPath("orders")); err != nil || got != "select 1\n" {
 		t.Errorf("the file went with it: %q %v", got, err)
 	}
-	if _, err := os.Stat(config.ConsolePath("console_1")); !errors.Is(err, fs.ErrNotExist) {
+	if _, err := os.Stat(config.QueryPath("query_1")); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("the old file is still there: %v", err)
 	}
-	if _, old := a.state.Consoles["console_1"]; old || a.state.Consoles["orders"].Conn == "" {
-		t.Errorf("the state's key: %+v", a.state.Consoles)
+	if _, old := a.state.Queries["query_1"]; old || a.state.Queries["orders"].Conn == "" {
+		t.Errorf("the state's key: %+v", a.state.Queries)
 	}
 	var tabs []string
 	for _, p := range a.win().Root.Leaves() {
 		for _, tb := range p.Tabs {
-			if tb.Console == c {
+			if tb.Query == c {
 				tabs = append(tabs, tb.Name)
 			}
 		}
@@ -900,7 +900,7 @@ func TestConsoleRename(t *testing.T) {
 	for _, w := range l.Sessions[0].Windows {
 		for _, p := range w.Panes {
 			for _, lt := range p.Tabs {
-				if lt.Kind == "console" {
+				if lt.Kind == "query" {
 					seen = append(seen, lt.Name+"/"+strconv.Itoa(lt.N))
 				}
 			}
@@ -912,52 +912,52 @@ func TestConsoleRename(t *testing.T) {
 }
 
 // Names that differ only in case are one file on some file systems (macOS,
-// Windows): a console cannot take the name of another open, whether or not
+// Windows): a query cannot take the name of another open, whether or not
 // that one has a file yet; two new ones never get the same file; and its
 // own file may change case (§11, F8.11).
-func TestConsoleRenameCase(t *testing.T) {
+func TestQueryRenameCase(t *testing.T) {
 	ask := func(a *App, name string) {
 		a.askName.in = ui.Input{}
 		feed(t, a, name+"<CR>")
 	}
-	a, first := inConsole(t, "", "") // console_1: nothing typed, no file
-	a.newConsole(first.conn)
-	second := consoleOf(a.focused())
+	a, first := inQuery(t, "", "") // query_1: nothing typed, no file
+	a.newQuery(first.conn)
+	second := queryOf(a.focused())
 	feed(t, a, "iselect 2<Esc>")
 	if err := second.flush(); err != nil {
 		t.Fatal(err)
 	}
-	a.run("console.rename", 0)
-	if ask(a, "Console_1"); a.askName == nil || second.name != "console_2" {
-		t.Errorf("another open console's name in other case: asking %v, %q", a.askName != nil, second.name)
+	a.run("query.rename", 0)
+	if ask(a, "Query_1"); a.askName == nil || second.name != "query_2" {
+		t.Errorf("another open query's name in other case: asking %v, %q", a.askName != nil, second.name)
 	}
-	if got, _ := config.ReadConsole(second.path); got != "select 2\n" {
+	if got, _ := config.ReadQuery(second.path); got != "select 2\n" {
 		t.Errorf("its file: %q", got)
 	}
-	if ask(a, "Console_3"); a.askName != nil || second.name != "Console_3" {
+	if ask(a, "Query_3"); a.askName != nil || second.name != "Query_3" {
 		t.Fatalf("a free name: asking %v, %q", a.askName != nil, second.name)
 	}
 	for range 2 {
-		if _, ok := a.newConsole(first.conn); !ok {
-			t.Fatal("a new console")
+		if _, ok := a.newQuery(first.conn); !ok {
+			t.Fatal("a new query")
 		}
 	}
 	var names []string
-	for _, c := range a.consoles() {
+	for _, c := range a.queries() {
 		names = append(names, c.name)
 	}
 	slices.Sort(names)
-	if want := []string{"Console_3", "console_1", "console_2", "console_4"}; !slices.Equal(names, want) {
-		t.Errorf("new consoles go round it: %v, want %v", names, want)
+	if want := []string{"Query_3", "query_1", "query_2", "query_4"}; !slices.Equal(names, want) {
+		t.Errorf("new queries go round it: %v, want %v", names, want)
 	}
 
-	a, c := inConsole(t, "", "")
+	a, c := inQuery(t, "", "")
 	feed(t, a, "iselect 1<Esc>")
 	if err := c.flush(); err != nil {
 		t.Fatal(err)
 	}
-	a.run("console.rename", 0)
-	if ask(a, "Console_1"); a.askName != nil || c.name != "Console_1" {
+	a.run("query.rename", 0)
+	if ask(a, "Query_1"); a.askName != nil || c.name != "Query_1" {
 		t.Fatalf("its own file's case: asking %v, %q", a.askName != nil, c.name)
 	}
 	var files []string
@@ -965,37 +965,37 @@ func TestConsoleRenameCase(t *testing.T) {
 	for _, e := range es {
 		files = append(files, e.Name())
 	}
-	if !slices.Equal(files, []string{"Console_1.sql"}) {
+	if !slices.Equal(files, []string{"Query_1.sql"}) {
 		t.Errorf("files %v", files)
 	}
 
-	// a closed console reopens on the open one of its file, whatever the case
-	a.newConsole(c.conn)
-	a.run("tab.close", 0) // console_2, closed
+	// a closed query reopens on the open one of its file, whatever the case
+	a.newQuery(c.conn)
+	a.run("tab.close", 0) // query_2, closed
 	a.showPane(a.win().pane(2).ID)
-	a.run("console.rename", 0)
-	ask(a, "CONSOLE_2")
-	n := len(a.consoles())
-	if a.run("tab.reopen", 0); len(a.consoles()) != n {
-		t.Errorf("reopened on a second console of the one file: %d consoles, was %d", len(a.consoles()), n)
+	a.run("query.rename", 0)
+	ask(a, "QUERY_2")
+	n := len(a.queries())
+	if a.run("tab.reopen", 0); len(a.queries()) != n {
+		t.Errorf("reopened on a second query of the one file: %d queries, was %d", len(a.queries()), n)
 	}
 }
 
-// A console's name is changed as it stands: its own name again is nothing,
+// A query's name is changed as it stands: its own name again is nothing,
 // one never typed in has no file to move, and a file that cannot be moved
 // leaves the name, the tab and the state as they were (F8.11).
-func TestConsoleRenameEdges(t *testing.T) {
-	a, c := inConsole(t, "", "")
-	a.run("console.rename", 0)
+func TestQueryRenameEdges(t *testing.T) {
+	a, c := inQuery(t, "", "")
+	a.run("query.rename", 0)
 	a.toast = ""
-	if feed(t, a, "<CR>"); a.askName != nil || a.toast != "" || c.name != "console_1" {
+	if feed(t, a, "<CR>"); a.askName != nil || a.toast != "" || c.name != "query_1" {
 		t.Errorf("its own name: asking %v, toast %q, %q", a.askName != nil, a.toast, c.name)
 	}
-	a.keepConsole(c)
-	a.run("console.rename", 0)
+	a.keepQuery(c)
+	a.run("query.rename", 0)
 	a.askName.in = ui.Input{}
-	if feed(t, a, "fresh<CR>"); a.askName != nil || c.name != "fresh" || a.state.Consoles["fresh"].Conn == "" {
-		t.Errorf("no file yet: asking %v, %q, state %+v", a.askName != nil, c.name, a.state.Consoles)
+	if feed(t, a, "fresh<CR>"); a.askName != nil || c.name != "fresh" || a.state.Queries["fresh"].Conn == "" {
+		t.Errorf("no file yet: asking %v, %q, state %+v", a.askName != nil, c.name, a.state.Queries)
 	}
 	if _, err := os.Stat(c.path); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("a file made out of nothing: %v", err)
@@ -1013,20 +1013,20 @@ func TestConsoleRenameEdges(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) // the temp dir goes with it
-	a.run("console.rename", 0)
+	a.run("query.rename", 0)
 	a.askName.in = ui.Input{}
 	a.toast = ""
-	if feed(t, a, "moved<CR>"); a.askName == nil || a.toast == "" || c.name != "fresh" || c.path != config.ConsolePath("fresh") {
+	if feed(t, a, "moved<CR>"); a.askName == nil || a.toast == "" || c.name != "fresh" || c.path != config.QueryPath("fresh") {
 		t.Errorf("the file stays: asking %v, toast %q, %q at %s", a.askName != nil, a.toast, c.name, c.path)
 	}
-	if _, ok := a.state.Consoles["moved"]; ok || a.state.Consoles["fresh"].Conn == "" || a.focused().tab().Name != "fresh" {
-		t.Errorf("state %+v, tab %q", a.state.Consoles, a.focused().tab().Name)
+	if _, ok := a.state.Queries["moved"]; ok || a.state.Queries["fresh"].Conn == "" || a.focused().tab().Name != "fresh" {
+		t.Errorf("state %+v, tab %q", a.state.Queries, a.focused().tab().Name)
 	}
 }
 
 // A click on a candidate takes it, with its space (§9.7, F8.1).
-func TestConsoleClickCandidate(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQueryClickCandidate(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	feed(t, a, "iselect * from t_o")
 	if c.comp == nil {
 		t.Fatal("no list")
@@ -1042,8 +1042,8 @@ func TestConsoleClickCandidate(t *testing.T) {
 // last; a letter typed selects the first as ever; a word accepted with its
 // space has the next list come up at once; C-n's list and an INSERT's all
 // columns are selected from the start (§9.7, F8.17).
-func TestConsoleNoSelectList(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestQueryNoSelectList(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	cols := ordersCatalog(a)
 	first, last := cols.Cols[0].Name, cols.Cols[len(cols.Cols)-1].Name
 	const q = "<Esc>ggdGiselect * from t_order where"
@@ -1080,8 +1080,8 @@ func TestConsoleNoSelectList(t *testing.T) {
 
 // The list with nothing selected has no row in the select color; Tab gives
 // the first one (F8.17).
-func TestConsoleNoSelectListDraws(t *testing.T) {
-	a, _ := inConsole(t, "", "")
+func TestQueryNoSelectListDraws(t *testing.T) {
+	a, _ := inQuery(t, "", "")
 	cols := ordersCatalog(a)
 	feed(t, a, "iselect * from t_order where<CR>")
 	selected := func() []int {
@@ -1117,8 +1117,8 @@ func ordersCatalog(a *App) db.Columns {
 }
 
 // The list with nothing selected, as it shows under the word (F8.17).
-func TestGoldenConsoleNoSelect160x45(t *testing.T) {
-	a, _ := inConsole(t, "", "")
+func TestGoldenQueryNoSelect160x45(t *testing.T) {
+	a, _ := inQuery(t, "", "")
 	ordersCatalog(a)
 	feed(t, a, "iselect * from t_order where<CR>")
 	golden.RequireEqual(t, a.render().String())
@@ -1127,7 +1127,7 @@ func TestGoldenConsoleNoSelect160x45(t *testing.T) {
 // A complete.accept the user bound, pressed with nothing selected, does
 // nothing; once a row is selected it takes it (F8.17).
 func TestAcceptKeyWithNothingSelected(t *testing.T) {
-	a, c := inConsole(t, "", "[keys.complete]\n\"<C-y>\" = \"complete.accept\"\n")
+	a, c := inQuery(t, "", "[keys.complete]\n\"<C-y>\" = \"complete.accept\"\n")
 	cols := ordersCatalog(a)
 	feed(t, a, "iselect * from t_order where<CR><C-y>")
 	if c.comp == nil || c.comp.sel != -1 || text(c) != "select * from t_order where " {
@@ -1141,7 +1141,7 @@ func TestAcceptKeyWithNothingSelected(t *testing.T) {
 // What was picked stays picked when the columns of another table come in and
 // the list is made again: ↵ still takes it (F8.17).
 func TestAsyncColumnsKeepThePick(t *testing.T) {
-	a, c := inConsole(t, "", "")
+	a, c := inQuery(t, "", "")
 	ordersCatalog(a)
 	var other db.Table
 	for _, tb := range a.sess.Conns[0].Tables {
@@ -1167,7 +1167,7 @@ func TestAsyncColumnsKeepThePick(t *testing.T) {
 // And the pick survives the columns of a second table coming after the first
 // (F8.17).
 func TestAsyncColumnsKeepThePickTwice(t *testing.T) {
-	a, c := inConsole(t, "", "")
+	a, c := inQuery(t, "", "")
 	ordersCatalog(a)
 	var others []db.Table
 	for _, tb := range a.sess.Conns[0].Tables {

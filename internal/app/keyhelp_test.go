@@ -66,26 +66,26 @@ func TestKeyHelp(t *testing.T) {
 	}
 }
 
-// ? opens it in every pane in NORMAL, a console's too, whose VISUAL ?
+// ? opens it in every pane in NORMAL, a query's too, whose VISUAL ?
 // stays vim's backward search; <leader>? anywhere.
 func TestKeyHelpWhere(t *testing.T) {
 	a := inTree(45)
 	if feed(t, a, "?"); a.keyHelp == nil || !slices.Contains(helpItems(a), "t "+title("tree.open.tab")+" [keys.tree]") {
 		t.Fatalf("tree: %v", helpItems(a))
 	}
-	a, c := inConsole(t, "", "")
-	if feed(t, a, "?"); a.keyHelp == nil || !slices.Contains(helpItems(a), "↵ "+title("console.run")+" [keys.console]") {
-		t.Fatalf("a console's ? in NORMAL: %v", helpItems(a))
+	a, c := inQuery(t, "", "")
+	if feed(t, a, "?"); a.keyHelp == nil || !slices.Contains(helpItems(a), "↵ "+title("query.run")+" [keys.query]") {
+		t.Fatalf("a query's ? in NORMAL: %v", helpItems(a))
 	}
 	if feed(t, a, "<Esc>v?"); a.keyHelp != nil || c.ed.Mode() != editor.Command {
-		t.Fatal("a console's ? in VISUAL is vim's")
+		t.Fatal("a query's ? in VISUAL is vim's")
 	}
 	feed(t, a, "<Esc><Esc><Space>?")
-	if a.keyHelp == nil || !slices.Contains(helpItems(a), "↵ "+title("console.run")+" [keys.console]") {
-		t.Fatalf("SPC ? in a console: %v", helpItems(a))
+	if a.keyHelp == nil || !slices.Contains(helpItems(a), "↵ "+title("query.run")+" [keys.query]") {
+		t.Fatalf("SPC ? in a query: %v", helpItems(a))
 	}
-	feed(t, a, "<Esc><Space>x") // the console goes: ② is a landing pane
-	if feed(t, a, "<C-l>?"); a.keyHelp == nil || !slices.Contains(helpItems(a), "c "+title("console.new")+" [keys.landing]") {
+	feed(t, a, "<Esc><Space>x") // the query goes: ② is a landing pane
+	if feed(t, a, "<C-l>?"); a.keyHelp == nil || !slices.Contains(helpItems(a), "c "+title("query.new")+" [keys.landing]") {
 		t.Errorf("landing: %v", helpItems(a))
 	}
 }
@@ -160,9 +160,9 @@ func TestKeyHelpTitle(t *testing.T) {
 	if feed(t, a, "g?"); a.keyHelp == nil || a.keyHelpView().Prefix != "g?" {
 		t.Fatalf("g?: %+v", a.keyHelp)
 	}
-	a, c := inConsole(t, "", "")
+	a, c := inQuery(t, "", "")
 	if feed(t, a, "<Space>?"); a.keyHelp == nil || a.keyHelpView().Prefix != "?" || c == nil {
-		t.Errorf("a console's: %q", a.keyHelpView().Prefix)
+		t.Errorf("a query's: %q", a.keyHelpView().Prefix)
 	}
 }
 

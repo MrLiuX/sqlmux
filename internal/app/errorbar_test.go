@@ -15,7 +15,7 @@ import (
 )
 
 // PG's Position, a character of the statement from 1, as a line and a
-// column of the console's text; past the statement's end, its end.
+// column of the query's text; past the statement's end, its end.
 func TestErrorAt(t *testing.T) {
 	text := "select 1;\n\n  select * frm 中文 t;"
 	off := strings.Index(text, "select *")
@@ -27,11 +27,11 @@ func TestErrorAt(t *testing.T) {
 	}
 }
 
-// A console's failed run says so on its error bar: [SQLSTATE], DETAIL's
+// A query's failed run says so on its error bar: [SQLSTATE], DETAIL's
 // lines, HINT and where; the text takes the rows it has. esc in NORMAL
 // closes it, not with a count typed, nor in VISUAL; the next run takes it
-// away. A console closed by then keeps it in the log alone (§7.8).
-func TestConsoleErrorBar(t *testing.T) {
+// away. A query closed by then keeps it in the log alone (§7.8).
+func TestQueryErrorBar(t *testing.T) {
 	fail := &pgconn.PgError{Severity: "ERROR", Code: "42P01", Message: `relation "nope" does not exist`, Detail: "one\ntwo", Hint: "look again", Position: 15}
 	d := &execDB{res: map[string]db.Result{"select 1": rows(1)}, fail: map[string]error{"select * from nope": fail}}
 	a, c := inRun(t, d, "select 1;\n\nselect * from nope;")
@@ -40,7 +40,7 @@ func TestConsoleErrorBar(t *testing.T) {
 	if c.bar == nil || c.bar.First.Head != "[42P01] " || !slices.Equal(c.bar.More, []string{"DETAIL: one", "two", "HINT: look again", "位置：第 3 行第 15 列"}) {
 		t.Fatalf("bar %+v", c.bar)
 	}
-	if _, body := a.consoleView(p, c); body.Dy() != bodyRect(a.layout()[p.ID]).Dy()-5 {
+	if _, body := a.queryView(p, c); body.Dy() != bodyRect(a.layout()[p.ID]).Dy()-5 {
 		t.Errorf("the text is %d rows, %d without the bar", body.Dy(), bodyRect(a.layout()[p.ID]).Dy())
 	}
 	if st := styleOf(t, a.render(), `relation "nope"`); st.Fg != a.theme.Error || st.Bg != a.theme.ErrorBg {
@@ -56,11 +56,11 @@ func TestConsoleErrorBar(t *testing.T) {
 	if press(t, a, "gg<CR>"); c.bar != nil {
 		t.Error("the next run takes it away")
 	}
-	d.fail["select 1"] = fail // R on select 1's result, the console closed
+	d.fail["select 1"] = fail // R on select 1's result, the query closed
 	a.closeTab(p, p.Cur)
 	a.win().focus(a.win().Result.ID)
 	if press(t, a, "R"); c.bar != nil || !strings.HasSuffix(logText(a), "HINT: look again") {
-		t.Errorf("rerun of a closed console: bar %+v, log %q", c.bar, logText(a))
+		t.Errorf("rerun of a closed query: bar %+v, log %q", c.bar, logText(a))
 	}
 }
 

@@ -33,11 +33,11 @@ func inMenu(a *App) bool { return a.menu != nil }
 // menuItems is what n offers; none for a node that has no menu.
 func (a *App) menuItems(n node) []menuItem {
 	switch n.kind {
-	case nodeConsoleFile:
+	case nodeQueryFile:
 		return []menuItem{
 			{i18n.T("打开"), func() tea.Cmd { return a.treeOpen(false) }},
-			{i18n.T("重命名…"), a.renameConsoleFile},
-			{i18n.T("删除…"), a.deleteConsole},
+			{i18n.T("重命名…"), a.renameQueryFile},
+			{i18n.T("删除…"), a.deleteQuery},
 		}
 	case nodeTable:
 		drop := i18n.T("删除表…")
@@ -49,7 +49,7 @@ func (a *App) menuItems(n node) []menuItem {
 			{i18n.T("在新 tab 打开"), func() tea.Cmd { return a.treeOpen(true) }},
 			{drop, a.dropTable},
 		}
-	case nodeConn, nodeSchema, nodeGroup, nodeColumn, nodeWorkspace, nodeWindow, nodeTab, nodeConsoles, nodeSep: // no menu
+	case nodeConn, nodeSchema, nodeGroup, nodeColumn, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeSep: // no menu
 	}
 	return nil
 }
@@ -103,28 +103,28 @@ func (a *App) drawMenu(f *ui.Frame) {
 	v.Draw(f, box, rows)
 }
 
-// renameConsoleFile is the menu's rename on a console file: the console is
-// gone to, opened first when it is not, and asked its name as console.rename
+// renameQueryFile is the menu's rename on a query file: the query is
+// gone to, opened first when it is not, and asked its name as query.rename
 // does.
 // ponytail: a file not open is opened to be renamed; rename the file alone if
 // that bothers.
-func (a *App) renameConsoleFile() tea.Cmd {
+func (a *App) renameQueryFile() tea.Cmd {
 	n, ok := a.treeNode()
-	if !ok || n.kind != nodeConsoleFile {
+	if !ok || n.kind != nodeQueryFile {
 		return nil
 	}
-	cmd := a.openConsoleFile(n.console)
-	a.askConsoleName()
+	cmd := a.openQueryFile(n.query)
+	a.askQueryName()
 	return cmd
 }
 
-// treeDelete is tree.delete (dd): a console file's deletion, a table's or a
+// treeDelete is tree.delete (dd): a query file's deletion, a table's or a
 // view's drop; on any other node it does nothing.
 func (a *App) treeDelete() tea.Cmd {
 	if n, ok := a.treeNode(); ok && n.kind == nodeTable {
 		return a.dropTable()
 	}
-	return a.deleteConsole()
+	return a.deleteQuery()
 }
 
 // dropSQL is the statement that drops t, as its kind is dropped (§7.8「右键菜单」).
@@ -164,7 +164,7 @@ func (a *App) dropTable() tea.Cmd {
 		return a.showToast(i18n.T("%s 是只读连接", c.Spec.Name), toastTTL)
 	case c.Manual:
 		return a.showToast(i18n.T("手动事务模式下不能删表：先提交或回滚，或切回自动"), toastTTL)
-	case c.inTx(): // begun by the user in a console: MySQL's DROP would commit it, PG's join it
+	case c.inTx(): // begun by the user in a query: MySQL's DROP would commit it, PG's join it
 		return a.showToast(i18n.T("事务中不能删表：先提交或回滚"), toastTTL)
 	}
 	sql := dropSQL(c.eng, t)

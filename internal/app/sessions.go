@@ -176,7 +176,7 @@ func (a *App) gotSessionDialed(m sessionDialed) tea.Cmd {
 	}
 	conns[start].take(m.d)
 	s := bareSession(m.name, conns, conns[start])
-	s.Windows = []*Window{s.blankWindow()} // no console: one is made when it is wanted (F8.18)
+	s.Windows = []*Window{s.blankWindow()} // no query: one is made when it is wanted (F8.18)
 	a.sessions = append(a.sessions, s)
 	a.attach(s)
 	return a.loadCatalog(conns[start])
@@ -193,7 +193,7 @@ func (a *App) killSession() tea.Cmd {
 
 // closeSession closes s, as x on its row in the list does and session.close
 // does the one attached (§7.8, F8.12): asked first when changes or a
-// transaction would go; its consoles written, its connections closed, which
+// transaction would go; its queries written, its connections closed, which
 // rolls a transaction back. The one attached gives way to the one before it,
 // or after; the last one gone is quitting. A list open stays.
 func (a *App) closeSession(s *Session) tea.Cmd {
@@ -202,7 +202,7 @@ func (a *App) closeSession(s *Session) tea.Cmd {
 	}
 	ps := s.panes()
 	return a.unlessLost(unsaved(ps...), i18n.T("%s 里", s.Name), txConns(s), verbClose, func() tea.Cmd {
-		if cmd, ok := a.flushAll(ps...); !ok { // the consoles' text is not lost (§11)
+		if cmd, ok := a.flushAll(ps...); !ok { // the queries' text is not lost (§11)
 			return cmd
 		}
 		i := slices.Index(a.sessions, s)

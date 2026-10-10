@@ -9,17 +9,17 @@ import (
 	"github.com/kackerx/sqlmux/internal/config"
 )
 
-// A console's select over 1203 rows is three pages of 500, 500 and 203, the
+// A query's select over 1203 rows is three pages of 500, 500 and 203, the
 // ids in order and none twice, on either engine (F10.4).
 func TestResultPagingOnServer(t *testing.T) { eachEngine(t, resultPagingOnServer) }
 
 func resultPagingOnServer(t *testing.T, eng, _ string) {
 	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: ownDB(t, eng)})
-	c := consoleOf(a.win().Root.B.Pane)
+	c := queryOf(a.win().Root.B.Pane)
 	run := func(sql string) {
 		t.Helper()
 		c.ed.Load(sql)
-		settle(a, a.runSQL(c, c.conn, c.schema, "console_1", sql, 0, c.ver))
+		settle(a, a.runSQL(c, c.conn, c.schema, "query_1", sql, 0, c.ver))
 	}
 	if eng == "mysql" {
 		run("set session cte_max_recursion_depth = 5000") // the default 1000 is short of the rows

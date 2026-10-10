@@ -90,7 +90,7 @@ func TestTreeNodes(t *testing.T) {
 	if !slices.Equal(got[:6], want) {
 		t.Fatalf("top:\n%s", strings.Join(got[:6], "\n"))
 	}
-	if tail := strings.Join(got[18:], "|"); tail != "    ▸ Views (2)|▾ 工作区|  ▾ data|      ② console_1|▾ Consoles|    console_1" { // a tab straight under its window, marked with its pane's number (F10.5)
+	if tail := strings.Join(got[18:], "|"); tail != "    ▸ Views (2)|▾ 工作区|  ▾ data|      ② query_1|▾ Queries|    query_1" { // a tab straight under its window, marked with its pane's number (F10.5)
 		t.Errorf("tail %q", tail)
 	}
 	ns, _ := a.treeNodes()
@@ -182,8 +182,8 @@ func TestConnectFromTree(t *testing.T) {
 func TestCurrentConn(t *testing.T) {
 	a, seed := withConns()
 	doraemon := a.sess.Conns[0]
-	if a.conn() != doraemon || consoleOf(a.win().Root.B.Pane).conn != doraemon {
-		t.Fatal("at start: the connection it started on, console_1's too")
+	if a.conn() != doraemon || queryOf(a.win().Root.B.Pane).conn != doraemon {
+		t.Fatal("at start: the connection it started on, query_1's too")
 	}
 	a.win().focus(0)
 	for _, c := range []struct {
@@ -214,10 +214,10 @@ func TestCurrentConn(t *testing.T) {
 	if feed(t, a, "<C-p>tab.new<CR>"); !data.tab().landing() || a.conn() != seed {
 		t.Errorf("a landing tab: %s, want the last, seed", a.conn().Spec.Name)
 	}
-	console := a.win().Root.B.Pane
-	consoleOf(console).conn = seed
-	if a.win().focus(console.ID); a.conn() != seed {
-		t.Errorf("a console on seed: %s", a.conn().Spec.Name)
+	query := a.win().Root.B.Pane
+	queryOf(query).conn = seed
+	if a.win().focus(query.ID); a.conn() != seed {
+		t.Errorf("a query on seed: %s", a.conn().Spec.Name)
 	}
 	res := a.resultPane(a.win())
 	res.Tabs = append(res.Tabs, Tab{Name: "quick #1", Result: &resultTab{run: &run{conn: doraemon}}})
@@ -257,7 +257,7 @@ func TestTreeMoves(t *testing.T) {
 	a := inTree(18) // 11 rows show
 	for _, c := range []struct{ keys, want string }{
 		{"j", "agentable"}, {"3j", "agent"}, {"k", "Tables (14)"},
-		{"G", "console_1"}, {"j", "console_1"}, {"gg", "doraemon"}, {"k", "doraemon"},
+		{"G", "query_1"}, {"j", "query_1"}, {"gg", "doraemon"}, {"k", "doraemon"},
 	} {
 		feed(t, a, c.keys)
 		if got := cursorText(a); got != c.want {
@@ -420,7 +420,7 @@ func TestTreeWorkspace(t *testing.T) {
 		}
 		return "▾ 工作区" + ws
 	}
-	if ws := workspace(); ws != "▾ 工作区\n  ▾ data\n      ① t_user\n      ① t_sku\n      ② console_1\n▾ Consoles\n    console_1" {
+	if ws := workspace(); ws != "▾ 工作区\n  ▾ data\n      ① t_user\n      ① t_sku\n      ② query_1\n▾ Queries\n    query_1" {
 		t.Fatalf("workspace:\n%s", ws)
 	}
 	ns, _ := a.treeNodes()
@@ -448,7 +448,7 @@ func TestTreeWorkspace(t *testing.T) {
 	}
 	// a pane of two tabs of its own, and another with none: ①①②②④, numbered by pane, the empty ③ left out
 	feed(t, a, `<C-l><Space>"<C-p>@t_order<CR><C-p>@t_payment<C-t><Space>"<C-h>`)
-	want := "▾ 工作区\n  ▾ data\n      ① t_user\n      ① t_sku\n      ② t_order\n      ② t_payment\n      ④ console_1\n▾ Consoles\n    console_1"
+	want := "▾ 工作区\n  ▾ data\n      ① t_user\n      ① t_sku\n      ② t_order\n      ② t_payment\n      ④ query_1\n▾ Queries\n    query_1"
 	if ws := workspace(); ws != want {
 		t.Fatalf("two panes of two tabs:\n%s", ws)
 	}

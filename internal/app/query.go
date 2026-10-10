@@ -19,17 +19,17 @@ import (
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
-// consoleTab is a console open in a pane (§5, §11): its editor and the
+// queryTab is a query open in a pane (§5, §11): its editor and the
 // file that keeps its text.
-type consoleTab struct {
+type queryTab struct {
 	conn *Conn // where it runs, on its Main (§5)
 	// want is the connection it goes to once connected, picked or kept
 	// for its file, with wantSchema, "" for that one's Schema (§7.8
-	// 「console 标题」); nil for none.
+	// 「query 标题」); nil for none.
 	want       *Conn
 	wantSchema string
 	ed         *editor.Editor
-	name       string // the file's name, console_1: the state keeps where it runs by it
+	name       string // the file's name, query_1: the state keeps where it runs by it
 	path       string
 	ver, saved int       // changes made, and the one the file has
 	failed     int       // the first line of the statement whose last run failed, its ▶ red; -1 for none
@@ -46,38 +46,38 @@ type consoleTab struct {
 	wait  *compWait
 }
 
-// compWait is where a console last completed, C-n's or not.
+// compWait is where a query last completed, C-n's or not.
 type compWait struct {
 	at     editor.Pos
 	ver    int
 	manual bool
 }
 
-// openConsole is the console called name on connection c, in its Schema,
+// openQuery is the query called name on connection c, in its Schema,
 // with what its file keeps (§11).
-func openConsole(c *Conn, name string) (*consoleTab, error) {
-	path := config.ConsolePath(name)
-	text, err := config.ReadConsole(path)
+func openQuery(c *Conn, name string) (*queryTab, error) {
+	path := config.QueryPath(name)
+	text, err := config.ReadQuery(path)
 	if err != nil {
 		return nil, fmt.Errorf(i18n.T("读取失败：%w"), err)
 	}
-	return &consoleTab{conn: c, schema: c.Schema, ed: editor.New(text), name: name, path: path, failed: -1}, nil
+	return &queryTab{conn: c, schema: c.Schema, ed: editor.New(text), name: name, path: path, failed: -1}, nil
 }
 
-func consoleOf(p *Pane) *consoleTab {
+func queryOf(p *Pane) *queryTab {
 	if p.Cur < len(p.Tabs) {
-		return p.Tabs[p.Cur].Console
+		return p.Tabs[p.Cur].Query
 	}
 	return nil
 }
 
-// focusedConsole is the console that has the keys: the focused pane's
+// focusedQuery is the query that has the keys: the focused pane's
 // current tab, with no overlay over it.
-func (a *App) focusedConsole() *consoleTab {
+func (a *App) focusedQuery() *queryTab {
 	if a.overlaid() {
 		return nil
 	}
-	return consoleOf(a.focused())
+	return queryOf(a.focused())
 }
 
 // overlaid reports whether an overlay has the keys (§7.8).
@@ -86,12 +86,12 @@ func (a *App) overlaid() bool {
 }
 
 // vim is the editor that has the keys, with nothing over it: the focused
-// console's, or the WHERE's being typed (F3.39).
+// query's, or the WHERE's being typed (F3.39).
 func (a *App) vim() *editor.Editor {
 	if a.overlaid() {
 		return nil
 	}
-	if c := consoleOf(a.focused()); c != nil {
+	if c := queryOf(a.focused()); c != nil {
 		return c.ed
 	}
 	if t := dataOf(a.focused()); t != nil && t.typing == "where" && t.hist == nil {
@@ -109,18 +109,18 @@ func vimMode(m editor.Mode) keymap.Mode {
 	}[m]
 }
 
-// consoleView is console t in pane p as it draws, and the area it draws
+// queryView is query t in pane p as it draws, and the area it draws
 // in; t's editor gets the size of its text there, which H M L, C-d and
 // the scrolling go by.
-func (a *App) consoleView(p *Pane, t *consoleTab) (ui.Console, uv.Rectangle) {
+func (a *App) queryView(p *Pane, t *queryTab) (ui.Query, uv.Rectangle) {
 	ed := t.ed
 	body := bodyRect(a.layout()[p.ID])
 	body.Max.Y = max(body.Max.Y-t.bar.rows(), body.Min.Y)
-	text := ui.Console{Lines: ed.Lines()}.TextArea(body)
+	text := ui.Query{Lines: ed.Lines()}.TextArea(body)
 	ed.TabWidth, ed.AutoPairs = a.tabWidth, a.autoPairs
 	ed.SetHeight(text.Dy())
 	ed.SetWidth(text.Dx())
-	c := ui.Console{
+	c := ui.Query{
 		Lines: ed.Lines(), TabWidth: ed.TabWidth, Top: ed.Top(), Left: ed.Left(),
 		Cursor: ui.TextPos(ed.Cursor()), CursorCol: ed.CursorCol(), Normal: ed.Mode() == editor.Normal,
 		Failed: t.failed, Pane: p.ID, Dialect: t.conn.eng.Dialect(),
@@ -149,33 +149,33 @@ func vimSel(ed *editor.Editor) (s ui.Sel) {
 	return s
 }
 
-// consoleKey gives key k to the editor of console t, in pane p. With the
+// queryKey gives key k to the editor of query t, in pane p. With the
 // candidates up, ↵ takes the selected one and does no more; esc closes them and leaves INSERT, as nvim-cmp (§9.7).
 // In INSERT a character typed completes; C-n does with nothing typed.
-func (a *App) consoleKey(p *Pane, t *consoleTab, k keymap.Key) tea.Cmd {
-	a.consoleView(p, t)
+func (a *App) queryKey(p *Pane, t *queryTab, k keymap.Key) tea.Cmd {
+	a.queryView(p, t)
 	switch {
 	case t.comp != nil && t.comp.sel >= 0 && k == "<CR>": // nothing selected: ↵ is the editor's (F8.17)
-		return a.consoleAccept(t)
+		return a.queryAccept(t)
 	case t.comp == nil && k == "<C-n>" && t.ed.Mode() == editor.Insert:
-		// ponytail: C-n is fixed here, not in the keymap: [keys.console] is
-		// NORMAL's; add a console INSERT scope when it has to be remappable
-		return a.consoleComplete(t, true)
+		// ponytail: C-n is fixed here, not in the keymap: [keys.query] is
+		// NORMAL's; add a query INSERT scope when it has to be remappable
+		return a.queryComplete(t, true)
 	}
 	open, inInsert := t.comp != nil, t.ed.Mode() == editor.Insert // i, a, A, o type nothing: no list (§9.7)
-	cmd := a.consoleDid(t, t.ed.Feed(string(k)))
+	cmd := a.queryDid(t, t.ed.Feed(string(k)))
 	switch {
 	case t.ed.Mode() != editor.Insert:
 		t.asked, t.wait = nil, nil
 	case inInsert && keymap.Text(k) != "" || open && (k == "<BS>" || k == "<C-h>"):
-		return tea.Batch(cmd, a.consoleComplete(t, false))
+		return tea.Batch(cmd, a.queryComplete(t, false))
 	}
 	return cmd
 }
 
-// consoleComplete finds console t's candidates for its cursor, in INSERT
+// queryComplete finds query t's candidates for its cursor, in INSERT
 // (sqlComplete); manual is C-n's.
-func (a *App) consoleComplete(t *consoleTab, manual bool) tea.Cmd {
+func (a *App) queryComplete(t *queryTab, manual bool) tea.Cmd {
 	t.comp = nil
 	if t.ed.Mode() != editor.Insert {
 		return nil
@@ -193,14 +193,14 @@ func (a *App) consoleComplete(t *consoleTab, manual bool) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// consoleAccept puts console t's selected candidate in place of the word
+// queryAccept puts query t's selected candidate in place of the word
 // it completes, as typing it would, and closes the list (§9.7).
-func (a *App) consoleAccept(t *consoleTab) tea.Cmd {
+func (a *App) queryAccept(t *queryTab) tea.Cmd {
 	c, cur := t.comp, t.ed.Cursor()
 	t.comp = nil
-	cmd := a.consoleDid(t, c.plan(t.ed.Lines()[cur.Line], cur.Col).put(t.ed))
+	cmd := a.queryDid(t, c.plan(t.ed.Lines()[cur.Line], cur.Col).put(t.ed))
 	if c.items[c.sel].space { // the next word may be a column: its list comes up at once (F8.17)
-		cmd = tea.Batch(cmd, a.consoleComplete(t, false))
+		cmd = tea.Batch(cmd, a.queryComplete(t, false))
 	}
 	return cmd
 }
@@ -228,24 +228,24 @@ func (a *App) vimCmds(eff editor.Effect, put func(text string, p editor.ClipPut)
 }
 
 type autosave struct {
-	t   *consoleTab
+	t   *queryTab
 	ver int
 }
 
-// autosaveDelay is how long after the last change a console is written (§11).
+// autosaveDelay is how long after the last change a query is written (§11).
 var autosaveDelay = time.Second
 
-// consoleDid acts on what the editor did: vimCmds, then a change drops
+// queryDid acts on what the editor did: vimCmds, then a change drops
 // the red ▶ and is written a second after the last one, a : command it
 // left runs here. The candidate list closes; typing on opens it again
-// (consoleKey).
-func (a *App) consoleDid(t *consoleTab, eff editor.Effect) tea.Cmd {
+// (queryKey).
+func (a *App) queryDid(t *queryTab, eff editor.Effect) tea.Cmd {
 	t.comp = nil
 	cmds := a.vimCmds(eff, func(text string, p editor.ClipPut) tea.Cmd {
-		if !slices.Contains(a.consoles(), t) {
+		if !slices.Contains(a.queries(), t) {
 			return nil
 		}
-		return a.consoleDid(t, t.ed.PutClip(text, p))
+		return a.queryDid(t, t.ed.PutClip(text, p))
 	})
 	if eff.Changed {
 		t.failed = -1
@@ -257,7 +257,7 @@ func (a *App) consoleDid(t *consoleTab, eff editor.Effect) tea.Cmd {
 		cmds = append(cmds, a.ex(eff.Ex))
 	}
 	if eff.Format != nil {
-		cmds = append(cmds, a.consoleFormat(t, *eff.Format, false))
+		cmds = append(cmds, a.queryFormat(t, *eff.Format, false))
 	}
 	return tea.Batch(cmds...)
 }
@@ -271,10 +271,10 @@ func (a *App) ex(c string) tea.Cmd {
 	return a.showToast(i18n.T("不支持的命令：%s", c), toastTTL)
 }
 
-// flush writes console t's file if it changed since it was last written.
+// flush writes query t's file if it changed since it was last written.
 // ponytail: written in Update, a slow disk holds up a key; write from a
 // Cmd, in order, if that shows.
-func (t *consoleTab) flush() error {
+func (t *queryTab) flush() error {
 	if t.ver == t.saved {
 		return nil
 	}
@@ -282,22 +282,22 @@ func (t *consoleTab) flush() error {
 	if text == "\n" { // nothing: an empty file, as vim writes it
 		text = ""
 	}
-	if err := config.WriteConsole(t.path, text); err != nil {
+	if err := config.WriteQuery(t.path, text); err != nil {
 		return err
 	}
 	t.saved = t.ver
 	return nil
 }
 
-// flushAll writes the consoles among panes, and on a failure tells so and
+// flushAll writes the queries among panes, and on a failure tells so and
 // is false: what asked for it, closing or quitting, must not go on (§11).
 func (a *App) flushAll(panes ...*Pane) (tea.Cmd, bool) {
 	for _, p := range panes {
 		for _, tab := range p.Tabs {
-			if tab.Console == nil {
+			if tab.Query == nil {
 				continue
 			}
-			if err := tab.Console.flush(); err != nil {
+			if err := tab.Query.flush(); err != nil {
 				return a.saveFailed(err), false
 			}
 		}
@@ -310,14 +310,14 @@ func (a *App) saveFailed(err error) tea.Cmd {
 }
 
 type externalDone struct {
-	t   *consoleTab
+	t   *queryTab
 	err error
 }
 
-// external opens the focused console's file in $VISUAL, $EDITOR or vi
+// external opens the focused query's file in $VISUAL, $EDITOR or vi
 // (§11), written first; what it holds after is one undo step.
 func (a *App) external() tea.Cmd {
-	t := consoleOf(a.focused())
+	t := queryOf(a.focused())
 	if t == nil {
 		return nil
 	}
@@ -331,11 +331,11 @@ func (a *App) external() tea.Cmd {
 
 func (a *App) gotExternal(msg externalDone) tea.Cmd {
 	t := msg.t
-	text, err := config.ReadConsole(t.path)
+	text, err := config.ReadQuery(t.path)
 	if err != nil {
 		return a.showToast(err.Error(), toastTTL)
 	}
-	cmd := a.consoleDid(t, t.ed.Load(text))
+	cmd := a.queryDid(t, t.ed.Load(text))
 	t.saved = t.ver // what the file has
 	if msg.err != nil {
 		return tea.Batch(cmd, a.showToast(msg.err.Error(), toastTTL))
@@ -343,15 +343,15 @@ func (a *App) gotExternal(msg externalDone) tea.Cmd {
 	return cmd
 }
 
-// consoleAt is the console of pane id, and the line and display column of
-// its text under p; nil when the pane shows no console.
-func (a *App) consoleAt(id int, p uv.Position) (*consoleTab, int, int) {
+// queryAt is the query of pane id, and the line and display column of
+// its text under p; nil when the pane shows no query.
+func (a *App) queryAt(id int, p uv.Position) (*queryTab, int, int) {
 	pane := a.win().pane(id)
-	if pane == nil || consoleOf(pane) == nil {
+	if pane == nil || queryOf(pane) == nil {
 		return nil, 0, 0
 	}
-	c := consoleOf(pane)
-	view, body := a.consoleView(pane, c)
+	c := queryOf(pane)
+	view, body := a.queryView(pane, c)
 	text := view.TextArea(body)
 	return c, view.Top + p.Y - text.Min.Y, max(view.Left+p.X-text.Min.X, 0)
 }

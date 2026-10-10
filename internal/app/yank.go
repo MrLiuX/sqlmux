@@ -31,7 +31,7 @@ type copiedRow struct {
 }
 
 // yankFlash is a yank flashing in pane (F3.32, nvim's vim.hl.on_yank): a
-// grid's record and field, -1 for all of it, or a console's text.
+// grid's record and field, -1 for all of it, or a query's text.
 type yankFlash struct {
 	pane int
 	cell [2]int
@@ -351,7 +351,7 @@ func (a *App) pasteRow() tea.Cmd {
 	return cmd
 }
 
-// yankSel is what a console's yank took, as its flash covers it.
+// yankSel is what a query's yank took, as its flash covers it.
 func yankSel(y editor.Yank) ui.Sel {
 	s := ui.Sel{Mode: ui.SelChars, From: ui.TextPos(y.From), To: ui.TextPos(y.To)}
 	switch {

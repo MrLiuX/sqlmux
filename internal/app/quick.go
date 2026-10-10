@@ -24,7 +24,7 @@ type quickSQL struct {
 	schema       string
 	res          db.Result
 	err          string
-	write        bool // ran is a write, not run: a console runs it (F-05)
+	write        bool // ran is a write, not run: a query runs it (F-05)
 	top, left    int  // the result's scroll
 }
 
@@ -85,7 +85,7 @@ func (a *App) runQuick(sql string) tea.Cmd {
 	}
 	h := slices.Insert(slices.DeleteFunc(a.state.SQL[c.Spec.Name], func(s string) bool { return s == sql }), 0, sql)
 	a.state.SQL[c.Spec.Name] = h[:min(len(h), quickHistory)]
-	if q := p.quick; sqlkit.IsWrite(sql, c.eng.Dialect()) { // a write is for a console, where running it is the user's own ↵ (F-05)
+	if q := p.quick; sqlkit.IsWrite(sql, c.eng.Dialect()) { // a write is for a query, where running it is the user's own ↵ (F-05)
 		q.ran, q.res, q.err, q.write, q.top, q.left = sql, db.Result{}, "", true, 0, 0
 		return a.saveState()
 	}
@@ -146,11 +146,11 @@ func (a *App) quickView(q *quickSQL) *ui.PaletteResult {
 	for _, c := range q.res.Cols {
 		r.Grid.Cols = append(r.Grid.Cols, ui.GridCol{Name: c.Name, Type: colType(c.Type)})
 	}
-	edit := ui.Hint{Key: a.keys.Hint("quicksql.edit", "palette"), Label: "console", Action: "quicksql.edit"}
+	edit := ui.Hint{Key: a.keys.Hint("quicksql.edit", "palette"), Label: "query", Action: "quicksql.edit"}
 	if q.write {
 		r.Err, r.Warn = i18n.T("写语句不在这里执行"), true
 		if edit.Key != "" {
-			r.Err += " · " + i18n.T("%s 在 console 中打开", edit.Key)
+			r.Err += " · " + i18n.T("%s 在 query 中打开", edit.Key)
 		}
 	}
 	if q.res.Cols != nil { // rows to copy, or to put in the result area
@@ -225,10 +225,10 @@ func (a *App) gotQuickRerun(m quickRerun) tea.Cmd {
 	return nil
 }
 
-// quickEdit is C-e (§12「C-e 在 console 中打开」): the SQL scope's text, the
-// ; off, in a new console in openTarget's pane: one undo step, the cursor at
-// its start in NORMAL; the palette goes, the console has the focus. A new
-// console is empty (F8.21).
+// quickEdit is C-e (§12「C-e 在 query 中打开」): the SQL scope's text, the
+// ; off, in a new query in openTarget's pane: one undo step, the cursor at
+// its start in NORMAL; the palette goes, the query has the focus. A new
+// query is empty (F8.21).
 func (a *App) quickEdit() tea.Cmd {
 	scope, sql := a.paletteScope()
 	if scope != sqlScope || strings.TrimSpace(sql) == "" {
@@ -237,13 +237,13 @@ func (a *App) quickEdit() tea.Cmd {
 	if a.palette.conn == nil {
 		return a.noConnection()
 	}
-	kept, ok := a.newConsole(a.palette.conn)
+	kept, ok := a.newQuery(a.palette.conn)
 	if !ok { // its file can't be read: the palette stays, the SQL in it
 		return kept
 	}
 	a.palette = nil
-	t := consoleOf(a.focused())
-	cmd := a.consoleDid(t, t.ed.Load(sql))
+	t := queryOf(a.focused())
+	cmd := a.queryDid(t, t.ed.Load(sql))
 	return tea.Batch(kept, cmd)
 }
 
@@ -258,7 +258,7 @@ func (a *App) copyQuick() tea.Cmd {
 }
 
 // completeSQL finds the candidates for the quick SQL's cursor (§12「补全」),
-// as a console's (sqlComplete).
+// as a query's (sqlComplete).
 func (a *App) completeSQL() tea.Cmd {
 	p := a.palette
 	p.comp = nil
@@ -289,7 +289,7 @@ func (a *App) fetchCols(c *Conn, t db.Table) tea.Cmd {
 }
 
 // gotCols caches what fetchCols read and completes again with it: the
-// quick SQL, or the focused console, still in INSERT where it asked.
+// quick SQL, or the focused query, still in INSERT where it asked.
 func (a *App) gotCols(m colsMsg) tea.Cmd {
 	if m.err != nil {
 		return nil
@@ -299,8 +299,8 @@ func (a *App) gotCols(m colsMsg) tea.Cmd {
 	var cmd tea.Cmd
 	if a.palette != nil {
 		cmd = a.completeSQL()
-	} else if t := a.focusedConsole(); t != nil && t.wait != nil && t.wait.at == t.ed.Cursor() && t.wait.ver == t.ver {
-		cmd = a.consoleComplete(t, t.wait.manual) // in INSERT only
+	} else if t := a.focusedQuery(); t != nil && t.wait != nil && t.wait.at == t.ed.Cursor() && t.wait.ver == t.ver {
+		cmd = a.queryComplete(t, t.wait.manual) // in INSERT only
 	}
 	if now := a.completing(); old != nil && now != nil && old.moved { // what was picked stays picked when its candidate is still there
 		if i := slices.IndexFunc(now.items, func(c candidate) bool { return c.label == old.items[old.sel].label }); i >= 0 {

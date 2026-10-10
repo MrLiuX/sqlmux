@@ -75,7 +75,7 @@ func TestNoConnectionKeys(t *testing.T) {
 // The start opens the form over a tree of one line saying what to do; esc
 // closes it, the line and the ＋ in the sidebar's first row open it again,
 // and saving the first connection connects it, names the session by it and
-// opens console_1 beside the empty pane (F7.4).
+// opens query_1 beside the empty pane (F7.4).
 func TestNoConnectionStart(t *testing.T) {
 	keychain(t, "none")
 	a := emptyApp(t)
@@ -103,8 +103,8 @@ func TestNoConnectionStart(t *testing.T) {
 	if a.form != nil || conn == nil || a.sess.Name != "play" || a.conn() != conn || conn.State != connConnecting {
 		t.Fatalf("saved: form %v, start %v, session %q", a.form, conn, a.sess.Name)
 	}
-	if c := consoleOf(a.win().pane(2)); c == nil || c.conn != conn || c.name != "console_1" {
-		t.Errorf("console_1: %+v", c)
+	if c := queryOf(a.win().pane(2)); c == nil || c.conn != conn || c.name != "query_1" {
+		t.Errorf("query_1: %+v", c)
 	}
 }
 

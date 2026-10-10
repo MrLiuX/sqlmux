@@ -13,7 +13,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/editor"
 )
 
-// ran is what the console sent the database, the reads without the LIMIT
+// ran is what the query sent the database, the reads without the LIMIT
 // they get and the search_path sets left out.
 func ran(d *execDB) []string {
 	var out []string
@@ -28,9 +28,9 @@ func ran(d *execDB) []string {
 
 // What runs is the selection exactly, over lines and across statements,
 // else the statement at the cursor (§6.9).
-func TestPlainConsoleRunsSelection(t *testing.T) {
+func TestPlainQueryRunsSelection(t *testing.T) {
 	d := &execDB{}
-	a, c := inConsole(t, "vim = false", "")
+	a, c := inQuery(t, "vim = false", "")
 	a.sess.Conns[0].Main = db.NewWorker(d)
 	c.schema = ""
 	feed(t, a, "1;<CR>select 2;")
@@ -39,13 +39,13 @@ func TestPlainConsoleRunsSelection(t *testing.T) {
 	if from, to, _ := c.ed.SelectionSpan(); from != (editor.Pos{}) || to != (editor.Pos{Line: 1, Col: 7}) {
 		t.Fatalf("selected %v to %v", from, to)
 	}
-	deliver(a, a.run("console.run", 0))
+	deliver(a, a.run("query.run", 0))
 	if got := ran(d); !slices.Equal(got, []string{"1", "select"}) || c.ed.HasSelection() {
 		t.Errorf("the selection: ran %q, still selected %v", got, c.ed.HasSelection())
 	}
 	d.ran = nil
 	c.ed.Goto(editor.Pos{Line: 1, Col: 3})
-	deliver(a, a.run("console.run", 0))
+	deliver(a, a.run("query.run", 0))
 	if got := ran(d); !slices.Equal(got, []string{"select 2"}) {
 		t.Errorf("none selected: the statement at the cursor, ran %q", got)
 	}
@@ -100,11 +100,11 @@ func TestPlainWhereKeys(t *testing.T) {
 	}
 }
 
-// C-c in a plain console ends the selection, else closes the list, else is
+// C-c in a plain query ends the selection, else closes the list, else is
 // the first press of quit; C-h is Backspace there and C-l still goes to the
 // next pane (§6.9).
-func TestPlainConsoleKeys(t *testing.T) {
-	a, c := inConsole(t, "vim = false", "")
+func TestPlainQueryKeys(t *testing.T) {
+	a, c := inQuery(t, "vim = false", "")
 	feed(t, a, "sele")
 	if c.comp == nil {
 		t.Fatal("no list")
@@ -127,25 +127,25 @@ func TestPlainConsoleKeys(t *testing.T) {
 	}
 }
 
-// A console a key makes has no modes for the keys after it, in a mapping
+// A query a key makes has no modes for the keys after it, in a mapping
 // too: a ? is the text, not the help (§6.9).
-func TestPlainFreshConsoleByMapping(t *testing.T) {
+func TestPlainFreshQueryByMapping(t *testing.T) {
 	for in, want := range map[string]string{`"c?"`: "?", `"cab"`: "ab", `"cx"`: "x"} {
 		a := sizedWith(160, 45, userConfig(t, "vim = false", "[map.normal]\nQ = "+in+"\n"))
 		a.win().focus(1)
 		feed(t, a, "Q")
-		c := a.focusedConsole()
+		c := a.focusedQuery()
 		if c == nil || a.keyHelp != nil || text(c) != want || c.ed.Mode() != editor.Insert {
 			t.Errorf("Q = %s: text %q, help %v", in, text(c), a.keyHelp != nil)
 		}
 	}
 }
 
-// With the list open, C-e still runs the console, and a selection is not
+// With the list open, C-e still runs the query, and a selection is not
 // needed for it (§6.9).
-func TestPlainConsoleRunWithList(t *testing.T) {
+func TestPlainQueryRunWithList(t *testing.T) {
 	d := &execDB{}
-	a, c := inConsole(t, "vim = false", "")
+	a, c := inQuery(t, "vim = false", "")
 	a.sess.Conns[0].Main = db.NewWorker(d)
 	c.schema = ""
 	feed(t, a, "sele")
@@ -158,18 +158,18 @@ func TestPlainConsoleRunWithList(t *testing.T) {
 	}
 }
 
-// A console made after the program began has no modes before its first
+// A query made after the program began has no modes before its first
 // key: a ? is the text, not the help (§6.9).
-func TestPlainFreshConsole(t *testing.T) {
+func TestPlainFreshQuery(t *testing.T) {
 	a := sizedWith(160, 45, userConfig(t, "vim = false", ""))
-	feed(t, a, "<Space>c")             // a window of one empty pane
-	feed(t, a, "<C-p>console.new<CR>") // made in an Update: what is drawn next is modeless already
-	if c := consoleOf(a.focused()); c == nil || !c.ed.Plain() {
-		t.Fatal("a console made by a command is not modeless as it is drawn")
+	feed(t, a, "<Space>c")           // a window of one empty pane
+	feed(t, a, "<C-p>query.new<CR>") // made in an Update: what is drawn next is modeless already
+	if c := queryOf(a.focused()); c == nil || !c.ed.Plain() {
+		t.Fatal("a query made by a command is not modeless as it is drawn")
 	}
-	c := a.focusedConsole()
+	c := a.focusedQuery()
 	if c == nil {
-		t.Fatal("no console")
+		t.Fatal("no query")
 	}
 	feed(t, a, "?")
 	if a.keyHelp != nil || text(c) != "?" || !c.ed.Plain() {
@@ -177,10 +177,10 @@ func TestPlainFreshConsole(t *testing.T) {
 	}
 }
 
-// After the $EDITOR the text is read back, and the console is still typed
+// After the $EDITOR the text is read back, and the query is still typed
 // into (§6.9).
 func TestPlainExternalEditor(t *testing.T) {
-	a, c := inConsole(t, "vim = false", "")
+	a, c := inQuery(t, "vim = false", "")
 	feed(t, a, "select 1")
 	if err := os.MkdirAll(filepath.Dir(c.path), 0o700); err != nil {
 		t.Fatal(err)
@@ -196,19 +196,19 @@ func TestPlainExternalEditor(t *testing.T) {
 	}
 }
 
-// console.format over a selection lays out that, none the statements; both
+// query.format over a selection lays out that, none the statements; both
 // are steps of their own (§6.9, F5.16).
-func TestPlainConsoleFormat(t *testing.T) {
-	a, c := inConsole(t, "vim = false\nformatprg = \"tr a-z A-Z\"", "")
+func TestPlainQueryFormat(t *testing.T) {
+	a, c := inQuery(t, "vim = false\nformatprg = \"tr a-z A-Z\"", "")
 	format := func() {
 		t.Helper()
-		cmd := a.run("console.format", 0)
+		cmd := a.run("query.format", 0)
 		if cmd == nil {
 			t.Fatal("formats nothing")
 		}
 		a.Update(cmd())
 	}
-	a.consoleDid(c, c.ed.Load("select a;\nselect b;"))
+	a.queryDid(c, c.ed.Load("select a;\nselect b;"))
 	c.ed.Goto(editor.Pos{})
 	shiftArrow(a, tea.KeyRight, 6)
 	format()
@@ -224,7 +224,7 @@ func TestPlainConsoleFormat(t *testing.T) {
 	}
 }
 
-// A hint names the keys the layer gave, and a plain console has no tabs to
+// A hint names the keys the layer gave, and a plain query has no tabs to
 // walk with gt (§6.9).
 func TestNoVimHints(t *testing.T) {
 	vim := sizedWith(160, 45, userConfig(t, "", ""))
@@ -239,12 +239,12 @@ func TestNoVimHints(t *testing.T) {
 	if s := novim.render().String(); !strings.Contains(s, "←↓↑→") || strings.Contains(s, "hjkl") {
 		t.Errorf("vim = false: the grid's hint is the arrows")
 	}
-	a, c := inConsole(t, "vim = false", "")
+	a, c := inQuery(t, "vim = false", "")
 	if s := a.render().String(); strings.Contains(s, "gt/gT") || !strings.Contains(s, "C-e") {
-		t.Errorf("a plain console's bar: %q has gt/gT or no C-e", c.path)
+		t.Errorf("a plain query's bar: %q has gt/gT or no C-e", c.path)
 	}
-	a, _ = inConsole(t, "", "")
+	a, _ = inQuery(t, "", "")
 	if s := a.render().String(); !strings.Contains(s, "gt/gT") {
-		t.Error("a vim console's bar has gt/gT")
+		t.Error("a vim query's bar has gt/gT")
 	}
 }

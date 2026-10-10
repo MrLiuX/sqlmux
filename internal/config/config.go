@@ -26,11 +26,11 @@ type Config struct {
 	ThemeName  string    // the theme in use: `theme`, or tokyonight-storm
 	Language   string    // `language = "en" | "zh"` (§14「界面语言」)
 	Border     uv.Border // `border = "single" | "rounded" | "double" | "bold" | "hidden"`: the boxes' lines (§7.1)
-	Vim        bool      // `vim = false`: console and WHERE are plain editors, the grid and tree get arrow keys too (§6.9)
+	Vim        bool      // `vim = false`: query and WHERE are plain editors, the grid and tree get arrow keys too (§6.9)
 	Timeoutlen int       // ms to wait on an ambiguous key sequence
-	TabWidth   int       // the console's indent, and the formatter's (§14)
+	TabWidth   int       // the query's indent, and the formatter's (§14)
 	// ResultHeight is the share of the window the result area first takes;
-	// MaxRows the rows a console's run keeps of each result (§11).
+	// MaxRows the rows a query's run keeps of each result (§11).
 	ResultHeight float64
 	MaxRows      int
 	// KeywordCase and FormatPrg are gq's (§9.5): sql-formatter's keywordCase,
@@ -60,7 +60,7 @@ type Config struct {
 
 // Binding is one `key = "value"` line under [keys.<scope>] or [map.<...>].
 type Binding struct {
-	Table string // "keys.normal", "map.console.normal"
+	Table string // "keys.normal", "map.query.normal"
 	Key   string // as written, e.g. "<C-p>"
 	Value string // action for keys.*, key sequence for map.*; "" unbinds
 }
@@ -131,9 +131,9 @@ func Parse(data string) (*Config, error) {
 		FormatPrg  string   `toml:"formatprg"`
 		AutoPairs  *bool    `toml:"autopairs"`
 		Dangerous  *bool    `toml:"confirm_dangerous"`
-		Console    struct {
+		Query      struct {
 			MaxRows *int `toml:"max_rows"`
-		} `toml:"console"`
+		} `toml:"query"`
 		Tree struct {
 			Width *int `toml:"width"`
 		} `toml:"tree"`
@@ -208,9 +208,9 @@ func Parse(data string) (*Config, error) {
 	if raw.Dangerous != nil {
 		c.ConfirmDangerous = *raw.Dangerous
 	}
-	if n := raw.Console.MaxRows; n != nil {
+	if n := raw.Query.MaxRows; n != nil {
 		if *n <= 0 {
-			return nil, fmt.Errorf("[console] max_rows = %d: must be greater than 0", *n)
+			return nil, fmt.Errorf("[query] max_rows = %d: must be greater than 0", *n)
 		}
 		c.MaxRows = *n
 	}

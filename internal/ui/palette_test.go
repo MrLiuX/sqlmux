@@ -67,9 +67,9 @@ func TestPaletteBoxResult(t *testing.T) {
 // never over the title (F-04).
 func TestPaletteResultHints(t *testing.T) {
 	p := Palette{Search: Icon{Text: "~"}, Result: &PaletteResult{Title: "100+ 行 · 12ms · 只读", Hints: []Hint{
-		{Key: "C-y", Label: "CSV"}, {Key: "C-t", Label: "结果区"}, {Key: "C-e", Label: "console"},
+		{Key: "C-y", Label: "CSV"}, {Key: "C-t", Label: "结果区"}, {Key: "C-e", Label: "query"},
 	}}}
-	for w, want := range map[int]string{80: "C-y CSV · C-t 结果区 · C-e console", 60: "C-y CSV · C-t 结果区", 44: "C-y CSV", 30: ""} {
+	for w, want := range map[int]string{80: "C-y CSV · C-t 结果区 · C-e query", 60: "C-y CSV · C-t 结果区", 44: "C-y CSV", 30: ""} {
 		f := NewFrame(w, 30, TokyonightStorm)
 		p.Draw(f, uv.Rect(0, 0, w, 29))
 		row := ""

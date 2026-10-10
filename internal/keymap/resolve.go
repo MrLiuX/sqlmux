@@ -27,7 +27,7 @@ type Context struct {
 	Overlay string   // topmost overlay scope, if one is open
 	Under   string   // an overlay under it, whose keys come next: options or segments under newrow (F3.33), the palette under quick SQL's candidates (F4.1)
 	Focus   []string // focused widget scopes, most specific first: {"result", "grid"}
-	Pane    string   // pane type for [map.<pane>.<mode>]: console | grid | tree
+	Pane    string   // pane type for [map.<pane>.<mode>]: query | grid | tree
 	Mode    Mode
 	// Firm is a scope whose complete bindings stay complete: a longer
 	// sequence of a lower scope that starts with one is not bound (select: d
@@ -57,8 +57,8 @@ func (m *Map) scopes(c Context, maps bool) []string {
 		ts = append(ts, "map."+c.Mode.String())
 	}
 	for _, f := range c.Focus {
-		// grid/tree/console/result keys are NORMAL/VISUAL keys: in INSERT only
-		// the input being typed into has bindings (↵ in console inserts a newline).
+		// grid/tree/query/result keys are NORMAL/VISUAL keys: in INSERT only
+		// the input being typed into has bindings (↵ in query inserts a newline).
 		if !c.Mode.typing() || f == "cell" || f == "input" || c.Plain {
 			ts = append(ts, "keys."+f)
 		}

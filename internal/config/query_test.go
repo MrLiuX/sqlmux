@@ -7,22 +7,22 @@ import (
 	"testing"
 )
 
-// Console files go under XDG_DATA_HOME, in directories and files only the
+// Query files go under XDG_DATA_HOME, in directories and files only the
 // user can read (§11, §13).
-func TestConsoleFiles(t *testing.T) {
+func TestQueryFiles(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", dir)
-	path := ConsolePath("console_1")
-	if want := filepath.Join(dir, "sqlmux", "consoles", "console_1.sql"); path != want {
+	path := QueryPath("query_1")
+	if want := filepath.Join(dir, "sqlmux", "queries", "query_1.sql"); path != want {
 		t.Fatalf("path %s, want %s", path, want)
 	}
-	if text, err := ReadConsole(path); text != "" || err != nil {
+	if text, err := ReadQuery(path); text != "" || err != nil {
 		t.Errorf("no file yet: %q %v", text, err)
 	}
-	if err := WriteConsole(path, "select 1;\n"); err != nil {
+	if err := WriteQuery(path, "select 1;\n"); err != nil {
 		t.Fatal(err)
 	}
-	if text, err := ReadConsole(path); text != "select 1;\n" || err != nil {
+	if text, err := ReadQuery(path); text != "select 1;\n" || err != nil {
 		t.Errorf("read back: %q %v", text, err)
 	}
 	for p, want := range map[string]os.FileMode{path: 0o600, filepath.Dir(path): 0o700, filepath.Join(dir, "sqlmux"): 0o700} {
@@ -35,10 +35,10 @@ func TestConsoleFiles(t *testing.T) {
 	}
 }
 
-func TestSortConsoles(t *testing.T) {
-	names := []string{"Zeta", "alpha", "console_10", "console_2", "console_02", "Beta"}
-	SortConsoles(names)
-	if want := []string{"console_2", "console_10", "alpha", "Beta", "console_02", "Zeta"}; !slices.Equal(names, want) {
+func TestSortQueries(t *testing.T) {
+	names := []string{"Zeta", "alpha", "query_10", "query_2", "query_02", "Beta"}
+	SortQueries(names)
+	if want := []string{"query_2", "query_10", "alpha", "Beta", "query_02", "Zeta"}; !slices.Equal(names, want) {
 		t.Errorf("got %v, want %v", names, want)
 	}
 }

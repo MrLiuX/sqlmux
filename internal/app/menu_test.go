@@ -18,7 +18,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
-// menuApp is a tree with a view and a materialized view in public, console_1
+// menuApp is a tree with a view and a materialized view in public, query_1
 // open: the nodes a right-click menu is for.
 func menuApp() *App {
 	a := sized(160, 45, "nerd")
@@ -56,7 +56,7 @@ func menuLabels(a *App) (labels []string) {
 	return labels
 }
 
-// A right click on a table, a view, a console file opens a menu with what
+// A right click on a table, a view, a query file opens a menu with what
 // can be done to it, the tree's cursor on the node; on any other node
 // nothing opens (F8.23).
 func TestMenuItemsByNode(t *testing.T) {
@@ -68,10 +68,10 @@ func TestMenuItemsByNode(t *testing.T) {
 		{"t_user", []string{"打开", "在新 tab 打开", "删除表…"}},
 		{"v_paid", []string{"打开", "在新 tab 打开", "删除视图…"}},
 		{"mv_sum", []string{"打开", "在新 tab 打开", "删除视图…"}},
-		{"consoles/console_1", []string{"打开", "重命名…", "删除…"}},
+		{"queries/query_1", []string{"打开", "重命名…", "删除…"}},
 		{"public", nil},
 		{"Tables (14)", nil},
-		{"Consoles", nil},
+		{"Queries", nil},
 		{"data", nil},
 	} {
 		a.menu = nil
@@ -87,7 +87,7 @@ func TestMenuItemsByNode(t *testing.T) {
 }
 
 // The menu takes j / k / the arrows, ↵ and esc, and no other key: they are no
-// text for the console behind it; a click on an item runs it, a click off
+// text for the query behind it; a click on an item runs it, a click off
 // the menu closes it and does no more (F8.23).
 func TestMenuKeysAndClicks(t *testing.T) {
 	a := menuApp()
@@ -131,7 +131,7 @@ func TestMenuKeysAndClicks(t *testing.T) {
 	}
 	feed(t, a, "<Esc>")
 	a.win().focus(a.win().Root.Leaves()[1].ID)
-	a.run("console.rename", 0)
+	a.run("query.rename", 0)
 	if a.askName == nil {
 		t.Fatal("no name asked")
 	}
@@ -142,25 +142,25 @@ func TestMenuKeysAndClicks(t *testing.T) {
 	}
 }
 
-// The menu's rename is console.rename, the console opened first when it is
+// The menu's rename is query.rename, the query opened first when it is
 // not; its delete is tree.delete (F8.23).
 func TestMenuRenameAndDelete(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	a := menuApp()
-	consoleFile(t, "console_2", "two\n")
+	queryFile(t, "query_2", "two\n")
 	a.View()
-	rightClickNode(t, a, "consoles/console_2")
+	rightClickNode(t, a, "queries/query_2")
 	feed(t, a, "jj<CR>")
-	if a.confirm == nil || a.confirm.text != "删除 console_2？" {
+	if a.confirm == nil || a.confirm.text != "删除 query_2？" {
 		t.Fatalf("delete: %v", a.confirm)
 	}
 	feed(t, a, "<Esc>")
 	a.View()
-	rightClickNode(t, a, "consoles/console_2")
+	rightClickNode(t, a, "queries/query_2")
 	feed(t, a, "j<CR>")
-	if a.askName == nil || consoleOf(a.focused()) == nil || consoleOf(a.focused()).name != "console_2" {
-		t.Fatalf("rename: asked %v, on %v", a.askName != nil, consoleOf(a.focused()))
+	if a.askName == nil || queryOf(a.focused()) == nil || queryOf(a.focused()).name != "query_2" {
+		t.Fatalf("rename: asked %v, on %v", a.askName != nil, queryOf(a.focused()))
 	}
 }
 
@@ -257,7 +257,7 @@ func TestDropTableClosesItsTabs(t *testing.T) {
 	user := db.Table{Schema: "public", Name: "t_user"}
 	report.Conns[0].Tables = []db.Table{user}
 	idle := newConn(config.Connection{Name: "doraemon", Engine: "postgres"}) // listed, not dialed: it has no Meta to read a catalog with
-	third := newSession("third", []*Conn{idle}, idle, a.freeConsole())
+	third := newSession("third", []*Conn{idle}, idle, a.freeQuery())
 	a.sessions = append(a.sessions, third)
 	a.attach(report)
 	a.openTable(report.Conns[0], user)
@@ -460,11 +460,11 @@ func TestMenuRightClickWhileOpen(t *testing.T) {
 // all while a cell's edit cannot end (F8.23).
 func TestMenuRightClickFocusAndEdit(t *testing.T) {
 	a := menuApp()
-	a.win().focus(a.win().Root.Leaves()[1].ID) // the console
+	a.win().focus(a.win().Root.Leaves()[1].ID) // the query
 	a.View()
 	rightClickNode(t, a, "t_user")
 	if n, _ := a.treeNode(); a.menu == nil || a.win().Focus != 0 || n.Text != "t_user" {
-		t.Errorf("from the console: menu %v, focus %d, cursor %q", a.menu != nil, a.win().Focus, n.Text)
+		t.Errorf("from the query: menu %v, focus %d, cursor %q", a.menu != nil, a.win().Focus, n.Text)
 	}
 	b := wide(160, 45)
 	loadOrders(t, b, 10)

@@ -13,14 +13,14 @@ import (
 	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
-// Console is a console tab's text as its editor has it (§7.8, §9.2, §11):
+// Query is a query tab's text as its editor has it (§7.8, §9.2, §11):
 // a gutter of ▶ on each statement's first line and the line numbers, then
 // the SQL in its colors, not wrapped. In NORMAL the statement under the
 // cursor, what ↵ runs, is on the row background, in VISUAL the selection
 // on select; the / ? : line takes the last row.
 // ponytail: the text is scanned twice a frame (colors, statements), fine
 // for SQL files; keep the tokens per change if a big file lags.
-type Console struct {
+type Query struct {
 	Lines     []string
 	TabWidth  int
 	Top, Left int     // the first line and display column on screen
@@ -61,17 +61,17 @@ const (
 )
 
 // gutter is ▶, the line numbers at 3 columns at least, a blank.
-func (c Console) gutter() int { return 1 + max(3, len(strconv.Itoa(len(c.Lines)))) + 1 }
+func (c Query) gutter() int { return 1 + max(3, len(strconv.Itoa(len(c.Lines)))) + 1 }
 
 // TextArea is where the text goes in r: right of the gutter.
-func (c Console) TextArea(r uv.Rectangle) uv.Rectangle {
+func (c Query) TextArea(r uv.Rectangle) uv.Rectangle {
 	g := min(c.gutter(), r.Dx())
 	return uv.Rect(r.Min.X+g, r.Min.Y, r.Dx()-g, r.Dy())
 }
 
-// Draw paints the console over r and returns where the terminal cursor
+// Draw paints the query over r and returns where the terminal cursor
 // goes; X is -1 when it is off the view.
-func (c Console) Draw(f *Frame, r uv.Rectangle) uv.Position {
+func (c Query) Draw(f *Frame, r uv.Rectangle) uv.Position {
 	th := f.Theme
 	f.Fill(r, uv.Style{Fg: th.Fg, Bg: th.PaneBg})
 	f.Region(r, Target{Kind: KindText, Pane: c.Pane})
@@ -104,7 +104,7 @@ func (c Console) Draw(f *Frame, r uv.Rectangle) uv.Position {
 				st.Fg = th.Error
 			}
 			f.Text(r.Min.X, row, ta.Min.X, "▶", st)
-			f.Region(uv.Rect(r.Min.X, row, 1, 1), Target{Kind: KindHint, Pane: c.Pane, Action: fmt.Sprintf("console.run %d", n+1)})
+			f.Region(uv.Rect(r.Min.X, row, 1, 1), Target{Kind: KindHint, Pane: c.Pane, Action: fmt.Sprintf("query.run %d", n+1)})
 		}
 		num := uv.Style{Fg: th.Dim, Bg: th.PaneBg}
 		if n == cur.Line {
@@ -130,7 +130,7 @@ func (c Console) Draw(f *Frame, r uv.Rectangle) uv.Position {
 
 // drawLine draws line n on row, from display column Left; fg are its
 // characters' colors.
-func (c Console) drawLine(f *Frame, ta uv.Rectangle, row, n int, fg []color.Color, bg color.Color) {
+func (c Query) drawLine(f *Frame, ta uv.Rectangle, row, n int, fg []color.Color, bg color.Color) {
 	th, l := f.Theme, c.Lines[n]
 	put := func(v int, s string, st uv.Style) { // a cell at display column v, when on screen
 		if x := ta.Min.X + v - c.Left; x >= ta.Min.X {
@@ -200,7 +200,7 @@ const (
 // written, "quoted" or not.
 type SQLNames func(at int, word string) SQLName
 
-// SQLColors are SQL text's colors by byte (§7.3), a console's and a WHERE
+// SQLColors are SQL text's colors by byte (§7.3), a query's and a WHERE
 // input's, read as d: keywords, numbers, strings, comments, operators, a
 // name right before ( as a function, the tables and columns names says it
 // is, the rest fg.

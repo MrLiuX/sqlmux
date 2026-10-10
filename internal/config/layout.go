@@ -61,9 +61,9 @@ type LayoutPane struct {
 	Tabs    []LayoutTab `toml:"tab"`
 }
 
-// LayoutTab is a table's or a console's: Kind says which.
+// LayoutTab is a table's or a query's: Kind says which.
 type LayoutTab struct {
-	Kind       string `toml:"kind"` // "table" | "console"
+	Kind       string `toml:"kind"` // "table" | "query"
 	Connection string `toml:"connection,omitempty"`
 	Schema     string `toml:"schema,omitempty"`
 	// a table's
@@ -76,18 +76,18 @@ type LayoutTab struct {
 	Cols      []string `toml:"cols,omitempty"`       // the columns COLS hides
 	OrderCols []string `toml:"order_cols,omitempty"` // the columns in the order COLS puts them (F10.3)
 	Transpose bool     `toml:"transpose,omitempty"`
-	// a console's: the name of its file; N is what layouts of before
-	// M8 F8.11 say, console_<n>
+	// a query's: the name of its file; N is what layouts of before
+	// M8 F8.11 say, query_<n>
 	Name string `toml:"name,omitempty"`
 	N    int    `toml:"n,omitempty"`
 }
 
-// ConsoleName is the name of a console tab's file: Name, or console_<N> in
+// QueryName is the name of a query tab's file: Name, or query_<N> in
 // a layout of before the names (no migration: it is read, and written as a
 // name).
-func (t LayoutTab) ConsoleName() string {
+func (t LayoutTab) QueryName() string {
 	if t.Name == "" && t.N > 0 {
-		return ConsoleName(t.N)
+		return QueryName(t.N)
 	}
 	return t.Name
 }
@@ -139,7 +139,7 @@ func CheckLayoutName(name string) error {
 }
 
 // checkFileName is the rule of a name that is a file's: none of / or \, no
-// leading . (a connection's, a layout's, a console's).
+// leading . (a connection's, a layout's, a query's).
 func checkFileName(name string) error {
 	if strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, ".") {
 		return errors.New(i18n.T("名字不能含 / 或 \\，也不能以 . 开头"))
@@ -164,6 +164,18 @@ func LoadLayout(path string) (*Layout, error) {
 	}
 	if len(l.Sessions) == 0 {
 		return nil, fmt.Errorf(i18n.T("%s: 里面没有 [[session]]"), path)
+	}
+	for _, s := range l.Sessions { // the queries were consoles before F10.11: read as queries, written as such
+		for _, w := range s.Windows {
+			for _, p := range w.Panes {
+				for i, t := range p.Tabs {
+					if t.Kind == "console" {
+						p.Tabs[i].Kind = "query"
+					}
+					p.Tabs[i].Name = currentName(t.Name)
+				}
+			}
+		}
 	}
 	return l, nil
 }

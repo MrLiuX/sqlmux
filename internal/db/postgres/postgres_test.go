@@ -129,7 +129,7 @@ func TestReadOnlyRefusesWrites(t *testing.T) {
 	}
 }
 
-// execEach is a console's run on w, as one request.
+// execEach is a query's run on w, as one request.
 func execEach(ctx context.Context, w *db.Worker, stmts ...string) (rs []db.Result, err error) {
 	err = w.Run(ctx, func(ctx context.Context, c db.Conn) error {
 		rs, err = db.ExecEach(ctx, c, stmts, 0, nil)
@@ -138,7 +138,7 @@ func execEach(ctx context.Context, w *db.Worker, stmts ...string) (rs []db.Resul
 	return rs, err
 }
 
-// A console's schema goes first on search_path, the started one after it:
+// A query's schema goes first on search_path, the started one after it:
 // agentable's tables need no prefix, public's still resolve. The started
 // path goes as a parameter: "" (the server's search_path set empty) and
 // $user,public (a DSN's) take no quoting (§8.6).
@@ -162,7 +162,7 @@ func TestSetSearchPath(t *testing.T) {
 	}
 }
 
-// A console's run (§11「执行」): each statement commits on its own, and the
+// A query's run (§11「执行」): each statement commits on its own, and the
 // first to fail stops the rest; a cancelled run leaves Main usable.
 func TestExecEach(t *testing.T) {
 	c, err := Connect(context.Background(), OwnDB(t), "", false)

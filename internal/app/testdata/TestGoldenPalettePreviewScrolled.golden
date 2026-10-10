@@ -22,7 +22,7 @@
 │        Views (0)           │ );                                                                                               │                             │
 │ ▾  工作区                  │ create index i on t_order (id);                                                                  │                             │
 │      data                  │ create index i on t_order (id);                                                                  │                             │
-│ ▾  Consoles                │ create index i on t_order (id);                                                                  │                             │
+│ ▾  Queries                 │ create index i on t_order (id);                                                                  │                             │
 │                             │ …                                                                                                │                             │
 │                             │──────────────────────────────────────────────────────────────────────────────────────────────────│                             │
 │                             │ ↑/↓ 移动 · C-b/C-f 滚动预览 · Tab/S-Tab 范围 · esc 关闭                                   ↵ 打开 │                             │

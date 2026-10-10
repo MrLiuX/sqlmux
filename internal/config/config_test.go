@@ -21,7 +21,7 @@ keyword_case = "upper"
 formatprg = "pg_format -"
 autopairs = false
 confirm_dangerous = false
-[console]
+[query]
 max_rows = 50
 [grid]
 full_width = 12
@@ -43,14 +43,14 @@ leader = "<C-a>"
 x = ""
 [map.normal]
 J = "5j"
-[map.console.normal]
+[map.query.normal]
 L = "5l"
 `)
 	want := []Binding{
 		{"keys.normal", "<C-w>v", "pane.split.right"},
 		{"keys.normal", "x", ""},
 		{"map.normal", "J", "5j"},
-		{"map.console.normal", "L", "5l"},
+		{"map.query.normal", "L", "5l"},
 	}
 	if err != nil || leader != "<C-a>" || !reflect.DeepEqual(bs, want) {
 		t.Fatalf("leader %q, bindings %+v, %v", leader, bs, err)
@@ -110,7 +110,7 @@ func TestParseErrors(t *testing.T) {
 		`keyword_case = "title"`,
 		`autopairs = "yes"`,
 		`confirm_dangerous = "no"`,
-		"[console]\nmax_rows = 0",
+		"[query]\nmax_rows = 0",
 		"[grid]\nfull_width = 0",
 		"[keys]\nleader = \"<C-a>\"",
 		"[map.normal]\nJ = \"5j\"",
@@ -124,7 +124,7 @@ func TestParseErrors(t *testing.T) {
 		"[keys.normal]\nx = 1",
 		"[keys]\nx = \"a\"",
 		`theme = "x"`,
-		"[console]\nmax_rows = 50",
+		"[query]\nmax_rows = 50",
 		"[keys.normal\n",
 	} {
 		if _, _, err := ParseKeys(s); err == nil {
@@ -181,7 +181,7 @@ func TestThemeFile(t *testing.T) {
 	if err := os.MkdirAll(themes, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(themes, "ristretto.toml"), []byte("pane_bg = \"#393333\"\n[icon]\nconsole = { text = \"C\" }"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(themes, "ristretto.toml"), []byte("pane_bg = \"#393333\"\n[icon]\nquery = { text = \"C\" }"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(themes, "typo.toml"), []byte(`rwo = "#393333"`), 0o644); err != nil {
@@ -206,7 +206,7 @@ func TestThemeFile(t *testing.T) {
 	if c.Theme.PaneBg == ui.TokyonightStorm.PaneBg || c.Theme.Fg != ui.TokyonightStorm.Fg {
 		t.Errorf("pane_bg %v fg %v", c.Theme.PaneBg, c.Theme.Fg)
 	}
-	if c.Icons.Console.Text != "C" || c.Icons.Table != ui.ASCIIIcons.Table {
+	if c.Icons.Query.Text != "C" || c.Icons.Table != ui.ASCIIIcons.Table {
 		t.Errorf("icons %+v", c.Icons)
 	}
 	if c, err := load(`theme = "tokyonight-storm"`); err != nil || c.Theme != ui.TokyonightStorm {

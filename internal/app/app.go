@@ -27,7 +27,7 @@ type App struct {
 	// fresh is that nothing changed since, reuse that an Update found the
 	// pointer moved inside it and View may answer with seen (F8.20)
 	rendered ui.Rendered
-	files    consoleDir // the Consoles node's list (F8.21)
+	files    queryDir // the Queries node's list (F8.21)
 	probes   []uv.Rectangle
 	seenAt   uv.Position
 	seen     tea.View
@@ -37,10 +37,10 @@ type App struct {
 	// baseIcons is what `icons` chose, a theme's [icon] not on it, and themeName
 	// the theme in use: theme.switch loads another over them (F6.2).
 	jump      *jumpState // a flash-style jump going on (F10.8)
-	askName   *nameAsk   // a name typed in the status bar: layout.save's, a session's, a console's (F6.5, F8.11)
+	askName   *nameAsk   // a name typed in the status bar: layout.save's, a session's, a query's (F6.5, F8.11)
 	lastPath  string     // where the working set is kept as the program quits; "" for nowhere
-	plain     bool       // vim = false: console and WHERE edit without modes (§6.9)
-	restored  bool       // the sessions are a layout's: console_1 is not looked up in state.json (F6.5)
+	plain     bool       // vim = false: query and WHERE edit without modes (§6.9)
+	restored  bool       // the sessions are a layout's: query_1 is not looked up in state.json (F6.5)
 	baseIcons *ui.Icons
 	themeName string
 	keys      *keymap.Map
@@ -50,8 +50,8 @@ type App struct {
 	lastSess *Session // the one attached before sess (F9.10)
 	sessions []*Session
 
-	tabWidth     int       // the consoles' (§14)
-	maxRows      int       // a console run keeps of each result (§11)
+	tabWidth     int       // the queries' (§14)
+	maxRows      int       // a query run keeps of each result (§11)
 	resultHeight float64   // the share the result area first takes
 	treeWidth    int       // config [tree] width: the sidebar's default width (§7.8)
 	fullWidth    int       // the grid's columns up to this wide are not squeezed (§7.6)
@@ -60,7 +60,7 @@ type App struct {
 	newTurned    bool
 	keywordCase  string // gq's (§9.5)
 	formatPrg    string
-	autoPairs    bool // a console's INSERT, a WHERE and the quick SQL (§7.9)
+	autoPairs    bool // a query's INSERT, a WHERE and the quick SQL (§7.9)
 	// confirmDangerous asks before a run that would delete or drop, and a
 	// save that deletes rows (§13).
 	confirmDangerous bool
@@ -97,7 +97,7 @@ type App struct {
 	mouse       uv.Position // pointer, for hover styles
 	drag        *handle     // the split border being dragged
 	dragTree    bool        // the sidebar's edge is being dragged
-	dragText    int         // the pane whose console text is being selected by dragging; 0 for none
+	dragText    int         // the pane whose query text is being selected by dragging; 0 for none
 	dragWhere   int         // the same for a WHERE's text (vim = false)
 	lastClick   ui.Target   // with lastClickAt, to spot a double click
 	lastClickAt time.Time
@@ -132,7 +132,7 @@ func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, 
 		keys: keys, res: keymap.NewResolver(keys), sess: sess, sessions: []*Session{sess},
 		mouse: uv.Pos(-1, -1), warning: JoinNotes(warning, sess.warning), state: st,
 	}
-	a.plainConsoles()
+	a.plainQueries()
 	if len(sess.Conns) == 0 { // a start with no connection (F7.4)
 		a.openConnForm()
 	}
@@ -169,14 +169,14 @@ func (a *App) KeyProblems(ps []keymap.Problem) {
 // has appeared.
 func (a *App) Init() tea.Cmd {
 	cmds := []tea.Cmd{func() tea.Msg { return tea.ModeReportMsg{Mode: ansi.ModeUnicodeCore, Value: ansi.ModeSet} }}
-	if a.restored { // a layout's: its connections now, its consoles as it had them (F6.5)
+	if a.restored { // a layout's: its connections now, its queries as it had them (F6.5)
 		cmds = append(cmds, a.connectsNow()...)
 	} else {
 		if a.sess.last != nil { // none at a start with no connection (F7.4)
 			cmds = append(cmds, a.loadCatalog(a.sess.last))
 		}
-		for _, t := range a.sess.consoles() { // console_1, where it last ran (§11)
-			cmds = append(cmds, a.restoreConsole(t))
+		for _, t := range a.sess.queries() { // query_1, where it last ran (§11)
+			cmds = append(cmds, a.restoreQuery(t))
 		}
 	}
 	if a.warning != "" {
@@ -185,19 +185,19 @@ func (a *App) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// plainConsoles has every console without modes with vim = false (§6.9):
+// plainQueries has every query without modes with vim = false (§6.9):
 // they are made all over, the sessions of a layout before the App, so what
 // there is is gone through before each key, a mapping's too, and after each
 // message, for what is drawn.
-func (a *App) plainConsoles() {
+func (a *App) plainQueries() {
 	if a.plain {
-		for _, t := range a.consoles() {
+		for _, t := range a.queries() {
 			t.ed.SetPlain(true)
 		}
 	}
 }
 
-// Update is update, then the columns the consoles on screen want (§7.3)
+// Update is update, then the columns the queries on screen want (§7.3)
 // and the DDL the palette's selection may (F4.2).
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	wasFresh := a.fresh
@@ -213,7 +213,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if wasFresh && a.stillOver(msg) { // a pointer moved inside what it was over: the frame is the same
 		a.fresh, a.reuse = true, true
 	}
-	a.plainConsoles()
+	a.plainQueries()
 	a.sess.last = a.conn() // where the focus goes next may name none (§5)
 	a.sess.touch(a.focused().tab())
 	return a, tea.Batch(cmd, a.wantCols(), a.wantDDL(), a.wantPopupDDL())
@@ -328,7 +328,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.win().TreeW = treeWidth(a.mouse.X, a.w)
 		}
 		if a.dragText != 0 {
-			if t, n, v := a.consoleAt(a.dragText, a.mouse); t != nil {
+			if t, n, v := a.queryAt(a.dragText, a.mouse); t != nil {
 				t.ed.Drag(n, v)
 			}
 		}
@@ -385,7 +385,7 @@ func (a *App) feed(k keymap.Key, maps bool) tea.Cmd {
 			return nil
 		}
 	}
-	a.plainConsoles() // one a key before it made, by a mapping, has no modes as this one meets it
+	a.plainQueries() // one a key before it made, by a mapping, has no modes as this one meets it
 	if a.paneNumbers {
 		a.jumpToPane(k)
 		return nil
@@ -530,7 +530,7 @@ func (a *App) click(p uv.Position) tea.Cmd {
 		return focus()
 	case ui.KindText: // the cursor goes there; dragging from there selects (§11)
 		a.focusPane(t.Pane)
-		if c, n, v := a.consoleAt(t.Pane, p); c != nil {
+		if c, n, v := a.queryAt(t.Pane, p); c != nil {
 			c.ed.Click(n, v)
 			a.dragText, c.comp = t.Pane, nil
 		}
@@ -612,7 +612,7 @@ func (a *App) wheel(m tea.Mouse) {
 
 // paste types s into the input that has the keys, each its own way, a
 // newline as a space: they are single-line (§10.1). On a grid in NORMAL it
-// starts editing the current cell with s; a console takes it whole, as
+// starts editing the current cell with s; a query takes it whole, as
 // text in any mode (§11).
 func (a *App) paste(s string) tea.Cmd {
 	if j := a.jump; j != nil { // text for the pattern, whatever has the focus (F10.8)
@@ -623,12 +623,12 @@ func (a *App) paste(s string) tea.Cmd {
 	if a.ddl != nil && a.ddl.col != "" { // the column's box goes with it, as with a key, and what is pasted is then typed (F9.8)
 		a.ddl = nil
 	}
-	if t := a.focusedConsole(); t != nil {
-		a.consoleView(a.focused(), t)
-		return a.consoleDid(t, t.ed.Paste(s))
+	if t := a.focusedQuery(); t != nil {
+		a.queryView(a.focused(), t)
+		return a.queryDid(t, t.ed.Paste(s))
 	}
 	s = strings.NewReplacer("\r\n", " ", "\r", " ", "\n", " ").Replace(s)
-	if t := dataOf(a.focused()); t != nil && t.typing == "where" && !a.overlaid() { // text in any mode, as a console takes it (F3.39)
+	if t := dataOf(a.focused()); t != nil && t.typing == "where" && !a.overlaid() { // text in any mode, as a query takes it (F3.39)
 		return a.whereDid(t, t.ed.Paste(s))
 	}
 	if a.mode() == keymap.Normal {
@@ -646,8 +646,8 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 	var cmds []tea.Cmd
 	for _, r := range out {
 		if r.Action != "" {
-			if c := a.focusedConsole(); r.Action == "jump.start" && c != nil && vimMode(c.ed.Mode()) == keymap.Visual { // a console's VISUAL has its own s
-				cmds = append(cmds, a.consoleKey(a.focused(), c, "s"))
+			if c := a.focusedQuery(); r.Action == "jump.start" && c != nil && vimMode(c.ed.Mode()) == keymap.Visual { // a query's VISUAL has its own s
+				cmds = append(cmds, a.queryKey(a.focused(), c, "s"))
 				continue
 			}
 			cmds = append(cmds, a.run(r.Action, r.Count))
@@ -685,8 +685,8 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 				a.filterKey(k)
 			case t != nil:
 				cmds = append(cmds, a.typeKey(t, k))
-			case a.focusedConsole() != nil: // what the console's keymap leaves goes to its vim (§6.4)
-				cmds = append(cmds, a.consoleKey(a.focused(), a.focusedConsole(), k))
+			case a.focusedQuery() != nil: // what the query's keymap leaves goes to its vim (§6.4)
+				cmds = append(cmds, a.queryKey(a.focused(), a.focusedQuery(), k))
 			}
 		}
 	}
@@ -702,7 +702,7 @@ func (a *App) mode() keymap.Mode {
 		return keymap.Insert
 	case a.overlaid(), t != nil && t.hist != nil: // an overlay has the keys (§7.8)
 		return keymap.Command
-	case ed != nil: // a console's vim, or a WHERE's (F3.39)
+	case ed != nil: // a query's vim, or a WHERE's (F3.39)
 		return vimMode(ed.Mode())
 	case a.win().tree.filtering, t != nil:
 		return keymap.Insert
@@ -752,8 +752,8 @@ func (a *App) context() keymap.Context {
 		return keymap.Context{Overlay: "where", Focus: []string{"input"}, Mode: keymap.Command}
 	case typing != nil && typing.comp != nil:
 		return keymap.Context{Overlay: "complete", Focus: []string{"input"}, Mode: keymap.Insert, Plain: typing.typing == "where" && a.plain}
-	case a.focusedConsole() != nil && a.focusedConsole().comp != nil: // ↵ and esc are its vim's, as a WHERE's
-		return keymap.Context{Overlay: "complete", Focus: []string{"console"}, Mode: keymap.Insert, Plain: a.plain}
+	case a.focusedQuery() != nil && a.focusedQuery().comp != nil: // ↵ and esc are its vim's, as a WHERE's
+		return keymap.Context{Overlay: "complete", Focus: []string{"query"}, Mode: keymap.Insert, Plain: a.plain}
 	case typing != nil && typing.cell != nil:
 		c := keymap.Context{Focus: []string{"cell"}, Mode: keymap.Insert}
 		if !typing.cell.folded && len(typing.options()) > 0 {
@@ -770,7 +770,7 @@ func (a *App) context() keymap.Context {
 		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Insert, Plain: true}
 	case typing != nil && typing.typing == "where" && vimMode(typing.ed.Mode()) != keymap.Insert:
 		// its vim's NORMAL or VISUAL: user maps as any pane's, esc and ↵ in
-		// VISUAL the vim's, as a console's (F3.39)
+		// VISUAL the vim's, as a query's (F3.39)
 		c := keymap.Context{Mode: vimMode(typing.ed.Mode())}
 		if c.Mode == keymap.Normal {
 			c.Focus = []string{"wherenormal"}
@@ -786,13 +786,13 @@ func (a *App) context() keymap.Context {
 		over, firm = []string{"select"}, "select"
 	}
 	mode := a.mode()
-	if scope != "console" && mode == keymap.Visual { // a table's VISUAL is NORMAL with the select scope over it (F10.7)
+	if scope != "query" && mode == keymap.Visual { // a table's VISUAL is NORMAL with the select scope over it (F10.7)
 		mode = keymap.Normal
 	}
 	if scope == "result" { // over grid's keys, which its tables move by (§6.4)
 		return keymap.Context{Focus: append(over, "result", "grid"), Pane: "grid", Mode: mode, Firm: firm}
 	}
-	return keymap.Context{Focus: append(over, scope), Pane: scope, Mode: mode, Plain: a.plain && scope == "console", Firm: firm}
+	return keymap.Context{Focus: append(over, scope), Pane: scope, Mode: mode, Plain: a.plain && scope == "query", Firm: firm}
 }
 
 // paneScope is the keymap scope of the focused pane: its current tab's.
@@ -804,8 +804,8 @@ func (a *App) paneScope() string {
 		return "result"
 	case dataOf(p) != nil:
 		return "grid"
-	case consoleOf(p) != nil:
-		return "console"
+	case queryOf(p) != nil:
+		return "query"
 	}
 	return "landing" // a new tab, or none (§6.4)
 }

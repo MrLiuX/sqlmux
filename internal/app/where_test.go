@@ -187,7 +187,7 @@ func TestRankedWordStart(t *testing.T) {
 	}
 }
 
-// Autopairs in a WHERE, the quick SQL and a console's INSERT, not in a
+// Autopairs in a WHERE, the quick SQL and a query's INSERT, not in a
 // cell's edit or the palette's other scopes, off with autopairs = false
 // (§7.9). Taking a value swallows the closing quote after the cursor.
 func TestAutoPairs(t *testing.T) {
@@ -226,16 +226,16 @@ func TestAutoPairs(t *testing.T) {
 		t.Errorf("off: %q", in.Text)
 	}
 
-	a, c := inConsole(t, "", "")
+	a, c := inQuery(t, "", "")
 	if feed(t, a, "icount("); text(c) != "count()" || c.ed.Cursor().Col != 6 {
-		t.Fatalf("console: %q at %v", text(c), c.ed.Cursor())
+		t.Fatalf("query: %q at %v", text(c), c.ed.Cursor())
 	}
 	if feed(t, a, "<Esc>u"); text(c) != "" {
 		t.Errorf("one u takes the INSERT: %q", text(c))
 	}
-	a, c = inConsole(t, "autopairs = false", "")
+	a, c = inQuery(t, "autopairs = false", "")
 	if feed(t, a, "i("); text(c) != "(" {
-		t.Errorf("console off: %q", text(c))
+		t.Errorf("query off: %q", text(c))
 	}
 }
 
@@ -465,7 +465,7 @@ func openPaletteOn(t *testing.T, a *App) *App {
 // Names in SQL for their colors: a table the catalog has, its ASCII
 // folded unless quoted, not a schema qualifying one; a column of the
 // tables its statement names, not of an alias's or a CTE's; the tables whose columns are not fetched yet missing, and
-// asked for once, the consoles on screen's (§7.3).
+// asked for once, the queries on screen's (§7.3).
 func TestSQLNames(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	tab := loadOrders(t, a, 3)
@@ -505,9 +505,9 @@ func TestSQLNames(t *testing.T) {
 	if n := a.queryBar(a.focused(), tab).Names; n(0, "note") != ui.ColumnName || n(0, "t_user") != ui.TableName {
 		t.Error("the WHERE's: the table's columns")
 	}
-	consoleOf(a.win().pane(2)).ed = editor.New("select * from t_user") // on screen
+	queryOf(a.win().pane(2)).ed = editor.New("select * from t_user") // on screen
 	if _, cmd := a.Update(tea.WindowSizeMsg{Width: 160, Height: 45}); cmd == nil || !a.sess.Conns[0].colsAsked[tableID{"public", "t_user"}] {
-		t.Fatal("the console's t_user: its columns asked for")
+		t.Fatal("the query's t_user: its columns asked for")
 	}
 	if _, cmd := a.Update(tea.WindowSizeMsg{Width: 160, Height: 45}); cmd != nil {
 		t.Error("asked again")

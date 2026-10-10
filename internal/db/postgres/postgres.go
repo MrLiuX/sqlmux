@@ -19,9 +19,9 @@ import (
 type Conn struct {
 	pg       *pgconn.PgConn
 	Addr     string // user@host:port, for the status bar (§7.8)
-	Database string // on console titles, before the schema (§8.6)
+	Database string // on query titles, before the schema (§8.6)
 	// SearchPath is search_path as the connection started, before any
-	// console sets its own schema in front of it (§8.6).
+	// query sets its own schema in front of it (§8.6).
 	SearchPath string
 }
 

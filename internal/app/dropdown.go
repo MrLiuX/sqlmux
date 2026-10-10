@@ -15,27 +15,27 @@ import (
 )
 
 // dropKind is what an open dropdown picks: a table's ORDER or LIMIT (§7.8
-// 「查询条」), a console's schema (§8.6), connection or transaction mode
-// (§7.8「console 标题」).
+// 「查询条」), a query's schema (§8.6), connection or transaction mode
+// (§7.8「query 标题」).
 type dropKind int
 
 const (
 	dropOrder dropKind = iota
 	dropLimit
 	dropSchema
-	dropConsoleConn
+	dropQueryConn
 	dropTx
 	dropAuto   // auto refresh's interval (§7.8「自动刷新」)
 	dropTheme  // the theme in use (F6.2)
 	dropLayout // layout.open: the layouts there are (F6.5)
 )
 
-// dropdown is the open one-pick dropdown; tab or console, in pane, is what
+// dropdown is the open one-pick dropdown; tab or query, in pane, is what
 // it acts on.
 type dropdown struct {
 	kind     dropKind
 	tab      *dataTab
-	console  *consoleTab
+	query    *queryTab
 	pane     *Pane
 	input    ui.Input
 	sel, top int
@@ -89,13 +89,13 @@ func (a *App) setTheme(name string) tea.Cmd {
 	return a.showToast(i18n.T("写进 config.toml 的 theme 才会保留"), toastTTL)
 }
 
-// openConsoleDrop opens the focused console's dropdown of kind k, schema
+// openQueryDrop opens the focused query's dropdown of kind k, schema
 // (gs, §8.6), connection or transaction mode, its selection on the one it
 // has.
-func (a *App) openConsoleDrop(k dropKind) {
+func (a *App) openQueryDrop(k dropKind) {
 	p := a.focused()
-	if c := consoleOf(p); c != nil && (k != dropSchema || len(c.conn.Schemas) > 0) {
-		a.drop = &dropdown{kind: k, console: c, pane: p}
+	if c := queryOf(p); c != nil && (k != dropSchema || len(c.conn.Schemas) > 0) {
+		a.drop = &dropdown{kind: k, query: c, pane: p}
 		_, a.drop.sel = a.dropItems()
 		a.dropMove(0)
 	}
@@ -106,20 +106,20 @@ func (a *App) dropItems() (items []string, current int) {
 	d := a.drop
 	switch d.kind {
 	case dropSchema:
-		return d.console.conn.Schemas, slices.Index(d.console.conn.Schemas, d.console.schema)
+		return d.query.conn.Schemas, slices.Index(d.query.conn.Schemas, d.query.schema)
 	case dropTheme:
 		names := config.ThemeNames()
 		return names, slices.Index(names, a.themeName)
 	case dropLayout:
 		return layoutNames(), -1
-	case dropConsoleConn:
+	case dropQueryConn:
 		for _, c := range a.sess.Conns {
 			items = append(items, c.Spec.Name)
 		}
-		return items, slices.Index(a.sess.Conns, d.console.conn)
+		return items, slices.Index(a.sess.Conns, d.query.conn)
 	case dropTx:
 		current = 0
-		if d.console.conn.Manual {
+		if d.query.conn.Manual {
 			current = 1
 		}
 		return []string{i18n.T("自动"), i18n.T("手动")}, current
@@ -171,7 +171,7 @@ func (a *App) dropMatches() []ui.Match {
 
 // dropBox is where v, the dropdown as drawn, opens (§8.6, §7.8): under its
 // chip, left aligned with it, as wide as its longest item with its icon
-// and note. A console's opens under its part of the console title, as
+// and note. A query's opens under its part of the query title, as
 // hits, the frame's, have it, its right edge on the pane's right border;
 // with the part left out, at that border. Auto refresh's under its button,
 // or given way, at the query bar's right end as a schema one.
@@ -184,17 +184,17 @@ func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 		if note := a.dropNote(i); note != "" {
 			n += 1 + ui.Width(note)
 		}
-		if d.kind == dropConsoleConn {
+		if d.kind == dropQueryConn {
 			n += ui.Width(a.connIcon(i).Text) + 1
 		}
 		w = max(w, n+4) // border and padding on both sides
 	}
 	var entry uv.Rectangle
 	switch d.kind {
-	case dropSchema, dropConsoleConn, dropTx:
+	case dropSchema, dropQueryConn, dropTx:
 		r := a.layout()[d.pane.ID]
 		entry = uv.Rect(r.Max.X-w, r.Min.Y, w, 1)
-		action := map[dropKind]string{dropSchema: "console.schema", dropConsoleConn: "console.conn", dropTx: "console.tx"}[d.kind]
+		action := map[dropKind]string{dropSchema: "query.schema", dropQueryConn: "query.conn", dropTx: "query.tx"}[d.kind]
 		for _, h := range hits {
 			if h.Target == (ui.Target{Kind: ui.KindHint, Pane: d.pane.ID, Action: action}) {
 				entry, w = h.Rect, max(w, r.Max.X-h.Rect.Min.X)
@@ -236,12 +236,12 @@ func (a *App) dropPick(i int) tea.Cmd {
 	item := items[at]
 	switch t := d.tab; d.kind {
 	case dropSchema: // the next run sets it (§8.6)
-		d.console.schema = item
-		return a.keepConsole(d.console)
-	case dropConsoleConn:
-		return a.pickConn(d.console, a.sess.Conns[at])
+		d.query.schema = item
+		return a.keepQuery(d.query)
+	case dropQueryConn:
+		return a.pickConn(d.query, a.sess.Conns[at])
 	case dropTx:
-		return a.setTxMode(d.console.conn, at == 1)
+		return a.setTxMode(d.query.conn, at == 1)
 	case dropTheme:
 		return a.setTheme(item)
 	case dropLayout:
@@ -265,7 +265,7 @@ func (a *App) dropPick(i int) tea.Cmd {
 		}
 	case dropLimit:
 		t.limit, _ = strconv.Atoi(item)
-	case dropSchema, dropConsoleConn, dropTx, dropAuto, dropTheme, dropLayout: // above
+	case dropSchema, dropQueryConn, dropTx, dropAuto, dropTheme, dropLayout: // above
 	}
 	d.tab.pageNo = 0
 	return a.fetch(d.tab, false)
@@ -294,16 +294,16 @@ func (a *App) dropKey(k keymap.Key) {
 }
 
 // dropNote is what the dropdown notes on item i: a read-only connection's
-// lock (§7.8「console 标题」).
+// lock (§7.8「query 标题」).
 func (a *App) dropNote(i int) string {
-	if a.drop.kind == dropConsoleConn && a.sess.Conns[i].readOnly {
+	if a.drop.kind == dropQueryConn && a.sess.Conns[i].readOnly {
 		return a.icons.Lock.Text
 	}
 	return ""
 }
 
 // connIcon is the connection dropdown's icon for item i, connection i's
-// engine's (§7.8「console 标题」).
+// engine's (§7.8「query 标题」).
 func (a *App) connIcon(i int) ui.Icon { return a.icons.Engine(a.sess.Conns[i].Spec.Engine) }
 
 func (a *App) dropView() ui.Dropdown {
@@ -314,7 +314,7 @@ func (a *App) dropView() ui.Dropdown {
 			v.Mark = i
 		}
 		v.Items, v.Pos = append(v.Items, items[m.Index]), append(v.Pos, m.Pos)
-		if a.drop.kind == dropConsoleConn {
+		if a.drop.kind == dropQueryConn {
 			v.Notes, v.Icons = append(v.Notes, a.dropNote(m.Index)), append(v.Icons, a.connIcon(m.Index))
 		}
 	}

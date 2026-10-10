@@ -31,7 +31,7 @@ const (
 	KindFold                     // a tree node's ▸ / ▾ (I: its index): click opens or closes it
 	KindCell                     // a grid cell: focus its pane, then run Action (grid.goto r c)
 	KindRowNo                    // a grid row number: as KindCell, to that row in the current column
-	KindText                     // a console's text: a click puts the cursor there, a drag selects (§11)
+	KindText                     // a query's text: a click puts the cursor there, a drag selects (§11)
 	KindSegment                  // a segment of a form's switch (Pane: its field, I: the segment)
 	KindConn                     // a row of the connection manager's list (I: its index)
 )

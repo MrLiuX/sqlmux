@@ -152,7 +152,7 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 			v.Draw(f, box, rows)
 		}
 	}
-	if t := a.focusedConsole(); t != nil && t.comp != nil && f.Cursor != nil { // under what it completes, which ends at the cursor
+	if t := a.focusedQuery(); t != nil && t.comp != nil && f.Cursor != nil { // under what it completes, which ends at the cursor
 		at, cur := *f.Cursor, t.ed.Cursor()
 		at.X -= ui.Width(t.ed.Lines()[cur.Line][t.comp.start:cur.Col])
 		v, box, rows := a.completeView(t.comp, at)
@@ -242,16 +242,16 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 			ui.Hint{Key: a.keys.Hint("grid.transpose", "grid"), Label: i18n.T("转置"), Action: "grid.transpose"},
 			ui.Hint{Key: a.hints("normal", "/", "tab.next", "tab.prev")},
 		)
-	case consoleOf(p) != nil:
+	case queryOf(p) != nil:
 		// Drawn left to right; Prio says what goes first when space runs out
 		// (§7.8): ▶ run, the connection and the schema as one, the
 		// transaction's as one, ↵.
-		c := consoleOf(p)
+		c := queryOf(p)
 		mode := i18n.T("Tx: 自动 ▾")
 		if c.conn.Manual {
 			mode = i18n.T("Tx: 手动 ▾")
 		}
-		b.Hints = append(b.Hints, ui.Hint{Label: mode, Action: "console.tx", Color: th.Fg, Prio: 2, Group: 2})
+		b.Hints = append(b.Hints, ui.Hint{Label: mode, Action: "query.tx", Color: th.Fg, Prio: 2, Group: 2})
 		if c.conn.Manual { // dim, and no button, out of a transaction
 			commit, rollback := ui.Hint{Label: "✓", Prio: 2, Group: 2}, ui.Hint{Label: "↺", Prio: 2, Group: 2}
 			if c.conn.inTx() {
@@ -263,12 +263,12 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 		if c.conn.readOnly {
 			name += " " + a.icons.Lock.Text
 		}
-		b.Hints = append(b.Hints, ui.Hint{Label: name, Action: "console.conn", Color: th.Info, Prio: 1, Group: 1})
+		b.Hints = append(b.Hints, ui.Hint{Label: name, Action: "query.conn", Color: th.Info, Prio: 1, Group: 1})
 		if c.schema != "" { // a MySQL schema is a database: none before it (§8.6)
-			b.Hints = append(b.Hints, ui.Hint{Label: "·", Prio: 1, Group: 1}, ui.Hint{Label: strings.TrimPrefix(c.conn.DB+"."+c.schema, ".") + " ▾", Action: "console.schema", Color: th.PK, Prio: 1, Group: 1})
+			b.Hints = append(b.Hints, ui.Hint{Label: "·", Prio: 1, Group: 1}, ui.Hint{Label: strings.TrimPrefix(c.conn.DB+"."+c.schema, ".") + " ▾", Action: "query.schema", Color: th.PK, Prio: 1, Group: 1})
 		}
-		b.Hints = append(b.Hints, ui.Hint{Label: "▶ run", Action: "console.run", Button: true})
-		b.Hints = append(b.Hints, bound(ui.Hint{Key: a.keys.Hint("console.run", "console"), Action: "console.run", Prio: 3, Attached: true})...)
+		b.Hints = append(b.Hints, ui.Hint{Label: "▶ run", Action: "query.run", Button: true})
+		b.Hints = append(b.Hints, bound(ui.Hint{Key: a.keys.Hint("query.run", "query"), Action: "query.run", Prio: 3, Attached: true})...)
 		if !a.plain { // gt there is text to type
 			tabHints = bound(ui.Hint{Key: a.hints("normal", "/", "tab.next", "tab.prev")})
 		}
@@ -297,7 +297,7 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 	if p.tab().landing() { // what it can become (§5「引导页」)
 		ui.Landing{Pane: p.ID, Buttons: []ui.LandingButton{
 			{Icon: a.icons.Table, Label: i18n.T("打开表"), Key: a.keys.Hint("tab.table", "landing"), Action: "tab.table"},
-			{Icon: a.icons.Console, Label: i18n.T("新建 console"), Key: a.keys.Hint("console.new", "landing"), Action: "console.new"},
+			{Icon: a.icons.Query, Label: i18n.T("新建 query"), Key: a.keys.Hint("query.new", "landing"), Action: "query.new"},
 		}}.Draw(f, bodyRect(r))
 		return
 	}
@@ -305,10 +305,10 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 		a.drawResult(f, p, rt, bodyRect(r))
 		return
 	}
-	if c := consoleOf(p); c != nil {
-		view, body := a.consoleView(p, c)
-		view.Names, _ = a.sqlNames(c.conn, strings.Join(view.Lines, "\n"), cmp.Or(c.schema, c.conn.Schema), nil) // for the drawing alone: consoleView goes with every key
-		if cur := view.Draw(f, body); cur.X >= 0 && b.Focused && a.focusedConsole() == c {
+	if c := queryOf(p); c != nil {
+		view, body := a.queryView(p, c)
+		view.Names, _ = a.sqlNames(c.conn, strings.Join(view.Lines, "\n"), cmp.Or(c.schema, c.conn.Schema), nil) // for the drawing alone: queryView goes with every key
+		if cur := view.Draw(f, body); cur.X >= 0 && b.Focused && a.focusedQuery() == c {
 			f.Cursor = &cur
 		}
 		drawBar(f, c.bar, p, r)
@@ -414,8 +414,8 @@ func (a *App) tabIcon(t *Tab) (ui.Icon, string) {
 	case t == nil:
 	case t.Data != nil:
 		return a.icons.Table, "table"
-	case t.Console != nil:
-		return a.icons.Console, "console"
+	case t.Query != nil:
+		return a.icons.Query, "query"
 	case t.Result != nil && t.Result.pinned:
 		return a.icons.Pin, "result"
 	case t.Result != nil && t.Result.run != nil:
@@ -522,7 +522,7 @@ func (a *App) statusLine() ui.StatusLine {
 		{Runs: iconRuns(ic.Search, bar(th.Info), strings.TrimRight(" "+a.label(a.keys.Hint("palette.open", "global")), " ")+" "), Action: "palette.open"},
 		{Runs: append(iconRuns(ic.Keys, bar(th.FgMuted), " "), pending, ui.Run{Text: " ", Style: bar(th.FgMuted)})},
 	}
-	switch t, c := a.typingTab(), a.focusedConsole(); {
+	switch t, c := a.typingTab(), a.focusedQuery(); {
 	case t != nil && t.typing == "where":
 		s.Info = "-- editing WHERE --" // §7.8
 	case t != nil && t.cell != nil:
@@ -537,7 +537,7 @@ func (a *App) statusLine() ui.StatusLine {
 	}
 	if c := a.conn(); c != nil { // its name too: two often differ by the database alone (§7.8); none at a start with no connection (F7.4)
 		s.Right = append(s.Right, ui.Segment{Runs: iconRuns(ic.Conn, conn, " "+c.Spec.Name+" · "+c.Addr+" "), Drop: dropConn})
-		switch c.tx { // Main's transaction, one a console began in the auto mode too (§7.8)
+		switch c.tx { // Main's transaction, one a query began in the auto mode too (§7.8)
 		case 'T':
 			s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: i18n.T(" 事务中 "), Style: bar(th.Warn)}}})
 		case 'E':
@@ -565,7 +565,7 @@ func (a *App) statusLine() ui.StatusLine {
 	return s
 }
 
-// selectionInfo is the status bar's word on a console's VISUAL (§7.8):
+// selectionInfo is the status bar's word on a query's VISUAL (§7.8):
 // "4 行 · ↵ run", "12 字符 · ↵ run", "3 行 × 4 列 · ↵ run".
 func (a *App) selectionInfo(ed *editor.Editor) string {
 	lines, n := ed.Size()
@@ -580,7 +580,7 @@ func (a *App) selectionInfo(ed *editor.Editor) string {
 	default:
 		s = fmt.Sprintf(i18n.T("%d 行"), lines)
 	}
-	if k := a.keys.Hint("console.run", "console"); k != "" {
+	if k := a.keys.Hint("query.run", "query"); k != "" {
 		s += " · " + k + " run"
 	}
 	return s

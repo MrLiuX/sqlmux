@@ -24,7 +24,7 @@ import (
 func withSessions() (*App, *Session) {
 	a := sized(160, 45, "nerd")
 	c := readyConn("doraemon")
-	s := newSession("report", []*Conn{c}, c, a.freeConsole())
+	s := newSession("report", []*Conn{c}, c, a.freeQuery())
 	s.Windows = append(s.Windows, &Window{Name: "logs"})
 	a.sessions = append(a.sessions, s)
 	return a, s
@@ -34,7 +34,7 @@ func withSessions() (*App, *Session) {
 // the one attached before; with one session they do nothing (F9.10).
 func TestSessionNextPrevLast(t *testing.T) {
 	a, report := withSessions()
-	third := newSession("third", []*Conn{readyConn("doraemon")}, nil, a.freeConsole())
+	third := newSession("third", []*Conn{readyConn("doraemon")}, nil, a.freeQuery())
 	a.sessions = append(a.sessions, third)
 	doraemon := a.sess
 	if a.sessions[0] != doraemon {
@@ -253,7 +253,7 @@ func TestNewWindowSplitNumbering(t *testing.T) {
 }
 
 // A session made is one window of one empty pane, on the connection that was
-// dialed for it, and no console, nor a file for one (F8.18).
+// dialed for it, and no query, nor a file for one (F8.18).
 func TestNewSessionIsOneEmptyPane(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sized(160, 45, "nerd")
@@ -265,10 +265,10 @@ func TestNewSessionIsOneEmptyPane(t *testing.T) {
 	if len(a.sessions) != 2 || s.Name != "1" || len(s.Windows) != 1 {
 		t.Fatalf("%d sessions, attached %q with %d windows", len(a.sessions), s.Name, len(s.Windows))
 	}
-	if ps := s.Windows[0].Root.Leaves(); len(ps) != 1 || len(ps[0].Tabs) != 0 || len(s.consoles()) != 0 {
-		t.Errorf("%d panes, %d consoles", len(s.Windows[0].Root.Leaves()), len(s.consoles()))
+	if ps := s.Windows[0].Root.Leaves(); len(ps) != 1 || len(ps[0].Tabs) != 0 || len(s.queries()) != 0 {
+		t.Errorf("%d panes, %d queries", len(s.Windows[0].Root.Leaves()), len(s.queries()))
 	}
-	if es, _ := os.ReadDir(filepath.Join(config.DataDir(), "consoles")); len(es) != 0 {
+	if es, _ := os.ReadDir(filepath.Join(config.DataDir(), "queries")); len(es) != 0 {
 		t.Errorf("files made for it: %v", es)
 	}
 	if s.start.State != connReady || s.last != s.start {
@@ -309,9 +309,9 @@ func TestWindows(t *testing.T) {
 	if len(a.sess.Windows) != 2 || a.sess.Active != 1 || w.Name != "data-2" || w.ID != 2 {
 		t.Fatalf("SPC c: %d windows, on %d %q", len(a.sess.Windows), a.sess.Active, w.Name)
 	}
-	// one empty pane, the landing page, focused; no console, no file for it (F8.18)
-	if ps := w.Root.Leaves(); len(ps) != 1 || len(ps[0].Tabs) != 0 || w.Focus != ps[0].ID || len(a.sess.consoles()) != 1 {
-		t.Errorf("a new window: %d panes, %d consoles in the session", len(w.Root.Leaves()), len(a.sess.consoles()))
+	// one empty pane, the landing page, focused; no query, no file for it (F8.18)
+	if ps := w.Root.Leaves(); len(ps) != 1 || len(ps[0].Tabs) != 0 || w.Focus != ps[0].ID || len(a.sess.queries()) != 1 {
+		t.Errorf("a new window: %d panes, %d queries in the session", len(w.Root.Leaves()), len(a.sess.queries()))
 	}
 	feed(t, a, "<Space>c<Space>n")
 	if a.sess.Active != 0 {
@@ -336,7 +336,7 @@ func TestWindows(t *testing.T) {
 	}
 }
 
-// window.close: asked first with changes, its consoles written; the one
+// window.close: asked first with changes, its queries written; the one
 // used before shown, else the one before; the last one stays. window.rename
 // types the name in the status bar, in its place: ↵ takes it but a blank
 // one, esc drops it (§5, F5.2).
@@ -564,13 +564,13 @@ func TestSessionCloseCommand(t *testing.T) {
 }
 
 // The names asked in the status bar, layout.save, session.rename and
-// console.rename, take the left of it as window.rename does: the mode block
+// query.rename, take the left of it as window.rename does: the mode block
 // stays at the right, INSERT, the input not over it, on a narrow bar too
 // (§7.8, F8.11).
 func TestAskNameKeepsModeBlock(t *testing.T) {
 	for _, w := range []int{160, 50} {
-		for _, cmd := range []string{"layout.save", "session.rename", "console.rename"} {
-			a, _ := inConsole(t, "", "")
+		for _, cmd := range []string{"layout.save", "session.rename", "query.rename"} {
+			a, _ := inQuery(t, "", "")
 			a.Update(tea.WindowSizeMsg{Width: w, Height: 20})
 			a.run(cmd, 0)
 			if a.askName == nil {

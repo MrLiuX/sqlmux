@@ -105,18 +105,18 @@ func TestYankRow(t *testing.T) {
 	}
 }
 
-// A console's yanks flash what they took, as vim.hl.on_yank: a line, a
+// A query's yanks flash what they took, as vim.hl.on_yank: a line, a
 // word; a delete does not (F3.32).
-func TestYankFlashConsole(t *testing.T) {
-	a, c := inConsole(t, "", "")
+func TestYankFlashQuery(t *testing.T) {
+	a, c := inQuery(t, "", "")
 	c.ed.Load("select 1\nfrom t")
 	p := a.focused()
 	keys(t, a, "yy")
-	if v, _ := a.consoleView(p, c); v.Yank != (ui.Sel{Mode: ui.SelLines}) {
+	if v, _ := a.queryView(p, c); v.Yank != (ui.Sel{Mode: ui.SelLines}) {
 		t.Fatalf("yy: %+v", v.Yank)
 	}
 	keys(t, a, "yiw")
-	if v, _ := a.consoleView(p, c); v.Yank != (ui.Sel{Mode: ui.SelChars, To: ui.TextPos{Col: 5}}) {
+	if v, _ := a.queryView(p, c); v.Yank != (ui.Sel{Mode: ui.SelChars, To: ui.TextPos{Col: 5}}) {
 		t.Fatalf("yiw: %+v", v.Yank)
 	}
 	if st := styleOf(t, a.render(), "select"); st.Bg != a.theme.Yank {

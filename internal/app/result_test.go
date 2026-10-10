@@ -20,7 +20,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/keymap"
 )
 
-// execDB answers console runs: a statement's result by its SQL, the
+// execDB answers query runs: a statement's result by its SQL, the
 // LIMIT a read gets left off; fail says where one fails. A search_path
 // set is kept in ran as "search_path <schema> <started>"; tx is the
 // transaction status it reports ('I' when 0), which rollback ends.
@@ -107,11 +107,11 @@ func runOf(t *testing.T, cmd tea.Cmd) runDone {
 	return runDone{}
 }
 
-// inRun is inConsole with Main answering from d and the console holding
+// inRun is inQuery with Main answering from d and the query holding
 // text, with no schema of its own: no search_path is set (TestRunSchema).
-func inRun(t *testing.T, d *execDB, text string) (*App, *consoleTab) {
+func inRun(t *testing.T, d *execDB, text string) (*App, *queryTab) {
 	t.Helper()
-	a, c := inConsole(t, "", "")
+	a, c := inQuery(t, "", "")
 	a.sess.Conns[0].Main = db.NewWorker(d)
 	a.confirmDangerous = false // what the runs here are about is not the question; TestConfirmDangerousRun's is
 	c.ed.Load(text)
@@ -130,31 +130,31 @@ func logText(a *App) string {
 
 // The first run makes the result area at the bottom; the statement under
 // the cursor runs, a read with a LIMIT past max_rows; its result tab
-// comes after the log, the focus stays in the console (§11).
+// comes after the log, the focus stays in the query (§11).
 func TestRunFirst(t *testing.T) {
 	d := &execDB{res: map[string]db.Result{"select 1": rows(3)}}
 	a, c := inRun(t, d, "select 1;\nselect 2;")
-	console := a.focused()
+	query := a.focused()
 	press(t, a, "<CR>")
 	res := a.win().Result
 	if res == nil || a.win().Root.Split != Vert || a.win().Root.Ratio != 0.6 || a.win().Root.B.Pane != res {
 		t.Fatalf("no result area at the bottom: %+v", a.win().Root)
 	}
-	if tabNames(res) != "日志 console_1 #1" || res.Cur != 1 || a.focused() != console || c.running != nil {
+	if tabNames(res) != "日志 query_1 #1" || res.Cur != 1 || a.focused() != query || c.running != nil {
 		t.Fatalf("tabs %v cur %d, focus %d", tabNames(res), res.Cur, a.win().Focus)
 	}
 	if len(d.ran) != 1 || d.ran[0] != "select 1\nLIMIT 501" {
 		t.Errorf("ran %q", d.ran)
 	}
-	if got := logText(a); got != "console_1  select 1  3 行 · 0s" {
+	if got := logText(a); got != "query_1  select 1  3 行 · 0s" {
 		t.Errorf("log %q", got)
 	}
-	if top := strings.Split(a.render().String(), "\n")[a.layout()[res.ID].Min.Y]; !strings.Contains(top, "console_1 #1") || !strings.Contains(top, "3 行 · 0s") {
+	if top := strings.Split(a.render().String(), "\n")[a.layout()[res.ID].Min.Y]; !strings.Contains(top, "query_1 #1") || !strings.Contains(top, "3 行 · 0s") {
 		t.Errorf("title %q", top)
 	}
 }
 
-// Running again takes the place of the console's tabs, the number going
+// Running again takes the place of the query's tabs, the number going
 // up; a pinned tab stays and the next run opens beside it. Several result
 // sets get a tab each; a write only a line in the log (§11).
 func TestRunReplaces(t *testing.T) {
@@ -162,21 +162,21 @@ func TestRunReplaces(t *testing.T) {
 	a, c := inRun(t, d, "select 1;\nselect 2;\nupdate t set a = 1;")
 	press(t, a, "<CR><CR>")
 	res := a.win().Result
-	if tabNames(res) != "日志 console_1 #2" {
+	if tabNames(res) != "日志 query_1 #2" {
 		t.Fatalf("again: %v", tabNames(res))
 	}
 	a.win().focus(res.ID)
 	press(t, a, "P")
 	a.win().focus(2)
 	press(t, a, "ggVG<CR>")
-	if tabNames(res) != "日志 console_1 #2 console_1 #3 console_1 #3·2" || res.Cur != 2 || c.ed.Mode() != 0 {
+	if tabNames(res) != "日志 query_1 #2 query_1 #3 query_1 #3·2" || res.Cur != 2 || c.ed.Mode() != 0 {
 		t.Fatalf("pinned, then three statements: %v cur %d mode %v", tabNames(res), res.Cur, c.ed.Mode())
 	}
-	if !strings.HasSuffix(logText(a), "console_1  update t set a = 1  UPDATE 3 · 0s") {
+	if !strings.HasSuffix(logText(a), "query_1  update t set a = 1  UPDATE 3 · 0s") {
 		t.Errorf("log %q", logText(a))
 	}
 	press(t, a, "G<CR>") // nothing to show: the last tabs stay, the log shows
-	if tabNames(res) != "日志 console_1 #2 console_1 #3 console_1 #3·2" || res.Cur != 0 {
+	if tabNames(res) != "日志 query_1 #2 query_1 #3 query_1 #3·2" || res.Cur != 0 {
 		t.Errorf("a write alone: %v cur %d", tabNames(res), res.Cur)
 	}
 }
@@ -189,10 +189,10 @@ func TestRunFails(t *testing.T) {
 	a, c := inRun(t, d, "select 1;\n\nselect * from nope;\nselect 3;")
 	press(t, a, "ggVG<CR>")
 	res := a.win().Result
-	if tabNames(res) != "日志 console_1 #1" || res.Cur != 0 || len(d.ran) != 2 {
+	if tabNames(res) != "日志 query_1 #1" || res.Cur != 0 || len(d.ran) != 2 {
 		t.Fatalf("tabs %v cur %d ran %q", tabNames(res), res.Cur, d.ran)
 	}
-	if got := logText(a); got != "console_1  select 1  1 行 · 0s\nconsole_1  select * from nope  ERROR: relation \"nope\" does not exist\nHINT: look again" {
+	if got := logText(a); got != "query_1  select 1  1 行 · 0s\nquery_1  select * from nope  ERROR: relation \"nope\" does not exist\nHINT: look again" {
 		t.Errorf("log %q", got)
 	}
 	if c.failed != 2 {
@@ -201,7 +201,7 @@ func TestRunFails(t *testing.T) {
 	if press(t, a, "gg<CR>"); c.failed != -1 { // the next run starts with none
 		t.Errorf("red ▶ on line %d after select 1 ran", c.failed)
 	}
-	a.consoleDid(c, c.ed.Load("select pg_sleep(9);"))
+	a.queryDid(c, c.ed.Load("select pg_sleep(9);"))
 	press(t, a, "<CR>")
 	if a.toast != "查询已取消" || c.failed != -1 || !strings.HasSuffix(logText(a), "已取消") {
 		t.Errorf("cancel: toast %q, red ▶ %d, log %q", a.toast, c.failed, logText(a))
@@ -237,7 +237,7 @@ func TestRunDDLAndBusy(t *testing.T) {
 }
 
 // q and x close a result tab, never the log; P pins; R runs its SQL
-// again; the export writes <console>-<n>.csv here (§11).
+// again; the export writes <query>-<n>.csv here (§11).
 func TestResultKeys(t *testing.T) {
 	d := &execDB{res: map[string]db.Result{"select 1": rows(2)}}
 	a, _ := inRun(t, d, "select 1")
@@ -245,7 +245,7 @@ func TestResultKeys(t *testing.T) {
 	res := a.win().Result
 	a.win().focus(res.ID)
 	press(t, a, "R")
-	if tabNames(res) != "日志 console_1 #2" || len(d.ran) != 2 {
+	if tabNames(res) != "日志 query_1 #2" || len(d.ran) != 2 {
 		t.Fatalf("R: %v", tabNames(res))
 	}
 	dir := t.TempDir()
@@ -255,7 +255,7 @@ func TestResultKeys(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(wd) }()
 	a.run("result.export", 0)
-	if data, err := os.ReadFile(filepath.Join(dir, "console_1-2.csv")); err != nil || string(data) != "n\na\nb\n" || !strings.HasPrefix(a.toast, "已导出 ") {
+	if data, err := os.ReadFile(filepath.Join(dir, "query_1-2.csv")); err != nil || string(data) != "n\na\nb\n" || !strings.HasPrefix(a.toast, "已导出 ") {
 		t.Errorf("export: %q %v, toast %q", data, err, a.toast)
 	}
 	press(t, a, "x")
@@ -268,9 +268,9 @@ func TestResultKeys(t *testing.T) {
 	}
 }
 
-// A console's run sets search_path to its schema first when Main has
+// A query's run sets search_path to its schema first when Main has
 // another, in the same request, out of the log; a set, reset or discard
-// in a run makes the next set it again. Two consoles take turns. A SET
+// in a run makes the next set it again. Two queries take turns. A SET
 // that fails stops the run, logged, no ▶ red. In a failed transaction no
 // SET goes, the user's rollback must run; in one going on the SET is not
 // counted on, a rollback may take it back (§8.6).
@@ -285,21 +285,21 @@ func TestRunSchema(t *testing.T) {
 		t.Fatalf("ran %q, log %q", d.ran, logText(a))
 	}
 	d.ran = nil
-	a.consoleDid(c, c.ed.Load("set search_path to public;\nselect 1"))
+	a.queryDid(c, c.ed.Load("set search_path to public;\nselect 1"))
 	press(t, a, "ggVG<CR><CR>")
 	if len(d.ran) != 4 || d.ran[0] != "set search_path to public" || d.ran[2] != setA { // Main had it: no SET the first time
 		t.Fatalf("after a set: %q", d.ran)
 	}
 	d.ran = nil
-	a.run("console.new", 0)
-	c2 := consoleOf(a.focused())
-	a.consoleDid(c2, c2.ed.Load("select 1"))
+	a.run("query.new", 0)
+	c2 := queryOf(a.focused())
+	a.queryDid(c2, c2.ed.Load("select 1"))
 	press(t, a, "<CR>")
-	selectTab(a.focused(), 0) // console_1, beside it
-	a.consoleDid(c, c.ed.Load("select 1"))
+	selectTab(a.focused(), 0) // query_1, beside it
+	a.queryDid(c, c.ed.Load("select 1"))
 	press(t, a, "<CR>")
 	if len(d.ran) != 4 || d.ran[0] != `search_path "public" "$user", public` || d.ran[2] != setA {
-		t.Fatalf("console_2 in public, then console_1: %q", d.ran)
+		t.Fatalf("query_2 in public, then query_1: %q", d.ran)
 	}
 	d.ran, d.tx = nil, 'E'
 	press(t, a, "<CR>")
@@ -311,9 +311,9 @@ func TestRunSchema(t *testing.T) {
 		t.Fatalf("in a transaction the SET is not counted on: %q", d.ran)
 	}
 	d.ran = nil
-	a.consoleDid(c, c.ed.Load("rollback"))
+	a.queryDid(c, c.ed.Load("rollback"))
 	press(t, a, "<CR>") // set in the transaction, out of it at the end: the rollback took the SET back
-	a.consoleDid(c, c.ed.Load("select 1"))
+	a.queryDid(c, c.ed.Load("select 1"))
 	if press(t, a, "<CR>"); len(d.ran) != 4 || d.ran[2] != setA {
 		t.Fatalf("SET in a transaction that ended: %q", d.ran)
 	}
@@ -331,7 +331,7 @@ func TestRunSchema(t *testing.T) {
 func TestRunWhat(t *testing.T) {
 	d := &execDB{}
 	a, c := inRun(t, d, "select '中', 2;\nselect 3;\nselect 4;")
-	deliver(a, a.run("console.run 3", 0))
+	deliver(a, a.run("query.run 3", 0))
 	if len(d.ran) != 1 || d.ran[0] != "select 4\nLIMIT 501" || c.ed.Cursor() != (editor.Pos{}) {
 		t.Fatalf("▶ 3: ran %q, cursor %v", d.ran, c.ed.Cursor())
 	}
@@ -344,7 +344,7 @@ func TestRunWhat(t *testing.T) {
 		{"jl<C-v>j", "select 3;\nselect 4;"}, // a block by its whole lines
 	} {
 		press(t, a, "<Esc>gg0"+k.keys)
-		if text, from, to := consoleSpan(c, ""); text[from:to] != k.span || c.ed.Mode() != editor.Normal {
+		if text, from, to := querySpan(c, ""); text[from:to] != k.span || c.ed.Mode() != editor.Normal {
 			t.Errorf("%s: %q, mode %v", k.keys, text[from:to], c.ed.Mode())
 		}
 	}
@@ -354,7 +354,7 @@ func TestRunWhat(t *testing.T) {
 	}
 }
 
-// 重跑 runs the tab's SQL, which the console's text may no longer be: no
+// 重跑 runs the tab's SQL, which the query's text may no longer be: no
 // ▶ goes red then (§11).
 func TestRerunAfterEdit(t *testing.T) {
 	nope := &pgconn.PgError{Severity: "ERROR", Message: "relation \"nope\" does not exist"}
@@ -362,7 +362,7 @@ func TestRerunAfterEdit(t *testing.T) {
 	for _, edited := range []string{"x", "select 5;\nselect 6;\nselect 1;\nselect * from nope;"} {
 		a, c := inRun(t, d, "select 1;\nselect * from nope;")
 		press(t, a, "ggVG<CR>")
-		a.consoleDid(c, c.ed.Load(edited))
+		a.queryDid(c, c.ed.Load(edited))
 		res := a.win().Result
 		a.win().focus(res.ID)
 		selectTab(res, 1)
@@ -373,7 +373,7 @@ func TestRerunAfterEdit(t *testing.T) {
 }
 
 // R runs again where the run ran, on its connection and schema, the
-// console since on another (F5.11).
+// query since on another (F5.11).
 func TestRerunWhereItRan(t *testing.T) {
 	d := &execDB{res: map[string]db.Result{"select 1": rows(1)}}
 	a, c := inRun(t, d, "select 1")
@@ -395,7 +395,7 @@ func TestResultAreaClosedWhileRunning(t *testing.T) {
 	d := &execDB{res: map[string]db.Result{"select 1": rows(1), "update t set a = 1": {Tag: "UPDATE 3"}}}
 	a, c := inRun(t, d, "select 1")
 	press(t, a, "<CR>")
-	a.consoleDid(c, c.ed.Load("update t set a = 1"))
+	a.queryDid(c, c.ed.Load("update t set a = 1"))
 	_, cmd := a.Update(teaKey("<CR>"))
 	win := a.win()
 	a.removePane(win.Result.ID)
@@ -421,7 +421,7 @@ func TestResultAreaCloses(t *testing.T) {
 		t.Fatalf("closed: result %v, log %d, ratio %v of %v", win.Result, len(win.log), win.resultRatio, ratio)
 	}
 	press(t, a, "<C-l><CR>")
-	if win.Result == nil || win.Root.Ratio != ratio || tabNames(win.Result) != "日志 console_1 #2" || len(win.log) != 2 {
+	if win.Result == nil || win.Root.Ratio != ratio || tabNames(win.Result) != "日志 query_1 #2" || len(win.log) != 2 {
 		t.Fatalf("again: %v, ratio %v", tabNames(win.Result), win.Root.Ratio)
 	}
 	win.focus(win.Result.ID)
@@ -432,7 +432,7 @@ func TestResultAreaCloses(t *testing.T) {
 	}
 }
 
-// SPC r hides the result area, its tabs kept and the console taller, and
+// SPC r hides the result area, its tabs kept and the query taller, and
 // brings it back as it was, a toggle in the palette (§12); nothing before
 // the first run. The focus in it
 // goes back to the pane before. A run finishing hidden stays so; one
@@ -445,19 +445,19 @@ func TestResultToggle(t *testing.T) {
 		t.Fatal("no result area: nothing")
 	}
 	press(t, a, "<CR>")
-	console := a.focused()
-	h := a.layout()[console.ID].Dy()
+	query := a.focused()
+	h := a.layout()[query.ID].Dy()
 	res, ratio := win.Result, win.Root.Ratio
 	win.focus(res.ID)
 	press(t, a, "<Space>r")
-	if _, shown := a.layout()[res.ID]; shown || win.Result != res || len(res.Tabs) != 2 || a.layout()[console.ID].Dy() <= h || a.focused() != console {
-		t.Fatalf("hidden: shown %v, tabs %v, height %d of %d, focus %d", shown, tabNames(res), a.layout()[console.ID].Dy(), h, a.focused().ID)
+	if _, shown := a.layout()[res.ID]; shown || win.Result != res || len(res.Tabs) != 2 || a.layout()[query.ID].Dy() <= h || a.focused() != query {
+		t.Fatalf("hidden: shown %v, tabs %v, height %d of %d, focus %d", shown, tabNames(res), a.layout()[query.ID].Dy(), h, a.focused().ID)
 	}
 	if on := actions["result.toggle"].On; on(a) {
 		t.Error("hidden: the palette's toggle is ON")
 	}
-	if press(t, a, "<Space>r"); a.layout()[console.ID].Dy() != h || win.Root.Ratio != ratio || tabNames(res) != "日志 console_1 #1" || !actions["result.toggle"].On(a) {
-		t.Fatalf("back: height %d of %d, tabs %v", a.layout()[console.ID].Dy(), h, tabNames(res))
+	if press(t, a, "<Space>r"); a.layout()[query.ID].Dy() != h || win.Root.Ratio != ratio || tabNames(res) != "日志 query_1 #1" || !actions["result.toggle"].On(a) {
+		t.Fatalf("back: height %d of %d, tabs %v", a.layout()[query.ID].Dy(), h, tabNames(res))
 	}
 	_, cmd := a.Update(teaKey("<CR>"))
 	press(t, a, "<Space>r")
@@ -479,7 +479,7 @@ func TestGoldenResult(t *testing.T) {
 	defer func() { clock = time.Now }()
 	var titles []string
 	for _, w := range []int{160, 90, 70, 62, 56, 50, 46, 42} { // ascii: the buttons can be read
-		a, c := inConsole(t, `icons = "ascii"`, "")
+		a, c := inQuery(t, `icons = "ascii"`, "")
 		a.sess.Conns[0].Main = db.NewWorker(d)
 		c.ed.Load("select 1")
 		a.Update(tea.WindowSizeMsg{Width: w, Height: 30})
@@ -492,7 +492,7 @@ func TestGoldenResult(t *testing.T) {
 	r := a.layout()[a.win().Result.ID]
 	running := strings.Split(a.render().String(), "\n")[r.Min.Y+1]
 	a.Update(runOf(t, cmd))
-	a.consoleDid(c, c.ed.Feed("j"))
+	a.queryDid(c, c.ed.Feed("j"))
 	press(t, a, "<CR>")
 	golden.RequireEqual(t, strings.Join(titles, "\n")+"\n\n"+ansi.Cut(running, r.Min.X, r.Max.X)+"\n\n"+a.render().String())
 }
@@ -543,7 +543,7 @@ func TestResultCap(t *testing.T) {
 	}
 	b, _ := inRun(t, &execDB{res: res}, sql)
 	press(t, b, "ggVG<CR>")
-	if got := tabNames(b.win().Result); got != "日志 console_1 #1·3 console_1 #1·4 console_1 #1·5 console_1 #1·6 console_1 #1·7 console_1 #1·8 console_1 #1·9 console_1 #1·10 console_1 #1·11 console_1 #1·12" {
+	if got := tabNames(b.win().Result); got != "日志 query_1 #1·3 query_1 #1·4 query_1 #1·5 query_1 #1·6 query_1 #1·7 query_1 #1·8 query_1 #1·9 query_1 #1·10 query_1 #1·11 query_1 #1·12" {
 		t.Errorf("twelve sets: %s", got)
 	}
 	if res := b.win().Result; res.Cur != 1 {

@@ -27,8 +27,8 @@ var noVimTOML string
 var tables = []string{
 	"keys.confirm", "keys.menu", "keys.ddl", "keys.palette", "keys.conns", "keys.groups", "keys.form", "keys.jump", "keys.where", "keys.cols", "keys.dropdown", "keys.sessions",
 	"keys.complete", "keys.newrow", "keys.options", "keys.segments", "keys.keyhelp", "keys.cell", "keys.input",
-	"keys.wherenormal", "keys.select", "keys.result", "keys.grid", "keys.tree", "keys.console", "keys.landing", "keys.normal", "keys.global",
-	"map.console.normal", "map.console.visual", "map.grid.normal", "map.grid.visual",
+	"keys.wherenormal", "keys.select", "keys.result", "keys.grid", "keys.tree", "keys.query", "keys.landing", "keys.normal", "keys.global",
+	"map.query.normal", "map.query.visual", "map.grid.normal", "map.grid.visual",
 	"map.tree.normal", "map.tree.visual", "map.normal", "map.visual",
 }
 
@@ -230,7 +230,7 @@ var when = map[string]string{
 	"keys.normal":      i18n.N("NORMAL 模式，焦点在任何 pane"),
 	"keys.grid":        i18n.N("焦点在表格（NORMAL）"),
 	"keys.tree":        i18n.N("焦点在 schema 树（NORMAL）"),
-	"keys.console":     i18n.N("console 的 NORMAL / VISUAL（M3）"),
+	"keys.query":       i18n.N("query 的 NORMAL / VISUAL（M3）"),
 	"keys.landing":     i18n.N("引导页：新 tab、没有 tab 的 pane（M3）"),
 	"keys.result":      i18n.N("结果区，叠在 grid 之上（M3）"),
 	"keys.palette":     i18n.N("命令面板打开时"),
@@ -256,9 +256,9 @@ var when = map[string]string{
 	"keys.keyhelp":     i18n.N("? 键位帮助打开时"),
 }
 
-// whenPlainConsole is keys.console's note with vim = false, where the console
+// whenPlainQuery is keys.query's note with vim = false, where the query
 // has no NORMAL and the Ctrl keys reach its editor (§6.9).
-var whenPlainConsole = i18n.N("console 的编辑器，只有 Ctrl 开头的键生效，C-h 除外，它是退格（F6.6）；NORMAL / VISUAL 是 vim 模式的")
+var whenPlainQuery = i18n.N("query 的编辑器，只有 Ctrl 开头的键生效，C-h 除外，它是退格（F6.6）；NORMAL / VISUAL 是 vim 模式的")
 
 // TOML renders the effective keymap as a whole keymaps.toml (`sqlmux keys
 // --format toml`, §6.7): every scope, with its defaults commented out, so
@@ -276,7 +276,7 @@ func (m *Map) TOML(titles map[string]string) string {
 			continue
 		}
 		t := "keys.normal"
-		if p, _, _ := strings.Cut(id, "."); slices.Contains([]string{"grid", "tree", "console", "result"}, p) {
+		if p, _, _ := strings.Cut(id, "."); slices.Contains([]string{"grid", "tree", "query", "result"}, p) {
 			t = "keys." + p
 		}
 		unbound[t] = append(unbound[t], fmt.Sprintf(`# "" = %s  # %s`, strconv.Quote(id), titles[id]))
@@ -309,8 +309,8 @@ func (m *Map) TOML(titles map[string]string) string {
 		if len(lines) > 0 {
 			b.WriteString("\n")
 			note := when[t]
-			if t == "keys.console" && m.novim != nil {
-				note = whenPlainConsole
+			if t == "keys.query" && m.novim != nil {
+				note = whenPlainQuery
 			}
 			if note != "" {
 				fmt.Fprintf(&b, "# %s\n", i18n.T(note))

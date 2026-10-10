@@ -52,7 +52,7 @@ func TestQueryBarNoteCut(t *testing.T) {
 // not (§7.3).
 func TestGoldenWhereColors(t *testing.T) {
 	q := QueryBar{Where: Input{Text: "user_id = '2' and status = 'running'"}, Names: sqlNames("t_order", "user_id", "status")}
-	f := NewFrame(50, 1, consoleTheme)
+	f := NewFrame(50, 1, queryTheme)
 	q.Draw(f, uv.Rect(0, 0, 50, 1))
 	golden.RequireEqual(t, colorShot(f, uv.Pos(-1, -1)))
 }

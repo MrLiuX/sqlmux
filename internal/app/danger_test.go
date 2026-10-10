@@ -22,14 +22,14 @@ import (
 // confirm_dangerous off nothing asks (§13, F6.7).
 func TestConfirmDangerousRun(t *testing.T) {
 	d := &execDB{res: map[string]db.Result{"select 1": rows(1)}}
-	a, c := inConsole(t, "", "")
+	a, c := inQuery(t, "", "")
 	a.sess.Conns[0].Main = db.NewWorker(d)
 	c.schema = ""
 	a.confirmDangerous = true
 	run := func() { // the whole text, as a selection
 		t.Helper()
 		feed(t, a, "ggVG")
-		deliver(a, a.run("console.run", 0))
+		deliver(a, a.run("query.run", 0))
 	}
 	nothing := func(when string) {
 		t.Helper()
@@ -38,7 +38,7 @@ func TestConfirmDangerousRun(t *testing.T) {
 		}
 	}
 
-	a.consoleDid(c, c.ed.Load("delete from t_log;\nselect 1;\ndrop table x;\ndelete from t where id = 1;"))
+	a.queryDid(c, c.ed.Load("delete from t_log;\nselect 1;\ndrop table x;\ndelete from t where id = 1;"))
 	run()
 	if a.confirm == nil || !strings.HasPrefix(a.confirm.text, "这次执行有 2 条危险语句：\n  delete from t_log\n  drop table x") ||
 		strings.Contains(a.confirm.text, "id = 1") || a.confirm.yes != "执行" {
@@ -79,7 +79,7 @@ func TestConfirmDangerousRun(t *testing.T) {
 	// what does not ask
 	a.focusPane(a.win().pane(2).ID)
 	d.ran = nil
-	a.consoleDid(c, c.ed.Load("select 1;\ndelete from t where id = 1;\nupdate t set a = 1 where b = 2;\nalter table t drop constraint c;"))
+	a.queryDid(c, c.ed.Load("select 1;\ndelete from t where id = 1;\nupdate t set a = 1 where b = 2;\nalter table t drop constraint c;"))
 	run()
 	if a.confirm != nil || len(ran(d)) != 4 {
 		t.Errorf("safe statements: confirm %v, ran %q", a.confirm, ran(d))
@@ -88,7 +88,7 @@ func TestConfirmDangerousRun(t *testing.T) {
 	// off
 	a.confirmDangerous = false
 	d.ran = nil
-	a.consoleDid(c, c.ed.Load("delete from t_log"))
+	a.queryDid(c, c.ed.Load("delete from t_log"))
 	run()
 	if a.confirm != nil || len(ran(d)) != 1 {
 		t.Errorf("confirm_dangerous off: confirm %v, ran %q", a.confirm, ran(d))
@@ -96,14 +96,14 @@ func TestConfirmDangerousRun(t *testing.T) {
 }
 
 // A read-only connection keeps the dangerous statements back as it did,
-// without asking; a selection and a plain console's C-e are runs too.
+// without asking; a selection and a plain query's C-e are runs too.
 func TestConfirmDangerousReadOnlyAndSelection(t *testing.T) {
 	d := &execDB{}
-	a, c := inConsole(t, "vim = false", "")
+	a, c := inQuery(t, "vim = false", "")
 	a.sess.Conns[0].Main = db.NewWorker(d)
 	c.schema = ""
 	a.confirmDangerous = true
-	a.consoleDid(c, c.ed.Load("select 1;\ndelete from t;"))
+	a.queryDid(c, c.ed.Load("select 1;\ndelete from t;"))
 	c.ed.Goto(editor.Pos{})
 	shiftArrow(a, tea.KeyDown, 1)
 	press(t, a, "<C-e>") // only the select is selected
@@ -148,15 +148,15 @@ func TestDangerText(t *testing.T) {
 	}
 }
 
-// A connection the console waits for may land while the box asks, and the
-// console goes over to it: yes then runs nothing, as it was asked about
+// A connection the query waits for may land while the box asks, and the
+// query goes over to it: yes then runs nothing, as it was asked about
 // another connection (§13).
 func TestConfirmDangerousConnLands(t *testing.T) {
 	d := &execDB{}
-	a, c := inConsole(t, "", "")
+	a, c := inQuery(t, "", "")
 	a.sess.Conns[0].Main = db.NewWorker(d)
 	c.schema = ""
-	a.consoleDid(c, c.ed.Load("delete from t_log"))
+	a.queryDid(c, c.ed.Load("delete from t_log"))
 	idle := newConn(config.Connection{Name: "idle", Engine: "postgres"})
 	a.sess.Conns = append(a.sess.Conns, idle)
 	c.want, idle.State = idle, connConnecting
@@ -166,7 +166,7 @@ func TestConfirmDangerousConnLands(t *testing.T) {
 	}
 	a.Update(connected{conn: idle, d: dialed{main: &execDB{}, meta: noDB{}, spec: idle.Spec}})
 	if c.conn != idle {
-		t.Fatalf("the console stays on %s", c.conn.Spec.Name)
+		t.Fatalf("the query stays on %s", c.conn.Spec.Name)
 	}
 	_, cmd := a.Update(teaKey("y"))
 	deliver(a, cmd)
@@ -265,19 +265,19 @@ func TestConfirmDeletesThenClose(t *testing.T) {
 	}
 }
 
-// dangerScene is a console about to run two dangerous statements of three,
+// dangerScene is a query about to run two dangerous statements of three,
 // asked about, on a 100 × 30 screen.
 func dangerScene(t *testing.T) *App {
 	t.Helper()
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sized(100, 30, "nerd")
 	a.win().focus(2)
-	c := consoleOf(a.focused())
+	c := queryOf(a.focused())
 	a.sess.Conns[0].Main = db.NewWorker(&execDB{})
 	c.schema = ""
-	a.consoleDid(c, c.ed.Load("delete from t_log;\nselect 1;\ndrop table if exists archive_2024"))
+	a.queryDid(c, c.ed.Load("delete from t_log;\nselect 1;\ndrop table if exists archive_2024"))
 	feed(t, a, "ggVG")
-	a.run("console.run", 0)
+	a.run("query.run", 0)
 	if a.confirm == nil {
 		t.Fatal("no question")
 	}

@@ -11,7 +11,7 @@ import (
 // Quick runs sql, one statement IsRead takes, for the palette's quick SQL
 // (§12): in a read-only transaction that is always rolled back, in
 // database schema. With no cursor to stop at, a read gets the LIMIT §9.4
-// gives a console's, a row past maxRows; at most maxRows rows come back,
+// gives a query's, a row past maxRows; at most maxRows rows come back,
 // Truncated when there were more.
 // ponytail: one with a LIMIT of its own, or in parentheses, is worked out
 // whole

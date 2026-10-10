@@ -19,7 +19,7 @@ import (
 // the sessions, Restore builds sessions from it.
 
 // layoutOf is every session as a Layout: the windows with their split
-// trees and panes, a table's request, a console's file, connection and
+// trees and panes, a table's request, a query's file, connection and
 // schema. The result area, a landing tab, results and what is not saved are
 // left out, and so is a session of no connection (F7.4).
 func (a *App) layoutOf() *config.Layout {
@@ -90,13 +90,13 @@ func paneLayout(p *Pane) config.LayoutPane {
 			}
 			slices.Sort(lt.Cols)
 			lt.OrderCols = slices.Clone(d.colOrder)
-		case tb.Console != nil:
-			t := tb.Console
+		case tb.Query != nil:
+			t := tb.Query
 			c, schema := t.conn, t.schema
 			if t.want != nil { // not there yet: it is where it is going that is kept
 				c, schema = t.want, t.wantSchema
 			}
-			lt = config.LayoutTab{Kind: "console", Connection: c.Spec.Name, Schema: schema, Name: t.name}
+			lt = config.LayoutTab{Kind: "query", Connection: c.Spec.Name, Schema: schema, Name: t.name}
 		default: // a landing tab
 			continue
 		}
@@ -130,10 +130,10 @@ func (r *Restored) DialStart(ctx context.Context) error {
 // Restore builds the sessions of l over the connections of specs (§14),
 // none of them connected: a table tab waits for its connection's catalog.
 // What cannot be built is left out, said in Warnings: a connection that is
-// not there, a console file that does not read.
+// not there, a query file that does not read.
 func Restore(specs []config.Connection, l *config.Layout) *Restored {
 	r := &Restored{Active: min(max(l.Active, 0), len(l.Sessions)-1)}
-	used := map[string]bool{} // the consoles taken, by lower-cased name: files of names differing in case are one on some file systems
+	used := map[string]bool{} // the queries taken, by lower-cased name: files of names differing in case are one on some file systems
 	for _, ls := range l.Sessions {
 		conns := make([]*Conn, len(specs))
 		for j, spec := range specs {
@@ -155,7 +155,7 @@ func Restore(specs []config.Connection, l *config.Layout) *Restored {
 			r.Warnings = append(r.Warnings, warns...)
 		}
 		if len(s.Windows) == 0 { // a session with no window is one with the default
-			name := freeConsoleName(func(name string) bool { return used[name] })
+			name := freeQueryName(func(name string) bool { return used[name] })
 			w, warning := s.newWindow(first, name)
 			if warning != "" {
 				r.Warnings = append(r.Warnings, warning)
@@ -252,16 +252,16 @@ func restoreWindow(s *Session, lw config.LayoutWindow, used map[string]bool) (*W
 }
 
 // restoreTab is a layout's tab: a table, pending its connection's catalog,
-// or a console on its file; warn says why there is none. A tab with no
+// or a query on its file; warn says why there is none. A tab with no
 // connection is on the session's start (§14).
 func (s *Session) restoreTab(lt config.LayoutTab, used map[string]bool) (tb Tab, warn string) {
-	if lt.Kind != "table" && lt.Kind != "console" {
+	if lt.Kind != "table" && lt.Kind != "query" {
 		return tb, i18n.T("不认识的 tab")
 	}
 	name := cmp.Or(lt.Connection, s.start.Spec.Name)
 	i := slices.IndexFunc(s.Conns, func(c *Conn) bool { return c.Spec.Name == name })
 	if i < 0 {
-		return tb, i18n.T("没有名为 %s 的连接，跳过 %s", name, cmp.Or(lt.Table, lt.ConsoleName()))
+		return tb, i18n.T("没有名为 %s 的连接，跳过 %s", name, cmp.Or(lt.Table, lt.QueryName()))
 	}
 	c := s.Conns[i]
 	if lt.Kind == "table" { // a schema it does not name is the connection's home, known with the catalog
@@ -280,11 +280,11 @@ func (s *Session) restoreTab(lt config.LayoutTab, used map[string]bool) (tb Tab,
 		d.colOrder = slices.Clone(lt.OrderCols)
 		return Tab{Name: lt.Table, Data: d}, ""
 	}
-	cname := lt.ConsoleName()
-	if cname == "" || used[strings.ToLower(cname)] || config.CheckConsoleName(cname) != nil { // none, taken or not a file's: the next free one, with its own file
-		cname = freeConsoleName(func(name string) bool { return used[name] })
+	cname := lt.QueryName()
+	if cname == "" || used[strings.ToLower(cname)] || config.CheckQueryName(cname) != nil { // none, taken or not a file's: the next free one, with its own file
+		cname = freeQueryName(func(name string) bool { return used[name] })
 	}
-	t, err := openConsole(s.start, cname)
+	t, err := openQuery(s.start, cname)
 	if err != nil {
 		return tb, err.Error()
 	}
@@ -294,7 +294,7 @@ func (s *Session) restoreTab(lt config.LayoutTab, used map[string]bool) (tb Tab,
 	} else { // the connection it was on goes over once it is there
 		t.want, t.wantSchema = c, lt.Schema
 	}
-	return Tab{Name: cname, Console: t}, ""
+	return Tab{Name: cname, Query: t}, ""
 }
 
 // Adopt makes r the program's sessions, the one it names attached; the
@@ -302,12 +302,12 @@ func (s *Session) restoreTab(lt config.LayoutTab, used map[string]bool) (tb Tab,
 func (a *App) Adopt(r *Restored) {
 	a.sessions, a.sess = r.Sessions, r.Sessions[r.Active]
 	a.warning = JoinNotes(append([]string{a.warning}, r.Warnings...)...)
-	a.plainConsoles()
+	a.plainQueries()
 	a.restored = true
 }
 
 // connectsNow are the connections the running program connects to at once:
-// each session's start, a pending table tab's, the one a console waits for.
+// each session's start, a pending table tab's, the one a query waits for.
 func (a *App) connectsNow() []tea.Cmd {
 	var cmds []tea.Cmd
 	catalog := map[*Conn]bool{}
@@ -326,8 +326,8 @@ func (a *App) connectsNow() []tea.Cmd {
 				switch {
 				case tb.Data != nil && tb.Data.pending:
 					want(tb.Data.conn)
-				case tb.Console != nil && tb.Console.want != nil:
-					want(tb.Console.want)
+				case tb.Query != nil && tb.Query.want != nil:
+					want(tb.Query.want)
 				}
 			}
 		}
@@ -437,10 +437,10 @@ func layoutNames() []string {
 }
 
 // pickLayout is a layout.open pick: asked first when every session's
-// unsaved changes and transactions would go (§10.5); then the consoles are
+// unsaved changes and transactions would go (§10.5); then the queries are
 // written, the layout read and every session replaced, all in this one
 // Update (§14「命令」): between, what was typed would be lost or written
-// over the new consoles' files. The connections are dialed in the background,
+// over the new queries' files. The connections are dialed in the background,
 // the first session's start among them.
 func (a *App) pickLayout(name string) tea.Cmd {
 	path := config.LayoutPath(name)
@@ -452,7 +452,7 @@ func (a *App) pickLayout(name string) tea.Cmd {
 		ps = append(ps, s.panes()...)
 	}
 	return a.unlessLost(unsaved(ps...), "", txConns(a.sessions...), verbOpen, func() tea.Cmd {
-		if cmd, ok := a.flushAll(ps...); !ok { // the consoles' text is not lost (§11)
+		if cmd, ok := a.flushAll(ps...); !ok { // the queries' text is not lost (§11)
 			return cmd
 		}
 		l, err := config.LoadLayout(path)

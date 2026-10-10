@@ -258,7 +258,7 @@ func TestPaletteScopesCycle(t *testing.T) {
 func TestPaletteScopesFilter(t *testing.T) {
 	for in, want := range map[string]string{
 		"@ord": "表:t_order 表:t_order_item",
-		"%con": "Pane:② console · console_1 Tab:console_1 Pane:⓪ schema", // ⓪'s doraemon too; a tie as the empty input has it (§12)
+		"%que": "Pane:② query · query_1 Tab:query_1",
 	} {
 		a := twoPanes(160, 45)
 		if feed(t, a, "<C-p>"+in); strings.Join(namesOf(a), " ") != want {
@@ -273,13 +273,13 @@ func TestPaletteScopesFilter(t *testing.T) {
 			t.Errorf("所有 lacks %s", s)
 		}
 	}
-	if want := "会话:doraemon 窗口:0: data Pane:⓪ schema Pane:① table · t_order Tab:t_order Tab:t_user Pane:② console · console_1 Tab:console_1 窗口:1: report 表:"; !strings.HasPrefix(all, want) {
+	if want := "会话:doraemon 窗口:0: data Pane:⓪ schema Pane:① table · t_order Tab:t_order Tab:t_user Pane:② query · query_1 Tab:query_1 窗口:1: report 表:"; !strings.HasPrefix(all, want) {
 		t.Errorf("as the tree's workspace, when nothing is typed: a window, its panes, each pane's tabs:\n%.200s", all)
 	}
 }
 
 // From the tree too a table not open yet takes a new tab, over neither a
-// table's tab nor a console's; a landing tab it replaces (§7.8, §12).
+// table's tab nor a query's; a landing tab it replaces (§7.8, §12).
 func TestTreeOpensInNewTab(t *testing.T) {
 	a := twoPanes(160, 45)
 	data := a.focused()
@@ -288,16 +288,16 @@ func TestTreeOpensInNewTab(t *testing.T) {
 	if feed(t, a, "<CR>"); tabNames(data) != "t_order t_user t_sku" || data.Cur != 2 {
 		t.Fatalf("over a table's tab: %v cur %d", tabNames(data), data.Cur)
 	}
-	console := a.win().pane(2)
+	query := a.win().pane(2)
 	a.win().focus(2)
 	feed(t, a, "<C-p>@t_user<CR>")
-	if tabNames(console) != "console_1 t_user" || console.Cur != 1 {
-		t.Fatalf("over a console's: %v", tabNames(console))
+	if tabNames(query) != "query_1 t_user" || query.Cur != 1 {
+		t.Fatalf("over a query's: %v", tabNames(query))
 	}
 	a.run("tab.new", 0)
 	feed(t, a, "<C-p>@t_order<CR>")
-	if tabNames(console) != "console_1 t_user t_order" {
-		t.Errorf("a landing tab is replaced: %v", tabNames(console))
+	if tabNames(query) != "query_1 t_user t_order" {
+		t.Errorf("a landing tab is replaced: %v", tabNames(query))
 	}
 }
 
@@ -311,10 +311,10 @@ func TestPaletteOpensTables(t *testing.T) {
 		t.Fatalf("↵: tabs %v cur %d", tabNames(data), data.Cur)
 	}
 	a.win().focus(2)
-	a.win().focus(0) // from the tree, ⟨2⟩ focused last, a console's pane (F3.37)
+	a.win().focus(0) // from the tree, ⟨2⟩ focused last, a query's pane (F3.37)
 	feed(t, a, "<C-p>@t_sku<C-t>")
-	if console := a.win().pane(2); tabNames(console) != "console_1 t_sku" || console.Cur != 1 || console.Prev != 0 {
-		t.Fatalf("C-t: tabs %v cur %d prev %d", tabNames(console), console.Cur, console.Prev)
+	if query := a.win().pane(2); tabNames(query) != "query_1 t_sku" || query.Cur != 1 || query.Prev != 0 {
+		t.Fatalf("C-t: tabs %v cur %d prev %d", tabNames(query), query.Cur, query.Prev)
 	}
 	if a.win().Focus != 2 {
 		t.Errorf("focus %d: the pane the table opened in takes it", a.win().Focus)
@@ -340,18 +340,18 @@ func TestPaletteOpensTables(t *testing.T) {
 	}
 
 	a = twoPanes(160, 45)
-	feed(t, a, ":q<CR>:q<CR>") // the console's pane left
+	feed(t, a, ":q<CR>:q<CR>") // the query's pane left
 	feed(t, a, "<C-p>@t_user<CR>")
-	if leaves := a.win().Root.Leaves(); len(leaves) != 1 || tabNames(leaves[0]) != "console_1 t_user" || leaves[0].Cur != 1 {
-		t.Errorf("a console is not replaced, the table opens beside it (§5): %v", tabNames(leaves[0]))
+	if leaves := a.win().Root.Leaves(); len(leaves) != 1 || tabNames(leaves[0]) != "query_1 t_user" || leaves[0].Cur != 1 {
+		t.Errorf("a query is not replaced, the table opens beside it (§5): %v", tabNames(leaves[0]))
 	}
 }
 
 func TestPaletteFocusesPanes(t *testing.T) {
 	a := twoPanes(160, 45)
-	feed(t, a, "<C-p>%console<CR>")
+	feed(t, a, "<C-p>%query<CR>")
 	if a.palette != nil || a.win().Focus != 2 {
-		t.Fatalf("focus %d, want the console", a.win().Focus)
+		t.Fatalf("focus %d, want the query", a.win().Focus)
 	}
 }
 
@@ -363,7 +363,7 @@ func TestPaletteFocusUnzooms(t *testing.T) {
 		zoomed      int // the pane zoomed before
 		focus, zoom int // after
 	}{
-		{"table from the zoomed console: beside it", "<C-p>@t_user<CR>", 2, 2, 2},
+		{"table from the zoomed query: beside it", "<C-p>@t_user<CR>", 2, 2, 2},
 		{"table in the zoomed data pane", "<C-p>@t_user<CR>", 1, 1, 1},
 		{"pane hidden by the zoom", "<C-p>%t_order<CR>", 2, 1, 0},
 	} {
@@ -517,7 +517,7 @@ func TestGoldenPalettePreview160x45(t *testing.T) {
 // focuses its pane, and is not kept among the recent (F4.3). A pane is
 // placed doraemon › 0: data.
 func TestPaletteTabs(t *testing.T) {
-	a := twoPanes(160, 45) // ① t_order and t_user, ② console_1
+	a := twoPanes(160, 45) // ① t_order and t_user, ② query_1
 	a.win().focus(2)
 	feed(t, a, "<C-p>%t_us")
 	rows := a.paletteView().Rows
@@ -571,7 +571,7 @@ func TestPaletteTiesKeepOrder(t *testing.T) {
 }
 
 // The Window scope lists this session's windows by number; the Tab scope
-// every table, console and result tab of it, the one focused last first and
+// every table, query and result tab of it, the one focused last first and
 // the current one last, a landing tab none; palette.window and palette.tab
 // open them (F5.19, §12).
 func TestPaletteWindowAndTabScopes(t *testing.T) {
@@ -582,20 +582,20 @@ func TestPaletteWindowAndTabScopes(t *testing.T) {
 		t.Fatalf("palette.window: %q %v", a.palette.input.Text, namesOf(a))
 	}
 	feed(t, a, "<Esc><Space>c")
-	a.run("console.new", 0) // console_2 in window 1: a new window has none
+	a.run("query.new", 0) // query_2 in window 1: a new window has none
 	feed(t, a, "<Space>c")
-	a.run("console.new", 0)                                     // console_3 in window 2
+	a.run("query.new", 0)                                       // query_3 in window 2
 	a.state.Recent = []config.Recent{{Kind: "window", ID: "3"}} // picked last, the number goes first
 	a.run("palette.window", 0)
 	if got := namesOf(a); !slices.Equal(got, []string{"窗口:0: data", "窗口:1: data-2", "窗口:2: data-3"}) {
 		t.Errorf("by number: %v", got)
 	}
-	feed(t, a, "<Esc><Space>p<Space>p") // back on window 0, console_1 and a table in it
+	feed(t, a, "<Esc><Space>p<Space>p") // back on window 0, query_1 and a table in it
 	loadOrders(t, a, 3)                 // focused: t_order
-	a.win().focus(2)                    // console_1
+	a.win().focus(2)                    // query_1
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
 	a.run("palette.tab", 0)
-	if got := namesOf(a); len(got) == 0 || got[len(got)-1] != "Tab:console_1" || got[0] != "Tab:t_order" {
+	if got := namesOf(a); len(got) == 0 || got[len(got)-1] != "Tab:query_1" || got[0] != "Tab:t_order" {
 		t.Fatalf("Tab scope: %v", got)
 	}
 	got := namesOf(a)
@@ -604,8 +604,8 @@ func TestPaletteWindowAndTabScopes(t *testing.T) {
 			t.Errorf("a landing tab is listed: %v", got)
 		}
 	}
-	// the other windows' consoles are listed too, and the order follows the focus
-	if !slices.Contains(got, "Tab:console_2") || !slices.Contains(got, "Tab:console_3") {
+	// the other windows' queries are listed too, and the order follows the focus
+	if !slices.Contains(got, "Tab:query_2") || !slices.Contains(got, "Tab:query_3") {
 		t.Errorf("other windows' tabs: %v", got)
 	}
 	feed(t, a, "<CR>") // the first: back to the table
@@ -613,7 +613,7 @@ func TestPaletteWindowAndTabScopes(t *testing.T) {
 		t.Errorf("↵ goes back to the table: pane %d", a.focused().ID)
 	}
 	a.run("palette.tab", 0)
-	if got := namesOf(a); got[len(got)-1] != "Tab:t_order" || got[0] != "Tab:console_1" {
+	if got := namesOf(a); got[len(got)-1] != "Tab:t_order" || got[0] != "Tab:query_1" {
 		t.Errorf("after the switch: %v", got)
 	}
 }

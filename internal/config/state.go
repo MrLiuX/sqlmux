@@ -16,17 +16,17 @@ import (
 // State is what the app keeps between runs (§14), in state.json: the
 // palette's recent picks, each table's WHERE history and favorites, each
 // connection's quick SQL history, and the connection and schema each
-// console file last ran on.
+// query file last ran on.
 type State struct {
-	Recent   []Recent                `json:"recent,omitempty"`
-	Tables   map[string]*TableState  `json:"tables,omitempty"`   // by "<connection>/<schema>.<table>"
-	SQL      map[string][]string     `json:"sql,omitempty"`      // by connection, newest first (§12)
-	Consoles map[string]ConsoleState `json:"consoles,omitempty"` // by file name: "console_1" (§11)
+	Recent  []Recent               `json:"recent,omitempty"`
+	Tables  map[string]*TableState `json:"tables,omitempty"`  // by "<connection>/<schema>.<table>"
+	SQL     map[string][]string    `json:"sql,omitempty"`     // by connection, newest first (§12)
+	Queries map[string]QueryState  `json:"queries,omitempty"` // by file name: "query_1" (§11)
 }
 
 // RenameConnection makes what the state keeps by the connection called old
 // kept by to: the table picks and table keys that start with its name, its
-// quick SQL, the consoles that run on it (F8.16). Data under the new name
+// quick SQL, the queries that run on it (F8.16). Data under the new name
 // from a connection of that name since deleted is written over by the
 // renamed one's, a pick in both once. The layout files are the user's, and
 // say the old name still.
@@ -49,17 +49,17 @@ func (s *State) RenameConnection(old, to string) {
 		delete(s.SQL, old)
 		s.SQL[to] = sql
 	}
-	for k, c := range s.Consoles {
+	for k, c := range s.Queries {
 		if c.Conn == old {
 			c.Conn = to
-			s.Consoles[k] = c
+			s.Queries[k] = c
 		}
 	}
 }
 
-// ConsoleState is where a console runs: its connection, by name, and its
+// QueryState is where a query runs: its connection, by name, and its
 // schema (§8.6).
-type ConsoleState struct {
+type QueryState struct {
 	Conn   string `json:"conn"`
 	Schema string `json:"schema,omitempty"`
 }
@@ -115,6 +115,19 @@ func LoadState() (*State, error) {
 		return &State{}, fmt.Errorf("%s: %w", statePath(), err)
 	}
 	s.Recent = slices.DeleteFunc(s.Recent, func(r Recent) bool { return r.Kind == "table" && !strings.Contains(r.ID, "/") })
+	var old struct {
+		Consoles map[string]QueryState `json:"consoles"`
+	}
+	if json.Unmarshal(data, &old) == nil { // what the queries were called, F10.11: read, written as queries
+		for k, v := range old.Consoles {
+			if _, ok := s.Queries[currentName(k)]; !ok {
+				if s.Queries == nil {
+					s.Queries = map[string]QueryState{}
+				}
+				s.Queries[currentName(k)] = v
+			}
+		}
+	}
 	return s, nil
 }
 
