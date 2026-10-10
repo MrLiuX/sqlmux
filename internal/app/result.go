@@ -560,6 +560,9 @@ func (a *App) exportResult() tea.Cmd {
 	if rt.part > 1 {
 		name += fmt.Sprintf("-%d", rt.part)
 	}
+	if rt.offset > 0 { // the page shown is what is written, so the file says which (F10.4)
+		name += fmt.Sprintf("-p%d", rt.offset/a.maxRows+1)
+	}
 	path, err := filepath.Abs(name + ".csv")
 	if err == nil {
 		err = os.WriteFile(path, []byte(csvOf(rt.page)), 0o600)

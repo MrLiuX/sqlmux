@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -67,6 +69,12 @@ func TestResultPaging(t *testing.T) {
 	}
 	if !strings.Contains(logText(a), q+"  4–6+ 行") {
 		t.Errorf("the log:\n%s", logText(a))
+	}
+	// the export is of the page shown, its name saying which
+	t.Chdir(t.TempDir())
+	a.run("result.export", 0)
+	if data, err := os.ReadFile(fmt.Sprintf("console_1-%d-p2.csv", tab(1).run.seq)); err != nil || strings.Count(string(data), "\n") != 4 {
+		t.Errorf("export of page 2: %q %v, toast %q", data, err, a.toast)
 	}
 	if tab(2).page.Rows == nil || tab(2).offset != 0 {
 		t.Error("another tab of the run is left as it was")
