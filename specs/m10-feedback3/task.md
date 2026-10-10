@@ -184,10 +184,10 @@
 - **依赖**：F10.1–F10.10 passed
 - **涉及**：全仓库：`internal/app`、`internal/ui`、`internal/config`、`internal/keymap/default.toml`、`internal/i18n`、golden、e2e（tester 改）；spec 由决策者在开工时一次改完
 
-**开发**（开工时决策者先把 tech-design、task.md 里的用词改掉，再写代码）
+**开发**（tech-design 的用词决策者已在开工前改完：`design/11-console.md` → `11-query.md`，各章 console → query，`consoles` 键 → `queries`；task.md 前面各 feature 的名字是历史，不改）
 - [ ] 用户看得见的词全部从 console 改成 query：树的 `Consoles` 节点 → `Queries`；tab 和 pane 标题；命令标题（「新建 console」→「新建 query」等）和 Action ID（`console.*` → `query.*`，`console.new` / `console.format` / `console.schema` / `console.conn` / `console.rename` 等）；keymap 作用域 `[keys.console]` → `[keys.query]`、`[map.console.visual]` → `[map.query.visual]`；config `[console] max_rows` → `[query] max_rows`；state.json 和布局文件里的 tab 类型和键；i18n 的中英文文案；toast 和确认框文案；`sqlmux keys` 的输出。
 - [ ] 文件：目录 `consoles/` → `queries/`，默认文件名 `console_<n>.sql` → `query_<n>.sql`。启动时一次性迁移：没有 `queries/` 而有 `consoles/` 就把目录改名，目录里 `console_<n>.sql` 改成 `query_<n>.sql`（用户改过名的文件不动），state.json 里的键跟着改；布局文件里旧的类型名照新的读。
-- [ ] 不留旧 Action ID 的别名：v0.1.0 还没推送，没有外部用户；用户自己的 keymaps.toml 和 config.toml 由决策者改。代码里的标识符（`consoleTab` 这类）一并改，commit 说明注明是 rename。
+- [ ] 不留旧配置键的别名和兼容读取（`console.*` 动作、`[keys.console]`、`[map.console.*]`、`[console]`、`[icon] console` 都按未知键的现有处理走）：v0.1.0 推送了但没有外部用户（`go install` 都装不了）；用户自己的 keymaps.toml 和 config.toml 由决策者改。`[icon]` 的 `console` 键改 `query`，字形不变。迁移只做目录、文件名、state.json 的键、布局文件里旧的 kind 和 `console_<n>` 名字（读时转换，不回写）；`queries/` 已存在就不动、不合并，目标文件已存在就跳过那一个；「用户改过名的文件不动」按名字前缀 `console_<数字>` 判定。代码里的标识符（`consoleTab` 这类）一并改，commit 说明注明是 rename。
 - [ ] 细节（已定）：不改 `internal/editor` 的包名和编辑器行为；commit 前缀、e2e 脚本文件名随 tester。
 
 **验收**

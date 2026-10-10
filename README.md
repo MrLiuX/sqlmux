@@ -11,7 +11,7 @@ A terminal database client organized the way tmux is: sessions, windows, panes a
 - Schema tree: schemas → tables / views → columns, plus the open workspace.
 - Table tabs: WHERE with completion and history, ORDER, LIMIT, paging, column picker, transpose.
 - Inline editing: edit cells, then save everything in one transaction. Enum, boolean and time columns get pickers.
-- SQL console: a vim editor that is diff-tested against nvim, with completion, formatting, a schema picker, and results in a bottom pane.
+- SQL queries: a vim editor that is diff-tested against nvim, with completion, formatting, a schema picker, and results in a bottom pane.
 - Command palette (`C-p`) and quick SQL (`;`).
 - Every key can be rebound, per pane type; `SPC` is the leader. Themes and Nerd Font icons are configurable (`icons = "ascii"` if you have no Nerd Font).
 

@@ -6,13 +6,13 @@
 
 - **危险语句先确认**（M6 F6.7，用户 2026-10-05 要求：没带条件的 delete / update、删表这类操作一定要有闸门）。参照 DataGrip 执行前的「DELETE 语句没有 WHERE」提示和 MySQL 的 `sql_safe_updates`。
   - **哪些算危险**（只做词法判断，`sqlkit`，和 §9.3 的读写判定建在同一个扫描器上）：没有 `WHERE` 的 `DELETE` 和 `UPDATE`：主语句的看顶层（子查询、CTE 里的 `where` 不算，`delete from t using …` 照样看顶层有没有 where；MySQL 的 `delete … limit` 没有 where 也算）；括号里的也判，紧跟在 `(` 后面的 DELETE / UPDATE 各按自己那一层有没有 WHERE 算一次（PG 的 `with d as (delete from t returning *) …`、`copy (delete from t returning *) to stdout` 实测照样删光整表，F6.7 审查时定）；`TRUNCATE`；`DROP`（表、库、schema、索引、视图都算，`drop … if exists`、MySQL 的 `drop temporary table` 也算，不细分）。`ALTER TABLE` 里的 `DROP` 按位置和方言判（审查时在 PG 17 / MySQL 8.4 实测后定）：紧跟在 `ALTER [COLUMN] <列名>` 后面的 DROP（default / not null / expression / identity）是改列属性，不算；子句开头的 DROP，PG 只有 `drop constraint` 不算，MySQL 的 `drop constraint / index / key / primary / foreign / check` 不算（这几个在 MySQL 是保留字，在 PG 里 `drop key` 删的是叫 key 的列）；其余一律按删列算。MySQL 的 `alter table … drop partition` 和 `truncate partition` 会删数据，算。`EXPLAIN ANALYZE` 后面跟着危险语句的，PG 上算（它真的会执行），MySQL 上不算（实测只给计划、不执行）。认不出的：`merge … when matched then delete`、`prepare` 之后的 `execute`，和存储过程一样属于已知上限。主语句词的取法：开头是 `with` 时取第一个括号深度 0 的语句词（CTE 体都在括号里），同 §9.3。只读连接上这些本来就执行不了，不会走到确认。
-  - **什么时候问**：console 执行（`↵` / `C-e` / `▶ run`，含选区执行）、结果区的重跑 `R`，在真正发出前先扫这次要执行的全部语句；有危险语句就弹确认框（§10.5 的样式，标题用 `error` 色——M8 F8.23 起，删表的确认框也是它）：标题「这次执行有 N 条危险语句」，每条把连续空白（含换行、tab）压成一个空格后截到 60 列（多行语句只列第一行会只剩 `with old as (`），按钮「执行」/「取消」，`y` / `↵` 执行、`n` / `esc` 取消整次（不是跳过那几条）。一次执行只问一次。选区执行被取消时选区不恢复（文字和光标不变，已退出 VISUAL，和 vim 执行命令后一样）。手动事务模式下也问：MySQL 的 DDL 会隐式提交，回滚救不回来。快速 SQL 在只读事务里跑，写语句本来就被拦下（§12），不用问。
+  - **什么时候问**：query 执行（`↵` / `C-e` / `▶ run`，含选区执行）、结果区的重跑 `R`，在真正发出前先扫这次要执行的全部语句；有危险语句就弹确认框（§10.5 的样式，标题用 `error` 色——M8 F8.23 起，删表的确认框也是它）：标题「这次执行有 N 条危险语句」，每条把连续空白（含换行、tab）压成一个空格后截到 60 列（多行语句只列第一行会只剩 `with old as (`），按钮「执行」/「取消」，`y` / `↵` 执行、`n` / `esc` 取消整次（不是跳过那几条）。一次执行只问一次。选区执行被取消时选区不恢复（文字和光标不变，已退出 VISUAL，和 vim 执行命令后一样）。手动事务模式下也问：MySQL 的 DDL 会隐式提交，回滚救不回来。快速 SQL 在只读事务里跑，写语句本来就被拦下（§12），不用问。
   - **表格的保存**：保存里含删除行时也先确认：「将删除 N 行（另有 M 处修改），确定保存？」（M 为 0 时不带括号），`y` / `↵` 保存、`n` / `esc` 回到表格、标记都还在。只改格子、新增行的保存不问：每格都带旧值检查，影响的只是看得见的那几格。
   - **配置**：`config.toml` 的 `confirm_dangerous = true`，默认开；关掉后上面两种确认都不弹。不按语句类型细分开关。
   - 这是防误操作的闸门，不是权限边界：拼接在存储过程、函数里的写操作认不出来，真正要限制权限用只读账号或只读连接。
 - **只读连接（S-04；M5 起按连接，connections.toml 的 `read_only = true`）**：
   - **应用层**：
-    - console 执行前检查这一次的全部语句：判为写的、会解除只读的，有一条就整次都不发，日志记原因并切到日志 tab；表格的编辑、新增、删除、粘贴都拦下（§10.1）。
+    - query 执行前检查这一次的全部语句：判为写的、会解除只读的，有一条就整次都不发，日志记原因并切到日志 tab；表格的编辑、新增、删除、粘贴都拦下（§10.1）。
     - SET 语句中，下面四类整类拦截（简单；里面有些写法实测并不解除只读，如 `SET TRANSACTION READ ONLY`、`SET TRANSACTION ISOLATION LEVEL …`，要设隔离级别用 `BEGIN ISOLATION LEVEL …` 或 `SET default_transaction_isolation`；作用域词连写几个也照样认出）：`SET TRANSACTION`、`SET SESSION CHARACTERISTICS`、`default_transaction_read_only`、`transaction_read_only`；还有带 `READ WRITE` 的 `BEGIN` / `START TRANSACTION`（PG 里它盖过 `default_transaction_read_only`）。最终清单以在 PG 上逐条实测的集成测试为准（F5.3）。MySQL 的写法：`SET [GLOBAL | SESSION | PERSIST …] TRANSACTION`、`@@[scope.]transaction_read_only`、`START TRANSACTION … READ WRITE`，同样在 MySQL 上逐条实测（F5.4）。MySQL 上另外：`reset` 是管理命令，算写；SET 里带 `GLOBAL` / `PERSIST` / `PERSIST_ONLY` 作用域的项和 `@@global.x` 都拦（改的是整个服务端，同 PG 的 ALTER SYSTEM）；MySQL 8.4 的语句首词（kill、flush、purge、install / uninstall、shutdown、restart、clone、xa、handler、stop、optimize、repair 等）补进关键字表，照 §9.3 第 7 条算写。已知上限：`SET sql_mode = 'NO_BACKSLASH_ESCAPES'` 之后服务端的词法和我们的扫描器不一致，精心构造的 SET 能解开只读，同 PG 的 `U&`。
     - 其他不影响只读的 SET（如 `search_path`、`statement_timeout`）放行；事务控制（begin / start / commit / end / rollback / abort / savepoint / release）和 reset / discard 也放行（F5.3 在 PG 上实测：`RESET`、`RESET ALL`、`DISCARD ALL`、`SET … TO DEFAULT` 之后仍是只读，`SET SESSION AUTHORIZATION DEFAULT` 解除不了）。其余首词是关键字的照 §9.3 第 7 条算写、拦下（vacuum、call、do、copy、prepare、declare、notify 等）；首词不是关键字的照旧发给数据库，由它报错。
     - 拦下时整次都不执行，不算一次执行（不加执行序号、不出占位），日志记一行 `<连接> 是只读连接，整次都没有执行`（`error` 色）并切到日志 tab，不弹 toast、▶ 不变红、不出错误栏；结果区的重跑也检查。
@@ -30,4 +30,4 @@
 - **注入**：值一律参数化，标识符一律按方言加引号。
 - **日志与文件**：
   - 只有带 `--debug` 启动时才写日志，DSN 中的密码会被脱敏。
-  - 历史记录里可能含有敏感的字面量，所以 state 文件和 console 文件的权限都设为 0600。
+  - 历史记录里可能含有敏感的字面量，所以 state 文件和 query 文件的权限都设为 0600。
