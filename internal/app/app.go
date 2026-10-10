@@ -36,10 +36,11 @@ type App struct {
 	icons    *ui.Icons
 	// baseIcons is what `icons` chose, a theme's [icon] not on it, and themeName
 	// the theme in use: theme.switch loads another over them (F6.2).
-	askName   *nameAsk // a name typed in the status bar: layout.save's, a session's, a console's (F6.5, F8.11)
-	lastPath  string   // where the working set is kept as the program quits; "" for nowhere
-	plain     bool     // vim = false: console and WHERE edit without modes (§6.9)
-	restored  bool     // the sessions are a layout's: console_1 is not looked up in state.json (F6.5)
+	jump      *jumpState // a flash-style jump going on (F10.8)
+	askName   *nameAsk   // a name typed in the status bar: layout.save's, a session's, a console's (F6.5, F8.11)
+	lastPath  string     // where the working set is kept as the program quits; "" for nowhere
+	plain     bool       // vim = false: console and WHERE edit without modes (§6.9)
+	restored  bool       // the sessions are a layout's: console_1 is not looked up in state.json (F6.5)
 	baseIcons *ui.Icons
 	themeName string
 	keys      *keymap.Map
@@ -238,6 +239,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.w, a.h = msg.Width, msg.Height
+		a.jump = nil                         // its matches are where the screen was
 		a.menu = nil                         // it was placed by the pointer, on a tree that is laid out again
 		if a.ddl != nil && a.ddl.col != "" { // under a cell that has moved
 			a.ddl = nil
@@ -409,6 +411,9 @@ func (a *App) feed(k keymap.Key, maps bool) tea.Cmd {
 // click turns a left click into what its target stands for (§7.4): the
 // same actions keys run.
 func (a *App) click(p uv.Position) tea.Cmd {
+	if a.jump != nil { // a click goes where it is, the jump over (F10.8)
+		a.jump = nil
+	}
 	t, ok := ui.HitAt(a.hits, p)
 	if a.askName != nil { // so is a click off the name's (F6.5)
 		a.askName = nil
@@ -542,6 +547,7 @@ func (a *App) click(p uv.Position) tea.Cmd {
 // Shift turns the vertical wheel horizontal, as does a touchpad's sideways
 // swipe (buttons 6 and 7).
 func (a *App) wheel(m tea.Mouse) {
+	a.jump = nil      // what it matched moves
 	if a.ddl != nil { // the table's DDL scrolls; the column's goes with the wheel as with a key, which then turns (F9.8)
 		if a.ddl.col == "" {
 			a.scrollDDL(map[tea.MouseButton]int{tea.MouseWheelUp: -wheelStep, tea.MouseWheelDown: wheelStep}[m.Button], false)
@@ -635,6 +641,8 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 		}
 		for _, k := range r.Keys { // unbound keys go to the input that has them
 			switch t := a.typingTab(); {
+			case a.jump != nil:
+				cmds = append(cmds, a.jumpKey(k))
 			case a.menu != nil || a.ddl != nil: // no text to type: the key is none of theirs
 			case a.keyHelp != nil:
 				cmds = append(cmds, a.keyHelpKey(k))
@@ -673,6 +681,8 @@ func (a *App) mode() keymap.Mode {
 	switch t, ed := a.typingTab(), a.vim(); {
 	case a.form != nil && !a.form.list, a.winRename != nil, a.askName != nil, a.sessList != nil && a.sessList.rename != nil: // inputs with the keys over the panes (§7.8)
 		return keymap.Insert
+	case a.jump != nil: // a pattern typed, a letter jumps (F10.8)
+		return keymap.Insert
 	case a.overlaid(), t != nil && t.hist != nil: // an overlay has the keys (§7.8)
 		return keymap.Command
 	case ed != nil: // a console's vim, or a WHERE's (F3.39)
@@ -689,6 +699,8 @@ func (a *App) mode() keymap.Mode {
 // context tells the keymap which scopes apply to the next key (§6.4).
 func (a *App) context() keymap.Context {
 	switch typing := a.typingTab(); {
+	case a.jump != nil:
+		return keymap.Context{Overlay: "jump", Mode: keymap.Insert}
 	case a.confirm != nil:
 		return keymap.Context{Overlay: "confirm", Mode: keymap.Command}
 	case a.menu != nil:

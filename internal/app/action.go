@@ -179,9 +179,14 @@ func init() {
 		"grid.select.clear":  {Title: i18n.N("清除选中 / 结束 VISUAL"), Local: true, Run: do(func(a *App, _ Args) { a.selectClear() })},
 		"grid.select.delete": {Title: i18n.N("标记删除选中的记录"), Local: true, Run: func(a *App, _ Args) tea.Cmd { return a.selectDelete() }},
 		"grid.select.yank":   {Title: i18n.N("复制选中的记录为 JSON"), Local: true, Run: func(a *App, _ Args) tea.Cmd { return a.selectYank() }},
-		"result.page.next":   {Title: i18n.N("结果下一页"), Run: func(a *App, _ Args) tea.Cmd { return a.resultPage(1) }},
-		"result.page.prev":   {Title: i18n.N("结果上一页"), Run: func(a *App, _ Args) tea.Cmd { return a.resultPage(-1) }},
-		"result.export":      {Title: i18n.N("导出 CSV"), Run: func(a *App, _ Args) tea.Cmd { return a.exportResult() }},
+		// the flash-style jump (§6.10, F10.8)
+		"jump.start":       {Title: i18n.N("跳转到屏幕上的字符"), Run: func(a *App, _ Args) tea.Cmd { return a.jumpStart() }},
+		"jump.cancel":      {Title: i18n.N("退出跳转"), Local: true, Run: do(func(a *App, _ Args) { a.jump = nil })},
+		"jump.back":        {Title: i18n.N("跳转：删一个字符"), Local: true, Run: do(func(a *App, _ Args) { a.jumpBack() })},
+		"jump.confirm":     {Title: i18n.N("跳到最近的匹配"), Local: true, Run: func(a *App, _ Args) tea.Cmd { return a.jumpConfirm() }},
+		"result.page.next": {Title: i18n.N("结果下一页"), Run: func(a *App, _ Args) tea.Cmd { return a.resultPage(1) }},
+		"result.page.prev": {Title: i18n.N("结果上一页"), Run: func(a *App, _ Args) tea.Cmd { return a.resultPage(-1) }},
+		"result.export":    {Title: i18n.N("导出 CSV"), Run: func(a *App, _ Args) tea.Cmd { return a.exportResult() }},
 		"result.pin": {Title: i18n.N("固定结果"), Run: do(func(a *App, _ Args) {
 			if rt := resultOf(a.focused()); rt != nil && rt.run != nil && rt.run.done {
 				rt.pinned = !rt.pinned

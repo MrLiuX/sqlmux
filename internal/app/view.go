@@ -128,6 +128,9 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 		c := n.in.Draw(f, uv.Rect(x, y, max(rightX-1-x, 1), 1), in)
 		f.Cursor = &c
 	}
+	if a.jump != nil && !a.jump.scanning {
+		a.drawJump(f)
+	}
 	if a.keyHelp != nil {
 		a.keyHelpView().Draw(f, a.overlayArea())
 	}
@@ -554,6 +557,9 @@ func (a *App) statusLine() ui.StatusLine {
 	name := strings.ToUpper(mode.String())
 	if ed := a.vim(); ed != nil { // V-LINE, V-BLOCK and REPLACE in the colors of VISUAL and INSERT
 		name = ed.Mode().String()
+	}
+	if a.jump != nil {
+		name, modeColor = "JUMP", th.Info
 	}
 	s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: " " + name + " ", Style: uv.Style{Fg: th.Bg, Bg: modeColor, Attrs: uv.AttrBold}}}})
 	return s

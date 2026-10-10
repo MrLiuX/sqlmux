@@ -66,6 +66,7 @@ leader = "<Space>"
 "gc" = "grid.cols"
 "]" = "grid.page.next"
 "[" = "grid.page.prev"
+"s" = "jump.start" # flash-style jump to what is on the screen (F10.8)
 "m" = "grid.select.toggle" # mark the record; space is the leader, so not yazi's (F10.7)
 "v" = "grid.select.visual"
 "V" = "grid.select.visual"
@@ -103,6 +104,7 @@ leader = "<Space>"
 "/" = "tree.filter"
 "R" = "tree.refresh"
 "dd" = "tree.delete"
+"s" = "jump.start"
 ":" = "palette.open"
 ";" = "palette.sql"
 
@@ -115,6 +117,7 @@ leader = "<Space>"
 
 [keys.console] # NORMAL / VISUAL; everything else goes to the vim engine
 "<CR>" = "console.run"
+"s" = "jump.start" # over vim's s in NORMAL; in VISUAL it is the vim's still (F10.8)
 "gs" = "console.schema"
 
 [keys.palette] # quick SQL lives in the palette's SQL mode
@@ -204,6 +207,11 @@ leader = "<Space>"
 "A" = "cols.none"
 "/" = "cols.filter"
 "<Esc>" = "cols.close"
+
+[keys.jump] # a flash-style jump going on: the rest is the pattern, a label jumps (F10.8)
+"<Esc>" = "jump.cancel"
+"<BS>" = "jump.back"
+"<CR>" = "jump.confirm"
 
 [keys.sessions] # the session list (§7.8, S-03)
 "j" = "sessions.down"
