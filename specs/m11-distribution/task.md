@@ -49,7 +49,7 @@
 
 **开发**（§15「发布与分发」）
 - [ ] 照 esbuild / turbo 的做法：壳包 `sqlmux` 的 `optionalDependencies` 列出 `@kackerx/sqlmux-darwin-arm64`、`-darwin-x64`、`-linux-x64`、`-linux-arm64`（作用域 `@kackerx`，用户 2026-10-10 定），每个子包 `os` / `cpu` 字段限定平台、里面只有一个二进制；壳包的 `bin/sqlmux.js` 按 `process.platform` / `process.arch` `require.resolve` 子包里的二进制，`spawnSync` 带 `stdio: "inherit"` 执行，退出码透传，找不到子包时打印安装提示并退出 1。不用 postinstall 下载（pnpm 10 默认禁脚本，`--ignore-scripts` 会装出空包）。
-- [ ] release workflow 从 GoReleaser 的产物装好子包、把五个 package.json 的版本写成 tag、`npm publish --access public`（仓库密钥 `NPM_TOKEN`：用户自己注册 npm 账号 `kackerx`，作用域就是用户名；生成只有 publish 权限的 granular token，由决策者 `gh secret set NPM_TOKEN` 存进仓库）。
+- [ ] release workflow 从 GoReleaser 的产物装好子包、把五个 package.json 的版本写成 tag、`npm publish --access public`（仓库密钥 `NPM_TOKEN` 已于 2026-10-10 存进 `kackerx/sqlmux`：npm 账号 `kackerx`，token 名 `sqlmux`，package write、绕过 2FA、不过期；作用域 `@kackerx` 就是用户名，不用建组织）。
 - [ ] 细节（已定）：Windows 不出子包；壳包不带 `engines` 之外的依赖。
 
 **验收**
