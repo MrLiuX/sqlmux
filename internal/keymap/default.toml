@@ -45,6 +45,7 @@ leader = "<Space>"
 "gg" = "grid.top"
 "G" = "grid.bottom"
 "0" = "grid.first"
+"^" = "grid.first" # the same as 0: no indent here
 "$" = "grid.last"
 "<CR>" = "grid.edit"
 "i" = "grid.edit"

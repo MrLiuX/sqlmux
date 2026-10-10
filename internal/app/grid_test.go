@@ -270,6 +270,29 @@ func TestGridMoves(t *testing.T) {
 	}
 }
 
+// ^ is 0 (F9.3): to the first column, in the turned view too, and a user's
+// _ = "^" is it as well.
+func TestGridCaretIsZero(t *testing.T) {
+	a := configured(t, 100, 20, "[map.grid.normal]\n_ = \"^\"")
+	tab := loadOrders(t, a, 60)
+	for _, keys := range []string{"^", "_"} {
+		feed(t, a, "$")
+		if tab.col == 0 {
+			t.Fatal("$ did not move")
+		}
+		if feed(t, a, keys); tab.col != 0 {
+			t.Errorf("%s: column %d", keys, tab.col)
+		}
+	}
+	feed(t, a, "T$")
+	feed(t, a, "0")
+	row, col := tab.row, tab.col
+	feed(t, a, "$")
+	if feed(t, a, "^"); tab.row != row || tab.col != col {
+		t.Errorf("turned: ^ at %d,%d, 0 at %d,%d", tab.row, tab.col, row, col)
+	}
+}
+
 // T only turns the drawing: the cursor stays on its cell, and j walks the
 // fields (§7.6).
 func TestGridTranspose(t *testing.T) {
