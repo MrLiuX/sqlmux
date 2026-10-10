@@ -805,6 +805,18 @@ func (a *App) histApply(t *dataTab, i int) tea.Cmd {
 	return a.runWhere(t)
 }
 
+// histEdit puts the selected entry's WHERE in the input to be edited, in INSERT
+// at the end, and runs nothing: its ORDER and LIMIT are applied only by running
+// the entry (F9.1).
+func (a *App) histEdit(t *dataTab) {
+	es, _ := a.histEntries(t)
+	if t.hist.sel >= len(es) {
+		return
+	}
+	t.where.Text = es[t.hist.sel].q.Where
+	a.startWhere(t)
+}
+
 // histStar makes the selected entry a favorite, or no longer one.
 func (a *App) histStar(t *dataTab) tea.Cmd {
 	es, _ := a.histEntries(t)
@@ -877,6 +889,7 @@ func (a *App) histView(p *Pane, t *dataTab) (ui.Complete, uv.Rectangle, int) {
 	v := ui.Complete{Sel: t.hist.sel, Foot: bound(
 		ui.Hint{Key: a.hints("where", "/", "where.up", "where.down"), Label: i18n.T("移动")},
 		ui.Hint{Key: a.keys.Hint("where.apply", "where"), Label: i18n.T("应用"), Action: "where.apply"},
+		ui.Hint{Key: a.keys.Hint("where.edit", "where"), Label: i18n.T("填入"), Action: "where.edit"},
 		ui.Hint{Key: a.keys.Hint("where.star", "where"), Label: i18n.T("收藏 / 取消收藏"), Action: "where.star"},
 		ui.Hint{Key: a.keys.Hint("where.close", "where"), Label: i18n.T("关闭"), Action: "where.close"},
 	)}

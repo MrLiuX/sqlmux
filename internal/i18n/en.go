@@ -263,6 +263,8 @@ var en = map[string]string{
 	"手动事务模式下不能删表：先提交或回滚，或切回自动": "A table cannot be dropped in the manual transaction mode: commit or roll back first, or switch to auto",
 	"事务中不能删表：先提交或回滚":           "A table cannot be dropped in a transaction: commit or roll back first",
 	"命令面板：session":             "Command palette: sessions",
+	"填入输入框":                    "Put in the input",
+	"填入":                       "Put in",
 	"关闭菜单":                     "Close menu",
 	"树的右键菜单打开时（F8.23）":         "While the tree's right-click menu is open (F8.23)",
 	"先关掉它的 tab":                "Close its tab first",

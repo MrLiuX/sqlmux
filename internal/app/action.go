@@ -225,6 +225,7 @@ func init() {
 		"where.up":        {Title: i18n.N("上移"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { a.histMove(a.typingTab(), -1); return nil })},
 		"where.down":      {Title: i18n.N("下移"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { a.histMove(a.typingTab(), 1); return nil })},
 		"where.apply":     {Title: i18n.N("执行 WHERE"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { t := a.typingTab(); return a.histApply(t, t.hist.sel) })},
+		"where.edit":      {Title: i18n.N("填入输入框"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { a.histEdit(a.typingTab()); return nil })},
 		"where.star":      {Title: i18n.N("收藏 / 取消收藏"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { return a.histStar(a.typingTab()) })},
 		"where.close":     {Title: i18n.N("关闭下拉"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { a.typingTab().hist = nil; return nil })},
 		// C-r in the WHERE input or on the grid, or a click on its ▾ (Q-02, F9.4).

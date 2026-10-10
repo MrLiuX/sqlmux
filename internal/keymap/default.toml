@@ -148,6 +148,7 @@ leader = "<Space>"
 "<S-Tab>" = "where.up"
 "<Up>" = "where.up"
 "<CR>" = "where.apply"
+"<C-e>" = "where.edit"
 "<C-f>" = "where.star"
 "<Esc>" = "where.close"
 

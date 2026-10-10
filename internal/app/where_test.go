@@ -341,6 +341,39 @@ func TestWhereHistory(t *testing.T) {
 	}
 }
 
+// C-e in the list puts the selected entry's WHERE in the input: INSERT, the
+// cursor at the end, nothing run, its ORDER and LIMIT left where they are;
+// ↵ then runs what was edited (F9.1).
+func TestWhereHistoryEdit(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	wipe := strings.Repeat("<BS>", 20)
+	feed(t, a, "/id > 5<CR>")
+	tab.order, tab.limit = "amount", 500
+	feed(t, a, "/"+wipe+"status = 'done'<CR>")
+	tab.order, tab.limit = "", 100
+	feed(t, a, "/"+wipe+"<C-r>")
+	if es, _ := a.histEntries(tab); tab.hist == nil || len(es) != 2 || es[0].q.Where != "status = 'done'" {
+		t.Fatalf("the list: %+v", es)
+	}
+	applied := tab.applied
+	feed(t, a, "<C-e>")
+	if tab.hist != nil || tab.typing != "where" || tab.ed.Mode() != editor.Insert || tab.where.Text != "status = 'done'" || tab.where.Pos != len("status = 'done'") {
+		t.Fatalf("C-e: list %v, typing %q, mode %v, input %q at %d", tab.hist != nil, tab.typing, tab.ed.Mode(), tab.where.Text, tab.where.Pos)
+	}
+	if tab.applied != applied || tab.order != "" || tab.limit != 100 {
+		t.Errorf("run, or order / limit taken: applied %q order %q limit %d", tab.applied, tab.order, tab.limit)
+	}
+	feed(t, a, "<BS><BS><BS><BS><BS>new'<CR>")
+	if tab.applied != "status = 'new'" || tab.order != "" {
+		t.Errorf("edited, then ↵: applied %q order %q", tab.applied, tab.order)
+	}
+	// the hint of the key, in the list's foot
+	feed(t, a, "/<C-r>")
+	if f := a.render().String(); !strings.Contains(f, "C-e 填入") {
+		t.Errorf("the foot of the list:\n%s", f)
+	}
+}
+
 // A table's WHERE history keeps its last 100 runs (§9.7).
 func TestWhereHistoryRows(t *testing.T) {
 	a, tab, _ := withRecorder(t)
