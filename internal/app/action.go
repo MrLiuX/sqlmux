@@ -213,6 +213,15 @@ func init() {
 		"tree.refresh":  {Title: i18n.N("刷新表列表"), Run: func(a *App, _ Args) tea.Cmd { return a.refreshTree() }},
 		"tree.delete":   {Title: i18n.N("删除 console 文件、表、视图"), Run: func(a *App, _ Args) tea.Cmd { return a.treeDelete() }},
 		// Keys inside the dropdowns and the COLS list (§6.8): untitled, like the palette's.
+		"grid.ddl.column": {Title: i18n.N("列的定义"), Run: func(a *App, _ Args) tea.Cmd { return a.openDDL(true) }},
+		"grid.ddl.table":  {Title: i18n.N("表的 DDL"), Run: func(a *App, _ Args) tea.Cmd { return a.openDDL(false) }},
+		"ddl.down":        {Title: i18n.N("下移"), Local: true, Run: when(inDDL, func(a *App) tea.Cmd { a.scrollDDL(1, false); return nil })},
+		"ddl.up":          {Title: i18n.N("上移"), Local: true, Run: when(inDDL, func(a *App) tea.Cmd { a.scrollDDL(-1, false); return nil })},
+		"ddl.page.down":   {Title: i18n.N("向下滚动"), Local: true, Run: when(inDDL, func(a *App) tea.Cmd { a.scrollDDL(1, true); return nil })},
+		"ddl.page.up":     {Title: i18n.N("向上滚动"), Local: true, Run: when(inDDL, func(a *App) tea.Cmd { a.scrollDDL(-1, true); return nil })},
+		"ddl.top":         {Title: i18n.N("到顶"), Local: true, Run: when(inDDL, func(a *App) tea.Cmd { a.ddlEdge(false); return nil })},
+		"ddl.bottom":      {Title: i18n.N("到底"), Local: true, Run: when(inDDL, func(a *App) tea.Cmd { a.ddlEdge(true); return nil })},
+		"ddl.close":       {Title: i18n.N("关闭"), Local: true, Run: when(inDDL, func(a *App) tea.Cmd { a.ddl = nil; return nil })},
 		"menu.up":         {Title: i18n.N("上移"), Local: true, Run: when(inMenu, func(a *App) tea.Cmd { a.menuMove(-1); return nil })},
 		"menu.down":       {Title: i18n.N("下移"), Local: true, Run: when(inMenu, func(a *App) tea.Cmd { a.menuMove(1); return nil })},
 		"menu.run":        {Title: i18n.N("执行"), Local: true, Run: when(inMenu, func(a *App) tea.Cmd { return a.menuRun(a.menu.sel) })},
@@ -552,7 +561,7 @@ func title(action string) string {
 // run executes "id [arg]" from the registry.
 func (a *App) run(action string, count int) tea.Cmd {
 	id, arg, _ := strings.Cut(action, " ")
-	if a.menu != nil && !strings.HasPrefix(id, "menu.") && id != "cancel" { // what it has no key for is no one's: cancel is esc, which closes it (F8.23)
+	if a.menu != nil && !strings.HasPrefix(id, "menu.") && id != "cancel" || a.ddl != nil && !strings.HasPrefix(id, "ddl.") && id != "cancel" { // what it has no key for is no one's: cancel is esc, which closes it (F8.23, F9.8)
 		return nil
 	}
 	if !strings.HasPrefix(id, "cell.") && id != "cancel" && !a.endEdit() { // cancel is esc here, which ends it itself

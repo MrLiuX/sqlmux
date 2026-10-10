@@ -165,6 +165,9 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 	if a.menu != nil {
 		a.drawMenu(f)
 	}
+	if a.ddl != nil {
+		a.drawDDL(f)
+	}
 	if a.cols != nil {
 		d := a.colsView()
 		box, rows := a.colsBox(d)

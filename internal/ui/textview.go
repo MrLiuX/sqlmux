@@ -45,3 +45,32 @@ func (v TextView) Draw(f *Frame, area uv.Rectangle, bg uv.Style) {
 		at += len(l) + 1
 	}
 }
+
+// TextBox is a TextView in a box of its own, a title on its top border, over
+// everything else: a click outside it is a click on the backdrop (F9.8).
+type TextBox struct {
+	Title string
+	View  TextView
+}
+
+// Inner is where the text goes in a box: inside the border and a column of
+// padding.
+func (TextBox) Inner(box uv.Rectangle) uv.Rectangle {
+	return uv.Rect(box.Min.X+2, box.Min.Y+1, max(box.Dx()-4, 0), max(box.Dy()-2, 0))
+}
+
+func (b TextBox) Draw(f *Frame, box uv.Rectangle) {
+	th := f.Theme
+	f.Region(f.Bounds(), Target{Kind: KindBackdrop})
+	if box.Dx() < 6 || box.Dy() < 3 {
+		return
+	}
+	f.Region(box, Target{}) // inside, a click is not outside
+	f.Fill(box, uv.Style{Bg: th.PaneBg})
+	border := f.Border.Style(uv.Style{Fg: th.Focus, Bg: th.PaneBg})
+	border.Draw(f.Buf, box)
+	if b.Title != "" {
+		f.Text(box.Min.X+2, box.Min.Y, box.Max.X-1, " "+b.Title+" ", uv.Style{Fg: th.Focus, Bg: th.PaneBg, Attrs: uv.AttrBold})
+	}
+	b.View.Draw(f, b.Inner(box), uv.Style{Fg: th.Fg, Bg: th.PaneBg})
+}

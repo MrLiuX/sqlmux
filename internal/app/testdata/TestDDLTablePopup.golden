@@ -1,0 +1,45 @@
+┌─ ⓪  doraemon ─────── SPC b ─┐ ┌─ ①  t_order ───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  15 tables                 │ │ WHERE                                                                                                                C-r ▾ │
+│──────────────────────────────│ │  ORDER id    LIMIT 100   PAGE 1/?   COLS 7/7       │    │    │                                     auto · … 行 · 0s │
+│ ▾  doraemon                 │ │   │  id │ status  │ amount │ paid │ meta                       │ note                             │ created_at             │
+│   ▸  agentable              │ │───┼──────┼─────────┼────────┼──────┼────────────────────────────┼──────────────────────────────────┼────────────────────────│
+│   ▾  public                 │ │ 1 │    1 │ running │   1.99 │ t    │ {"n": 1, "tags": ["a", "b… │ note 1                           │ 2026-09-01 00:01:00+00 │
+│     ▾  Tables (14)          │ │ 2 │    2 │ done    │   2.99 │ t    │ {"n": 2, "tags": ["a", "b… │ line one↵line two after tab [31… │ 2026-09-01 00:02:00+00 │
+│       ▸  agent          ┌─ public.t_order ───────────────────────────────────────────────────────────────────────────────────────┐ │ 2026-09-01 00:03:00+00 │
+│       ▸  agent_version  │ create table public.t_order (                                                                          │ │ 2026-09-01 00:04:00+00 │
+│       ▸  goal           │   id bigint not null default nextval('t_order_id_seq'::regclass),                                      │ │ 2026-09-01 00:05:00+00 │
+│       ▸  mt_task        │   user_id bigint not null,                                                                             │                          │
+│       ▸  mt_task_log    │   status order_status not null default 'pending'::order_status,                                        │                          │
+│       ▸  schema_migratio│   amount numeric(10,2) not null,                                                                       │                          │
+│       ▸  t_order       1│   paid boolean,                                                                                        │                          │
+│       ▸  t_order_item  3│   meta jsonb,                                                                                          │                          │
+│       ▸  t_payment     4│   raw json,                                                                                            │                          │
+│       ▸  t_refund       │   note text,                                                                                           │                          │
+│       ▸  t_sku         8│   created_at timestamp with time zone not null default now(),                                          │                          │
+│       ▸  t_user         │   deleted_at timestamp with time zone,                                                                 │                          │
+│       ▸  t_user_address │   constraint t_order_pkey PRIMARY KEY (id),                                                            │                          │
+│       ▸  t_user_profile │   constraint t_order_user_id_fkey FOREIGN KEY (user_id) REFERENCES t_user(id)                          │                          │
+│        Views (0)        │ );                                                                                                     │                          │
+│ ▾  工作区               │ CREATE INDEX t_order_status ON public.t_order USING btree (status, id);                                │                          │
+│   ▾  data               │ comment on column public.t_order.status is 'where the order is';                                       │                          │
+│     ▾  pane-1           │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
+│            t_order      │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
+│ ▾  Consoles             │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
+│                          │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
+│                          │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
+│                          │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
+│                          │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
+│                          │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
+│                          │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
+│                          │ CREATE INDEX i ON public.t_order USING btree (id);                                                     │                          │
+│                          │ …                                                                                                      │                          │
+│                          └────────────────────────────────────────────────────────────────────────────────────────────────────────┘                          │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│──────────────────────────────│ │                                                                                                                             │
+│ j/k move · ↵ open            │ │ 1: t_order* │ +                                                                             hjkl · ↵ edit · T 转置 · gt/gT │
+└──────────────────────────────┘ └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ doraemon ▾  0: data*                                                                                       ·    1,1   doraemon · pg@localhost:5432  COMMAND 

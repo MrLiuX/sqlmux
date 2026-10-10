@@ -138,6 +138,17 @@ leader = "<Space>"
 "<CR>" = "menu.run"
 "<Esc>" = "menu.close"
 
+[keys.ddl] # the table's DDL over the grid (§7.5, F9.8); the column's goes with any key
+"j" = "ddl.down"
+"<Down>" = "ddl.down"
+"k" = "ddl.up"
+"<Up>" = "ddl.up"
+"<C-d>" = "ddl.page.down"
+"<C-u>" = "ddl.page.up"
+"gg" = "ddl.top"
+"G" = "ddl.bottom"
+"<Esc>" = "ddl.close"
+
 [keys.complete] # §9.7: ↵ (takes the selected one and does no more, F8.1; with none selected it is the input's, F8.17) and esc are the input's; in quick SQL the palette's keys come next
 "<Tab>" = "complete.down"
 "<C-n>" = "complete.down"

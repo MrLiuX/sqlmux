@@ -499,7 +499,13 @@ func (a *App) fetchDDL(m previewDue) tea.Cmd {
 		m.p.fetches, m.p.stop = context.WithCancel(context.Background())
 		a.fetching = m.p
 	}
-	meta, eng, ctx := conn.Meta, conn.eng, m.p.fetches
+	return a.ddlCmd(m.p.fetches, conn, t)
+}
+
+// ddlCmd reads t's DDL, and a table's columns, on conn's Meta, in ctx and for
+// countTimeout at most.
+func (a *App) ddlCmd(ctx context.Context, conn *Conn, t db.Table) tea.Cmd {
+	meta, eng := conn.Meta, conn.eng
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, countTimeout)
 		defer cancel()
