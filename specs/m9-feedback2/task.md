@@ -1,12 +1,12 @@
 # M9 第二轮使用反馈 · 任务清单
 
-- **状态**：**todo**（2026-10-10 用户在 M8 验收期间提出 10 条，决策者拆成 F9.1–F9.9；另外两条只改用户自己的配置：`SPC p` 改成 session 列表、表格默认转置 `[grid] transpose = true`）。M8 全部 passed 之后开工。
+- **状态**：**todo**（2026-10-10 用户在 M8 验收期间提出 10 条，决策者拆成 F9.1–F9.10；另外两条只改用户自己的配置：`SPC p` 改成 session 列表、表格默认转置 `[grid] transpose = true`）。M8 全部 passed 之后开工。
 - **目标**：WHERE 历史 / 收藏的几处顺手操作，表格的 `^`、`C-r`、复制为 JSON，缩放提示，DDL 的查看（面板预览可滚动、表格里看列 / 表的定义）。
 - **范围**：tech-design §7.5（表格键）、§7.8（pane 标题、WHERE）、§9.6（历史 / 收藏下拉）、§12（DDL 预览）。
 - **依赖**：M8 F8.1–F8.23 passed。
 - **完成标准**：F9.1–F9.8 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m9`。
 - **审查节点**：
-  1. F9.5 之后：F9.1–F9.5、F9.9 一批（WHERE 和表格的小改动，加一个面板入口）；
+  1. F9.5 之后：F9.1–F9.5、F9.9、F9.10 一批（WHERE 和表格的小改动、session 的几个命令）；
   2. F9.8 之后：F9.6–F9.8 一批（缩放提示、DDL 查看）。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
@@ -140,7 +140,21 @@
 - **涉及**：`internal/app`
 
 **开发**（§6.8）
-- [ ] `palette.session`「命令面板：session」= 打开面板并输入 `$`，同 `palette.window` / `palette.tab` / `palette.table`。不带默认键。旧的 session 列表（`session.list`，`SPC s`）保留，以后要不要去掉由决策者另定。
+- [ ] `palette.session`「命令面板：session」= 打开面板并输入 `$`，同 `palette.window` / `palette.tab` / `palette.table`。不带默认键。session 列表（`session.list`）保留：用户 2026-10-10 想过一遍，session 没几个，`j` / `k` 就够，`SPC p` 仍是列表；面板的入口照加。
 
 **验收**
 - [ ] 单测：执行后面板打开、范围是 session。
+
+## F9.10 上一个 / 下一个 / 上次用的 session · 状态：todo
+
+用户 2026-10-10：session 列表留着，再加切 session 的三个命令，同 window 的 `SPC n` / `SPC p` / `SPC l`。
+
+- **依赖**：F5.1
+- **涉及**：`internal/app`、`internal/keymap/default.toml`
+
+**开发**（§6.8）
+- [ ] `session.next`「下一个 session」、`session.prev`「上一个 session」（按 session 列表的顺序，到头绕回）、`session.last`「上次用的 session」（上一次 attach 的，没有时无事）。默认键照 tmux：`SPC )`、`SPC (`、`SPC L`（`[keys.normal]`）。attach 的规则同列表里的 `↵`。
+
+**验收**
+- [ ] 单测：三个 session 时 next / prev 绕回；last 在两个之间来回；只有一个 session 时无事。
+- [ ] e2e：`SPC )` 状态栏的 session 块换了；`SPC L` 回来。
