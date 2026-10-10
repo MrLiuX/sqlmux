@@ -22,7 +22,7 @@
 - **涉及**：`internal/ui`（CompleteBox）、`internal/app`
 
 **开发**（§9.6）
-- [ ] WHERE 下拉的高度：从输入框下一行起，往下撑到 data pane 内容区的底边，留出提示行；条目比这还多时滚动。补全列表（console、WHERE 的补全）仍是 8 行。
+- [ ] WHERE 下拉的高度：取「data pane 内容区底边放得下的」和「原来的 min(条目数, 8, 窗口剩余)」中的大者，不超过条目数（pane 矮时不比现在少）；CompleteBox 加行数上限参数，补全列表（console、WHERE 的补全）仍传 8。
 - [ ] 细节（已定）：不加配置项。
 
 **验收**
@@ -52,7 +52,7 @@
 
 **开发**（§7.8「COLS」）
 - [ ] `[keys.cols]` 加 `J` = `cols.move.down`「下移」、`K` = `cols.move.up`「上移」：当前项和相邻项换位，表格的列顺序立刻跟着变，光标仍在原来那一列上。过滤框非空时不动。
-- [ ] 顺序和隐藏一样按 tab 记，和隐藏列用同一处存法；`yy`、`yi`、`Y`、转置视图都按显示顺序。
+- [ ] 顺序和隐藏一样按 tab 记，布局文件加 `order_cols`（§14）；刷新后新出现的列排最后，已删除的列去掉；`yy`、`yi`、`Y`、转置视图都按显示顺序。
 - [ ] 底部提示加 `J/K move`（从 keymap 读）。
 
 **验收**
@@ -68,7 +68,7 @@
 
 **开发**（§11、§14）
 - [ ] `[console] max_rows` 默认 500。
-- [ ] 翻页只对被自动 LIMIT 的语句生效（顶层没写 LIMIT / FETCH 的读语句）：`[keys.result]` 加 `]` = `result.page.next`、`[` = `result.page.prev`，在结果 tab 所属 console 的连接上重跑同一条语句，追加 `LIMIT max_rows+1 OFFSET 页号×max_rows`（走 §9.4 的追加，不包子查询）；结果替换这个 tab 的内容。下一页只在截断时有效，上一页只在第 2 页起有效，其余按了无事。自己写了 LIMIT 的和写语句没有翻页。
+- [ ] 翻页只对被自动 LIMIT 的语句生效（顶层没写 LIMIT / FETCH 的读语句）：`[keys.result]` 加 `]` = `result.page.next`、`[` = `result.page.prev`，在结果 tab 所属 console 的连接上重跑同一条语句，追加 `LIMIT max_rows+1 OFFSET 页号×max_rows`（走 §9.4 的追加，不包子查询）；结果替换这个 tab 的内容。下一页只在截断时有效，上一页只在第 2 页起有效，其余按了无事。自己写了 LIMIT 或 OFFSET 的、写语句、快速 SQL 送来的结果没有翻页。翻页只换这一个 tab（结果 tab 记语句序号、offset、是否被自动 LIMIT；把 run 里在 Main 上跑的那段抽成函数复用），兄弟 tab 和固定的 tab 不动，取回期间保留旧内容，完成后写一行日志。
 - [ ] 标题和日志的行数文字：第 1 页照旧 `500+ 行`；之后 `501–1000+ 行`（还有更多）/ `1001–1203 行`（最后一页）。`R` 重跑回第 1 页。固定的 tab 同样能翻。
 - [ ] 已知上限（写进 §11）：没有 ORDER BY 时两页可能重叠或漏行，同 DataGrip。
 
@@ -118,16 +118,16 @@
 - **涉及**：`internal/app`（grid）、`internal/ui`（grid 绘制）、`internal/keymap/default.toml`
 
 **开发**（§6.4 `select` 作用域、§6.8、§7.6「选择」）
-- [ ] 选择的单位是记录（竖直视图一行，转置视图一列），选中集按 tab 记。`space`（`grid.select.toggle`）切换光标所在记录，不进 VISUAL。`v` / `V`（`grid.select.visual`）进 VISUAL：锚点是当前记录，移动改变范围，范围内的记录和 `space` 选的合并算选中；`esc` 或再按 `v` 退出 VISUAL，范围并入选中集（yazi）。模式块显示 VISUAL。
-- [ ] `select` 作用域：有选中或在 VISUAL 时生效，叠在 `grid` 之上。`d`（`grid.select.delete`）：对选中的记录做 `dd` 的标记删除，全部已标记时全部取消；`y`（`grid.select.yank`）：复制为 JSON 数组（按显示顺序，格式同 `Y`，复制后闪一下序号格）；两者之后清空选中、退出 VISUAL。`esc`（`grid.select.clear`）在 NORMAL 有选中时清空。`d`、`y` 立即执行，不因为下层 `grid` 的 `dd` / `yy` 等 `timeoutlen`（上层的完整绑定优先）。
+- [ ] 选择的单位是记录（竖直视图一行，转置视图一列），选中集按 tab 记。`m`（`grid.select.toggle`，标记）切换光标所在记录，不进 VISUAL（不用 yazi 的 `space`：它是 leader，单按要等 `timeoutlen`，`space j` 又是用户的 `SPC j`）。`v` / `V`（`grid.select.visual`）进 VISUAL：锚点是当前记录，移动改变范围，范围内的记录和 `m` 标记的合并算选中；`esc` 或再按 `v` 退出 VISUAL，范围并入选中集（yazi）。模式块显示 VISUAL。
+- [ ] `select` 作用域：有选中或在 VISUAL 时生效，叠在 `grid` 之上。`d`（`grid.select.delete`）：对选中的记录做 `dd` 的标记删除，全部已标记时全部取消；`y`（`grid.select.yank`）：复制为 JSON 数组（按显示顺序，格式同 `Y`，复制后闪一下序号格）；两者之后清空选中、退出 VISUAL。`esc`（`grid.select.clear`）在 NORMAL 有选中时清空。`d`、`y` 立即执行，不因为下层 `grid` 的 `dd` / `yy` 等 `timeoutlen`：解析器加「完整绑定优先」的作用域标记，只对 `select` 生效（§6.4）。
 - [ ] 高亮：选中记录的序号格（竖直：左侧行号；转置：顶部记录号）用 `visual` 底；VISUAL 里的范围同样。chip 行的计数后面加 ` · 3 selected`（i18n）。
 - [ ] 换页、刷新、改 WHERE / ORDER / LIMIT 后清空选中；转置不清。
 - [ ] 细节（已定）：没有鼠标选择；`o` 换锚点不做。
 
 **验收**
-- [ ] 单测：`space` 在 1、3 行，`d` 后两行都标删除、选中清空；`v` `2j` `esc` 后三行选中、模式回 NORMAL；`v` `j` `y` 剪贴板是两条记录的 JSON 数组；有选中时 `d` 不等超时；无选中时 `dd` 照旧；转置下 `v` `l` 选两条记录。
+- [ ] 单测：`m` 在 1、3 行，`d` 后两行都标删除、选中清空；`v` `2j` `esc` 后三行选中、模式回 NORMAL；`v` `j` `y` 剪贴板是两条记录的 JSON 数组；有选中时 `d` 不等超时；无选中时 `dd` 照旧；转置下 `v` `l` 选两条记录。
 - [ ] golden：竖直和转置两种高亮。
-- [ ] e2e：`space` `j` `j` `space` `d` `C-s` 后两行真删。
+- [ ] e2e：`m` `j` `j` `m` `d` `C-s` 后两行真删。
 
 ## F10.8 flash 式跳转 · 状态：todo
 

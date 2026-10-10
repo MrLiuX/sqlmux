@@ -276,7 +276,7 @@ type Action struct {                // 注册表是 map[id]Action，id 如 "pane
 | `cell` | 正在编辑单元格（INSERT） |
 | `input` | 任意单行输入框获得焦点（INSERT） |
 | `result` | result pane 获得焦点时生效，优先级在 `grid` 之上（如 `P`、`q`）；其余按键落到 `grid` |
-| `select` | 表格有选中的记录、或在 VISUAL 扩选时生效，叠在 `grid` / `result` 之上（M10 F10.7，§7.6「选择」）：`d` / `y` 对选中的记录生效、`esc` 清空；它们是完整绑定，上层优先，不因为下层的 `dd` / `yy` 等 `timeoutlen` |
+| `select` | 表格有选中的记录、或在 VISUAL 扩选时生效，叠在 `grid` / `result` 之上（M10 F10.7，§7.6「选择」）：`d` / `y` 对选中的记录生效、`esc` 清空；它们是完整绑定，上层优先，不因为下层的 `dd` / `yy` 等 `timeoutlen`：解析器合并 trie 时，`select` 是「完整绑定优先」的作用域，挂在它已绑节点下面的下层更长序列不并进来（Context 里指定，只对 `select` 生效；别的作用域照旧先到先得、更长序列仍挂在下面） |
 | `jump` | flash 式跳转进行中（M10 F10.8，§6.10）：`esc`、`backspace`、`↵`；其余可打印字符进模式，不经过别的作用域 |
 | `grid` / `tree` / `console` / `landing` | 对应控件获得焦点：按 pane 当前 tab 的类型，表格 → grid，console → console，引导页和没有 tab 的 pane → landing（M3 F3.7）。`console` 只含应用层的键（如 ↵ 执行），其余按键交给 vim 引擎；`gq` 是编辑器的操作符（§9.5） |
 | `normal` | 所有 NORMAL 上下文共用：pane 焦点、leader、gt/gT。`:`、`;` M3 起在 grid / tree / landing 里（§6.8） |
@@ -387,7 +387,7 @@ H = "0"
 | 表格 | `yy` · `yl` · `p` · `yi` · `Y` | 复制整行 · 复制单元格 · 把复制的行粘贴成新行 · 把行复制为 INSERT 语句（F3.32 起 `yy` 从单元格改为整行）· 把行复制为 JSON（M9 F9.5） | y / yi |
 | 表格 | `0` / `^` · `$` | 首列（`^` 是 M9 F9.3 加的，用户要映射 `_`）· 末列 | 0 / $ |
 | 表格 | `r` · `o` · `dd` | 撤回这一格的修改 · 新增一行 · 标记 / 取消删除这一行（§10.1、§10.6） | 新增（M2/M3 验收） |
-| 表格 | `space` · `v` / `V` · `s` | 选中 / 取消光标所在的记录 · 进 VISUAL 扩选（§7.6「选择」）· flash 式跳转（§6.10）（M10 F10.7、F10.8；result 同） | 新增（M10） |
+| 表格 | `m` · `v` / `V` · `s` | 标记 / 取消标记光标所在的记录 · 进 VISUAL 扩选（§7.6「选择」）· flash 式跳转（§6.10）（M10 F10.7、F10.8；result 同） | 新增（M10） |
 | NORMAL | `?` | 键位帮助（§6.5），所有 pane 通用，绑在 `[keys.normal]`（F3.25 起；原来在 grid / tree / landing 各绑一个） | 新增（M2/M3 验收） |
 | NORMAL | `<leader>?` | 键位帮助，哪里都能用 | 新增（M2/M3 验收） |
 | result | `P` · `q` | 固定当前结果 tab · 关闭当前结果 tab | P / q（原为固定 / 关闭 pane） |
@@ -615,7 +615,7 @@ type Hit struct {
   - **点击单元格**：命中区 Kind 为 `cell`，点击等于依次执行 `pane.focus` 和 `grid.goto r c`（§7.4），M1 F1.3 就做。
   - 已修改的单元格用 `warn` 色文字、`edited_bg` 底色、点状下划线（SGR 4:4）。终端不支持点状下划线时，退化为普通下划线。
 - **转置（G-05）只影响渲染**：`GridState` 始终保存数据坐标（游标 Row / Col 和视图偏移 Top / Left 都是），按键时把屏幕方向换算成数据方向，所以光标位置、视图和修改标记在两种视图之间自然保持。转置后：表头行是记录的行号（当前记录的行号用绿色），第一列是字段名（`func` 色，主键带钥匙图标），每一行按字段的类型着色；`j` / `k` 在字段间移动，`h` / `l` 在记录间移动，`0` / `$` 到第一条 / 最后一条记录，`gg` / `G` 到第一个 / 最后一个字段。
-- **选择（M10 F10.7，照 yazi）**：选择的单位是记录（竖直视图一行，转置视图一列），选中集按 tab 记。`space`（`grid.select.toggle`）切换光标所在的记录，不进 VISUAL；`v` / `V`（`grid.select.visual`）进 VISUAL，锚点是当前记录，之后的移动（`j` / `k`，转置下 `h` / `l`，以及 `gg` / `G`、`0` / `$`）改变范围，范围内的记录和 `space` 选的合并算选中，模式块显示 VISUAL；`esc` 或再按 `v` 退出 VISUAL，范围并入选中集。有选中或在 VISUAL 时 `select` 作用域生效（§6.4）：`d`（`grid.select.delete`）对选中的记录做 `dd` 的标记删除，全部已标记时全部取消，`C-s` 才真删；`y`（`grid.select.yank`）复制为 JSON 数组，按显示顺序，每条的格式同 `Y`，复制后序号格闪一下 `yank` 色；两者之后清空选中、退出 VISUAL；NORMAL 下有选中时 `esc`（`grid.select.clear`）清空。高亮：选中记录的序号格（竖直视图是左侧行号，转置视图是顶部记录号）用 `visual` 底，VISUAL 里的范围同样；chip 行的计数后面加 ` · 3 selected`。换页、刷新、改 WHERE / ORDER / LIMIT 取回新数据后清空选中，转置不清。不做鼠标选择，不做 `o` 换锚点。
+- **选择（M10 F10.7，照 yazi）**：选择的单位是记录（竖直视图一行，转置视图一列），选中集按 tab 记。`m`（`grid.select.toggle`，标记）切换光标所在的记录，不进 VISUAL（yazi 用 `space`，这里 `space` 是 leader：单按要等 `timeoutlen`，`space j` 又是用户的 `SPC j`，所以换成 vim 标记的 `m`；worker 开工时提出）；`v` / `V`（`grid.select.visual`）进 VISUAL，锚点是当前记录，之后的移动（`j` / `k`，转置下 `h` / `l`，以及 `gg` / `G`、`0` / `$`）改变范围，范围内的记录和 `m` 标记的合并算选中，模式块显示 VISUAL；`esc` 或再按 `v` 退出 VISUAL，范围并入选中集。有选中或在 VISUAL 时 `select` 作用域生效（§6.4）：`d`（`grid.select.delete`）对选中的记录做 `dd` 的标记删除，全部已标记时全部取消，`C-s` 才真删；`y`（`grid.select.yank`）复制为 JSON 数组，按显示顺序，每条的格式同 `Y`，复制后序号格闪一下 `yank` 色；两者之后清空选中、退出 VISUAL；NORMAL 下有选中时 `esc`（`grid.select.clear`）清空。高亮：选中记录的序号格（竖直视图是左侧行号，转置视图是顶部记录号）用 `visual` 底，VISUAL 里的范围同样；chip 行的计数后面加 ` · 3 selected`。换页、刷新、改 WHERE / ORDER / LIMIT 取回新数据后清空选中，转置不清。不做鼠标选择，不做 `o` 换锚点。
 - **转置时列宽不按比例收缩**：一页 100 条记录横排时，收缩下去每列只剩行号那么宽，什么都看不见；所以转置视图各列取期望宽度，放不下就横向滚动。
 - **悬停行**（G-06）：指针所在的行用 `row` 底，不移动光标，与树一致。**点击行号**（G-04）：光标移到那一行，列不变，等于 `grid.goto r <当前列>`；命中区 Kind 为 `rowno`。
 - **视图跟随光标**：光标移出视图时视图跟着滚，保证光标所在的列完整可见；这个计算在 `ui.Grid` 里，app 每次移动后调用并把结果存下来，这样上移时视图不会跳回顶部（与 vim 相同）。滚轮只滚视图：纵向每格 3 行，最多滚到最后一行贴底；Shift + 滚轮和横向滚轮每格 1 列；两种滚动都把光标夹回视图内（与树一致）。
@@ -748,7 +748,7 @@ table   = { fg = "#a9dc76" }                     # 只换颜色
   - **ORDER**（`go`）：通用下拉框列出所有列，第一项「默认」即按行标识列排。在当前排序列上按 `↵` 翻转方向，在别的列上按 `↵` 按 `[grid] order` 的方向（默认 asc；M8 F8.8，用户常倒序看最新数据，配成 desc 后新打开的表和新选的列都先降序；布局文件里记的方向优先）；只支持单列（Q-03）。默认排序时 chip 上显示的那一列（行标识列；复合键时是它的第一列）就算当前排序列：chip 显示 `id ↑` 时选 `id` 得到 `id ↓`，chip 显示 `occurred_at,id ↑` 时选 `occurred_at` 得到 `occurred_at ↓`，不能只是从「默认」变成显式的 `id ↑`，否则用户看着 chip 会以为按了没反应（tester 在 F1.4 提出）。SQL 为 `ORDER BY <列> <方向>, <行标识列>`，行标识列作 tiebreaker 保证分页稳定，选的就是行标识列时不重复。换了排序后回到第 1 页（和 LIMIT 一样）。chip 默认显示行标识列 `id` 加升序图标，没有行标识列时显示 `—`、不画方向图标。点击方向图标切换升降序（Action `grid.order.toggle`，标题「切换排序方向」，没有默认键），规则同上：默认排序时点击得到行标识列降序；行标识列是复合键时（如 `occurred_at, id`），得到按第一列降序，其余键列照旧作 tiebreaker，与下拉框里选第一列的规则一致；点击 chip 的其余部分仍打开下拉框（设计稿如此，M1 用户反馈）。
   - **LIMIT**（`gl`）：同一个下拉框，100 / 500 / 1000，换了之后回到第 1 页。过滤框里可以直接输入正整数作为自定义的每页行数（M1 用户反馈）：输入是正整数时，候选第一项就是这个数，`↵` 应用，后面照旧列出匹配到的 100 / 500 / 1000；超过 10000 按 10000，因为一页数据全在内存里，再大会卡。`0`、负数、小数不当数字，照常过滤。
   - **PAGE**（`gp`）：chip 原地变成页码输入框 `PAGE [3_]/60`（INSERT），`↵` 跳页（超出范围夹到边界），`esc` 放弃。总页数在计数未知时是 `?`，估计值加 `~`。`]` / `[` 翻页：已是最后一页（没有下一页）时 `]` 不起作用，第 1 页时 `[` 不起作用。翻页后光标的行、列保留，夹在新页范围内。
-  - **COLS**（`gc`）：打开时焦点在列表上：`j` / `k` 移动、`space` 勾选、`a` / `A` 全选 / 全不选、`esc` 先清空过滤再关闭；`/` 进过滤框（模式仍是 COMMAND），`↵` 或 `esc` 回列表，过滤文字保留。每行 `[x] 列名  类型` 加主键标记，顶部显示匹配数。`J` / `K` 把这一列下移 / 上移一位（M10 F10.3）：和相邻项换位，表格的列顺序立刻跟着变，光标仍在原来那一列上；过滤框非空时不动；底部提示 `J/K move`。顺序和隐藏的列都按 tab 记住、同一处存法，`yy`、`yi`、`Y`、转置视图都按显示顺序；隐藏的正好是光标所在列时，光标挪到最近的可见列。chip 显示 `可见列数/总列数`。键位在 `[keys.cols]`。
+  - **COLS**（`gc`）：打开时焦点在列表上：`j` / `k` 移动、`space` 勾选、`a` / `A` 全选 / 全不选、`esc` 先清空过滤再关闭；`/` 进过滤框（模式仍是 COMMAND），`↵` 或 `esc` 回列表，过滤文字保留。每行 `[x] 列名  类型` 加主键标记，顶部显示匹配数。`J` / `K` 把这一列下移 / 上移一位（M10 F10.3）：和相邻项换位，表格的列顺序立刻跟着变，光标仍在原来那一列上；过滤框非空时不动；底部提示 `J/K move`。顺序和隐藏的列都按 tab 记住、同一处存法（布局文件的 `order_cols`，§14），`yy`、`yi`、`Y`、转置视图都按显示顺序；隐藏的正好是光标所在列时，光标挪到最近的可见列。chip 显示 `可见列数/总列数`。键位在 `[keys.cols]`。
   - **WHERE**（F3.39 起是一行的 vim 编辑器，同 console：INSERT 下 `esc` 到 NORMAL，NORMAL 下能用 `dd`、`ciw` 这类操作，`/` 打开历史 / 收藏下拉；NORMAL 下再 `esc` 才回表格。F6.6 关掉 vim 模式时是普通输入框）：`↵` 应用输入、回到第 1 页、重新取数和计数、焦点回表格；回表格时输入框恢复成当前生效的那条，所以输入框显示的总是正在生效的条件；执行出错时例外，失败的条件留在输入框里。报错显示在 pane 底部的错误栏（§7.8「错误栏」），查询条仍在上面，方便改了再执行。
   - **`R`**（`grid.refresh`）：按当前 WHERE / ORDER / LIMIT / PAGE 重新取当前页并重新计数。
 - **tab 栏**：
@@ -1041,7 +1041,7 @@ MySQL 的 schema 就是 database（M5 F5.4 定，同 DataGrip）：树里 MySQL 
   - PG 的表格查询走扩展协议，协议本身就拒绝多条语句；MySQL 不开启 `multiStatements`。
   - 发送之前，扫描器如果在顶层发现 `;`，直接提示错误，不发送：在 pane 底部的错误栏显示「WHERE 里不能有 ;」（F3.20 起，此前在内容区第一行）（M3 F3.5 起；在此之前由 PG 的扩展协议报错）。这样可以防止类似 `1=1; drop table t` 的输入连带执行其他语句。
 - **历史 / 收藏**：保存输入原文。
-  - 下拉框的高度（M10 F10.1，用户要看到更多候选）：从输入框下一行起往下撑到 data pane 内容区的底边，留出提示行，条目更多时滚动；不加配置项。补全列表仍是 8 行（§9.7）。
+  - 下拉框的高度（M10 F10.1，用户要看到更多候选）：行数取「data pane 内容区底边放得下的」和「原来的 min(条目数, 8, 窗口剩余)」中的大者，再不超过条目数，所以 pane 矮时不比现在少、可以照旧盖到结果区；不加配置项。补全列表仍是 8 行（§9.7）。
 - **补全**：见 §9.7。
 
 ### 9.7 模糊匹配与补全（console、WHERE）
@@ -1341,7 +1341,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
 
 - 在 NORMAL 或 VISUAL 下按 `↵`、点击 gutter 的 ▶、点击标题栏的 `▶ run` 都可以执行。有选区时执行选区（块选区执行它覆盖到的那几整行，同 V-LINE），执行后退出 VISUAL、光标不动，同 vim 的操作符；要再跑一次用 `gv` 重新选中，或点结果区的重跑。否则执行光标所在的语句。点 gutter 的 ▶ 执行那一行开始的语句，不移动光标。
 - 每次最多取 `console.max_rows` 行（默认 500，M10 F10.4 起；原来 1000），读语句用自动 LIMIT（§9.4），其余靠 `Exec` 的 `maxRows` 截断；截断时显示 `500+ 行`。
-- **翻页**（M10 F10.4，照 DataGrip 的 `501-1,000 / 1,001+`）：只对被自动 LIMIT 的语句有效（顶层没写 LIMIT / FETCH 的读语句）。结果区聚焦时 `]` / `[`（`result.page.next` / `result.page.prev`，`[keys.result]`）在这个 tab 所属 console 的连接上重跑同一条语句，追加 `LIMIT max_rows+1 OFFSET 页号×max_rows`（走 §9.4 的追加，不包子查询），结果替换 tab 的内容；下一页只在截断时有效，上一页只在第 2 页起有效，其余按了无事；自己写了 LIMIT 的和写语句没有翻页。标题和日志的行数文字：第 1 页照旧 `500+ 行`，之后 `501–1000+ 行`（还有更多）/ `1001–1203 行`（最后一页）。`R` 重跑回第 1 页，固定的 tab 同样能翻。手动事务模式下翻页就是在事务里再执行一条，同执行语句。已知上限：没有 ORDER BY 时两页可能重叠或漏行，DataGrip 一样。
+- **翻页**（M10 F10.4，照 DataGrip 的 `501-1,000 / 1,001+`）：只对被自动 LIMIT 的语句有效（顶层没写 LIMIT / FETCH 的读语句）。结果区聚焦时 `]` / `[`（`result.page.next` / `result.page.prev`，`[keys.result]`）在这个 tab 所属 console 的连接上重跑同一条语句，追加 `LIMIT max_rows+1 OFFSET 页号×max_rows`（走 §9.4 的追加，不包子查询），结果替换 tab 的内容；下一页只在截断时有效，上一页只在第 2 页起有效，其余按了无事；自己写了 LIMIT 的和写语句没有翻页。标题和日志的行数文字：第 1 页照旧 `500+ 行`，之后 `501–1000+ 行`（还有更多）/ `1001–1203 行`（最后一页）。`R` 重跑回第 1 页，固定的 tab 同样能翻。翻页只换这一个 tab：只跑这一条语句（结果 tab 记着语句序号、offset、是否被自动 LIMIT），同一次 run 的兄弟 tab 和固定的 tab 不动；取回期间保留旧内容、不弹占位、按键忽略，tab 名不变，完成后写一行日志（同执行语句）。顶层带 OFFSET 的语句不翻页（否则拼出两个 OFFSET）；快速 SQL 送到结果区的结果（`C-t`，不属于任何 console）不翻页。手动事务模式下翻页就是在事务里再执行一条，同执行语句。已知上限：没有 ORDER BY 时两页可能重叠或漏行，DataGrip 一样。
 - 在所选连接的 `Main` 的一次 `Worker.Run` 里逐条执行，每条是单独的简单协议请求：自动事务模式下各自自动提交；手动模式下（F5.3）每条语句前 `Main` 不在事务里就先 BEGIN（照 psql 在 AUTOCOMMIT off 时的 SendQuery：一次执行里 commit 之后的语句也在新事务里），psql `command_no_begin` 列出的语句不补 BEGIN（事务控制、VACUUM、CREATE / DROP DATABASE、带 CONCURRENTLY 的、ALTER SYSTEM、DISCARD ALL 等，按 psql 源码定），出错后事务停在出错状态，由用户回滚。console 有执行在跑时不能关（关 tab、pane、window），toast「正在执行，结束后再关闭」，同换连接的规则：否则执行回来后连接停在事务里，上面却没有 console 了。遇到错误就停，后面的不执行。不一次发出整段：PG 简单协议里一次发送的多条语句属于同一个隐式事务，一条出错全部回滚，也没法知道错在哪一条、把哪个 ▶ 标红。
 - 首个关键字是 create / alter / drop / rename（MySQL 的 `RENAME TABLE`，F5.4；PG 的改名是 `ALTER … RENAME`）的语句成功后，重新加载这个 console 所在连接的 catalog、清空列缓存（同 `tree.refresh`）。
 - 用户在自动模式下自己 `begin`：`Main` 进了事务，这个连接上表格的保存也进这个事务、不自动提交（§10.3）；状态栏显示「事务中」（§7.8），提交、回滚同手动模式（M5 F5.3 起，原来是已知上限）。
@@ -1532,7 +1532,7 @@ WHERE pk = $2 AND format('%s', c1) = $3 AND c2 IS NULL
   - key 仍是中文原文（F7.6 时定）：改成英文 key 要动 300 多处文案且不改任何行为，不值；代价是读代码的人看到的是中文 key，`en` 表就是对照。
   - 测试：单测扫一遍所有包，找出没走翻译的中文字面量；`en` 表里缺的条目也由单测报出来。单测和 golden 照旧按 `zh` 断言（各包的 TestMain 里 `Set("zh")`），`en` 的几张 golden 照旧，默认是英文这件事由 i18n / config / cmd 的单测直接盖；e2e 的 `lib.sh` 在每个脚本的 config.toml 里补 `language = "zh"`（脚本自己写了就不补，同 `confirm_dangerous`），已有的中文断言不动，默认英文和 `language = "zh"` 各由一个脚本验证。
 - **布局文件**（M6 F6.5，用户 2026-09-30 提出，细节 2026-10-05 按 worker 的提议定）：
-  - **格式**：TOML，`version = 1`；每个 `[[session]]` 记 `name`、`connection`（启动连接）、`active`；每个 `[[session.window]]` 记 `name`、`layout`（分割树，TOML 表：`split = "h" | "v"`、`ratio`、`a`、`b`，叶子是 `pane = <id>`；程序写成子表 `[session.window.layout.a]`，手写成内联表也能读）、`focus`、`zoom`、`sidebar_open`、`sidebar_width`、`result_height`；每个 `[[session.window.pane]]` 记 `id` 和它的 tab：表 tab 是 `kind = "table"`、`connection`、`schema`、`table`、`where`、`order`、`desc`、`limit`、`page`、`cols`（隐藏的列）、`transpose`；console tab 是 `kind = "console"`、`n`、`connection`、`schema`；再记当前 tab。不存：结果集、正在跑的查询、未保存的单元格修改（退出前本来就要确认）、引导页。
+  - **格式**：TOML，`version = 1`；每个 `[[session]]` 记 `name`、`connection`（启动连接）、`active`；每个 `[[session.window]]` 记 `name`、`layout`（分割树，TOML 表：`split = "h" | "v"`、`ratio`、`a`、`b`，叶子是 `pane = <id>`；程序写成子表 `[session.window.layout.a]`，手写成内联表也能读）、`focus`、`zoom`、`sidebar_open`、`sidebar_width`、`result_height`；每个 `[[session.window.pane]]` 记 `id` 和它的 tab：表 tab 是 `kind = "table"`、`connection`、`schema`、`table`、`where`、`order`、`desc`、`limit`、`page`、`cols`（隐藏的列）、`order_cols`（列的显示顺序，M10 F10.3；刷新后新出现的列排最后，已删除的列去掉）、`transpose`；console tab 是 `kind = "console"`、`n`、`connection`、`schema`；再记当前 tab。不存：结果集、正在跑的查询、未保存的单元格修改（退出前本来就要确认）、引导页。
   - **恢复**：第一个 session 的启动连接照现在连（连不上就是启动错误）；其余被 tab 用到的连接和其他 session 的启动连接都在启动时后台连（Cmd）；恢复出来的表 tab 先挂起不取数，等那个连接的 catalog 到了，表在 catalog 里的才取数、不在的关掉并 toast；连接失败就关掉它的全部挂起 tab，每个连接一条 toast（启动连接也走这一条）。console tab 先建在所在 session 的启动连接上，布局里的连接和 schema 作为「想要的」，连上后像标题下拉切换那样挪过去。catalog 里没有的表、读不了的 console 文件（读出错；文件不存在就当空 console 打开，没打过字的 console 本来就没有文件，§11）、不存在的连接：跳过这一项、toast 一条，其余照建。布局里的 console 编号已经被另一个正在跑的 session 用着时，换下一个空号，打开新编号自己的文件，不复制、不覆盖任何文件（原文件本来就在占着它的 session 里开着）。手写的布局缺字段时给缺省值：console 不写 `connection` 用这个 session 的启动连接，表不写 `schema` 用那个连接的 home schema，和 `sqlmux <连接名>` 启动时一致。同一个 pane 里同一张表写了两次只留第一个、不 toast（F3.37）；`[[pane]]` 里有、分割树里没有的 pane，它的 tab 一概不建。
   - **保存**：`last.toml` 只在正常退出时写（`:qa`、两次 `C-c`、关掉最后一个 session），不是每次改动都写；进程被杀掉就丢掉这次的布局改动（`ponytail:` 标出）。不管这次是怎么启动的，退出都覆盖 `last`，同 DataGrip。
   - **命令**：`layout.save`「保存布局为…」在状态栏的单行输入里要名字（同 `window.rename`，提示和输入框只占左边、右边照常画模式块，M8 F8.11 起三处统一；面板的输入行是搜索框兼快速 SQL，不再给它加一种模式），`↵` 写 `layouts/<名字>.toml`，同名覆盖，`esc` 放弃；名字含 `/`、以 `.` 开头、或是保留名 `last` 时 toast 拒绝（`last` 指 last.toml，F6.5 审查时定）。`layout.open`「打开布局」是下拉框（同 `theme.switch`），列出 `layouts/*.toml` 和 `last`，选中后替换正在跑的全部 session，有未保存的修改或没提交的事务先按 §10.5 确认（动词「打开」）；确认后在 Update 里同步读布局、建好 session，所有启动连接都在后台连，没有「拨号期间旧 session 还能操作」的窗口（审查时发现那时打的字会丢、还会把旧内容写进新 console 的文件）；第一个 session 的连接连不上也是 toast、丢掉它的 tab，和别的连接一样；`--layout` 和它共用读布局、建 session 的代码，但启动时连不上照上面「恢复」的规则，是启动错误、在终端里报出来退出，和 `sqlmux <连接名>` 一致（F6.5 复审时定）。
