@@ -76,10 +76,10 @@
 - **依赖**：F3.32、F8.7
 - **涉及**：`internal/app`、`internal/keymap/default.toml`
 
-**开发**（§7.5「复制为 JSON」）
+**开发**（§7.5「复制为 JSON」，§6.x 键位表）
 - [ ] `grid.yank.json`「复制为 JSON」，默认 `Y`：一个对象，键是列名、按列顺序（含隐藏的列）；值按列类型：数字类型 → JSON 数字（文本不是合法 JSON 数字时退回字符串），布尔 → `true` / `false`（MySQL 的 `1` / `0` 也转），NULL → `null`，json / jsonb → 原文嵌入，其余（含时间、数组、uuid）→ 字符串；2 空格缩进、多行；值取显示的（含未保存修改），成功后整行闪一下，同 `yy`；结果 tab 的行也能复制（有列类型就行）。转置视图里同样是当前记录。
 - [ ] 用 `encoding/json`，不手拼。
-- [ ] 细节（worker 2026-10-10 提议，已定）：数字按 F8.7 的 `number` 正则（不合法退回字符串）；布尔认 PG `bool` 的 `t` / `f` / `true` / `false` 和 MySQL `tinyint(1)` 的 `1` / `0`；json / jsonb `json.Valid` 才原文嵌入；二进制列照屏幕上的 `<binary N bytes>` 当字符串，不拒绝；外层对象按列顺序用有序键值对写、再 `json.Indent`；新增行里 DEFAULT 的格整个键省略；结果 tab 的行同样。默认键 `Y`（`[keys.grid]`，之前空着）。
+- [ ] 细节（worker 2026-10-10 提议，已定）：数字列的文本是合法的 JSON 数字（`json.Valid`）才写成数字，否则字符串（审查时定：F8.7 的正则放过 zerofill 的 `007`，起作用的只有 json.Valid，去掉正则）；结果 tab 里 MySQL 的布尔列（驱动只报 `tinyint`）复制成 `1` / `0`，已知上限；布尔认 PG `bool` 的 `t` / `f` / `true` / `false` 和 MySQL `tinyint(1)` 的 `1` / `0`；json / jsonb `json.Valid` 才原文嵌入；二进制列照屏幕上的 `<binary N bytes>` 当字符串，不拒绝；外层对象按列顺序用有序键值对写、再 `json.Indent`；新增行里 DEFAULT 的格整个键省略；结果 tab 的行同样。默认键 `Y`（`[keys.grid]`，之前空着）。
 
 **验收**
 - [ ] 单测：含 int、bool、null、jsonb、text、timestamptz 的一行 → 期望的 JSON；非法数字文本退回字符串。
