@@ -50,7 +50,7 @@ esac
 `,
 			"secret-tool": `cmd=$1; for a; do last=$a; done
 case $cmd in
-store) cat >"$FAKE/svc-$last"; cp "$FAKE/svc-$last" "$FAKE/pw" ;;
+store) cat >"$FAKE/svc-$last"; cat "$FAKE/svc-$last" >"$FAKE/pw" ;;
 lookup) [ -f "$FAKE/svc-$last" ] || exit 1; cat "$FAKE/svc-$last" ;;
 clear) rm -f "$FAKE/svc-$last" ;;
 esac
@@ -104,7 +104,8 @@ func TestConnFormPassword(t *testing.T) {
 	feed(t, a, "<Tab>d<CR>")
 	got, _ := os.ReadFile(pw)
 	file := connections()
-	if a.form != nil || string(got) != "secret" || strings.Contains(file, "secret") || !strings.Contains(file, "password_cmd = ") || len(a.sess.Conns) != 2 {
+	// quoted: the command, secret-tool, has the word in it
+	if a.form != nil || string(got) != "secret" || strings.Contains(file, `"secret"`) || !strings.Contains(file, "password_cmd = ") || len(a.sess.Conns) != 2 {
 		t.Errorf("saved: form %v, keychain %q, conns %d, file:\n%s", a.form, got, len(a.sess.Conns), file)
 	}
 }

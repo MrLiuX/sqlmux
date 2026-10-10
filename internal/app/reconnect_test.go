@@ -322,7 +322,7 @@ func TestRedialAfterRenameInTheManager(t *testing.T) {
 	if err == nil || strings.Contains(err.Error(), "password") {
 		t.Errorf("the redial: %v", err) // a dial that fails, its password found
 	}
-	if calls := kcCalled("find-generic-password"); len(calls) != 1 || !strings.Contains(calls[0], "third") {
+	if calls := kcCalled("find-generic-password", "lookup"); len(calls) != 1 || !strings.Contains(calls[0], "third") {
 		t.Errorf("the keychain read: %q", calls)
 	}
 }
