@@ -3,7 +3,7 @@
 # UPDATE 的生成（单列 / 复合主键、唯一索引、NULL、DEFAULT、json 旧值）由集成测试覆盖；这里在自建库里
 # 走真实的保存：结果文字、库里的值、并发修改时的整体回滚、保存中 C-c 取消、R 和关闭 / 退出前的确认框。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")

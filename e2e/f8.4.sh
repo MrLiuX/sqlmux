@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # F8.4 需要列名的位置自动弹出列名补全（specs/m8-feedback/task.md F8.4；tech-design §9.7「空前缀的列名补全」）
-# 上下文识别（哪些词之后、找不到表不弹、多表）由 sqlkit 的单测覆盖；这里在真实终端里测 console 和 WHERE：打了空格就弹，
+# 上下文识别（哪些词之后、找不到表不弹、多表）由 sqlkit 的单测覆盖；这里在真实终端里测 query 和 WHERE：打了空格就弹，
 # esc 关掉后继续打字再弹，不该弹的位置不弹，WHERE 空输入框不弹（删空再 ↵ 是清除过滤）。只读，用共用库。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
@@ -24,7 +24,7 @@ EVT="id|occurred_at|kind|"      # t_event 的列（按表里的顺序）
 
 start; key C-l; key i
 
-# ---- console：用户的原话 —— delete from t_event where ␠
+# ---- query：用户的原话 —— delete from t_event where ␠
 e2e_type "delete from t_event where "; sleep 1
 check "delete from t_event where ␠：不打字母就弹出 t_event 的列，没有「全部列」" names_are "$EVT"
 check "注释里有列的类型和所属的表" eval 'items | head -1 | grep -q "bigint · t_event"'

@@ -45,5 +45,5 @@ check "未保存的修改也算：note 列（第 8 列，刚改成 zz，没保�
 # ---- 结果 tab 的行
 SOLO= start; key C-l; key i; e2e_type "select 1 as a, true as b, null as c, '{\"x\": [1, 2]}'::jsonb as d, 'hi' as e, 1.50::numeric as f"; key Escape; key Enter; wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 1
 g=($(geom 3)); e2e_click $((g[0] + 3)) $((g[1] + 3)); sleep 0.5; key Y; sleep 0.6
-check "console 的结果 tab 上 Y：{a: 1, b: true, c: null, d: {x: [1, 2]}, e: hi, f: 1.50→数字}" eval 'jok "import json,sys; d = json.load(sys.stdin); assert d == {\"a\": 1, \"b\": True, \"c\": None, \"d\": {\"x\": [1, 2]}, \"e\": \"hi\", \"f\": 1.5}, d; print(\"ok\")"'
+check "query 的结果 tab 上 Y：{a: 1, b: true, c: null, d: {x: [1, 2]}, e: hi, f: 1.50→数字}" eval 'jok "import json,sys; d = json.load(sys.stdin); assert d == {\"a\": 1, \"b\": True, \"c\": None, \"d\": {\"x\": [1, 2]}, \"e\": \"hi\", \"f\": 1.5}, d; print(\"ok\")"'
 e2e_done

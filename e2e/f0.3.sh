@@ -22,7 +22,7 @@ run
 check "keys：退出码 0、stderr 为空" eval 'rc_is 0 && [[ -z $ERR ]]'
 check "keys：markdown 表头" out_has $'| Scope | Key | Action |\n|---|---|---|'
 check "keys：行数与 default.toml 的绑定数一致" eval '(( $(grep -c "^| [a-z]" <<<"$OUT") == $(grep -cE "^[\"'"'"']" "$E2E_ROOT/internal/keymap/default.toml") ))'
-check "keys：§6.8 抽查（C-p / SPC s / SPC \" / 表格 ↵ / console ↵ / result P；gq 是编辑器的操作符，不在 keymap 里，b8bf335）" eval 'out_has "| global | \`C-p\` | palette.open |" && out_has "| normal | \`SPC s\` | session.list |" && out_has "| normal | \`SPC \"\` | pane.split.below |" && out_has "| grid | \`↵\` | grid.edit |" && out_has "| console | \`↵\` | console.run |" && out_has "| result | \`P\` | result.pin |"'
+check "keys：§6.8 抽查（C-p / SPC s / SPC \" / 表格 ↵ / query ↵ / result P；gq 是编辑器的操作符，不在 keymap 里，b8bf335）" eval 'out_has "| global | \`C-p\` | palette.open |" && out_has "| normal | \`SPC s\` | session.list |" && out_has "| normal | \`SPC \"\` | pane.split.below |" && out_has "| grid | \`↵\` | grid.edit |" && out_has "| query | \`↵\` | query.run |" && out_has "| result | \`P\` | result.pin |"'
 check "默认键位只用 §6.2 允许的键（无 Alt、C-S-、C-数字、C-i/m/[、F 键、Home/End/PgUp/PgDn）" eval '! grep -E "\`[^\`]*(M-|A-|C-S-|C-[0-9]|C-i|C-m|C-\[|F[0-9]|Home|End|PageUp|PageDown)[^\`]*\`" <<<"$OUT"'
 check "C-h 只出现在 NORMAL" eval '[[ $(grep -F "\`C-h\`" <<<"$OUT" | cut -d"|" -f2 | tr -d " " | sort -u) == normal ]]'
 run --check; check "--check：默认配置退出码 0" rc_is 0
@@ -38,7 +38,7 @@ roundtrip() {
 check "toml 往返：默认" roundtrip ''
 check "toml 往返：leader = <C-a>" roundtrip '[keys]\nleader = "<C-a>"\n'
 check "toml 往返：改键 + 解绑" roundtrip '[keys.normal]\n"<Space>s" = ""\n"<C-b>" = "tree.toggle"\n"<Leader>b" = ""\n[keys.global]\n"<C-c>" = ""\n'
-check "toml 往返：映射（通用 + 按 pane）" roundtrip '[map.normal]\nJ = "5j"\n[map.console.normal]\nL = "5l"\nQ = "<Leader>b"\n[map.grid.normal]\nH = "0"\n'
+check "toml 往返：映射（通用 + 按 pane）" roundtrip '[map.normal]\nJ = "5j"\n[map.query.normal]\nL = "5l"\nQ = "<Leader>b"\n[map.grid.normal]\nH = "0"\n'
 check "toml 往返：特殊字符 | < \\" roundtrip '[keys.grid]\n"<Bar>" = "p"\n"<lt>" = "q"\n"\\\\" = "r"\n'
 check "toml 往返：自定义序列 <C-w>v" roundtrip '[keys.normal]\n"<C-w>v" = "pane.split.right"\n'
 
@@ -83,8 +83,8 @@ tuic 'icons = "ascii"\n'; check "icons = \"ascii\"：画面没有私有区码点
 tui '[keys.normal]\n"<Space>b" = ""\n"<C-b>" = "tree.toggle"\n'; check "改绑 tree.toggle 为 C-b：侧栏标题仍只有 «，不写键位（F10.9）" eval '[[ $(e2e_text 1 32 1) == *" « ─┐" && $(e2e_text 1 32 1) != *C-b* ]]'
 tui '[keys]\nleader = "<C-a>"\n'; check "leader = <C-a>：侧栏标题仍只有 «" eval '[[ $(e2e_text 1 32 1) == *" « ─┐" && $(e2e_text 1 32 1) != *C-a* ]]'
 tui '[keys.normal]\n"<Leader>b" = ""\n'; check "解绑 tree.toggle：侧栏标题照样是 «（点击还能收起）" eval '[[ $(e2e_text 1 32 1) == *"doraemon ───"*" « ─┐" && $(e2e_text 1 32 1) != *SPC* ]]'
-tui '[keys.console]\n"<CR>" = ""\n"R" = "console.run"\n'; e2e_resize 200 45; sleep 0.4   # 160 宽下 F5.3 的事务控件把键位文字挤掉了
-check "改绑 console.run 为 R：② console 标题显示 ▶ run R" text_ends 1 200 1 "▶ run  R ─┐"
+tui '[keys.query]\n"<CR>" = ""\n"R" = "query.run"\n'; e2e_resize 200 45; sleep 0.4   # 160 宽下 F5.3 的事务控件把键位文字挤掉了
+check "改绑 query.run 为 R：② query 标题显示 ▶ run R" text_ends 1 200 1 "▶ run  R ─┐"
 tui '[keys.grid]\n"T" = ""\n'; two_tabs; check "解绑 grid.transpose：tab 栏不显示「转置」" eval '[[ $(e2e_text 34 160 43) != *转置* && $(e2e_text 34 160 43) == *"↵ edit"* ]]'
 # 侧栏提示行（§6.7、§7.8）：未绑定的整项不显示；放不下时整项省略（F3.37 起没有 t tab，t 和 ↵ 一样是打开）
 side_hints() { local c; c=$(e2e_find ┐ 1); text_is 1 "${c%% *}" 43 "$1"; }

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# F3.38 console 的系统剪贴板寄存器（specs/m3-console/task.md F3.38；tech-design §11「寄存器」）
+# F3.38 query 的系统剪贴板寄存器（specs/m3-console/task.md F3.38；tech-design §11「寄存器」）
 # 系统剪贴板是 lib.sh 放在 PATH 最前面的假 pbcopy / pbpaste（clip 读它、set_clip 写它），测试不碰用户真实的剪贴板
 # （AGENTS.md「隔离用户数据」）。最后一段 -P /bin：PATH 里没有这类工具，读写走 OSC 52 和 tmux 的 paste buffer（快速 SQL 的 C-y 在 f1.7.sh）。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 
 paste() { t set-buffer -b e2e -- "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
-setsql() { key Escape; key g g; key d G; key i; paste "$1"; key Escape; key g g; key 0; }   # console 的内容换成 SQL，光标回到第 1 行行首
-line() { e2e_text 104 159 $((1 + $1)) | sed 's/ *$//'; }                         # 第 N 行的文字（② console 从 x 111 起）
+setsql() { key Escape; key g g; key d G; key i; paste "$1"; key Escape; key g g; key 0; }   # query 的内容换成 SQL，光标回到第 1 行行首
+line() { e2e_text 104 159 $((1 + $1)) | sed 's/ *$//'; }                         # 第 N 行的文字（② query 从 x 111 起）
 set_clip() { printf '%s' "$1" >"$E2E_TMP/clipboard"; }
 clip_is() { local want=$1; wait_for 3 eval '[[ "$(clip; echo .)" == "$want." ]]' || { echo "  clip: [$(clip)], want [$want]"; false; }; }   # TEXT：剪贴板里是 TEXT（pbcopy 负载高时晚一点才写完）
 
@@ -49,9 +49,9 @@ key u; key u
 
 # ---- 剪贴板为空时 "+p 什么都不做：出错语句的红 ▶ 还在，不触发自动保存
 setsql "select nosuch"; key Enter; wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 1.5
-mtime() { stat -f %Fm "$E2E_TMP/data/sqlmux/consoles/console_1.sql"; }   # F5.11 起不按连接分目录；文件不在时没有输出（check 里要求非空）
+mtime() { stat -f %Fm "$E2E_TMP/data/sqlmux/queries/query_1.sql"; }   # F5.11 起不按连接分目录；文件不在时没有输出（check 里要求非空）
 rm -f "$E2E_TMP/clipboard"; m0=$(mtime); e2e_type '"+p'; sleep 1.5
-check "剪贴板为空时 \"+p：文字不变，红 ▶ 还在，console 文件没有重写" eval '[[ -n $m0 && $(line 1) == "select nosuch" && $(mtime) == "$m0" ]] && style_has 99 2 fg=#f7768e'
+check "剪贴板为空时 \"+p：文字不变，红 ▶ 还在，query 文件没有重写" eval '[[ -n $m0 && $(line 1) == "select nosuch" && $(mtime) == "$m0" ]] && style_has 99 2 fg=#f7768e'
 
 # ---- "+p 的内容晚到、编辑器已经离开 NORMAL 时不贴（pbpaste 慢 1.5 秒）
 printf '#!/bin/sh\nsleep 1.5\ncat "%s/clipboard"\n' "$E2E_TMP" >"$E2E_TMP/bin/pbpaste"; set_clip "LATE"

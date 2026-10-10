@@ -5,7 +5,7 @@
 # 没改过的文字不检查、提示框和选项浮层叠放不出屏幕；放行的几种写法真的存进 PG（前置校验只是提示，以数据库为准）。
 # 自建库：t_types 放 seed 里没有的类型；连接的 TimeZone 是 Asia/Shanghai，1900 年的 timestamptz 带秒级偏移 +08:05:43。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # F8.1 补全列表打开时 ↵ 只接受，列名和表名也补空格（specs/m8-feedback/task.md F8.1；tech-design §9.7「接受」「WHERE 补全的细节」）
-# 接受后补不补空格的规则有单测；这里在真实终端里测 console 和 WHERE：↵ 接受之后不换行、不执行，再按一次 ↵ 才换行 / 执行；
+# 接受后补不补空格的规则有单测；这里在真实终端里测 query 和 WHERE：↵ 接受之后不换行、不执行，再按一次 ↵ 才换行 / 执行；
 # 值、函数、INSERT 列清单里的列不补空格。只读，用共用库。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
@@ -19,7 +19,7 @@ settle() { wait_for 8 settled; }
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); ST=$D/state; SJ=$ST/sqlmux/state.json; trap 'e2e_stop; rm -rf "$D"' EXIT
 start; key C-l; key i
 
-# ---- console：用户的原话 —— delete from t_event where id ↵
+# ---- query：用户的原话 —— delete from t_event where id ↵
 e2e_type "delete from t_event where id"; sleep 0.6
 check "输入 …where id：列表开着，有 id" has id
 key Enter; sleep 0.4

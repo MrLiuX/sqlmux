@@ -2,7 +2,7 @@
 # F0.13 Command palette: frame and command scope (specs/m0-skeleton/task.md F0.13; tech-design §12, §9.7, §7.5)
 # match.go ranking / highlight / extended syntax are unit-tested (TestFilterRanks, TestFilterPositions, TestTextMatch).
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 W() { e2e_flag pane_width; }
@@ -26,7 +26,7 @@ for s in "160 45" "100 30" "60 20"; do
   # "1/4 of the window": the window is the area above the status bar, H-1 rows
   check "${SW}x$SH: width $w, centered, top at row $(( (SH - 1) / 6 + 1 ))" eval '[[ $(top) == $(( (SH - 1) / 6 + 1 )) && $(left) == $(( (SW - w) / 2 + 1 )) ]] && [[ $(e2e_text $(( (SW - w) / 2 + w )) $(( (SW - w) / 2 + w )) $(top)) == ┐ ]]'
 done
-start; two_panes; pal   # F1.1: ① | ② in place of M0's data | console
+start; two_panes; pal   # F1.1: ① | ② in place of M0's data | query
 check "empty input: at most 12 rows" eval '(( $(nrows) == 12 ))'
 e2e_type '>'; sleep 0.3   # a command selected (F0.14: a window row would say ↵ 切换)
 check "footer: ↑/↓ 移动 · … esc 关闭 … ↵ 执行" eval '[[ $(footer) == " ↑/↓ 移动 · "*"esc 关闭"*"↵ 执行 " ]]'

@@ -23,7 +23,7 @@ check "面板多了「SQL ;」范围" eval '[[ $(e2e_text $(($(left) + 2)) $(($(
 # ---- 执行：Meta 上的只读事务，结果在面板下半部分（§12）
 sql "select status, count(*) from t_order group by 1 order by 1"
 want=$(psql_n "select status || '|' || count(*) from t_order group by status order by status" | tr '\n' /)
-check "group by：标题「4 行 · 耗时 · 只读」，右侧 C-y CSV · C-t 结果区 · C-e console（F4.1）；四行和 psql 一致" eval 'title_like "^4 行 · [0-9.]+(µs|ms|s) · 只读 C-y CSV · C-t 结果区 · C-e console$" && [[ $(grid | tr "\n" /) == "$want" ]] || { grid; echo "  want $want"; false; }'
+check "group by：标题「4 行 · 耗时 · 只读」，右侧 C-y CSV · C-t 结果区 · C-e query（F4.1）；四行和 psql 一致" eval 'title_like "^4 行 · [0-9.]+(µs|ms|s) · 只读 C-y CSV · C-t 结果区 · C-e query$" && [[ $(grid | tr "\n" /) == "$want" ]] || { grid; echo "  want $want"; false; }'
 check "刚执行完：底栏没有「已修改」" eval '! modified'
 e2e_keys BSpace; sleep 0.3
 check "改动输入：底栏「已修改，↵ 重新执行」" modified
@@ -40,7 +40,7 @@ check "服务端只算到第 101 行：第 5000 行的除零没有发生，显�
 sql "selec 1"
 check "语法错误：标题下第一行是数据库原文，红色" eval '[[ $(line1) == "ERROR: syntax error at or near \"selec\" (SQLSTATE 42601)" ]] && g=($(pbox)) && style_has $((g[0] + 2)) $(( $(prows | grep -n -m1 "ERROR:" | cut -d: -f1) + g[1] - 1 )) fg=$ERROR || { echo "  $(line1)"; false; }'
 sql "delete from t_order where id = 1"
-check "写语句（F4.1）：不执行，标题下第一行是提示「写语句不在这里执行 · C-e 在 console 中打开」，数据不变" eval '[[ $(line1) == "写语句不在这里执行 · C-e 在 console 中打开" && $(psql_n "select count(*) from t_order where id = 1") == 1 ]] || { echo "  $(line1)"; false; }'
+check "写语句（F4.1）：不执行，标题下第一行是提示「写语句不在这里执行 · C-e 在 query 中打开」，数据不变" eval '[[ $(line1) == "写语句不在这里执行 · C-e 在 query 中打开" && $(psql_n "select count(*) from t_order where id = 1") == 1 ]] || { echo "  $(line1)"; false; }'
 
 # ---- 执行中：标题「… 行」，再按 ↵ 忽略；C-c 取消查询、面板不关、保留上次结果（§12、§8.3）
 sql "select 42 as x"

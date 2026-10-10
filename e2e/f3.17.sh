@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # F3.17 ? 键位帮助（specs/m3-console/task.md F3.17；tech-design §6.5「键位帮助」、§6.8）
-# 浮层的画法由 golden（TestGoldenKeyHelp160x45）覆盖；这里测真实终端里的按键、用户配置的合并与分组、console 里的 <leader>?。
+# 浮层的画法由 golden（TestGoldenKeyHelp160x45）覆盖；这里测真实终端里的按键、用户配置的合并与分组、query 里的 <leader>?。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 
@@ -52,26 +52,26 @@ e2e_type '?'; sleep 0.4
 check "接着按 ?：回到根层，列的还是表格的键" eval '[[ $(help | head -1) == *"─ C-a ? ─"* || $(help | head -1) == *"─ ? ─"* ]] && has "R +→ 刷新" || { help | head -3; false; }'
 key Escape
 
-# ---- F3.25：? 绑在 [keys.normal]，引导页、树、console 的 NORMAL 下都打开帮助
+# ---- F3.25：? 绑在 [keys.normal]，引导页、树、query 的 NORMAL 下都打开帮助
 start; key '?'
 check "① 的引导页上 ?：打开键位帮助" eval '[[ -n $(box) && $(help | head -1) == *"─ ? ─"* ]]'
 key Escape; key C-h; key '?'
 check "树上 ?：打开键位帮助" eval '[[ -n $(box) && $(help | head -1) == *"─ ? ─"* ]]'
 key Escape; key C-l; key C-l
-# console：NORMAL 下 ? 打开帮助；INSERT 下照常输入；VISUAL 下、操作符后面的 ? 仍是 vim 的反向搜索
+# query：NORMAL 下 ? 打开帮助；INSERT 下照常输入；VISUAL 下、操作符后面的 ? 仍是 vim 的反向搜索
 key '?'
-check "console 的 NORMAL 下 ?：打开键位帮助，不是反向搜索" eval '[[ -n $(box) && $(help | head -1) == *"─ ? ─"* && $(mode) == COMMAND && $(e2e_text 98 160 42) != "│?"* ]]'
+check "query 的 NORMAL 下 ?：打开键位帮助，不是反向搜索" eval '[[ -n $(box) && $(help | head -1) == *"─ ? ─"* && $(mode) == COMMAND && $(e2e_text 98 160 42) != "│?"* ]]'
 key Escape
 check "esc 关掉帮助，回到 NORMAL" eval '[[ -z $(box) && $(mode) == NORMAL ]]'
 key i; e2e_type 'select 1 ?'; sleep 0.3; key Escape
-check "INSERT 下 ?：照常输入到 console 里" eval '[[ -z $(box) && $(e2e_text 98 160 2) == *"select 1 ?"* ]]'
+check "INSERT 下 ?：照常输入到 query 里" eval '[[ -z $(box) && $(e2e_text 98 160 2) == *"select 1 ?"* ]]'
 key v; key '?'
 check "VISUAL 下 ?：交给 vim，是反向搜索的命令行" eval '[[ -z $(box) && $(mode) == COMMAND && $(e2e_text 98 160 42) == "│?"* ]]'
 key Escape; key Escape; key d; key '?'
 check "d 后面的 ?：交给 vim（d? 的搜索命令行）" eval '[[ -z $(box) && $(e2e_text 98 160 42) == "│?"* ]]'
 key Escape
 key Space; e2e_type '?'; sleep 0.4
-check "console 里 <leader>?：打开帮助（根层标题是 keyhelp.open 绑的键，F3.25 起是 ?），列出 ↵ 执行和 gs，不列 vim 自己的键" eval '[[ $(help | head -1) == *"─ ? ─"* ]] && has "↵ +→ 执行" && has "gs +→ |g +→ …" && ! help | grep -qE "^dd|w +→ 下一个词"'
+check "query 里 <leader>?：打开帮助（根层标题是 keyhelp.open 绑的键，F3.25 起是 ?），列出 ↵ 执行和 gs，不列 vim 自己的键" eval '[[ $(help | head -1) == *"─ ? ─"* ]] && has "↵ +→ 执行" && has "gs +→ |g +→ …" && ! help | grep -qE "^dd|w +→ 下一个词"'
 key Escape
 
 e2e_done

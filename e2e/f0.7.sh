@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # F0.7 布局树与 pane 操作（键盘）（specs/m0-skeleton/task.md F0.7；tech-design §5「布局树」、§7.8）
 # 鼠标操作属于 F0.8。
-# F1.1 起默认只有一个 data pane：two_panes 分出 ① | ② 代替 M0 的 data | console（127 列的主区域各占 63 列）。
+# F1.1 起默认只有一个 data pane：two_panes 分出 ① | ② 代替 M0 的 data | query（127 列的主区域各占 63 列）。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 # F0.11 起 SPC hjkl / HJKL 不再是默认键：用 config 绑回去来测这些 Action
@@ -14,10 +14,10 @@ L() { e2e_keys Space; e2e_type "$1"; sleep 0.3; }         # SPC <key>
 key() { e2e_keys "$1"; sleep 0.25; }
 nums() { e2e_panes | awk '{ printf "%s ", $1 }'; }        # 按出现顺序（行优先）列出编号
 title_of() { local g; g=($(geom "$1")); e2e_text "${g[0]}" $((g[0] + g[2] - 1)) "${g[1]}"; }
-empty_pane() {  # §7.8 空 pane：F3.7 起内容区是引导页（打开表 / 新建 console 两个按钮），tab 栏只有 +
+empty_pane() {  # §7.8 空 pane：F3.7 起内容区是引导页（打开表 / 新建 query 两个按钮），tab 栏只有 +
   local g y body=; g=($(geom "$1")); local x1=$((g[0] + 1)) x2=$((g[0] + g[2] - 2)) yb=$((g[1] + g[3] - 2))
   for ((y = g[1] + 1; y < yb; y++)); do body+=$(e2e_text $x1 $x2 $y | tr -d ' '); done
-  [[ $body == *打开表*新建console* ]] || { echo "  ⟨$1⟩ body: $body"; return 1; }
+  [[ $body == *打开表*新建query* ]] || { echo "  ⟨$1⟩ body: $body"; return 1; }
   [[ $(e2e_text $x1 $x2 $yb | sed 's/ *$//') == " +" ]] || { echo "  ⟨$1⟩ tab bar: '$(e2e_text $x1 $x2 $yb)'"; false; }
 }
 width_of() { local g; g=($(geom "$1")); echo "${g[2]}"; }

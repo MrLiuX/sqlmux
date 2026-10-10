@@ -3,7 +3,7 @@
 # 解析、循环、按天数夹取由单测覆盖（timepick_test）；这里在真实终端里按键、点 ▴、滚滚轮，看输入框的文字怎么变，
 # 以及「◷ 现在」写进库里的值。在自建库里做。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")

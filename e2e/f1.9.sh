@@ -3,7 +3,7 @@
 # F1.14 把弱 / 强高亮换成了「弹出即选中、到头绕回、智能回车」，那部分在 f1.14.sh；这里留下没变的：
 # esc 两步（F3.39 起第一步同时回到 WHERE 的 NORMAL），快速 SQL 里 Tab 移动候选还是切换范围，select 42 as x 的 ↵ 是执行。match 色由单测覆盖。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 . "$(dirname "$0")/palette.sh"
 SELECT=#364a82
@@ -21,7 +21,7 @@ start; open_table t_order; wait_for 8 settled
 
 # ---- esc 两步：第一次关列表（仍在输入，↵ 执行），第二次才退出输入
 edit; typ sta; key Escape
-check "esc 第一次：关补全列表，回到 WHERE 的 NORMAL（F3.39，同 console），还在编辑 WHERE" eval '[[ -z $(boxN 1) ]] && mode_is NORMAL && [[ $(bar) == *"-- editing WHERE --"* && $(where_in) == sta ]]'
+check "esc 第一次：关补全列表，回到 WHERE 的 NORMAL（F3.39，同 query），还在编辑 WHERE" eval '[[ -z $(boxN 1) ]] && mode_is NORMAL && [[ $(bar) == *"-- editing WHERE --"* && $(where_in) == sta ]]'
 key Enter; wait_for 8 settled
 check "列表关了之后 ↵（WHERE 的 NORMAL 下）：执行查询（错误栏报 sta 不是列，F3.20）" eval 'mode_is NORMAL && [[ $(errbar 1 | head -1) == *"column \"sta\" does not exist"* ]]'
 edit; typ sta; key Escape; key Escape

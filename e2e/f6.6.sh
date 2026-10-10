@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # F6.6 非 vim 模式（specs/m6-config/task.md F6.6a / F6.6b；tech-design §6.9）
-# vim = false：console 和 WHERE 是没有模式的普通编辑器，表格、树多一层方向键，grid 有 PgUp / PgDn / Delete，console 用 C-e 执行。
+# vim = false：query 和 WHERE 是没有模式的普通编辑器，表格、树多一层方向键，grid 有 PgUp / PgDn / Delete，query 用 C-e 执行。
 # 编辑器的各项行为有单测，叠加的键位有单测；这里在真实终端里只用「非 vim 用户手边的键」走一遍：写 SQL、选区、替换、撤销、执行选区、
 # 补全里 esc 只关列表、WHERE、表格浏览 / 翻页 / 删除 / 编辑保存、树。写库的部分在自己建的库里做。
 . "$(dirname "$0")/lib.sh"
@@ -11,7 +11,7 @@ D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; rm -rf "
 e2e_own_db || { echo "e2e: could not create the private database" >&2; exit 1; }
 mkdir -p "$D/c"; printf 'vim = false\n' >"$D/c/config.toml"
 (umask 077; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$E2E_DB" >"$D/c/connections.toml")
-cl() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }                         # console 的第 N 行
+cl() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }                         # query 的第 N 行
 VISUAL_BG=#2d3f76
 modeless() { [[ $(bar) != *NORMAL* && $(bar) != *INSERT* && $(bar) != *VISUAL* && $(bar) != *COMMAND* ]]; }
 sel_bg() { [[ $(e2e_style "$1" "$2") == *"bg=$VISUAL_BG"* ]]; }
@@ -48,19 +48,19 @@ check "C-w 删到词首" eval '[[ $(cl 2) == "ect 222;" ]] || { echo "  [$(cl 2)
 # ---- Tab 插空格；执行：光标所在语句 / 选区
 start -C "$D/c"; key C-l
 e2e_type "select 111\;"; key Enter; e2e_type "select 222\;"; key Enter; e2e_type "select 333\;"; key Up; key Up; key C-a; key Tab; sleep 0.3
-check "Tab 插入空格（不是切焦点），光标还在 console" eval '[[ $(cl 1) == "  select 111;" ]] && focus_is 2 || { echo "  [$(cl 1)] focus $(focused)"; false; }'
+check "Tab 插入空格（不是切焦点），光标还在 query" eval '[[ $(cl 1) == "  select 111;" ]] && focus_is 2 || { echo "  [$(cl 1)] focus $(focused)"; false; }'
 key BSpace; key BSpace
 key C-e; done_run
 check "没有选区：C-e 执行光标所在的语句（第 1 行），结果值 111" eval '[[ $(rval) == 111 ]] || { echo "  result: [$(rval)]"; false; }'
 key S-Down; key S-Down; key C-e; done_run
-check "有选区（第 1、2 行，光标停在第 3 行行首）：C-e 只执行选区，两条语句、两个结果 tab（#2、#2·2），第 3 行没有执行" eval 'tb=$(tabbar 3); [[ $tb == *"console_1 #2"* && $tb == *"console_1 #2·2"* && $tb != *"·3"* ]] || { echo "  tabs: $(tabbar 3)"; false; }'
+check "有选区（第 1、2 行，光标停在第 3 行行首）：C-e 只执行选区，两条语句、两个结果 tab（#2、#2·2），第 3 行没有执行" eval 'tb=$(tabbar 3); [[ $tb == *"query_1 #2"* && $tb == *"query_1 #2·2"* && $tb != *"·3"* ]] || { echo "  tabs: $(tabbar 3)"; false; }'
 
 # ---- 补全：esc 只关列表；C-c 取消选区
 start -C "$D/c"; key C-l
 e2e_type "select * from t_us"; sleep 0.6
 check "输入 t_us：自动弹出补全，没有模式块" eval 'screen_has "t_user" && modeless'
 key Escape; sleep 0.3
-check "esc 只关列表：文字还在，仍在 console 里（没有模式可退）" eval '! screen_has "┌─────" || true; [[ $(cl 1) == "select * from t_us" && $(focused) == 2 ]]'
+check "esc 只关列表：文字还在，仍在 query 里（没有模式可退）" eval '! screen_has "┌─────" || true; [[ $(cl 1) == "select * from t_us" && $(focused) == 2 ]]'
 key S-Left; key S-Left; key C-c; sleep 0.3
 check "C-c 取消选区（不算退出提示的第一次）：选区没了，也没有「再按一次」" eval '! sel_bg 123 2 && ! screen_has "再按一次"' || true
 # ---- WHERE：/ 进入（表格的键），一直可输入，↵ 执行，C-r 历史，esc 回表格
@@ -104,17 +104,17 @@ check "← 折叠" eval '[[ $(tsel) == *"▸"*"Views"* ]] || { echo "  [$(tsel)]
 key Up; sleep 0.3
 check "↑ 往上移了一行" eval '[[ $(tsel) != *Views* ]]'
 
-# ---- 鼠标拖动选择（console）
+# ---- 鼠标拖动选择（query）
 start -C "$D/c"; key C-l; e2e_type "select 111\;"; key Enter; e2e_type "select 222\;"; sleep 0.3
 e2e_drag 111 2 114 2; sleep 0.3
-check "鼠标在 console 里拖动：选区用 visual 底" eval 'sel_bg 111 2 && sel_bg 113 2 && ! sel_bg 110 2'
+check "鼠标在 query 里拖动：选区用 visual 底" eval 'sel_bg 111 2 && sel_bg 113 2 && ! sel_bg 110 2'
 e2e_type "7"; sleep 0.3
 check "再输入替换选区：select 7" eval '[[ $(cl 1) == "select 7" || $(cl 1) == "select 7;" ]] || { echo "  [$(cl 1)] [$(cl 2)]"; false; }'
 
 # ---- sqlmux keys 按配置导出叠加后的键位
 mkdir -p "$D/k-novim/sqlmux" "$D/k-vim/sqlmux"; printf 'vim = false\n' >"$D/k-novim/sqlmux/config.toml"
 kk() { XDG_CONFIG_HOME=$D/$1 XDG_STATE_HOME=$D/st XDG_DATA_HOME=$D/st "$E2E_BIN" keys; }
-check "vim = false：sqlmux keys 里 grid 的 ↓ 是 grid.down、PgDn 是 grid.page.next、Delete 是 grid.row.delete，console 的 C-e 是 console.run，↵ 没有绑定" eval 'k=$(kk k-novim); grep -qE "\| grid \| .(↓|<Down>|Down). \| grid.down" <<<"$k" && grep -q "grid.page.next" <<<"$k" && grep -q "grid.row.delete" <<<"$k" && grep -qE "\| console \| .(C-e|<C-e>). \| console.run" <<<"$k" && ! grep -qE "\| console \| .(↵|<CR>). \|" <<<"$k" || { grep -E "grid.down|console.run" <<<"$k"; false; }'
-check "vim = true（默认）：这些都不在" eval 'k=$(kk k-vim); ! grep -qE "\| grid \| .(↓|<Down>|Down). \|" <<<"$k" && ! grep -qE "\| console \| .(C-e|<C-e>). \| console.run" <<<"$k"'
+check "vim = false：sqlmux keys 里 grid 的 ↓ 是 grid.down、PgDn 是 grid.page.next、Delete 是 grid.row.delete，query 的 C-e 是 query.run，↵ 没有绑定" eval 'k=$(kk k-novim); grep -qE "\| grid \| .(↓|<Down>|Down). \| grid.down" <<<"$k" && grep -q "grid.page.next" <<<"$k" && grep -q "grid.row.delete" <<<"$k" && grep -qE "\| query \| .(C-e|<C-e>). \| query.run" <<<"$k" && ! grep -qE "\| query \| .(↵|<CR>). \|" <<<"$k" || { grep -E "grid.down|query.run" <<<"$k"; false; }'
+check "vim = true（默认）：这些都不在" eval 'k=$(kk k-vim); ! grep -qE "\| grid \| .(↓|<Down>|Down). \|" <<<"$k" && ! grep -qE "\| query \| .(C-e|<C-e>). \| query.run" <<<"$k"'
 
 e2e_done

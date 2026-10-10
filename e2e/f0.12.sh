@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# F0.12 Theme files, colors by column type, [icon] overrides, console icon
+# F0.12 Theme files, colors by column type, [icon] overrides, query icon
 # (specs/m0-skeleton/task.md F0.12; tech-design §7.3, §7.6, §7.7)
 # "No theme = unchanged screen" is covered by f0.2/f0.5 passing and the golden diff (one glyph).
-# [icon] overrides use ② console_1's title icon (M3 F3.6 puts the console back in the default layout).
+# [icon] overrides use ② query_1's title icon (M3 F3.6 puts the query back in the default layout).
 # Column colors (F1.3, §7.6) on seed's t_order: id / amount number, status an enum, paid bool, meta jsonb,
 # note text (set on every 10th row), created_at timestamptz.
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")
@@ -15,7 +15,7 @@ trap 'e2e_stop; rm -rf "$D"' EXIT
 conf() { rm -rf "$D"/*; printf "$1" > "$D/config.toml"; [[ -n $2 ]] && { mkdir -p "$D/themes"; printf "$2" > "$D/themes/x.toml"; }; true; }
 fails() { e2e_start -C "$D" "$E2E_BIN"; wait_for 3 screen_has '[e2e-exit 1]' || return 1; screen_has "$1" || { echo "  error lacks '$1':"; e2e_plain | grep sqlmux: | sed 's/^/    /'; false; }; }
 NF_CONSOLE=$(printf '\xef\x92\x89')   # U+F489
-ICON=103 ICON_ASCII=105               # ② console title icon column: nerd ┌─ ② <icon> …; ascii ┌─ ⟨2⟩ <icon> … (⟨2⟩ is 3 wide, F0.16)
+ICON=103 ICON_ASCII=105               # ② query title icon column: nerd ┌─ ② <icon> …; ascii ┌─ ⟨2⟩ <icon> … (⟨2⟩ is 3 wide, F0.16)
 # cell NAME N — "X Y" of column NAME's value on data row N (-1: the header): text starts under the header name,
 # numbers end under its last letter (right-aligned)
 cell() { local hy=$(( $(grid_y) - 1 )) c; c=$(e2e_find "$1" $hy | tr ' ' '\n' | awk '$1 > 34 { print; exit }')   # ① only: the sidebar has names too
@@ -45,21 +45,21 @@ conf 'theme = "x"\n' 'pane_bgg = "#101010"\n'; check "misspelt token → error n
 conf 'theme = "x"\n' 'pane_bg = "#12345"\n';  check "bad color → error names it" fails 'pane_bg = "#12345"'
 conf 'theme = "nope"\n';                        check "theme not found → error names it" fails 'theme = "nope"'
 
-# ---- the console icon (§7.7), then [icon] overrides (yazi-style) on it; ② unfocused, so its title is dim
+# ---- the query icon (§7.7), then [icon] overrides (yazi-style) on it; ② unfocused, so its title is dim
 conf ''; SOLO= start -C "$D"
-check "nerd: console icon is U+F489" text_is $ICON $ICON 1 "$NF_CONSOLE"
+check "nerd: query icon is U+F489" text_is $ICON $ICON 1 "$NF_CONSOLE"
 conf 'icons = "ascii"\n'; SOLO= start -C "$D"
-check "ascii: console icon is >" text_is $ICON_ASCII $ICON_ASCII 1 ">"
-conf 'theme = "x"\n' '[icon]\nconsole = { text = "C", fg = "#ff0000" }\n'; SOLO= start -C "$D"
-check "[icon] console text+fg: red C, rest of the title unchanged" eval 'text_is $ICON $ICON 1 C && style_has $ICON 1 fg=#ff0000 && style_has 101 1 fg=#565f89   # ② (F5.3: at 160 the Tx control leaves no room for console_1)'
-conf 'theme = "x"\n' '[icon]\nconsole = { fg = "#00ff00" }\n'; SOLO= start -C "$D"
+check "ascii: query icon is >" text_is $ICON_ASCII $ICON_ASCII 1 ">"
+conf 'theme = "x"\n' '[icon]\nquery = { text = "C", fg = "#ff0000" }\n'; SOLO= start -C "$D"
+check "[icon] query text+fg: red C, rest of the title unchanged" eval 'text_is $ICON $ICON 1 C && style_has $ICON 1 fg=#ff0000 && style_has 101 1 fg=#565f89   # ② (F5.3: at 160 the Tx control leaves no room for query_1)'
+conf 'theme = "x"\n' '[icon]\nquery = { fg = "#00ff00" }\n'; SOLO= start -C "$D"
 check "[icon] fg only: same glyph, new color" eval 'text_is $ICON $ICON 1 "$NF_CONSOLE" && style_has $ICON 1 fg=#00ff00'
-conf 'theme = "x"\nicons = "ascii"\n' '[icon]\nconsole = { text = "C", fg = "#ff0000" }\n'; SOLO= start -C "$D"
+conf 'theme = "x"\nicons = "ascii"\n' '[icon]\nquery = { text = "C", fg = "#ff0000" }\n'; SOLO= start -C "$D"
 check "[icon] still applies with icons = ascii" eval 'text_is $ICON_ASCII $ICON_ASCII 1 C && style_has $ICON_ASCII 1 fg=#ff0000'
 conf 'theme = "x"\n' '[icon]\nconn = { fg = "#ff00ff" }\n'; start -C "$D"
 check "[icon] conn: the status bar connection icon changes color" eval 'c=$(e2e_find "doraemon · sqlmux@localhost" 45); style_has $((c - 2)) 45 fg=#ff00ff && style_has $c 45 fg=#7dcfff'
 conf 'theme = "x"\n' '[icon]\nfoo = { text = "F" }\n';            check "[icon] unknown name → error" fails "foo"
-conf 'theme = "x"\n' '[icon]\nconsole = { bg = "#ff0000" }\n';    check "[icon] unknown sub-key (bg) → error" fails "bg"
-conf 'theme = "x"\n' '[icon]\nconsole = { fg = "red" }\n';        check "[icon] bad color → error" fails '"red"'
+conf 'theme = "x"\n' '[icon]\nquery = { bg = "#ff0000" }\n';    check "[icon] unknown sub-key (bg) → error" fails "bg"
+conf 'theme = "x"\n' '[icon]\nquery = { fg = "red" }\n';        check "[icon] bad color → error" fails '"red"'
 
 e2e_done

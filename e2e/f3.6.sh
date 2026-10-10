@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# F3.6 console tab（specs/m3-console/task.md F3.6；tech-design §5 默认布局、§11 编辑器 / 文件、§7.3 高亮、§6.8、§14）
+# F3.6 query tab（specs/m3-console/task.md F3.6；tech-design §5 默认布局、§11 编辑器 / 文件、§7.3 高亮、§6.8、§14）
 # 高亮、gutter、语句范围、选区、命令行的画法由 golden 覆盖；这里测真实终端里的按键、鼠标、粘贴、光标形状和文件。
-# 默认布局 ⓪ | ① | ② console_1，② 在 x 105..160：x 106 是 ▶，107..109 行号，111 起是文字；第 y 行是第 y−1 行文字。
+# 默认布局 ⓪ | ① | ② query_1，② 在 x 105..160：x 106 是 ▶，107..109 行号，111 起是文字；第 y 行是第 y−1 行文字。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 
-D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); DD=$D/data; CF=$DD/sqlmux/consoles/console_1.sql   # F5.11 起不按连接分目录
+D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); DD=$D/data; CF=$DD/sqlmux/queries/query_1.sql   # F5.11 起不按连接分目录
 trap 'e2e_stop; rm -rf "$D"' EXIT
 KEYWORD=#bb9af7 NUMBER=#ff9e64 STR=#9ece6a COMMENT=#565f89 FUNC=#7aa2f7 FG=#c0caf5 DIM=#565f89 FOCUS=#9ece6a ROW=#292e42 PANE_BG=#24283b
 line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }                         # 第 N 行的文字
@@ -18,7 +18,7 @@ typ() { e2e_type "$1"; sleep 0.3; }
 paste() { t set-buffer -b e2e "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }   # bracketed paste，-r：原样发出，不把 LF 换成 CR
 
 start -D "$DD"
-check "默认布局：⓪ | ① | ② console_1，焦点在 ①" eval '[[ $(e2e_panes | awk "{ print \$1 }" | tr "\n" " ") == "0 1 2 " && $(focused) == 1 && $(tabbar 2) == "1:console_1*"* ]]'
+check "默认布局：⓪ | ① | ② query_1，焦点在 ①" eval '[[ $(e2e_panes | awk "{ print \$1 }" | tr "\n" " ") == "0 1 2 " && $(focused) == 1 && $(tabbar 2) == "1:query_1*"* ]]'
 key C-l
 check "C-l 到 ②：NORMAL，不显示 行,列" eval '[[ $(focused) == 2 && $(mode) == NORMAL && -z $(pos) ]]'
 check "NORMAL 下终端光标是块" flag_is cursor_shape block
@@ -84,12 +84,12 @@ check "整段粘贴是一个撤销步：u 一次恢复原样" eval '[[ $(line 1)
 
 # ---- 文件（§11「文件」、§13）
 sleep 1.5
-check "改动 1s 后自动保存到 XDG_DATA_HOME/sqlmux/consoles/console_1.sql，内容与缓冲区一致" eval '[[ -f $CF && $(cat "$CF") == "$(printf "selectcount(*), '"'a'"' from t where id > 10; -- n\nselect 2 as b\nselect 3")" ]] || { echo "  file: $(cat "$CF" 2>&1)"; false; }'
-check "文件 0600，目录 0700" eval '[[ $(stat -f %Lp "$CF") == 600 && $(stat -f %Lp "$(dirname "$CF")") == 700 && $(stat -f %Lp "$DD/sqlmux/consoles") == 700 ]]'
+check "改动 1s 后自动保存到 XDG_DATA_HOME/sqlmux/queries/query_1.sql，内容与缓冲区一致" eval '[[ -f $CF && $(cat "$CF") == "$(printf "selectcount(*), '"'a'"' from t where id > 10; -- n\nselect 2 as b\nselect 3")" ]] || { echo "  file: $(cat "$CF" 2>&1)"; false; }'
+check "文件 0600，目录 0700" eval '[[ $(stat -f %Lp "$CF") == 600 && $(stat -f %Lp "$(dirname "$CF")") == 700 && $(stat -f %Lp "$DD/sqlmux/queries") == 700 ]]'
 key G; key dd; key C-s; sleep 0.3
 check "G dd 后 C-s 立刻写盘（不等 1s）" eval '[[ $(cat "$CF") == "$(printf "selectcount(*), '"'a'"' from t where id > 10; -- n\nselect 2 as b")" ]] || { echo "  file: $(cat "$CF")"; false; }'
 start -D "$DD"
-check "重启：console_1 还是上次的内容" eval '[[ $(line 1) == "selectcount(*), '"'a'"' from t where id > 10; -- n" && $(line 2) == "select 2 as b" && -z $(line 3) ]]'
+check "重启：query_1 还是上次的内容" eval '[[ $(line 1) == "selectcount(*), '"'a'"' from t where id > 10; -- n" && $(line 2) == "select 2 as b" && -z $(line 3) ]]'
 
 # ---- ex 命令（§11「命令行」）：编辑器不认识的交给 app 按面板的 ex 别名执行
 key C-l; key :; typ foo; key Enter
@@ -98,42 +98,42 @@ key x; key :; typ w; key Enter
 check ":w 立刻写盘" eval '[[ $(head -1 "$CF") == "electcount(*), '"'a'"' from t where id > 10; -- n" ]] || { echo "  file: $(head -1 "$CF")"; false; }'
 key u; key C-s; sleep 0.3
 chmod 500 "$(dirname "$CF")"; key x; key :; typ q; key Enter
-check "写不进文件时 :q 不关 tab，toast「保存失败：…」" eval 'e2e_text 1 160 44 | grep -q "保存失败：.*console_1.sql.*permission denied" && [[ $(e2e_text 98 160 1) == *"②"*"▶ run"* ]]'   # 长 toast 盖住了下边框，e2e_panes 认不出 pane，看标题行
+check "写不进文件时 :q 不关 tab，toast「保存失败：…」" eval 'e2e_text 1 160 44 | grep -q "保存失败：.*query_1.sql.*permission denied" && [[ $(e2e_text 98 160 1) == *"②"*"▶ run"* ]]'   # 长 toast 盖住了下边框，e2e_panes 认不出 pane，看标题行
 key :; typ qa; key Enter
 check "写不进文件时 :qa 也不退出" eval 'running && e2e_text 1 160 44 | grep -q "保存失败："'
 key Space; e2e_type x; sleep 0.3
 check "写不进文件时 SPC x 也不关 pane" eval '[[ $(e2e_text 98 160 1) == *"②"*"▶ run"* ]]'
 chmod 700 "$(dirname "$CF")"; key u
 key :; typ q; key Enter
-check ":q 关掉 console_1：不确认，② 随最后一个 tab 关掉，文件还在" eval '[[ $(e2e_text 1 160 1) != *console* && $(e2e_find ┐ 1) == "32 160" && -f $CF ]] && ! screen_has 丢弃'
+check ":q 关掉 query_1：不确认，② 随最后一个 tab 关掉，文件还在" eval '[[ $(e2e_text 1 160 1) != *query* && $(e2e_find ┐ 1) == "32 160" && -f $CF ]] && ! screen_has 丢弃'
 
-# ---- [map.console.normal] / [map.console.visual]（§6.6）：只对 console，覆盖同名的 vim 键
-mkdir -p "$D/map"; printf '[map.console.normal]\nL = "5l"\nJ = "j"\n[map.console.visual]\nL = "3l"\n' >"$D/map/keymaps.toml"
+# ---- [map.query.normal] / [map.query.visual]（§6.6）：只对 query，覆盖同名的 vim 键
+mkdir -p "$D/map"; printf '[map.query.normal]\nL = "5l"\nJ = "j"\n[map.query.visual]\nL = "3l"\n' >"$D/map/keymaps.toml"
 start -C "$D/map" -D "$DD"; key C-l; key g g; key 0
 key L
-check "[map.console.normal] L = \"5l\"：右移 5 个字符" cur_is 1,6
+check "[map.query.normal] L = \"5l\"：右移 5 个字符" cur_is 1,6
 key J
 check "J = \"j\" 覆盖合并行：只是下移一行，没有合并" eval 'cur_is 2,6 && [[ $(line 1) == "selectcount(*), '"'a'"' from t where id > 10; -- n" ]]'
 key 0; key v; key L
-check "[map.console.visual] L = \"3l\"：选区扩到 4 个字符" eval '[[ $(info) == "4 字符 · ↵ run" ]] || { echo "  $(bar)"; false; }'
+check "[map.query.visual] L = \"3l\"：选区扩到 4 个字符" eval '[[ $(info) == "4 字符 · ↵ run" ]] || { echo "  $(bar)"; false; }'
 key Escape
 
-# ---- 在 $EDITOR 中编辑（console.external，默认不绑键）：先写盘，外部编辑器改完回来重新载入，算一个撤销步
+# ---- 在 $EDITOR 中编辑（query.external，默认不绑键）：先写盘，外部编辑器改完回来重新载入，算一个撤销步
 printf '#!/bin/sh\nprintf "select 42\\n" >>"$1"\n' >"$D/ed"; chmod +x "$D/ed"
 e2e_start -D "$DD" "VISUAL=$D/ed $E2E_BIN"; wait_for 5 flag_is alternate_on 1; sleep 0.3
-key C-l; key C-p; typ '>console.external'; key Enter; sleep 1
+key C-l; key C-p; typ '>query.external'; key Enter; sleep 1
 check "面板里执行「在 \$EDITOR 中编辑」：\$VISUAL 改过的文件重新载入，界面恢复" eval 'running && flag_is alternate_on 1 && [[ $(line 2) == "select 2 as b" && $(line 3) == "select 42" ]] || { echo "  line 3: $(line 3)"; false; }'
 key u
 check "u 一次撤掉外部编辑器的改动" eval '[[ $(line 2) == "select 2 as b" && -z $(line 3) ]]'
 
-# ---- console 文件读不出来（cd4729f）：照常启动，这个 console 不打开，toast「读取失败：…」，不拿空内容覆盖它
-mkdir -p "$D/bad-data/sqlmux/consoles/console_1.sql"                # 是个目录
+# ---- query 文件读不出来（cd4729f）：照常启动，这个 query 不打开，toast「读取失败：…」，不拿空内容覆盖它
+mkdir -p "$D/bad-data/sqlmux/queries/query_1.sql"                # 是个目录
 start -D "$D/bad-data"
-check "console_1.sql 是个目录：照常启动，toast「读取失败：…is a directory」，② 没有 console（显示引导页）" eval 'running && e2e_text 1 160 44 | grep -q "读取失败：.*console_1.sql.*is a directory" && [[ $(e2e_text 98 160 1) != *console* ]] && e2e_plain | cut -c105-160 | grep -q 新建'
-check "那个目录原样留着" test -d "$D/bad-data/sqlmux/consoles/console_1.sql"
+check "query_1.sql 是个目录：照常启动，toast「读取失败：…is a directory」，② 没有 query（显示引导页）" eval 'running && e2e_text 1 160 44 | grep -q "读取失败：.*query_1.sql.*is a directory" && [[ $(e2e_text 98 160 1) != *query* ]] && e2e_plain | cut -c105-160 | grep -q 新建'
+check "那个目录原样留着" test -d "$D/bad-data/sqlmux/queries/query_1.sql"
 
 # ---- 用户映射展开的按键（§6.6）：展开出来的空格和 x 不能凑成 SPC x 关掉 pane（审查时的真 bug）
-printf '[map.console.normal]\nQ = "iselect x<Esc>"\n' >"$D/map/keymaps.toml"
+printf '[map.query.normal]\nQ = "iselect x<Esc>"\n' >"$D/map/keymaps.toml"
 start -C "$D/map"; key C-l; key Q
 check "映射 Q = \"iselect x<Esc>\"：插入 select x，回到 NORMAL，pane 都在" eval '[[ $(line 1) == "select x" && $(mode) == NORMAL && $(e2e_panes | awk "{ print \$1 }" | tr "\n" " ") == "0 1 2 " ]]'
 

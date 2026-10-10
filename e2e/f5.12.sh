@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # F5.12 补全：接受关键字补空格，补齐 DML / DDL 关键字（specs/m5-workspace/task.md F5.12；tech-design §9.7「接受关键字时补一个空格」）
-# 补空格和光标的细节有单测；这里测真实终端里 console、WHERE、快速 SQL 三处的接受、↵ 不执行 / 照常执行，以及 DML / DDL 候选。只读，用共用库。
+# 补空格和光标的细节有单测；这里测真实终端里 query、WHERE、快速 SQL 三处的接受、↵ 不执行 / 照常执行，以及 DML / DDL 候选。只读，用共用库。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 . "$(dirname "$0")/palette.sh"
@@ -18,13 +18,13 @@ settle() { wait_for 8 settled; }
 
 start; key C-l; key i
 
-# ---- console：selec ↵ → "select "，光标落在空格后（状态栏的列号 = 文字长度 + 1）
+# ---- query：selec ↵ → "select "，光标落在空格后（状态栏的列号 = 文字长度 + 1）
 e2e_type "selec"; sleep 0.5
-check "console 输入 selec：弹出 select" has select
+check "query 输入 selec：弹出 select" has select
 key Enter
 check "↵ 接受：select + 一个空格，光标在空格后（前面 7 个字符），列表关了，仍在 INSERT" eval '[[ $(line 1) == "select" && $(cc) == 1:7 && -z $(pop) ]] && mode_is INSERT'
 fresh; e2e_type "select 1 from t_user wher"; sleep 0.5; key Enter
-check "console：wher ↵ → where + 空格（前面 27 个字符），没有换行（F8.17：接着弹出列名列表，没有选中项，盖住第 2 行，用光标行判断）" eval '[[ $(line 1) == "select 1 from t_user where" && $(cc) == 1:27 ]]'
+check "query：wher ↵ → where + 空格（前面 27 个字符），没有换行（F8.17：接着弹出列名列表，没有选中项，盖住第 2 行，用光标行判断）" eval '[[ $(line 1) == "select 1 from t_user where" && $(cc) == 1:27 ]]'
 fresh; e2e_type "select * from t_user u wher"; sleep 0.5; key Enter; e2e_type "u.i"; sleep 0.5
 check "补空格之后接着打：where u.i 弹出列 id（列不补空格的前提）" has id
 key Enter
@@ -44,11 +44,11 @@ check "光标后已有空格：不多补，文字还是 'select x'，光标移�
 
 # ---- DML / DDL 候选
 fresh; e2e_type "ins"; sleep 0.5
-check "console 输入 ins：有 insert into" has "insert into"
+check "query 输入 ins：有 insert into" has "insert into"
 fresh; e2e_type "upd"; sleep 0.5
-check "console 输入 upd：有 update" has update
+check "query 输入 upd：有 update" has update
 fresh; e2e_type "del"; sleep 0.5
-check "console 输入 del：有 delete from" has "delete from"
+check "query 输入 del：有 delete from" has "delete from"
 fresh; e2e_type "ins"; sleep 0.5; key Enter
 check "接受 insert into：补一个空格（带空格的整条候选）" eval '[[ $(line 1) == "insert into" && $(cc) == 1:12 ]]'
 fresh; e2e_type "crea"; sleep 0.5

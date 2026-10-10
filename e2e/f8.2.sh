@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # F8.2 以 ; 结尾的行之后，新行不继承缩进（specs/m8-feedback/task.md F8.2；tech-design §7.9）
-# 规则本身有编辑器单测；这里在真实终端的 console 里测 ↵（INSERT）、o、O 三个入口。nvim 没有这条规则，不进 nvim 差分。
+# 规则本身有编辑器单测；这里在真实终端的 query 里测 ↵（INSERT）、o、O 三个入口。nvim 没有这条规则，不进 nvim 差分。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 

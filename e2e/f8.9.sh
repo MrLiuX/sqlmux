@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# F8.9 默认布局的 data 和 console 等宽（specs/m8-feedback/task.md F8.9；tech-design §5、§7.1）
+# F8.9 默认布局的 data 和 query 等宽（specs/m8-feedback/task.md F8.9；tech-design §5、§7.1）
 # 宽度分配有 golden（侧栏展开 / 折叠各一张）；这里在不同终端宽度下看真实终端里 ① 和 ② 的宽度差不超过 1 列，
 # 侧栏折叠后也是，拆分出来的一对同样均分；窗口缩放后仍然均分。只读。
 . "$(dirname "$0")/lib.sh"

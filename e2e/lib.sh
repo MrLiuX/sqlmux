@@ -28,7 +28,7 @@ e2e_build() { [[ -n $E2E_NOBUILD ]] && { [[ -x $E2E_BIN ]] || { echo "e2e: E2E_N
 # -K: install FILE as $XDG_CONFIG_HOME/sqlmux/keymaps.toml (F5.9: [keys] / [map] live there, not in config.toml).
 # -C: copy DIR's contents into $XDG_CONFIG_HOME/sqlmux/ (config.toml, themes/ …).
 # -S: use DIR (the caller's, kept across starts) as $XDG_STATE_HOME instead of a fresh one.
-# -D: the same for $XDG_DATA_HOME (consoles' files, §11).
+# -D: the same for $XDG_DATA_HOME (queries' files, §11).
 # -P: CMD's PATH instead of the default, which puts $E2E_TMP/bin first: a fake pbcopy / pbpaste there
 # keep the system clipboard in $E2E_TMP/clipboard (lib.sh clip), so no run touches the user's (F3.38,
 # AGENTS.md「隔离用户数据」); -P /bin has no clipboard tool at all, for the OSC 52 fallback. PATH is set inside
@@ -205,7 +205,7 @@ start() {
   e2e_start "$@" "$E2E_BIN"; wait_for 5 flag_is alternate_on 1 || echo "e2e: sqlmux did not start: $(e2e_plain | grep -m1 'sqlmux:')"; sleep 0.3
   if [[ -n $SOLO ]]; then solo; fi
 }
-# solo: close ② console_1 of M3's default layout (§5), so ① spans the width right of the sidebar
+# solo: close ② query_1 of M3's default layout (§5), so ① spans the width right of the sidebar
 # with the focus, as scripts written for M1's one-pane layout assume (m3-console/task.md「M1 / M2 的 e2e」).
 solo() { e2e_keys C-l; sleep 0.3; e2e_keys Space; e2e_type x; wait_for 3 eval '[[ -z $(e2e_panes | awk "\$1 == 2") ]]'; sleep 0.2; }
 exited()  { screen_has '[e2e-exit'; }
@@ -214,7 +214,7 @@ running() { flag_is alternate_on 1 && ! exited; }
 # t_user (↵), then t_order in a new tab (C-t), in the focused pane: "1:t_user- │ 2:t_order*".
 two_tabs() { local t; for t in "@t_user Enter" "@t_order C-t"; do e2e_keys C-p; sleep 0.3; e2e_type "${t% *}"; sleep 0.3; e2e_keys "${t#* }"; sleep 0.3; done; }
 # two_panes: split the focused pane right (SPC %) and move back — "① | ②" side by side with ① focused,
-# in place of M0's data | console.
+# in place of M0's data | query.
 two_panes() { e2e_keys Space; e2e_type %; sleep 0.3; e2e_keys C-h; sleep 0.3; }
 # e2e_lock TABLE: another session holds an ACCESS EXCLUSIVE lock on TABLE in E2E_DB until e2e_unlock,
 # so the next query on it waits and pg_stat_activity shows its text (e2e_waiting APP).

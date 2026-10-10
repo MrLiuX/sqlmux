@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # F3.14 输入框删词（specs/m3-console/task.md F3.14；tech-design §7.9「删词」）
-# 切词规则由单测覆盖；这里在真实终端里按 C-w、M-BS（ESC DEL）、C-u：WHERE、面板、单元格编辑、console 的 INSERT 和 : 命令行。
+# 切词规则由单测覆盖；这里在真实终端里按 C-w、M-BS（ESC DEL）、C-u：WHERE、面板、单元格编辑、query 的 INSERT 和 : 命令行。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 . "$(dirname "$0")/palette.sh"
@@ -52,12 +52,12 @@ mbs
 check "单元格里 M-BS：删掉 hello" eval '[[ -z $(cell) ]] || { echo "  $(cell)"; false; }'
 key Escape; key Escape
 
-# ---- console 的 INSERT 和 : 命令行
+# ---- query 的 INSERT 和 : 命令行
 start; key C-l; key i; typ "select foo.bar"
 key C-w
-check "console INSERT 里 C-w：同 vim，删掉 bar，留下 foo." eval '[[ $(line 1) == "select foo." ]] || { echo "  $(line 1)"; false; }'
+check "query INSERT 里 C-w：同 vim，删掉 bar，留下 foo." eval '[[ $(line 1) == "select foo." ]] || { echo "  $(line 1)"; false; }'
 mbs
-check "console INSERT 里 M-BS：同 C-w，删掉 .（一串非关键字字符）" eval '[[ $(line 1) == "select foo" ]] || { echo "  $(line 1)"; false; }'
+check "query INSERT 里 M-BS：同 C-w，删掉 .（一串非关键字字符）" eval '[[ $(line 1) == "select foo" ]] || { echo "  $(line 1)"; false; }'
 key Escape; mbs
 check "NORMAL 下 M-BS 不做事" eval '[[ $(line 1) == "select foo" && $(mode) == NORMAL ]]'
 key u

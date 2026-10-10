@@ -3,7 +3,7 @@
 # 编辑器本身的行为有 nvim 差分兜底；这里在真实终端里走 WHERE 的 INSERT / NORMAL / VISUAL 切换、执行、回表格、历史下拉，
 # 以及单行的规则（j / k / o / : 不做事，yy p 当字符粘）。只读，用共用库的 t_order。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 editing() { [[ $(bar) == *"-- editing WHERE --"* ]]; }

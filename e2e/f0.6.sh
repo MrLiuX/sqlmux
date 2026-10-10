@@ -2,7 +2,7 @@
 # F0.6 which-key（specs/m0-skeleton/task.md F0.6；tech-design §6.5、§6.8）
 # 点击浮层里的项属于 F0.8。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 CFG=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")

@@ -3,7 +3,7 @@
 # 「所有键位都经由 Action」由单测 TestKeysRunActions 覆盖。
 # F0.13 起状态栏命令行被命令面板取代：: 打开面板（F5.8 起是「所有」范围），:q↵ / :qa↵ 不变；面板本身见 f0.13.sh。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 CFG=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")
@@ -27,7 +27,7 @@ check "关掉 ① 的最后一个 tab：pane 关闭，② 占满并成为 ⟨1�
 check "剩下的 pane 获得焦点（focus 色边框）" style_has 34 1 fg=#9ece6a
 cmd q
 check "唯一的 pane 关掉最后一个 tab：保留为空 pane，标题只有 ①（F3.7：没有 tab 就没有图标）" text_is 34 39 1 "┌─ ① ─"
-check "空 pane：显示引导页（F3.7）" eval 'screen_has "打开表" && screen_has "新建 console"'
+check "空 pane：显示引导页（F3.7）" eval 'screen_has "打开表" && screen_has "新建 query"'
 check "空 pane：tab 栏只有 +，前面没有 │，右侧没有提示" text_is 34 160 43 "$EMPTY_TABS"
 check "空 pane：标题栏右侧没有任何提示（§7.8 空 pane）" eval '[[ $(e2e_text 34 160 1) =~ ^┌─\ ①\ ─+┐$ ]] || { echo "  title: $(e2e_text 34 160 1)"; false; }'
 check "空 pane：程序不退出" running

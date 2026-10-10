@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # F5.17 终端翻译过来的修饰键（specs/m5-workspace/task.md F5.17；tech-design §6.2「终端翻译过来的键」）
 # 推荐的送法：tmux 用 send-keys -H 写原始字节 ESC [ <码点十进制> ; <1+修饰> u（shift 1、alt 2、ctrl 4、super 8）。
-# <C-S-w> <C-S-[> <C-S-t> <D-w> 都绑成 pane.zoom（看得见：只剩焦点所在的 pane / 恢复；焦点不动，不会把输入框里的光标带走），在表格、树、console 的 NORMAL / INSERT、WHERE 的 INSERT
-# 下各按两次，看命令执行了、输入框里没有多出字符；没绑的 <D-x> 在 console 的 INSERT 下不会输入 x。只读，用共用库。
+# <C-S-w> <C-S-[> <C-S-t> <D-w> 都绑成 pane.zoom（看得见：只剩焦点所在的 pane / 恢复；焦点不动，不会把输入框里的光标带走），在表格、树、query 的 NORMAL / INSERT、WHERE 的 INSERT
+# 下各按两次，看命令执行了、输入框里没有多出字符；没绑的 <D-x> 在 query 的 INSERT 下不会输入 x。只读，用共用库。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 . "$(dirname "$0")/palette.sh"
@@ -34,9 +34,9 @@ check "（准备）三个 pane，焦点在 ① 表格" eval 'shown && focus_is 1
 check "表格：四个键各按两次，放大又恢复" all_keys
 
 key C-l; key C-l
-check "console 的 NORMAL：四个键都执行" eval 'focus_is 2 && mode_is NORMAL && all_keys'
+check "query 的 NORMAL：四个键都执行" eval 'focus_is 2 && mode_is NORMAL && all_keys'
 key i; paste "abc"
-check "console 的 INSERT：四个键都执行，文字还是 abc，没有字符漏进去" eval 'mode_is INSERT && all_keys && [[ $(cline 1) == "abc" ]] || { echo "  line1: $(cline 1)"; false; }'
+check "query 的 INSERT：四个键都执行，文字还是 abc，没有字符漏进去" eval 'mode_is INSERT && all_keys && [[ $(cline 1) == "abc" ]] || { echo "  line1: $(cline 1)"; false; }'
 csi x $SUPER
 check "没绑的 <D-x>：INSERT 下不输入 x，文字还是 abc，没有放大" eval '[[ $(cline 1) == "abc" ]] && shown'
 key Escape; key C-h

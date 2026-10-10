@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # F3.20 错误栏（specs/m3-console/task.md F3.20；tech-design §7.8「错误栏」、§7.6「数据库报错」、§10.3）
 # 错误栏的画法（多行、截短、6 行上限）由 golden 覆盖；这里在真实 PG 上测哪些错误进错误栏、关掉它的途径、自动消失、
-# 属于 tab，出错后 ORDER / LIMIT / PAGE 退回画着的那一份（发出的 SQL 看 pg_stat_activity），console 的位置换算与 R 重跑。
-# 自建库：要改名表和列、锁行、写库。表格部分 SOLO（① 占满），console 部分用默认布局。
+# 属于 tab，出错后 ORDER / LIMIT / PAGE 退回画着的那一份（发出的 SQL 看 pg_stat_activity），query 的位置换算与 R 重跑。
+# 自建库：要改名表和列、锁行、写库。表格部分 SOLO（① 占满），query 部分用默认布局。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")
@@ -110,14 +110,14 @@ key '['; wait_for 8 settled
 set_col 1 1 3; key C-s; wait_for 8 eval '[[ $(result) == 已保存* ]]'
 check "改成存在的 user 3 再保存：成功，错误栏消失，库里写进去" eval '[[ $(result) == "已保存 1 行"* && -z $(errbar 1) && $(psql_n "select user_id from t_order where id = 1") == 3 ]]'
 
-# ---- console（默认布局，② console_1 在 [105,1] 56x26，文字从 x 111 起）：报错带 SQLSTATE 和换算成文件里的位置
+# ---- query（默认布局，② query_1 在 [105,1] 56x26，文字从 x 111 起）：报错带 SQLSTATE 和换算成文件里的位置
 paste() { t set-buffer -b e2e -- "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
-setsql() { key Escape; key g g; key d G; key i; paste "$1"; key Escape; key g g; }   # console 的内容换成 SQL，光标回到第 1 行
+setsql() { key Escape; key g g; key d G; key i; paste "$1"; key Escape; key g g; }   # query 的内容换成 SQL，光标回到第 1 行
 run() { key Enter; wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 0.3; }
 SOLO= start -C "$D/own"; key C-l
 setsql $'select 1;\n\nselect id,\n  nosuch_a from t_order\nwhere id < 3;'
 key G; run
-check "console 执行出错：② 底部的错误栏 [42703]，下一行「位置：第 4 行第 3 列」（换算成文件里的行列）" eval 'errbar_is 2 "[42703] column \"nosuch_a\" does not exist ×" && [[ $(errbar 2 | sed -n 2p) == "位置：第 4 行第 3 列" ]] && style_has 100 $(errbar_y 2) fg=$ERROR || { errbar 2; false; }'
+check "query 执行出错：② 底部的错误栏 [42703]，下一行「位置：第 4 行第 3 列」（换算成文件里的行列）" eval 'errbar_is 2 "[42703] column \"nosuch_a\" does not exist ×" && [[ $(errbar 2 | sed -n 2p) == "位置：第 4 行第 3 列" ]] && style_has 100 $(errbar_y 2) fg=$ERROR || { errbar 2; false; }'
 setsql 'select 1; select nosuch_b;'; key '$'; run
 check "同一行的第二条语句：列号从行首算（第 1 行第 18 列）" eval '[[ $(errbar 2 | sed -n 2p) == "位置：第 1 行第 18 列" ]] || { errbar 2; false; }'
 setsql $'-- 注释\nselect  \'中文\', nosuch_c'; key j; run
@@ -132,18 +132,18 @@ key Escape
 check "再按 esc：关掉" eval '[[ -z $(errbar 2) ]]'
 setsql 'select nosuch_d'; run; setsql 'select 1 as ok'; run
 check "下一次开始执行就清掉上一次的：成功之后没有错误栏" eval '[[ -z $(errbar 2) ]]'
-# 光标在最后一行时出错：错误栏让 console 变矮，光标所在行仍然可见
+# 光标在最后一行时出错：错误栏让 query 变矮，光标所在行仍然可见
 setsql "$(for i in $(seq 29); do echo "select $i;"; done; echo 'select nosuch_e;')"; key G; run
 check "30 行、光标在第 30 行出错：错误栏上面一行就是第 30 行（视图跟着变矮）" eval '[[ $(e2e_text 99 160 $(( $(errbar_y 2) - 1 ))) == *"30 select nosuch_e"* ]] || { e2e_text 99 160 $(( $(errbar_y 2) - 1 )); false; }'
 
-# ---- 结果区 R 重跑出错：错误显示在来源 console 的 tab 上；来源 console 关了只记日志
+# ---- 结果区 R 重跑出错：错误显示在来源 query 的 tab 上；来源 query 关了只记日志
 setsql 'select id, note from t_order where id < 3'; run
 psql_n "alter table t_order rename column note to note2" >/dev/null
 key C-j; key R; wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 0.3
-check "③ 上 R 重跑出错：错误栏出在来源 console ② 上（带位置），③ 没有" eval 'errbar_is 2 "[42703] column \"note\" does not exist ×" && [[ $(errbar 2 | tail -1) == "位置：第 1 行第 12 列" && -z $(errbar 3) ]] || { errbar 2; false; }'
-key C-k; key Space; e2e_type x; sleep 0.5                                         # 关掉 console ②，结果区变成 ②
+check "③ 上 R 重跑出错：错误栏出在来源 query ② 上（带位置），③ 没有" eval 'errbar_is 2 "[42703] column \"note\" does not exist ×" && [[ $(errbar 2 | tail -1) == "位置：第 1 行第 12 列" && -z $(errbar 3) ]] || { errbar 2; false; }'
+key C-k; key Space; e2e_type x; sleep 0.5                                         # 关掉 query ②，结果区变成 ②
 key C-j; key g t; key R; wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 0.3
-check "来源 console 已关：R 出错只记日志，哪里都没有错误栏" eval '[[ -z $(errbar 1) && -z $(errbar 2) && $(e2e_plain | grep -c "column \"note\" does not exist") -ge 2 ]] && running'
+check "来源 query 已关：R 出错只记日志，哪里都没有错误栏" eval '[[ -z $(errbar 1) && -z $(errbar 2) && $(e2e_plain | grep -c "column \"note\" does not exist") -ge 2 ]] && running'
 psql_n "alter table t_order rename column note2 to note" >/dev/null
 
 e2e_done

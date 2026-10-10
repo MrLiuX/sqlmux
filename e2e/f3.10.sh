@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# F3.10 console 的补全（specs/m3-console/task.md F3.10；tech-design §9.7「补全的上下文判断」「交互」）
+# F3.10 query 的补全（specs/m3-console/task.md F3.10；tech-design §9.7「补全的上下文判断」「交互」）
 # 上下文判断由 sqlkit 的单测覆盖；这里测真实终端里的自动弹出、接受、esc、粘贴不弹，以及列在第一次用到时从 PG 取。
 # 默认布局；共用库只读。
 . "$(dirname "$0")/lib.sh"
@@ -13,7 +13,7 @@ names() { items | awk '{ print $1 }' | tr '\n' ' '; }
 has() { [[ " $(names) " == *" $1 "* ]] || { echo "  candidates: $(names)"; false; }; }
 line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
 mode() { bar | awk '{ print $NF }'; }
-fresh() { key Escape; key Escape; key g g; key d G; key i; }                      # 清空 console，进 INSERT
+fresh() { key Escape; key Escape; key g g; key d G; key i; }                      # 清空 query，进 INSERT
 
 start; key C-l; key i
 e2e_type "select * from t_o"; sleep 0.5
@@ -30,7 +30,7 @@ check "t_user u 之后输入 u.：前缀为空也弹，列出 t_user 的列（�
 e2e_type e; sleep 0.3
 check "接着输入 e：按首字符过滤，只剩 e 开头的列" eval '[[ $(names) == "email " ]] || { echo "  $(names)"; false; }'
 key Escape
-check "console 里列表开着时 esc：关掉列表，同时退出 INSERT（同 nvim-cmp，ce3126e）" eval '[[ -z $(pop) && $(mode) == NORMAL ]]'
+check "query 里列表开着时 esc：关掉列表，同时退出 INSERT（同 nvim-cmp，ce3126e）" eval '[[ -z $(pop) && $(mode) == NORMAL ]]'
 
 # ---- CTE 的名字算作表
 fresh; e2e_type "with recent as (select 1) select * from rec"; sleep 0.5
@@ -68,7 +68,7 @@ key C-p; sleep 0.3; e2e_type ";select * from evt"; sleep 1
 check "快速 SQL 输入 select * from evt：候选里有 t_event（e 在 _ 之后）" has t_event
 key Escape; key Escape
 start; key C-l; key i; e2e_type "select * from tord"; sleep 0.8
-check "console 里 tord：t_order 排第一" eval '[[ $(names) == "t_order "* ]] || { echo "  $(names)"; false; }'
+check "query 里 tord：t_order 排第一" eval '[[ $(names) == "t_order "* ]] || { echo "  $(names)"; false; }'
 key Escape; key Escape; key d; key d; key i; e2e_type "select * from t_order where ma"; sleep 0.8
 check "t_order 上输入 ma：词首是 m 的 meta、max 在，m 在词中间的 amount 不在" eval 'has meta && has max && ! has amount'
 

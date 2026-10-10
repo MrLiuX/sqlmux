@@ -116,8 +116,8 @@ e2e_stop
 mkdir -p "$D/z-last/state/sqlmux"; printf 'version = 1\n[[session]]\n  name = "ghost"\n  connection = "gone"\n' >"$D/z-last/state/sqlmux/last.toml"
 E2E_NOCONN=1 e2e_start -S "$D/z-last/state" "$E2E_BIN"; wait_for 6 flag_is alternate_on 1; sleep 1.2
 check "零连接：last.toml 被忽略（不弹它的错、不建 ghost session），表单照常打开" eval 'running && form_open && ! screen_has "ghost" && [[ -f "$D/z-last/state/sqlmux/last.toml" ]]'
-key Escape; e2e_keys C-p; sleep 0.3; e2e_type ">新建 console"; sleep 0.5; key Enter; sleep 0.6
-check "零连接下需要连接的命令（新建 console）：toast「还没有连接，先新建一个」，不崩" eval 'running && toast_row | grep -q "还没有连接，先新建一个"'
+key Escape; e2e_keys C-p; sleep 0.3; e2e_type ">新建 query"; sleep 0.5; key Enter; sleep 0.6
+check "零连接下需要连接的命令（新建 query）：toast「还没有连接，先新建一个」，不崩" eval 'running && toast_row | grep -q "还没有连接，先新建一个"'
 e2e_keys C-p; sleep 0.3; e2e_type ">打开布局"; sleep 0.5; key Enter; sleep 0.6
 check "layout.open 也一样" eval 'running && toast_row | grep -q "还没有连接，先新建一个"'
 e2e_stop

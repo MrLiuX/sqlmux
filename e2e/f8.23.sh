@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# F8.23 树的右键菜单、删 console 文件、删表 / 视图（specs/m8-feedback/task.md F8.23；tech-design §7.8「右键菜单」、§13）
-# 右键（SGR 按钮 2）弹菜单：console 文件 → 打开 / 重命名… / 删除…，表 → 打开 / 在新 tab 打开 / 删除表…，视图 → 删除视图…，别的节点不弹；
+# F8.23 树的右键菜单、删 query 文件、删表 / 视图（specs/m8-feedback/task.md F8.23；tech-design §7.8「右键菜单」、§13）
+# 右键（SGR 按钮 2）弹菜单：query 文件 → 打开 / 重命名… / 删除…，表 → 打开 / 在新 tab 打开 / 删除表…，视图 → 删除视图…，别的节点不弹；
 # 菜单的键（j k ↑ ↓ ↵ esc）、点别处关；删表走危险确认框（红色、正文是要执行的 DROP，confirm_dangerous = false 也问），dd 等于菜单里的删除；
 # 手动事务模式拒绝，只读连接拒绝。表和视图建在自建库里，只在自建库上删。
 . "$(dirname "$0")/lib.sh"
@@ -14,13 +14,13 @@ mkdir -p "$D/c" "$D/ro"
 (umask 077; printf '[[connection]]\nname = "rw"\nengine = "postgres"\ndsn = "%s"\n' "$E2E_DB" >"$D/c/connections.toml"
  printf '[[connection]]\nname = "ro"\nengine = "postgres"\ndsn = "%s"\nread_only = true\n' "$E2E_DB" >"$D/ro/connections.toml")
 psql_n() { psql "$E2E_DB" -At -c "$1"; }
-files() { ls "$E2E_TMP/data/sqlmux/consoles" 2>/dev/null | sed 's/\.sql$//' | tr '\n' ' '; }
+files() { ls "$E2E_TMP/data/sqlmux/queries" 2>/dev/null | sed 's/\.sql$//' | tr '\n' ' '; }
 toast_text() { e2e_text 1 "$(e2e_flag pane_width)" $(( $(H) - 1 )) | sed 's/[ │└┘─┌┐]//g'; }
 toasted() { grep -qF -- "$1" "$D/rec"; }
 fresh_rec() { : >|"$D/rec"; }
 rclick() { _sgr 2 "$1" "$2" M; _sgr 2 "$1" "$2" m; sleep 0.6; }                  # 右键单击
 srow() { local y; for y in $(seq 3 43); do [[ $(e2e_text 1 32 "$y") == *" $1 "* ]] && { echo "$y"; return; }; done; }     # 侧栏里 NAME 最靠上的那一行（表在「工作区」的 tab 节点之上）
-srow_last() { local y r=; for y in $(seq 3 43); do [[ $(e2e_text 1 32 "$y") == *" $1 "* ]] && r=$y; done; echo "$r"; }     # 最靠下的（Consoles 下的 console 在「工作区」的之下）
+srow_last() { local y r=; for y in $(seq 3 43); do [[ $(e2e_text 1 32 "$y") == *" $1 "* ]] && r=$y; done; echo "$r"; }     # 最靠下的（Queries 下的 query 在「工作区」的之下）
 pop() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5 }' | tail -1; }
 mitems() { local g y; g=($(pop)); [[ -n ${g[0]} ]] || return 0; for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $y | sed 's/^ *//; s/ *$//'; done | tr '\n' '|'; }
 menu_is() { [[ $(mitems) == "$1" ]] || { echo "  menu: [$(mitems)], want [$1]"; false; }; }
@@ -31,7 +31,7 @@ box_red() { local g; g=($(pop)); [[ -n ${g[0]} ]] && style_has $((g[0] + 2)) $((
 tsel() { local y; for y in $(seq 3 43); do [[ $(e2e_style 4 "$y") == *bg=#364a82* ]] && { e2e_text 1 32 "$y"; return; }; done; }
 tree_focus() { local i; for ((i = 0; i < 6; i++)); do [[ $(focused) == 0 ]] && return 0; key C-h; done; }
 tree_to() { local i; tree_focus; key G; for ((i = 0; i < 60; i++)); do [[ $(tsel) == *" $1 "* ]] && return 0; key k; done; return 1; }
-newcon() { pal ">console.new"; key Enter; sleep 0.8; }
+newcon() { pal ">query.new"; key Enter; sleep 0.8; }
 type_in() { key i; e2e_type "$1"; key Escape; sleep 1.5; }
 
 psql_n "create table t_drop1 (id int); create table t_drop2 (id int); create table t_drop3 (id int); create view v_drop1 as select 1 as x" >/dev/null
@@ -84,20 +84,20 @@ fresh_rec; y=$(srow t_drop3); rclick 12 "$y"; key j; key j; key Enter; sleep 0.8
 check "手动事务模式：删表被拒绝，toast「手动事务模式下不能删表：…」，没有确认框，表还在" eval '! asked && toasted "手动事务模式下不能删表" && [[ $(psql_n "select count(*) from pg_tables where tablename = '"'t_drop3'"'") == 1 ]]'
 g=($(geom 2)); x=$(e2e_find "Tx:" "${g[1]}" | tr ' ' '\n' | awk -v l="${g[0]}" '$1 > l { print; exit }'); e2e_click "$x" "${g[1]}"; sleep 0.4; e2e_type 自动; sleep 0.3; key Enter; sleep 0.4
 
-# ---- console 文件：右键 → 删除… → 确认
+# ---- query 文件：右键 → 删除… → 确认
 key C-l; type_in "keep me"; newcon; type_in "kill me"
 e2e_type ':q'; key Enter; sleep 0.8
-check "（准备）console_2 关着，文件有内容，Consoles 下还在" eval '[[ $(files) == *console_2* && -n $(srow_last console_2) ]]'
-y=$(srow_last console_2); rclick 12 "$y"
-check "右键 Consoles 下的 console_2：菜单「打开 / 重命名… / 删除…」" eval 'menu_is "打开|重命名…|删除…|"'
+check "（准备）query_2 关着，文件有内容，Queries 下还在" eval '[[ $(files) == *query_2* && -n $(srow_last query_2) ]]'
+y=$(srow_last query_2); rclick 12 "$y"
+check "右键 Queries 下的 query_2：菜单「打开 / 重命名… / 删除…」" eval 'menu_is "打开|重命名…|删除…|"'
 key j; key j; key Enter; sleep 0.5
-check "选「删除…」：确认框「删除 console_2？」" eval '[[ $(e2e_plain | grep -oE "删除 console_2？" | head -1) == "删除 console_2？" ]]'
+check "选「删除…」：确认框「删除 query_2？」" eval '[[ $(e2e_plain | grep -oE "删除 query_2？" | head -1) == "删除 query_2？" ]]'
 key y; sleep 0.8
-check "y：文件删了，Consoles 下没有 console_2 了，console_1 的内容还在" eval '[[ $(files) == "console_1 " && -z $(srow_last console_2) ]]'
-y=$(srow_last console_1); rclick 12 "$y"; key Enter; sleep 0.8
-check "右键开着的 console_1 → 打开（第一项）：聚焦它（已开着不重复开），工作区下还是一个 console_1 tab" eval 'no_menu && [[ $(e2e_plain | grep -c "keep me") -ge 1 ]]'
-y=$(srow_last console_1); rclick 12 "$y"; key j; key j; key Enter; sleep 0.6
-check "开着的 console_1 选「删除…」：拒绝，toast「先关掉它的 tab」，文件还在" eval 'toasted "先关掉它的 tab" || toast_text | grep -q "先关掉它的 tab"; [[ $(files) == "console_1 " ]]'
+check "y：文件删了，Queries 下没有 query_2 了，query_1 的内容还在" eval '[[ $(files) == "query_1 " && -z $(srow_last query_2) ]]'
+y=$(srow_last query_1); rclick 12 "$y"; key Enter; sleep 0.8
+check "右键开着的 query_1 → 打开（第一项）：聚焦它（已开着不重复开），工作区下还是一个 query_1 tab" eval 'no_menu && [[ $(e2e_plain | grep -c "keep me") -ge 1 ]]'
+y=$(srow_last query_1); rclick 12 "$y"; key j; key j; key Enter; sleep 0.6
+check "开着的 query_1 选「删除…」：拒绝，toast「先关掉它的 tab」，文件还在" eval 'toasted "先关掉它的 tab" || toast_text | grep -q "先关掉它的 tab"; [[ $(files) == "query_1 " ]]'
 
 # ---- 只读连接：拒绝删表
 start -x 200 -C "$D/ro"; e2e_record "$D/rec"; sleep 1

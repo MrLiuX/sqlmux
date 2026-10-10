@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# F8.3 console.format 格式化整个文件，光标不动（specs/m8-feedback/task.md F8.3；tech-design §6.8 console.format、§9.5）
+# F8.3 query.format 格式化整个文件，光标不动（specs/m8-feedback/task.md F8.3；tech-design §6.8 query.format、§9.5）
 # 两条语句都要格式化（不只光标所在的那条）；格式化之后光标留在原来的行号和列号，超出时夹到行尾 / 文件末尾；一次 u 撤回。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; rm -rf "$D"' EXIT
-printf '[keys.global]\n"<F6>" = "console.format"\n' >"$D/keymaps.toml"
+printf '[keys.global]\n"<F6>" = "query.format"\n' >"$D/keymaps.toml"
 paste() { local s=$1; [[ $s == *\; ]] && s="${s%;}\;"; t set-buffer -b e2e -- "$s"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }   # 结尾的 ; 要写成 \;
 cline() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
 clines() { local i; for ((i = 1; i <= $1; i++)); do cline $i; done; }

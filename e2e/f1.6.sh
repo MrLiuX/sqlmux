@@ -3,7 +3,7 @@
 # 布局交给 golden（TestGoldenTabs160x45、80x24）；这里测按键、点击和真实 PG 上的打开 / 切换。
 # 在自建库里做：「切过去，不重新取数」要锁住表，看有没有等锁的取数语句。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")

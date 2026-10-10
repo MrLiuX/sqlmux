@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F8.19 断线重连，MySQL（specs/m8-feedback/task.md F8.19；tech-design §8.2「断线重连」）
 # 用 KILL <id> 杀掉服务端的连接（等价于 tsh 代理断开 / wait_timeout 空闲断开；不停、不 pause 共用的容器）：表格 R 刷新自动恢复；
-# console 的语句服务端杀连接后已发出，读写都不重跑（错误栏原错误 + toast「已重连，请重新执行」），再执行就成功；选过的 database 重放；
+# query 的语句服务端杀连接后已发出，读写都不重跑（错误栏原错误 + toast「已重连，请重新执行」），再执行就成功；选过的 database 重放；
 # wait_timeout 到了同一条路径；重拨失败（password_cmd 读到错密码）节点变红、改回来恢复；手动事务里被杀（写语句不跑、commit 提交结果未知、
 # rollback 成功、表格重新加载）；只读连接重连后仍只读。写库只在自建库 sqlmux_e2e_<pid> 上。
 . "$(dirname "$0")/lib.sh"
@@ -50,23 +50,23 @@ kill_all; fresh_rec
 key R; wait_for 8 settled; sleep 1
 check "杀掉两条连接后在表格上按 R：数据回来，没有错误栏、没有 toast，树节点不变红，Meta 已经重连" eval '(( $(rows) >= 5 )) && [[ -z $(errbar 1 | head -1) && -z $(toast_text) && -n $(ids) ]] && ! node_red my'
 
-# ---- console：已发出的读写语句都不重跑；再执行就成功
+# ---- query：已发出的读写语句都不重跑；再执行就成功
 key C-l; setsql "select count(*) from t_user"
 kill_all; fresh_rec; run
-check "杀掉连接后 console 执行 select：已发出，不重跑，错误栏有原来的错误；toast「my：已重连，请重新执行」" eval '[[ -n $(errbar 2 | head -1) ]] && toasted "my：已重连，请重新执行" || { echo "  err=[$(errbar 2 | head -1)]"; false; }'
+check "杀掉连接后 query 执行 select：已发出，不重跑，错误栏有原来的错误；toast「my：已重连，请重新执行」" eval '[[ -n $(errbar 2 | head -1) ]] && toasted "my：已重连，请重新执行" || { echo "  err=[$(errbar 2 | head -1)]"; false; }'
 run
 check "再执行一次：成功，结果是 ${CNT}，错误栏没了，树节点不变红" eval '[[ $(rval) == "$CNT" && -z $(errbar 2 | head -1) ]] && ! node_red my'
 setsql "update t_user set name = 'zz819' where id = 1"
 kill_all; fresh_rec; run
-check "杀掉连接后 console 执行 update：不重跑，错误栏有原来的错误；toast「已重连，请重新执行」" eval '[[ -n $(errbar 2 | head -1) ]] && toasted "my：已重连，请重新执行"'
+check "杀掉连接后 query 执行 update：不重跑，错误栏有原来的错误；toast「已重连，请重新执行」" eval '[[ -n $(errbar 2 | head -1) ]] && toasted "my：已重连，请重新执行"'
 check "那条 update 没有执行（id 1 的 name 不是 zz819）" eval '[[ $(my "select name from t_user where id = 1") != zz819 ]]'
 run
 check "再按一次执行：成功，id 1 的 name 是 zz819" eval '[[ $(my "select name from t_user where id = 1") == zz819 && -z $(errbar 2 | head -1) ]]'
 
-# ---- 重连后 console 选过的 database 还在（USE 重放）
+# ---- 重连后 query 选过的 database 还在（USE 重放）
 key g s; e2e_type sqlmux; sleep 0.4; key Enter; sleep 1.2
 setsql "select database()"; run
-check "（准备）console 选了共用的 sqlmux 库：select database() 是 sqlmux" eval '[[ $(rval) == sqlmux ]] || { echo "  got: $(rval) title=$(ctitle)"; false; }'
+check "（准备）query 选了共用的 sqlmux 库：select database() 是 sqlmux" eval '[[ $(rval) == sqlmux ]] || { echo "  got: $(rval) title=$(ctitle)"; false; }'
 kill_all; run; run
 check "杀掉连接、重连后再执行：database 还是 sqlmux（选过的重放了）" eval '[[ $(rval) == sqlmux ]] || { echo "  got: $(rval)"; false; }'
 
@@ -84,7 +84,7 @@ printf 'wrong-%s\n' "$$" >|"$D/pw"
 key C-h; key R; sleep 2.5
 check "密码改错、杀掉连接后按 R：树节点 my 变红" eval 'node_red my'
 check "toast「my：…」带连接名和错误（看录下来的输出）" toasted "my："
-check "tab 都留着（t_user、console_1 还在）" eval '[[ $(e2e_plain | head -1) == *" t_user ─"* && $(tabbar 2) == *console_1* ]]'
+check "tab 都留着（t_user、query_1 还在）" eval '[[ $(e2e_plain | head -1) == *" t_user ─"* && $(tabbar 2) == *query_1* ]]'
 printf '%s\n' "$PW" >|"$D/pw"
 key R; wait_for 10 settled; sleep 1
 check "密码改回来再按 R：数据回来，树节点不再红" eval '! node_red my && (( $(rows) >= 5 )) && [[ -n $(ids) ]]'

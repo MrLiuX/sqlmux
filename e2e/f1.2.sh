@@ -3,7 +3,7 @@
 # catalog 的主键、唯一索引、枚举、可空、默认值由 go test -tags integration 覆盖；这里测树和面板。
 # F1.12 起树是层级树，schema 下拉框去掉了；展开、列节点、跨 schema 过滤、工作区在 f1.12.sh。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")
@@ -64,7 +64,7 @@ key C-h
 check "C-h 聚焦树：光标行为 select 底" eval 'cursor_on doraemon && style_has 30 4 bg=$SELECT'
 key 3 j; check "3j：下移 3 个节点（Tables (6)）" cursor_on "Tables (6)"
 key k;   check "k：上移 1 个（public）" cursor_on public
-key G;   check "G：最后一个节点（Consoles，F8.21：工作区下面多了 Consoles 节点；没有 console 时它下面是空的）" cursor_on Consoles
+key G;   check "G：最后一个节点（Queries，F8.21：工作区下面多了 Queries 节点；没有 query 时它下面是空的）" cursor_on Queries
 key g g; check "gg：第一个节点" cursor_on doraemon
 e2e_move 20 $(item_y t_sku); sleep 0.3
 check "悬停 t_sku：row 底，光标不动" eval 'style_has 30 $(item_y t_sku) bg=$ROW && style_has 30 4 bg=$SELECT'
@@ -116,7 +116,7 @@ key C-h
 e2e_wheel 10 6 down; sleep 0.3
 check "滚一格：视图下移 3 个节点（Tables (6) 起）；光标被夹到 Tables (6)" eval '[[ $(tree | head -1) == "Tables (6)" ]] && cursor_on "Tables (6)"'
 for i in 1 2 3 4; do e2e_wheel 10 6 down; sleep 0.2; done
-check "滚到底：最后一个节点 Consoles 贴着底边，不再往下" eval '[[ $(tree | tail -1) == Consoles && $(e2e_text 2 31 $(last_y)) == *Consoles* ]]'
+check "滚到底：最后一个节点 Queries 贴着底边，不再往下" eval '[[ $(tree | tail -1) == Queries && $(e2e_text 2 31 $(last_y)) == *Queries* ]]'
 for i in 1 2 3 4 5 6; do e2e_wheel 10 6 up; sleep 0.2; done
 check "往回滚：回到顶部" eval '[[ $(tree | head -1) == doraemon ]]'
 

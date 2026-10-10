@@ -62,17 +62,17 @@ check "连上之后：seed 展开，下面是 public 的 Tables（同一个库�
 e2e_keys Enter; wait_for 5 eval '[[ -n $(title) && $(title) != "… 行"* ]]'
 check "面板是 seed 连上之前打开的：快速 SQL 照样走 doraemon" eval '[[ $(grid) == "$APP_A" ]] || { grid; false; }'
 e2e_keys C-e; sleep 0.5
-check "C-e 开的 console 也在 doraemon 上（① 的 console_2，标题 doraemon · sqlmux.public ▾）" eval 'closed && tabs_are 1 "1:console_2*" && [[ $(e2e_text 34 103 1) == *" doraemon · sqlmux.public ▾"* ]] || { e2e_text 34 103 1; false; }'
+check "C-e 开的 query 也在 doraemon 上（① 的 query_2，标题 doraemon · sqlmux.public ▾）" eval 'closed && tabs_are 1 "1:query_2*" && [[ $(e2e_text 34 103 1) == *" doraemon · sqlmux.public ▾"* ]] || { e2e_text 34 103 1; false; }'
 
 # ---- 从 seed 打开表：表 tab 属于 seed，取数走 seed 的连接
 mark; click_node t_order 2; wait_for 8 settled
-check "单击 seed 下的 t_order：① 开出 t_order，取数走 seed 的连接" eval 'tabs_are 1 "1:console_2- │ 2:t_order*" && fetched "$APP_B"'
+check "单击 seed 下的 t_order：① 开出 t_order，取数走 seed 的连接" eval 'tabs_are 1 "1:query_2- │ 2:t_order*" && fetched "$APP_B"'
 check "地址块跟着焦点：seed · sqlmux@localhost:55432" addr_is seed
 pal "@t_order"
 check "面板的表范围列出两个连接的 t_order：位置 seed.public、doraemon.public，当前连接 seed 的排前面；bad 没连上，不列" eval '[[ $(list | cut -d"|" -f1 | grep "^t_order  " | tr "\n" /) == "t_order  seed.public  表/t_order  doraemon.public  表/" ]] || { list; false; }'
 pick() { local i; for ((i = 0; i < 12; i++)); do [[ $(selected) == "$1"* ]] && return; e2e_keys Down; sleep 0.1; done; }
 pick "t_order  doraemon.public"; mark; e2e_keys Enter; wait_for 8 settled
-check "选 doraemon 的 t_order ↵：另开一个 tab（两个连接上的同名表是两个 tab），取数走 doraemon" eval 'tabs_are 1 "1:console_2 │ 2:t_order- │ 3:t_order*" && fetched "$APP_A" && addr_is doraemon'
+check "选 doraemon 的 t_order ↵：另开一个 tab（两个连接上的同名表是两个 tab），取数走 doraemon" eval 'tabs_are 1 "1:query_2 │ 2:t_order- │ 3:t_order*" && fetched "$APP_A" && addr_is doraemon'
 key g T
 check "gT 回到 seed 的 t_order：地址块是 seed" addr_is seed
 pal '\;'; e2e_type "select current_setting('application_name') as app"; sleep 0.3; e2e_keys Enter; wait_for 5 eval '[[ -n $(title) && $(title) != "… 行"* ]]'

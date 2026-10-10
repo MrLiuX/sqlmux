@@ -3,7 +3,7 @@
 # F1.1 starts with one empty data pane: two_tabs / two_panes build what M0's default layout had;
 # the second window (%report) comes back in M5 (F5.2).
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")

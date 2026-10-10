@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F5.4 MySQL（specs/m5-workspace/task.md F5.4；tech-design §5、§7.7、§8.1–§8.6、§9.1、§10.2、§10.3、§12、§13）
 # 连接节点、表单的画法由 golden 覆盖，SQL 的拼法、逐类型的旧值校验、只读解除的清单由集成测试覆盖；这里在真实终端和 MySQL 8.4 上
-# 端到端地走一遍：树里列 database、表格浏览、面板（表、DDL 预览、快速 SQL）、console（/*! */、选 database、USE 之后重设、
+# 端到端地走一遍：树里列 database、表格浏览、面板（表、DDL 预览、快速 SQL）、query（/*! */、选 database、USE 之后重设、
 # KILL QUERY 取消）、编辑保存（布尔写 1 / 0、别人改过时报错、只差大小写也查得出）、事务状态与手动模式、只读连接、表单选 mysql。
 # 共用的 sqlmux 库只读；写库、开事务都在自建库 sqlmux_e2e_<pid>（lib.sh e2e_own_mydb）。
 . "$(dirname "$0")/lib.sh"
@@ -25,7 +25,7 @@ my() { e2e_mysql "$OWN" <<<"$1"; }                                         # 在
 sidebar() { local y; for y in $(seq 3 43); do e2e_text 1 32 "$y"; done; }
 trow() { local y; for y in $(seq 3 43); do [[ $(e2e_text 1 32 "$y") == *" $1 "* ]] && { echo "$y"; return; }; done; }
 paste() { t set-buffer -b e2e "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
-setsql() { key Escape; key g g; key d G; key i; paste "$1"; key Escape; key g g; }   # 焦点所在 console 的内容换成 SQL
+setsql() { key Escape; key g g; key d G; key i; paste "$1"; key Escape; key g g; }   # 焦点所在 query 的内容换成 SQL
 done_run() { wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 0.4; }
 run() { key Enter; done_run; }
 rval() { local g; g=($(geom 3)); e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $((g[1] + 3)) | awk -F'│' '{ gsub(/ /, "", $2); print $2 }'; }   # ③ 结果第一行第一列
@@ -65,11 +65,11 @@ pal; sql "select count(*) as n from agent"
 check "树的光标移到 agentable 上：快速 SQL 先 USE 当前连接的 Schema（agentable），select count(*) from agent 是 3" eval '[[ $(grid | head -1) == 3 ]] || { echo "  $(title) / $(line1) / $(grid | head -1)"; false; }'
 key Escape
 
-# ---- console：/*! */、选 database、USE 之后重设
+# ---- query：/*! */、选 database、USE 之后重设
 key C-l; key C-l
-check "② console 标题：my · sqlmux ▾（MySQL 只有 database 一段）" eval '[[ $(ctitle) == *" my · sqlmux ▾ "* ]]'
+check "② query 标题：my · sqlmux ▾（MySQL 只有 database 一段）" eval '[[ $(ctitle) == *" my · sqlmux ▾ "* ]]'
 setsql "select 5 /*! +1 */ as x"; run
-check "console 里 select 5 /*! +1 */：6" eval '[[ $(rval) == 6 ]] || { echo "  got: $(rval)"; false; }'
+check "query 里 select 5 /*! +1 */：6" eval '[[ $(rval) == 6 ]] || { echo "  got: $(rval)"; false; }'
 setsql "$(printf '/*!40101 select 1 as a */;\nselect 2 as b')"; run
 check "第 1 行 /*!40101 select 1 as a */; 上 ↵：它是一条语句（不当注释），结果 1" eval '[[ $(rval) == 1 ]] || { echo "  got: $(rval)"; false; }'
 key j; run
@@ -79,7 +79,7 @@ check "点标题的 database 下拉选 agentable：标题 my · agentable ▾" e
 setsql "select count(*) from agent"; run
 check "执行前先 USE agentable：select count(*) from agent 是 3" eval '[[ $(rval) == 3 ]] || { echo "  got: $(rval)"; false; }'
 setsql "use sqlmux"; run; setsql "select database()"; run
-check "一次执行里 USE 了别的库：记下的值作废，下次执行又 USE 回 console 的 agentable" eval '[[ $(rval) == agentable ]] || { echo "  got: $(rval)"; false; }'
+check "一次执行里 USE 了别的库：记下的值作废，下次执行又 USE 回 query 的 agentable" eval '[[ $(rval) == agentable ]] || { echo "  got: $(rval)"; false; }'
 
 # ---- KILL QUERY：取消长查询，服务端上的查询停掉，连接还是原来那条
 setsql "select connection_id()"; run; cid=$(rval)
@@ -125,7 +125,7 @@ check "别人把 user_3 改成 USER_3（排序规则下相等）：旧值按字�
 # ---- 事务：按执行过的语句记状态；手动模式下不提交，✓ 提交
 key C-l
 setsql "begin"; run
-check "console 里 begin：状态栏「事务中」" eval '[[ $(txstate) == 事务中 ]]'
+check "query 里 begin：状态栏「事务中」" eval '[[ $(txstate) == 事务中 ]]'
 setsql "delete from t_log"; run
 check "（准备）事务里删了 t_log：别的连接看到的还是 3 行" eval '[[ $(my "select count(*) from t_log") == 3 ]]'
 setsql "select 1 from no_such_table"; run
@@ -211,7 +211,7 @@ goto id 1; key Enter
 check "已有的行上 auto_increment 列不提供 DEFAULT" eval '[[ $(opts) != *DEFAULT* ]] || { echo "  $(opts)"; false; }'
 key Escape; key Escape
 
-# ---- console：call、嵌套的 /*!、整条 /*! … */
+# ---- query：call、嵌套的 /*!、整条 /*! … */
 key C-l
 setsql "call p42()"; run
 check "call 返回的行能显示：42" eval '[[ $(rval) == 42 ]] || { echo "  got: $(rval)"; false; }'

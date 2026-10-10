@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # F3.13 自动配对括号与引号（specs/m3-console/task.md F3.13；tech-design §7.9「自动配对」）
-# 配对规则由单测覆盖；这里在真实终端里按键：WHERE、快速 SQL、console 的 INSERT，撤销，配置 autopairs = false。
+# 配对规则由单测覆盖；这里在真实终端里按键：WHERE、快速 SQL、query 的 INSERT，撤销，配置 autopairs = false。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 
@@ -10,8 +10,8 @@ typ() { e2e_type "$1"; sleep 0.3; }
 paste() { t set-buffer -b e2e "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 wcur() { echo $(( $(e2e_flag cursor_x) - 41 )); }                              # WHERE 输入框里光标前有几个字符（SOLO 布局，文字从 x 42 起；cursor_x 从 0 起）
 where_is() { [[ $(where_in) == "$1" && $(wcur) == "$2" ]] || { echo "  WHERE '$(where_in)' cursor $(wcur), want '$1' cursor $2"; false; }; }
-line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }                       # console 第 N 行（默认布局）
-ccur() { echo $(( $(e2e_flag cursor_x) - 103 )); }                              # console 里光标前有几个字符
+line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }                       # query 第 N 行（默认布局）
+ccur() { echo $(( $(e2e_flag cursor_x) - 103 )); }                              # query 里光标前有几个字符
 mode() { bar | awk '{ print $NF }'; }
 
 # ---- WHERE（SOLO：① 独占右侧）
@@ -37,9 +37,9 @@ key C-p; typ ";select count("
 check "快速 SQL 输入 count(：补上 )" eval 'e2e_plain | grep -q "; *select count()"'
 key Escape; key Escape
 
-# ---- console 的 INSERT：一起撤销；带次数的重放照样配对
+# ---- query 的 INSERT：一起撤销；带次数的重放照样配对
 start; key C-l; key i; typ "select count("
-check "console 输入 count(：得到 count(█)" eval '[[ $(line 1) == "select count()" && $(ccur) == 13 ]] || { echo "  $(line 1) / $(ccur)"; false; }'
+check "query 输入 count(：得到 count(█)" eval '[[ $(line 1) == "select count()" && $(ccur) == 13 ]] || { echo "  $(line 1) / $(ccur)"; false; }'
 typ "*) from t where note = 'a"
 check "接着输入 *) 跳过右括号，引号照样配对" eval '[[ $(line 1) == "select count(*) from t where note = '"'a'"'" ]] || { echo "  $(line 1)"; false; }'
 key Escape; key u
@@ -57,7 +57,7 @@ key Escape
 # ---- autopairs = false：哪里都不配对
 mkdir -p "$D/off"; printf 'autopairs = false\n' >"$D/off/config.toml"
 start -C "$D/off"; key C-l; key i; typ "count('"
-check "autopairs = false：console 里不配对" eval '[[ $(line 1) == "count('"'"'" ]] || { echo "  $(line 1)"; false; }'
+check "autopairs = false：query 里不配对" eval '[[ $(line 1) == "count('"'"'" ]] || { echo "  $(line 1)"; false; }'
 key Escape
 SOLO=1 start -C "$D/off"; open_table t_order; key /; typ "status = '"
 check "autopairs = false：WHERE 里不配对" where_is "status = '" 10

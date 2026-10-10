@@ -22,15 +22,15 @@ save_layout() { e2e_keys C-p; sleep 0.3; e2e_type ">save layout"; sleep 0.2; cle
 # （tab 栏里「上一个」的 - 记号不存进布局，所以比较时去掉）
 snap() { echo "$(wins) | $(tabbar 1) | $(wh) | $(tabbar 2)" | sed "s/-//g"; }
 
-# ---- 状态 A：window 0 里 ① [t_user, t_order WHERE id < 50]、② console_1 写着 select 99 as marker；window 1 是默认布局
+# ---- 状态 A：window 0 里 ① [t_user, t_order WHERE id < 50]、② query_1 写着 select 99 as marker；window 1 是默认布局
 startl; two_tabs; key /; clear_in; e2e_type "id < 50"; key Enter; wait_for 8 settled
 key C-l; key i; paste "select 99 as marker"; key Escape
 e2e_keys Space; e2e_type c; sleep 0.6; e2e_keys Space; e2e_type p; sleep 0.5
 SNA=$(snap)
-check "（准备）状态 A：两个 window，① 里 t_user / t_order（WHERE id < 50），② console_1" eval '[[ $(wins) == "0: data*  1: data-2" && $(wh) == "id < 50" ]] || { echo "  $SNA"; false; }'
+check "（准备）状态 A：两个 window，① 里 t_user / t_order（WHERE id < 50），② query_1" eval '[[ $(wins) == "0: data*  1: data-2" && $(wh) == "id < 50" ]] || { echo "  $SNA"; false; }'
 save_layout a
 check "layout.save：状态栏输入布局名，↵ 写 layouts/a.toml，toast「已保存布局 a」" eval 'toast_text | grep -q "已保存布局 a" && [[ -f "$E2E_TMP/config/sqlmux/layouts/a.toml" ]]'
-check "文件是 TOML：version = 1，两个 [[session.window]]，表 tab 有 where，console 有 n" eval 'f="$E2E_TMP/config/sqlmux/layouts/a.toml"; grep -q "^version = 1" "$f" && [[ $(grep -c "\[\[session.window\]\]" "$f") == 2 ]] && grep -q "where = \"id < 50\"" "$f" && grep -q "kind = \"console\"" "$f"'
+check "文件是 TOML：version = 1，两个 [[session.window]]，表 tab 有 where，query 有 n" eval 'f="$E2E_TMP/config/sqlmux/layouts/a.toml"; grep -q "^version = 1" "$f" && [[ $(grep -c "\[\[session.window\]\]" "$f") == 2 ]] && grep -q "where = \"id < 50\"" "$f" && grep -q "kind = \"query\"" "$f"'
 # 非法名字
 e2e_keys C-p; sleep 0.3; e2e_type ">保存布局"; sleep 0.5; key Enter; sleep 0.4; e2e_type "x/y"; key Enter; sleep 0.5
 check "名字含 /：toast 拒绝，不写文件" eval 'toast_text | grep -q "名字不能含" && [[ ! -e "$E2E_TMP/config/sqlmux/layouts/x/y.toml" && $(ls "$E2E_TMP/config/sqlmux/layouts") == a.toml ]]'
@@ -43,7 +43,7 @@ check "esc 放弃：不写文件" eval '[[ $(ls "$E2E_TMP/config/sqlmux/layouts"
 key Escape; e2e_keys Space; e2e_type n; sleep 0.5; e2e_keys C-p; sleep 0.3; e2e_type ">window.close"; sleep 0.4; key Enter; sleep 0.5
 e2e_keys C-p; sleep 0.3; e2e_type "@t_sku"; sleep 0.3; e2e_keys C-t; sleep 0.8
 SNB=$(snap)
-check "（准备）状态 B：一个 window，② 里 console_1 / t_sku（关掉 window 1 后焦点在 ②）" eval '[[ $(wins) == "0: data*" && $(tabbar 2) == *"t_sku"* ]] || { echo "  $SNB"; false; }'
+check "（准备）状态 B：一个 window，② 里 query_1 / t_sku（关掉 window 1 后焦点在 ②）" eval '[[ $(wins) == "0: data*" && $(tabbar 2) == *"t_sku"* ]] || { echo "  $SNB"; false; }'
 save_layout b
 mkdir -p "$D/cfg/layouts"; cp "$E2E_TMP/config/sqlmux/layouts/"*.toml "$D/cfg/layouts/"
 quit_all
@@ -57,10 +57,10 @@ check "sqlmux 不带参数：恢复 last，window、tab、WHERE 和退出前一�
 check "（恢复的表 tab 取到了数据）" eval 'wait_for 8 settled; [[ -n $(grid_y) ]]'
 e2e_stop
 
-# ---- --layout 名字：打开 a（两个 window、WHERE、console 里的文字）
+# ---- --layout 名字：打开 a（两个 window、WHERE、query 里的文字）
 startl --layout a
 check "--layout a：两个 window，当前 window 的 ① / ② 和保存时一样" eval '[[ $(snap) == "$SNA" ]] || { echo "  got  $(snap)"; echo "  want $SNA"; false; }'
-check "console 的内容回来了（select 99 as marker）" eval 'cline 1 | grep -q "select 99 as marker"'
+check "query 的内容回来了（select 99 as marker）" eval 'cline 1 | grep -q "select 99 as marker"'
 key Escape
 e2e_stop
 startl --layout b
