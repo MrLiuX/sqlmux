@@ -111,7 +111,7 @@ func (a *App) ddlRect(v ui.TextView) uv.Rectangle {
 	for _, l := range strings.Split(v.Text, "\n") {
 		w = max(w, ui.Width(l))
 	}
-	box, _ := ui.CompleteBox(win, a.ddl.at, min(w+4, max(win.Dx()*2/3, 20)), min(v.Lines(), ddlColumnRows), 0)
+	box, _ := ui.CompleteBox(win, a.ddl.at, min(w+4, max(win.Dx()*2/3, 20)), min(v.Lines(), ddlColumnRows), 0, ui.CompleteRows)
 	return box
 }
 

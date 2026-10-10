@@ -394,10 +394,10 @@ func (a *App) drawCellMenu(f *ui.Frame, p *Pane, t *dataTab) {
 	if h.Text != "" {
 		extra = ui.CellHintRows
 	}
-	hb, _ := ui.CompleteBox(a.window(), at, h.Width(), 1, 0) // a hint alone
+	hb, _ := ui.CompleteBox(a.window(), at, h.Width(), 1, 0, ui.CompleteRows) // a hint alone
 	// place is where a menu w wide with n rows goes, and how many show
 	place := func(w, n int) (uv.Rectangle, int) {
-		box, rows := ui.CompleteBox(a.window(), at, w, n+extra, 0)
+		box, rows := ui.CompleteBox(a.window(), at, w, n+extra, 0, ui.CompleteRows)
 		if box.Min.Y > at.Y { // down: the hint on top
 			hb.Min.Y, box.Min.Y = box.Min.Y, box.Min.Y+extra
 		} else {

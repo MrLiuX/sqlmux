@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -686,6 +687,48 @@ func TestGoldenWhereHistory(t *testing.T) {
 			golden.RequireEqual(t, a.render().String())
 		})
 	}
+}
+
+// The history list goes down to the pane's bottom edge, as far as the
+// entries need; a pane too short for it gets the 8 rows it always had, over
+// the result area; a completion list is 8 rows, as ever (F10.1).
+func TestWhereHistoryFillsThePane(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	at := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	st := a.tableState(tab)
+	for i := range 20 {
+		st.History = append(st.History, config.Query{Where: fmt.Sprintf("id > %d", i), At: at})
+	}
+	feed(t, a, "/<C-r>")
+	p := a.focused()
+	in, pane := a.whereAt(p, tab), a.layout()[p.ID]
+	_, box, rows := a.histView(p, tab)
+	if want := min(20, pane.Max.Y-1-in.Y-4); rows != want || rows <= ui.CompleteRows || box.Max.Y != in.Y+1+rows+3 || box.Max.Y > pane.Max.Y-1 {
+		t.Errorf("a tall pane: %d rows, want %d; box %v in pane %v", rows, want, box, pane)
+	}
+	if _, _, rows := a.completeView(&completion{items: make([]candidate, 20)}, in); rows != ui.CompleteRows {
+		t.Errorf("a completion list: %d rows", rows)
+	}
+	feed(t, a, "<Esc>")
+	a.showResult(a.win())
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 20})
+	feed(t, a, "/<C-r>")
+	pane = a.layout()[p.ID]
+	if _, box, rows = a.histView(p, tab); rows != ui.CompleteRows || box.Max.Y <= pane.Max.Y-1 {
+		t.Errorf("a short pane: %d rows, box %v over pane %v", rows, box, pane)
+	}
+}
+
+// A history of 20 fills the pane down to its bottom edge (F10.1).
+func TestGoldenWhereHistoryFull(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	at := time.Date(2026, 10, 7, 12, 0, 0, 0, time.Local)
+	st := a.tableState(tab)
+	for i := range 20 {
+		st.History = append(st.History, config.Query{Where: fmt.Sprintf("id > %d", i), At: at})
+	}
+	feed(t, a, "/<C-r>")
+	golden.RequireEqual(t, a.render().String())
 }
 
 // A column's values, which the list opens on after its operator, have the

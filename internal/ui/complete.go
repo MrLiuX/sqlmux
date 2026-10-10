@@ -23,16 +23,18 @@ type Complete struct {
 	Foot     []Hint // a last row of dim hints in the box, "Key Label · …", when there are some (F8.14)
 }
 
-const completeRows = 8
+// CompleteRows is how many items a completion list shows (§9.7); the WHERE's
+// history and favorites show more (F10.1).
+const CompleteRows = 8
 
 // CompleteBox is where a list of n items opens under the input cell at, or
 // over it when they don't all fit below and there is more room above
 // (§10.2): from at's column, w wide and moved left to stay on screen; rows
-// is how many items show; foot is the rows under them, 0 or 1 (F8.14).
-func CompleteBox(screen uv.Rectangle, at uv.Position, w, n, foot int) (box uv.Rectangle, rows int) {
+// is how many items show, at most limit; foot is the rows under them, 0 or 1 (F8.14).
+func CompleteBox(screen uv.Rectangle, at uv.Position, w, n, foot, limit int) (box uv.Rectangle, rows int) {
 	w, x := min(w, screen.Dx()), min(at.X, screen.Max.X-min(w, screen.Dx()))
-	rows = max(min(n, completeRows, screen.Max.Y-at.Y-3-foot), 0) // below the input, in a border
-	if up := max(min(n, completeRows, at.Y-screen.Min.Y-2-foot), 0); rows < min(n, completeRows) && up > rows {
+	rows = max(min(n, limit, screen.Max.Y-at.Y-3-foot), 0) // below the input, in a border
+	if up := max(min(n, limit, at.Y-screen.Min.Y-2-foot), 0); rows < min(n, limit) && up > rows {
 		return uv.Rect(x, at.Y-up-2-foot, w, up+2+foot), up
 	}
 	return uv.Rect(x, at.Y+1, w, rows+2+foot), rows

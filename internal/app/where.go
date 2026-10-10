@@ -728,7 +728,7 @@ func (a *App) completeView(c *completion, at uv.Position) (ui.Complete, uv.Recta
 		v.Items = append(v.Items, ui.CompleteItem{Text: cd.label, Pos: cd.pos, Note: cd.note})
 		w = max(w, ui.Width(cd.label+"  "+cd.note)+4)
 	}
-	box, rows := ui.CompleteBox(a.window(), at, w, len(v.Items), 0)
+	box, rows := ui.CompleteBox(a.window(), at, w, len(v.Items), 0, ui.CompleteRows)
 	v.Top = max(0, v.Sel-rows+1)
 	return v, box, rows
 }
@@ -939,7 +939,15 @@ func (a *App) histView(p *Pane, t *dataTab) (ui.Complete, uv.Rectangle, int) {
 	if len(v.Foot) > 0 {
 		foot, w = 1, max(w, v.FootWidth())
 	}
-	box, rows := ui.CompleteBox(a.window(), a.whereAt(p, t), w, len(v.Items), foot)
+	// down to the pane's bottom edge, or as far as the list always went, over the
+	// result area, when the pane is too short for that (F10.1)
+	at, n := a.whereAt(p, t), len(v.Items)
+	inPane := a.window()
+	inPane.Max.Y = min(inPane.Max.Y, a.layout()[p.ID].Max.Y-1)
+	box, rows := ui.CompleteBox(inPane, at, w, n, foot, n)
+	if b, r := ui.CompleteBox(a.window(), at, w, n, foot, ui.CompleteRows); r > rows {
+		box, rows = b, r
+	}
 	v.Top = max(0, v.Sel-rows+1)
 	return v, box, rows
 }

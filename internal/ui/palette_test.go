@@ -107,13 +107,13 @@ func TestPaletteBoxPreview(t *testing.T) {
 // more room there (§10.2); else below, as much as fits.
 func TestCompleteBoxFlips(t *testing.T) {
 	screen := uv.Rect(0, 0, 80, 24)
-	if box, rows := CompleteBox(screen, uv.Pos(10, 5), 20, 5, 0); box.Min.Y != 6 || rows != 5 {
+	if box, rows := CompleteBox(screen, uv.Pos(10, 5), 20, 5, 0, CompleteRows); box.Min.Y != 6 || rows != 5 {
 		t.Errorf("room below: %v %d", box, rows)
 	}
-	if box, rows := CompleteBox(screen, uv.Pos(10, 20), 20, 5, 0); box.Max.Y != 20 || rows != 5 {
+	if box, rows := CompleteBox(screen, uv.Pos(10, 20), 20, 5, 0, CompleteRows); box.Max.Y != 20 || rows != 5 {
 		t.Errorf("near the bottom: %v %d", box, rows)
 	}
-	if box, rows := CompleteBox(uv.Rect(0, 0, 80, 6), uv.Pos(10, 2), 20, 5, 0); box.Min.Y != 3 || rows != 1 {
+	if box, rows := CompleteBox(uv.Rect(0, 0, 80, 6), uv.Pos(10, 2), 20, 5, 0, CompleteRows); box.Min.Y != 3 || rows != 1 {
 		t.Errorf("short either way, more below: %v %d", box, rows)
 	}
 }
@@ -135,21 +135,32 @@ func TestCompleteHover(t *testing.T) {
 func TestCompleteBoxFoot(t *testing.T) {
 	// flipped up: the foot's row is under the items, inside the box, and the
 	// box ends on the input's row
-	if box, rows := CompleteBox(uv.Rect(0, 0, 80, 24), uv.Pos(10, 20), 20, 5, 1); box.Max.Y != 20 || rows != 5 || box.Dy() != 8 {
+	if box, rows := CompleteBox(uv.Rect(0, 0, 80, 24), uv.Pos(10, 20), 20, 5, 1, CompleteRows); box.Max.Y != 20 || rows != 5 || box.Dy() != 8 {
 		t.Errorf("up with a foot: %v, %d rows", box, rows)
 	}
 	// room above for exactly the items and the foot: they all fit
-	if box, rows := CompleteBox(uv.Rect(0, 0, 80, 12), uv.Pos(10, 8), 20, 5, 1); box.Min.Y != 0 || box.Max.Y != 8 || rows != 5 {
+	if box, rows := CompleteBox(uv.Rect(0, 0, 80, 12), uv.Pos(10, 8), 20, 5, 1, CompleteRows); box.Min.Y != 0 || box.Max.Y != 8 || rows != 5 {
 		t.Errorf("just enough above: %v, %d rows", box, rows)
 	}
-	if _, rows := CompleteBox(uv.Rect(0, 0, 80, 12), uv.Pos(10, 7), 20, 5, 1); rows != 4 {
+	if _, rows := CompleteBox(uv.Rect(0, 0, 80, 12), uv.Pos(10, 7), 20, 5, 1, CompleteRows); rows != 4 {
 		t.Errorf("a row short above: %d rows", rows)
 	}
 	screen := uv.Rect(0, 0, 80, 24)
-	if box, rows := CompleteBox(screen, uv.Pos(10, 5), 20, 3, 1); box.Dy() != 3+2+1 || rows != 3 {
+	if box, rows := CompleteBox(screen, uv.Pos(10, 5), 20, 3, 1, CompleteRows); box.Dy() != 3+2+1 || rows != 3 {
 		t.Errorf("below: %v %d", box, rows)
 	}
-	if box, rows := CompleteBox(uv.Rect(0, 0, 80, 8), uv.Pos(10, 2), 20, 9, 1); rows != 2 || box.Max.Y > 8 {
+	if box, rows := CompleteBox(uv.Rect(0, 0, 80, 8), uv.Pos(10, 2), 20, 9, 1, CompleteRows); rows != 2 || box.Max.Y > 8 {
 		t.Errorf("a short screen: %v %d", box, rows)
+	}
+}
+
+// limit is how many items a list shows at most, the room allowing (F10.1).
+func TestCompleteBoxLimit(t *testing.T) {
+	screen := uv.Rect(0, 0, 80, 24)
+	if _, rows := CompleteBox(screen, uv.Pos(10, 5), 20, 20, 0, CompleteRows); rows != 8 {
+		t.Errorf("limit 8: %d rows", rows)
+	}
+	if box, rows := CompleteBox(screen, uv.Pos(10, 5), 20, 20, 0, 20); rows != 16 || box.Max.Y != 24 {
+		t.Errorf("limit 20, the room below is 16: %v %d rows", box, rows)
 	}
 }
