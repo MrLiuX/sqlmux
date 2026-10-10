@@ -11,7 +11,7 @@ wk_row() { e2e_plain | grep "$1"; }
 
 # ---- sqlmux keys: the removed defaults are gone
 out=$(XDG_CONFIG_HOME="$CFG" "$E2E_BIN" keys)
-check "keys: no SPC 0-9 / SPC h j k / SPC H J K L / SPC , / SPC & (SPC l is window.last now)" eval '! grep -E "\`SPC ([0-9hjkHJKL,&])\`" <<<"$out"'
+check "keys: no SPC 0-9 / SPC h j k / SPC H J K / SPC , / SPC & (SPC l is window.last now; SPC L is session.last since F9.10)" eval '! grep -E "\`SPC ([0-9hjkHJK,&])\`" <<<"$out"'
 check "keys: SPC n / p / l are window.next / prev / last" eval 'grep -qF "| normal | \`SPC n\` | window.next |" <<<"$out" && grep -qF "| normal | \`SPC p\` | window.prev |" <<<"$out" && grep -qF "| normal | \`SPC l\` | window.last |" <<<"$out"'
 check "keys: session.new has no default key any more" eval '! grep -q "session.new" <<<"$out"'
 
