@@ -165,6 +165,7 @@ leader = "<Space>"
 
 [keys.input] # every input
 "<C-r>" = "where.history" # does something in the WHERE input only
+"<C-f>" = "where.star" # so does this one (F9.2)
 
 [keys.cols] # Q-04: the list has the keys until / gives them to the filter
 "j" = "cols.down"

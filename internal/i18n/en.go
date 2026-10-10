@@ -265,6 +265,8 @@ var en = map[string]string{
 	"命令面板：session":             "Command palette: sessions",
 	"填入输入框":                    "Put in the input",
 	"填入":                       "Put in",
+	"已收藏":                      "Starred",
+	"已取消收藏":                    "Unstarred",
 	"关闭菜单":                     "Close menu",
 	"树的右键菜单打开时（F8.23）":         "While the tree's right-click menu is open (F8.23)",
 	"先关掉它的 tab":                "Close its tab first",

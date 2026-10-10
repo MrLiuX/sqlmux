@@ -851,15 +851,41 @@ func (a *App) runWhere(t *dataTab) tea.Cmd {
 	cmds := []tea.Cmd{fetch}
 	if t.applied != "" && fetch != nil { // not one fetch refuses
 		st := a.tableState(t)
-		q := config.Query{Where: t.applied, Order: t.order, Desc: t.desc, At: time.Now()}
-		if t.limit != limits[0] {
-			q.Limit = t.limit
-		}
+		q := t.savedQuery(t.applied)
 		st.History = slices.Insert(slices.DeleteFunc(st.History, func(h config.Query) bool { return sameQuery(h, q) }), 0, q)
 		st.History = st.History[:min(len(st.History), whereRows)]
 		cmds = append(cmds, a.saveState())
 	}
 	return tea.Batch(cmds...)
+}
+
+// savedQuery is where, with the ORDER and LIMIT the tab has, as the history and the
+// favorites keep it: a limit that is the first of the choices is none.
+func (t *dataTab) savedQuery(where string) config.Query {
+	q := config.Query{Where: where, Order: t.order, Desc: t.desc, At: time.Now()}
+	if t.limit != limits[0] {
+		q.Limit = t.limit
+	}
+	return q
+}
+
+// starWhere is C-f in the WHERE input: the condition typed becomes a favorite
+// with the tab's ORDER and LIMIT, or, when that very one is, no longer; none
+// when nothing is typed (F9.2).
+func (a *App) starWhere(t *dataTab) tea.Cmd {
+	where := strings.TrimSpace(t.where.Text)
+	if where == "" {
+		return nil
+	}
+	q, st := t.savedQuery(where), a.tableState(t)
+	same := func(f config.Query) bool { return sameQuery(f, q) }
+	toast := i18n.T("已取消收藏")
+	if slices.ContainsFunc(st.Favorites, same) {
+		st.Favorites = slices.DeleteFunc(st.Favorites, same)
+	} else {
+		st.Favorites, toast = slices.Insert(st.Favorites, 0, q), i18n.T("已收藏")
+	}
+	return tea.Batch(a.saveState(), a.showToast(toast, toastTTL))
 }
 
 // histSep is where the rule between the history and the favorites goes: the

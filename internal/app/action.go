@@ -226,8 +226,18 @@ func init() {
 		"where.down":      {Title: i18n.N("下移"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { a.histMove(a.typingTab(), 1); return nil })},
 		"where.apply":     {Title: i18n.N("执行 WHERE"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { t := a.typingTab(); return a.histApply(t, t.hist.sel) })},
 		"where.edit":      {Title: i18n.N("填入输入框"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { a.histEdit(a.typingTab()); return nil })},
-		"where.star":      {Title: i18n.N("收藏 / 取消收藏"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { return a.histStar(a.typingTab()) })},
-		"where.close":     {Title: i18n.N("关闭下拉"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { a.typingTab().hist = nil; return nil })},
+		// C-f: the selected entry of the list, else what is typed in the WHERE (F9.2); in any other input it is nothing.
+		"where.star": {Title: i18n.N("收藏 / 取消收藏"), Local: true, Run: func(a *App, _ Args) tea.Cmd {
+			switch t := a.typingTab(); {
+			case t == nil:
+			case t.hist != nil:
+				return a.histStar(t)
+			case t.typing == "where":
+				return a.starWhere(t)
+			}
+			return nil
+		}},
+		"where.close": {Title: i18n.N("关闭下拉"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { a.typingTab().hist = nil; return nil })},
 		// C-r in the WHERE input or on the grid, or a click on its ▾ (Q-02, F9.4).
 		"where.history": {Title: i18n.N("历史 / 收藏"), Run: func(a *App, _ Args) tea.Cmd {
 			t := dataOf(a.focused())

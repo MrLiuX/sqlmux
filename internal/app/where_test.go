@@ -341,6 +341,53 @@ func TestWhereHistory(t *testing.T) {
 	}
 }
 
+// C-f in the WHERE input stars what is typed with the tab's ORDER and LIMIT,
+// again un-stars it, and says which; nothing typed, or another input, is
+// nothing (F9.2).
+func TestWhereStarInTheInput(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	st := a.tableState(tab)
+	feed(t, a, "/<C-f>")
+	if len(st.Favorites) != 0 || a.toast != "" {
+		t.Fatalf("nothing typed: %+v, toast %q", st.Favorites, a.toast)
+	}
+	tab.order, tab.limit = "amount", 500
+	feed(t, a, "id > 5 <C-f>") // trimmed
+	if len(st.Favorites) != 1 || st.Favorites[0].Where != "id > 5" || st.Favorites[0].Order != "amount" || st.Favorites[0].Limit != 500 || a.toast != "已收藏" {
+		t.Fatalf("starred: %+v, toast %q", st.Favorites, a.toast)
+	}
+	if tab.typing != "where" || tab.where.Text != "id > 5 " {
+		t.Errorf("the input: %q, typing %q", tab.where.Text, tab.typing)
+	}
+	feed(t, a, "<C-f>")
+	if len(st.Favorites) != 0 || a.toast != "已取消收藏" {
+		t.Errorf("again: %+v, toast %q", st.Favorites, a.toast)
+	}
+	tab.order, tab.limit = "", 100 // another ORDER: another entry
+	feed(t, a, "<C-f>")
+	tab.order = "amount"
+	feed(t, a, "<C-f>")
+	if len(st.Favorites) != 2 || st.Favorites[0].Order != "amount" || st.Favorites[1].Order != "" || st.Favorites[1].Limit != 0 {
+		t.Errorf("two: %+v", st.Favorites)
+	}
+	if loaded, err := config.LoadState(); err != nil || len(loaded.Tables["doraemon/public.t_order"].Favorites) != 2 {
+		t.Errorf("after a restart: %+v %v", loaded, err)
+	}
+	// another input has the key and does nothing
+	feed(t, a, "<Esc><Esc><C-p>id<C-f>")
+	if len(st.Favorites) != 2 || a.palette == nil || a.palette.input.Text != "id" {
+		t.Errorf("in the palette: %d favorites, palette %+v", len(st.Favorites), a.palette)
+	}
+	tab.where.Text = "id > 5" // what a PAGE input has the key to do nothing about
+	feed(t, a, "<Esc>gp")
+	if tab.typing != "page" {
+		t.Fatalf("typing %q", tab.typing)
+	}
+	if feed(t, a, "<C-f>"); len(st.Favorites) != 2 {
+		t.Errorf("in the PAGE input: %d favorites", len(st.Favorites))
+	}
+}
+
 // C-e in the list puts the selected entry's WHERE in the input: INSERT, the
 // cursor at the end, nothing run, its ORDER and LIMIT left where they are;
 // ↵ then runs what was edited (F9.1).
