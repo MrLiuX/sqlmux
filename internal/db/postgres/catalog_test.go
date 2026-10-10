@@ -200,4 +200,18 @@ CREATE UNIQUE INDEX t_sku_title_priced ON public.t_sku USING btree (title) WHERE
 	if got, err := pg.DDL(ctx, own, "public", "bare"); err != nil || got != "create table public.bare ();" {
 		t.Errorf("no columns: %v %q", err, got)
 	}
+	// comments last, the relation's then each column's by position (F9.8)
+	if _, err := own.Exec(ctx, `create table noted (a int, "B c" int, d int); create view noted_v as select a from noted;
+		comment on column noted.d is 'last'; comment on column noted."B c" is 'it''s quoted'; comment on table noted is 'the table';
+		comment on column noted_v.a is 'on the view'`, 0); err != nil {
+		t.Fatal(err)
+	}
+	want = "create table public.noted (\n  a integer,\n  \"B c\" integer,\n  d integer\n);\ncomment on table public.noted is 'the table';\n" +
+		"comment on column public.noted.\"B c\" is 'it''s quoted';\ncomment on column public.noted.d is 'last';"
+	if got, err := pg.DDL(ctx, own, "public", "noted"); err != nil || got != want {
+		t.Errorf("comments: %v\n%s", err, got)
+	}
+	if got, err := pg.DDL(ctx, own, "public", "noted_v"); err != nil || !strings.HasSuffix(got, ";\ncomment on column public.noted_v.a is 'on the view';") {
+		t.Errorf("a view's: %v\n%s", err, got)
+	}
 }
