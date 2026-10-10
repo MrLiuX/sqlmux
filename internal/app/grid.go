@@ -315,14 +315,18 @@ func (t *dataTab) pages() (int64, bool) {
 // order COLS puts them: those colOrder names first, the others after as the
 // page has them, so a column that came with a refresh goes last (F10.3).
 func (t *dataTab) ordered() []int {
-	out := make([]int, 0, len(t.page.Cols))
+	at := make(map[string]int, len(t.page.Cols))
+	for i := len(t.page.Cols) - 1; i >= 0; i-- { // the first of a name that comes twice
+		at[t.page.Cols[i].Name] = i
+	}
+	out, seen := make([]int, 0, len(t.page.Cols)), make([]bool, len(t.page.Cols))
 	for _, name := range t.colOrder {
-		if i := slices.IndexFunc(t.page.Cols, func(c db.Col) bool { return c.Name == name }); i >= 0 {
-			out = append(out, i)
+		if i, ok := at[name]; ok && !seen[i] {
+			out, seen[i] = append(out, i), true
 		}
 	}
-	for i, c := range t.page.Cols {
-		if !slices.Contains(t.colOrder, c.Name) {
+	for i := range t.page.Cols {
+		if !seen[i] {
 			out = append(out, i)
 		}
 	}

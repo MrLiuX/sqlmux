@@ -126,9 +126,10 @@ func (a *App) dropItems() (items []string, current int) {
 	case dropOrder: // first the row identity, "默认"; then the columns
 		items = []string{i18n.T("默认")}
 		current = 0
-		for i, c := range d.tab.page.Cols {
-			items = append(items, c.Name)
-			if c.Name == d.tab.order {
+		for i, f := range d.tab.ordered() { // as the grid has them (F10.3)
+			name := d.tab.page.Cols[f].Name
+			items = append(items, name)
+			if name == d.tab.order {
 				current = i + 1
 			}
 		}

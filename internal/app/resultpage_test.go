@@ -132,6 +132,44 @@ func TestResultPaging(t *testing.T) {
 	}
 }
 
+// A statement after a SET of its run has no pages: asked alone, it would
+// run with the console's schema again and read another table; one before
+// the SET has (F10.4).
+func TestResultNoPagesAfterSet(t *testing.T) {
+	d := &pagesDB{pages: map[string]db.Result{
+		"select 1\nLIMIT 4": rows(1), "select 2\nLIMIT 4": rows(1),
+	}}
+	a, _ := inRun(t, &d.execDB, "")
+	a.sess.Conns[0].Main = db.NewWorker(d)
+	a.maxRows = 3
+	consoleOf(a.focused()).ed.Load("select 1;\nset x to y;\nselect 2;")
+	press(t, a, "ggVG<CR>")
+	p := a.win().Result
+	if len(p.Tabs) != 3 || !p.Tabs[1].Result.pageable || p.Tabs[2].Result.pageable {
+		t.Fatalf("%d tabs: pageable %v, %v", len(p.Tabs), p.Tabs[1].Result.pageable, p.Tabs[2].Result.pageable)
+	}
+}
+
+// A page whose console's schema cannot be set logs the SET as what failed,
+// as a run does, not the statement that never ran (§8.6, F10.4).
+func TestResultPageSetFails(t *testing.T) {
+	d := &pagesDB{pages: map[string]db.Result{"select 1\nLIMIT 4": cut(rows(3)), "select 1\nLIMIT 4 OFFSET 3": rows(1)}}
+	a, c := inRun(t, &d.execDB, "")
+	conn := a.sess.Conns[0]
+	conn.Main = db.NewWorker(d)
+	a.maxRows = 3
+	c.schema = "agentable"
+	c.ed.Load("select 1;")
+	press(t, a, "<CR>")
+	conn.mainPath = "" // what the connection has is not known, as after a SET of another run
+	d.execDB.fail = map[string]error{`search_path "agentable" `: errors.New("no schema")}
+	a.win().focus(a.win().Result.ID)
+	press(t, a, "]")
+	if got := logText(a); !strings.Contains(got, "set search_path to agentable") || !strings.Contains(got, "no schema") || strings.Contains(got, "select 1  ERROR") {
+		t.Errorf("the log:\n%s", got)
+	}
+}
+
 // The rows a page says: all of a first page, which are on one after it, none
 // when a table that shrank leaves a page with no rows (F10.4).
 func TestResultTextPages(t *testing.T) {

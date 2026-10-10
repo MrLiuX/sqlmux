@@ -289,6 +289,7 @@ func (a *App) startRun(t *consoleTab, conn *Conn, schema, name, sql string, base
 	resets := false // what search_path, or MySQL's database, is past this run is not known (§8.6)
 	for i, s := range stmts {
 		texts[i], r.pageable[i] = sqlkit.AutoLimit(sql[s.Start:s.End], d, a.maxRows+1, 0)
+		r.pageable[i] = r.pageable[i] && !resets // after a SET or USE of the run a page would ask for the schema again, and read another table
 		switch sqlkit.FirstWord(texts[i], d) {
 		case "set", "reset", "discard", "use":
 			resets = true

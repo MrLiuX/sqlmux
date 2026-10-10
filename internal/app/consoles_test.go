@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/db"
 )
 
 // consoleFile writes a console file with text in it.
@@ -267,6 +268,52 @@ func TestDeleteOpenConsole(t *testing.T) {
 	consoleNode(t, a, "console_7")
 	if feed(t, a, "dd<CR>"); a.toast != "" || slices.Contains(a.consoles(), d) {
 		t.Errorf("no file: toast %q, open %v", a.toast, slices.Contains(a.consoles(), d))
+	}
+}
+
+// The last console on a connection in a transaction, deleted, asks as a close
+// does and rolls it back; one running is not deleted; a console closed and
+// deleted is not reopened (F10.10).
+func TestDeleteOpenConsoleAsks(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	a, c := inConsole(t, "", "")
+	main := &saveDB{}
+	c.conn.Main, c.conn.tx = db.NewWorker(main), 'T'
+	consoleFile(t, "console_1", "x\n")
+	consoleNode(t, a, "console_1")
+	feed(t, a, "dd<CR>")
+	if a.confirm == nil || a.confirm.text != "doraemon 有未提交的事务，关闭会回滚。" || !config.ConsoleExists("console_1") || len(a.sess.consoles()) != 1 {
+		t.Fatalf("a transaction left: %+v", a.confirm)
+	}
+	if feed(t, a, "<Esc>"); !config.ConsoleExists("console_1") || len(a.sess.consoles()) != 1 {
+		t.Fatal("no: the file and the tab stay")
+	}
+	consoleNode(t, a, "console_1")
+	feed(t, a, "dd<CR>y")
+	if config.ConsoleExists("console_1") || len(a.sess.consoles()) != 0 || !slices.Contains(main.sqls, "rollback []") {
+		t.Errorf("y: file %v, %d consoles, sent %q", config.ConsoleExists("console_1"), len(a.sess.consoles()), main.sqls)
+	}
+
+	a, c = inConsole(t, "", "")
+	consoleFile(t, "console_1", "x\n")
+	c.running = &run{}
+	consoleNode(t, a, "console_1")
+	feed(t, a, "dd<CR>")
+	if a.toast != "正在执行，结束后再关闭" || !config.ConsoleExists("console_1") || len(a.sess.consoles()) != 1 {
+		t.Errorf("running: toast %q, file %v, %d consoles", a.toast, config.ConsoleExists("console_1"), len(a.sess.consoles()))
+	}
+
+	a, _ = inConsole(t, "", "")
+	a.openConsoleFile("console_5")
+	n := slices.IndexFunc(a.consoles(), func(c *consoleTab) bool { return c.name == "console_5" })
+	a.closeTab(a.win().Root.B.Pane, n) // closed: tab.reopen goes back to it
+	consoleFile(t, "console_5", "five\n")
+	consoleNode(t, a, "console_5")
+	feed(t, a, "dd<CR>")
+	a.run("tab.reopen", 0)
+	if slices.ContainsFunc(a.consoles(), func(c *consoleTab) bool { return c.name == "console_5" }) || config.ConsoleExists("console_5") {
+		t.Error("a deleted console is brought back by tab.reopen")
 	}
 }
 

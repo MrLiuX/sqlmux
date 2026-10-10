@@ -203,8 +203,9 @@ func TestNewSessionAsksName(t *testing.T) {
 	if feed(t, a, "<C-u>report<CR>"); a.askName == nil || a.toast != "已有同名 session" || len(a.sessions) != 2 {
 		t.Errorf("a name taken: input %v, toast %q", a.askName, a.toast)
 	}
-	if feed(t, a, "<Esc>"); a.askName != nil || len(a.sessions) != 2 {
-		t.Error("esc makes none")
+	toast := a.toast
+	if _, cmd := a.Update(teaKey("<Esc>")); a.askName != nil || len(a.sessions) != 2 || cmd != nil || a.toast != toast {
+		t.Errorf("esc makes none, not even a dial: input %v, %d sessions, toast %q", a.askName, len(a.sessions), a.toast)
 	}
 	feed(t, a, "<Space>sn<C-u>")
 	_, cmd := a.Update(teaKey("<CR>")) // blank: the number in the box to begin with

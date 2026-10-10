@@ -426,6 +426,25 @@ func TestColsMove(t *testing.T) {
 	}
 }
 
+// A name twice in the order, as a layout file written by hand may have it,
+// shows its column once; the ORDER list has the columns as the grid does
+// (F10.3).
+func TestColsOrderRepeated(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	tab.colOrder = []string{"id", "id", "amount", "gone"}
+	var names []string
+	for _, f := range tab.shownCols() {
+		names = append(names, tab.page.Cols[f].Name)
+	}
+	if got := strings.Join(names, " "); got != "id amount status paid meta note created_at" {
+		t.Errorf("shown: %s", got)
+	}
+	feed(t, a, "go")
+	if items, _ := a.dropItems(); strings.Join(items, " ") != "默认 id amount status paid meta note created_at" {
+		t.Errorf("the ORDER list: %v", items)
+	}
+}
+
 // The list as it shows after a K: the order in it and in the table's header,
 // and the J/K hint under it (F10.3).
 func TestGoldenColsMoved(t *testing.T) {

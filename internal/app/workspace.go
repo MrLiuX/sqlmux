@@ -437,7 +437,7 @@ func (a *App) askNameKey(k keymap.Key) tea.Cmd {
 	if !done {
 		return nil
 	}
-	if name == "" {
+	if name == "" && k != keymap.Esc { // a blank ↵, not esc, takes the name given to begin with
 		name = n.blank
 	}
 	if name == "" {

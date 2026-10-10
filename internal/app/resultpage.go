@@ -70,6 +70,9 @@ func (a *App) gotResultPage(m pageDone) tea.Cmd {
 	rt.paging = false
 	s := r.stmts[rt.stmt]
 	stmt := r.sql[s.Start:s.End]
+	if m.m.set != "" { // none ran: the SET is what failed, not the statement (§8.6)
+		stmt = m.m.set
+	}
 	p := r.win.Result
 	if m.m.err != nil {
 		if errors.Is(m.m.err, context.Canceled) {
