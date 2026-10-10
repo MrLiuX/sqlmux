@@ -42,6 +42,8 @@ key f; key h; sleep 0.6
 check "c2（没有默认值、索引、注释）：浮窗只有一行 c2 integer" eval '[[ $(body | tr "\n" "|") == "c2 integer|" ]] || { body; false; }'
 key C-c; sleep 0.5
 check "C-c 只关浮窗，不是退出（程序还在，没有「再按一次 C-c」之外的退出）" eval 'closed && running'
+key f; key h; sleep 0.6; e2e_wheel 60 12 down; sleep 0.5
+check "浮窗开着时滚轮：先关浮窗，再照常滚表格（浮窗没了，程序在）" eval 'closed && running'
 key j; key f; key h; sleep 0.6
 check "第二行同一列也能看（行不影响列的定义）" eval '[[ $(body | head -1) == "c2 integer" ]]'
 key Escape; sleep 0.3
