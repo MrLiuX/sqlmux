@@ -128,7 +128,7 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 		c := n.in.Draw(f, uv.Rect(x, y, max(rightX-1-x, 1), 1), in)
 		f.Cursor = &c
 	}
-	if a.jump != nil && !a.jump.scanning {
+	if a.jump != nil {
 		a.drawJump(f)
 	}
 	if a.keyHelp != nil {
