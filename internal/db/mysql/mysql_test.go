@@ -300,6 +300,9 @@ func TestDDL(t *testing.T) {
 	if got, err := my.DDL(context.Background(), c, "sqlmux", "t_sku"); err != nil || !strings.Contains(got, "UNIQUE KEY `t_sku_code` (`code`)") {
 		t.Errorf("t_sku's index: %v\n%s", err, got)
 	}
+	if got, err := my.DDL(context.Background(), c, "sqlmux", "t_order"); err != nil || strings.Count(got, "PRIMARY KEY") != 1 {
+		t.Errorf("t_order's primary key, once: %v\n%s", err, got)
+	}
 	for name, want := range map[string]string{"t_log": "CREATE TABLE `t_log` (", "v_paid_order": "CREATE ALGORITHM="} {
 		if got, err := my.DDL(context.Background(), c, "sqlmux", name); err != nil || !strings.HasPrefix(got, want) || !strings.HasSuffix(got, ";") {
 			t.Errorf("%s: %v\n%s", name, err, got)

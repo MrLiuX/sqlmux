@@ -201,17 +201,23 @@ CREATE UNIQUE INDEX t_sku_title_priced ON public.t_sku USING btree (title) WHERE
 		t.Errorf("no columns: %v %q", err, got)
 	}
 	// comments last, the relation's then each column's by position (F9.8)
-	if _, err := own.Exec(ctx, `create table noted (a int, "B c" int, d int); create view noted_v as select a from noted;
-		comment on column noted.d is 'last'; comment on column noted."B c" is 'it''s quoted'; comment on table noted is 'the table';
-		comment on column noted_v.a is 'on the view'`, 0); err != nil {
+	if _, err := own.Exec(ctx, `create table noted (z int, "B c" int, d int); create view noted_v as select z from noted;
+		create materialized view noted_m as select z from noted;
+		comment on column noted.d is 'last'; comment on column noted."B c" is 'it''s quoted'; comment on column noted.z is 'first';
+		comment on table noted is 'the table'; comment on column noted_v.z is 'on the view'; comment on view noted_v is 'a view';
+		comment on materialized view noted_m is 'a matview'`, 0); err != nil {
 		t.Fatal(err)
 	}
-	want = "create table public.noted (\n  a integer,\n  \"B c\" integer,\n  d integer\n);\ncomment on table public.noted is 'the table';\n" +
-		"comment on column public.noted.\"B c\" is 'it''s quoted';\ncomment on column public.noted.d is 'last';"
+	// the columns by position, z first though d and "B c" sort before it
+	want = "create table public.noted (\n  z integer,\n  \"B c\" integer,\n  d integer\n);\ncomment on table public.noted is 'the table';\n" +
+		"comment on column public.noted.z is 'first';\ncomment on column public.noted.\"B c\" is 'it''s quoted';\ncomment on column public.noted.d is 'last';"
 	if got, err := pg.DDL(ctx, own, "public", "noted"); err != nil || got != want {
 		t.Errorf("comments: %v\n%s", err, got)
 	}
-	if got, err := pg.DDL(ctx, own, "public", "noted_v"); err != nil || !strings.HasSuffix(got, ";\ncomment on column public.noted_v.a is 'on the view';") {
+	if got, err := pg.DDL(ctx, own, "public", "noted_v"); err != nil || !strings.HasSuffix(got, ";\ncomment on view public.noted_v is 'a view';\ncomment on column public.noted_v.z is 'on the view';") {
 		t.Errorf("a view's: %v\n%s", err, got)
+	}
+	if got, err := pg.DDL(ctx, own, "public", "noted_m"); err != nil || !strings.HasSuffix(got, "\ncomment on materialized view public.noted_m is 'a matview';") {
+		t.Errorf("a materialized view's: %v\n%s", err, got)
 	}
 }

@@ -491,7 +491,24 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 // cell and on to the right as its text needs, up to the edge; empty with
 // no edit, or when the cell doesn't show.
 func (g Grid) EditRect(area uv.Rectangle) uv.Rectangle {
-	if g.Edit == nil || len(g.Cols) == 0 {
+	if g.Edit == nil {
+		return uv.Rectangle{}
+	}
+	need := Width(Printable(g.Edit.Text)) + 3 // a space each side, and the cursor's cell
+	if g.EditMenu {
+		need += 2
+	}
+	return g.cellRect(area, need)
+}
+
+// CellRect is where the current cell is in area, edited or not; empty when it
+// doesn't show (F9.8).
+func (g Grid) CellRect(area uv.Rectangle) uv.Rectangle { return g.cellRect(area, 0) }
+
+// cellRect is the current cell's, at least need wide, on to the right as far
+// as the edge.
+func (g Grid) cellRect(area uv.Rectangle, need int) uv.Rectangle {
+	if len(g.Cols) == 0 {
 		return uv.Rectangle{}
 	}
 	v := g.view()
@@ -505,10 +522,6 @@ func (g Grid) EditRect(area uv.Rectangle) uv.Rectangle {
 	x := area.Min.X + labelW + 3 // the first shown column's cell, its padding in
 	for c := hoff; c < cc; c++ {
 		x += ws[c] + 3
-	}
-	need := Width(Printable(g.Edit.Text)) + 3 // a space each side, and the cursor's cell
-	if g.EditMenu {
-		need += 2
 	}
 	r := uv.Rect(x, area.Min.Y+2+cr-voff, max(ws[cc]+2, need), 1)
 	r.Max.X = min(r.Max.X, area.Max.X)

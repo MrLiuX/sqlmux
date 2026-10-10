@@ -34,10 +34,9 @@ type palette struct {
 	// palette closes (F4.2).
 	preview    string
 	previewSeq int
-	// pvTop is how far the preview of the table pvFor is scrolled (F9.7); a
-	// selection on another table has it at the top.
+	// pvTop is how far the preview is scrolled (F9.7); a selection that moves
+	// to another table, or more typed, has it at the top again.
 	pvTop   int
-	pvFor   string
 	fetches context.Context
 	stop    context.CancelFunc
 
@@ -280,13 +279,11 @@ func (a *App) paletteView() ui.Palette {
 		p.Rows = append(p.Rows, ui.PaletteRow{Icon: it.icon, Name: it.name, Where: it.where, Pos: m.Pos, Right: right, Tag: i18n.T(itemTags[it.kind])})
 	}
 	scopeKeys := a.hints("palette", "/", "palette.scope.next", "palette.scope.prev")
-	p.Preview = a.palettePreview()
+	pv, rows := a.previewWindow()
+	p.Preview = pv
 	scrollKeys := ""
-	if pv := p.Preview; pv != nil && pv.Err == "" && !a.quickShows() { // the hint where there is something to scroll
-		_, _, grid := a.paletteBox(len(ms))
-		if pv.Lines() > grid.Dy() {
-			scrollKeys = a.hints("palette", "/", "palette.preview.up", "palette.preview.down")
-		}
+	if pv != nil && rows > 0 && pv.Lines() > rows { // the hint where there is something to scroll
+		scrollKeys = a.hints("palette", "/", "palette.preview.up", "palette.preview.down")
 	}
 	p.Footer = bound(
 		ui.Hint{Key: a.hints("palette", "/", "palette.up", "palette.down"), Label: i18n.T("移动")},
@@ -330,7 +327,7 @@ func (a *App) keyFor(id string) string {
 func (a *App) paletteMove(d int) {
 	_, ms := a.paletteMatches()
 	p := a.palette
-	p.sel, p.pvTop = max(min(p.sel+d, len(ms)-1), 0), 0
+	p.sel = max(min(p.sel+d, len(ms)-1), 0)
 	_, rows, _ := a.paletteBox(len(ms))
 	p.top = max(min(p.top, p.sel), p.sel-rows+1)
 }
@@ -424,34 +421,43 @@ func (a *App) palettePreview() *ui.PalettePreview {
 		return nil
 	}
 	d := c.ddl[idOf(t)]
-	var names ui.SQLNames
-	if cols := c.cols[idOf(t)]; t.View() {
-		names, _ = a.sqlNames(c, d.text, t.Schema, nil)
-	} else {
-		names, _ = a.sqlNames(c, d.text, "", &cols)
-	}
-	pv := &ui.PalettePreview{Text: d.text, Err: d.err, Names: names, Dialect: c.eng.Dialect()}
-	if id, _, _, _ := a.previewed(); id == a.palette.pvFor {
-		pv.Top = a.palette.pvTop
-	}
-	return pv
+	return &ui.PalettePreview{Text: d.text, Err: d.err, Names: a.ddlNames(c, t, d.text), Dialect: c.eng.Dialect(), Top: a.palette.pvTop}
 }
 
-// scrollPreview is C-d (d 1) and C-u (-1) over the preview: half its rows,
-// held to what there is to scroll; the key goes to the input as it was when
-// there is nothing to scroll, as C-u clearing it (F9.7).
-func (a *App) scrollPreview(d int) tea.Cmd {
-	id, _, _, _ := a.previewed()
-	pv := a.palettePreview()
-	_, ms := a.paletteMatches()
-	_, _, grid := a.paletteBox(len(ms))
-	if pv == nil || pv.Err != "" || pv.Lines() <= grid.Dy() {
-		return a.paletteKey(map[int]keymap.Key{1: "<C-d>", -1: "<C-u>"}[d])
+// ddlNames are the names in t's DDL text the catalog knows, for their colors:
+// a table's own columns among them, a view's by the tables its query names.
+func (a *App) ddlNames(c *Conn, t db.Table, text string) ui.SQLNames {
+	if t.View() {
+		names, _ := a.sqlNames(c, text, t.Schema, nil)
+		return names
 	}
-	rows := grid.Dy()
-	top := pv.Top + d*max(rows/2, 1)
-	a.palette.pvFor, a.palette.pvTop = id, max(min(top, pv.Lines()-rows), 0)
-	return nil
+	cols := c.cols[idOf(t)]
+	names, _ := a.sqlNames(c, text, "", &cols)
+	return names
+}
+
+// previewWindow is the preview of the table selected and how many rows the
+// palette shows of it: none when it has no room (§12「预览」).
+func (a *App) previewWindow() (*ui.PalettePreview, int) {
+	pv := a.palettePreview()
+	lines := 0
+	if pv != nil {
+		lines = pv.Lines()
+	}
+	_, ms := a.paletteMatches()
+	_, _, grid := ui.PaletteBox(a.window(), len(ms), a.quickShows(), lines)
+	return pv, grid.Dy()
+}
+
+// scrollPreview is C-f (d 1) and C-b (-1) over the preview: half its rows,
+// from where it is held now, to the ends and no further (F9.7).
+func (a *App) scrollPreview(d int) {
+	pv, rows := a.previewWindow()
+	if pv == nil || rows <= 0 || pv.Lines() <= rows {
+		return
+	}
+	v := ui.TextView{Text: pv.Text, Top: pv.Top}
+	a.palette.pvTop = v.Scroll(rows, d*max(rows/2, 1))
 }
 
 // wantDDL times the preview: the selection moved to a table whose DDL is
@@ -471,7 +477,7 @@ func (a *App) wantDDL() tea.Cmd {
 	if id == p.preview {
 		return nil
 	}
-	p.preview = id
+	p.preview, p.pvTop = id, 0 // another table, or none: the top
 	if !ok {
 		return nil
 	}

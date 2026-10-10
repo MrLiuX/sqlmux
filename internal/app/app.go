@@ -208,7 +208,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	a.plainConsoles()
 	a.sess.last = a.conn() // where the focus goes next may name none (§5)
 	a.sess.touch(a.focused().tab())
-	return a, tea.Batch(cmd, a.wantCols(), a.wantDDL())
+	return a, tea.Batch(cmd, a.wantCols(), a.wantDDL(), a.wantPopupDDL())
 }
 
 // stillOver is whether msg changed nothing the last frame shows: a pointer
@@ -368,8 +368,8 @@ func (a *App) press(k keymap.Key) tea.Cmd { return a.feed(k, true) }
 // back from the resolver to go in here key by key, maps off (noremap), each
 // meeting the editor as it then is (§6.6).
 func (a *App) feed(k keymap.Key, maps bool) tea.Cmd {
-	if a.ddl != nil && a.ddl.col != "" { // a column's DDL goes with the next key, which is then pressed as it is; esc is no more (F9.8)
-		if a.ddl = nil; k == keymap.Esc {
+	if a.ddl != nil && a.ddl.col != "" { // a column's DDL goes with the next key, which is then pressed as it is; esc and C-c are no more (F9.8)
+		if a.ddl = nil; k == keymap.Esc || k == "<C-c>" {
 			return nil
 		}
 	}
@@ -540,11 +540,12 @@ func (a *App) click(p uv.Position) tea.Cmd {
 // Shift turns the vertical wheel horizontal, as does a touchpad's sideways
 // swipe (buttons 6 and 7).
 func (a *App) wheel(m tea.Mouse) {
-	if a.ddl != nil { // the table's DDL scrolls; the column's is cut, and goes with the next key (F9.8)
+	if a.ddl != nil { // the table's DDL scrolls; the column's goes with the wheel as with a key, which then turns (F9.8)
 		if a.ddl.col == "" {
 			a.scrollDDL(map[tea.MouseButton]int{tea.MouseWheelUp: -wheelStep, tea.MouseWheelDown: wheelStep}[m.Button], false)
+			return
 		}
-		return
+		a.ddl = nil
 	}
 	if a.menu != nil { // the menu is of the node the cursor is on: the wheel goes no further (F8.23)
 		return
@@ -598,6 +599,12 @@ func (a *App) wheel(m tea.Mouse) {
 // starts editing the current cell with s; a console takes it whole, as
 // text in any mode (§11).
 func (a *App) paste(s string) tea.Cmd {
+	if a.ddl != nil { // the table's DDL has no input; the column's goes with it, as with a key, and what is pasted is then typed (F9.8)
+		if a.ddl.col == "" {
+			return nil
+		}
+		a.ddl = nil
+	}
 	if t := a.focusedConsole(); t != nil {
 		a.consoleView(a.focused(), t)
 		return a.consoleDid(t, t.ed.Paste(s))

@@ -15,6 +15,7 @@ import (
 type TextView struct {
 	Text   string
 	Colors []color.Color
+	Fg     color.Color // the text's color when it has none of its own: the error's by default
 	Top    int
 }
 
@@ -23,6 +24,13 @@ func (v TextView) Lines() int { return strings.Count(v.Text, "\n") + 1 }
 
 // Fit is Top held to what there is to scroll in a window of rows.
 func (v TextView) Fit(rows int) int { return max(min(v.Top, v.Lines()-rows), 0) }
+
+// Scroll is Top moved by d rows in a window of rows, from where Fit holds it
+// now, to the ends and no further.
+func (v TextView) Scroll(rows, d int) int {
+	v.Top = v.Fit(rows) + d
+	return v.Fit(rows)
+}
 
 // Draw paints the window in area, over bg.
 func (v TextView) Draw(f *Frame, area uv.Rectangle, bg uv.Style) {
@@ -38,7 +46,11 @@ func (v TextView) Draw(f *Frame, area uv.Rectangle, bg uv.Style) {
 		case i == 0 && top > 0, i == area.Dy()-1 && top+i < len(lines)-1:
 			f.Text(r.Min.X, r.Min.Y, r.Max.X, "…", uv.Style{Fg: th.Dim, Bg: bg.Bg})
 		case v.Colors == nil:
-			f.Text(r.Min.X, r.Min.Y, r.Max.X, l, uv.Style{Fg: th.Error, Bg: bg.Bg})
+			fg := v.Fg
+			if fg == nil {
+				fg = th.Error
+			}
+			f.Text(r.Min.X, r.Min.Y, r.Max.X, l, uv.Style{Fg: fg, Bg: bg.Bg})
 		default:
 			Input{Text: l}.draw(f, r, bg, v.Colors[at:at+len(l)])
 		}

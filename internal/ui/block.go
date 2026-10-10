@@ -92,7 +92,7 @@ func (b Block) Draw(f *Frame, r uv.Rectangle) uv.Rectangle {
 		f.Text(x0+2, y0, x1, " "+title+" ", st)
 		// An icon with its own color keeps it (§7.7); the zoom's is the zoom color's.
 		n := b.Num + " "
-		if b.Zoomed && strings.HasPrefix(title, n+b.ZoomIcon.Text) {
+		if b.Zoomed && b.ZoomIcon.Text != "" && strings.HasPrefix(title, n+b.ZoomIcon.Text) {
 			f.Text(x0+3+Width(n), y0, x1, b.ZoomIcon.Text, b.ZoomIcon.On(uv.Style{Fg: th.Zoom, Bg: st.Bg}))
 			n += b.ZoomIcon.Text + " "
 		}
@@ -120,7 +120,7 @@ func (b Block) Draw(f *Frame, r uv.Rectangle) uv.Rectangle {
 func (b Block) fit(room int) (string, []Hint) {
 	n := b.Num
 	head := n
-	if b.Zoomed {
+	if b.Zoomed && b.ZoomIcon.Text != "" {
 		head += " " + b.ZoomIcon.Text
 	}
 	for _, s := range []string{b.Icon.Text, b.Title} {
