@@ -73,7 +73,7 @@ check "resize 60x15 → 5x5 → 160x45 后画面完整" eval 'running && widths_
 SOLO= start
 check "上边框角：侧栏 [1,32]、① [34,96]、② [98,160]；①:② = 63:63 = 1:1（F8.9）" eval 'cols_are ┌ 1 "1 34 98" && cols_are ┐ 1 "32 96 160"'
 check "② query 未聚焦：边框 border、标题 dim" eval 'style_has 98 1 fg=$BORDER && style_has 160 44 fg=$BORDER && at "②" 1 fg=$DIM'
-check "160 宽 ② 标题（63 列）：② <图标> con…，右边 Tx: 自动 ▾、doraemon · sqlmux.public ▾、▶ run ↵ 都在（F3.11、F5.11、F5.3；F8.9 起 ② 变宽）" eval '[[ $(e2e_text 98 160 1) =~ ^┌─\ ②\ $NF_CONSOLE\ con…\ +Tx:\ 自动\ ▾\ doraemon\ ·\ sqlmux\.public\ ▾\ \ ▶\ run\ +↵\ ─┐$ ]] || { echo "  $(e2e_text 98 160 1)"; false; }'
+check "160 宽 ② 标题（63 列）：② <图标> que…，右边 Tx: 自动 ▾、doraemon · sqlmux.public ▾、▶ run ↵ 都在（F3.11、F5.11、F5.3；F8.9 起 ② 变宽）" eval '[[ $(e2e_text 98 160 1) =~ ^┌─\ ②\ $NF_CONSOLE\ que…\ +Tx:\ 自动\ ▾\ doraemon\ ·\ sqlmux\.public\ ▾\ \ ▶\ run\ +↵\ ─┐$ ]] || { echo "  $(e2e_text 98 160 1)"; false; }'
 check "▶ run：focus 底、bg 字、粗体" eval 'at "▶ run" 1 "fg=$BG" && at "▶ run" 1 "bg=$FOCUS" && at "▶ run" 1 bold && at "▶ run" 1 bold 3'
 # 标题栏退让（§7.8 pane 标题）：先截对象名（截完就不显示），再按 ▶ run > 下拉框 > ↵ 从低往高丢，最后只留 ⟨n⟩
 query_title() { local c; c=$(e2e_find ┌ 1); c=${c##* }; e2e_text "$c" "$(e2e_flag pane_width)" 1; }
@@ -100,11 +100,11 @@ PY
 }
 SOLO= start -x 200
 check "200 宽：对象名完整，Tx: 自动 ▾、doraemon · sqlmux.public ▾ 依次在 ▶ run ↵ 左边，↵ dim，①:② 约为 1:1（F8.9）" eval 't=$(query_title); [[ $t == "┌─ ② $NF_CONSOLE query_1 ─"*"─ Tx: 自动 ▾ doraemon · sqlmux.public ▾  ▶ run  ↵ ─┐" ]] && at "↵ ─┐" 1 fg=$DIM && set -- $(e2e_find ┌ 1) $(e2e_find ┐ 1) && dw=$(($5 - $2 + 1)) cw=$(($6 - $3 + 1)) && ((dw - cw <= 1 && cw - dw <= 1)) || { echo "  $t"; false; }'
-SOLO= start -x 140; check "140 宽：提示都在，对象名截成 cons…" title_ends "② $NF_CONSOLE cons…  doraemon · sqlmux.public ▾  ▶ run  ↵ ─┐"
-SOLO= start -x 110; check "110 宽：连接和 schema 的下拉框（算一项）放不下被跳过，放得下的事务控件和 ▶ run ↵ 在，对象名回来一点" title_ends "② $NF_CONSOLE conso…  Tx: 自动 ▾  ▶ run  ↵ ─┐"
+SOLO= start -x 140; check "140 宽：提示都在，对象名截成 quer…" title_ends "② $NF_CONSOLE quer…  doraemon · sqlmux.public ▾  ▶ run  ↵ ─┐"
+SOLO= start -x 110; check "110 宽：连接和 schema 的下拉框（算一项）放不下被跳过，放得下的事务控件和 ▶ run ↵ 在，对象名回来一点" title_ends "② $NF_CONSOLE query…  Tx: 自动 ▾  ▶ run  ↵ ─┐"
 SOLO= start -x 100; check "100 宽：下拉框放不下被跳过，事务控件和 ▶ run ↵ 在，对象名放不下不显示" title_ends "② $NF_CONSOLE ── Tx: 自动 ▾  ▶ run  ↵ ─┐"
 SOLO= start -x 70;  check "70 宽：对象名放不下就不显示，▶ run ↵ 仍在" title_ends "② $NF_CONSOLE ──  ▶ run  ↵ ─┐"
-SOLO= start -x 60;  check "60 宽：提示都放不下，只剩 ② <图标> 和截短的对象名" title_ends "─ ② $NF_CONSOLE consol… ─┐"
+SOLO= start -x 60;  check "60 宽：提示都放不下，只剩 ② <图标> 和对象名（query_1 刚好放得下）" title_ends "─ ② $NF_CONSOLE query_1 ─┐"
 ok=1; for w in 65 70 75 80 85; do
   SOLO= start -x $w -y 12; t=$(query_title); [[ $t == *"↵"* && $t != *"▶ run"* ]] && { echo "  $w: '$t'"; ok=0; }
 done
@@ -115,6 +115,6 @@ done
 check "220…60 宽：没有「放得下却没显示」的按钮" test $ok = 1
 SOLO= start -x 80 -y 24
 check "80 宽：侧栏 24、① 27、② 27" eval 'cols_are ┌ 1 "1 26 54" && cols_are ┐ 1 "24 52 80" && cols_are ┘ 23 "24 52 80"'
-check "80 宽 ② 标题：② <图标> conso… 加 ▶ run ↵" text_ends 54 80 1 "② $NF_CONSOLE conso…   ▶ run  ↵ ─┐"
+check "80 宽 ② 标题：② <图标> query… 加 ▶ run ↵" text_ends 54 80 1 "② $NF_CONSOLE query…   ▶ run  ↵ ─┐"
 
 e2e_done
