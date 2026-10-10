@@ -29,7 +29,7 @@ sqlmux/
 ├─ specs/
 │  ├─ tech-design.md          技术方案
 │  ├─ plan.md                 里程碑索引与推进规则
-│  └─ m0-skeleton/ … m8-feedback/task.md  各里程碑的任务清单
+│  └─ m0-skeleton/ … m9-feedback2/task.md  各里程碑的任务清单
 ├─ justfile                   常规操作的入口：构建、测试、lint、e2e、起数据库（M7 F7.2）
 ├─ .golangci.yml              golangci-lint 的规则，reviewer 起草、worker 提交（M7 F7.1）
 ├─ .github/workflows/ci.yml   GitHub Actions：lint、vet、单测、集成测试（M7 F7.1）
