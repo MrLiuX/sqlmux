@@ -279,10 +279,9 @@ func (a *App) paletteView() ui.Palette {
 		p.Rows = append(p.Rows, ui.PaletteRow{Icon: it.icon, Name: it.name, Where: it.where, Pos: m.Pos, Right: right, Tag: i18n.T(itemTags[it.kind])})
 	}
 	scopeKeys := a.hints("palette", "/", "palette.scope.next", "palette.scope.prev")
-	pv, rows := a.previewWindow()
-	p.Preview = pv
+	p.Preview = a.palettePreview()
 	scrollKeys := ""
-	if pv != nil && rows > 0 && pv.Lines() > rows { // the hint where there is something to scroll
+	if pv, _ := a.scrollablePreview(); pv != nil { // the hint where there is something to scroll
 		scrollKeys = a.hints("palette", "/", "palette.preview.up", "palette.preview.down")
 	}
 	p.Footer = bound(
@@ -439,21 +438,26 @@ func (a *App) ddlNames(c *Conn, t db.Table, text string) ui.SQLNames {
 // previewWindow is the preview of the table selected and how many rows the
 // palette shows of it: none when it has no room (§12「预览」).
 func (a *App) previewWindow() (*ui.PalettePreview, int) {
-	pv := a.palettePreview()
-	lines := 0
-	if pv != nil {
-		lines = pv.Lines()
-	}
 	_, ms := a.paletteMatches()
-	_, _, grid := ui.PaletteBox(a.window(), len(ms), a.quickShows(), lines)
-	return pv, grid.Dy()
+	_, _, grid := a.paletteBox(len(ms))
+	return a.palettePreview(), grid.Dy()
+}
+
+// scrollablePreview is the preview and its rows when the palette shows it and
+// it has more lines than that; none otherwise (F9.7).
+func (a *App) scrollablePreview() (*ui.PalettePreview, int) {
+	pv, rows := a.previewWindow()
+	if pv == nil || rows <= 0 || pv.Lines() <= rows {
+		return nil, 0
+	}
+	return pv, rows
 }
 
 // scrollPreview is C-f (d 1) and C-b (-1) over the preview: half its rows,
 // from where it is held now, to the ends and no further (F9.7).
 func (a *App) scrollPreview(d int) {
-	pv, rows := a.previewWindow()
-	if pv == nil || rows <= 0 || pv.Lines() <= rows {
+	pv, rows := a.scrollablePreview()
+	if pv == nil {
 		return
 	}
 	v := ui.TextView{Text: pv.Text, Top: pv.Top}

@@ -599,10 +599,7 @@ func (a *App) wheel(m tea.Mouse) {
 // starts editing the current cell with s; a console takes it whole, as
 // text in any mode (§11).
 func (a *App) paste(s string) tea.Cmd {
-	if a.ddl != nil { // the table's DDL has no input; the column's goes with it, as with a key, and what is pasted is then typed (F9.8)
-		if a.ddl.col == "" {
-			return nil
-		}
+	if a.ddl != nil && a.ddl.col != "" { // the column's box goes with it, as with a key, and what is pasted is then typed (F9.8)
 		a.ddl = nil
 	}
 	if t := a.focusedConsole(); t != nil {

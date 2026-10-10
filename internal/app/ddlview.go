@@ -232,10 +232,8 @@ func ddlColumnLines(ddl, col string, cat db.Column, d sqlkit.Dialect) []string {
 		if cat.NotNull {
 			own += " not null"
 		}
-		if cat.Default != "" && !strings.HasPrefix(cat.Default, "generated ") { // an identity: how it is generated
+		if cat.Default != "" {
 			own += " default " + cat.Default
-		} else if cat.Default != "" {
-			own += " " + cat.Default
 		}
 	}
 	return append(append([]string{own}, keys...), notes...)
@@ -280,12 +278,12 @@ func tableLines(text string, ts []ddlItem, col string, d sqlkit.Dialect) (own st
 		}
 		item := ts[from:to]
 		line := strings.TrimSpace(text[item[0].start:item[len(item)-1].end])
-		switch isKey, isDef := keyItem(item, d); {
-		case isKey:
+		switch {
+		case keyItem(item, d):
 			if mentions(afterParen(item), col, true) {
 				keys = append(keys, line)
 			}
-		case !isDef && own == "" && item[0].name() == col:
+		case own == "" && item[0].name() == col:
 			own = line
 		}
 	}
@@ -311,33 +309,18 @@ func tableLines(text string, ts []ddlItem, col string, d sqlkit.Dialect) (own st
 	return own, keys
 }
 
-// keyItem classifies an item of a table's definition: whether it makes a key
-// or an index, and whether it is a definition of the table and not a column.
-// PG's all begin with constraint, so a column called key or index there is a
-// column (not reserved); MySQL's KEY lines are bare, its columns of those names
-// quoted.
-func keyItem(item []ddlItem, d sqlkit.Dialect) (isKey, isDef bool) {
+// keyItem is whether an item of a table's definition makes a key or an index:
+// a constraint (both engines name them: constraint <name> primary key …) that
+// is a primary key or unique, and in MySQL's the KEY lines, bare. PG's columns
+// called key or index are columns: its definitions all begin with constraint.
+func keyItem(item []ddlItem, d sqlkit.Dialect) bool {
 	w := item[0]
-	switch {
-	case w.is("constraint"): // [name], then what it is
-		i := 1
-		if len(item) > 2 && !slices.ContainsFunc(item[1:2], func(t ddlItem) bool {
-			return t.is("primary") || t.is("unique") || t.is("foreign") || t.is("check")
-		}) {
-			i = 2
+	if w.is("constraint") {
+		if len(item) < 3 {
+			return false
 		}
-		if i >= len(item) {
-			return false, true
-		}
-		w = item[i]
+		w = item[2]
 	}
-	switch {
-	case w.is("primary"), w.is("unique"):
-		return true, true
-	case d == sqlkit.MySQL && (w.is("key") || w.is("index") || w.is("fulltext") || w.is("spatial")):
-		return true, true
-	case w.is("foreign"), w.is("check"), w.is("exclude"):
-		return false, true
-	}
-	return false, w.is("constraint")
+	return w.is("primary") || w.is("unique") ||
+		d == sqlkit.MySQL && (w.is("key") || w.is("index") || w.is("fulltext") || w.is("spatial"))
 }
