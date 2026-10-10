@@ -89,7 +89,9 @@ comment on column public.k."ID" is 'the upper one';`
 		{"mysql title, a prefix length", my, "title", sqlkit.MySQL, db.Column{}, []string{"`title` varchar(80) DEFAULT NULL", "KEY `t_sku_title` (`title`(10),`code`)"}},
 		{"mysql column key, quoted", my, "key", sqlkit.MySQL, db.Column{}, []string{"`key` int DEFAULT NULL"}},
 		{"a view's column: the catalog's", view, "status", sqlkit.PG, db.Column{Type: "text", NotNull: true, Default: "'x'"}, []string{"status text not null default 'x'"}},
-		{"a view's column that is an identity's", view, "id", sqlkit.PG, db.Column{Type: "integer", NotNull: true, Default: "generated always as identity"}, []string{"id integer not null generated always as identity"}},
+		{"a view's join is no index", "create view public.v as\n SELECT a.id\n   FROM a\n     JOIN b ON (a.id = b.id);", "id", sqlkit.PG, db.Column{Type: "integer"}, []string{"id integer"}},
+		{"a column called as the function", "create table public.f (\n  lower text,\n  title text\n);\nCREATE INDEX f_t ON public.f USING btree (lower(title));", "lower", sqlkit.PG, db.Column{}, []string{"lower text"}},
+		{"a comment on another table's column", "create table public.t (\n  id integer\n);\ncomment on column public.id.x is 'not ours';\ncomment on column public.t.id is 'ours';", "id", sqlkit.PG, db.Column{}, []string{"id integer", "comment on column public.t.id is 'ours';"}},
 		{"an index on a table called as the column", "create table public.t (\n  code integer\n);\nCREATE INDEX t_code ON public.id USING btree (code);", "id", sqlkit.PG, db.Column{Type: "integer"}, []string{"id integer"}},
 	} {
 		if got := ddlColumnLines(c.ddl, c.col, c.cat, c.d); !slices.Equal(got, c.want) {

@@ -217,6 +217,14 @@ CREATE UNIQUE INDEX t_sku_title_priced ON public.t_sku USING btree (title) WHERE
 	if got, err := pg.DDL(ctx, own, "public", "noted_v"); err != nil || !strings.HasSuffix(got, ";\ncomment on view public.noted_v is 'a view';\ncomment on column public.noted_v.z is 'on the view';") {
 		t.Errorf("a view's: %v\n%s", err, got)
 	}
+	// a foreign table, with no handler: only its catalog row is there
+	if _, err := own.Exec(ctx, `create foreign data wrapper w; create server s foreign data wrapper w; create foreign table ft (a int) server s;
+		comment on foreign table ft is 'remote'`, 0); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := pg.DDL(ctx, own, "public", "ft"); err != nil || !strings.HasSuffix(got, ";\ncomment on foreign table public.ft is 'remote';") {
+		t.Errorf("a foreign table's: %v\n%s", err, got)
+	}
 	if got, err := pg.DDL(ctx, own, "public", "noted_m"); err != nil || !strings.HasSuffix(got, "\ncomment on materialized view public.noted_m is 'a matview';") {
 		t.Errorf("a materialized view's: %v\n%s", err, got)
 	}

@@ -3,6 +3,8 @@ package ui
 import (
 	"reflect"
 	"testing"
+
+	uv "github.com/charmbracelet/ultraviolet"
 )
 
 // §7.8: head first, hints greedily by priority, then the object name.
@@ -84,5 +86,25 @@ func TestBlockZoomIconEmpty(t *testing.T) {
 	b.ZoomIcon = Icon{}
 	if got, _ := b.fit(40); got != "① T data" {
 		t.Errorf("without it: %q", got)
+	}
+}
+
+// An icon with a color of its own keeps it beside a zoom icon, and where a
+// theme has left the zoom icon out (F9.6).
+func TestBlockIconColorWithZoom(t *testing.T) {
+	th := TokyonightStorm
+	for _, zoom := range []string{"Z", ""} {
+		f := NewFrame(30, 3, th)
+		own := c("#ff0000")
+		Block{Num: "1", Icon: Icon{Text: "T", Fg: own}, Title: "data", Zoomed: true, ZoomIcon: Icon{Text: zoom}}.Draw(f, uv.Rect(0, 0, 30, 3))
+		got := false
+		for x := range 30 {
+			if cell := f.Buf.CellAt(x, 0); cell.String() == "T" {
+				got = cell.Style.Fg == own
+			}
+		}
+		if !got {
+			t.Errorf("zoom icon %q: the icon lost its color", zoom)
+		}
 	}
 }
