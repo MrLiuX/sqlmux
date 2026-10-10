@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
@@ -357,4 +358,50 @@ func TestDefaultLayoutEven(t *testing.T) {
 			golden.RequireEqual(t, a.render().String())
 		}
 	}
+}
+
+// A zoomed pane has the zoom icon after its number and its border in the zoom
+// color, focused or not; the others, and the pane once the zoom is over, have
+// neither (F9.6).
+func TestZoomedPaneIsMarked(t *testing.T) {
+	for _, icons := range []string{"nerd", "ascii"} {
+		a := sized(160, 45, icons)
+		a.win().focus(2)
+		feed(t, a, "<Space>z")
+		f := a.render()
+		r := a.window()
+		fg := func(x, y int) any { return f.Buf.CellAt(x, y).Style.Fg }
+		if got := fg(r.Min.X, r.Min.Y); got != a.theme.Zoom {
+			t.Errorf("%s: corner %v, want the zoom color %v", icons, got, a.theme.Zoom)
+		}
+		top := strings.Split(f.String(), "\n")[0]
+		if want := a.icons.Number(2) + " " + a.icons.Zoom.Text + " "; !strings.Contains(top, want) {
+			t.Errorf("%s: title %q lacks %q", icons, top, want)
+		}
+		glyph, _ := utf8.DecodeRuneInString(a.icons.Zoom.Text)
+		for x := range r.Dx() { // the icon is drawn in the zoom color too
+			if c := f.Buf.CellAt(x, 0); c.String() == string(glyph) {
+				if c.Style.Fg != a.theme.Zoom {
+					t.Errorf("%s: the icon is %v", icons, c.Style.Fg)
+				}
+				break
+			}
+		}
+		a.win().focus(1) // not the pane zoomed: its border is the zoom color all the same
+		if got := a.render().Buf.CellAt(r.Min.X, r.Min.Y).Style.Fg; got != a.theme.Zoom {
+			t.Errorf("%s: unfocused zoomed corner %v", icons, got)
+		}
+		feed(t, a, "<Space>z")
+		g := a.render()
+		if got := g.Buf.CellAt(0, 0).Style.Fg; got == a.theme.Zoom {
+			t.Errorf("%s: the border keeps the zoom color", icons)
+		}
+		if top := strings.Split(g.String(), "\n")[0]; strings.Contains(top, a.icons.Zoom.Text) {
+			t.Errorf("%s: the zoom icon stays: %q", icons, top)
+		}
+	}
+	a := sized(160, 45, "nerd")
+	a.win().focus(2)
+	feed(t, a, "<Space>z")
+	golden.RequireEqual(t, a.render().String())
 }

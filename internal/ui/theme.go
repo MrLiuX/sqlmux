@@ -33,6 +33,7 @@ type Theme struct {
 
 	SQLTable, SQLColumn, SQLOperator color.Color // SQL's names the catalog knows, and its operators (§7.3)
 	Yank                             color.Color // a yank's flash, bg text on it (§7.3)
+	Zoom                             color.Color // the border of the pane zoomed (F9.6); a theme that has none gets its warn
 }
 
 var TokyonightStorm = &Theme{
@@ -54,6 +55,7 @@ var TokyonightStorm = &Theme{
 
 	SQLTable: c("#2ac3de"), SQLColumn: c("#73daca"), SQLOperator: c("#89ddff"),
 	Yank: c("#e0af68"),
+	Zoom: c("#e0af68"),
 }
 
 // Themes are the built-in themes by name.
@@ -112,6 +114,9 @@ func ParseTheme(data string, icons *Icons) (*Theme, *Icons, error) {
 			return nil, nil, err
 		}
 	}
+	if _, ok := raw["zoom"]; !ok {
+		th.Zoom = th.Warn // as the theme has it, not as tokyonight-storm's
+	}
 	if u := md.Undecoded(); len(u) > 0 { // e.g. `bg` inside an [icon] entry
 		return nil, nil, fmt.Errorf(i18n.T("不认识 %s"), u[0])
 	}
@@ -145,6 +150,6 @@ func (th *Theme) tokens() map[string]*color.Color {
 		"match": &th.Match,
 
 		"sql_table": &th.SQLTable, "sql_column": &th.SQLColumn, "sql_operator": &th.SQLOperator,
-		"yank": &th.Yank,
+		"yank": &th.Yank, "zoom": &th.Zoom,
 	}
 }
