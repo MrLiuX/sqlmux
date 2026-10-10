@@ -1,0 +1,36 @@
+# sqlmux 技术方案 · §15 测试
+
+> 这是技术方案的一章，各章的索引和阅读规则在 [`../tech-design.md`](../tech-design.md)；章节编号（§N.M）全仓库通用，不随文件改。
+
+## 15. 测试
+
+- **性能**（M8 F8.20）：`SQLMUX_PPROF=<addr>` 启动时开 `net/http/pprof`（如 `localhost:6060`），`just profile` 起一个连着 seed 库的实例并打印 `go tool pprof` 的用法；不开时运行零开销，二进制多约 2.4 MB（29.3 → 31.7 MB，审查时实测；接受，不用 build tag：用户手上的二进制要能直接 profile）。可重复的测量放在 `internal/app` 的 benchmark 里：默认布局、160×45、t_order 一页 100 行，往 Update 里喂指针在表格上来回扫过的移动事件（每个事件一次 View），报告每事件的耗时和分配；目标是每事件 < 1ms（100 事件 / 秒不到一个核的 10%）。优化只按 profile 的热点做（AGENTS.md：不做没有测量依据的性能优化），做完的数字写在这里。
+  - **优化前**（worker 2026-10-08，M3 Pro，`BenchmarkPointerMotion`）：1.33–1.41 ms / 事件，1.35 MB、7557 次分配 / 事件；真实终端每秒约 90 个移动事件时 sqlmux 占约 0.2 个核（2.3 ms CPU / 事件，含 GC 和渲染器 flush；macOS 的 `ps %cpu` 瞬时值不可信，以 pprof 为准）。热点：`Frame.Render` 每帧把 7200 个单元格全部重新序列化 44%（指针移动只变 2 行）；`Grid.Draw` 31%（其中每帧重算所有可见单元格的列宽 15%）；每帧新建整块 ScreenBuffer 约 0.6 MB，GC 占 12–17%。tea 的渲染器已按 60 fps 合并 flush、相同内容跳过，不是瓶颈。
+  - **改法**（已定）：A 行缓存——渲染时和上一帧逐行比较单元格，没变的行复用上一帧的字符串；B 悬停没变就不重画——渲染时记下查过指针的矩形，移动事件到来时新旧坐标对每个矩形的包含关系都一样（且没有拖拽、没有列表的悬停选中）就沿用上一次的 View；C 列宽按（页内容版本、列集合）缓存，A、B 做完已经达标就不做。**优化后**（同一台机器、load 14–16、取最小值）：跨行 1.27 → **0.54 ms**，1.35 → 0.35 MB，7559 → 2090 allocs；行内 **1.2 µs**、516 B、6 allocs；真实终端每秒约 90 个事件时约 21% → 约 10.5% 核，剩下的大头是 tea 渲染器的 flush（35%）和写终端（15%），按 60 fps 合并，不归我们。做了 A、B 和 C 的一半（Grid.Draw 列宽只算一次），外加 ASCII 宽度的快路径；`Frame.Mouse` 改成只能经 `Over` 读，B 才算得准。
+
+- **静态检查**（M7 F7.1，用户 2026-10-05 要求）：golangci-lint v2，规则在仓库根的 `.golangci.yml`，每个 commit 零报告，reviewer 审查前先跑。规则以 golangci-lint 的默认集（errcheck、govet、ineffassign、staticcheck、unused）为底，加上能抓到真 bug 和误用的：errorlint、nilerr、exhaustive（`default-signifies-exhaustive`，`keymap.Key` 不算枚举）、copyloopvar、intrange、unconvert、unparam、wastedassign、perfsprint、usestdlibvars、misspell、gocritic（diagnostic + performance 组，关掉 evalOrder、filepathJoin 两个误报项和 hugeParam、rangeValCopy）、revive（默认规则）、nolintlint（要写明 linter 和理由）、govet 的 nilness；staticcheck 去掉 QF*（按口味的重构建议）；formatters 用 gofmt、goimports（import 分标准库 / 第三方 / sqlmux 三组）；`build-tags: [integration]`，集成测试也检查。排除 preset `comments`（revive 要求每个导出名写「X is …」，和「注释写为什么」相反）和 `std-error-handling`。不开只为速度、没有测量依据的（prealloc、perfsprint 的 concat-loop、hugeParam、rangeValCopy，同 AGENTS.md「不做没有测量依据的性能优化」），不开和 gofmt 打架或只讲风格的（wsl、nlreturn、lll、godot、varnamelen、exhaustruct 等），也不开 depguard、gochecknoglobals 这类要为项目逐个配的。每个开启的 linter 在配置里一行注释写为什么；屏蔽用带理由的 `//nolint`。版本钉在 v2.14.0，本地和 CI 一致（reviewer 2026-10-05 起草，398899a 上 131 条报告：生产代码 52、测试 79）。
+- **CI**（M7 F7.1）：GitHub Actions，push 和 PR 到 main 时跑 lint、vet、单测、集成测试（PG 17 和 MySQL 8.4 用 services 起，seed 同 docker-compose）；e2e 不进 CI（要 tmux 和 40 分钟以上，本地由 tester 跑）。
+- **常规操作走 `just`**（M7 F7.2）：`justfile` 里有 build、run、test、test-integration、e2e（只编译一次）、lint、fmt、tidy、check（commit 前的全部检查）、golden 更新、db-up / db-down、keys 导出、clean；AGENTS.md 里写命令的地方都改成 just 的入口。
+
+- **单元测试**（表驱动）：
+  - `sqlkit`：扫描、分句、读写判定、自动 LIMIT、WHERE 拼接与多语句拦截，以及补全上下文判断（光标位置 → 候选类别、表的别名、CTE 和子查询的层级）。用例可以参考 lazysql 的 `sql_context_test.go`。
+  - `keymap`：解析、trie 合并、次数前缀、映射展开（含按 pane 类型的优先级）、冲突检测、提示。
+  - 模糊匹配：对 fzf 算法的封装，以及扩展语法的解析。
+  - 布局树：分割、关闭、调整大小、按方向切焦点。
+  - 保存时生成的 UPDATE 语句。
+  - 时间分段的解析与调整。
+- **编辑器与 nvim 的差分测试**：
+  - `internal/editor/testdata/cases.txt` 中每条用例包含：初始文本、光标位置、按键序列。
+  - `go generate` 调用 `nvim --headless --clean`，逐条用 `silent! call feedkeys(keys, 'xt')` 喂按键，记录结果的文本、光标位置、无名寄存器和 topline，作为 golden 文件提交。不用 `normal!`：一次 `:normal` 的全部按键只算一个撤销步，`xxu` 会把两个 `x` 一起撤掉，和手按不一致（M3 核对时在 nvim 0.12.4 上实测）；`t` 让按键按真实输入处理。
+  - 生成器的选项：`--clean --cmd 'set noloadplugins'` 加 `expandtab tabstop=2 shiftwidth=2 nowrap ignorecase smartcase commentstring=--\ %s formatoptions-=j`，窗口固定 24×80，Go 那边用同一个高度；golden 文件头记下 nvim 版本。
+  - 正则：RE2 和 vim 的语法不同，搜索和 `:s` 的差分用例只用两边含义相同的写法（字面量、`.`、`^`、`$`、`\d`、`[…]`、`*`），其余另写单测。POSIX 字符类（`[[:upper:]]` 等）不算通用写法：ignorecase 下 RE2 的 `(?i)` 会让它也忽略大小写，nvim 不会，不进差分用例。
+  - 基准是不加载插件的 nvim 本体（M3 审查时定）：`--cmd 'set noloadplugins'` 关掉 matchit 这类自带插件（nvim 0.12.4 上 `--clean` 会把 `loadplugins` 设回 1，`--noplugin` 不起作用，worker 实测），否则 `%` 在 operator-pending 下是 matchit 的行为；nvim 本体的默认映射照做（如 INSERT 下 `C-w` / `C-u` 先断开撤销步）；`formatoptions` 去掉 `j`，因为 `J` 去掉注释前导符只对 nvim 默认 comments 里的 `#`、`//` 等生效，`--` 本来就不在里面，对 SQL 收益小，写进已知上限。
+  - `go test` 把自研编辑器的结果和 golden 文件逐条比对。CI 上不需要安装 nvim；只有新增用例或升级 nvim 版本时，才需要重新生成。
+  - 已验证可行：在 nvim 0.12.4 上跑了 `ciw`、`daw`、`di(`、`gUiw`、`D`、`J`、`caw`、`dd`、`C`、`gcc`，以及块选择的 `I`、`$A`、`d`、`c`、`y` + `p` 等用例，都能拿到结果文本、光标位置和寄存器类型。
+  - 生成期望结果时，用 `silent!` 执行按键，避免 nvim 的提示消息混进输出。
+- **默认键位兼容性测试**：断言 `default.toml` 中没有只能在 kitty 协议下使用的键，也没有 Alt 组合键。
+- **格式化 golden 测试**：几条典型的 PG / MySQL 语句，格式化结果与 golden 文件比对。升级 sql-formatter 时，输出如有变化，这个测试会失败。
+- **渲染 golden 测试**：在固定尺寸 160×45 下渲染 Frame，与 golden 文件比对（`charmbracelet/x/exp/golden` 已是 bubbletea 的依赖）。场景对应设计稿的几种状态：WHERE 下拉、COLS 下拉、命令面板的 SQL 模式、转置、result 在右侧或下方、时间选项浮层、which-key。
+- **e2e（tmux 黑盒）**：只测真实终端才能验证的行为：终端模式、SGR 鼠标、resize、字素宽度、时序（连按、超时、取消）、配置加载，以及真实数据库上的端到端流程。布局、颜色、位置由上面的渲染 golden 覆盖，UI 改动时改 golden，不去重写几十条 e2e 断言（M0 复盘）。
+- **集成测试**：用 `docker compose` 启动 postgres:17 和 mysql:8.4，运行 `go test -tags integration ./internal/db/...`。覆盖以下内容：catalog、文本值、取消、只读拦截、保存时的乐观校验、枚举和可空属性、用唯一索引作为行标识、无主键表只读、按 console 切换 `search_path`。
+- **手工测试矩阵**：Terminal.app、iTerm2、Ghostty、WezTerm、Linux 下的 GNOME Terminal。每个都分别在 tmux 内外测试，重点检查默认键位和鼠标。

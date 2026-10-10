@@ -1,6 +1,6 @@
 # sqlmux 开发计划（索引）
 
-范围和设计以 [`tech-design.md`](tech-design.md) 为准。每个里程碑一个目录，目录里的 `task.md` 是这个里程碑的任务清单。协作流程见 [`../AGENTS.md`](../AGENTS.md)。
+范围和设计以 [`tech-design.md`](tech-design.md) 为准。每个里程碑一个目录，目录里的 `task.md` 是这个里程碑的任务清单。协作流程、审查节点怎么走、谁改什么、里程碑怎么结束，全在 [`../AGENTS.md`](../AGENTS.md)，这里不重复。
 
 | 里程碑 | 任务清单 | 目标 | 状态 |
 |---|---|---|---|
@@ -9,17 +9,16 @@
 | M2 编辑 | [m2-edit/task.md](m2-edit/task.md) | 编辑单元格、选项浮层、保存与刷新 | 完成（用户 2026-10-02 与 M3、M4 一起验收，tag `m2`） |
 | M3 console | [m3-console/task.md](m3-console/task.md) | vim 编辑器、执行、底部结果区、格式化、补全、schema 下拉；表格与 console 混放 tab | 完成（用户 2026-10-02 验收，tag `m3`） |
 | M4 命令面板 | [m4-palette/task.md](m4-palette/task.md) | 快速 SQL 接上 M3、DDL 预览、面板里 tab 的层级 | 完成（用户 2026-10-02 验收，tag `m4`）；验收意见排进 M5 的 F5.5–F5.9 |
-| M5 工作现场 | [m5-workspace/task.md](m5-workspace/task.md) | 一个 session 多个连接、多 session / window、只读与事务模式、MySQL；先做 M4 验收意见 F5.5–F5.9 | F5.1–F5.11 passed（2026-10-03）；验收中，F5.12–F5.19 passed（2026-10-05，完整回归在 d156ec7 上全过）；开发全部完成，和 M6 一起验收后打 tag `m5`；M5 不单独验收，和 M6 一起（用户 10-05 定），节点 5 通过后直接开工 M6 |
-| M6 配置 | [m6-config/task.md](m6-config/task.md) | 键位配置收尾、主题、持久化、界面中英文切换、布局文件（保存与恢复工作现场）、可以关掉 vim 模式 | 完成（F6.1–F6.7 passed，完整回归在 be5f6f3 上全过，2026-10-06）；等用户和 M5 一起验收，通过后打 tag `m6` |
-| M7 工程质量 | [m7-quality/task.md](m7-quality/task.md) | golangci-lint 与 CI、justfile、凭据不落明文、分字段的新建连接表单与无连接启动（用户 2026-10-05 提出） | F7.1–F7.5 passed（99781fc，2026-10-07）；F7.6 默认英文 passed（ec4aaad，2026-10-07）；和 M5、M6 一起验收，通过后打 tag `m7`、`v0.1.0`，CI 首次运行等推送 |
-
-| M8 第一轮使用反馈 | [m8-feedback/task.md](m8-feedback/task.md) | 用户照 WALKTHROUGH 走完 M5–M7 后的 20 条意见：补全和格式化的 bug、列宽、边框样式、默认排序、window / session / console 改名、连接的修改与删除 | 完成（F8.1–F8.23 passed，0c023d2，完整回归 118 个脚本全过，2026-10-10）；等用户验收，通过后和 M5–M7 一起打 tag `m8`、`v0.1.0` |
-| M9 第二轮使用反馈 | [m9-feedback2/task.md](m9-feedback2/task.md) | 用户 2026-10-10 在 M8 验收期间提的 10 条：WHERE 历史 / 收藏的顺手操作、表格 `^` / `C-r` / 复制为 JSON、缩放提示、DDL 查看 | 完成（F9.1–F9.10 passed，93e9d8c，完整回归 130 个脚本全过，2026-10-10）；等用户验收，通过后打 tag `m9` |
+| M5 工作现场 | [m5-workspace/task.md](m5-workspace/task.md) | 一个 session 多个连接、多 session / window、只读与事务模式、MySQL；先做 M4 验收意见 F5.5–F5.9 | 完成（F5.1–F5.19 passed，完整回归在 d156ec7 上全过，2026-10-05；tag `m5`） |
+| M6 配置 | [m6-config/task.md](m6-config/task.md) | 键位配置收尾、主题、持久化、界面中英文切换、布局文件（保存与恢复工作现场）、可以关掉 vim 模式 | 完成（F6.1–F6.7 passed，完整回归在 be5f6f3 上全过，2026-10-06；tag `m6`） |
+| M7 工程质量 | [m7-quality/task.md](m7-quality/task.md) | golangci-lint 与 CI、justfile、凭据不落明文、分字段的新建连接表单与无连接启动（用户 2026-10-05 提出） | 完成（F7.1–F7.6 passed，ec4aaad，2026-10-07；tag `m7`，和 `v0.1.0` 一起推送，CI 首次运行） |
+| M8 第一轮使用反馈 | [m8-feedback/task.md](m8-feedback/task.md) | 用户照 WALKTHROUGH 走完 M5–M7 后的 20 条意见：补全和格式化的 bug、列宽、边框样式、默认排序、window / session / console 改名、连接的修改与删除 | 完成（F8.1–F8.23 passed，0c023d2，完整回归 118 个脚本全过，2026-10-10；tag `m8`） |
+| M9 第二轮使用反馈 | [m9-feedback2/task.md](m9-feedback2/task.md) | 用户 2026-10-10 在 M8 验收期间提的 10 条：WHERE 历史 / 收藏的顺手操作、表格 `^` / `C-r` / 复制为 JSON、缩放提示、DDL 查看 | 完成（F9.1–F9.10 passed，93e9d8c，完整回归 130 个脚本全过，2026-10-10；tag `m9` 和 `v0.1.0`；用户 10-10 定：先打 tag，之后自己慢慢验收） |
 | M10 第三轮使用反馈 | [m10-feedback3/task.md](m10-feedback3/task.md) | 用户 2026-10-10 在 M9 审查期间提的 9 条：表格多选、flash 式跳转、树去掉 pane 层、连接分组、WHERE 下拉撑满、新建 session 先要名字、console 结果 500 行并翻页、COLS 调列顺序、侧栏去掉键位文字、删开着的 console；最后 console 改名 query（单独一个节点） | 开发中（2026-10-10，M9 passed 后开工） |
 
-## 发布（用户 2026-10-07 定）
+## 发布
 
-M5–M7 验收通过、打 tag 之后，发布一个可用版（tag `v0.1.0`，和 `m7` 同一个 commit；`go install` 能装，GoReleaser / Homebrew 等用户要再说）。用户 2026-10-07 照 `/Users/ctw/proj/sqlmux-verify/WALKTHROUGH.md` 走完一遍后给了 20 条意见，整理成 M8；M5–M8 的 tag 和 `v0.1.0` 等 M8 验收通过后一起打（用户 2026-10-07 定）；M9 的 10 条是 M8 验收期间提的，单独一个里程碑，不阻塞 M8 的 tag。
+`v0.1.0` 和 `m9` 同一个 commit（93e9d8c），`go install` 能装；GoReleaser / Homebrew 等用户要再说。每个里程碑的 tag 在用户验收通过后由 worker 打并推送（M5–M9 由用户 10-10 定为先打 tag 再慢慢验收）。
 
 ## 任务文件的格式
 
@@ -29,9 +28,9 @@ M5–M7 验收通过、打 tag 之后，发布一个可用版（tag `v0.1.0`，�
 - **依赖**：必须先完成的 feature。
 - **涉及**：会改动的包或文件，用来判断改动范围、避免冲突。
 - **开发**：worker 按顺序实现的清单。
-- **验收**：tester 的测试项，每项都要能用命令、golden 或 e2e 脚本验证。写着「e2e」的验收项里，属于布局、颜色、位置的，可以由渲染 golden 验证（AGENTS.md「tester 的规则」）。
+- **验收**：tester 的测试项，每项都要能用命令、golden 或 e2e 脚本验证。写着「e2e」的验收项里，属于布局、颜色、位置的，可以由渲染 golden 验证（`roles/tester.md`）。
 
-**审查节点**：worker 按 feature 提交，reviewer 不逐个审，只在节点上整批审，通过后整批提测。节点由决策者按工作量定：小的里程碑只在最后一个 feature 之后设一个；大的里程碑在中间合适的位置多设几个，让一批的改动量保持在一次能审完的范围内。2026-09-30 用户要求拉长节点、减少来回：一轮改进项或一个中等大小的里程碑只设一个节点。
+**审查节点**：worker 按 feature 提交，reviewer 不逐个审，只在节点上整批审，通过后整批提测。节点由决策者按工作量定：小的里程碑只在最后一个 feature 之后设一个；大的里程碑在中间合适的位置多设几个，让一批的改动量保持在一次能审完的范围内。用户要求拉长节点、减少来回：一轮改进项或一个中等大小的里程碑只设一两个节点。
 
 ## 状态
 
@@ -42,31 +41,3 @@ M5–M7 验收通过、打 tag 之后，发布一个可用版（tag `v0.1.0`，�
 | `passed（sha；e2e sha）` | 所在批次审查、测试都已通过，由决策者填写 |
 
 不再有 doing、reviewing、testing、failed 这些中间状态：按批审查之后，它们只增加记账，不提供信息。
-
-## 按步推进的规则
-
-1. **按依赖顺序开发，不等审查。** worker 做完一个 feature 就提交，接着做下一个。
-2. **每一步都保持测试通过。** 每个 commit 都由 worker 自己保证：vet、单元测试、golden、gofmt、`go mod tidy`、涉及数据库时的集成测试，以及和改动相关的 e2e 脚本。全量 e2e 每个审查节点跑一次，和送审同时进行；reviewer 等它跑完、没有清单外的失败，才提测（AGENTS.md「worker 的规则」）。
-3. **到了审查节点：先整批审查，再整批测试。**
-   1. worker 把 `<上一个节点>..<sha>` 发给 reviewer，同时告诉 tester，tester 开始准备，spec 问题在审查期间就提；
-   2. reviewer 审查，有待定的 spec 问题先问决策者，再把必须改的问题一次退回；通过后整批提测给 tester；
-   3. 审查或测试发现问题时，worker 修复后提交新的 commit，同样先交给 reviewer 复审，再交给 tester 复测；
-   4. tester 全部通过后，把批次结论发给决策者和 worker。
-   5. 修复 commit 排在下一批的 feature 之后时，照常在修复的 sha 上审、测，只看本批的验收项；后续 feature 造成的 e2e 失败由 worker 列出，不算本批的问题（AGENTS.md「固定的工作流」第 5 条）。
-4. **谁改什么。**
-   - `specs/` 和 `AGENTS.md` 只由决策者修改，并由决策者自己提交：`git commit -m "docs: …" -- specs AGENTS.md`。worker、reviewer、tester、pruner 都不改。
-   - 收到 tester 的批次结论后，决策者把这批 feature 的状态填为 `passed`，注明 sha，并勾选开发清单和验收项。
-   - worker 觉得清单不合理时，提给决策者。
-5. **里程碑完成的流程。** 用户按里程碑验收，不逐个验收 feature。
-   1. 最后一个审查节点通过，全部 feature 为 `passed`。
-   2. tester 在最后一个 commit 上跑一遍完整的 e2e 回归。
-   3. **暂停，由用户深度体验并验收。**用户可以决定跳过这一步、攒到后面的里程碑一起验收（2026-09-30：M2、M3、M4 一起验收），这时直接开工下一个里程碑。
-      - worker 停止写代码，只可以起草下一个里程碑的开发清单。
-      - 决策者整理出体验路径：怎么运行、依次试哪些操作、应该看到什么。用户照着完整体验一遍，提出问题和改进意见。
-   4. 决策者把用户的反馈整理成任务。
-      - 属于当前里程碑的，追加成改进 feature，编号接着往后排，标好审查节点，照常按批走完。
-      - 其余的排进后续里程碑。
-   5. 修剪不是必经步骤。用户需要时自己启动 `sqlmux-pruner`（AGENTS.md「pruner 的规则」）。
-   6. 用户确认验收通过后，worker 打 tag（`m0`、`m1` ……），决策者把本表的状态改为「完成」，然后进入下一个里程碑。
-6. **下一个里程碑开工前**，worker 起草该里程碑的开发清单发给决策者，决策者写进 task.md、定好审查节点，状态从 `draft` 改为 `todo`。
-7. **消息和会话**：只发 spec 问题、退回、批次提测、批次结论四类消息；上下文到 700–800k token 时在原会话里 `/handoff` + `/clear`，名字不变（AGENTS.md「消息规则」「会话与交接」）。
