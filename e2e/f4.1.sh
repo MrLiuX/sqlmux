@@ -96,7 +96,7 @@ check "SPC r：结果区隐藏" eval '[[ -z $(geom $RP) ]]'
 # 面板开着时它盖住了 ③ 的边框，e2e_panes 认不出 ③：看树的工作区（sidebar 里 pane-3 下面列出它的 tab）
 wtree() { e2e_plain | sed 's/^│//; s/│.*//' | noicon | sed 's/^ *//; s/ *$//'; }   # the sidebar's rows (cut -c counts bytes here)
 pal; sql "select count(*) from t_log"; e2e_keys C-t; sleep 0.5
-check "C-t：隐藏着的结果区出来，工作区里多了 quick #2（序号和 console 的共用）；面板还开着，输入还在" eval 'is_open && [[ $(input) == ";select count(*) from t_log" ]] && wtree | grep -q "quick #2$" && wtree | grep -q "pane-3$" || { wtree | tail -8; false; }'
+check "C-t：隐藏着的结果区出来，工作区里多了 quick #2（序号和 console 的共用）；面板还开着，输入还在" eval 'is_open && [[ $(input) == ";select count(*) from t_log" ]] && wtree | grep -q "quick #2$" && wtree | grep -qE "③ +quick #2$" || { wtree | tail -8; false; }'
 e2e_keys C-t; sleep 0.5; e2e_keys Escape; sleep 0.3
 check "同一个结果再按一次：又一个 quick #3" rtabs_are "1:日志 │ 2:console_1 #1 │ 3:quick #2 │ 4:quick #3*"
 pal; sql "delete from t_log"; e2e_keys C-t; sleep 0.4; sql "selec 1"; e2e_keys C-t; sleep 0.4

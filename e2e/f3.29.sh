@@ -18,7 +18,7 @@ check "SPC b：树收起" eval '! tree_shown && focus_is 1'
 toggle
 check "焦点在 t_order 的 tab 上时 SPC b：树展开，焦点到树上，光标在 public 下的 t_order 节点，折着的 public、Tables 也展开了" eval 'tree_shown && focus_is 0 && [[ $(cur) == "t_order 6.0k" ]] || { echo "  cursor on \"$(cur)\""; false; }'
 key C-l; key C-l; toggle; toggle
-check "在 ② 的 console 上按：光标在工作区的 console_1 节点" eval 'focus_is 0 && [[ $(cur) == console_1 ]] && [[ -n $(sub_of 工作区 | grep console_1) ]] || { echo "  cursor on \"$(cur)\""; false; }'
+check "在 ② 的 console 上按：光标在工作区的 console_1 节点" eval 'focus_is 0 && [[ $(cur) == "② console_1" ]] && [[ -n $(sub_of 工作区 | grep console_1) ]] || { echo "  cursor on \"$(cur)\""; false; }'
 toggle
 check "树展开时 SPC b：照旧收起" eval '! tree_shown'
 

@@ -11,7 +11,7 @@ printf '[keys.global]\n"<F9>" = "palette.session"\n' >|"$D/k.toml"
 sname() { bar | sed 's/^ //; s/ ▾.*//'; }
 leader() { e2e_keys Space; e2e_type "$1"; sleep 0.8; }
 cmd() { pal ">$1"; key Enter; }
-newsess() { cmd session.new; wait_for 8 eval '[[ $(sname) == "$1" ]]'; sleep 0.5; }
+newsess() { cmd session.new; sleep 0.4; key Enter; wait_for 8 eval '[[ $(sname) == "$1" ]]'; sleep 0.5; }
 
 SOLO= start -K "$D/k.toml"
 check "（准备）一个 session doraemon" eval '[[ $(sname) == doraemon ]]'

@@ -32,7 +32,7 @@ e2e_stop; start -K "$D/rebind.toml"; sleep 0.8
 check "改键本身不是冲突：重新绑定默认键不出浮层" eval '! overlay'
 
 # ---- 改了键：显示的都是新键
-check "树的 pane 标题：C-g（不是 SPC b）" eval 't=$(e2e_plain | sed -n 1p); [[ $t == *"C-g"* && $t != *"SPC b"* ]]'
+check "树的 pane 标题：没有键位文字（F10.9），只有 «" eval 't=$(e2e_plain | sed -n 1p); [[ $t == *"«"* && $t != *"C-g"* && $t != *"SPC b"* ]]'
 g=($(geom 2)); tb=$(e2e_text $((g[0])) $((g[0] + g[2] - 1)) $((g[1] + g[3] - 2)))
 check "console 的 tab 栏提示：用新键（不再是 gt/gT）" eval '[[ $tb == *"SPC t"* && $tb != *"gt/gT"* ]] || { echo "  $tb"; false; }'
 key Space; sleep 0.8
