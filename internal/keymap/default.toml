@@ -46,6 +46,7 @@ leader = "<Space>"
 "G" = "grid.bottom"
 "0" = "grid.first"
 "^" = "grid.first" # the same as 0: no indent here
+"<C-r>" = "where.history" # from the grid: the WHERE gets the keys first (F9.4)
 "$" = "grid.last"
 "<CR>" = "grid.edit"
 "i" = "grid.edit"

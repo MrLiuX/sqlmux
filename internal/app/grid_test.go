@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 
 	"sqlmux/internal/db"
+	"sqlmux/internal/editor"
 	"sqlmux/internal/ui"
 )
 
@@ -267,6 +268,29 @@ func TestGridMoves(t *testing.T) {
 	lines := strings.Split(a.render().String(), "\n")
 	if tab.left == 0 || !strings.Contains(lines[body.Min.Y], "created_at") {
 		t.Errorf("$: left %d, header %q", tab.left, lines[body.Min.Y])
+	}
+}
+
+// C-r on the grid goes into the WHERE and opens its history; esc closes the
+// list, esc again leaves the input for the grid (F9.4).
+func TestGridCtrlRHistory(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 10)
+	if tab.typing != "" {
+		t.Fatalf("typing %q", tab.typing)
+	}
+	feed(t, a, "<C-r>")
+	if tab.typing != "where" || tab.hist == nil || tab.ed.Mode() != editor.Insert {
+		t.Fatalf("C-r: typing %q, list %v, mode %v", tab.typing, tab.hist != nil, tab.ed.Mode())
+	}
+	feed(t, a, "<Esc>")
+	if tab.typing != "where" || tab.hist != nil {
+		t.Fatalf("esc: typing %q, list %v", tab.typing, tab.hist != nil)
+	}
+	feed(t, a, "<Esc>")
+	feed(t, a, "<Esc>")
+	if tab.typing != "" {
+		t.Errorf("esc again: typing %q", tab.typing)
 	}
 }
 

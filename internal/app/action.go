@@ -227,8 +227,8 @@ func init() {
 		"where.apply":     {Title: i18n.N("执行 WHERE"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { t := a.typingTab(); return a.histApply(t, t.hist.sel) })},
 		"where.star":      {Title: i18n.N("收藏 / 取消收藏"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { return a.histStar(a.typingTab()) })},
 		"where.close":     {Title: i18n.N("关闭下拉"), Local: true, Run: when(inHist, func(a *App) tea.Cmd { a.typingTab().hist = nil; return nil })},
-		// C-r in the WHERE input, or a click on its ▾ from the grid (Q-02).
-		"where.history": {Title: i18n.N("历史 / 收藏"), Local: true, Run: func(a *App, _ Args) tea.Cmd {
+		// C-r in the WHERE input or on the grid, or a click on its ▾ (Q-02, F9.4).
+		"where.history": {Title: i18n.N("历史 / 收藏"), Run: func(a *App, _ Args) tea.Cmd {
 			t := dataOf(a.focused())
 			if t == nil || t.page.Cols == nil || a.drop != nil || a.cols != nil || t.typing == "page" {
 				return nil
