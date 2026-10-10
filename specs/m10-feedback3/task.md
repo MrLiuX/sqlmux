@@ -1,12 +1,12 @@
 # M10 第三轮使用反馈 · 任务清单
 
-- **状态**：**todo**（2026-10-10 用户在 M9 审查期间提出 9 条，决策者拆成 F10.1–F10.8，之后追加 F10.9；翻页键改 `<lt>` / `>`、`c` 开 COLS 只是用户自己的 keymaps.toml，不算 feature）。M9 全部 passed 之后开工。
-- **目标**：表格的多选（标记删除、复制 JSON）、flash 式跳转、树去掉 pane 层、连接分组、WHERE 下拉撑满、新建 session 先要名字、console 结果 500 行并翻页、COLS 调列顺序、侧栏去掉键位文字。
+- **状态**：**todo**（2026-10-10 用户在 M9 审查期间提出 9 条，决策者拆成 F10.1–F10.8，之后追加 F10.9、F10.10；翻页键改 `<lt>` / `>`、`c` 开 COLS 只是用户自己的 keymaps.toml，不算 feature）。M9 全部 passed 之后开工。
+- **目标**：表格的多选（标记删除、复制 JSON）、flash 式跳转、树去掉 pane 层、连接分组、WHERE 下拉撑满、新建 session 先要名字、console 结果 500 行并翻页、COLS 调列顺序、侧栏去掉键位文字、删开着的 console 直接关 tab。
 - **范围**：tech-design §6.4（作用域）、§6.8（键位表）、§6.10（跳转，新）、§7.6（表格选择）、§7.8（树、COLS、session 列表、连接表单）、§9.6（WHERE 下拉）、§11（结果翻页）、§14（`group`、`max_rows`）。
 - **依赖**：M9 F9.1–F9.10 passed。
-- **完成标准**：F10.1–F10.9 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m10`。
+- **完成标准**：F10.1–F10.10 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m10`。
 - **审查节点**：
-  1. F10.5 之后：F10.1–F10.5、F10.9 一批（小改：WHERE 下拉、session 名字、COLS 顺序、结果翻页、树去掉 pane 层、侧栏的键位文字）；
+  1. F10.5 之后：F10.1–F10.5、F10.9、F10.10 一批（小改：WHERE 下拉、session 名字、COLS 顺序、结果翻页、树去掉 pane 层、侧栏的键位文字、删开着的 console）；
   2. F10.8 之后：F10.6–F10.8 一批（连接分组、选择模式、跳转）。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
@@ -161,3 +161,17 @@
 **验收**
 - [ ] golden：折叠和展开两种侧栏（替换原来带 `SPC b` 的场景）。
 - [ ] 单测：点 `«` 折叠，点 `»` 展开。
+
+## F10.10 删除开着的 console 直接关掉它的 tab · 状态：todo
+
+用户 2026-10-10：树里删 console 时，它开着就 toast「Close its tab first」拒绝；照 DataGrip 不限制，直接删，开着的 tab 自动关掉。
+
+- **依赖**：F8.21、F8.23
+- **涉及**：`internal/app`（tree、tab）
+
+**开发**（§7.8「Consoles 节点」）
+- [ ] `tree.delete` 和右键菜单的「删除…」对开着的 console 文件：确认后删文件和 state.json 的记录，关掉它在所有 session 里的 tab（规则同 F8.23 删表关 tab：没落盘的内容随文件丢弃，不另提示；pane 空了留引导页）；去掉「先关掉它的 tab」的分支和文案。
+
+**验收**
+- [ ] 单测：两个 session 各开着这个 console，删除后两处 tab 都没了、文件没了、state.json 没有它。
+- [ ] e2e：树里 `dd` 删开着的 console，`y` 后 tab 消失、没有 toast。
