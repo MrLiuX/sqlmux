@@ -2,9 +2,9 @@
 # F0.16 Drop text next to icons, circled pane numbers, fewer palette candidates
 # (specs/m0-skeleton/task.md F0.16; tech-design §7.7, §7.8, §12)
 # ⑳ → ⟨21⟩ is unit-tested (icons_test.go); the goldens: 80×24 unchanged, 160×45 differs in 3 lines (checked by diff).
-# SOLO + two_tabs / two_panes give ① t_order | ② empty (M3's console title and icon: f0.2, f0.12).
+# SOLO + two_tabs / two_panes give ① t_order | ② empty (M3's query title and icon: f0.2, f0.12).
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")
@@ -15,7 +15,7 @@ widths_are() { local got; got=$(e2e_widths | sed '/^0$/d' | sort -u | tr '\n' ' 
 
 # ---- nerd: circled numbers, no type words, icon-only palette entry, no / in the filter row
 start; two_tabs; two_panes
-check "no data / console words in the titles" eval '[[ $(e2e_text 34 160 1) != *" data "* && $(e2e_text 34 160 1) != *"console · "* ]]'
+check "no data / query words in the titles" eval '[[ $(e2e_text 34 160 1) != *" data "* && $(e2e_text 34 160 1) != *"query · "* ]]'
 check "filter row: icon then the table count, no /" text_is 2 14 2 " $NF_FILTER 11 tables "
 check "status bar: the palette entry is only the search icon" eval '[[ $(e2e_text 1 160 45) != *C-p* ]] && text_is $(( $(search_col) - 1 )) $(( $(search_col) + 1 )) 45 " $SEARCH_ICON "'
 e2e_click $(search_col) 45; sleep 0.3

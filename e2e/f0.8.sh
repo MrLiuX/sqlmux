@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # F0.8 命中表与鼠标（specs/m0-skeleton/task.md F0.8；tech-design §7.4、§5「按编号跳转」）
 # 全部用注入的 SGR 鼠标序列（e2e_click / e2e_move / e2e_down …，1 起算的列、行）。
-# SOLO 之后只有一个 pane：two_panes 分出 ① [34,96] | ② [98,160]；console 的用例（M3 F3.6 补回）用默认布局 ⓪ | ① | ② console_1。
+# SOLO 之后只有一个 pane：two_panes 分出 ① [34,96] | ② [98,160]；query 的用例（M3 F3.6 补回）用默认布局 ⓪ | ① | ② query_1。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 L() { e2e_keys Space; e2e_type "$1"; sleep 0.3; }
@@ -93,13 +93,13 @@ check "表格上滚一格：前进 3 行（第 1 行 → 第 4 行），表头�
 e2e_wheel 60 20 up; e2e_wheel 60 20 up; sleep 0.3
 check "往上滚到顶就停住" eval '[[ $(first) == 1 ]]'
 
-# ---- ② console_1（M3 默认布局）：▶ run 的悬停与点击；滚轮只滚指针下方的 console
+# ---- ② query_1（M3 默认布局）：▶ run 的悬停与点击；滚轮只滚指针下方的 query
 SOLO= start
 read x y <<<"$(at "▶ run" 1)"; x=$((x + 2)); hover $x $y
 check "悬停 ② 标题的 ▶ run：warn 底" style_has $x $y bg=#e0af68
 hover 60 10; check "移开后恢复 focus 底" style_has $x $y bg=#9ece6a
 e2e_click $x $y; sleep 0.3
-check "点击 ▶ run：先让 console 获得焦点" focus_is 2
+check "点击 ▶ run：先让 query 获得焦点" focus_is 2
 e2e_keys i; t set-buffer -b e2e "$(seq -f 'select %g;' 60)"; t paste-buffer -p -b e2e -t t; sleep 0.4; e2e_keys Escape; sleep 0.2
 e2e_keys g g; sleep 0.2; e2e_click 60 10; sleep 0.3
 top_line() { e2e_text 100 102 2 | tr -d ' '; }   # ② 可见的第一行的行号

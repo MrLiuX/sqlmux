@@ -3,7 +3,7 @@
 # 网格样式见 f0.9.sh，按类型着色见 f0.12.sh，表格滚轮见 f0.8.sh；golden 由 go test 覆盖。
 # 锁表、删表、空表在自建库 sqlmux_e2e_<pid> 里做（AGENTS.md「集成测试环境」）。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")

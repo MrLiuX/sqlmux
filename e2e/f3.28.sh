@@ -13,13 +13,13 @@ check "还没有结果区时 SPC r：不做事" eval 'geom_is 2 "98 1 63 44" && 
 key i; e2e_type "select 1 as x"; key Escape; run
 check "执行一条 SQL：底部出现结果区 ③" eval 'geom_is 3 "34 27 127 18" && geom_is 2 "98 1 63 26"'
 key Space; e2e_type r; sleep 0.3
-check "SPC r：结果区消失，console 和 ① 变高（占满 44 行），焦点不动" eval '[[ -z $(geom 3) ]] && geom_is 2 "98 1 63 44" && geom_is 1 "34 1 63 44" && focus_is 2'
+check "SPC r：结果区消失，query 和 ① 变高（占满 44 行），焦点不动" eval '[[ -z $(geom 3) ]] && geom_is 2 "98 1 63 44" && geom_is 1 "34 1 63 44" && focus_is 2'
 key Space; e2e_type r; sleep 0.3
-check "再按 SPC r：原样回来，结果 tab 还在" eval 'geom_is 3 "34 27 127 18" && rtabs_are "1:日志- │ 2:console_1 #1*"'
+check "再按 SPC r：原样回来，结果 tab 还在" eval 'geom_is 3 "34 27 127 18" && rtabs_are "1:日志- │ 2:query_1 #1*"'
 key C-j; key Space; e2e_type r; sleep 0.3
 check "焦点在结果区时隐藏：焦点回到上一个聚焦的 ②" eval '[[ -z $(geom 3) ]] && focus_is 2'
 run
-check "隐藏着再执行：结果区自动出现，结果放进新的一次" eval 'geom_is 3 "34 27 127 18" && rtabs_are "1:日志- │ 2:console_1 #2*"'
+check "隐藏着再执行：结果区自动出现，结果放进新的一次" eval 'geom_is 3 "34 27 127 18" && rtabs_are "1:日志- │ 2:query_1 #2*"'
 
 # ---- 面板里是开关类命令（5514975）：显示 ON / OFF，执行后面板不关
 state() { e2e_plain | grep -a "result.toggle" | grep -oE " (ON|OFF) " | tr -d ' '; }

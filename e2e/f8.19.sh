@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F8.19 断线重连，PG（specs/m8-feedback/task.md F8.19；tech-design §8.2「断线重连」）
 # 判定、重拨、重跑的分档由 db 层单测和集成测试覆盖；这里在真实终端里用 pg_terminate_backend 杀掉服务端的连接，等价于 tsh 代理断开
-# （不停、不 pause 共用的容器）：Meta 上的请求（表格 R）自动重连重跑；console 的语句不论读写，服务端杀掉连接后都已发出，
+# （不停、不 pause 共用的容器）：Meta 上的请求（表格 R）自动重连重跑；query 的语句不论读写，服务端杀掉连接后都已发出，
 # 不重跑，错误栏显示原错误 + toast「已重连，请重新执行」，再执行就成功；search_path 重放；idle_session_timeout 断开；
 # 重拨失败（password_cmd 读到错密码）节点变红 + toast，密码改回来再请求就恢复；手动事务里被杀：模式不变、写语句不跑、commit 报提交结果未知、
 # rollback 按成功、表格重新加载；只读连接重连后仍只读。全在自建库上做。
@@ -50,24 +50,24 @@ kill_all; fresh_rec
 key R; wait_for 8 settled; sleep 1
 check "杀掉两条连接后在表格上按 R：数据回来，没有错误栏、没有 toast，树节点不变红" eval '(( $(rows) >= 5 )) && [[ -z $(errbar 1 | head -1) && -z $(toast_text) ]] && ! node_red rw && (( $(conns) >= 1 ))'
 
-# ---- console：服务端杀连接后请求已发出，读写语句都不重跑；再执行就成功
+# ---- query：服务端杀连接后请求已发出，读写语句都不重跑；再执行就成功
 key C-l; setsql "select count(*) from t_user"
 kill_all; fresh_rec; run
-check "杀掉连接后 console 执行 select：已发出，不重跑，错误栏有原来的错误（57P01）" eval '[[ $(errbar 2 | head -1) == *57P01* ]] || { echo "  err=[$(errbar 2 | head -1)]"; false; }'
+check "杀掉连接后 query 执行 select：已发出，不重跑，错误栏有原来的错误（57P01）" eval '[[ $(errbar 2 | head -1) == *57P01* ]] || { echo "  err=[$(errbar 2 | head -1)]"; false; }'
 check "toast「rw：已重连，请重新执行」（看录下来的输出）" toasted "rw：已重连，请重新执行"
 run
 check "再执行一次：成功，结果是 ${CNT}，错误栏没了，树节点不变红" eval '[[ $(rval) == "$CNT" && -z $(errbar 2 | head -1) ]] && ! node_red rw'
 setsql "update t_user set name = 'zz819' where id = 1"
 kill_all; fresh_rec; run
-check "杀掉连接后 console 执行 update：不重跑，错误栏有原来的错误；toast「已重连，请重新执行」" eval '[[ -n $(errbar 2 | head -1) ]] && toasted "rw：已重连，请重新执行"'
+check "杀掉连接后 query 执行 update：不重跑，错误栏有原来的错误；toast「已重连，请重新执行」" eval '[[ -n $(errbar 2 | head -1) ]] && toasted "rw：已重连，请重新执行"'
 check "那条 update 没有执行（id 1 的 name 不是 zz819）" eval '[[ $(psql_n "select name from t_user where id = 1") != zz819 ]]'
 run
 check "再按一次执行：成功，id 1 的 name 是 zz819" eval '[[ $(psql_n "select name from t_user where id = 1") == zz819 && -z $(errbar 2 | head -1) ]]'
 
-# ---- 重连后 console 选过的 schema 还在（search_path 重放）
+# ---- 重连后 query 选过的 schema 还在（search_path 重放）
 key g s; e2e_type agen; sleep 0.4; key Enter; sleep 1.2
 setsql "show search_path"; run
-check "（准备）console 选了 agentable：search_path 是 agentable" eval '[[ $(rval) == \"agentable\"* ]] || { echo "  got: $(rval)"; false; }'
+check "（准备）query 选了 agentable：search_path 是 agentable" eval '[[ $(rval) == \"agentable\"* ]] || { echo "  got: $(rval)"; false; }'
 kill_all; run; run
 check "杀掉连接、重连后再执行：search_path 还是 agentable（选过的 schema 重放了）" eval '[[ $(rval) == \"agentable\"* ]] || { echo "  got: $(rval)"; false; }'
 
@@ -85,7 +85,7 @@ printf 'wrong-%s\n' "$$" >|"$D/pw"
 key C-h; key R; sleep 2.5
 check "密码改错、杀掉连接后按 R：树节点 rw 变红" eval 'node_red rw'
 check "toast「rw：…」带连接名和错误（看录下来的输出）" toasted "rw："
-check "tab 都留着（t_user、console_1 还在）" eval '[[ $(e2e_plain | head -1) == *" t_user ─"* && $(tabbar 2) == *console_1* ]]'
+check "tab 都留着（t_user、query_1 还在）" eval '[[ $(e2e_plain | head -1) == *" t_user ─"* && $(tabbar 2) == *query_1* ]]'
 printf '%s\n' "$PW" >|"$D/pw"
 key R; wait_for 10 settled; sleep 1
 check "密码改回来再按 R：数据回来，树节点不再红，库里有连接" eval '! node_red rw && (( $(rows) >= 5 )) && (( $(conns) >= 1 ))'

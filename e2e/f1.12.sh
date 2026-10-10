@@ -2,7 +2,7 @@
 # F1.12 层级目录树（specs/m1-browse/task.md F1.12；tech-design §7.8「schema 侧栏」）
 # 默认展开、列节点、过滤后的样子由 golden 覆盖；这里在真实 PG 上按键、点击，看光标去哪、打开了什么。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 . "$(dirname "$0")/palette.sh"
 SELECT=#364a82

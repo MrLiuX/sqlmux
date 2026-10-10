@@ -1,4 +1,4 @@
-# Shared by f10.4.sh (PG) and f10.4b.sh (MySQL): F10.4 console result paging on a 1203-row table t_page(id 1..1203) in the
+# Shared by f10.4.sh (PG) and f10.4b.sh (MySQL): F10.4 query result paging on a 1203-row table t_page(id 1..1203) in the
 # script's own database. Needs $D/own/connections.toml with a connection called doraemon, and the helpers below.
 paste() { t set-buffer -b e2e "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 setsql() { key Escape; key g g; key d G; key i; paste "$1"; key Escape; key g g; }
@@ -28,7 +28,7 @@ paging_body() {
   seq_n=$(rtitle | grep -oE '#[0-9]+' | tr -d '#')
   read -r x y <<<"$(g=($(geom $RP)); echo $((g[0] + g[2] - 9)) "${g[1]}")"
   e2e_click "$x" "$y"; sleep 0.8; key C-k; key C-j
-  check "第 2 页点导出：当前目录下是 console_1-${seq_n}-p2.csv，500 行数据 + 表头，第一行数据是 501" eval 'f=$E2E_TMP/console_1-${seq_n}-p2.csv; [[ -f $f && $(wc -l <"$f" | tr -d " ") == 501 && $(sed -n 2p "$f" | tr -d "\r\" ") == 501 ]] || { ls $E2E_TMP | head; false; }'
+  check "第 2 页点导出：当前目录下是 query_1-${seq_n}-p2.csv，500 行数据 + 表头，第一行数据是 501" eval 'f=$E2E_TMP/query_1-${seq_n}-p2.csv; [[ -f $f && $(wc -l <"$f" | tr -d " ") == 501 && $(sed -n 2p "$f" | tr -d "\r\" ") == 501 ]] || { ls $E2E_TMP | head; false; }'
   paged "]" "1001–1203 行"
   check "再 ]：第 3 页（最后一页）：标题 1001–1203 行，第一行 id 1001" eval 'title_has "1001–1203 行" && [[ $(firstid) == 1001 ]]'
   check "最后一页再按 ]：无事" eval 'key "]"; sleep 0.8; title_has "1001–1203 行" && [[ $(firstid) == 1001 ]]'

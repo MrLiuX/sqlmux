@@ -3,7 +3,7 @@
 # 行号的颜色由 golden 覆盖；这里在真实终端里按 r，看撤回的是哪一格、行号颜色和保存按钮的计数跟着变。
 # 保存失败时行号 error 色优先见 f2.2.sh；新增行、删除行上的 r 见 f3.24.sh。不写库，用共用的 sqlmux 库。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 WARN=#e0af68 FOCUS=#9ece6a DIM=#565f89

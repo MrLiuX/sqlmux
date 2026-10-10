@@ -44,7 +44,7 @@ zoom
 check "主题 x 里 zoom = #ff00ff：缩放时边框是 #ff00ff（不是 warn）" eval 'style_has 1 1 fg=#ff00ff && style_has 1 10 fg=#ff00ff'
 zoom
 
-# ---- 缩放中的 console / 表 tab 一样；退出缩放的几个途径
+# ---- 缩放中的 query / 表 tab 一样；退出缩放的几个途径
 SOLO= start; open_table t_order; wait_for 8 settled
 zoom; e2e_keys Space; e2e_type %; sleep 0.8
 check "缩放中分割：退出缩放（分割、关闭都会退出缩放），边框恢复" eval '! style_has 1 1 fg=$WARN'

@@ -4,7 +4,7 @@
 # 有修改 / 在编辑 / 不可见时跳过、不清掉保存结果；停止按钮取消取数和保存；让位时从面板打开的下拉框锚在哪；
 # [icon] 的 fg 只换「亮着」时的颜色。自建库：另一条连接改数据、锁表锁行。有没有发出取数看 pg_stat_activity。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")

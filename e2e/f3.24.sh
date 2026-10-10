@@ -5,7 +5,7 @@
 # LIMIT 改小之后新行挂到哪、删除线（SGR 9 由 tmux 转发）。自建库：清空 t_order_item（它引用 t_order 的 1–200，挡住删除），
 # t_def 有默认值，t_trig 的触发器不让插入，t_txt 的主键有空串。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")

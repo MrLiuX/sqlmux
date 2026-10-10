@@ -54,14 +54,14 @@ key Down; key Down; key C-a; for i in 1 2 3 4 5; do key S-Right; done
 e2e_type "("; sleep 0.3
 check "选中 three 再打 (：包成 (three)" eval '[[ $(cl 3) == "(three)" ]] || { echo "  [$(cl 3)]"; false; }'
 
-# ---- 提示行：grid 用 novim 层的键、plain console 的 tab 栏不画 gt/gT
+# ---- 提示行：grid 用 novim 层的键、plain query 的 tab 栏不画 gt/gT
 e2e_stop
 mkdir -p "$D/c2"; printf 'vim = false\n' >"$D/c2/config.toml"
 start -C "$D/c2"; open_table t_order; wait_for 8 settled
 g=($(geom 1)); tb=$(e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $((g[1] + g[3] - 2)))
 check "表格的提示行：方向键 ←↓↑→ 在前（novim 层的键），不是 hjkl" eval '[[ $tb == *"←↓↑→"* && $tb != *hjkl* ]] || { echo "  $tb"; false; }'
 key C-l; g=($(geom 2)); tb=$(e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $((g[1] + g[3] - 2)))
-check "plain console 的 tab 栏不画 gt/gT" eval '[[ $tb != *gt/gT* ]] || { echo "  $tb"; false; }'
+check "plain query 的 tab 栏不画 gt/gT" eval '[[ $tb != *gt/gT* ]] || { echo "  $tb"; false; }'
 key C-h; g=($(geom 0)); tf=$(e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $((g[1] + g[3] - 2)))
 check "树的提示行：↓/↑ move" eval '[[ $tf == *"↓/↑"* ]] || { echo "  $tf"; false; }'
 

@@ -29,17 +29,17 @@ check "点 t_order 借来的那一格（原来的 │）：关掉 t_order，当�
 c=$(end_of t_user); e2e_move "$c" "$y"; sleep 0.2; e2e_click $((c + 1)) "$y"; sleep 0.4; e2e_move 100 20; sleep 0.3   # 指针移开再看：留在原处会悬停到挪过来的下一个 tab
 check "点 t_user- 的 × 后面那一格：关掉 t_user" tabs_are 1 "1:t_sku*"
 
-# ---- 结果区：1:日志 │ 2:console_1 #1（固定）│ 3:console_1 #2，当前 #1、上一个日志，最后一个 tab 没有标记
+# ---- 结果区：1:日志 │ 2:query_1 #1（固定）│ 3:query_1 #2，当前 #1、上一个日志，最后一个 tab 没有标记
 start; key C-l; key i; e2e_type "select 1 as a"; key Escape; key Enter; wait_for 8 eval '[[ -n $(geom 3) ]]'; sleep 0.3
 key C-j; key P; key C-k; key Enter; sleep 1; click_tab 3 "1:"; click_tab 3 "2:"; P=3; y=$(tab_y 3)
 rtabs() { tabbar 3 | sed -E 's/ {3,}.*//'; }
-check "准备好了：③ 1:日志- │ 2:console_1 #1* │ 3:console_1 #2" eval '[[ $(rtabs) == "1:日志- │ 2:console_1 #1* │ 3:console_1 #2" ]] || { echo "  $(rtabs)"; false; }'
-x0=$(tabs_at 1: 2: 3:); c=$(end_of "console_1 #2")
+check "准备好了：③ 1:日志- │ 2:query_1 #1* │ 3:query_1 #2" eval '[[ $(rtabs) == "1:日志- │ 2:query_1 #1* │ 3:query_1 #2" ]] || { echo "  $(rtabs)"; false; }'
+x0=$(tabs_at 1: 2: 3:); c=$(end_of "query_1 #2")
 e2e_move $((c + 1)) "$y"; sleep 0.3
 check "最后一个 tab（没有标记、右边没有 │）：名字后面是 ×，再后面一格亮着的空格，两格都亮，tab 栏不移位" eval '[[ $(ch $c) == "$CLOSE" && $(ch $((c + 1))) == " " && $(tabs_at 1: 2: 3:) == "$x0" ]] && lit_at $c && lit_at $((c + 1))'
 c=$(end_of 日志); e2e_move $((c - 2)) "$y"; sleep 0.3
 check "日志 tab 不能关：悬停不画 ×（- 还在）" eval '[[ $(ch $c) == "-" ]]'
-c=$(end_of "console_1 #2"); e2e_move "$c" "$y"; sleep 0.2; e2e_click $((c + 1)) "$y"; sleep 0.4; e2e_move 100 20; sleep 0.3   # 指针移开再看：留在原处会悬停到挪过来的下一个 tab
-check "点最后一个 tab 后面那格亮着的空格：关掉 console_1 #2" eval '[[ $(rtabs) == "1:日志- │ 2:console_1 #1*" ]] || { echo "  $(rtabs)"; false; }'
+c=$(end_of "query_1 #2"); e2e_move "$c" "$y"; sleep 0.2; e2e_click $((c + 1)) "$y"; sleep 0.4; e2e_move 100 20; sleep 0.3   # 指针移开再看：留在原处会悬停到挪过来的下一个 tab
+check "点最后一个 tab 后面那格亮着的空格：关掉 query_1 #2" eval '[[ $(rtabs) == "1:日志- │ 2:query_1 #1*" ]] || { echo "  $(rtabs)"; false; }'
 
 e2e_done

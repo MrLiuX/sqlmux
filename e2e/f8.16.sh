@@ -149,7 +149,7 @@ pal "@t_user seed"; sleep 0.5
 key Escape; sleep 0.2
 cmdp conn.manage; key j; key Tab; sleep 0.3
 clr; e2e_type seed2; key C-s; sleep 1.5
-check "seed 改名 seed2：文件里是 seed2；state.json 里按连接名记的键（recent / tables / consoles）没有 seed 了" eval 'grep -q "^name = \"seed2\"" "$(ct)" && ! grep -q "\"seed/" "$ST/sqlmux/state.json" 2>/dev/null || { cat "$ST/sqlmux/state.json" 2>/dev/null | head -c 600; false; }'
+check "seed 改名 seed2：文件里是 seed2；state.json 里按连接名记的键（recent / tables / queries）没有 seed 了" eval 'grep -q "^name = \"seed2\"" "$(ct)" && ! grep -q "\"seed/" "$ST/sqlmux/state.json" 2>/dev/null || { cat "$ST/sqlmux/state.json" 2>/dev/null | head -c 600; false; }'
 key Escape; key Escape; sleep 0.3
 
 # ---- 列表上 C-s 是保存表单，不是全局保存（背后表格的修改不会被存进库）：自建库

@@ -2,7 +2,7 @@
 # F1.5 WHERE 补全与历史 / 收藏（specs/m1-browse/task.md F1.5；tech-design §9.7「WHERE 补全的细节」「C-r 历史 / 收藏下拉」、§14 state.json、§7.8）
 # 只读，用共用库的 t_order；state.json 放在脚本自己的临时目录（-S），重启时沿用。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); ST=$D/state
@@ -61,7 +61,7 @@ check "in 列表里逗号之后也弹枚举值" eval '[[ $(names) == "pending qu
 clear_in; typ "paid = "
 check "paid = ：列出 true / false" eval '[[ $(names) == "true false " ]] || { echo "  $(names)"; false; }'
 key Escape
-check "esc 第一次：关列表，同时回到 WHERE 的 NORMAL（F3.39，同 console）" eval '[[ -z $(pop) ]] && mode_is NORMAL && [[ $(bar) == *"-- editing WHERE --"* && $(where_in) == "paid =" ]]'
+check "esc 第一次：关列表，同时回到 WHERE 的 NORMAL（F3.39，同 query）" eval '[[ -z $(pop) ]] && mode_is NORMAL && [[ $(bar) == *"-- editing WHERE --"* && $(where_in) == "paid =" ]]'
 key Escape
 check "esc 第二次：回到表格" eval 'mode_is NORMAL && [[ $(bar) != *"editing WHERE"* ]]'
 edit; typ "status = "

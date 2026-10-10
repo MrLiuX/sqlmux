@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F3.9 格式化（specs/m3-console/task.md F3.9；tech-design §9.5）
 # 格式化的结果由 sqlkit 的 golden 覆盖，首次耗时由单测覆盖；这里测真实终端里的 gq、撤销、配置加载和外部命令 formatprg。
-# 默认布局，② console_1 的文字从 x 111 起，第 y 行是第 y−1 行文字。
+# 默认布局，② query_1 的文字从 x 111 起，第 y 行是第 y−1 行文字。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 

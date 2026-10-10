@@ -2,7 +2,7 @@
 # F8.17 空前缀的补全列表不预选（specs/m8-feedback/task.md F8.17；tech-design §9.7「空前缀的列表不预选」）
 # 前缀为空、自己弹出的列表没有选中项：↵ 是输入框的（换行 / 执行），Tab C-n ↓ 选第一项，S-Tab C-p ↑ 选最后一项；
 # 打了字母之后第一项自动选中；接受 where 等关键字补出的空格也立即弹出列名；C-n 手动唤起的、INSERT 的「全部列」仍预选。
-# console、WHERE、快速 SQL 三处一致。只读，用共用库。
+# query、WHERE、快速 SQL 三处一致。只读，用共用库。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 
@@ -26,7 +26,7 @@ LOG="logged_at|msg|"      # t_log 的列（按表里的顺序）
 
 start; key C-l; key i
 
-# ---- console：用户的原话 —— 接受 where 补了空格，列名直接弹出，不用再敲一个空格
+# ---- query：用户的原话 —— 接受 where 补了空格，列名直接弹出，不用再敲一个空格
 fresh; e2e_type "select * from t_log wher"; sleep 0.8
 check "（准备）wher：弹出列表，第一项（where）已选中（有前缀）" eval 'sel_is where'
 key Enter; sleep 0.8
@@ -82,7 +82,7 @@ check "C-n 手动唤起：列出该位置的候选，第一项已选中（只有
 fresh; e2e_type "insert into t_log("; sleep 1
 check "insert into t_log(：弹出「全部列」，已选中（↵ 一下全加上）" eval '[[ -n $(pop) && -n $(sel) ]] && items | head -1 | grep -q "全部 2 列" || { echo "  $(items | tr "\n" "|")  sel=$(sel)"; false; }'
 
-# 取值位置的枚举 / 布尔值列表照旧预选第一项（docs 1f41f01）：WHERE 里测（console 本来就没有取值补全），见最后一段
+# 取值位置的枚举 / 布尔值列表照旧预选第一项（docs 1f41f01）：WHERE 里测（query 本来就没有取值补全），见最后一段
 
 # ---- 其他触发词同样不预选：select、and、order by
 fresh; e2e_type "select * from t_log where msg = 'a' and "; sleep 1

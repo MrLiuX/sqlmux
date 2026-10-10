@@ -3,7 +3,7 @@
 # 计数不知道时翻到哪一页、转置视图的第 N 个字段由单测覆盖；这里在真实 PG 上按键，看光标到哪一行、翻到哪一页。
 # 自建库：最后一段要锁住 t_order，让 ] 的请求卡在路上。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")

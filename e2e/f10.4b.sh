@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# F10.4 console 结果翻页（MySQL）（specs/m10-feedback3/task.md F10.4；tech-design §11「结果翻页」）：同 f10.4.sh，在 MySQL 8.4 的自建库上。
+# F10.4 query 结果翻页（MySQL）（specs/m10-feedback3/task.md F10.4；tech-design §11「结果翻页」）：同 f10.4.sh，在 MySQL 8.4 的自建库上。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 . "$(dirname "$0")/paging.sh"

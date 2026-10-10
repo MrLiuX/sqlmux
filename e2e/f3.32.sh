@@ -3,7 +3,7 @@
 # 系统剪贴板是 lib.sh 放在 PATH 最前面的假 pbcopy（clip 读它，AGENTS.md「隔离用户数据」）。复制高亮只闪 150ms：
 # 用 pipe-pane 把程序写到终端的字节录下来，找 yank 底色（#e0af68，48;2;224;175;104）。自建库：yyp 之后要保存。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")
@@ -60,11 +60,11 @@ check "C-s：存进去，seq 由 identity 给出 2" eval '[[ $(ident_rows) == "1
 open_table t_gen; wait_for 8 settled; key y y; key p; key C-s; wait_for 8 eval '[[ -n $(errbar 1) || $(qb) == *已保存* ]]'
 check "t_gen 的 yyp 再 C-s：generated 列 g 照抄了，报 428C9（已知上限），库里没变" eval '[[ $(errbar 1 | head -1) == "[428C9] "* && $(psql_n "select count(*) from t_gen") == 1 ]] || { errbar 1; false; }'
 
-# ---- console 里 yy 同样闪一下；结果区只读：p 不做事，yy / yl 照常
+# ---- query 里 yy 同样闪一下；结果区只读：p 不做事，yy / yl 照常
 SOLO= start -C "$D/own"; key C-l; key i; e2e_type "select 7 as a, 'x' as b"; key Escape
 rec cy; key y y; flashed; f=$?; unrec
-check "console 里 yy：这一行闪一下 yank 色" eval '(( f == 0 ))'
-check "console 的无名寄存器不写系统剪贴板（F3.38：只有 \"+ 写）" eval '[[ "$(clip)" != "select 7"* ]]'
+check "query 里 yy：这一行闪一下 yank 色" eval '(( f == 0 ))'
+check "query 的无名寄存器不写系统剪贴板（F3.38：只有 \"+ 写）" eval '[[ "$(clip)" != "select 7"* ]]'
 key Enter; wait_for 8 eval '[[ $(bar) != *busy* && -n $(geom 3) ]]'; sleep 0.3
 key C-j; key y y; sleep 0.3
 check "结果区 yy：剪贴板里是这一行的 TSV" eval '[[ "$(clip)" == "$(printf "7\tx")" ]] || { clip | od -c | head -2; false; }'

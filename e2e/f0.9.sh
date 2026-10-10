@@ -2,7 +2,7 @@
 # F0.9 表格网格样式（specs/m0-skeleton/task.md F0.9；tech-design §7.6「网格样式」「列宽」，颜色见 §7.3）
 # F1.3 起表格是真实数据：打开 seed 的 t_order（按 id 排序）。表头下面一行是横线，再往下是数据行；最后一行内容是 tab 栏。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 CFG=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")

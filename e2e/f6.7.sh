@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F6.7 危险语句先确认（specs/m6-config/task.md F6.7；tech-design §13「危险语句先确认」）
 # 危险判定的表驱动用例（CTE / 子查询里的 where、delete … using、MySQL delete … limit、alter table … drop）有单测；这里在真实终端和 PG 上测：
-# console 执行没带 where 的 delete / update、truncate、drop 弹确认框，n 取消整次（不执行、不记日志）、y 执行；带 where 的不弹；一次多条只问一次；
+# query 执行没带 where 的 delete / update、truncate、drop 弹确认框，n 取消整次（不执行、不记日志）、y 执行；带 where 的不弹；一次多条只问一次；
 # 表格保存含删除行时先确认，n 回到表格标记还在；只改格子的保存不问；confirm_dangerous = false 时都不弹。写库的部分在自己建的库里做。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
@@ -18,14 +18,14 @@ paste() { t set-buffer -b e2e -- "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0
 done_run() { wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 0.5; }
 asked() { e2e_plain | grep -q "危险语句"; }
 box() { e2e_plain | grep -E '危险语句|^ *│ +[│ ]*(delete|update|truncate|drop)|│ +(delete|update|truncate|drop|alter)' | sed 's/^[^│]*│//; s/│.*//; s/^ *//; s/ *$//'; }
-# run SQL：焦点在 console 里，换成这段 SQL（粘贴不触发补全），↵ 执行
+# run SQL：焦点在 query 里，换成这段 SQL（粘贴不触发补全），↵ 执行
 setsql() { key Escape; key g g; key d G; key i; paste "$1"; key Escape; key g g; }
 run() { setsql "$1"; key Enter; sleep 0.8; }
 has_result_pane() { [[ $(e2e_panes | awk '$1 != "-"' | grep -c .) == 4 ]]; }
 
 start -C "$D/on"; key C-l
 run "delete from t_log"
-check "console 里执行 delete from t_log（没有 where）：弹确认框「这次执行有 1 条危险语句：」，列出这条，按钮 y 执行 / n 取消" eval 'asked && e2e_plain | grep -q "这次执行有 1 条危险语句：" && e2e_plain | grep -q "delete from t_log" && e2e_plain | grep -q "y 执行   n 取消"'
+check "query 里执行 delete from t_log（没有 where）：弹确认框「这次执行有 1 条危险语句：」，列出这条，按钮 y 执行 / n 取消" eval 'asked && e2e_plain | grep -q "这次执行有 1 条危险语句：" && e2e_plain | grep -q "delete from t_log" && e2e_plain | grep -q "y 执行   n 取消"'
 key n; sleep 0.5
 check "n：整次不执行，表里还是 3 行，没有结果区（不算一次执行、不记日志）" eval '! asked && [[ $(q "select count(*) from t_log") == 3 ]] && ! has_result_pane'
 key Enter; sleep 0.8

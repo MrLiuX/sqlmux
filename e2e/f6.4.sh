@@ -35,8 +35,8 @@ e2e_stop
 
 # ---- en：界面都是英文
 start -C "$D/en"; sleep 0.5
-check "引导页：Open a table / New console，没有中文" eval 'screen_has "Open a table" && screen_has "New console" && ! e2e_plain | grep -qE "打开表|新建 console"'
-check "console 标题栏：Tx: Auto（不是 自动）" eval 'screen_has "Tx: Auto" && ! screen_has "自动"'
+check "引导页：Open a table / New query，没有中文" eval 'screen_has "Open a table" && screen_has "New query" && ! e2e_plain | grep -qE "打开表|新建 query"'
+check "query 标题栏：Tx: Auto（不是 自动）" eval 'screen_has "Tx: Auto" && ! screen_has "自动"'
 key C-c
 check "toast：Press C-c again to quit（键位文字照旧从 keymap 读）" eval 'screen_has "Press C-c again to quit"'
 key C-l; key i; paste "select 1 as x; select nosuchcol"; key Escape; key V; key G; key Enter; sleep 2

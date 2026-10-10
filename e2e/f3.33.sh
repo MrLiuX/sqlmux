@@ -3,7 +3,7 @@
 # 在还没保存的新行里编辑时 Tab / S-Tab 提交这一格、直接编辑下一个 / 上一个字段；已有的行照旧（F3.15 的 Tab 在浮层里选，见 f2.3.sh）。
 # 自建库：整行要存进去。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")

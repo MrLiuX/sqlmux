@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F0.17 Command palette layout (specs/m0-skeleton/task.md F0.17; tech-design §12 layout / column alignment)
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")

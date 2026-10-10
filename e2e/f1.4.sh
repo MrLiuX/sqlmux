@@ -2,7 +2,7 @@
 # F1.4 查询条（specs/m1-browse/task.md F1.4；tech-design §7.8「查询条」「COMMAND 模式」、§9.6、§8.5、§8.3、§7.6）
 # 全部在自建库里做：发出的 SQL 靠锁住 t_order、在 pg_stat_activity 里看等锁的那条语句；golden 由 go test 覆盖。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX")

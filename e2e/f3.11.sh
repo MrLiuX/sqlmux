@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# F3.11 console 的 schema 下拉框（specs/m3-console/task.md F3.11；tech-design §8.6）
+# F3.11 query 的 schema 下拉框（specs/m3-console/task.md F3.11；tech-design §8.6）
 # 标题栏的退让在 f0.2；这里测下拉框的打开与选择，以及选的 schema 在真实 PG 上怎么生效（search_path 的比较与重设）。
-# 自建库（库名 sqlmux_e2e_<pid>）；默认布局，② console_1 的文字从 x 111 起。
+# 自建库（库名 sqlmux_e2e_<pid>）；默认布局，② query_1 的文字从 x 111 起。
 # F5.11 起标题是 <连接> · <库>.<schema> ▾：连接名取 d，否则长库名放不下、下拉框整个让位（让位由 golden 覆盖）。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
@@ -38,17 +38,17 @@ check "SET search_path 不进日志、不占结果 tab" eval '! logs | grep -qi 
 setsql "show search_path"; run
 check "SET 的是所选 schema，后面接着建连时的原始 search_path" eval '[[ $(rrow 3) == *agentable*public* ]] || { echo "  $(rrow 3)"; false; }'
 
-# ---- 两个 console 各选各的，交替执行（§8.6「执行方式」：只在不一致时 SET）
+# ---- 两个 query 各选各的，交替执行（§8.6「执行方式」：只在不一致时 SET）
 key C-h; key c; setsql "select who from agent"
-check "新 console 默认用树当前的 schema（public），和 console_1 互不影响" eval '[[ $(title 1) == *" $DB.public ▾"* && $(title 2) == *" $DB.agentable ▾"* ]]'
+check "新 query 默认用树当前的 schema（public），和 query_1 互不影响" eval '[[ $(title 1) == *" $DB.public ▾"* && $(title 2) == *" $DB.agentable ▾"* ]]'
 run
-check "console_2（public）：读到 public.agent" eval '[[ $(rrow 3) == *public* ]] || { echo "  $(rrow 3)"; false; }'
+check "query_2（public）：读到 public.agent" eval '[[ $(rrow 3) == *public* ]] || { echo "  $(rrow 3)"; false; }'
 key C-l; setsql "select count(*) as n from agent"; run
-check "回到 console_1（agentable）：又读 agentable.agent" eval '[[ $(rrow 3) == *" $(psql_n "select count(*) from agentable.agent")"* ]] || { echo "  $(rrow 3)"; false; }'
+check "回到 query_1（agentable）：又读 agentable.agent" eval '[[ $(rrow 3) == *" $(psql_n "select count(*) from agentable.agent")"* ]] || { echo "  $(rrow 3)"; false; }'
 key C-h; run
-check "再回 console_2：public.agent" eval '[[ $(rrow 3) == *public* ]]'
+check "再回 query_2：public.agent" eval '[[ $(rrow 3) == *public* ]]'
 
-# ---- console 里自己 set search_path：只到这次执行结束，下一次照下拉框重新 SET
+# ---- query 里自己 set search_path：只到这次执行结束，下一次照下拉框重新 SET
 key C-l; setsql $'set search_path to public;\nselect count(*) as n from agent;'
 key V; key G; run
 check "同一次执行里 set search_path to public 之后：这次读的是 public.agent（1 行）" eval '[[ $(rrow 3) == *" 1"* ]] || { echo "  $(rrow 3)"; false; }'
@@ -56,7 +56,7 @@ setsql "select count(*) as n from agent"; run
 check "下一次执行：照下拉框重新 SET 成 agentable" eval '[[ $(rrow 3) == *" $(psql_n "select count(*) from agentable.agent")"* ]] || { echo "  $(rrow 3)"; false; }'
 
 # ---- 只在事务外记住 search_path（§8.6，92df28b）
-# 事务里做的 SET 会被 rollback 撤掉：这时不能当它还在。console_2（public）先跑一次，Main 记下 public
+# 事务里做的 SET 会被 rollback 撤掉：这时不能当它还在。query_2（public）先跑一次，Main 记下 public
 N=$(psql_n "select count(*) from agentable.agent")
 key C-h; setsql "select who from agent"; run
 key C-l; setsql $'begin;\nselect count(*) as n from agent;'; key V; key G; run      # 事务里 SET 成 agentable
@@ -66,19 +66,19 @@ setsql "select count(*) as n from agent"; run
 check "rollback 撤掉了事务里的 SET：下一次照样重新 SET，仍读 agentable.agent（不是 public 的 1 行）" eval '[[ $(rrow 3) == *" $N"* ]] || { echo "  $(rrow 3)"; false; }'
 # 出错的事务里（TxStatus E）跳过 SET 直接执行，所以 rollback 能执行到
 setsql $'begin;\nselect 1/0;'; key V; key G; run
-key C-h; setsql "select who from agent"; run                                     # console_2（public）要 SET，但事务已中止
-check "中止的事务里另一个 schema 的 console 执行：不先 SET，语句自己报「事务已中止」" eval '[[ $(logs | tail -1) == *"select who from agent  ERROR: current transaction is aborted"* ]] && ! logs | tail -2 | grep -qi "search_path" || { logs | tail -2; false; }'
+key C-h; setsql "select who from agent"; run                                     # query_2（public）要 SET，但事务已中止
+check "中止的事务里另一个 schema 的 query 执行：不先 SET，语句自己报「事务已中止」" eval '[[ $(logs | tail -1) == *"select who from agent  ERROR: current transaction is aborted"* ]] && ! logs | tail -2 | grep -qi "search_path" || { logs | tail -2; false; }'
 key C-l; setsql "rollback"; run
-check "回到 console_1 执行 rollback：执行到了，Main 恢复" eval '[[ $(logs | tail -1) == *"rollback  ROLLBACK"* ]] || { logs | tail -2; false; }'
+check "回到 query_1 执行 rollback：执行到了，Main 恢复" eval '[[ $(logs | tail -1) == *"rollback  ROLLBACK"* ]] || { logs | tail -2; false; }'
 setsql "select count(*) as n from agent"; run
 check "之后照常按下拉框 SET：读 agentable.agent" eval '[[ $(rrow 3) == *" $N"* ]] || { echo "  $(rrow 3)"; false; }'
 
-# ---- 选的 schema 被删掉：catalog 重新加载后，console 退回树当前的 schema（§8.6）
-setsql "create schema gone"; run                                               # 在 console 里建：DDL 成功后重新加载 catalog
+# ---- 选的 schema 被删掉：catalog 重新加载后，query 退回树当前的 schema（§8.6）
+setsql "create schema gone"; run                                               # 在 query 里建：DDL 成功后重新加载 catalog
 key g; key s; e2e_type gone; sleep 0.3; key Enter
 check "选了新建的 schema gone" eval '[[ $(title 2) == *" $DB.gone ▾"* ]] || { echo "  $(title 2)"; false; }'
 setsql "drop schema gone"; run                                                 # DDL 成功后重新加载 catalog
-check "drop schema gone 之后：console 退回树当前的 public，不弹提示" eval '[[ $(title 2) == *" $DB.public ▾"* ]] || { echo "  $(title 2)"; false; }'
+check "drop schema gone 之后：query 退回树当前的 public，不弹提示" eval '[[ $(title 2) == *" $DB.public ▾"* ]] || { echo "  $(title 2)"; false; }'
 
 # ---- 按钮让掉时（100 宽）gs 照样打开，框的右边对齐本 pane 的右边框，不伸进别的 pane
 start -x 100 -C "$D/own"; key C-l; key g; key s

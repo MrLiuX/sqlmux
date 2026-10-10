@@ -25,23 +25,23 @@ tsel() { local y; for y in $(seq 3 43); do [[ $(e2e_style 4 "$y") == *bg=#364a82
 tree_to() { local i; key G; for ((i = 0; i < 40; i++)); do [[ $(tsel) == *" $1 "* ]] && return; key k; done; }
 trow() { local y; for y in $(seq 3 43); do [[ $(e2e_text 1 32 "$y") == *" $1 "* ]] && { echo "$y"; return; }; done; }   # 侧栏里 NAME 的第一行
 
-mk() { leader c; leader %; key c; }                                         # 新 window：F8.18 起只有一个空 pane，分一个出来再 c 新建 console（旧的默认布局）
+mk() { leader c; leader %; key c; }                                         # 新 window：F8.18 起只有一个空 pane，分一个出来再 c 新建 query（旧的默认布局）
 
 # ---- SPC c 新建：一个空 pane（F8.18），放在最后并切过去
 start; open_table t_order
 leader c
 check "SPC c：新 window 叫 data-2（F8.11），放在最后并切过去" wins_are "0: data  1: data-2*"
-check "新 window 只有侧栏和一个空 pane ①（引导页），没有 console，焦点在 ①（F8.18）" eval 'panes_are "0 1 " && [[ $(tabbar 1) != *console* ]] && e2e_plain | grep -q "打开表" && focus_is 1'
+check "新 window 只有侧栏和一个空 pane ①（引导页），没有 query，焦点在 ①（F8.18）" eval 'panes_are "0 1 " && [[ $(tabbar 1) != *query* ]] && e2e_plain | grep -q "打开表" && focus_is 1'
 
 # ---- 各 window 的布局、结果区互不影响
 leader %; key c
-check "（准备）window 1 里分割 ①，新 pane 里 c 新建 console_2：侧栏和两个 pane，② 是 console_2" eval 'panes_are "0 1 2 " && tabs_are 2 "1:console_2*"'
+check "（准备）window 1 里分割 ①，新 pane 里 c 新建 query_2：侧栏和两个 pane，② 是 query_2" eval 'panes_are "0 1 2 " && tabs_are 2 "1:query_2*"'
 leader p
-check "SPC p：回到 window 0，它的布局原样：① t_order、② console_1，没有结果区" eval 'wins_are "0: data*  1: data-2" && panes_are "0 1 2 " && [[ $(title1) == *" t_order ─"* ]] && tabs_are 2 "1:console_1*"'
+check "SPC p：回到 window 0，它的布局原样：① t_order、② query_1，没有结果区" eval 'wins_are "0: data*  1: data-2" && panes_are "0 1 2 " && [[ $(title1) == *" t_order ─"* ]] && tabs_are 2 "1:query_1*"'
 key C-l; setsql "select 1 as x"; key Enter; wait_for 8 eval '[[ $(bar) != *busy* ]]'; sleep 0.3
-check "window 0 的 console 执行：结果区 ③ 出现在 window 0 底部" eval 'panes_are "0 1 2 3 " && g=($(geom 3)) && (( g[1] > 20 && g[2] > 120 ))'
+check "window 0 的 query 执行：结果区 ③ 出现在 window 0 底部" eval 'panes_are "0 1 2 3 " && g=($(geom 3)) && (( g[1] > 20 && g[2] > 120 ))'
 leader n
-check "SPC n：window 1 原样（引导页、新分出来的 pane 里的 console_2），没有 window 0 的结果区" eval 'wins_are "0: data  1: data-2*" && panes_are "0 1 2 " && tabs_are 2 "1:console_2*" && ! e2e_plain | grep -q "select 1 as x"'
+check "SPC n：window 1 原样（引导页、新分出来的 pane 里的 query_2），没有 window 0 的结果区" eval 'wins_are "0: data  1: data-2*" && panes_are "0 1 2 " && tabs_are 2 "1:query_2*" && ! e2e_plain | grep -q "select 1 as x"'
 
 # ---- SPC n / SPC p 到头绕回，SPC l 回到上一个用过的
 mk
@@ -94,7 +94,7 @@ check "SPC q 后点 session 块：编号关掉，也没打开 session 列表" ev
 key Escape
 
 # ---- 面板：window 项 ↵ 切过去；别的 window 的 tab 项 ↵ 先切 window、再选 tab、聚焦它的 pane
-leader p; key C-h; open_table t_user; key C-l                               # window 0：① t_order、t_user，焦点在 ② console_1
+leader p; key C-h; open_table t_user; key C-l                               # window 0：① t_order、t_user，焦点在 ② query_1
 pal "%report"
 check "（准备）在 window 0 里搜 %report：window 项排第一" eval '[[ $(selected) == "1: report  doraemon  窗口" ]] || { echo "  selected: $(selected)"; false; }'
 key Enter
@@ -109,8 +109,8 @@ key C-h; key C-h; key C-h; tree_to data-3
 check "（准备）report 里焦点到树上，光标在最后一个 window（2: data-3）上" eval 'focus_is 0 && [[ $(tsel) == *" data-3 "* ]]'
 key Enter
 check "window 节点上 ↵：切到 window 2" wins_are "0: data  1: report  2: data-3*"
-key C-h; key C-h; key C-h; tree_to console_2; key Enter
-check "report 的 console_2 tab 节点 ↵：先切到 report，再聚焦 console_2 所在的 ②" eval 'wins_are "0: data  1: report*  2: data-3" && focus_is 2'
+key C-h; key C-h; key C-h; tree_to query_2; key Enter
+check "report 的 query_2 tab 节点 ↵：先切到 report，再聚焦 query_2 所在的 ②" eval 'wins_are "0: data  1: report*  2: data-3" && focus_is 2'
 
 # ---- 树的展开状态按 window 的稳定 ID 记：关掉前面的 window 之后，折叠的还是原来那个（不按下标错到后一个上）
 key C-h; key C-h; key C-h; tree_to report; key h
@@ -119,13 +119,13 @@ leader p; cmd window.close
 check "关掉排在前面的 window 0（切到上一个用过的 report）：report 还是折叠的，原来的 window 2 还是展开的" eval 'wins_are "0: report*  1: data-3" && [[ $(e2e_text 1 32 "$(trow report)") == *"▸"* && $(e2e_text 1 32 "$(trow data-3)") == *"▾"* ]]'
 
 # ---- 关闭：先写盘，有修改先确认；切到上一个用过的，没有就切到前面那个（第一个就后面那个）；最后一个不关
-con2() { tabbar 2 | sed 's/^1://; s/\*$//'; }                                # ② 的 console tab 名，用来认出是哪个 window
-leader n; key C-l; key C-l; key i; e2e_type "select 7"; key Escape; cf=$(con2)   # 原来的 window 2 的 console 写一句
+con2() { tabbar 2 | sed 's/^1://; s/\*$//'; }                                # ② 的 query tab 名，用来认出是哪个 window
+leader n; key C-l; key C-l; key i; e2e_type "select 7"; key Escape; cf=$(con2)   # 原来的 window 2 的 query 写一句
 cmd window.close
-check "window.close：它的 console 写了盘，切到上一个用过的 report" eval 'wins_are "0: report*" && grep -q "select 7" "$E2E_TMP/data/sqlmux/consoles/$cf.sql"'
+check "window.close：它的 query 写了盘，切到上一个用过的 report" eval 'wins_are "0: report*" && grep -q "select 7" "$E2E_TMP/data/sqlmux/queries/$cf.sql"'
 leader l
 check "上一个用过的已经关了：SPC l 不做事" wins_are "0: report*"
-mk; mk; c2=$(con2); mk                                     # report、1、2、3，2 的 console 记作 c2
+mk; mk; c2=$(con2); mk                                     # report、1、2、3，2 的 query 记作 c2
 leader p; leader p; e2e_click $(( $(e2e_find "3: data" "$(H)" | cut -d' ' -f1) + 2 )) "$(H)"; sleep 0.4
 check "（准备）从 1 点状态栏到 3" wins_are "0: report  1: data  2: data-2  3: data-3*"
 cmd window.close

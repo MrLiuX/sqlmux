@@ -2,7 +2,7 @@
 # F3.35 悬停 tab 显示关闭按钮（specs/m3-console/task.md F3.35；tech-design §7.8「tab 栏」）
 # × 的画法（标记的位置、不移位）由 golden 覆盖；这里测真实终端里的悬停命中、点 × 关的是哪一个 tab、有修改时的确认、结果区的 tab。
 . "$(dirname "$0")/lib.sh"
-SOLO=1   # ① alone right of the sidebar, as before M3's console (lib.sh solo)
+SOLO=1   # ① alone right of the sidebar, as before M3's query (lib.sh solo)
 e2e_build || exit 1
 
 SELECT=#364a82
@@ -50,7 +50,7 @@ check "点右边框那一格：不会关掉看不见的 tab，tab 一个不少" 
 SOLO= start; key C-l; key i; e2e_type "select 1 as x"; key Escape; key Enter; wait_for 8 eval '[[ $(bar) != *busy* && -n $(geom 3) ]]'; sleep 0.3
 hover 3 1:日志
 check "悬停结果区的「日志」tab：不画 ×" eval '[[ -z $(x_at 3) ]]'
-hover 3 2:console_1
+hover 3 2:query_1
 check "悬停结果 tab：画 ×" eval '[[ -n $(x_at 3) ]]'
 e2e_click "$(x_at 3)" "$(tab_y 3)"; sleep 0.4
 check "点 ×：关掉这个结果 tab，只剩日志" eval '[[ $(tabbar 3 | sed -E "s/ {3,}.*//") == "1:日志*" ]] || { tabbar 3; false; }'
