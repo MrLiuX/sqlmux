@@ -80,7 +80,7 @@ func TestPaletteListsNoOverlayKeys(t *testing.T) {
 	for _, q := range []string{"关闭", "palette"} {
 		feed(t, a, "<C-p>"+q)
 		for _, r := range rowsOf(a) {
-			if strings.HasPrefix(r, "palette.") && r != "palette.open=:" && r != "palette.command=" && r != "palette.window=" && r != "palette.tab=" && r != "palette.table=" && r != "palette.sql=;" {
+			if strings.HasPrefix(r, "palette.") && r != "palette.open=:" && r != "palette.command=" && r != "palette.window=" && r != "palette.tab=" && r != "palette.table=" && r != "palette.session=" && r != "palette.sql=;" {
 				t.Errorf("%s lists %s", q, r)
 			}
 		}
@@ -615,6 +615,18 @@ func TestPaletteWindowAndTabScopes(t *testing.T) {
 	a.run("palette.tab", 0)
 	if got := namesOf(a); got[len(got)-1] != "Tab:t_order" || got[0] != "Tab:console_1" {
 		t.Errorf("after the switch: %v", got)
+	}
+}
+
+// palette.session opens the palette in its session scope (F9.9, §12).
+func TestPaletteSessionCommand(t *testing.T) {
+	a, _ := withSessions()
+	a.run("palette.session", 0)
+	if a.palette == nil || a.palette.input.Text != "$" {
+		t.Fatalf("palette.session: %+v", a.palette)
+	}
+	if names := namesOf(a); !slices.Equal(names, []string{"会话:doraemon", "会话:report"}) {
+		t.Errorf("the sessions: %v", names)
 	}
 }
 
