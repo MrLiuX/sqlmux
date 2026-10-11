@@ -261,6 +261,7 @@ var en = map[string]string{
 	"标记删除选中的记录":        "Mark the selected records for deletion",
 	"复制选中的记录为 JSON":    "Copy the selected records as JSON",
 	"已选 %d":            "%d selected",
+	"取消选择（范围）":         "Unselect a range",
 	"表格有选中的记录、或在 VISUAL 扩选时，叠在 grid / result 之上；它的键是完整绑定，不等 timeoutlen（F10.7）": "Records marked, or VISUAL on a table: over grid / result; its keys are complete, no timeoutlen to wait (F10.7)",
 	"接受分组 / 下一项": "Take the group / next field",
 	"接受分组 / 保存":  "Take the group / save",

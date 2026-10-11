@@ -25,8 +25,21 @@ func gridStateOf(p *Pane) *gridState {
 // select scope then applies (§6.4, F10.7).
 func (s *gridState) selecting() bool { return s.visual || len(s.marked) > 0 }
 
+// ranged is the records from the anchor to the cursor in VISUAL or UNSET.
+func (s *gridState) ranged() map[int]bool {
+	if !s.visual {
+		return nil
+	}
+	out := map[int]bool{}
+	for r := min(s.anchor, s.row); r <= max(s.anchor, s.row); r++ {
+		out[r] = true
+	}
+	return out
+}
+
 // selected is the records selected, by position among the rows shown: those
-// marked, and in VISUAL those from the anchor to the cursor.
+// marked, and in VISUAL those from the anchor to the cursor too; in UNSET
+// without them.
 func (s *gridState) selected() map[int]bool {
 	if !s.visual {
 		return s.marked
@@ -35,15 +48,20 @@ func (s *gridState) selected() map[int]bool {
 	if out == nil {
 		out = map[int]bool{}
 	}
-	for r := min(s.anchor, s.row); r <= max(s.anchor, s.row); r++ {
-		out[r] = true
+	for r := range s.ranged() {
+		if s.unset {
+			delete(out, r)
+		} else {
+			out[r] = true
+		}
 	}
 	return out
 }
 
-// settle ends VISUAL, its range marked; deselect forgets it all.
-func (s *gridState) settle()   { s.marked, s.visual = s.selected(), false }
-func (s *gridState) deselect() { s.marked, s.visual = nil, false }
+// settle ends VISUAL or UNSET, its range marked or taken out; deselect
+// forgets it all.
+func (s *gridState) settle()   { s.marked, s.visual, s.unset = s.selected(), false, false }
+func (s *gridState) deselect() { s.marked, s.visual, s.unset = nil, false, false }
 
 // positions are the records selected, in the order they show.
 func (s *gridState) positions() []int {
@@ -76,9 +94,10 @@ func (a *App) selectToggle() {
 	}
 }
 
-// selectVisual is v and V: VISUAL begins at the record under the cursor, and
-// the next one ends it, its range marked (F10.7).
-func (a *App) selectVisual() {
+// selectVisual is v, and V with unset: VISUAL begins at the record under the
+// cursor, and the next one of either ends it, its range marked, or with unset
+// taken out of the marked (F10.7, F12.12).
+func (a *App) selectVisual(unset bool) {
 	p := a.focused()
 	s := gridStateOf(p)
 	switch {
@@ -86,7 +105,7 @@ func (a *App) selectVisual() {
 	case s.visual:
 		s.settle()
 	default:
-		s.visual, s.anchor = true, s.row
+		s.visual, s.unset, s.anchor = true, unset, s.row
 	}
 }
 

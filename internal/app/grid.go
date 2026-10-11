@@ -39,9 +39,11 @@ type gridState struct {
 	top, left int       // the first record and field shown
 	transpose bool
 	// the records marked with m, or by VISUAL from anchor to the cursor, by
-	// position among the rows shown (F10.7); a new page or row puts them back
+	// position among the rows shown (F10.7); a new page or row puts them back.
+	// unset: the range takes records out of the marked ones (F12.12)
 	marked map[int]bool
 	visual bool
+	unset  bool
 	anchor int
 	widest *ui.Widest // what the grid measured of the rows on screen (F11.4)
 }
@@ -427,7 +429,7 @@ func gridRect(r uv.Rectangle, t *dataTab) uv.Rectangle {
 func (a *App) grid(p *Pane, t *dataTab) ui.Grid {
 	g := ui.Grid{
 		Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose, FullWidth: a.fullWidth, First: t.shown.pageNo * t.shown.limit,
-		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Selected: t.selected(), FlashNums: a.flashNums(p), Widest: t.widestCache(), Heads: true,
+		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Selected: t.marked, Ranged: t.ranged(), FlashNums: a.flashNums(p), Widest: t.widestCache(), Heads: true,
 	}
 	shown := t.shownCols()
 	for _, i := range shown {
@@ -765,7 +767,7 @@ func (a *App) gridOf(p *Pane) (s *gridState, g ui.Grid, area uv.Rectangle, ok bo
 func (a *App) resultGrid(p *Pane, t *resultTab) ui.Grid {
 	g := ui.Grid{
 		Rows: t.page.Rows, Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose, FullWidth: a.fullWidth,
-		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Yank: a.gridFlash(p), Selected: t.selected(), FlashNums: a.flashNums(p), Widest: t.widestCache(),
+		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Yank: a.gridFlash(p), Selected: t.marked, Ranged: t.ranged(), FlashNums: a.flashNums(p), Widest: t.widestCache(),
 	}
 	for _, c := range t.page.Cols {
 		g.Cols = append(g.Cols, ui.GridCol{Name: c.Name, Type: colType(c.Type)})

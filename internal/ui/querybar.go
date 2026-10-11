@@ -276,7 +276,9 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 	}
 	x := q.end(r, chips, groups)
 	if sel {
-		x = f.Text(x, y, r.Max.X-1, q.Selected, dim) + 1
+		selected := dim
+		selected.Fg = f.Theme.Warn // the color of the records' own (F12.12)
+		x = f.Text(x, y, r.Max.X-1, q.Selected, selected) + 1
 	}
 	right, st := q.Right, dim
 	if n := q.Note; n != (Note{}) {

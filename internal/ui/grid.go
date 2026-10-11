@@ -70,6 +70,9 @@ type Grid struct {
 	// Selected are the records selected: their numbers on the visual
 	// background; FlashNums those whose numbers a yank of them flashes (F10.7)
 	Selected, FlashNums map[int]bool
+	// Ranged are the records the range being selected covers, in VISUAL or
+	// UNSET: on the visual background over the selected ones (F12.12)
+	Ranged map[int]bool
 
 	// Widest keeps the widest value of each column of the page between frames
 	// (F11.4); nil measures every frame.
@@ -635,14 +638,20 @@ func drawCell(f *Frame, x, y, right int, s string, st, mark uv.Style) {
 }
 
 // markNumber paints the cell of record rec's number, whose text is drawn in
-// st: on the visual background when the record is selected, in the yank's
-// colors while its yank flashes (F10.7).
+// st: on the visual background when it is in the range being selected, the
+// selected one when it is selected, in the yank's colors while its yank
+// flashes (F10.7, F12.12).
 func (g Grid) markNumber(f *Frame, st *uv.Style, cell uv.Rectangle, rec int) {
 	switch {
 	case g.FlashNums[rec]:
 		st.Fg, st.Bg = f.Theme.Bg, f.Theme.Yank
-	case g.Selected[rec]:
+	case g.Ranged[rec]:
 		st.Bg = f.Theme.Visual
+	case g.Selected[rec]:
+		st.Bg = f.Theme.Selected
+		if st.Fg == f.Theme.Dim { // the dim number would not read on it
+			st.Fg = f.Theme.Fg
+		}
 	default:
 		return
 	}

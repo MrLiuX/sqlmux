@@ -159,7 +159,7 @@ func TestSelectInResult(t *testing.T) {
 	for r := range 3 {
 		rows = append(rows, bgBand(a, f, area.Min.Y+2+r, area.Min.X, area.Min.X+5))
 	}
-	if got := strings.Join(rows, " "); got != "vvv.. vvv.. ....." {
+	if got := strings.Join(rows, " "); got != "sss.. sss.. ....." {
 		t.Errorf("the numbers of a result: %s", got)
 	}
 	if feed(t, a, "d"); !rt.selecting() {
@@ -171,16 +171,16 @@ func TestSelectInResult(t *testing.T) {
 	}
 }
 
-// The numbers of the records selected, marked or in the range of VISUAL, are
-// on the visual background, in a table turned or not, and the others are not
-// (F10.7).
+// The numbers of the records selected for good, marked, are on the selected
+// background and those in the range being selected on the visual one, in a
+// table turned or not, and the others are on neither (F10.7, F12.12).
 func TestSelectHighlight(t *testing.T) {
 	for name, c := range map[string]struct {
-		keys string
-		want []string
+		keys              string
+		selected, visuals []string
 	}{
-		"vertical":   {"mjjmjv", []string{"1", "3", "4"}},
-		"transposed": {"Tmlmlv", []string{"1", "2", "3"}},
+		"vertical":   {"mjjmjv", []string{"1", "3"}, []string{"4"}},
+		"transposed": {"Tmlmlv", []string{"1", "2"}, []string{"3"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			a := wide(160, 45)
@@ -188,18 +188,23 @@ func TestSelectHighlight(t *testing.T) {
 			feed(t, a, c.keys)
 			f := a.render()
 			_, _, area, _ := a.gridOf(a.focused())
-			var got []string
+			var selected, visuals []string
 			for y := area.Min.Y; y < area.Max.Y; y++ {
 				for x := area.Min.X; x < area.Min.X+3 || name == "transposed" && x < area.Max.X; x++ {
 					cell := f.Buf.CellAt(x, y)
 					// a number, alone in its cell, in the cells a record's number takes
-					if n := strings.TrimSpace(cell.Content); n >= "1" && n <= "6" && len(n) == 1 && cell.Style.Bg == a.theme.Visual && (name == "vertical" && y > area.Min.Y+1 || name == "transposed" && y == area.Min.Y) {
-						got = append(got, n)
+					if n := strings.TrimSpace(cell.Content); n >= "1" && n <= "6" && len(n) == 1 && (name == "vertical" && y > area.Min.Y+1 || name == "transposed" && y == area.Min.Y) {
+						switch cell.Style.Bg {
+						case a.theme.Selected:
+							selected = append(selected, n)
+						case a.theme.Visual:
+							visuals = append(visuals, n)
+						}
 					}
 				}
 			}
-			if !slices.Equal(got, c.want) {
-				t.Errorf("on the visual background: %v, want %v", got, c.want)
+			if !slices.Equal(selected, c.selected) || !slices.Equal(visuals, c.visuals) {
+				t.Errorf("selected %v, visual %v; want %v, %v", selected, visuals, c.selected, c.visuals)
 			}
 		})
 	}
@@ -273,11 +278,11 @@ func TestSelectDeleteRules(t *testing.T) {
 
 	feed(t, a, "gg")
 	feed(t, a, "o<Esc>") // a row added under the first, the cursor in it
-	feed(t, a, "ggVjj")  // the first record, the row added, the second: the records both marked for deletion
+	feed(t, a, "ggvjj")  // the first record, the row added, the second: the records both marked for deletion
 	if feed(t, a, "d"); len(tab.deleted) != 0 || len(tab.added) != 1 || tab.selecting() {
 		t.Errorf("all marked: deleted %v, added %d, selecting %v", tab.deleted, len(tab.added), tab.selecting())
 	}
-	feed(t, a, "ggVjjj") // those and the third, not marked
+	feed(t, a, "ggvjjj") // those and the third, not marked
 	if feed(t, a, "d"); len(tab.deleted) != 3 || len(tab.added) != 0 {
 		t.Errorf("some marked: deleted %v, added %d", tab.deleted, len(tab.added))
 	}
@@ -361,13 +366,15 @@ func TestSelectCountSegment(t *testing.T) {
 }
 
 // bgBand is row y's backgrounds from x0 to x1, a letter a column: "v" the
-// visual's, "y" the yank's, "." any other.
+// visual's, "s" the selected's, "y" the yank's, "." any other.
 func bgBand(a *App, f *ui.Frame, y, x0, x1 int) string {
 	var b strings.Builder
 	for x := x0; x < x1; x++ {
 		switch f.Buf.CellAt(x, y).Style.Bg {
 		case a.theme.Visual:
 			b.WriteByte('v')
+		case a.theme.Selected:
+			b.WriteByte('s')
 		case a.theme.Yank:
 			b.WriteByte('y')
 		default:
@@ -390,13 +397,13 @@ func TestSelectNumberCells(t *testing.T) {
 	for r := range 6 {
 		rows = append(rows, bgBand(a, f, area.Min.Y+2+r, area.Min.X, area.Min.X+5))
 	}
-	if got := strings.Join(rows, " "); got != "vvv.. ..... vvv.. vvv.. ..... ....." {
+	if got := strings.Join(rows, " "); got != "sss.. ..... sss.. vvv.. ..... ....." {
 		t.Errorf("the cells of the numbers: %s", got)
 	}
 	a.run("grid.transpose", 0)
 	f = a.render()
 	// the first and the third records, marked: a record's cell is its column and the space either side
-	if got := bgBand(a, f, area.Min.Y, area.Min.X, area.Max.X); !regexp.MustCompile(`^\.+v+\.v+\.+$`).MatchString(got) {
+	if got := bgBand(a, f, area.Min.Y, area.Min.X, area.Max.X); !regexp.MustCompile(`^\.+s+\.v+\.+$`).MatchString(got) {
 		t.Errorf("transposed: %s", got)
 	}
 
@@ -421,5 +428,77 @@ func TestFlashNumsOfItsPane(t *testing.T) {
 	a.flash = &yankFlash{pane: 7, nums: map[int]bool{0: true}}
 	if a.flashNums(&Pane{ID: 7}) == nil || a.flashNums(&Pane{ID: 8}) != nil {
 		t.Errorf("flash of pane 7: %v, of 8: %v", a.flashNums(&Pane{ID: 7}), a.flashNums(&Pane{ID: 8}))
+	}
+}
+
+// V begins UNSET: the range, moved over as VISUAL's is, is taken out of the
+// selected ones at esc or the next V or v, the records in it that were not
+// selected are as they were; the mode block says UNSET and d and y go by what
+// is left (F12.12).
+func TestSelectUnset(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 6)
+	feed(t, a, "vjj<Esc>") // 1, 2, 3 selected, the cursor on the third
+	feed(t, a, "Vk")
+	if a.mode() != keymap.Visual || !strings.Contains(statusRow(a), "UNSET") || strings.Contains(statusRow(a), "VISUAL") {
+		t.Fatalf("mode %v, status %q", a.mode(), statusRow(a))
+	}
+	if got := tab.positions(); !slices.Equal(got, []int{0}) {
+		t.Fatalf("V k: what is left %v", got)
+	}
+	if got := a.queryBar(a.focused(), tab).Selected; !strings.Contains(got, "1") {
+		t.Errorf("the count goes by what is left: %q", got)
+	}
+	feed(t, a, "<Esc>")
+	if got := markedOf(&tab.gridState); !slices.Equal(got, []int{0}) || tab.visual || tab.unset || a.mode() != keymap.Normal {
+		t.Fatalf("esc: marked %v, mode %v", got, a.mode())
+	}
+	feed(t, a, "jjjVjV") // rows 3 and 4 were never selected; V again ends it
+	if got := markedOf(&tab.gridState); !slices.Equal(got, []int{0}) || tab.visual {
+		t.Errorf("a range of records not selected: %v", got)
+	}
+	b := wide(160, 45) // d in UNSET: by what is left, the mode over
+	tab = loadOrders(t, b, 6)
+	feed(t, b, "vjj<Esc>Vkd")
+	if len(tab.deleted) != 1 || !tab.deleted[tab.rowKey(0)] || tab.selecting() || tab.unset {
+		t.Errorf("d: deleted %v, selecting %v, unset %v", tab.deleted, tab.selecting(), tab.unset)
+	}
+}
+
+// The records selected for good are on the selected background, the range
+// being selected on the visual one, and the count in the chip row is warn
+// (F12.12).
+func TestSelectColors(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 6)
+	feed(t, a, "mjjmjv")
+	f := a.render()
+	_, _, area, _ := a.gridOf(a.focused())
+	var rows []string
+	for r := range 6 {
+		rows = append(rows, bgBand(a, f, area.Min.Y+2+r, area.Min.X, area.Min.X+5))
+	}
+	if got := strings.Join(rows, " "); got != "sss.. ..... sss.. vvv.. ..... ....." {
+		t.Errorf("selected and the range: %s", got)
+	}
+	bar := a.queryBar(a.focused(), tab).Selected
+	r := find(t, a, ui.Target{Kind: ui.KindHint, Pane: 1, Action: "grid.cols"}) // the bar's second row is the row of the count
+	found := false
+	for x := range a.w {
+		if c := f.Buf.CellAt(x, r.Min.Y); c.Content == "3" && c.Style.Fg == a.theme.Warn && strings.Contains(bar, "3") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the count is not warn")
+	}
+	// a theme with no selected: the visual
+	th, _, err := ui.ParseTheme("pane_bg = \"#101010\"\nvisual = \"#102030\"", ui.NerdIcons)
+	if err != nil || th.Selected != th.Visual || th.Selected == ui.TokyonightStorm.Selected {
+		t.Errorf("a theme without selected: %v, %v", th.Selected, err)
+	}
+	th, _, err = ui.ParseTheme("selected = \"#102030\"", ui.NerdIcons)
+	if err != nil || th.Selected == th.Visual {
+		t.Errorf("a theme with selected: %v, %v", th.Selected, err)
 	}
 }
