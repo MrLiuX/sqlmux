@@ -18,7 +18,7 @@
 | M11 分发 | [m11-distribution/task.md](m11-distribution/task.md) | GoReleaser 与 release workflow、`--version`、Homebrew tap（源码编译的 formula）、npm / npx（壳包加平台子包） | todo（2026-10-10 用户定；2026-10-11 M10 passed 后开工） |
 | M12 表格日常 | [m12-grid/task.md](m12-grid/task.md) | 用户 2026-10-11 对照 DataGrip 规划：多列排序、值编辑器（JSON 格式化和高亮、vim）、按单元值过滤 / 表头排序 / 表格右键菜单、导出 CSV 和 JSON | todo（M11 F11.4 passed 之后开工） |
 | M13 SQLite 与历史 | [m13-sqlite/task.md](m13-sqlite/task.md) | SQLite（无 cgo）和命令行 DSN、查询历史、树上的索引 / 键 / 函数 / 序列、结构修改的模板 SQL | draft（方向已定，M12 开工后补清单） |
-| M14 PG 数据库层级 | [m14-pg-databases/task.md](m14-pg-databases/task.md) | PG 的树加数据库一层（每库一对连接）、SSH 隧道、query 的签名提示与值补全（INSERT VALUES、UPDATE SET、WHERE 的值；用户后续的编辑体验需求也归这里） | draft |
+| M14 PG 数据库层级 | [m14-pg-databases/task.md](m14-pg-databases/task.md) | PG 的树加数据库一层（每库一对连接）、SSH 隧道、query 的签名提示与值补全（INSERT VALUES、UPDATE SET、WHERE 的值；用户后续的编辑体验需求也归这里）、状态栏随机轮播的特性提示 | draft |
 
 ## 发布
 
