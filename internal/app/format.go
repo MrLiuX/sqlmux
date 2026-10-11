@@ -78,7 +78,7 @@ func format(sql string, d sqlkit.Dialect, prg string, o sqlkit.Options) (string,
 	var out string
 	var err error
 	if prg == "" {
-		out, err = sqlkit.Format(sql, d, o)
+		out, err = sqlkit.FormatAll(sql, d, o)
 	} else {
 		out, err = runPrg(sql, prg)
 	}
