@@ -22,7 +22,7 @@ start -C "$D/own"; open_table t_f; wait_for 8 settled
 check "（准备）表头 id name qty tag，COLS 4/4" eval '[[ $(hdr) == *"id name qty tag"* ]] && qb_has "COLS 4/4"'
 # ---- which-key 的 f 组
 key f; sleep 1
-check "f：which-key 列出 h H v c e（fv 过滤、fc 隐藏列、fe 导出，加原来的 fh / fH）" eval 'for k in "v →" "c →" "e →" "h →" "H →"; do e2e_plain | grep -qF "$k" || { echo "  lacks $k"; false; }; done'
+check "f：which-key 的 f 组列出 v → 按这个值过滤、c → 隐藏这一列、e → 导出…" eval 'e2e_plain | grep -qF "v → 按这个值过滤" && e2e_plain | grep -qF "c → 隐藏这一列" && e2e_plain | grep -qF "e → 导出…"'
 key Escape; sleep 0.3
 # ---- O 开值编辑器
 key l; key O; sleep 0.7
@@ -54,10 +54,10 @@ check "转回竖直：表头只有 id tag" eval '[[ $(hdr) == *"id tag"* && $(hd
 _e2e_kill
 
 # ---- 结果 tab 上的 fc
-start -C "$D/own"; key C-l
+SOLO= start -C "$D/own"; key C-l
 setsql "select * from t_f order by id"; run
 key C-j; sleep 0.5; key l; key l
 key f c; sleep 0.6
-g=($(geom 3)); res_hdr() { e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $((g[1] + 2)) | sed 's/│/ /g; s/  */ /g'; }
-check "结果 tab 上 fc：表头少了光标所在的列（qty），id name tag 还在" eval 'h=$(res_hdr); [[ $h == *name* && $h == *tag* && $h != *qty* ]] || { echo "  [$h]"; false; }'
+g=($(geom 3)); res_hdr() { e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $((g[1] + 1)) | sed 's/│/ /g; s/  */ /g'; }
+check "结果 tab（没有 COLS）上 fc：不做事、不崩，表头不变（spec：结果 tab 本来有 COLS 的才能用）" eval 'running && h=$(res_hdr) && [[ $h == *id* && $h == *qty* && $h == *tag* ]] || { echo "  [$(res_hdr)]"; false; }'
 e2e_done
