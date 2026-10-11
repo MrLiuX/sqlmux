@@ -25,6 +25,7 @@ type Completion struct {
 	Kind      CompKind
 	Prefix    string // the word the cursor is at the end of, maybe ""
 	Start     int    // where Prefix starts in the text
+	AtStart   bool   // no token of the statement is before Prefix: it begins one (F12.6)
 	Qualifier string // the X of X.Prefix, quotes off
 	Depth     int    // the parentheses the cursor is in
 	Tables    []TableRef
@@ -79,6 +80,7 @@ func CompletionContext(text string, pos int, d Dialect) Completion {
 			break
 		}
 	}
+	c.AtStart = before == 0
 	for _, t := range ts[:before] {
 		switch text[t.Start:t.End] {
 		case "(":

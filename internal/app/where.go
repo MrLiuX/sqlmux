@@ -96,11 +96,12 @@ func (a *App) complete(t *dataTab) {
 // ↓ select the first, S-Tab, C-p or ↑ the last (F8.17, nvim's noselect).
 const noSelection = -1
 
-// ranked is the candidates of groups that pattern matches, group by group
-// and best first within each (§9.7), completing what starts at start in the
-// text, the cursor at pos; nil when none does. One that is just what is
-// typed comes first of all, or a table's name would take the place of a
-// finished set or to. Pattern's first character matches at a word start,
+// ranked is the candidates of groups that pattern matches, completing what
+// starts at start in the text, the cursor at pos; nil when none does. By how
+// closely they match first (§9.7, F12.6): one that is just what is typed, or
+// a table's name would take the place of a finished set or to; one that
+// starts with it; one with a word that does; the rest. Within each, group by
+// group and best first within each group. Pattern's first character matches at a word start,
 // fuzzy past it as VS Code's does: evt finds mt_event and tord t_order, but
 // x no longer max.
 func ranked(text string, pos int, pattern string, start int, groups ...[]candidate) *completion {
@@ -108,13 +109,13 @@ func ranked(text string, pos int, pattern string, start int, groups ...[]candida
 	// no smart case: an upper-case letter would make fzf exact about case
 	// (§9.7); the palette, tree and COLS keep it
 	pattern = strings.ToLower(pattern)
-	var exact []candidate
+	var tiers [4][]candidate
 	add := func(cd candidate, from int) {
+		t := tierOf(pattern, cd.label)
 		if pattern != "" && strings.EqualFold(text[from:pos], cd.insert) {
-			exact = append(exact, cd)
-		} else {
-			c.items = append(c.items, cd)
+			t = 0
 		}
+		tiers[t] = append(tiers[t], cd)
 	}
 	for _, g := range groups {
 		labels := make([]string, len(g))
@@ -144,10 +145,26 @@ func ranked(text string, pos int, pattern string, start int, groups ...[]candida
 			}
 		}
 	}
-	if c.items = append(exact, c.items...); len(c.items) == 0 {
+	if c.items = slices.Concat(tiers[:]...); len(c.items) == 0 {
 		return nil
 	}
 	return c
+}
+
+// tierOf is how closely label matches pattern (lower case), 1 the closest
+// of what is not the same: it starts with it, 2 a word of it does, 3 the
+// rest, as fuzzy as fzf was (§9.7). With nothing typed all are alike.
+func tierOf(pattern, label string) int {
+	if pattern == "" {
+		return 3
+	}
+	rs := []rune(label)
+	for i := range rs {
+		if (i == 0 || wordStart(rs, i)) && strings.HasPrefix(strings.ToLower(string(rs[i:])), pattern) {
+			return min(i, 1) + 1
+		}
+	}
+	return 3
 }
 
 // startOf is where the text cd replaces starts: the list's, or further back
@@ -461,6 +478,9 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 			kws = append(kws, candidate{label: k, insert: k, note: i18n.T("关键字"), kw: true, space: sqlkit.SpaceAfter(k)})
 		}
 		groups = [][]candidate{near, far, append(ctes, tables(schema, named)...), kws}
+		if c.AtStart { // what is typed there is almost always a keyword (F12.6)
+			groups = [][]candidate{kws, groups[2], near, far}
+		}
 	}
 	if c.Prefix == "" && !manual && !resolved {
 		return nil, cmds

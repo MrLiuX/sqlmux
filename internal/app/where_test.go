@@ -28,8 +28,8 @@ import (
 func TestWhereCompletion(t *testing.T) {
 	a, tab, _ := withRecorder(t)
 	feed(t, a, "/a")
-	if tab.comp == nil || len(tab.comp.items) != 3 || tab.comp.items[0].label != "amount" || tab.comp.items[1].label != "created_at" || tab.comp.sel != 0 || a.mode() != keymap.Insert {
-		t.Fatalf("a: amount, created_at (a word of it), and: %+v", tab.comp)
+	if tab.comp == nil || len(tab.comp.items) != 3 || tab.comp.items[0].label != "amount" || tab.comp.items[1].label != "and" || tab.comp.items[2].label != "created_at" || tab.comp.sel != 0 || a.mode() != keymap.Insert {
+		t.Fatalf("a: amount, and (they start with it), created_at (a word of it): %+v", tab.comp)
 	}
 	at := a.whereAt(a.focused(), tab)
 	f := a.render()

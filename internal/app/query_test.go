@@ -1190,3 +1190,33 @@ func TestAsyncColumnsKeepThePickTwice(t *testing.T) {
 		t.Errorf("↵ took %q", text(c))
 	}
 }
+
+// A candidate that starts with what is typed comes before one that has a word
+// that does, and that before the fuzzy rest, whatever the group; at the start
+// of a statement the keywords come before the tables and the columns, elsewhere
+// the columns, the tables, the keywords stay in that order (§9.7, F12.6).
+func TestSQLCompleteRank(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	conn := a.sess.Conns[0]
+	for _, name := range []string{"pap_secretary_problem_event", "oa_workflow_instance", "oa_workflow_instance_log", "selected_item"} {
+		conn.Tables = append(conn.Tables, db.Table{Schema: "public", Name: name})
+	}
+	table, cols, _ := ordersTable(0)
+	conn.cols[idOf(table)] = cols
+	for _, c := range []struct{ sql, want string }{
+		{"sele|", "select"},
+		{"inse|", "insert into"},
+		{"sec|", "pap_secretary_problem_event"}, // a word of it, before select's fuzzy s·e·c
+		{"select t|", "表"},                      // not at the start: a table, before the keywords that start with t
+		{"select * from t_order where sta|", "status"},
+	} {
+		pos := strings.Index(c.sql, "|")
+		got, _ := a.sqlComplete(conn, strings.Replace(c.sql, "|", "", 1), pos, "public", map[tableID]bool{}, false)
+		if got == nil || got.items[0].label != c.want && got.items[0].note != c.want {
+			t.Errorf("%s: %+v, want %q first", c.sql, got.items[0], c.want)
+		}
+	}
+	if got, want := []int{tierOf("sec", "pap_secretary_problem_event"), tierOf("sec", "secret"), tierOf("sec", "select"), tierOf("", "x")}, []int{2, 1, 3, 3}; !slices.Equal(got, want) {
+		t.Errorf("tiers %v, want %v", got, want)
+	}
+}
