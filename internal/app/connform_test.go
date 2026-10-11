@@ -242,8 +242,8 @@ func TestConnFormTest(t *testing.T) {
 		t.Fatalf("testing: %v, %d", cmd != nil, a.form.testing)
 	}
 	a.Update(cmd())
-	if a.form.ok || a.form.testing != 0 || !strings.Contains(a.form.err, "127.0.0.1:1") {
-		t.Errorf("refused: ok %v, %q", a.form.ok, a.form.err)
+	if a.form.result != "" || a.form.testing != 0 || !strings.Contains(a.form.err, "127.0.0.1:1") {
+		t.Errorf("refused: result %q, %q", a.form.result, a.form.err)
 	}
 	if connections() != "" {
 		t.Errorf("a test saved: %s", connections())
@@ -262,10 +262,15 @@ func TestConnFormTest(t *testing.T) {
 	}
 	a.form.testing = 7
 	a.Update(connTested{seq: 7, note: "已连接 · PostgreSQL 17.7 · 120ms"})
-	if !a.form.ok || a.form.err != "已连接 · PostgreSQL 17.7 · 120ms" {
-		t.Errorf("connected: ok %v, %q", a.form.ok, a.form.err)
+	if a.form.result != "已连接 · PostgreSQL 17.7 · 120ms" || a.form.err != "" {
+		t.Errorf("connected: result %q, err %q", a.form.result, a.form.err)
 	}
 	golden.RequireEqual(t, a.render().String())
+	a.form.err = "save failed" // an error of a save is no result: not drawn as one
+	if v := a.formView(); v.OK || v.Err != "save failed" {
+		t.Errorf("an error over a result: %+v", v)
+	}
+	a.form.err = ""
 	a.form = nil
 	a.Update(connTested{seq: 7, note: "late"}) // no form: nothing to show it on
 }

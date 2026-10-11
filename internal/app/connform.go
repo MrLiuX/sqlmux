@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"net"
 	"net/url"
@@ -34,10 +35,11 @@ type connForm struct {
 	// with ↓ and ↑, -1 for none; esc closes it till something is typed
 	groupSel int
 	groupOff bool
-	// testing is the number of the connection test out, 0 for none; err then
-	// holds what it found, ok when that is a connection made (F12.5)
+	// testing is the number of the connection test out, 0 for none; result is
+	// what a test that connected found, shown while err, why a save or a test
+	// failed, is not (F12.5)
 	testing int
-	ok      bool
+	result  string
 }
 
 // The form's fields, in order; the last two are in the 高级 fold.
@@ -254,12 +256,7 @@ func (a *App) formSegment(i, seg int) {
 
 // untest drops a test's result, one still out too: the fields are not the
 // ones it tried.
-func (f *connForm) untest() {
-	if f.ok {
-		f.err = ""
-	}
-	f.testing, f.ok = 0, false
-}
+func (f *connForm) untest() { f.testing, f.result = 0, "" }
 
 // formClick is a click on field i: the keys go to it; a check and the fold
 // also turn over (a segment is picked by formSegment).
@@ -508,11 +505,12 @@ func (a *App) gotConnTested(m connTested) {
 	if f == nil || f.testing != m.seq {
 		return
 	}
-	f.testing, f.ok = 0, m.err == nil
-	f.err = m.note
+	f.testing = 0
 	if m.err != nil {
 		f.err = strings.ReplaceAll(m.err.Error(), "\n", " ") // one row
+		return
 	}
+	f.result = m.note
 }
 
 // saveEditedConn is ↵ on the form of a connection that is there: what the
@@ -734,7 +732,7 @@ func (a *App) formView() ui.Form {
 		test = i18n.T("测试中…")
 	}
 	fields[fieldDSN].Example = dsnExample[fields[fieldEngine].Choices[fields[fieldEngine].On]]
-	form := ui.Form{Fields: fields, Sel: f.sel, Err: f.err, OK: f.ok, Save: i18n.T("保存"), Test: test, Cancel: i18n.T("取消"), Delete: del, Hints: hints, PickAt: fieldGroup}
+	form := ui.Form{Fields: fields, Sel: f.sel, Err: cmp.Or(f.err, f.result), OK: f.err == "" && f.result != "", Save: i18n.T("保存"), Test: test, Cancel: i18n.T("取消"), Delete: del, Hints: hints, PickAt: fieldGroup}
 	if cands := a.groupCands(); len(cands) > 0 { // under the group field (F10.6)
 		form.Pick = &ui.Complete{Sel: f.groupPick(len(cands)), Act: "form.pick"}
 		for _, g := range cands {

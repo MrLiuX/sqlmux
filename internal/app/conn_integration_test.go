@@ -770,8 +770,8 @@ func connFormTestConnects(t *testing.T, eng, dsn string) {
 	}
 	a.Update(cmd())
 	want := map[string]string{"postgres": "已连接 · PostgreSQL ", "mysql": "已连接 · MySQL "}[eng]
-	if !f.ok || !strings.HasPrefix(f.err, want) || !strings.HasSuffix(f.err, "s") {
-		t.Errorf("ok %v: %q", f.ok, f.err)
+	if !strings.HasPrefix(f.result, want) || !strings.HasSuffix(f.result, "s") || f.err != "" {
+		t.Errorf("result %q, err %q", f.result, f.err)
 	}
 	if len(a.sess.Conns) != 1 {
 		t.Errorf("the tested connection is in the tree: %d", len(a.sess.Conns))

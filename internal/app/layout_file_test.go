@@ -666,3 +666,17 @@ func TestLayoutQueryNames(t *testing.T) {
 		t.Errorf("names %v, want %v", got, want)
 	}
 }
+
+// The query that last ran in a schema of the start connection, which is still
+// connecting as the program starts, is on that schema from the first frame:
+// a dial that fails does not take it back (F12.5).
+func TestRestoreQueryOnStart(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	start := a.sess.start
+	start.State = connIdle
+	q := a.sess.queries()[0]
+	a.state.Queries = map[string]config.QueryState{q.name: {Conn: start.Spec.Name, Schema: "sales"}}
+	if cmd := a.restoreQuery(q); cmd != nil || q.schema != "sales" || q.want != nil || q.conn != start {
+		t.Errorf("schema %q, want %v, conn %v", q.schema, q.want, q.conn == start)
+	}
+}

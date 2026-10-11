@@ -774,7 +774,7 @@ func (a *App) restoreQuery(t *queryTab) tea.Cmd {
 	switch {
 	case !ok || i < 0:
 		return nil
-	case a.sess.Conns[i].State == connReady:
+	case a.sess.Conns[i].State == connReady, a.sess.Conns[i] == t.conn: // the one it is on is the start, connecting: a failed dial must not lose the schema (F12.5)
 		t.conn, t.schema = a.sess.Conns[i], cmp.Or(st.Schema, a.sess.Conns[i].Schema)
 		return nil
 	}
