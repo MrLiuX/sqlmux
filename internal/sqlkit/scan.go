@@ -72,7 +72,8 @@ func Scan(s string, d Dialect) []Token {
 			kind, i, exec = Comment, i+3+version(s[i+3:]), true
 		case strings.HasPrefix(s[i:], "--") && (d == PG || i+2 >= len(s) || s[i+2] <= ' '),
 			d == MySQL && r == '#':
-			kind, i = Comment, lineEnd(s, i)
+			line, _, _ := strings.Cut(s[i:], "\n")
+			kind, i = Comment, i+len(line)
 		case strings.HasPrefix(s[i:], "/*"):
 			kind, i = Comment, blockComment(s, i, d == PG)
 		case r == '\'':
@@ -268,12 +269,4 @@ func meaningful(s string, all []Token) (ts []Token, depth []int) {
 		}
 	}
 	return ts, depth
-}
-
-// lineEnd is where the line s[i:] is in ends: its newline, or the text's end.
-func lineEnd(s string, i int) int {
-	if j := strings.IndexByte(s[i:], '\n'); j >= 0 {
-		return i + j
-	}
-	return len(s)
 }

@@ -195,6 +195,7 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 	}
 	if a.keyHelp != nil {
 		a.keyHelpView().Draw(f, a.overlayArea())
+		f.Cursor = nil // the input under it has not the keys
 	}
 	if a.whichKey { // over the help too: a Ctrl leader's keys there (§6.5)
 		a.whichKeyOverlay().Draw(f, a.overlayArea())
@@ -214,6 +215,7 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 			cf.NoKey, cf.No = a.keys.Hint("confirm.no", "confirm"), i18n.T("取消")
 		}
 		cf.Draw(f, a.window())
+		f.Cursor = nil
 	}
 	if a.toast != "" && y > 0 { // over the palette's mask too: dimmed, it can hardly be read (§7.5)
 		t := " " + a.toast + " "

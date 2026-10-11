@@ -374,7 +374,7 @@ func (g Grid) viewWith(v view, area uv.Rectangle, labelW int, ws []int, rows int
 	if g.Row >= 0 {
 		cr, cc = v.screen(g.Row, max(g.Col, 0))
 	}
-	voff = max(min(voff, cr, v.rows-rows), cr-rows+1, 0)
+	voff = InView(min(voff, v.rows-rows), cr, rows)
 	hoff = max(min(hoff, cc, v.cols-1), 0)
 	x0 := area.Min.X + labelW + 3 // the first column's cell
 	for hoff < cc && x0+colSpan(ws[hoff:cc+1]) > area.Max.X {

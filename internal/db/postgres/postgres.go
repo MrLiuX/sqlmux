@@ -25,12 +25,12 @@ type Conn struct {
 // again on the next request.
 const cancelGrace = 5 * time.Second
 
-// Connect opens one connection. dsn goes through pgconn.ParseConfig, which
-// reads PG* variables and ~/.pgpass; password, when not "", wins over both.
-// readOnly makes every transaction read only, as the Meta connection is (§8.2).
-// Connect opens a connection, and says where it is: the address for the status
-// bar (§7.8), the database for query titles (§8.6), and search_path as it
-// started, before any query sets its own schema in front of it (§8.6).
+// Connect opens one connection, and says where it is: the address for the
+// status bar (§7.8), the database for query titles (§8.6), and search_path as
+// it started, before any query sets its own schema in front of it (§8.6). dsn
+// goes through pgconn.ParseConfig, which reads PG* variables and ~/.pgpass;
+// password, when not "", wins over both. readOnly makes every transaction read
+// only, as the Meta connection is (§8.2).
 func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, db.Info, error) {
 	cfg, err := pgconn.ParseConfig(dsn)
 	if err != nil {

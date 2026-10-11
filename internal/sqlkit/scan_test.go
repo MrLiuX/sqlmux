@@ -4,7 +4,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 )
 
 // kinds is s's tokens as a string, one letter a kind: _ space, i ident,
@@ -82,21 +81,14 @@ func TestScanLines(t *testing.T) {
 	}
 }
 
-// A text of line comments scans in time that grows with its length, not with
-// its square (F13.8).
-func TestScanLineCommentsAreLinear(t *testing.T) {
-	scan := func(n int) time.Duration {
-		s := strings.Repeat("select a from t; -- note\n# mysql too\n", n)
-		best := time.Hour
-		for range 3 {
-			t0 := time.Now()
-			Scan(s, MySQL)
-			best = min(best, time.Since(t0))
+// A line comment's end is found without copying the rest of the text: a text of
+// 4000 comment lines scans in a few dozen allocations, not one a comment, which
+// is what made it quadratic (F13.8).
+func TestScanLineCommentsDoNotCopy(t *testing.T) {
+	for _, d := range []Dialect{PG, MySQL} {
+		s := strings.Repeat("select a from t; -- note\n# mysql too\n", 2000)
+		if n := testing.AllocsPerRun(3, func() { Scan(s, d) }); n > 100 {
+			t.Errorf("dialect %d: %v allocations", d, n)
 		}
-		return best
-	}
-	small, big := scan(2000), scan(16000) // 8 times the text: 8 times the time, 64 if squared
-	if big > 24*small {
-		t.Errorf("2000 lines %v, 16000 lines %v", small, big)
 	}
 }

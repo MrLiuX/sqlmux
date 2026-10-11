@@ -2,6 +2,7 @@ package sqlkit
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -90,29 +91,86 @@ func TestFormatTimeout(t *testing.T) {
 	}
 }
 
+// slowFormat gives a format all the time it needs, under -race as well.
+func slowFormat(t *testing.T) {
+	t.Helper()
+	was := FormatTimeout
+	FormatTimeout = time.Minute
+	t.Cleanup(func() { FormatTimeout = was })
+}
+
 // Several statements formatted one by one are what one call lays out of them:
-// the same text, an empty line between, the comments between as they were,
-// the last ; or none; what the split has no account of goes in one call (F13.19).
+// the same text, whatever the comments, blanks and ;s between, in either
+// keyword case; what the split has no account of goes in one call (F13.19).
 func TestFormatAllIsFormat(t *testing.T) {
-	o := Options{KeywordCase: "upper", TabWidth: 2}
+	slowFormat(t)
 	st := "select a.id, b.name, count(*) from orders a join users b on a.uid = b.id where a.ts > now() - interval '1 day' group by 1, 2 having count(*) > 3;\n"
-	for _, s := range []string{
-		strings.Repeat(st, 12),
-		"select 1; select 2",
-		"select 1;\n\n\n-- note\nselect 2;\n",
-		"select 1; -- trailing\nselect 2; /* block */",
-		"select 1;;select 2;",
-		"-- head\nselect 1;\nselect 2;\n-- tail\n",
-		"select 1;\n\n-- a\n-- b\n\nselect 2;",
-		"select 1 /* c */ ; select 2;",
-		"select 1",
+	for _, c := range []struct {
+		d Dialect
+		s string
+	}{
+		{PG, strings.Repeat(st, 12)},
+		{PG, "select 1; select 2"},
+		{PG, "select 1;\n\n\n-- note\nselect 2;\n"},
+		{PG, "select 1; -- trailing\nselect 2; /* block */"},
+		{PG, "select 1;;select 2;"},
+		{PG, "-- head\nselect 1;\nselect 2;\n-- tail\n"},
+		{PG, "select 1;\n\n-- a\n-- b\n\nselect 2;"},
+		{PG, "select 1 /* c */ ; select 2;"},
+		{PG, "select 1;\n\n-- a\n\n-- b\n\nselect 2;"},
+		{PG, "select 1;\n  -- a\n  -- b\nselect 2;"},
+		{PG, "select 1;\n/* a\n     b */\nselect 2;"},
+		{PG, "-- h1\n\n-- h2\nselect 1; select 2;"},
+		{PG, "select 1; select 2; -- t1\n\n-- t2\n"},
+		{PG, "select 1; /* x */ select 2;"},
+		{PG, "select 1; -- x\n-- y\nselect 2;"},
+		{PG, "create function f() returns int begin atomic select 1; select 2; end; select 3;"},
+		{PG, "select 1; select 2 -- tail no semi"},
+		{PG, "select 1"},
+		{MySQL, "/*!40101 SET a=1; SET b=2 */;\nselect 1;"},
+		{MySQL, "select 1; # c\nselect 2;"},
 	} {
-		want, err := Format(s, PG, o)
-		if err != nil {
-			t.Fatal(err)
+		for _, kc := range []string{"preserve", "upper"} {
+			o := Options{KeywordCase: kc, TabWidth: 2}
+			want, werr := Format(c.s, c.d, o)
+			got, err := FormatAll(c.s, c.d, o)
+			if got != want || fmt.Sprint(err) != fmt.Sprint(werr) {
+				t.Errorf("%s %q:\n got %q (%v)\nwant %q (%v)", kc, c.s, got, err, want, werr)
+			}
 		}
-		if got, err := FormatAll(s, PG, o); err != nil || got != want {
-			t.Errorf("%q:\n got %q (%v)\nwant %q", s, got, err, want)
+	}
+}
+
+// Several statements are a call each, and the lot has the one FormatTimeout: a
+// text of twelve takes twelve calls, and past the time given all of them, the
+// time of one call each would not tell (F13.19).
+func TestFormatAllIsOneCallEachUnderOneDeadline(t *testing.T) {
+	slowFormat(t)
+	o := Options{KeywordCase: "upper", TabWidth: 2}
+	s := strings.Repeat("select a.id, b.name, count(*) from orders a join users b on a.uid = b.id where a.ts > now() - interval '1 day' group by 1, 2 having count(*) > 3;\n", 12)
+	before := formatter.calls
+	if _, err := FormatAll(s, PG, o); err != nil {
+		t.Fatal(err)
+	}
+	if got := formatter.calls - before; got != 12 {
+		t.Errorf("%d calls for 12 statements", got)
+	}
+	FormatTimeout = 100 * time.Millisecond // each takes about 30 ms: the sum is over it
+	if _, err := FormatAll(s, PG, o); !errors.Is(err, ErrTimeout) {
+		t.Errorf("past the one deadline: %v", err)
+	}
+}
+
+// A syntax error is where it is in the text, not in the statement it is in
+// (F13.19).
+func TestFormatAllErrorPosition(t *testing.T) {
+	slowFormat(t)
+	o := Options{KeywordCase: "upper", TabWidth: 2}
+	for _, s := range []string{"select 1;\nselect 2;\nselect 'a", "select 1; select 2; select 3 'x"} {
+		_, want := Format(s, PG, o)
+		_, got := FormatAll(s, PG, o)
+		if want == nil || got == nil || got.Error() != want.Error() {
+			t.Errorf("%q: got %v, want %v", s, got, want)
 		}
 	}
 }

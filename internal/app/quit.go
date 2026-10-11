@@ -9,7 +9,8 @@ import (
 	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
-// confirmBox is the question put before changes are thrown away (§10.5).
+// confirmBox is the question put before what cannot be taken back: changes
+// thrown away, a delete, a drop, a run that deletes (§10.5, §13).
 type confirmBox struct {
 	text, yes string
 	then      func() tea.Cmd

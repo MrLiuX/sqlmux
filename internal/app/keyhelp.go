@@ -1,7 +1,6 @@
 package app
 
 import (
-	"cmp"
 	"slices"
 
 	tea "charm.land/bubbletea/v2"
@@ -26,8 +25,12 @@ func inKeyHelp(a *App) bool { return a.keyHelp != nil }
 func (a *App) keyHelpView() ui.WhichKey {
 	h := a.keyHelp
 	w := ui.WhichKey{Prefix: keymap.Display(h.prefix), Items: whichKeyItems(a.keys.Next(h.ctx, h.prefix)), Top: h.top, Help: true}
-	if len(h.prefix) == 0 && len(h.ctx.Focus) > 0 {
-		w.Prefix = cmp.Or(a.keys.Hint("keyhelp.open", h.ctx.Focus[0]), a.keys.Hint("keyhelp.open", "normal"))
+	if len(h.prefix) == 0 { // an overlay's context has no Focus: NORMAL's key (F13.14)
+		for _, s := range append(slices.Clone(h.ctx.Focus), "normal") {
+			if w.Prefix = a.keys.Hint("keyhelp.open", s); w.Prefix != "" {
+				break
+			}
+		}
 	}
 	return w
 }

@@ -31,6 +31,7 @@ var formatter struct {
 	vm     *goja.Runtime
 	format goja.Callable
 	err    error
+	calls  int // how many times it was asked, which a test counts
 }
 
 // Options are what sql-formatter is told besides the language.
@@ -49,6 +50,11 @@ var ErrTimeout = errors.New("timeout")
 // Format is sql as sql-formatter lays it out in d's language (§9.5). Past
 // FormatTimeout the VM is interrupted, to be used again.
 func Format(sql string, d Dialect, o Options) (string, error) {
+	return format(sql, d, o, time.Now().Add(FormatTimeout))
+}
+
+// format is Format that has until deadline.
+func format(sql string, d Dialect, o Options, deadline time.Time) (string, error) {
 	f := &formatter
 	f.Lock()
 	defer f.Unlock()
@@ -63,8 +69,13 @@ func Format(sql string, d Dialect, o Options) (string, error) {
 	_ = opts.Set("keywordCase", o.KeywordCase)
 	_ = opts.Set("dataTypeCase", o.KeywordCase) // PG's type names are keywords (15.x has them apart)
 	_ = opts.Set("tabWidth", o.TabWidth)
+	left := time.Until(deadline)
+	if left <= 0 {
+		return "", ErrTimeout
+	}
+	f.calls++
 	vm, fired := f.vm, make(chan struct{})
-	timer := time.AfterFunc(FormatTimeout, func() { vm.Interrupt(ErrTimeout); close(fired) })
+	timer := time.AfterFunc(left, func() { vm.Interrupt(ErrTimeout); close(fired) })
 	v, err := f.format(goja.Undefined(), vm.ToValue(sql), opts)
 	if !timer.Stop() {
 		<-fired // it may be interrupting still
@@ -88,62 +99,66 @@ func Format(sql string, d Dialect, o Options) (string, error) {
 }
 
 // FormatAll is Format of a text of several statements, each by a call of its
-// own: the VM's time grows faster than the text, 7 KB of statements taking 4 s
-// at once and 1.4 s one by one. Between them is what sql-formatter leaves, an
-// empty line, and the comments there as they were (§9.5). One statement, or a
-// text the split has no account of (an empty statement, a comment before a ;),
-// goes in one call.
+// own, the lot under one FormatTimeout: the VM's time grows faster than the
+// text (4 KB of statements take 4 s at once, 7 KB time out, and one by one
+// 48 of them take 1.4 s). Each runs from after the ; before it to its own, so
+// the comments above it go to sql-formatter with it, and the output is what
+// one call lays out of all of them. One statement, a text the split has no
+// account of (an empty statement, a gap that is not blanks, comments and one
+// ;) and MySQL's /*! … */, which may hold a ; of its own, go in one call
+// (§9.5).
 func FormatAll(s string, d Dialect, o Options) (string, error) {
+	deadline := time.Now().Add(FormatTimeout)
 	stmts := Statements(s, d)
-	if len(stmts) < 2 {
-		return Format(s, d, o)
+	if len(stmts) < 2 || d == MySQL && strings.Contains(s, "/*!") {
+		return format(s, d, o, deadline)
 	}
 	var units []string
-	comment := strings.TrimSpace(s[:stmts[0].Start]) // what is before the next statement
+	from := 0
 	for i, st := range stmts {
-		end := len(s)
+		cut := len(s)
 		if i+1 < len(stmts) {
-			end = stmts[i+1].Start
+			var ok bool
+			if cut, ok = semicolonAfter(s, st.End, stmts[i+1].Start, d); !ok {
+				return format(s, d, o, deadline)
+			}
 		}
-		terminated, after, ok := terminator(s[st.End:end], d)
-		if !ok {
-			return Format(s, d, o)
-		}
-		text := s[st.Start:st.End]
-		if terminated {
-			text += ";"
-		}
-		out, err := Format(text, d, o)
+		out, err := format(s[from:cut], d, o, deadline)
 		if err != nil {
+			if !errors.Is(err, ErrTimeout) { // where it is in the text, not in the unit
+				if _, here := format(positioned(s, from)+s[from:cut], d, o, deadline); here != nil {
+					err = here
+				}
+			}
 			return "", err
 		}
-		if comment != "" {
-			out = comment + "\n" + out
-		}
-		units, comment = append(units, out), after
-	}
-	if comment != "" {
-		units = append(units, comment)
+		units, from = append(units, out), cut
 	}
 	return strings.Join(units, "\n\n"), nil
 }
 
-// terminator reads what lies after a statement up to the next: blanks, the ;
-// that ends it if it is there, and the comments, which are after. ok is false
-// for anything else.
-func terminator(gap string, d Dialect) (terminated bool, after string, ok bool) {
-	rest := 0
+// semicolonAfter is where the ; that ends the statement before s[to:] is, past
+// s[from:to] that holds blanks, comments and that one; ok is false for any
+// other gap.
+func semicolonAfter(s string, from, to int, d Dialect) (end int, ok bool) {
+	gap, semi := s[from:to], -1
 	for _, t := range Scan(gap, d) {
 		switch {
-		case t.Kind == Space:
-		case t.Kind == Punct && gap[t.Start] == ';' && !terminated:
-			terminated, rest = true, t.End
-		case t.Kind == Comment && terminated:
+		case t.Kind == Space, t.Kind == Comment:
+		case t.Kind == Punct && gap[t.Start] == ';' && semi < 0:
+			semi = t.End
 		default:
-			return false, "", false
+			return 0, false
 		}
 	}
-	return terminated, strings.TrimSpace(gap[rest:]), true
+	return from + semi, semi >= 0
+}
+
+// positioned is the blank text that puts what follows s[:at] where it is in s:
+// its lines, and the columns of the last.
+func positioned(s string, at int) string {
+	line := s[strings.LastIndexByte(s[:at], '\n')+1 : at]
+	return strings.Repeat("\n", strings.Count(s[:at], "\n")) + strings.Repeat(" ", len([]rune(line)))
 }
 
 func load() (*goja.Runtime, goja.Callable, error) {

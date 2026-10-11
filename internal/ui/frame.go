@@ -263,7 +263,12 @@ func listText(f *Frame, x, y, noteRight int, text string, pos []int, note string
 // InView is the first row a list shows with selection sel in view and rows
 // rows to show: top, where the selection is in view already, as nvim's
 // completion menu holds still, else the least that brings it in (F13.10).
-func InView(top, sel, rows int) int { return max(min(top, sel), sel-rows+1, 0) }
+func InView(top, sel, rows int) int {
+	if rows <= 0 { // nothing shows: the top stays, not the row after the selection
+		return top
+	}
+	return max(min(top, sel), sel-rows+1, 0)
+}
 
 // ListView is sel and top kept on a list of n rows and in a view of rows.
 func ListView(sel, top, n, rows int) (int, int) {

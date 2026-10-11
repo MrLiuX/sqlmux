@@ -296,6 +296,31 @@ func TestDoubleCtrlCQuits(t *testing.T) {
 	}
 }
 
+// The quit hint stays quitWindow, not as long as a toast does (F13.17).
+func TestQuitHintLastsQuitWindow(t *testing.T) {
+	wasTTL, wasWindow := toastTTL, quitWindow
+	toastTTL, quitWindow = time.Hour, time.Millisecond
+	t.Cleanup(func() { toastTTL, quitWindow = wasTTL, wasWindow })
+	a := sized(160, 45, "nerd")
+	_, cmd := a.Update(teaKey("<C-c>"))
+	done := make(chan struct{})
+	go func() { cmd(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the hint to press C-c again is held as long as a toast")
+	}
+	b := sized(160, 45, "nerd") // and a toast is held toastTTL
+	cmd = b.showToast("x")
+	done = make(chan struct{})
+	go func() { cmd(); close(done) }()
+	select {
+	case <-done:
+		t.Error("a toast is held as short as the quit hint")
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
 func TestCloseTab(t *testing.T) {
 	a := twoPanes(160, 45)
 	data := a.focused()

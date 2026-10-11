@@ -707,7 +707,8 @@ func (a *App) typeInto(k keymap.Key) tea.Cmd {
 	if a.jump != nil {
 		return a.jumpKey(k)
 	}
-	switch a.topOverlay() {
+	ov := a.topOverlay()
+	switch ov {
 	case "":
 	case "value":
 		return a.valueKey(k)
@@ -736,7 +737,7 @@ func (a *App) typeInto(k keymap.Key) tea.Cmd {
 		}
 	default: // a box with no text to type: the key is none of its
 	}
-	if a.topOverlay() != "" {
+	if ov != "" {
 		return nil
 	}
 	switch t := a.typingTab(); {

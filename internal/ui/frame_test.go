@@ -65,7 +65,7 @@ func TestEveryBoxUsesFrameBorder(t *testing.T) {
 // it in, and keeps its top in the list (F13.10).
 func TestInView(t *testing.T) {
 	for _, c := range []struct{ top, sel, rows, want int }{
-		{0, 3, 8, 0}, {5, 7, 8, 5}, {5, 5, 8, 5}, {5, 4, 8, 4}, {0, 8, 8, 1}, {0, 20, 8, 13}, {3, -1, 8, 0}, {0, 0, 0, 1},
+		{0, 3, 8, 0}, {5, 7, 8, 5}, {5, 5, 8, 5}, {5, 4, 8, 4}, {0, 8, 8, 1}, {0, 20, 8, 13}, {3, -1, 8, 0}, {0, 0, 0, 0}, {4, 9, 0, 4},
 	} {
 		if got := InView(c.top, c.sel, c.rows); got != c.want {
 			t.Errorf("InView(%d, %d, %d) = %d, want %d", c.top, c.sel, c.rows, got, c.want)

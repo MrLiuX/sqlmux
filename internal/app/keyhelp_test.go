@@ -175,17 +175,51 @@ func TestGoldenKeyHelp160x45(t *testing.T) {
 	golden.RequireEqual(t, a.render().String())
 }
 
-// The ? help opened over the palette, which a Ctrl leader allows, is drawn
-// over it, where its keys go: what is typed is not in the palette's input and
-// the help's title is on the screen (F13.14).
-func TestKeyHelpOverPalette(t *testing.T) {
-	a := configured(t, 100, 24, "[keys]\nleader = \"<C-a>\"") // the two boxes overlap
-	feed(t, a, "<C-p>")
-	feed(t, a, "<C-a>?")
-	if a.palette == nil || a.keyHelp == nil {
-		t.Fatalf("palette %v keyHelp %v", a.palette != nil, a.keyHelp != nil)
+// The ? help opened over an overlay, which a Ctrl leader allows, is drawn over
+// it and has the keys: what is typed is not in the palette's input, the title
+// is the key that opened it, and no terminal cursor is left in what it covers
+// (F13.14).
+func TestKeyHelpOverOverlays(t *testing.T) {
+	for name, open := range map[string]func(a *App){
+		"palette":  func(a *App) { feed(t, a, "<C-p>") },
+		"form":     func(a *App) { a.openConnForm() },
+		"sessions": func(a *App) { a.run("session.list", 0) },
+		"cols":     func(a *App) { a.run("grid.cols", 0) },
+	} {
+		a := configured(t, 100, 24, "[keys]\nleader = \"<C-a>\"") // the two boxes overlap
+		loadOrders(t, a, 5)
+		open(a)
+		feed(t, a, "<C-a>?")
+		if a.keyHelp == nil || a.topOverlay() != "keyhelp" {
+			t.Errorf("%s: top %q", name, a.topOverlay())
+			continue
+		}
+		f := a.render()
+		if got := a.keyHelpView().Prefix; got == "" || !strings.Contains(f.String(), got) {
+			t.Errorf("%s: the title is %q", name, got)
+		}
+		if f.Cursor != nil {
+			t.Errorf("%s: the terminal cursor is at %v, under the help", name, *f.Cursor)
+		}
+		if feed(t, a, "xyz"); a.palette != nil && a.palette.input.Text != "" {
+			t.Errorf("%s: typed into the palette under it: %q", name, a.palette.input.Text)
+		}
 	}
-	if got := a.render().String(); !strings.Contains(got, "[keys.palette]") || !strings.Contains(got, "C-p   → 上移") {
-		t.Errorf("the help is under the palette:\n%s", got)
+}
+
+// A question over the value editor has the keys, and no cursor is left in the
+// text under it (F13.14).
+func TestNoCursorUnderAQuestion(t *testing.T) {
+	a, _ := valueTab(t)
+	if a.render().Cursor == nil {
+		t.Fatal("the value editor has no cursor")
+	}
+	feed(t, a, "ix")
+	a.valueClose(false)
+	if a.confirm == nil {
+		t.Fatal("no question")
+	}
+	if f := a.render(); f.Cursor != nil {
+		t.Errorf("the cursor is at %v, under the question", *f.Cursor)
 	}
 }
