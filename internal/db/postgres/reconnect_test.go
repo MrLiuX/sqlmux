@@ -24,12 +24,15 @@ func redialing(t *testing.T, dsn string, readOnly bool) (w *db.Worker, events *[
 // again: a proxy that is cut, then the database itself.
 func redialingTo(t *testing.T, dsn, again string, readOnly bool) (w *db.Worker, events *[]db.Event) {
 	t.Helper()
-	c, err := Connect(context.Background(), dsn, "", readOnly)
+	c, _, err := Connect(context.Background(), dsn, "", readOnly)
 	if err != nil {
 		t.Fatal(err)
 	}
 	w, events = db.NewWorker(c), new([]db.Event)
-	w.Redial = func(ctx context.Context) (db.Conn, error) { return Connect(ctx, again, "", readOnly) }
+	w.Redial = func(ctx context.Context) (db.Conn, error) {
+		c, _, err := Connect(ctx, again, "", readOnly)
+		return c, err
+	}
 	w.Broken = pg.Broken
 	w.Notify = func(e db.Event) { *events = append(*events, e) }
 	t.Cleanup(func() { w.Close() })
@@ -257,7 +260,7 @@ func TestBrokenSamples(t *testing.T) {
 	// the proxy cut idle: nothing from the server, the write may have gone out or not
 	for _, rst := range []bool{true, false} {
 		p, via := proxied(t, IntegrationDSN(t))
-		c, err := Connect(ctx, via, "", false)
+		c, _, err := Connect(ctx, via, "", false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -363,7 +366,7 @@ func TestReconnectIdleCutWrite(t *testing.T) {
 func TestReconnectLostAnswerIsNotRunAgain(t *testing.T) {
 	ctx := context.Background()
 	dsn := OwnDB(t)
-	own, err := Connect(ctx, dsn, "", false) // the test's own database, not through the proxy
+	own, _, err := Connect(ctx, dsn, "", false) // the test's own database, not through the proxy
 	if err != nil {
 		t.Fatal(err)
 	}

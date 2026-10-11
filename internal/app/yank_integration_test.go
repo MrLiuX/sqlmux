@@ -67,7 +67,7 @@ func yiRoundTrip(t *testing.T, c db.Conn, eng db.Engine, schema string, setup []
 }
 
 func TestYankInsertRoundTripPG(t *testing.T) {
-	c, err := postgres.Connect(context.Background(), postgres.OwnDB(t), "", false)
+	c, _, err := postgres.Connect(context.Background(), postgres.OwnDB(t), "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

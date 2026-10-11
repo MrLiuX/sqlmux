@@ -43,7 +43,7 @@ func commitLost(t *testing.T, at string, f func(ctx context.Context, w *db.Worke
 	t.Helper()
 	ctx := context.Background()
 	dsn := OwnDB(t)
-	own, err := Connect(ctx, dsn, "", false)
+	own, _, err := Connect(ctx, dsn, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,12 +57,12 @@ func commitLost(t *testing.T, at string, f func(ctx context.Context, w *db.Worke
 		}
 	}
 	p, via := proxied(t, dsn)
-	c, err := Connect(ctx, via, "", false)
+	c, _, err := Connect(ctx, via, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	w := db.NewWorker(holdAt{c, p, at})
-	w.Redial = func(ctx context.Context) (db.Conn, error) { return Connect(ctx, dsn, "", false) }
+	w.Redial = func(ctx context.Context) (db.Conn, error) { c, _, err := Connect(ctx, dsn, "", false); return c, err }
 	w.Broken = Engine{}.Broken
 	defer w.Close()
 	done := make(chan error, 1)

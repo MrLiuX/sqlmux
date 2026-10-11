@@ -56,7 +56,7 @@ func TestFilterCellOnServer(t *testing.T) {
 	}
 	if dsn, ok := dsns["postgres"]; ok {
 		t.Run("postgres", func(t *testing.T) {
-			c, err := postgres.Connect(ctx, dsn, "", false)
+			c, _, err := postgres.Connect(ctx, dsn, "", false)
 			if err != nil {
 				t.Fatal(err)
 			}

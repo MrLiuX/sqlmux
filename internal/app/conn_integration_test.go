@@ -417,7 +417,7 @@ func manualTxTable(t *testing.T, eng, _ string) {
 // backends is how many connections named app the server has.
 func backends(t *testing.T, app string) int {
 	t.Helper()
-	c, err := postgres.Connect(context.Background(), postgres.IntegrationDSN(t), "", true)
+	c, _, err := postgres.Connect(context.Background(), postgres.IntegrationDSN(t), "", true)
 	if err != nil {
 		t.Fatal(err)
 	}
