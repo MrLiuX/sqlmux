@@ -727,3 +727,15 @@ func TestParseKeysErrors(t *testing.T) {
 		}
 	}
 }
+
+// LeaderHint is the key that starts with the leader, where Hint is the first
+// key: the ? help is opened by <Leader>? where a pane has no keys (§6.5).
+func TestLeaderHint(t *testing.T) {
+	m := mustLoad(t, "[keys]\nleader = \"<C-a>\"")
+	if got, first := m.LeaderHint("keyhelp.open", "normal"), m.Hint("keyhelp.open", "normal"); got != "C-a ?" || first != "?" {
+		t.Errorf("leader's %q, first %q", got, first)
+	}
+	if got := m.LeaderHint("grid.edit", "grid"); got != "" {
+		t.Errorf("no key with the leader: %q", got)
+	}
+}

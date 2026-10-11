@@ -155,6 +155,7 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 		v.Draw(f, box, rows)
 	}
 	if a.cols != nil {
+		f.Cursor = nil // what is under has not the keys: its own, if it has one, is set below
 		d := a.colsView()
 		box, rows := a.colsBox(d)
 		if c := d.Draw(f, box, rows); c.X >= 0 {
@@ -162,6 +163,7 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 		}
 	}
 	if a.drop != nil {
+		f.Cursor = nil // what is under has not the keys: its own, if it has one, is set below
 		d := a.dropView()
 		box, rows := a.dropBox(d, f.Hits) // this frame's: the panes are drawn
 		if c := d.Draw(f, box, rows); c.X >= 0 {
@@ -169,11 +171,13 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 		}
 	}
 	if a.sessList != nil {
+		f.Cursor = nil // what is under has not the keys: its own, if it has one, is set below
 		if c := a.sessionsView().Draw(f, a.window()); c.X >= 0 {
 			f.Cursor = &c
 		}
 	}
 	if a.form != nil {
+		f.Cursor = nil
 		v := a.managerView()
 		if c := v.Draw(f, a.window()); c.X >= 0 {
 			f.Cursor = &c
@@ -198,15 +202,19 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 		f.Cursor = nil // the input under it has not the keys
 	}
 	if a.whichKey { // over the help too: a Ctrl leader's keys there (§6.5)
+		f.Cursor = nil
 		a.whichKeyOverlay().Draw(f, a.overlayArea())
 	}
 	if a.ddl != nil {
+		f.Cursor = nil // what is under has not the keys: its own, if it has one, is set below
 		a.drawDDL(f)
 	}
 	if a.value != nil {
+		f.Cursor = nil
 		a.drawValue(f)
 	}
 	if a.menu != nil {
+		f.Cursor = nil // what is under has not the keys: its own, if it has one, is set below
 		a.drawMenu(f)
 	}
 	if c := a.confirm; c != nil {

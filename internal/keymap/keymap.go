@@ -279,6 +279,17 @@ func (m *Map) Hint(action, scope string) string {
 	return first
 }
 
+// LeaderHint is Hint of the first key that starts with the leader: the one
+// typed where no pane has the keys, in an overlay, with a Ctrl leader (§6.4).
+func (m *Map) LeaderHint(action, scope string) string {
+	for _, b := range m.tables["keys."+scope] {
+		if b.Action == action && len(b.Keys) > 0 && b.Keys[0] == Leader {
+			return Display(m.expand(b.Keys))
+		}
+	}
+	return ""
+}
+
 // Actions lists every bound action ID, args stripped, once each: app's
 // tests check it against the registry's titles.
 func (m *Map) Actions() []string {

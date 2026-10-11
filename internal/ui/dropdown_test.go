@@ -53,3 +53,31 @@ func TestListRowCut(t *testing.T) {
 		}
 	}
 }
+
+// A name and its note fit exactly when they and one blank take what the row has
+// inside: then all three are there, a column fewer and the note is left out
+// (F13.9).
+func TestListTextEdge(t *testing.T) {
+	row := func(f *Frame, y int) string { return strings.Split(f.String(), "\n")[y] }
+	for what, draw := range map[string]func(f *Frame, w int) int{
+		"dropdown": func(f *Frame, w int) int {
+			Dropdown{Items: []string{"id"}, Pos: [][]int{nil}, Notes: []string{"bigint"}, Mark: -1}.Draw(f, uv.Rect(0, 0, w, 5), 1)
+			return 3
+		},
+		"complete": func(f *Frame, w int) int {
+			Complete{Items: []CompleteItem{{Text: "id", Note: "bigint"}}, Sel: -1}.Draw(f, uv.Rect(0, 0, w, 3), 1)
+			return 1
+		},
+	} {
+		f := NewFrame(30, 6, TokyonightStorm)
+		y := draw(f, 13) // id, a blank, bigint: 9 of the 9 the row has
+		if r := row(f, y); !strings.Contains(r, "id bigint") {
+			t.Errorf("%s: it fits exactly: %q", what, r)
+		}
+		f = NewFrame(30, 6, TokyonightStorm)
+		draw(f, 12)
+		if r := row(f, y); !strings.Contains(r, "id") || strings.Contains(r, "bigint") {
+			t.Errorf("%s: a column short: %q", what, r)
+		}
+	}
+}

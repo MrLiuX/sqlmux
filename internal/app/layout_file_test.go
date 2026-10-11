@@ -737,6 +737,10 @@ table = "items"
 		{"capital", `{split = "H", a = {pane = 1}, b = {pane = 2}}`, 2, 1, Horiz},
 		{"twice", `{split = "x", a = {split = "x", a = {pane = 1}, b = {pane = 3}}, b = {pane = 2}}`, 3, 1, Horiz},
 		{"leaf", `{split = "h", a = {split = "H", pane = 1}, b = {pane = 2}}`, 2, 0, Horiz},
+		{"only a", `{a = {pane = 2}}`, 1, 0, Horiz},
+		{"only b", `{split = "v", b = {pane = 2}}`, 1, 0, Horiz},
+		{"deep half", `{split = "v", a = {pane = 1}, b = {a = {pane = 2}}}`, 2, 0, Vert},
+		{"spaced", `{split = " h ", a = {pane = 1}, b = {pane = 2}}`, 2, 1, Horiz},
 	} {
 		p := filepath.Join(t.TempDir(), "a.toml")
 		if err := os.WriteFile(p, []byte(body(c.layout)), 0o600); err != nil {
@@ -758,7 +762,10 @@ table = "items"
 				said++
 			}
 		}
-		if len(w.Root.Leaves()) != c.panes || tabs != c.panes || said != c.warns || w.Root.Split != c.dir {
+		if c.name == "spaced" && !slices.ContainsFunc(r.Warnings, func(s string) bool { return strings.Contains(s, `" h "`) }) {
+			t.Errorf("the warning does not show the spaces: %q", r.Warnings)
+		}
+		if len(w.Root.Leaves()) != c.panes || tabs != c.panes || said != c.warns || c.panes > 1 && w.Root.Split != c.dir {
 			t.Errorf("%s: %d panes with %d tabs, %d said (%q), split %v", c.name, len(w.Root.Leaves()), tabs, said, r.Warnings, w.Root.Split)
 		}
 	}

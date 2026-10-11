@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf16"
 
 	"github.com/dop251/goja"
 )
@@ -31,7 +32,6 @@ var formatter struct {
 	vm     *goja.Runtime
 	format goja.Callable
 	err    error
-	calls  int // how many times it was asked, which a test counts
 }
 
 // Options are what sql-formatter is told besides the language.
@@ -73,7 +73,6 @@ func format(sql string, d Dialect, o Options, deadline time.Time) (string, error
 	if left <= 0 {
 		return "", ErrTimeout
 	}
-	f.calls++
 	vm, fired := f.vm, make(chan struct{})
 	timer := time.AfterFunc(left, func() { vm.Interrupt(ErrTimeout); close(fired) })
 	v, err := f.format(goja.Undefined(), vm.ToValue(sql), opts)
@@ -103,10 +102,8 @@ func format(sql string, d Dialect, o Options, deadline time.Time) (string, error
 // text (4 KB of statements take 4 s at once, 7 KB time out, and one by one
 // 48 of them take 1.4 s). Each runs from after the ; before it to its own, so
 // the comments above it go to sql-formatter with it, and the output is what
-// one call lays out of all of them. One statement, a text the split has no
-// account of (an empty statement, a gap that is not blanks, comments and one
-// ;) and MySQL's /*! … */, which may hold a ; of its own, go in one call
-// (§9.5).
+// one call lays out of all of them. One statement, and MySQL's /*! … */, which
+// may hold a ; of its own, go in one call (§9.5).
 func FormatAll(s string, d Dialect, o Options) (string, error) {
 	deadline := time.Now().Add(FormatTimeout)
 	stmts := Statements(s, d)
@@ -118,15 +115,12 @@ func FormatAll(s string, d Dialect, o Options) (string, error) {
 	for i, st := range stmts {
 		cut := len(s)
 		if i+1 < len(stmts) {
-			var ok bool
-			if cut, ok = semicolonAfter(s, st.End, stmts[i+1].Start, d); !ok {
-				return format(s, d, o, deadline)
-			}
+			cut = semicolonAfter(s, st.End, stmts[i+1].Start, d)
 		}
 		out, err := format(s[from:cut], d, o, deadline)
 		if err != nil {
-			if !errors.Is(err, ErrTimeout) { // where it is in the text, not in the unit
-				if _, here := format(positioned(s, from)+s[from:cut], d, o, deadline); here != nil {
+			if from > 0 && !errors.Is(err, ErrTimeout) { // where it is in the text, not in the unit
+				if _, here := format(positioned(s, from)+s[from:cut], d, o, deadline); here != nil && !errors.Is(here, ErrTimeout) {
 					err = here
 				}
 			}
@@ -137,28 +131,24 @@ func FormatAll(s string, d Dialect, o Options) (string, error) {
 	return strings.Join(units, "\n\n"), nil
 }
 
-// semicolonAfter is where the ; that ends the statement before s[to:] is, past
-// s[from:to] that holds blanks, comments and that one; ok is false for any
-// other gap.
-func semicolonAfter(s string, from, to int, d Dialect) (end int, ok bool) {
-	gap, semi := s[from:to], -1
+// semicolonAfter is where the first ; of s[from:to], the gap between two
+// statements, ends: the one that ends the statement before it. Comments before
+// it, and any more ;s, go with the next unit.
+func semicolonAfter(s string, from, to int, d Dialect) int {
+	gap := s[from:to]
 	for _, t := range Scan(gap, d) {
-		switch {
-		case t.Kind == Space, t.Kind == Comment:
-		case t.Kind == Punct && gap[t.Start] == ';' && semi < 0:
-			semi = t.End
-		default:
-			return 0, false
+		if t.Kind == Punct && gap[t.Start] == ';' {
+			return from + t.End
 		}
 	}
-	return from + semi, semi >= 0
+	return to // Statements cuts at a ;, so there is one
 }
 
 // positioned is the blank text that puts what follows s[:at] where it is in s:
-// its lines, and the columns of the last.
+// its lines, and the columns of the last, counted as JavaScript does.
 func positioned(s string, at int) string {
 	line := s[strings.LastIndexByte(s[:at], '\n')+1 : at]
-	return strings.Repeat("\n", strings.Count(s[:at], "\n")) + strings.Repeat(" ", len([]rune(line)))
+	return strings.Repeat("\n", strings.Count(s[:at], "\n")) + strings.Repeat(" ", len(utf16.Encode([]rune(line))))
 }
 
 func load() (*goja.Runtime, goja.Callable, error) {

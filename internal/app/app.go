@@ -482,13 +482,13 @@ func (a *App) click(p uv.Position) tea.Cmd {
 			return a.acceptCompletion()
 		case a.palette != nil:
 			return a.paletteRun(t.I, false)
-		case a.sessList != nil: // a row: there, then ↵ (§7.8)
-			a.sessionsAttach(t.I)
 		case a.form != nil && t.Action == "form.pick": // a group of the list (F10.6)
 			a.form.groupSel = t.I
 			a.groupAccept()
-		case a.form != nil:
+		case a.form != nil: // over the session list, as it has the keys (§6.4)
 			a.formClick(t.I)
+		case a.sessList != nil: // a row: there, then ↵ (§7.8)
+			a.sessionsAttach(t.I)
 		case tab != nil && tab.hist != nil:
 			es, _ := a.histEntries(tab)
 			return a.histApply(tab, histRow(es, t.I))

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/dop251/goja"
 )
 
 // Each long Unicode name is there as often as it was: a new bundle that
@@ -127,6 +128,8 @@ func TestFormatAllIsFormat(t *testing.T) {
 		{PG, "create function f() returns int begin atomic select 1; select 2; end; select 3;"},
 		{PG, "select 1; select 2 -- tail no semi"},
 		{PG, "select 1"},
+		{PG, ";select 1; select 2"},
+		{PG, "select 1; select 2; ;"},
 		{MySQL, "/*!40101 SET a=1; SET b=2 */;\nselect 1;"},
 		{MySQL, "select 1; # c\nselect 2;"},
 	} {
@@ -141,23 +144,48 @@ func TestFormatAllIsFormat(t *testing.T) {
 	}
 }
 
-// Several statements are a call each, and the lot has the one FormatTimeout: a
-// text of twelve takes twelve calls, and past the time given all of them, the
-// time of one call each would not tell (F13.19).
+// wrapFormat has f make the formatter's calls, orig being the real one: to
+// count them, or to take the time a call would (F13.19).
+func wrapFormat(t *testing.T, f func(orig goja.Callable, this goja.Value, args ...goja.Value) (goja.Value, error)) {
+	t.Helper()
+	if _, err := Format("select 1", PG, Options{KeywordCase: "upper", TabWidth: 2}); err != nil { // the VM is made
+		t.Fatal(err)
+	}
+	formatter.Lock()
+	orig := formatter.format
+	formatter.format = func(this goja.Value, args ...goja.Value) (goja.Value, error) { return f(orig, this, args...) }
+	formatter.Unlock()
+	t.Cleanup(func() {
+		formatter.Lock()
+		formatter.format = orig
+		formatter.Unlock()
+	})
+}
+
+// Several statements are a call each, twelve for twelve, and the lot has the
+// one FormatTimeout: once it has passed no call is made, whatever the one
+// before took (F13.19).
 func TestFormatAllIsOneCallEachUnderOneDeadline(t *testing.T) {
 	slowFormat(t)
 	o := Options{KeywordCase: "upper", TabWidth: 2}
-	s := strings.Repeat("select a.id, b.name, count(*) from orders a join users b on a.uid = b.id where a.ts > now() - interval '1 day' group by 1, 2 having count(*) > 3;\n", 12)
-	before := formatter.calls
-	if _, err := FormatAll(s, PG, o); err != nil {
-		t.Fatal(err)
+	s := strings.Repeat("select a.id, b.name from orders a join users b on a.uid = b.id;\n", 12)
+	calls := 0
+	wrapFormat(t, func(orig goja.Callable, this goja.Value, args ...goja.Value) (goja.Value, error) {
+		calls++
+		return orig(this, args...)
+	})
+	if _, err := FormatAll(s, PG, o); err != nil || calls != 12 {
+		t.Fatalf("%d calls for 12 statements: %v", calls, err)
 	}
-	if got := formatter.calls - before; got != 12 {
-		t.Errorf("%d calls for 12 statements", got)
-	}
-	FormatTimeout = 100 * time.Millisecond // each takes about 30 ms: the sum is over it
-	if _, err := FormatAll(s, PG, o); !errors.Is(err, ErrTimeout) {
-		t.Errorf("past the one deadline: %v", err)
+	FormatTimeout = 50 * time.Millisecond
+	wrapFormat(t, func(_ goja.Callable, _ goja.Value, _ ...goja.Value) (goja.Value, error) {
+		calls++
+		time.Sleep(100 * time.Millisecond) // the first takes the time there is
+		return goja.Undefined(), nil
+	})
+	calls = 0
+	if _, err := FormatAll(s, PG, o); !errors.Is(err, ErrTimeout) || calls != 1 {
+		t.Errorf("past the one deadline: %d calls, %v", calls, err)
 	}
 }
 
@@ -166,7 +194,7 @@ func TestFormatAllIsOneCallEachUnderOneDeadline(t *testing.T) {
 func TestFormatAllErrorPosition(t *testing.T) {
 	slowFormat(t)
 	o := Options{KeywordCase: "upper", TabWidth: 2}
-	for _, s := range []string{"select 1;\nselect 2;\nselect 'a", "select 1; select 2; select 3 'x"} {
+	for _, s := range []string{"select 1;\nselect 2;\nselect 'a", "select 1; select 2; select 3 'x", "select '😀'; select 'x"} {
 		_, want := Format(s, PG, o)
 		_, got := FormatAll(s, PG, o)
 		if want == nil || got == nil || got.Error() != want.Error() {

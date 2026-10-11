@@ -195,7 +195,7 @@ func TestKeyHelpOverOverlays(t *testing.T) {
 			continue
 		}
 		f := a.render()
-		if got := a.keyHelpView().Prefix; got == "" || !strings.Contains(f.String(), got) {
+		if got := a.keyHelpView().Prefix; got != "C-a ?" || !strings.Contains(f.String(), got) { // the key that opens it there
 			t.Errorf("%s: the title is %q", name, got)
 		}
 		if f.Cursor != nil {

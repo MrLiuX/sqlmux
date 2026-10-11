@@ -14,6 +14,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // overlayFields are the App fields of the overlays topOverlay names.
@@ -298,5 +299,84 @@ func TestListsHoldTheirTop(t *testing.T) {
 	}
 	if tops[11] == 0 || tops[12] != tops[11] || tops[13] != tops[11] || tops[14] != tops[11] {
 		t.Errorf("the options' top: %v", tops)
+	}
+}
+
+// The terminal cursor is the top overlay's, whatever lies under it: an input
+// open under another overlay leaves none, and what is on top shows its own
+// (F13.7).
+func TestCursorIsTheTopOverlays(t *testing.T) {
+	for name, c := range map[string]struct {
+		under, over func(a *App)
+	}{
+		"rename of a session, the manager over it": {
+			func(a *App) { a.run("session.list", 0); feed(t, a, "$") },
+			func(a *App) { a.openConnManager() },
+		},
+		"the filter of COLS, the sessions over it": {
+			func(a *App) { a.run("grid.cols", 0); feed(t, a, "/") },
+			func(a *App) { a.run("session.list", 0) },
+		},
+		"the filter of ORDER, the column's DDL over it": {
+			func(a *App) { a.run("grid.order", 0); feed(t, a, "/") },
+			func(a *App) { a.run("grid.ddl.table", 0) },
+		},
+		"the form, the DDL over it": {
+			func(a *App) { a.openConnForm() },
+			func(a *App) { a.run("grid.ddl.table", 0) },
+		},
+	} {
+		a, _, _ := withRecorder(t)
+		c.under(a)
+		if a.render().Cursor == nil {
+			t.Logf("%s: the lower one shows no cursor of its own, nothing to leak", name)
+		}
+		c.over(a)
+		if got := a.render().Cursor; got != nil && a.topOverlay() != "form" && a.topOverlay() != "dropdown" {
+			t.Errorf("%s: top %q, the cursor at %v is the one under it", name, a.topOverlay(), *got)
+		}
+	}
+}
+
+// Clicking a row of the form that is over the session list is the form's, not
+// the list's: it does not switch the session under it (§6.4, F13.7).
+func TestClickOnTheFormOverSessions(t *testing.T) {
+	a, _, _ := withRecorder(t)
+	c := a.sess.Conns[0]
+	a.sessions = append(a.sessions, newSession("report", []*Conn{c}, c, a.freeQuery()))
+	sess := a.sess
+	a.run("session.list", 0)
+	a.openConnForm()
+	a.View()
+	if a.topOverlay() != "form" {
+		t.Fatalf("top %q", a.topOverlay())
+	}
+	var hit *ui.Hit
+	for _, h := range a.hits {
+		if h.Target.Kind == ui.KindRow && h.Target.I == 1 && h.Target.Action == "" {
+			hh := h
+			hit = &hh
+		}
+	}
+	if hit == nil {
+		t.Fatal("no row 1 of the form")
+	}
+	click(a, hit.Rect.Min)
+	if a.sess != sess || a.form == nil || a.form.sel != 1 {
+		t.Errorf("the click went to the session list under the form: session %q, form open %v", a.sess.Name, a.form != nil)
+	}
+}
+
+// The rename's input has its place among the overlays: over a dropdown, under
+// the session list (F13.7).
+func TestRenamePlaceAmongOverlays(t *testing.T) {
+	a := &App{}
+	a.drop, a.askName = &dropdown{}, &nameAsk{}
+	if got := a.topOverlay(); got != "rename" {
+		t.Errorf("a name asked over a dropdown: %q", got)
+	}
+	a.sessList = &sessionList{}
+	if got := a.topOverlay(); got != "sessions" {
+		t.Errorf("the session list over a name asked: %q", got)
 	}
 }
