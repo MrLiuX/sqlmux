@@ -752,14 +752,14 @@ func (a *App) typeInto(k keymap.Key) tea.Cmd {
 
 // mode is derived from state, never stored (§3 principle 3).
 func (a *App) mode() keymap.Mode {
+	if a.jump != nil { // a pattern typed, a letter jumps (F10.8)
+		return keymap.Insert
+	}
+	if ov := a.topOverlay(); ov != "" { // an overlay has the keys (§7.8); the value editor's mode is its editor's (F12.2)
+		return a.overlayContext(ov).Mode
+	}
 	switch t, ed := a.typingTab(), a.vim(); {
-	case a.valueActive(): // its editor's, a table's cell under it not typing (F12.2)
-		return vimMode(a.value.ed.Mode())
-	case a.form != nil && !a.form.list, a.winRename != nil, a.askName != nil, a.sessList != nil && a.sessList.rename != nil: // inputs with the keys over the panes (§7.8)
-		return keymap.Insert
-	case a.jump != nil: // a pattern typed, a letter jumps (F10.8)
-		return keymap.Insert
-	case a.overlaid(), t != nil && t.hist != nil: // an overlay has the keys (§7.8)
+	case t != nil && t.hist != nil:
 		return keymap.Command
 	case ed != nil: // a query's vim, or a WHERE's (F3.39)
 		return vimMode(ed.Mode())

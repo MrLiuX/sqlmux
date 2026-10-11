@@ -632,10 +632,8 @@ func title(action string) string {
 // run executes "id [arg]" from the registry.
 func (a *App) run(action string, count int) tea.Cmd {
 	id, arg, _ := strings.Cut(action, " ")
-	if a.valueActive() && !strings.HasPrefix(id, "value.") && id != "cancel" { // what it has no key for is no one's (F12.2)
-		return nil
-	}
-	if a.menu != nil && !strings.HasPrefix(id, "menu.") && id != "cancel" || a.ddl != nil && !strings.HasPrefix(id, "ddl.") && id != "cancel" { // what it has no key for is no one's: cancel is esc, which closes it (F8.23, F9.8)
+	// what a box that takes only its own keys has no key for is no one's: cancel is esc, which closes it (F8.23, F9.8, F12.2, §6.4)
+	if ov := a.topOverlay(); (ov == "value" || ov == "menu" || ov == "ddl" || ov == "confirm") && !strings.HasPrefix(id, ov+".") && id != "cancel" {
 		return nil
 	}
 	if !strings.HasPrefix(id, "cell.") && id != "cancel" && !a.endEdit() { // cancel is esc here, which ends it itself

@@ -74,6 +74,9 @@ func TestInView(t *testing.T) {
 	if sel, top := ListView(30, 12, 20, 8); sel != 19 || top != 12 {
 		t.Errorf("ListView past the end: %d, %d", sel, top)
 	}
+	if sel, top := ListView(19, 15, 20, 8); sel != 19 || top != 12 { // the top is kept in the list: no blank rows at the foot
+		t.Errorf("ListView at the end: %d, %d", sel, top)
+	}
 	if sel, top := ListView(2, 15, 20, 8); sel != 2 || top != 2 {
 		t.Errorf("ListView: %d, %d", sel, top)
 	}

@@ -411,7 +411,7 @@ var en = map[string]string{
 	"%s: version = %d，只认识 %d":        "%s: version = %d, only %d is known",
 	"%s: 里面没有 [[session]]":           "%s: no [[session]] in it",
 	"last 是保留名，指上次退出时的布局":            "last is reserved: it is the layout of the last quit",
-	"不认识的 split %s，按 h":              "unknown split %s, read as h",
+	"不认识的 split %q，按 h":              "Unknown split %q, read as h",
 	"不认识的 tab":                       "Not a kind of tab",
 	"名字不能含 / 或 \\，也不能以 . 开头":         "A name has no / or \\, and no . at the start",
 	"已保存布局 %s":                       "Saved layout %s",
@@ -480,7 +480,7 @@ var en = map[string]string{
 
 	// F13.1, F13.2
 	"文件在别处改过，没有保存；再保存一次会覆盖它": "The file was changed elsewhere and not saved; save again to overwrite it",
-	"连接断开，提交结果未知：刷新后核对":      "Connection lost, commit result unknown: refresh and check",
+	"%s：连接断开，提交结果未知：已刷新，请核对": "%s: connection lost, the commit may have taken: refreshed, please check",
 
 	// F12.5
 	"测试":               "Test",

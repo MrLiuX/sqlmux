@@ -169,11 +169,16 @@ func restoreWindow(s *Session, lw config.LayoutWindow, used map[string]bool) (*W
 		if n == nil {
 			return nil
 		}
-		if n.Split != "" {
-			split := n.Split
-			if split != "h" && split != "v" { // said, and read as h: the panes and their tabs are not dropped for a slip
-				warns = append(warns, i18n.T("不认识的 split %s，按 h", n.Split))
-				split = "h"
+		if n.A != nil || n.B != nil { // two halves make a split; a leaf that has a split written too is still a leaf (§14)
+			dir := Horiz // none written: h
+			switch n.Split {
+			case "", "h":
+			case "v":
+				dir = Vert
+			default: // said once, and read as h: the panes and their tabs are not dropped for a slip
+				if warn := i18n.T("不认识的 split %q，按 h", n.Split); !slices.Contains(warns, warn) {
+					warns = append(warns, warn)
+				}
 			}
 			a, b := build(n.A), build(n.B)
 			switch {
@@ -186,7 +191,7 @@ func restoreWindow(s *Session, lw config.LayoutWindow, used map[string]bool) (*W
 			if ratio <= 0 || ratio >= 1 {
 				ratio = 0.5
 			}
-			return &Node{Split: map[string]Dir{"h": Horiz, "v": Vert}[split], Ratio: ratio, A: a, B: b}
+			return &Node{Split: dir, Ratio: ratio, A: a, B: b}
 		}
 		if n.Pane <= 0 || panes[n.Pane] != nil {
 			return nil

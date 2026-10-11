@@ -131,9 +131,8 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 	if a.jump != nil {
 		a.drawJump(f)
 	}
-	// The overlays are drawn from the bottom up, topOverlay's order reversed as
-	// far as they can be open together: the help, which has the keys over the
-	// palette, is drawn after it (F13.14).
+	// The overlays are drawn from the bottom up, topOverlay's order reversed (the
+	// rename's input is on the status bar): the one that has the keys is on top.
 	if t := a.typingTab(); t != nil { // the WHERE's lists (§9.7), a cell's options (§10.2)
 		switch p := a.focused(); {
 		case t.cell != nil:
@@ -155,25 +154,16 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 		v, box, rows := a.completeView(t.comp, at)
 		v.Draw(f, box, rows)
 	}
-	if a.drop != nil {
-		d := a.dropView()
-		box, rows := a.dropBox(d, f.Hits) // this frame's: the panes are drawn
+	if a.cols != nil {
+		d := a.colsView()
+		box, rows := a.colsBox(d)
 		if c := d.Draw(f, box, rows); c.X >= 0 {
 			f.Cursor = &c
 		}
 	}
-	if a.menu != nil {
-		a.drawMenu(f)
-	}
-	if a.ddl != nil {
-		a.drawDDL(f)
-	}
-	if a.value != nil {
-		a.drawValue(f)
-	}
-	if a.cols != nil {
-		d := a.colsView()
-		box, rows := a.colsBox(d)
+	if a.drop != nil {
+		d := a.dropView()
+		box, rows := a.dropBox(d, f.Hits) // this frame's: the panes are drawn
 		if c := d.Draw(f, box, rows); c.X >= 0 {
 			f.Cursor = &c
 		}
@@ -208,6 +198,15 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 	}
 	if a.whichKey { // over the help too: a Ctrl leader's keys there (§6.5)
 		a.whichKeyOverlay().Draw(f, a.overlayArea())
+	}
+	if a.ddl != nil {
+		a.drawDDL(f)
+	}
+	if a.value != nil {
+		a.drawValue(f)
+	}
+	if a.menu != nil {
+		a.drawMenu(f)
 	}
 	if c := a.confirm; c != nil {
 		cf := ui.Confirm{Text: c.text, Danger: c.danger, YesKey: a.keys.Hint("confirm.yes", "confirm"), Yes: c.yes}

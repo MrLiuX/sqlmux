@@ -247,17 +247,17 @@ func (f *Frame) RenderReusing(last *Rendered) string {
 func (f *Frame) String() string { return f.Buf.String() }
 
 // listText draws a list row's text from x on row y, the match positions pos
-// lit in st, and its note ending at noteRight in noteSt: the text is cut with
-// … to leave the note a blank, the note starts no further left than x, and a
-// row with no note has its text to noteRight (F13.9).
+// lit in st, and its note ending at noteRight in noteSt: the name goes first,
+// the note is left out unless it fits with the name whole, and a name too long
+// ends in … (F13.9, as the tree's rows, §7.8).
 func listText(f *Frame, x, y, noteRight int, text string, pos []int, note string, st, noteSt uv.Style) {
-	nx, end := max(noteRight-Width(note), x), noteRight
-	if note != "" {
-		end = nx - 1
+	end := noteRight
+	if w := Width(note); note != "" && Width(text)+1+w <= noteRight-x {
+		f.Text(noteRight-w, y, noteRight, note, noteSt)
+		end = noteRight - w - 1
 	}
 	name, inName := TruncateMatch(text, pos, end-x)
 	f.TextMatch(x, y, end, name, inName, st)
-	f.Text(nx, y, noteRight, note, noteSt)
 }
 
 // InView is the first row a list shows with selection sel in view and rows

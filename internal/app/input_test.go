@@ -26,4 +26,21 @@ func TestEditInputBackspaceKeys(t *testing.T) {
 	if b.cols == nil || b.cols.filter.Text != "a" {
 		t.Errorf("the COLS filter: %+v", b.cols)
 	}
+	// the quick SQL's pairs: an empty pair goes whole, as with <BS>
+	for _, k := range []string{"<BS>", "<C-h>"} {
+		q := sized(160, 45, "nerd")
+		feed(t, q, "<C-p>;select ("+k)
+		if got := q.palette.input.Text; got != ";select " {
+			t.Errorf("%s in an empty pair of the quick SQL: %q", k, got)
+		}
+	}
+	// the jump's pattern
+	j := wide(160, 45)
+	loadOrders(t, j, 5)
+	feed(t, j, "s")
+	j.jump.pattern = "ab"
+	feed(t, j, "<C-h>")
+	if j.jump == nil || j.jump.pattern != "a" {
+		t.Errorf("C-h in the jump's pattern: %+v", j.jump)
+	}
 }

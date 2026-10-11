@@ -723,7 +723,7 @@ func (a *App) editPaired(in *ui.Input, k keymap.Key) bool {
 	t := keymap.Text(k)
 	switch r, n := utf8.DecodeRuneInString(t); {
 	case !a.autoPairs:
-	case k == "<BS>" && editor.EmptyPair(before, after):
+	case (k == "<BS>" || k == "<C-h>") && editor.EmptyPair(before, after):
 		in.Text, in.Pos = before[:len(before)-1]+after[1:], in.Pos-1
 		return true
 	case n > 0 && n == len(t):

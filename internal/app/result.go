@@ -473,6 +473,9 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 			if slices.Contains(a.queries(), r.from) { // closed, the log has it alone
 				r.from.bar = newErrorBar("run", e, "", "", at...)
 			}
+			if errors.Is(m.err, db.ErrCommitUnknown) { // over the connection's "transaction lost", which came first: the commit may have taken
+				cmds = append(cmds, a.showToast(m.err.Error()))
+			}
 			cmds = append(cmds, a.deadlocked(r.conn, m.err))
 		}
 	}

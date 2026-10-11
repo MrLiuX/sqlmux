@@ -696,17 +696,18 @@ func TestRestoreQueryOnStart(t *testing.T) {
 	}
 }
 
-// A split the file spells in a way nothing reads is said, and read as h: the
-// panes and their tabs it holds are not dropped silently (F13.12).
+// Two halves make a split: with none written it is h, with one nothing reads it
+// is said once and read as h, and a leaf that has a split written too is still a
+// leaf; the panes and the tabs they hold are none of them dropped (F13.12, §14).
 func TestLayoutUnknownSplit(t *testing.T) {
-	body := func(split string) string {
+	body := func(layout string) string {
 		return `version = 1
 [[session]]
 name = "s"
 connection = "doraemon"
 [[session.window]]
 name = "w"
-layout = {split = "` + split + `", a = {pane = 1}, b = {pane = 2}}
+layout = ` + layout + `
 [[session.window.pane]]
 id = 1
 [[session.window.pane.tab]]
@@ -717,11 +718,28 @@ id = 2
 [[session.window.pane.tab]]
 kind = "table"
 table = "orders"
+[[session.window.pane]]
+id = 3
+[[session.window.pane.tab]]
+kind = "table"
+table = "items"
 `
 	}
-	for split, warned := range map[string]bool{"h": false, "v": false, "H": true} {
+	for _, c := range []struct {
+		name, layout string
+		panes, warns int
+		dir          Dir
+	}{
+		{"h", `{split = "h", a = {pane = 1}, b = {pane = 2}}`, 2, 0, Horiz},
+		{"v", `{split = "v", a = {pane = 1}, b = {pane = 2}}`, 2, 0, Vert},
+		{"none", `{a = {pane = 1}, b = {pane = 2}}`, 2, 0, Horiz},
+		{"empty", `{split = "", a = {pane = 1}, b = {pane = 2}}`, 2, 0, Horiz},
+		{"capital", `{split = "H", a = {pane = 1}, b = {pane = 2}}`, 2, 1, Horiz},
+		{"twice", `{split = "x", a = {split = "x", a = {pane = 1}, b = {pane = 3}}, b = {pane = 2}}`, 3, 1, Horiz},
+		{"leaf", `{split = "h", a = {split = "H", pane = 1}, b = {pane = 2}}`, 2, 0, Horiz},
+	} {
 		p := filepath.Join(t.TempDir(), "a.toml")
-		if err := os.WriteFile(p, []byte(body(split)), 0o600); err != nil {
+		if err := os.WriteFile(p, []byte(body(c.layout)), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		l, err := config.LoadLayout(p)
@@ -730,15 +748,18 @@ table = "orders"
 		}
 		r := restoredFrom(t, l)
 		w := r.Sessions[0].Windows[0]
-		var tabs []string
+		tabs := 0
 		for _, p := range w.Root.Leaves() {
-			for _, tb := range p.Tabs {
-				tabs = append(tabs, tb.Name)
+			tabs += len(p.Tabs)
+		}
+		said := 0
+		for _, s := range r.Warnings {
+			if strings.Contains(s, "split") {
+				said++
 			}
 		}
-		said := slices.ContainsFunc(r.Warnings, func(s string) bool { return strings.Contains(s, "split") })
-		if len(w.Root.Leaves()) != 2 || said != warned || split == "H" && w.Root.Split != Horiz {
-			t.Errorf("split %q: %d panes, tabs %v, warnings %q", split, len(w.Root.Leaves()), tabs, r.Warnings)
+		if len(w.Root.Leaves()) != c.panes || tabs != c.panes || said != c.warns || w.Root.Split != c.dir {
+			t.Errorf("%s: %d panes with %d tabs, %d said (%q), split %v", c.name, len(w.Root.Leaves()), tabs, said, r.Warnings, w.Root.Split)
 		}
 	}
 }

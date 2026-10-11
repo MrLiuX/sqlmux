@@ -127,10 +127,10 @@ func (a *App) topOverlay() string {
 		return "keyhelp"
 	case a.palette != nil:
 		return "palette"
+	case a.form != nil: // over the session list: the manager opened from it
+		return "form"
 	case a.sessList != nil:
 		return "sessions"
-	case a.form != nil:
-		return "form"
 	case a.winRename != nil, a.askName != nil:
 		return "rename"
 	case a.drop != nil:

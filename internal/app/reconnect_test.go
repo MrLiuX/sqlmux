@@ -150,6 +150,11 @@ func TestQueryEndLost(t *testing.T) {
 		if got := log[strings.LastIndex(log, "\n")+1:]; !strings.HasPrefix(got, "query_1  "+tc.sql+"  "+tc.want) {
 			t.Errorf("%s: %q", tc.sql, got)
 		}
+		// the commit that may have taken is no "transaction lost" in the toast, which the
+		// connection's event, first, said (F13.1)
+		if unknown := errors.Is(tc.fail, errLost) && (tc.sql == "commit" || tc.sql == "end"); unknown != (a.toast == "连接断开，提交结果未知：请先查一下数据") {
+			t.Errorf("%s: toast %q", tc.sql, a.toast)
+		}
 	}
 }
 

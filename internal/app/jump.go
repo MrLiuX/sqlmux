@@ -101,6 +101,10 @@ func (a *App) jumpStart() tea.Cmd {
 // jumps there, any other text goes onto the pattern, the matches read anew.
 func (a *App) jumpKey(k keymap.Key) tea.Cmd {
 	j := a.jump
+	if k == "<C-h>" { // a backspace in every typing, which no default key may be (§7.9)
+		a.jumpBack()
+		return nil
+	}
 	text := keymap.Text(k)
 	if text == "" {
 		return nil

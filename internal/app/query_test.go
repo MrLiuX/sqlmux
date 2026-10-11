@@ -1351,3 +1351,31 @@ func TestQueryFileStampKept(t *testing.T) {
 		t.Errorf("a deleted file, autosaved: %q %v", data, err)
 	}
 }
+
+// An external editor's return takes the file as it is: what an autosave said of
+// a file changed outside is said again when it changes again (F13.2).
+func TestExternalEditorResetsTold(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a := sizedWith(160, 45, config.Default())
+	feed(t, a, "<C-l>")
+	c := queryOf(a.focused())
+	feed(t, a, "iselect 1;<Esc>:w<CR>")
+	if err := os.WriteFile(c.path, []byte("outside\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	feed(t, a, "ox<Esc>")
+	a.Update(autosave{c, c.ver})
+	if !strings.Contains(a.toast, "别处改过") {
+		t.Fatalf("the autosave: %q", a.toast)
+	}
+	a.gotExternal(externalDone{t: c}) // the editor was open: its file is what the tab has now
+	if err := os.WriteFile(c.path, []byte("outside again\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	feed(t, a, "oy<Esc>")
+	a.toast = ""
+	a.Update(autosave{c, c.ver})
+	if !strings.Contains(a.toast, "别处改过") {
+		t.Errorf("said once, then the editor, then changed again: %q", a.toast)
+	}
+}
