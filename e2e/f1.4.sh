@@ -26,8 +26,8 @@ psql_n() { psql "$E2E_DB" -At -c "$1"; }
 sent() { e2e_lock t_order; "$@"; wait_for 5 eval '[[ -n $(e2e_waiting $APP) ]]'; SQL=$(e2e_waiting $APP); e2e_unlock; wait_for 8 settled; sleep 0.3; }
 sql_is() { [[ $SQL == "$1" ]] || { echo "  sent: $SQL"; echo "  want: $1"; false; }; }
 dd() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5 }'; }   # 浮层的 X Y W H
-dd_rows() { local g y; g=($(dd)); for ((y = g[1] + 3; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed 's/ *$//'; done; }
-dd_sel() { local g y; g=($(dd)); for ((y = g[1] + 3; y < g[1] + g[3] - 1; y++)); do style_has $((g[0] + 3)) $y bg=$SELECT >/dev/null && e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed 's/ *$//'; done; }
+dd_rows() { local g y; g=($(dd)); for ((y = g[1] + 3; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed -E 's/ *$//; s/^ +//; s/^[0-9][↑↓] //'; done; }   # F12.1: the ORDER list has a column before the name for 1↑ 2↓
+dd_sel() { local g y; g=($(dd)); for ((y = g[1] + 3; y < g[1] + g[3] - 1; y++)); do style_has $((g[0] + 3)) $y bg=$SELECT >/dev/null && e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed -E 's/ *$//; s/^ +//; s/^[0-9][↑↓] //'; done; }
 chip_x() { e2e_find "$1" 3 | cut -d' ' -f1; }
 
 start -C "$D/own"; open_table t_order

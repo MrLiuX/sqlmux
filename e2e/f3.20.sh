@@ -26,7 +26,7 @@ mark() { T0=$(psql_n "select clock_timestamp()"); }
 sent_since() { psql_n "select query from pg_stat_activity where application_name = '$APP' and query_start > '$T0'" | tr '\n' ' '; }
 sent_has() { [[ $(sent_since) == *"$1"* ]] || { echo "  sent since mark: $(sent_since)"; echo "  want …$1…"; false; }; }
 dd() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5 }'; }
-dd_sel() { local g y; g=($(dd)); for ((y = g[1] + 3; y < g[1] + g[3] - 1; y++)); do style_has $((g[0] + 3)) $y bg=$SELECT >/dev/null && e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed 's/ *$//'; done; }
+dd_sel() { local g y; g=($(dd)); for ((y = g[1] + 3; y < g[1] + g[3] - 1; y++)); do style_has $((g[0] + 3)) $y bg=$SELECT >/dev/null && e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed -E 's/ *$//; s/^ +//; s/^[0-9][↑↓] //'; done; }
 x_close() { e2e_find × "$(errbar_y "$1")" | tr ' ' '\n' | tail -1; }                   # N：pane N 错误栏的 × 所在列
 set_col() { key g g; key 0; [[ $1 -gt 1 ]] && key $(($1 - 1)) j; [[ $2 -gt 0 ]] && key $2 l; key Enter; e2e_type "$3"; sleep 0.2; key Escape; }
 

@@ -88,7 +88,7 @@ clear_input
 check "empty input lists the recently used one first" eval '[[ $(list | head -1) == *pane.zoom* ]]'
 e2e_keys Escape; sleep 0.2
 # scrolled list + toggle: the selection stays visible (the bug the reviewer sent back)
-pal; for i in $(seq 120); do [[ $(selected) == *tree.toggle* ]] && break; e2e_keys Down; sleep 0.05; done
+pal; for i in $(seq 300); do [[ $(selected) == *tree.toggle* ]] && break; e2e_keys Down; sleep 0.05; done
 check "moving down scrolls the list to tree.toggle" eval '[[ $(selected) == *tree.toggle* ]]'
 e2e_keys Enter; sleep 0.3
 check "after toggling from a scrolled list, the selected row is still visible" eval '[[ $(selected) == *tree.toggle* ]]'
