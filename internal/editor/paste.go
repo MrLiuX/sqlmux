@@ -14,6 +14,10 @@ import (
 // one undo step, or part of the INSERT's.
 func (e *Editor) Paste(text string) Effect {
 	e.eff = Effect{}
+	if e.ReadOnly {
+		e.eff.ReadOnly = true
+		return e.eff
+	}
 	text = strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\r", "\n")
 	if text == "" && !e.visual() { // nvim still deletes a selection
 		return e.eff

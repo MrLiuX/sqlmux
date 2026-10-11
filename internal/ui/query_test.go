@@ -140,3 +140,22 @@ func TestSQLColorsNames(t *testing.T) {
 		}
 	}
 }
+
+// A value's JSON is colored by token: keys, strings, numbers, true / false /
+// null and punctuation each in the color of its own, and a text that is no
+// JSON in fg (F12.2).
+func TestValueColors(t *testing.T) {
+	th := TokyonightStorm
+	text := `{"a": [1, "x", null]}`
+	cols := ValueColors(th, text, true)
+	for at, want := range map[string]color.Color{`{`: th.SQLOperator, `"a"`: th.SQLColumn, `1`: th.Number, `"x"`: th.SQLString, `null`: th.Keyword, ` `: th.Fg} {
+		if got := cols[strings.Index(text, at)]; got != want {
+			t.Errorf("%q: %v, want %v", at, got, want)
+		}
+	}
+	for i, c := range ValueColors(th, text, false) {
+		if c != th.Fg {
+			t.Fatalf("plain text at %d: %v", i, c)
+		}
+	}
+}

@@ -61,8 +61,8 @@ func table(conn, schema, name string) config.LayoutTab {
 // is kept as it is going there; a session keeps the connection it started on,
 // not the one the focus last named.
 func TestLayoutRoundTrip(t *testing.T) {
-	order := config.LayoutTab{Kind: "table", Connection: "doraemon", Schema: "public", Table: "t_order", Where: "id > 5", Order: "amount",
-		Desc: true, Limit: 500, Page: 2, Cols: []string{"meta", "note"}, OrderCols: []string{"note", "id", "amount"}, Transpose: true}
+	order := config.LayoutTab{Kind: "table", Connection: "doraemon", Schema: "public", Table: "t_order", Where: "id > 5", Order: config.LayoutOrder{{Col: "amount", Desc: true}, {Col: "id"}},
+		Limit: 500, Page: 2, Cols: []string{"meta", "note"}, OrderCols: []string{"note", "id", "amount"}, Transpose: true}
 	want := &config.Layout{Version: 1, Active: 1, Sessions: []config.LayoutSession{
 		{Name: "one", Connection: "doraemon", Active: 1, Windows: []config.LayoutWindow{
 			{
@@ -70,7 +70,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 				Layout: &config.LayoutNode{Split: "h", Ratio: 0.25, A: leafNode(1), B: &config.LayoutNode{Split: "v", Ratio: 0.75, A: leafNode(2), B: leafNode(3)}},
 				Panes: []config.LayoutPane{
 					{ID: 1, Current: 1, Tabs: []config.LayoutTab{order, {Kind: "query", Connection: "play", Schema: "s_play", Name: "query_1"}}},
-					{ID: 2, Tabs: []config.LayoutTab{{Kind: "table", Connection: "doraemon", Schema: "agentable", Table: "planner", Limit: 100}}},
+					{ID: 2, Tabs: []config.LayoutTab{{Kind: "table", Connection: "doraemon", Schema: "agentable", Table: "planner", Limit: 100, Desc: true}}}, // the default order turned
 					{ID: 3},
 				},
 			},

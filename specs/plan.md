@@ -18,11 +18,11 @@
 | M11 分发 | [m11-distribution/task.md](m11-distribution/task.md) | GoReleaser 与 release workflow、`--version`、Homebrew tap（源码编译的 formula）、npm / npx（壳包加平台子包） | todo（2026-10-10 用户定；2026-10-11 M10 passed 后开工） |
 | M12 表格日常 | [m12-grid/task.md](m12-grid/task.md) | 用户 2026-10-11 对照 DataGrip 规划：多列排序、值编辑器（JSON 格式化和高亮、vim）、按单元值过滤 / 表头排序 / 表格右键菜单、导出 CSV 和 JSON | todo（M11 F11.4 passed 之后开工） |
 | M13 SQLite 与历史 | [m13-sqlite/task.md](m13-sqlite/task.md) | SQLite（无 cgo）和命令行 DSN、查询历史、树上的索引 / 键 / 函数 / 序列、结构修改的模板 SQL | draft（方向已定，M12 开工后补清单） |
-| M14 PG 数据库层级 | [m14-pg-databases/task.md](m14-pg-databases/task.md) | PG 的树加数据库一层（每库一对连接）、SSH 隧道、query 的签名提示与值补全（INSERT VALUES、UPDATE SET、WHERE 的值；用户后续的编辑体验需求也归这里） | draft |
+| M14 PG 数据库层级 | [m14-pg-databases/task.md](m14-pg-databases/task.md) | PG 的树加数据库一层（每库一对连接）、SSH 隧道、query 的签名提示与值补全（INSERT VALUES、UPDATE SET、WHERE 的值；用户后续的编辑体验需求也归这里）、状态栏随机轮播的特性提示 | draft |
 
 ## 发布
 
-2026-10-10 推送：`m5`–`m9` 打在各自最后一个产品 commit 上，`v0.1.0` 打在 ffbcec5（m9 之后只多一个让 keychain 测试在 Linux 上过的 commit；93e9d8c 的首次 CI 是红的，tag 打在绿的那个），`go install` 还装不了：go.mod 的 module 是 `sqlmux` 而不是 `github.com/kackerx/sqlmux`，M10 F10.12 改掉后下一个 tag 才能 `go install github.com/kackerx/sqlmux/cmd/sqlmux@latest`；2026-10-11 M10 passed 后推送 `m10`、`v0.2.0`（de62155；M10 新功能，配置键 console → query 不兼容，所以升 minor），CI run 38096306240 绿，第一个 GitHub Release 发在 v0.2.0 上，只有源码包和说明，`go install …@v0.2.0` 验过；`kackerx/homebrew-tap` 仓库已建（空，M11 F11.2 填）；GoReleaser、Homebrew、npm 是 M11。每个里程碑的 tag 在用户验收通过后由 worker 打并推送（M5–M9 由用户 10-10 定为先打 tag 再慢慢验收）。
+2026-10-10 推送：`m5`–`m9` 打在各自最后一个产品 commit 上，`v0.1.0` 打在 ffbcec5（m9 之后只多一个让 keychain 测试在 Linux 上过的 commit；93e9d8c 的首次 CI 是红的，tag 打在绿的那个），`go install` 还装不了：go.mod 的 module 是 `sqlmux` 而不是 `github.com/kackerx/sqlmux`，M10 F10.12 改掉后下一个 tag 才能 `go install github.com/kackerx/sqlmux/cmd/sqlmux@latest`；2026-10-11 M10 passed 后推送 `m10`、`v0.2.0`（de62155；M10 新功能，配置键 console → query 不兼容，所以升 minor），CI run 38096306240 绿，第一个 GitHub Release 发在 v0.2.0 上，只有源码包和说明，`go install …@v0.2.0` 验过；`kackerx/homebrew-tap` 仓库已建；`v0.2.1` 打在 b1cb1c6（M11 节点 1 passed，只推了 tag），release.yml 第一次真跑（run 38104197358）：ci、release（四个压缩包加 checksums）、tap（formula 已是 v0.2.1，Linux docker 里 brew 装出 `sqlmux v0.2.1`）都绿，`go install …@v0.2.1` 的 `--version` 是 v0.2.1；npm 红：publish 的路径不带 `./` 被 npm 当成 GitHub 简写，37206c0 修了，0.2.1 在 npm 上缺席，npm 从 `v0.2.2` 开始，v0.2.2 等 F11.4 passed 后打在 main 上；GoReleaser、Homebrew、npm 是 M11。每个里程碑的 tag 在用户验收通过后由 worker 打并推送（M5–M9 由用户 10-10 定为先打 tag 再慢慢验收）。
 
 ## 任务文件的格式
 

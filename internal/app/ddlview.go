@@ -98,14 +98,21 @@ func (a *App) ddlContent() (ui.TextView, string) {
 	return ui.TextView{Text: text, Colors: ui.SQLColors(a.theme, text, c.eng.Dialect(), names)}, title
 }
 
+// popupBox is the box in the middle of the window the table's DDL and a
+// value's editor are in: two thirds of it each way, 40 by 8 at least.
+func (a *App) popupBox() uv.Rectangle {
+	win := a.window()
+	w, h := max(win.Dx()*2/3, min(win.Dx(), 40)), max(win.Dy()*2/3, min(win.Dy(), 8))
+	return uv.Rect(win.Min.X+(win.Dx()-w)/2, win.Min.Y+(win.Dy()-h)/2, w, h)
+}
+
 // ddlRect is where the popup is: the table's in the middle, two thirds of the
 // window each way and 40 by 8 at least; the column's under its cell, or over
 // it, as wide as its text.
 func (a *App) ddlRect(v ui.TextView) uv.Rectangle {
 	win := a.window()
 	if a.ddl.col == "" {
-		w, h := max(win.Dx()*2/3, min(win.Dx(), 40)), max(win.Dy()*2/3, min(win.Dy(), 8))
-		return uv.Rect(win.Min.X+(win.Dx()-w)/2, win.Min.Y+(win.Dy()-h)/2, w, h)
+		return a.popupBox()
 	}
 	w := 0
 	for _, l := range strings.Split(v.Text, "\n") {

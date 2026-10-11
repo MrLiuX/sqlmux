@@ -45,16 +45,14 @@ func BenchmarkPointerWithinRow(b *testing.B) {
 	}
 }
 
-// scrollResult is a result of 500 rows of 15 columns, half of the values
-// Chinese and 100-character JSON, as mt_task shows (F11.4), in the result
-// area of the default layout at 160×45.
-func scrollResult(b *testing.B) *App {
-	b.Helper()
+// heavyResult is n rows of 15 columns, half of the values Chinese and
+// 100-character JSON, as mt_task shows (F11.4).
+func heavyResult(n int) db.Result {
 	r := db.Result{}
 	for c := range 15 {
 		r.Cols = append(r.Cols, db.Col{Name: fmt.Sprintf("col_%d", c), Type: "text"})
 	}
-	for i := range 500 {
+	for i := range n {
 		row := make([]db.Val, 15)
 		for c := range row {
 			switch {
@@ -68,7 +66,14 @@ func scrollResult(b *testing.B) *App {
 		}
 		r.Rows = append(r.Rows, row)
 	}
-	a, _ := inRun(b, &execDB{res: map[string]db.Result{"select 1": r}}, "select 1;")
+	return r
+}
+
+// scrollResult is a result of 500 heavy rows in the result area of the
+// default layout at 160×45.
+func scrollResult(b testing.TB) *App {
+	b.Helper()
+	a, _ := inRun(b, &execDB{res: map[string]db.Result{"select 1": heavyResult(500)}}, "select 1;")
 	press(b, a, "<CR>")
 	a.win().focus(a.win().Result.ID)
 	if r := resultOf(a.focused()); r == nil || len(r.page.Rows) != 500 {
@@ -76,6 +81,17 @@ func scrollResult(b *testing.B) *App {
 	}
 	a.View()
 	return a
+}
+
+// scrollTable is a table tab of 100 heavy rows in the data pane.
+func scrollTable(b testing.TB) (*App, *dataTab) {
+	b.Helper()
+	a := wide(160, 45)
+	tab := loadOrders(b, a, 1)
+	tab.page = heavyResult(100)
+	tab.row, tab.col = 0, 0
+	a.View()
+	return a, tab
 }
 
 // BenchmarkResultScrollKeys is one j or k of a key held down in the result
@@ -107,12 +123,10 @@ func BenchmarkResultScrollWheel(b *testing.B) {
 	}
 }
 
-// BenchmarkTableScrollKeys is the same key held in a table pane of 100 rows,
-// for a comparison.
+// BenchmarkTableScrollKeys is the same key held in a table pane of 100 heavy
+// rows, for a comparison: its grid is made again every frame (F11.4).
 func BenchmarkTableScrollKeys(b *testing.B) {
-	a := wide(160, 45)
-	loadOrders(b, a, 100)
-	a.View()
+	a, _ := scrollTable(b)
 	b.ReportAllocs()
 	for i := 0; b.Loop(); i++ {
 		k := "j"

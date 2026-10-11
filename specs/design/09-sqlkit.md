@@ -111,7 +111,7 @@
 | query 的其他位置 | 依次为：当前语句引用到的表的列、其余表名、SQL 关键字。关键字包括查询、DML、DDL 的开头和子句（`insert into`、`update`、`set`、`delete from`、`values`、`returning`、`create table` 等；M5 F5.12 补齐，原来只有查询用的，用户验收时发现 insert / update / delete 补不出来），清单参照 lazysql 的 `builtinKeywords`，MySQL 另有 `replace into`、`on duplicate key update` |
 | WHERE 输入框 | 当前表的列名（附带类型）和常用关键字（`and` `or` `is null` `in` `like` `between` 等）。在 `列 =`、`列 <>`、`列 in (` 之后，枚举列和布尔列给出可选值 |
 
-- **排序**：先按上表中候选组的顺序，再按 fzf 得分。
+- **排序**（M12 F12.6 起；原来先按候选组顺序、再按 fzf 得分，用户 2026-10-11：打 `sele` 时 `pap_secretary_problem_event` 排在 `select` 前面不对）：先按匹配的紧密程度分层，层内再按候选组顺序，组内按 fzf 得分。层：① 和输入完全相同（原有规则）；② 输入是候选开头的前缀（`sele` → `select`，`inse` → `insert into`）；③ 输入是候选某个词首开始的前缀（`sec` → `pap_secretary_problem_event`）；④ 其余模糊匹配。候选组顺序在语句开头处（光标前这条语句里还没有别的 token）改成 关键字 → 表 → 列：那里打的几乎都是关键字；别处照上表的顺序。
 - **数据来源**：候选全部来自 session 的 catalog 缓存，在本地匹配，不发请求。某张表的列第一次用到时，才从 `Meta` 连接获取。
 
 **交互**（与 fzf 以及常见编辑器的补全一致）：

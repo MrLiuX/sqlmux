@@ -37,6 +37,9 @@ type Query struct {
 	Names        SQLNames       // the tables and columns among the text's names, for their colors; nil for none
 	Dialect      sqlkit.Dialect // its connection's SQL
 	Yank         Sel            // what a yank took, flashing (F3.32)
+	// Colors are the text's own colors by byte, a value editor's (F12.2):
+	// with them there are no statements, no ▶ and no click on the text.
+	Colors []color.Color
 }
 
 // TextPos is a line and a byte offset into it, both from 0.
@@ -74,24 +77,30 @@ func (c Query) TextArea(r uv.Rectangle) uv.Rectangle {
 func (c Query) Draw(f *Frame, r uv.Rectangle) uv.Position {
 	th := f.Theme
 	f.Fill(r, uv.Style{Fg: th.Fg, Bg: th.PaneBg})
-	f.Region(r, Target{Kind: KindText, Pane: c.Pane})
+	value := c.Colors != nil
+	if !value {
+		f.Region(r, Target{Kind: KindText, Pane: c.Pane})
+	}
 	text := strings.Join(c.Lines, "\n")
 	starts := make([]int, len(c.Lines)) // where each line is in text
 	for i := 1; i < len(c.Lines); i++ {
 		starts[i] = starts[i-1] + len(c.Lines[i-1]) + 1
 	}
 	lineOf := func(off int) int { return sort.SearchInts(starts, off+1) - 1 }
-	stmts := sqlkit.Statements(text, c.Dialect)
 	first := map[int]bool{}
-	for _, s := range stmts {
-		first[lineOf(s.Start)] = true
-	}
 	cur := c.Cursor
 	from, to := -1, -1 // the statement under the cursor, by lines
-	if i := sqlkit.StmtAt(text, stmts, starts[cur.Line]+cur.Col); i >= 0 && c.Normal {
-		from, to = lineOf(stmts[i].Lead), lineOf(stmts[i].End) // with the comment lines above it (§9.2)
+	colors := c.Colors
+	if !value {
+		stmts := sqlkit.Statements(text, c.Dialect)
+		for _, s := range stmts {
+			first[lineOf(s.Start)] = true
+		}
+		if i := sqlkit.StmtAt(text, stmts, starts[cur.Line]+cur.Col); i >= 0 && c.Normal {
+			from, to = lineOf(stmts[i].Lead), lineOf(stmts[i].End) // with the comment lines above it (§9.2)
+		}
+		colors = SQLColors(th, text, c.Dialect, c.Names)
 	}
-	colors := SQLColors(th, text, c.Dialect, c.Names)
 	ta, width := c.TextArea(r), c.gutter()-2
 	for y := range r.Dy() {
 		n, row := c.Top+y, r.Min.Y+y
@@ -239,6 +248,39 @@ func SQLColors(th *Theme, text string, d sqlkit.Dialect, names SQLNames) []color
 				col = th.SQLColumn
 			}
 		case sqlkit.Space: // the plain color
+		}
+		for j := t.Start; j < t.End; j++ {
+			out[j] = col
+		}
+	}
+	return out
+}
+
+// ValueColors are a value's colors by byte for the value editor (F12.2): JSON's
+// when json, keys, strings, numbers, true / false / null and punctuation, else
+// all fg.
+func ValueColors(th *Theme, text string, json bool) []color.Color {
+	out := make([]color.Color, len(text))
+	for i := range out {
+		out[i] = th.Fg
+	}
+	if !json {
+		return out
+	}
+	for _, t := range sqlkit.ScanJSON(text) {
+		col := th.Fg
+		switch t.Kind {
+		case sqlkit.JSONKey:
+			col = th.SQLColumn
+		case sqlkit.JSONString:
+			col = th.SQLString
+		case sqlkit.JSONNumber:
+			col = th.Number
+		case sqlkit.JSONKeyword:
+			col = th.Keyword
+		case sqlkit.JSONPunct:
+			col = th.SQLOperator
+		case sqlkit.JSONOther: // the plain color
 		}
 		for j := t.Start; j < t.End; j++ {
 			out[j] = col

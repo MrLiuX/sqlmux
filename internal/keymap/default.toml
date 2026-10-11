@@ -64,6 +64,7 @@ leader = "<Space>"
 "gl" = "grid.limit"
 "gp" = "grid.page"
 "gc" = "grid.cols"
+"e" = "grid.value" # the cell in the value editor (F12.2)
 "]" = "grid.page.next"
 "[" = "grid.page.prev"
 "s" = "jump.start" # flash-style jump to what is on the screen (F10.8)
@@ -141,6 +142,7 @@ leader = "<Space>"
 "<C-p>" = "dropdown.up"
 "<C-n>" = "dropdown.down"
 "<CR>" = "dropdown.select"
+"<Space>" = "dropdown.toggle" # ORDER: the column under the cursor joins, turns, leaves the sorting; a character of the filter once it has any (F12.1)
 "<Esc>" = "dropdown.close"
 
 [keys.menu] # the tree's right-click menu (§7.8, F8.23)
@@ -150,6 +152,10 @@ leader = "<Space>"
 "<Up>" = "menu.up"
 "<CR>" = "menu.run"
 "<Esc>" = "menu.close"
+
+[keys.value] # the value editor's box (F12.2): the rest goes to its vim
+"<C-s>" = "value.save"
+"<Esc>" = "value.leave" # NORMAL's closes it; the editor has it otherwise
 
 [keys.ddl] # the table's DDL over the grid (§7.5, F9.8); the column's goes with any key
 "j" = "ddl.down"

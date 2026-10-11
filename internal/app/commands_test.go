@@ -203,7 +203,7 @@ func TestTabReopen(t *testing.T) {
 		t.Fatal("nothing closed, something reopened")
 	}
 	tab := loadOrders(t, a, 3)
-	tab.applied, tab.order, tab.desc, tab.limit = "id > 1", "amount", true, 500
+	tab.applied, tab.order, tab.limit = "id > 1", orderOf("amount-"), 500
 	win := a.win()
 	win.focus(2)
 	queryOf(a.focused()).schema = "agentable"
@@ -215,7 +215,7 @@ func TestTabReopen(t *testing.T) {
 	}
 	a.run("tab.reopen", 0) // the table, in its own pane
 	d := dataOf(a.focused())
-	if d == nil || d.table.Name != "t_order" || d.applied != "id > 1" || d.order != "amount" || !d.desc || d.limit != 500 || d.where.Text != "id > 1" {
+	if d == nil || d.table.Name != "t_order" || d.applied != "id > 1" || !slices.Equal(d.order, orderOf("amount-")) || d.limit != 500 || d.where.Text != "id > 1" {
 		t.Fatalf("table: %+v", d)
 	}
 	a.run("tab.reopen", 0) // the query: its pane is gone, so the current one

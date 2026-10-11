@@ -25,7 +25,7 @@ var noVimTOML string
 // in resolution priority order for the export. which-key is no scope: keys
 // pressed over it resolve as without it (§6.5).
 var tables = []string{
-	"keys.confirm", "keys.menu", "keys.ddl", "keys.palette", "keys.conns", "keys.groups", "keys.form", "keys.jump", "keys.where", "keys.cols", "keys.dropdown", "keys.sessions",
+	"keys.confirm", "keys.value", "keys.menu", "keys.ddl", "keys.palette", "keys.conns", "keys.groups", "keys.form", "keys.jump", "keys.where", "keys.cols", "keys.dropdown", "keys.sessions",
 	"keys.complete", "keys.newrow", "keys.options", "keys.segments", "keys.keyhelp", "keys.cell", "keys.input",
 	"keys.wherenormal", "keys.select", "keys.result", "keys.grid", "keys.tree", "keys.query", "keys.landing", "keys.normal", "keys.global",
 	"map.query.normal", "map.query.visual", "map.grid.normal", "map.grid.visual",
@@ -250,6 +250,7 @@ var when = map[string]string{
 	"keys.confirm":     i18n.N("确认框打开时"),
 	"keys.menu":        i18n.N("树的右键菜单打开时（F8.23）"),
 	"keys.ddl":         i18n.N("表的 DDL 浮窗打开时（F9.8）"),
+	"keys.value":       i18n.N("值编辑器浮窗打开时：C-s 写回并关闭，其余是它的 vim（F12.2）"),
 	"keys.newrow":      i18n.N("编辑还没保存的新行的格时，叠在选项 / 分段浮层之上（F3.33）"),
 	"keys.options":     i18n.N("非时间列的单元格，选项浮层展开、而且有选项时"),
 	"keys.segments":    i18n.N("时间列的单元格，分段浮层展开时"),

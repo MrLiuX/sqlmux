@@ -381,4 +381,28 @@ func TestWidestCache(t *testing.T) {
 	if got := two.view().widest(); len(got) != 2 || got[1] != 3 { // more columns than the page kept
 		t.Errorf("a column shown again: %v", got)
 	}
+	// fewer rows, the first ones' values the same: the page is another one
+	few := &Widest{}
+	three := Grid{Cols: []GridCol{{Name: "a"}}, Widest: few, Rows: [][]db.Val{{{S: "1"}}, {{S: "22"}}, {{S: "333333"}}}}
+	two2 := Grid{Cols: []GridCol{{Name: "a"}}, Widest: few, Rows: three.Rows[:2]}
+	if got := three.view().widest(); got[0] != 6 {
+		t.Fatalf("three rows: %v", got)
+	}
+	if got := two2.view().widest(); len(got) != 1 || got[0] != 2 {
+		t.Errorf("the first two: %v", got)
+	}
+	// no rows, then more columns: a page with no values is of its columns too
+	empty := &Widest{}
+	for _, n := range []int{2, 3} {
+		g := Grid{Widest: empty}
+		for range n {
+			g.Cols = append(g.Cols, GridCol{Name: "c"})
+		}
+		if got := g.view().widest(); len(got) != n {
+			t.Errorf("%d columns and no rows: %v", n, got)
+		}
+	}
+	if empty.Passes != 2 {
+		t.Errorf("measured %d times", empty.Passes)
+	}
 }

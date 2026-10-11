@@ -1,13 +1,13 @@
 # M12 表格日常 · 任务清单
 
 - **状态**：**todo**（2026-10-11 用户规划 M12–M14 时定；M11 F11.4 passed 之后开工）。
-- **目标**：多列排序、值编辑器（长文本和 JSON）、按单元值过滤和按列排序加表格的右键菜单、导出 CSV / JSON；连接连不上不退出、表单的测试按钮、tab 移到相邻 pane。用户 2026-10-11 对照 DataGrip 提出，决策者分析后拆成 M12（表格日常）、M13（SQLite 与历史）、M14（PG 数据库层级）三个里程碑，一个 sprint 不超过两个审查节点。
-- **范围**：tech-design §5（`Query.Order`、启动连接）、§6.4（`value` 作用域、`menu`）、§6.8（键位表）、§7.6（ORDER、表头、按值过滤、按列排序、右键菜单、导出、工具按钮）、§10（值编辑器）、§11（结果导出）、§14（布局文件的 `order`、启动时连不上）、§7.8（表单的测试、tab 移动）。
+- **目标**：多列排序、值编辑器（长文本和 JSON）、按单元值过滤和按列排序加表格的右键菜单、导出 CSV / JSON；连接连不上不退出、表单的测试按钮、tab 移到相邻 pane；补全列表的排序。用户 2026-10-11 对照 DataGrip 提出，决策者分析后拆成 M12（表格日常）、M13（SQLite 与历史）、M14（PG 数据库层级）三个里程碑，一个 sprint 不超过两个审查节点。
+- **范围**：tech-design §5（`Query.Order`、启动连接）、§6.4（`value` 作用域、`menu`）、§6.8（键位表）、§7.6（ORDER、表头、按值过滤、按列排序、右键菜单、导出、工具按钮）、§10（值编辑器）、§11（结果导出）、§14（布局文件的 `order`、启动时连不上）、§7.8（表单的测试、tab 移动）、§9.7（补全排序）。
 - **依赖**：M11 F11.4 passed。
-- **完成标准**：F12.1–F12.5 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m12`。
+- **完成标准**：F12.1–F12.6 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m12`。
 - **审查节点**：
   1. F12.2 之后：F12.1–F12.2 一批（多列排序、值编辑器）；
-  2. F12.5 之后：F12.3–F12.5 一批（过滤 / 排序 / 右键菜单、导出、连接与 tab 的小项）。
+  2. F12.6 之后：F12.3–F12.6 一批（过滤 / 排序 / 右键菜单、导出、连接与 tab 的小项、补全排序）。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
 
@@ -41,7 +41,7 @@
 
 **开发**（§10「值编辑器」、§6.4 `value`）
 - [ ] `e`（`grid.value`「在值编辑器中打开」，grid 和 result）打开居中浮窗，宽高同表 DDL 浮窗，标题 `<列名> · <类型>`，内容是 `internal/editor` 的编辑器，作用域 `value`：`C-s` 写回并关闭，其余交给 vim；`[map.normal]` / `[map.visual]` 照常。模式块显示编辑器的模式。
-- [ ] JSON：列类型 json / jsonb / json，或文字 `json.Valid`，打开时格式化成 2 空格缩进；着色用一个小的 JSON 词法（键名 `sql_column`、字符串 `string`、数字 `number`、true / false / null `keyword`、标点 `sql_operator`）；`gq` 格式化 JSON，不合法 toast「不是 JSON」。
+- [ ] JSON：列类型 json / jsonb / json，或文字 `json.Valid`，打开时格式化成 2 空格缩进；着色用一个小的 JSON 词法（放 `internal/sqlkit/json.go`，和 SQL 词法同包，不新增目录；键名 `sql_column`、字符串 `string`、数字 `number`、true / false / null `keyword`、标点 `sql_operator`）；`gq` 格式化 JSON，不合法 toast「不是 JSON」。
 - [ ] 写回：`:w` 记成这一格的修改（规则同行内输入框：没改不记；空是空字符串），不关；`C-s` / `:wq` 写回并关；`esc`（NORMAL）/ `:q` 不写，有改动先确认「放弃修改？」。JSON 列写回原文含缩进。
 - [ ] 只读：进不了编辑的格和结果 tab 也能开，改动的键 toast「只读」，`y` 照常，`esc` / `q` 关。编辑器需要一个只读开关（最小改动：改动的操作统一拦在一处）。
 - [ ] 细节（已定）：不做 DataGrip 的「设置高亮显示语言」，只认 JSON；不做记录视图。
@@ -95,13 +95,29 @@
 - **涉及**：`cmd/sqlmux`、`internal/app`（启动、form、tab）、`internal/db`（测试连接）、`internal/keymap/default.toml`
 
 **开发**（§5、§14「恢复」、§7.8「新建连接表单」「把 tab 移到相邻 pane」）
-- [ ] 启动连接连不上（`sqlmux`、`sqlmux <连接名>`、`--layout` 三条路都是）不再是启动错误：进界面，节点标失败、toast 驱动的错误、丢掉用它的挂起 tab，同别的连接；启动错误只剩配置本身的问题。
+- [ ] 启动连接连不上（`sqlmux`、`sqlmux <连接名>`、`--layout` 三条路都是）不再是启动错误（`app.Open` 永远建出 Session，拨号失败记在启动连接的状态上、第一帧 toast；`error` 只剩配置类，worker 定）：进界面，节点标失败、toast 驱动的错误；用它的挂起 tab 不关（用户 2026-10-11 补：DataGrip 那样留着显示报错），内容区居中画 `error` 色的错误页（连接名加驱动的错误原文，折行），`R`、展开节点、连上都重试，连上后照常取数；query tab 本来就留着。启动错误只剩配置本身的问题。
 - [ ] 表单加「测试」按钮（`form.test`，`C-t`）：校验通过后用当前值真连一次（10s 超时），`测试中…`，结果写在底栏上方一行：`已连接 · <引擎 版本> · <耗时>` 或驱动的错误；不保存、测完断开。连接管理里同样。
 - [ ] dsn 字段空时显示 `dim` 色的示例（按 engine）；别的字段照旧不预填。
 - [ ] `tab.move.next` / `tab.move.prev`（默认 `<Leader>wn` / `<Leader>wp`）：当前 tab 挪到顺时针下一个 / 上一个普通 pane 的末尾并成为当前 tab，焦点跟过去；来源空了留引导页；只有一个普通 pane 或引导 tab 时无事。
 - [ ] 细节（已定）：测试不把连接留在树里；MySQL 的 dsn 两种写法（`mysql://` URL 和驱动的 `user:pass@tcp(host:port)/db`）本来就都认（§8），示例只写 URL 那种。
 
 **验收**
-- [ ] 单测：启动连接拨号失败时 App 照常建出 session、节点状态是失败、toast 有错误；`form.test` 成功和失败两种结果行；`tab.move.next` 后两个 pane 的 tab 列表和焦点；单 pane 无事。
+- [ ] 单测：启动连接拨号失败时 App 照常建出 session、节点状态是失败、toast 有错误、表 tab 还在且内容是错误页，连接恢复后 `R` 取到数据；`form.test` 成功和失败两种结果行；`tab.move.next` 后两个 pane 的 tab 列表和焦点；单 pane 无事。
 - [ ] golden：带「测试」按钮和结果行的表单。
-- [ ] e2e：把 play 的端口改成没人听的，`sqlmux` 能进界面、树里 play 变红、toast 有错误、`conn.manage` 能建新连接；表单填一个错端口 `C-t` 结果行是错误、改对后是「已连接」；`SPC wn` 后 tab 在右边的 pane。
+- [ ] e2e：把 play 的端口改成没人听的，`sqlmux` 能进界面、树里 play 变红、表 tab 居中显示错误、`conn.manage` 能建新连接；表单填一个错端口 `C-t` 结果行是错误、改对后是「已连接」；`SPC wn` 后 tab 在右边的 pane。
+
+## F12.6 补全列表的排序 · 状态：todo
+
+用户 2026-10-11：打 `sele` 时 `pap_secretary_problem_event` 排在 `select` 前面、打 `inse` 时四个 `oa_workflow_instance*` 排在 `insert into` 前面，匹配度明显是关键字高；关键字排前面。原因是 §9.7 原来先按候选组（列 → 表 → 关键字）再按得分。
+
+- **依赖**：F5.12
+- **涉及**：`internal/app`（补全的排序）、`internal/sqlkit`（语句开头的判断）
+
+**开发**（§9.7「排序」）
+- [ ] 先按匹配层排：完全相同 → 候选开头的前缀 → 候选某个词首开始的前缀 → 其余模糊；层内按候选组顺序，组内按 fzf 得分。
+- [ ] 候选组顺序在语句开头处（光标前这条语句里没有别的 token）改成 关键字 → 表 → 列；别处不变。
+- [ ] 细节（已定）：WHERE 输入框、快速 SQL 同一套排序；「和输入完全相同的排第一」不变。
+
+**验收**
+- [ ] 单测：`sele` 的第一项是 `select`、`inse` 的第一项是 `insert into`、`sec` 时 `pap_secretary_problem_event` 在词首前缀层；`select ` 之后打 `t` 时表仍在关键字前（不在语句开头）；`from t_order where sta` 列在前。
+- [ ] e2e：query 里打 `sele` 列表第一项是 `select`。

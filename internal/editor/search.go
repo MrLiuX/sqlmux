@@ -350,6 +350,10 @@ func (e *Editor) ex(line string) {
 			e.eff.Error = i18n.T(badRange)
 			return
 		}
+		if e.ReadOnly {
+			e.eff.ReadOnly = true
+			return
+		}
 		e.substitute(max(from, 0), max(to, 0), rest[1:])
 	case line != "":
 		e.eff.Ex = line

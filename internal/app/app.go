@@ -74,6 +74,7 @@ type App struct {
 	confirm   *confirmBox  // non-nil while it asks before changes go (§10.5)
 	menu      *menu        // non-nil while the tree's right-click menu is open (F8.23)
 	ddl       *ddlPopup    // non-nil while a table's or a column's DDL is shown over the grid (F9.8)
+	value     *valueEditor // non-nil while a cell's value is open in its editor (F12.2)
 	whichKey  bool         // the which-key overlay is up (§6.5)
 	keyHelp   *keyHelp     // non-nil while the ? help is open (§6.5)
 	// paneNumbers is SPC q's overlay: the next key picks a pane by its ⟨n⟩.
@@ -555,7 +556,10 @@ func (a *App) click(p uv.Position) tea.Cmd {
 // Shift turns the vertical wheel horizontal, as does a touchpad's sideways
 // swipe (buttons 6 and 7).
 func (a *App) wheel(m tea.Mouse) {
-	a.jump = nil      // what it matched moves
+	a.jump = nil        // what it matched moves
+	if a.value != nil { // the panes under it are not for the wheel (F12.2)
+		return
+	}
 	if a.ddl != nil { // the table's DDL scrolls; the column's goes with the wheel as with a key, which then turns (F9.8)
 		if a.ddl.col == "" {
 			a.scrollDDL(map[tea.MouseButton]int{tea.MouseWheelUp: -wheelStep, tea.MouseWheelDown: wheelStep}[m.Button], false)
@@ -623,6 +627,10 @@ func (a *App) paste(s string) tea.Cmd {
 	if a.ddl != nil && a.ddl.col != "" { // the column's box goes with it, as with a key, and what is pasted is then typed (F9.8)
 		a.ddl = nil
 	}
+	if a.valueActive() {
+		a.valueSize()
+		return a.valueDid(a.value.ed.Paste(s))
+	}
 	if t := a.focusedQuery(); t != nil {
 		a.queryView(a.focused(), t)
 		return a.queryDid(t, t.ed.Paste(s))
@@ -660,6 +668,8 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 			switch t := a.typingTab(); {
 			case a.jump != nil:
 				cmds = append(cmds, a.jumpKey(k))
+			case a.valueActive():
+				cmds = append(cmds, a.valueKey(k))
 			case a.menu != nil || a.ddl != nil: // no text to type: the key is none of theirs
 			case a.keyHelp != nil:
 				cmds = append(cmds, a.keyHelpKey(k))
@@ -696,6 +706,8 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 // mode is derived from state, never stored (§3 principle 3).
 func (a *App) mode() keymap.Mode {
 	switch t, ed := a.typingTab(), a.vim(); {
+	case a.valueActive(): // its editor's, a table's cell under it not typing (F12.2)
+		return vimMode(a.value.ed.Mode())
 	case a.form != nil && !a.form.list, a.winRename != nil, a.askName != nil, a.sessList != nil && a.sessList.rename != nil: // inputs with the keys over the panes (§7.8)
 		return keymap.Insert
 	case a.jump != nil: // a pattern typed, a letter jumps (F10.8)
@@ -722,6 +734,8 @@ func (a *App) context() keymap.Context {
 		return keymap.Context{Overlay: "confirm", Mode: keymap.Command}
 	case a.menu != nil:
 		return keymap.Context{Overlay: "menu", Mode: keymap.Command}
+	case a.value != nil:
+		return keymap.Context{Overlay: "value", Mode: vimMode(a.value.ed.Mode()), Plain: a.plain}
 	case a.ddl != nil:
 		return keymap.Context{Overlay: "ddl", Mode: keymap.Command}
 	case a.keyHelp != nil: // the keys it lists come to keyHelpKey

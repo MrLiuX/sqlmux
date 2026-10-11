@@ -12,6 +12,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
@@ -67,19 +68,56 @@ type LayoutTab struct {
 	Connection string `toml:"connection,omitempty"`
 	Schema     string `toml:"schema,omitempty"`
 	// a table's
-	Table     string   `toml:"table,omitempty"`
-	Where     string   `toml:"where,omitempty"`
-	Order     string   `toml:"order,omitempty"`
-	Desc      bool     `toml:"desc,omitempty"`
-	Limit     int      `toml:"limit,omitempty"`
-	Page      int      `toml:"page,omitempty"`       // from 0
-	Cols      []string `toml:"cols,omitempty"`       // the columns COLS hides
-	OrderCols []string `toml:"order_cols,omitempty"` // the columns in the order COLS puts them (F10.3)
-	Transpose bool     `toml:"transpose,omitempty"`
+	Table     string      `toml:"table,omitempty"`
+	Where     string      `toml:"where,omitempty"`
+	Order     LayoutOrder `toml:"order,omitempty"`
+	Desc      bool        `toml:"desc,omitempty"` // the default order turned; a layout of before F12.1 has the direction of its one column here
+	Limit     int         `toml:"limit,omitempty"`
+	Page      int         `toml:"page,omitempty"`       // from 0
+	Cols      []string    `toml:"cols,omitempty"`       // the columns COLS hides
+	OrderCols []string    `toml:"order_cols,omitempty"` // the columns in the order COLS puts them (F10.3)
+	Transpose bool        `toml:"transpose,omitempty"`
 	// a query's: the name of its file; N is what layouts of before
 	// M8 F8.11 say, query_<n>
 	Name string `toml:"name,omitempty"`
 	N    int    `toml:"n,omitempty"`
+}
+
+// LayoutOrder is a table tab's ORDER, [{col = "source", desc = true}, …]; a
+// layout of before F12.1 has order = "col" and desc beside it, which reads as
+// one column (LoadLayout puts the direction on it).
+type LayoutOrder []db.OrderCol
+
+// UnmarshalTOML reads the array, written as tables or inline, or the string.
+func (o *LayoutOrder) UnmarshalTOML(data any) error {
+	*o = nil
+	switch v := data.(type) {
+	case string:
+		if v != "" {
+			*o = LayoutOrder{{Col: v}}
+		}
+	case []map[string]any:
+		for _, m := range v {
+			*o = append(*o, orderOf(m))
+		}
+	case []any:
+		for _, e := range v {
+			m, ok := e.(map[string]any)
+			if !ok {
+				return fmt.Errorf("order: %v is no {col, desc} table", e)
+			}
+			*o = append(*o, orderOf(m))
+		}
+	default:
+		return fmt.Errorf("order: %v is no string or array of tables", data)
+	}
+	return nil
+}
+
+func orderOf(m map[string]any) db.OrderCol {
+	col, _ := m["col"].(string)
+	desc, _ := m["desc"].(bool)
+	return db.OrderCol{Col: col, Desc: desc}
 }
 
 // QueryName is the name of a query tab's file: Name, or query_<N> in
@@ -169,6 +207,10 @@ func LoadLayout(path string) (*Layout, error) {
 		for _, w := range s.Windows {
 			for _, p := range w.Panes {
 				for i, t := range p.Tabs {
+					if len(t.Order) == 1 && t.Desc { // before F12.1 the direction was beside the column
+						p.Tabs[i].Order = LayoutOrder{{Col: t.Order[0].Col, Desc: true}}
+						p.Tabs[i].Desc = false
+					}
 					if t.Kind == "console" {
 						p.Tabs[i].Kind = "query"
 					}

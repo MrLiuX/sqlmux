@@ -87,5 +87,5 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          for d in out/sqlmux-*; do npm publish "$d" --access public; done
-          npm publish out/sqlmux --access public
+          for d in out/sqlmux-*; do npm publish "./$d" --access public; done # ./: a bare out/x is a GitHub user/repo to npm
+          npm publish ./out/sqlmux --access public

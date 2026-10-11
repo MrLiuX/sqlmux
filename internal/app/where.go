@@ -835,7 +835,7 @@ func (a *App) histStar(t *dataTab) tea.Cmd {
 }
 
 func sameQuery(x, y config.Query) bool {
-	return x.Where == y.Where && x.Order == y.Order && x.Desc == y.Desc && x.Limit == y.Limit
+	return x.Where == y.Where && slices.Equal(x.Order, y.Order) && x.Desc == y.Desc && x.Limit == y.Limit
 }
 
 // whereRows is how many runs a table's WHERE history keeps (§9.7).
@@ -956,8 +956,8 @@ func (a *App) histView(p *Pane, t *dataTab) (ui.Complete, uv.Rectangle, int) {
 // the default: "status ↓ · 500".
 func queryNote(q config.Query) string {
 	var parts []string
-	if q.Order != "" {
-		parts = append(parts, sortedBy(q.Order, q.Desc))
+	if len(q.Order) > 0 {
+		parts = append(parts, orderText(q.Order))
 	}
 	if q.Limit != 0 {
 		parts = append(parts, strconv.Itoa(q.Limit))
