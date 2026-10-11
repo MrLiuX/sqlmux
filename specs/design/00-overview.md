@@ -113,6 +113,7 @@ sqlmux/
 ├─ .golangci.yml              golangci-lint v2 的规则
 ├─ .github/workflows/ci.yml   GitHub Actions：lint、vet、单测、集成测试
 ├─ .github/workflows/release.yml  打 v* tag 时发布（M11）
+├─ .github/scripts/            release workflow 用的脚本：tap-formula.sh 每个 tag 整份生成 Homebrew formula（M11）
 ├─ .goreleaser.yaml           交叉编译、压缩包、校验和、Release（M11）
 ├─ npm/                       npm 壳包和平台子包的模板（M11）
 ├─ bin/                       构建产物，不入库

@@ -36,7 +36,7 @@
 
 **开发**（§15「发布与分发」）
 - [ ] 用户（或决策者用 kackerx 账号）建 `kackerx/homebrew-tap`；formula 从 tag 的源码包编译：`depends_on "go" => :build`，`system "go", "build", *std_go_args(ldflags: …)`，`test` 跑 `sqlmux --version`；macOS 和 Linux 都能装。
-- [ ] release workflow 在 Release 建好后，用一个 PAT（仓库密钥 `TAP_GITHUB_TOKEN`）把 formula 的 `url` 和 `sha256` 改成新 tag 的，直接提交到 tap 仓库（不走 PR）。
+- [ ] release workflow 在 Release 建好后，用一个 PAT（仓库密钥 `TAP_GITHUB_TOKEN`）把新 tag 的 formula 整份生成（模板只在本仓库 `.github/scripts/tap-formula.sh` 一处，tap 里不手工放一份；worker 开工时定，tap 仓库本来是空的）直接提交到 tap 仓库（不走 PR）。
 - [ ] 细节（已定）：不用 GoReleaser 的 `homebrew_casks`（只管 macOS，没签名的二进制被 Gatekeeper 拦，要么交 Apple 年费要么 xattr 绕过）和已废弃的 `brews`；homebrew-core 等项目够知名再提交。
 
 **验收**
