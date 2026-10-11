@@ -154,6 +154,11 @@ func ranked(text string, pos int, pattern string, start int, groups ...[]candida
 // tierOf is how closely label matches pattern (lower case), 1 the closest
 // of what is not the same: it starts with it, 2 a word of it does, 3 the
 // rest, as fuzzy as fzf was (§9.7). With nothing typed all are alike.
+// Reference: lazysql components/sql_completer.go scores each candidate by how
+// close its match is (exact, prefix, the rest) and breaks a tie by group
+// (column, table, keyword), as here; it has the one group order everywhere,
+// where a statement's start puts keywords first here, and it drops a candidate
+// whose text was seen and cuts the list at 20.
 func tierOf(pattern, label string) int {
 	if pattern == "" {
 		return 3

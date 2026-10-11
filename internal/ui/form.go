@@ -36,7 +36,7 @@ type FormField struct {
 
 // Form is a box of fields over the screen: Sel is the field with the keys,
 // Err why it did not save, in error above the buttons, or, with OK, what a
-// test found, in the ok color.
+// test found or that one is going, in the ok color.
 type Form struct {
 	Fields             []FormField
 	Sel                int

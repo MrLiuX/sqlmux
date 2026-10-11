@@ -770,7 +770,7 @@ func connFormTestConnects(t *testing.T, eng, dsn string) {
 	}
 	a.Update(cmd())
 	want := map[string]string{"postgres": "已连接 · PostgreSQL ", "mysql": "已连接 · MySQL "}[eng]
-	if !strings.HasPrefix(f.result, want) || !strings.HasSuffix(f.result, "s") || f.err != "" {
+	if !strings.HasPrefix(f.result, want) || !strings.HasSuffix(f.result, "s") || f.err != "" || strings.Contains(f.result, " on ") || strings.Contains(f.result, " (") {
 		t.Errorf("result %q, err %q", f.result, f.err)
 	}
 	if len(a.sess.Conns) != 1 {

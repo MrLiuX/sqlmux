@@ -214,7 +214,7 @@ func (a *App) runSQL(t *queryTab, conn *Conn, schema, name, sql string, base, ve
 		return nil
 	}
 	if conn.State != connReady { // a layout's query, its connection not up yet (F6.5)
-		return a.showToast(i18n.T("连接还没连上"), toastTTL)
+		return a.notReady(conn)
 	}
 	if conn.readOnly {
 		if i := slices.IndexFunc(stmts, func(s sqlkit.Stmt) bool { return sqlkit.BreaksReadOnly(sql[s.Start:s.End], d) }); i >= 0 {

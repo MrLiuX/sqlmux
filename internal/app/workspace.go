@@ -53,6 +53,12 @@ func landing() Tab { return Tab{Name: i18n.T("新 tab")} }
 // landing reports whether t shows the landing page: a new tab, or no tab.
 func (t *Tab) landing() bool { return t == nil || t.Data == nil && t.Query == nil && t.Result == nil }
 
+// tableTab is the index of pane p's tab of table t of connection c, -1 for
+// none: a pane has a table once (F3.37).
+func (p *Pane) tableTab(c *Conn, t db.Table) int {
+	return slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Data != nil && tb.Data.conn == c && idOf(tb.Data.table) == idOf(t) })
+}
+
 // putTab puts tab in pane p: over the current tab, or after the last one,
 // which it becomes, the current one the previous.
 func putTab(p *Pane, tab Tab, over bool) {
@@ -315,7 +321,7 @@ func (c *Conn) dropCols() {
 }
 
 // newSession is a session's default workspace (§5) over conns, start the
-// one connected: one window, data, with the sidebar, a pane with no tab
+// one it starts on: one window, data, with the sidebar, a pane with no tab
 // and query_n on start beside it at 1 : 1 (§5, F8.9), which has what its
 // file kept (§11). A file that cannot be read leaves that pane with no tab
 // too: opened empty, the autosave would write over it.
@@ -644,7 +650,6 @@ func connectTo(ctx context.Context, spec config.Connection, readOnly bool) (db.C
 
 // take makes c connected over d.
 func (c *Conn) take(d dialed) {
-	c.err = nil
 	c.State, c.Main, c.Meta = connReady, c.worker(d.main, d.spec, false), c.worker(d.meta, d.spec, true)
 	c.Addr, c.DB, c.startedPath = d.info.Addr, d.info.Database, d.info.Path
 }
@@ -684,7 +689,7 @@ func (a *App) openTableIn(p *Pane, c *Conn, t db.Table) tea.Cmd {
 func (a *App) openTableAs(p *Pane, c *Conn, t db.Table, r *request, turned bool) tea.Cmd {
 	a.showPane(p.ID)
 	landing := p.tab().landing()
-	if i := slices.IndexFunc(p.Tabs, func(tb Tab) bool { return tb.Data != nil && tb.Data.conn == c && idOf(tb.Data.table) == idOf(t) }); i >= 0 {
+	if i := p.tableTab(c, t); i >= 0 {
 		if closed := p.Cur; landing {
 			if a.closeTab(p, closed); closed < i {
 				i--
@@ -945,7 +950,7 @@ func (a *App) moveTab(d int) tea.Cmd {
 	}
 	dst := win.pane(ids[(i+d+len(ids))%len(ids)])
 	tb := src.Tabs[src.Cur]
-	if t := tb.Data; t != nil && slices.ContainsFunc(dst.Tabs, func(o Tab) bool { return o.Data != nil && o.Data.conn == t.conn && idOf(o.Data.table) == idOf(t.table) }) {
+	if t := tb.Data; t != nil && dst.tableTab(t.conn, t.table) >= 0 {
 		return a.showToast(i18n.T("目标 pane 里已有这张表"), toastTTL)
 	}
 	dropTab(src, src.Cur)
