@@ -777,3 +777,19 @@ func TestWhereValuesPreselected(t *testing.T) {
 		t.Errorf("the columns after and: %+v", tab.comp)
 	}
 }
+
+// A confirm box is a question: a key it does not bind, and a paste, go to
+// nothing under it: not the WHERE being typed (F13.4).
+func TestConfirmTakesNoText(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	feed(t, a, "dd/id")
+	feed(t, a, "<C-s>")
+	if a.confirm == nil {
+		t.Fatalf("no confirm: typing %q changes %d", tab.typing, tab.changes())
+	}
+	feed(t, a, "x")
+	a.Update(tea.PasteMsg{Content: "Z"})
+	if tab.where.Text != "id" || a.confirm == nil {
+		t.Errorf("WHERE under the confirm box: %q, confirm up %v", tab.where.Text, a.confirm != nil)
+	}
+}

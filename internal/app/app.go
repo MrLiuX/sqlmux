@@ -691,7 +691,7 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 				cmds = append(cmds, a.jumpKey(k))
 			case a.valueActive():
 				cmds = append(cmds, a.valueKey(k))
-			case a.menu != nil || a.ddl != nil: // no text to type: the key is none of theirs
+			case a.confirm != nil || a.menu != nil || a.ddl != nil: // no text to type: the key is none of theirs
 			case a.keyHelp != nil:
 				cmds = append(cmds, a.keyHelpKey(k))
 			case a.palette != nil:
