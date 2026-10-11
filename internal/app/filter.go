@@ -14,13 +14,14 @@ import (
 )
 
 // noEquals are the types whose values a condition cannot be written for: no
-// literal, or no = (PG's json, xml, the geometric ones but point), or one
+// literal, or no = (PG's json, xml, point and polygon), or one compared by
+// area or length, not by what it is (box, circle, lseg, line, path), or one
 // that never matches (MySQL's JSON against a string; a four-byte float, PG's
 // real and MySQL's float, against a literal: 0.1 is not the float 0.1, where
 // the eight-byte ones are); arrays are cut by their []
 // (§7.6「按单元值过滤」).
 var noEquals = []string{"bytea", "blob", "tinyblob", "mediumblob", "longblob", "binary", "varbinary", "json", "xml",
-	"geometry", "point", "linestring", "polygon", "multipoint", "multilinestring", "multipolygon", "geometrycollection",
+	"geometry", "point", "linestring", "polygon", "multipoint", "multilinestring", "multipolygon", "geometrycollection", "geomcollection",
 	"box", "circle", "path", "lseg", "line", "real", "float4", "float"}
 
 // cellCondition is the condition that keeps the rows whose column col, of
@@ -30,12 +31,14 @@ var noEquals = []string{"bytea", "blob", "tinyblob", "mediumblob", "longblob", "
 // ponytail: the type decides, not the value; a number column holding NaN or
 // Infinity is a string literal, which PG reads as one.
 func cellCondition(d sqlkit.Dialect, quoted, typ string, fixed bool, v db.Val) (cond string, ok bool) {
-	base := strings.ToLower(baseType(typ))
-	if fixed || strings.HasSuffix(base, "[]") || slices.Contains(noEquals, strings.TrimSuffix(strings.TrimSuffix(base, " zerofill"), " unsigned")) {
+	if fixed || strings.HasSuffix(typ, "[]") || slices.Contains(noEquals, plainType(typ)) {
 		return "", false
 	}
 	if v.Null {
 		return quoted + " IS NULL", true
+	}
+	if db.IsBinaryShown(v.S) { // the grid's word for bytes it does not have: no condition keeps them (a MySQL geometry's type is not always its own)
+		return "", false
 	}
 	lit := sqlkit.Literal(v.S, d)
 	switch colType(typ) {

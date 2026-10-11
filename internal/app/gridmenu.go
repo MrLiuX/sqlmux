@@ -23,7 +23,7 @@ func (a *App) gridMenu(t ui.Target, p uv.Position) {
 	var items []menuItem
 	switch d, r := dataOf(pane), resultOf(pane); {
 	case d != nil && t.Kind == ui.KindHead:
-		d.col = t.I
+		a.cursorToHead(d, t.I)
 		items = a.columnItems(d, false)
 	case d != nil:
 		a.gridGoto(strings.TrimPrefix(t.Action, "grid.goto "))
@@ -82,7 +82,16 @@ func (a *App) headClick(pane, i int, shift bool) tea.Cmd {
 	if t == nil || t.fieldAt(i) < 0 {
 		return nil
 	}
+	a.cursorToHead(t, i)
+	if shift {
+		return a.run("grid.order.add", 0)
+	}
+	return a.run("grid.order.cycle", 0)
+}
+
+// cursorToHead puts table t's cursor on the shown column i, scrolled in
+// sight as a move there is: a head cut at the edge is brought in.
+func (a *App) cursorToHead(t *dataTab, i int) {
 	t.col = i
 	a.gridMove(func(r, c, _, _ int) (int, int) { return r, c })
-	return a.run(map[bool]string{false: "grid.order.cycle", true: "grid.order.add"}[shift], 0)
 }

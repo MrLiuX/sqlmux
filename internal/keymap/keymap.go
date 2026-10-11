@@ -248,7 +248,7 @@ var when = map[string]string{
 	"keys.select":      i18n.N("表格有选中的记录、或在 VISUAL 扩选时，叠在 grid / result 之上；它的键是完整绑定，不等 timeoutlen（F10.7）"),
 	"keys.groups":      i18n.N("连接表单的 group 字段弹出分组列表时，表单的键在它之后（F10.6）"),
 	"keys.confirm":     i18n.N("确认框打开时"),
-	"keys.menu":        i18n.N("树的右键菜单打开时（F8.23）"),
+	"keys.menu":        i18n.N("右键菜单打开时（F8.23、F12.3）"),
 	"keys.ddl":         i18n.N("表的 DDL 浮窗打开时（F9.8）"),
 	"keys.value":       i18n.N("值编辑器浮窗打开时：C-s 写回并关闭，其余是它的 vim（F12.2）"),
 	"keys.newrow":      i18n.N("编辑还没保存的新行的格时，叠在选项 / 分段浮层之上（F3.33）"),

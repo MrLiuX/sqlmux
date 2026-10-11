@@ -109,6 +109,18 @@ func TestAddCondition(t *testing.T) {
 			t.Errorf("%q + %q: %q %v, want %q %v", c.where, c.cond, got, changed, c.want, c.changed)
 		}
 	}
+	for _, c := range []struct {
+		d           Dialect
+		where, want string
+	}{
+		{MySQL, `k = 1 XOR k = 2`, `(k = 1 XOR k = 2) AND k = 2`},
+		{MySQL, `k = 1 || k = 2`, `(k = 1 || k = 2) AND k = 2`}, // MySQL's or
+		{PG, `k = 1 || k = 2`, `k = 1 || k = 2 AND k = 2`},      // PG's concatenation
+	} {
+		if got, _ := AddCondition(c.where, "k = 2", c.d); got != c.want {
+			t.Errorf("%v %q: %q, want %q", c.d, c.where, got, c.want)
+		}
+	}
 	if got, _ := AddCondition("a = 1 # c", "b = 2", MySQL); got != "a = 1 AND b = 2 # c" {
 		t.Errorf("MySQL's #: %q", got)
 	}

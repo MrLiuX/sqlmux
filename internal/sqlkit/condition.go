@@ -8,6 +8,9 @@ import "strings"
 // where is trimmed, as t.applied is. It is where and false when one of the conditions of where, as AND cuts it,
 // is cond already, blanks and the case of words aside, and where has no OR at
 // its top, which would make that one no condition of the whole.
+// Reference: lazysql components/sql_context.go reads the clause the cursor is
+// in by tokens, as Scan does here; it has nothing that edits a WHERE, so the
+// join and its duplicate check are this package's own.
 // ponytail: BETWEEN … AND is told by the word before it only; a CASE … END
 // with an AND at the top of it, outside parentheses, is cut in two.
 func AddCondition(where, cond string, d Dialect) (string, bool) {
@@ -29,12 +32,15 @@ func AddCondition(where, cond string, d Dialect) (string, bool) {
 		if i < len(ts) && depth[i] == 0 && (ts[i].Kind == Ident || ts[i].Kind == Keyword) {
 			w = strings.ToLower(code[ts[i].Start:ts[i].End])
 		}
+		if i < len(ts) && depth[i] == 0 && d == MySQL && code[ts[i].Start:ts[i].End] == "||" { // MySQL's or, PG's concatenation
+			w = "or"
+		}
 		switch {
 		case w == "between":
 			between = true
 		case w == "and" && between:
 			between = false
-		case w == "or":
+		case w == "or" || w == "xor": // XOR binds as OR does, looser than AND
 			hasOr = true
 		case w == "and" || i == len(ts): // a condition ends
 			stop := len(code)

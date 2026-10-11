@@ -446,8 +446,7 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 			f.Text(cellX(i), y, right, h, st)
 		default:
 			if g.Heads {
-				_, field := v.data(0, c)
-				f.Region(uv.Rect(cellX(i)-1, y, ws[c]+2, 1).Intersect(area), Target{Kind: KindHead, Pane: g.Pane, I: field})
+				f.Region(uv.Rect(cellX(i)-1, y, ws[c]+2, 1).Intersect(area), Target{Kind: KindHead, Pane: g.Pane, I: c})
 			}
 			f.Text(cellX(i), y, right, h, name)
 			if g.Cols[c].PK && g.Key.Fg != nil { // the key icon keeps its own color (§7.7)
