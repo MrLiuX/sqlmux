@@ -459,6 +459,9 @@ var en = map[string]string{
 	"知道了":    "Got it",
 	"；":      "; ",
 
+	// F13.1
+	"连接断开，提交结果未知：刷新后核对": "Connection lost, commit result unknown: refresh and check",
+
 	// F12.5
 	"测试":               "Test",
 	"测试中…":             "Testing…",

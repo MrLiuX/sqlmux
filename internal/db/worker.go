@@ -30,15 +30,19 @@ type Worker struct {
 // the request running: a request that failed on its first call, with nothing
 // sent, may run again whatever it writes (§8.2「断线重连」). It is the same
 // value for each request till a redial, which is what callers compare.
+// tx is where the transaction was after the last call that went through, 0
+// before one: a request that began one itself and lost the connection in it
+// has lost a transaction, which the request before it did not leave.
 type counted struct {
 	Conn
 	calls int
+	tx    byte
 }
 
 func (c *counted) Exec(ctx context.Context, sql string, maxRows int) ([]Result, error) {
 	r, err := c.Conn.Exec(ctx, sql, maxRows)
 	if err == nil {
-		c.calls++
+		c.went()
 	}
 	return r, err
 }
@@ -46,7 +50,7 @@ func (c *counted) Exec(ctx context.Context, sql string, maxRows int) ([]Result, 
 func (c *counted) Query(ctx context.Context, sql string, args ...Val) (Result, error) {
 	r, err := c.Conn.Query(ctx, sql, args...)
 	if err == nil {
-		c.calls++
+		c.went()
 	}
 	return r, err
 }
@@ -55,9 +59,15 @@ func (c *counted) Query(ctx context.Context, sql string, args ...Val) (Result, e
 func (c *counted) Stream(ctx context.Context, sql string, head func([]Col) error, row func([]Val) error) error {
 	err := Each(ctx, c.Conn, sql, head, row)
 	if err == nil {
-		c.calls++
+		c.went()
 	}
 	return err
+}
+
+// went notes a call that went through.
+func (c *counted) went() {
+	c.calls++
+	c.tx = TxStatus(c.Conn)
 }
 
 // Setup runs f on c, a session's setting up that a request run again would
@@ -67,8 +77,8 @@ func Setup(c Conn, f func() error) error {
 	if !ok {
 		return f()
 	}
-	was := cc.calls
-	defer func() { cc.calls = was }()
+	was, tx := cc.calls, cc.tx
+	defer func() { cc.calls, cc.tx = was, tx }()
 	return f()
 }
 
@@ -174,7 +184,7 @@ func (w *Worker) do(ctx context.Context, safe bool, f func(context.Context, Conn
 			return TxLost{}
 		}
 	}
-	w.conn.calls = 0
+	w.conn.calls, w.conn.tx = 0, 0
 	err := f(ctx, w.conn)
 	// A request stopped by Cancel or the caller's ctx fails with the ctx's
 	// error, which says more than the server's reply to the cancel.
@@ -200,7 +210,7 @@ func (w *Worker) lost(ctx context.Context, safe, redialed bool, lost Lost, err e
 		w.broken = true
 		return err
 	}
-	txLost, sent := w.inTx(), w.conn.calls > 0
+	txLost, sent := w.inTx() || w.conn.tx == 'T' || w.conn.tx == 'E', w.conn.calls > 0
 	again := safe || !txLost && lost == LostUnsent && !sent
 	if rerr := w.redial(ctx, txLost, again); rerr != nil {
 		return rerr

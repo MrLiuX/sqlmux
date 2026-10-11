@@ -783,6 +783,9 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 	switch {
 	case errors.Is(m.err, context.Canceled):
 		t.note = ui.Note{Head: i18n.T("已取消，已回滚"), Fg: a.theme.Warn}
+	case errors.Is(m.err, db.ErrCommitUnknown): // may be written: not "rolled back", the marks stay for the user to look and decide (F13.1)
+		t.note = ui.Note{}
+		return a.showToast(i18n.T("连接断开，提交结果未知：刷新后核对"), toastTTL)
 	case m.err != nil: // on the error bar: the query bar keeps what went well alone (§7.8「错误栏」)
 		t.note = ui.Note{}
 		head, e := "", t.conn.eng.ErrorOf(m.err)

@@ -73,6 +73,7 @@ type lostConn struct {
 	n      int
 	dead   error
 	lives  int
+	failAt string // the statement that fails with dead, the connection being good for the rest
 	tx     byte
 	closed bool      // what Closed says, as PG's after a cancel took too long
 	ran    *[]string // "<n>:<sql>", across connections
@@ -101,7 +102,7 @@ func (c *lostConn) Query(_ context.Context, sql string, _ ...Val) (Result, error
 	switch {
 	case c.gone:
 		return Result{}, errGone
-	case c.isDead():
+	case c.isDead(), sql == c.failAt && c.failAt != "":
 		return Result{}, c.dead
 	}
 	if c.dead != nil {
@@ -436,6 +437,21 @@ func TestWorkerTransactionLost(t *testing.T) {
 	l.first.dead = errSent
 	if err := l.RunSafe(ctx, query("select")); err != nil || !slices.Equal(l.events, []Event{{TxLost: true, Rerun: true}}) {
 		t.Fatalf("%v, events %v", err, l.events)
+	}
+}
+
+// A request that begins a transaction itself and loses the connection in it
+// has lost one, as one begun before it: the write is not run again, the
+// transaction not there (F13.1).
+func TestWorkerTransactionBegunInTheRequestIsLost(t *testing.T) {
+	for _, dead := range []error{errSent, errUnsent} {
+		l := newLostWorker(dead)
+		l.first.tx, l.first.lives, l.first.failAt = 'T', 100, "update" // begin goes through, the update is the call that fails
+		err := l.Run(context.Background(), query("begin", "update"))
+		var lost TxLost
+		if !errors.As(err, &lost) || lost.Sent != errors.Is(dead, errSent) || !slices.Equal(l.ran, []string{"1:begin"}) {
+			t.Errorf("%v: %v, ran %v", dead, err, l.ran)
+		}
 	}
 }
 

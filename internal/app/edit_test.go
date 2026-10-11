@@ -349,6 +349,18 @@ func TestSaveFails(t *testing.T) {
 	}
 }
 
+// A COMMIT whose result is not known is said so, not as rolled back; what was
+// to be saved stays marked, to look up and save again or not (F13.1).
+func TestSaveCommitUnknown(t *testing.T) {
+	a, tab, _ := withMain(t, "UPDATE 0")
+	feed(t, a, "lix<Esc>")
+	n := len(tab.edits)
+	a.Update(saveMsg{tab: tab, failed: -1, err: db.ErrCommitUnknown})
+	if a.toast != "连接断开，提交结果未知：刷新后核对" || tab.bar != nil || len(tab.edits) != n || n == 0 {
+		t.Errorf("toast %q, bar %+v, edits %d of %d", a.toast, tab.bar, len(tab.edits), n)
+	}
+}
+
 // Changes made while a save is out stay when it lands (§10.3); one of a
 // cell that was sent is checked against what was sent next time.
 func TestSaveKeepsNewer(t *testing.T) {

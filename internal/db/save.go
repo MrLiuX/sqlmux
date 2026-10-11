@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -115,6 +116,7 @@ func Save(ctx context.Context, w *Worker, e Engine, schema, table string, keyCol
 		stmts = append(stmts, stmt{sql, args, ErrNotInserted})
 	}
 	failed = -1
+	committing := false // the COMMIT of the save's own transaction is out
 	err = w.Run(ctx, func(ctx context.Context, c Conn) error {
 		defer func() { tx = TxStatus(c) }()
 		write := func() error {
@@ -144,9 +146,17 @@ func Save(ctx context.Context, w *Worker, e Engine, schema, table string, keyCol
 			_, _ = End(ctx, c, "rollback")
 			return err
 		}
+		committing = true
 		_, err := End(ctx, c, "commit")
 		return err
 	})
+	var lost TxLost
+	if committing && errors.As(err, &lost) { // the connection went with the COMMIT: it took, if it was sent (§8.2)
+		err = ErrNotCommitted
+		if lost.Sent {
+			err = ErrCommitUnknown
+		}
+	}
 	return failed, tx, err
 }
 
