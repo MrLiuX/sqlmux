@@ -271,3 +271,36 @@ func TestTreeWidth(t *testing.T) {
 		t.Errorf("-5: %d %v", c.TreeWidth, err)
 	}
 }
+
+// A key nothing reads, misspelt, is said at the start, with the connection it
+// is in: it is no error (F13.5).
+func TestUnknownKeys(t *testing.T) {
+	c, err := Parse("confirm_dngerous = false\nmax_rows = 10\n[query]\nmax_rows = 20\n[tree]\nwidht = 30\n")
+	if err != nil || c.MaxRows != 20 {
+		t.Fatalf("an unknown key is no error: %v, %v", err, c)
+	}
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	if err := os.MkdirAll(filepath.Join(dir, "sqlmux"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	conns := "[[connection]]\nname = \"ok\"\nengine = \"postgres\"\ndsn = \"postgres://u@h/d\"\nread_only = true\n\n[[connection]]\nname = \"D\"\nengine = \"postgres\"\ndsn = \"postgres://u@h/d\"\nreadonly = true\nnote = \"x\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "sqlmux", "connections.toml"), []byte(conns), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"config.toml: 不认识的键 confirm_dngerous, max_rows, tree.widht",
+		`connections.toml: 不认识的键 note, readonly（connection "D"）`,
+	}
+	if got := UnknownKeys(c); !slices.Equal(got, want) {
+		t.Errorf("%q, want %q", got, want)
+	}
+	clean, _ := Parse("max_rows_x = 1\n")
+	if len(clean.Unknown) != 1 {
+		t.Errorf("%v", clean.Unknown)
+	}
+	ok, _ := Parse("[query]\nmax_rows = 20\n")
+	if got := UnknownKeys(ok); len(got) != 1 || strings.HasPrefix(got[0], "config.toml") {
+		t.Errorf("only the connection: %q", got)
+	}
+}

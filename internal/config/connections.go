@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -26,6 +27,44 @@ type Connection struct {
 	PasswordEnv string `toml:"password_env,omitempty"`
 	Password    string `toml:"password,omitempty"`
 	ReadOnly    bool   `toml:"read_only,omitempty"` // §13, from F5.3
+}
+
+// UnknownKeys are the lines that say which keys of config.toml, and of each
+// connection of connections.toml, nothing reads: `readonly` for `read_only`
+// reads a connection that is writable, with no word. The files are the ones
+// the program read; what does not read is its error's to say (F13.5).
+func UnknownKeys(c *Config) (lines []string) {
+	if len(c.Unknown) > 0 {
+		lines = append(lines, i18n.T("config.toml: 不认识的键 %s", strings.Join(c.Unknown, ", ")))
+	}
+	data, err := os.ReadFile(connectionsPath())
+	if err != nil {
+		return lines
+	}
+	var file struct {
+		Connection []map[string]any `toml:"connection"`
+	}
+	if _, err := toml.Decode(string(data), &file); err != nil {
+		return lines
+	}
+	known, t := map[string]bool{}, reflect.TypeFor[Connection]()
+	for i := range t.NumField() {
+		name, _, _ := strings.Cut(t.Field(i).Tag.Get("toml"), ",")
+		known[name] = true
+	}
+	for _, m := range file.Connection {
+		var unknown []string
+		for k := range m {
+			if !known[k] {
+				unknown = append(unknown, k)
+			}
+		}
+		if slices.Sort(unknown); len(unknown) > 0 {
+			name, _ := m["name"].(string)
+			lines = append(lines, i18n.T("connections.toml: 不认识的键 %s（connection %q）", strings.Join(unknown, ", "), name))
+		}
+	}
+	return lines
 }
 
 // connectionsPath is connections.toml (§14).

@@ -56,6 +56,11 @@ type Config struct {
 	// entries; the keymap package gives them meaning.
 	Leader   string
 	Bindings []Binding
+
+	// Unknown are the keys of config.toml nothing reads, a misspelt one among
+	// them, as TOML names them (`query.max_rowz`); said at the start, not an
+	// error (F13.5).
+	Unknown []string
 }
 
 // Binding is one `key = "value"` line under [keys.<scope>] or [map.<...>].
@@ -145,8 +150,12 @@ func Parse(data string) (*Config, error) {
 		Keys any `toml:"keys"`
 		Map  any `toml:"map"`
 	}{}
-	if _, err := toml.Decode(data, &raw); err != nil {
+	md, err := toml.Decode(data, &raw)
+	if err != nil {
 		return nil, err
+	}
+	for _, k := range md.Undecoded() {
+		c.Unknown = append(c.Unknown, k.String())
 	}
 	if raw.Keys != nil || raw.Map != nil { // F5.9 moved them
 		return nil, errors.New("[keys] / [map] belong in keymaps.toml (sqlmux keys --format toml writes a complete reference)")

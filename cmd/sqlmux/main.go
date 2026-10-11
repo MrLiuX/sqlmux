@@ -88,8 +88,11 @@ func run(args []string) error {
 	}
 	i18n.Set(cfg.Language) // from here on, what is shown follows it (§14)
 	var warning string
+	for _, line := range config.UnknownKeys(cfg) { // a misspelt key, not a reason to stay out (F13.5)
+		warning = app.JoinNotes(warning, line)
+	}
 	if err := config.MigrateConsoles(); err != nil { // the queries were consoles before F10.11
-		warning = err.Error()
+		warning = app.JoinNotes(warning, err.Error())
 	}
 	l, err := startLayout(name, *layout, &warning)
 	if err != nil {
