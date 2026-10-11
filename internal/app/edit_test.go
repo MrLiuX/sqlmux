@@ -357,12 +357,16 @@ func TestSaveCommitUnknown(t *testing.T) {
 	feed(t, a, "lix<Esc>")
 	n := len(tab.edits)
 	a.Update(saveMsg{tab: tab, rows: []db.Row{{Key: []string{"1"}}}, failed: 0, err: errors.New("boom")}) // an earlier failure: a bar that says rolled back
-	if tab.bar == nil {
+	if tab.bar == nil || tab.failed == nil {
 		t.Fatal("no bar before")
 	}
+	tab.note = ui.Note{Head: "已取消，已回滚"} // or a cancel's: the same lie
 	a.Update(saveMsg{tab: tab, failed: -1, err: db.ErrCommitUnknown})
 	if a.toast != "连接断开，提交结果未知：刷新后核对" || tab.bar != nil || len(tab.edits) != n || n == 0 {
 		t.Errorf("toast %q, bar %+v, edits %d of %d", a.toast, tab.bar, len(tab.edits), n)
+	}
+	if tab.note != (ui.Note{}) || tab.failed != nil {
+		t.Errorf("an earlier failure's marks stay: note %+v, failed %v", tab.note, tab.failed)
 	}
 }
 
