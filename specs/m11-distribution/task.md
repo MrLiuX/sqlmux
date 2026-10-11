@@ -19,14 +19,14 @@
 - **涉及**：`.goreleaser.yaml`、`.github/workflows/release.yml`、`cmd/sqlmux`（`--version`）、`justfile`、README
 
 **开发**（§15「发布与分发」）
-- [ ] `sqlmux --version` 打印版本、commit、日期，来自 ldflags（`main.version` 等三个变量，没注入时是 `dev`）；`just build` 也注入 `git describe` 的值。
-- [ ] `.goreleaser.yaml`：`cmd/sqlmux`，`CGO_ENABLED=0`，darwin / linux × amd64 / arm64（不出 Windows，本来不支持），`-s -w` 加版本的 ldflags，`tar.gz` 归档（名字 `sqlmux_<version>_<os>_<arch>`），`checksums.txt`，changelog 按 commit 前缀分组（`F*:` 功能、`docs:`、`e2e:`、`prune:` 排除）；`release.draft = false`，说明用仓库里的模板（`.goreleaser` 的 `release.header` 指向 README 的一句话加安装方式）。
+- [ ] `sqlmux --version` 打印版本、commit、日期，来自 ldflags（`main.version` 等三个变量）；没注入时用 Go 记进二进制的模块版本（`runtime/debug.ReadBuildInfo` 的 `Main.Version`：`go install …@v0.2.1` 装的就是 `v0.2.1`，checkout 里直接 `go build` 的是 Go 1.24 起带 commit 和时间的伪版本），再没有才是 `dev`；不取 `vcs.*`（proxy 装的没有，checkout 里的伪版本已经带了）。`just build` 自己注入 `git describe` 的值（审查时定）。
+- [ ] `.goreleaser.yaml`：`cmd/sqlmux`，`CGO_ENABLED=0`，darwin / linux × amd64 / arm64（不出 Windows，本来不支持），`-s -w` 加版本的 ldflags，`tar.gz` 归档（名字 `sqlmux_<version>_<os>_<arch>`），`checksums.txt`，changelog 按 commit 前缀分组（`F*:` 功能、`docs:`、`e2e:`、`prune:` 排除）；`release.draft = false`，说明用仓库里的模板（`.goreleaser` 的 `release.header` 是内联字符串（OSS 没有 `from_file`），这批不写，文字由 oss-maintainer 起草、用户过目后在第一个 GoReleaser tag 之前加）。
 - [ ] `.github/workflows/release.yml`：`push: tags: ['v*']`，先跑 lint / vet / 单测（复用 ci.yml 的 job 或 `workflow_call`），再 `goreleaser release --clean`；`permissions: contents: write`；`just release-check` 本地跑 `goreleaser check` 和 `goreleaser build --snapshot --clean`。
-- [ ] README 的 Install 节：`go install github.com/kackerx/sqlmux/cmd/sqlmux@latest`、Release 页下载、brew 和 npm 两行（F11.2 / F11.3 落地后由决策者补）。
+- [ ] README 的 Install 节：`go install github.com/kackerx/sqlmux/cmd/sqlmux@latest`（决策者 069c422 已写）、Release 页下载一句（压缩包名和 `checksums.txt`，worker 这批补）、brew 和 npm 两行（F11.2 / F11.3 落地后由决策者补）。
 - [ ] 细节（已定）：GoReleaser 用 OSS 版，不用 Pro 的功能；发布说明的额外文字由 oss-maintainer 起草、用户过目后才进 Release。
 
 **验收**
-- [ ] 单测：`--version` 没注入时输出 `dev`。
+- [ ] 单测：`--version` 没注入、也没有模块版本时输出 `dev`（`go test` 的二进制）。
 - [ ] `goreleaser build --snapshot` 在本地出四个二进制，`./dist/…/sqlmux --version` 显示 snapshot 版本。
 - [ ] 打 tag 后 GitHub Release 有四个压缩包和 checksums.txt，workflow 绿（推送后由决策者确认）。
 
@@ -36,7 +36,7 @@
 - **涉及**：新仓库 `kackerx/homebrew-tap`（`Formula/sqlmux.rb`）、`.github/workflows/release.yml`
 
 **开发**（§15「发布与分发」）
-- [ ] 用户（或决策者用 kackerx 账号）建 `kackerx/homebrew-tap`；formula 从 tag 的源码包编译：`depends_on "go" => :build`，`system "go", "build", *std_go_args(ldflags: …)`，`test` 跑 `sqlmux --version`；macOS 和 Linux 都能装。
+- [ ] 决策者用 kackerx 账号建 `kackerx/homebrew-tap`（2026-10-11 已建）并推一个只有 README 的初始 commit（空仓库上 actions/checkout 取不到默认分支，审查时发现；workflow 不为空仓库写分支）；formula 从 tag 的源码包编译：`depends_on "go" => :build`，`system "go", "build", *std_go_args(ldflags: …)`，`test` 跑 `sqlmux --version`；macOS 和 Linux 都能装。
 - [ ] release workflow 在 Release 建好后，用一个 PAT（仓库密钥 `TAP_GITHUB_TOKEN`）把新 tag 的 formula 整份生成（模板只在本仓库 `.github/scripts/tap-formula.sh` 一处，tap 里不手工放一份；worker 开工时定，tap 仓库本来是空的）直接提交到 tap 仓库（不走 PR）。
 - [ ] 细节（已定）：不用 GoReleaser 的 `homebrew_casks`（只管 macOS，没签名的二进制被 Gatekeeper 拦，要么交 Apple 年费要么 xattr 绕过）和已废弃的 `brews`；homebrew-core 等项目够知名再提交。
 
@@ -46,7 +46,7 @@
 ## F11.3 npm：壳包加平台子包 · 状态：todo
 
 - **依赖**：F11.1
-- **涉及**：`npm/`（壳包 `sqlmux` 和 `@sqlmux/<os>-<arch>` 四个子包的 package.json 模板、壳包的 bin 脚本）、`.github/workflows/release.yml`
+- **涉及**：`npm/`（壳包 `sqlmux` 和 `@kackerx/sqlmux-<os>-<arch>` 四个子包的 package.json 模板、壳包的 bin 脚本）、`.github/workflows/release.yml`
 
 **开发**（§15「发布与分发」）
 - [ ] 照 esbuild / turbo 的做法：壳包 `sqlmux` 的 `optionalDependencies` 列出 `@kackerx/sqlmux-darwin-arm64`、`-darwin-x64`、`-linux-x64`、`-linux-arm64`（作用域 `@kackerx`，用户 2026-10-10 定），每个子包 `os` / `cpu` 字段限定平台、里面只有一个二进制；壳包的 `bin/sqlmux.js` 按 `process.platform` / `process.arch` `require.resolve` 子包里的二进制，`spawnSync` 带 `stdio: "inherit"` 执行，退出码透传，找不到子包时打印安装提示并退出 1。不用 postinstall 下载（pnpm 10 默认禁脚本，`--ignore-scripts` 会装出空包）。
