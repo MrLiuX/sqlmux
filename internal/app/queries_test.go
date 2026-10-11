@@ -11,6 +11,7 @@ import (
 
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // queryFile writes a query file with text in it.
@@ -428,5 +429,41 @@ func TestQueriesAfterMigration(t *testing.T) {
 	}
 	if got := queryNames(a); !slices.Contains(got, "query_2") {
 		t.Errorf("the Queries node lists %v", got)
+	}
+}
+
+// The palette's 表 and 所有 scopes list the queries of the Queries node after
+// the tables, with the connection state.json has of them; ↵ opens one that is
+// not open, as it does in the tree; the preview is the file's first rows, none
+// for an open query that has no file (F12.10).
+func TestPaletteQueries(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a := sized(160, 45, "nerd")
+	queryFile(t, "query_2", "select 1 -- one\nfrom t\n")
+	a.state.Queries = map[string]config.QueryState{"query_2": {Conn: "doraemon"}}
+	feed(t, a, "<C-p>@que")
+	rows := a.paletteView().Rows
+	if len(rows) != 2 || rows[0].Name != "query_1" || rows[1].Name != "query_2" || rows[1].Where != "doraemon" || rows[1].Tag != "Query" {
+		t.Fatalf("@que: %+v", rows)
+	}
+	if a.palettePreview() != nil {
+		t.Error("query_1 has no file: no preview")
+	}
+	feed(t, a, "<C-n>")
+	if pv := a.palettePreview(); pv == nil || pv.Text != "select 1 -- one\nfrom t\n" {
+		t.Errorf("preview %+v", pv)
+	}
+	feed(t, a, "<CR>")
+	if q := queryOf(a.focused()); a.palette != nil || q == nil || q.name != "query_2" {
+		t.Errorf("↵: palette %v, focused query %v", a.palette != nil, q)
+	}
+	feed(t, a, "<C-p>query_1") // 所有 has them too, after the open tabs
+	if rows := a.paletteView().Rows; !slices.ContainsFunc(rows, func(r ui.PaletteRow) bool { return r.Tag == "Query" && r.Name == "query_1" }) {
+		t.Errorf("in 所有: %+v", rows)
+	}
+	feed(t, a, "<Esc><C-p>@query_1")
+	feed(t, a, "<CR>") // open: gone to, not opened again
+	if q := queryOf(a.focused()); q == nil || q.name != "query_1" || len(a.queries()) != 2 {
+		t.Errorf("↵ on an open query: %v, %d open", q, len(a.queries()))
 	}
 }
