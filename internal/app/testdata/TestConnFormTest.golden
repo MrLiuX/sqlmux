@@ -22,8 +22,8 @@
 │        Views (0)           │                          │      database                                                        │                             │
 │ ▾  工作区                  │                          │     read_only [ ]                                                    │                             │
 │   ▾  data                  │                          │          高级 ▾                                                      │                             │
-│       ②  query_1           │                          │           dsn postgres://u@127.0.0.1:1/d?connect_timeout=1xx         │                             │
-│ ▾  Queries                 │                          │  password_cmd                                                        │                             │
+│       ②  query_1           │                          │           dsn postgres://u@127.0.0.1:1/d?connect_timeout=1           │                             │
+│ ▾  Queries                 │                          │  password_cmd xx                                                     │                             │
 │      query_1               │                          │ 已连接 · PostgreSQL 17.7 · 120ms                                      │                             │
 │      query_2               │                          │───────────────────────────────────────────────────────────────────────│                             │
 │                             │                          │ [ 保存 ] [ 测试 ] [ 取消 ]             Tab 下一项 · ↵ 保存 · esc 取消 │                             │

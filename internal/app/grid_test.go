@@ -430,7 +430,7 @@ func TestColType(t *testing.T) {
 		"character varying(20)": ui.ColString, "text": ui.ColString, `"char"`: ui.ColString,
 		"order_status": ui.ColOther, "uuid": ui.ColOther, "integer[]": ui.ColOther, "timeline": ui.ColOther,
 		// MySQL's
-		"bigint unsigned": ui.ColNumber, "decimal(10,2)": ui.ColNumber, "tinyint(1)": ui.ColBool, "tinyint(4)": ui.ColNumber,
+		"bigint unsigned": ui.ColNumber, "unsigned bigint": ui.ColNumber, "unsigned int": ui.ColNumber, "int unsigned zerofill": ui.ColNumber, "decimal(10,2)": ui.ColNumber, "tinyint(1)": ui.ColBool, "tinyint(4)": ui.ColNumber,
 		"datetime(3)": ui.ColTime, "varchar(64)": ui.ColString, "enum('a','b')": ui.ColString, "blob": ui.ColOther,
 	} {
 		if got := colType(typ); got != want {

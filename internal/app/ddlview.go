@@ -9,6 +9,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/sqlkit"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
@@ -39,6 +40,9 @@ func (a *App) openDDL(column bool) tea.Cmd {
 	t := dataOf(p)
 	if t == nil {
 		return nil
+	}
+	if t.conn.State != connReady { // its error page, or its dial still on: no Meta to ask
+		return a.showToast(i18n.T("连接还没连上"), toastTTL)
 	}
 	d := &ddlPopup{conn: t.conn, table: t.table}
 	if column {

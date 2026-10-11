@@ -103,7 +103,8 @@ func (a *App) drawMenu(f *ui.Frame) {
 		w = max(w, ui.Width(it.label)+5) // a border, a blank and the two cells Complete leaves on the right
 	}
 	// from the row under the pointer; over it, ending on the row above, when it does not fit below: the node clicked is seen
-	box, rows := ui.CompleteBox(a.window(), m.at, w, len(v.Items), 0, ui.CompleteRows)
+	box, rows := ui.CompleteBox(a.window(), m.at, w, len(v.Items), 0, len(v.Items))
+	v.Top = max(m.sel-rows+1, 0) // a window too short for all of them scrolls with the selection
 	f.Region(f.Bounds(), ui.Target{Kind: ui.KindBackdrop})
 	v.Draw(f, box, rows)
 }

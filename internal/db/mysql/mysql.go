@@ -189,34 +189,53 @@ func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (
 		return r, err
 	}
 	defer rows.Close()
-	types, err := rows.ColumnTypes()
-	if err != nil {
-		return r, err
-	}
-	raw := make([]sql.RawBytes, len(types))
-	dest := make([]any, len(types))
-	for i, t := range types {
-		r.Cols, dest[i] = append(r.Cols, db.Col{Name: t.Name(), Type: strings.ToLower(t.DatabaseTypeName())}), &raw[i]
-	}
-	for rows.Next() {
-		if maxRows > 0 && len(r.Rows) == maxRows {
-			r.Truncated = true
-			continue
-		}
-		if err := rows.Scan(dest...); err != nil {
-			return r, err
-		}
-		row := make([]db.Val, len(raw))
-		for i, v := range raw {
-			row[i] = cell(v, r.Cols[i].Type, shown)
-		}
-		r.Rows = append(r.Rows, row)
-	}
+	err = each(rows, shown, func(cols []db.Col) error { r.Cols = cols; return nil },
+		func() bool {
+			if maxRows > 0 && len(r.Rows) == maxRows {
+				r.Truncated = true
+				return false
+			}
+			return true
+		},
+		func(vals []db.Val) error { r.Rows = append(r.Rows, vals); return nil })
 	r.Tag, r.Took = fmt.Sprintf("%s %d", strings.ToUpper(word), len(r.Rows)), time.Since(start)
 	if err := ctx.Err(); err != nil { // killed, SLEEP() answers 1 as if done; a read, it did nothing else
 		return r, err
 	}
-	return r, rows.Err()
+	return r, err
+}
+
+// each reads the result in rows: head with its columns, then row with each of
+// the rows want says to keep, the others read and dropped; text tells a
+// value that is no UTF-8 (the grid's and the file's differ, F12.4).
+func each(rows *sql.Rows, text func([]byte, string) string, head func([]db.Col) error, want func() bool, row func([]db.Val) error) error {
+	types, err := rows.ColumnTypes()
+	if err != nil {
+		return err
+	}
+	raw, dest, cols := make([]sql.RawBytes, len(types)), make([]any, len(types)), make([]db.Col, len(types))
+	for i, t := range types {
+		cols[i], dest[i] = db.Col{Name: t.Name(), Type: strings.ToLower(t.DatabaseTypeName())}, &raw[i]
+	}
+	if err := head(cols); err != nil {
+		return err
+	}
+	for rows.Next() {
+		if !want() {
+			continue
+		}
+		if err := rows.Scan(dest...); err != nil {
+			return err
+		}
+		vals := make([]db.Val, len(raw))
+		for i, v := range raw {
+			vals[i] = cell(v, cols[i].Type, text)
+		}
+		if err := row(vals); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 // noted is what a statement's outcome does to c: the transaction it is in, or
@@ -236,6 +255,9 @@ func (c *Conn) noted(query string, err error) error {
 
 // Stream reads the rows of a statement that answers with them as they come,
 // one at a time (F12.4); cancelled, it is killed as run's is.
+// Reference: lazysql drivers/query_stream.go, as Postgres' Stream; cancelling
+// the driver's context there would close this connection (§8.3), so a stop is
+// the KILL QUERY that run's cancel is.
 func (c *Conn) Stream(ctx context.Context, query string, head func([]db.Col) error, row func([]db.Val) error) (err error) {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -251,34 +273,14 @@ func (c *Conn) Stream(ctx context.Context, query string, head func([]db.Col) err
 	// Close reads the rest of the result: a stop kills the statement first
 	// (the cancel is the watch's KILL), as Postgres' does
 	defer rows.Close()
-	stop := func(err error) error { cancel(); return err }
-	types, err := rows.ColumnTypes()
+	err = each(rows, hexed, head, func() bool { return true }, row)
+	if cerr := ctx.Err(); cerr != nil { // killed: the rows so far were all of it
+		return cerr
+	}
 	if err != nil {
-		return stop(err)
+		cancel()
 	}
-	raw, dest, cols := make([]sql.RawBytes, len(types)), make([]any, len(types)), make([]db.Col, len(types))
-	for i, t := range types {
-		cols[i], dest[i] = db.Col{Name: t.Name(), Type: strings.ToLower(t.DatabaseTypeName())}, &raw[i]
-	}
-	if err := head(cols); err != nil {
-		return stop(err)
-	}
-	for rows.Next() {
-		if err := rows.Scan(dest...); err != nil {
-			return stop(err)
-		}
-		vals := make([]db.Val, len(raw))
-		for i, v := range raw {
-			vals[i] = cell(v, cols[i].Type, hexed)
-		}
-		if err := row(vals); err != nil {
-			return stop(err)
-		}
-	}
-	if err := ctx.Err(); err != nil { // killed: the rows so far were all of it
-		return err
-	}
-	return rows.Err()
+	return err
 }
 
 // cell is the value v of a column of type typ, a non-UTF-8 one told by text;
@@ -301,15 +303,11 @@ func shown(v []byte, _ string) string {
 	return string(v)
 }
 
-// binaryTypes are the column types that hold bytes, not text, whatever the
-// bytes of a value happen to be.
-var binaryTypes = map[string]bool{"binary": true, "varbinary": true, "tinyblob": true, "blob": true, "mediumblob": true, "longblob": true}
-
 // hexed is a value as a file has it: a binary one as 0x and its hex, as
 // MySQL writes a literal and as Postgres' bytea reads, not the grid's
 // placeholder, which is no data (F12.4).
 func hexed(v []byte, typ string) string {
-	if binaryTypes[typ] || !utf8.Valid(v) {
+	if db.IsBytes(typ) || !utf8.Valid(v) {
 		return "0x" + hex.EncodeToString(v)
 	}
 	return string(v)

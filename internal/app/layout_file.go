@@ -210,9 +210,7 @@ func restoreWindow(s *Session, lw config.LayoutWindow, used map[string]bool) (*W
 				warns = append(warns, warn)
 				continue
 			}
-			if d := tb.Data; d != nil && slices.ContainsFunc(p.Tabs, func(o Tab) bool {
-				return o.Data != nil && o.Data.conn == d.conn && idOf(o.Data.table) == idOf(d.table)
-			}) { // a table is one tab of a pane (F3.37): the first stays
+			if d := tb.Data; d != nil && p.tableTab(d.conn, d.table) >= 0 { // a table is one tab of a pane (F3.37): the first stays
 				continue
 			}
 			if i == lp.Current {

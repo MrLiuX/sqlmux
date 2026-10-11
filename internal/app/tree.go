@@ -48,6 +48,15 @@ func (a *App) connect(c *Conn) tea.Cmd {
 	}
 }
 
+// notReady is what a command that needs c connected does while it is not:
+// dials again after a failure; while the dial is on, says so (F12.5).
+func (a *App) notReady(c *Conn) tea.Cmd {
+	if cmd := a.connect(c); cmd != nil {
+		return cmd
+	}
+	return a.showToast(i18n.T("连接还没连上"), toastTTL)
+}
+
 // gotConnected takes c's connections in, or marks it failed; the queries
 // waiting on it go over, or stay (§7.8「query 标题」). One of a session
 // closed meanwhile closes them again: nothing would.
@@ -548,7 +557,7 @@ func (a *App) refreshTree() tea.Cmd {
 		return a.noConnection()
 	}
 	if c.State != connReady { // a layout's other session, still connecting (F6.5)
-		return a.showToast(i18n.T("连接还没连上"), toastTTL)
+		return a.notReady(c)
 	}
 	c.dropCols()
 	return a.loadCatalog(c)

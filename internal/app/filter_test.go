@@ -1,6 +1,7 @@
 package app
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -47,6 +48,13 @@ func TestCellCondition(t *testing.T) {
 		{sqlkit.MySQL, "float unsigned", false, db.Val{S: "0.1"}, ""},
 		{sqlkit.MySQL, "double", false, db.Val{S: "0.1"}, `"c" = 0.1`},
 		{sqlkit.PG, "xml", false, db.Val{S: "<a/>"}, ""},
+		{sqlkit.MySQL, "float unsigned zerofill", false, db.Val{S: "0.1"}, ""},
+		{sqlkit.MySQL, "unsigned float", false, db.Val{S: "0.1"}, ""},
+		{sqlkit.MySQL, "unsigned bigint", false, db.Val{S: "7"}, `"c" = 7`},
+		{sqlkit.MySQL, "geomcollection", false, db.Val{S: "\x00\x00\x00\x00\x01\x07"}, ""}, // valid UTF-8: only its type keeps it out
+		{sqlkit.MySQL, "geomcollection", false, db.Val{S: "<binary 34 bytes>"}, ""},
+		{sqlkit.MySQL, "geometry", false, db.Val{S: "<binary 34 bytes>"}, ""},
+		{sqlkit.MySQL, "text", false, db.Val{S: "<binary 3 bytes>"}, ""}, // whatever the type says, bytes the grid does not have are no value to ask for
 		{sqlkit.MySQL, "longblob", false, db.Val{S: "x"}, ""},
 		{sqlkit.MySQL, "varbinary(16)", false, db.Val{S: "x"}, ""},
 		{sqlkit.PG, "json", false, db.Val{S: "{}"}, ""},
@@ -127,6 +135,7 @@ func TestOrderHeadKeys(t *testing.T) {
 		{orderOf("status-"), `order by "status" desc, "id" limit`},
 		{nil, `order by "id" limit`},
 	} {
+		tab.pageNo = 2 // the rows are others now: from the first page
 		sql := lastSQL(t, rec, a.run("grid.order.cycle", 0))
 		if len(tab.order) != len(want.order) || len(want.order) > 0 && tab.order[0] != want.order[0] || !strings.Contains(sql, want.sql) || tab.pageNo != 0 {
 			t.Fatalf("gs %d: %v, %s", i+1, tab.order, sql)
@@ -196,6 +205,31 @@ func TestOrderHeadClick(t *testing.T) {
 	}
 }
 
+// A head cut at the pane's edge is brought into sight by a click on it and by
+// a right-click, as a move to its cell is (F12.3).
+func TestHeadClipped(t *testing.T) {
+	for _, how := range []string{"click", "right"} {
+		a, tab, _ := withRecorder(t)
+		a.Update(tea.WindowSizeMsg{Width: 80, Height: 45}) // the last head shows two columns of itself
+		a.View()
+		heads := 0
+		for _, h := range a.hits {
+			if h.Target.Kind == ui.KindHead {
+				heads++
+			}
+		}
+		p := find(t, a, ui.Target{Kind: ui.KindHead, Pane: 1, I: heads - 1}).Min.Add(uv.Pos(1, 0))
+		if how == "click" {
+			click(a, p)
+		} else {
+			rightClick(a, p)
+		}
+		if tab.left == 0 || tab.col != heads-1 {
+			t.Errorf("%s on the cut head: left %d, col %d", how, tab.left, tab.col)
+		}
+	}
+}
+
 // batchSQL is lastSQL for a cmd that is a batch with the page's fetch in it.
 func batchSQL(t *testing.T, rec *recDB, cmd tea.Cmd) string {
 	t.Helper()
@@ -238,10 +272,36 @@ func TestGridMenu(t *testing.T) {
 		t.Fatalf("the cell's menu: %v", got)
 	}
 	golden.RequireEqual(t, a.render().String())
+	// the last item, the ninth, is drawn and takes the selection with 8 j
+	feed(t, a, "jjjjjjjj")
+	if row := strings.Split(a.render().String(), "\n"); !slices.ContainsFunc(row, func(l string) bool { return strings.Contains(l, "导出…") }) || a.menu.sel != 8 {
+		t.Errorf("the ninth item is not drawn: sel %d", a.menu.sel)
+	}
+	feed(t, a, "<Esc>")
+	// a window with room for five rows: the list scrolls with the selection, the ninth is seen with its highlight
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 12})
+	rightClick(a, find(t, a, ui.Target{Kind: ui.KindCell, Pane: 1, Action: "grid.goto 0 1"}).Min.Add(uv.Pos(1, 0)))
+	feed(t, a, "jjjjjjjj")
+	f := a.render()
+	hit := -1
+	for y, l := range strings.Split(f.String(), "\n") {
+		if strings.Contains(l, "导出…") {
+			hit = y
+		}
+	}
+	if hit < 0 || a.menu.sel != 8 || strings.Contains(f.String(), "在值编辑器中打开") {
+		t.Errorf("short window: ninth item at row %d, sel %d", hit, a.menu.sel)
+	} else if x := strings.Index(strings.Split(f.String(), "\n")[hit], "导出…"); f.Buf.CellAt(ui.Width(strings.Split(f.String(), "\n")[hit][:x])-1, hit).Style.Bg != a.theme.Select {
+		t.Error("the ninth item is not highlighted")
+	}
+	feed(t, a, "<Esc>")
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
+	rightClick(a, cell)
 
+	tab.pageNo = 2
 	feed(t, a, "jjj<CR>") // 按这一列排序 ↓
-	if len(tab.order) != 1 || tab.order[0].Col != "status" || !tab.order[0].Desc || a.menu != nil {
-		t.Errorf("↓: %v", tab.order)
+	if len(tab.order) != 1 || tab.order[0].Col != "status" || !tab.order[0].Desc || a.menu != nil || tab.pageNo != 0 {
+		t.Errorf("↓: %v, page %d", tab.order, tab.pageNo)
 	}
 	answer(a, tab)
 	rightClick(a, cell)
@@ -269,9 +329,10 @@ func TestGridMenu(t *testing.T) {
 	if got := menuLabels(a); strings.Join(got, "|") != "按这一列排序 ↑|按这一列排序 ↓|加入排序|隐藏这一列" || tab.col != 2 {
 		t.Errorf("the head's menu: %v, col %d", got, tab.col)
 	}
+	tab.pageNo = 2
 	feed(t, a, "jj<CR>") // 加入排序
-	if len(tab.order) != 2 {
-		t.Errorf("add: %v", tab.order)
+	if len(tab.order) != 2 || tab.pageNo != 0 {
+		t.Errorf("add: %v, page %d", tab.order, tab.pageNo)
 	}
 	_ = rec
 }
@@ -281,17 +342,17 @@ func (a *App) fieldNameAtCursor(t *dataTab) string { return t.page.Cols[t.fieldA
 // A result's cell has the value editor and the copy; its head, no menu at
 // all: a result has no ORDER to put it in nor columns to hide (F12.3).
 func TestGridMenuResult(t *testing.T) {
-	r := db.Result{Cols: []db.Col{{Name: "doc", Type: "jsonb"}}, Rows: [][]db.Val{{{S: `{"k": 1}`}}}}
+	r := db.Result{Cols: []db.Col{{Name: "doc", Type: "jsonb"}}, Rows: [][]db.Val{{{S: `{"k": 1}`}}, {{S: `{"k": 2}`}}}}
 	a, _ := inRun(t, &execDB{res: map[string]db.Result{"select 1": r}}, "select 1;")
 	press(t, a, "<CR>")
 	id := a.win().Result.ID
-	cell := find(t, a, ui.Target{Kind: ui.KindCell, Pane: id, Action: "grid.goto 0 0"}).Min.Add(uv.Pos(1, 0))
-	rightClick(a, cell)
-	if got := menuLabels(a); strings.Join(got, "|") != "在值编辑器中打开|复制这一格|导出…" {
-		t.Fatalf("the result cell's menu: %v", got)
+	cell := find(t, a, ui.Target{Kind: ui.KindCell, Pane: id, Action: "grid.goto 1 0"}).Min.Add(uv.Pos(1, 0))
+	rightClick(a, cell) // the second row's: the cursor goes there, not the menu of the first
+	if got := menuLabels(a); strings.Join(got, "|") != "在值编辑器中打开|复制这一格|导出…" || a.win().Result.tab().Result.row != 1 {
+		t.Fatalf("the result cell's menu: %v, row %d", got, a.win().Result.tab().Result.row)
 	}
 	feed(t, a, "<CR>")
-	if a.value == nil || !a.value.readOnly {
+	if a.value == nil || !a.value.readOnly || !strings.Contains(a.value.text(), `"k": 2`) {
 		t.Errorf("the value editor: %v", a.value)
 	}
 	a.value = nil

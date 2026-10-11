@@ -238,31 +238,35 @@ func TestConnFormTest(t *testing.T) {
 	a.form.sel = fieldAdvanced
 	feed(t, a, "<Space><Tab>postgres://u@127.0.0.1:1/d?connect_timeout=1")
 	_, cmd = a.Update(teaKey("<C-t>"))
-	if cmd == nil || a.form.testing == 0 || !strings.Contains(a.render().String(), "测试中…") {
+	if cmd == nil || a.form.testing == 0 || !strings.Contains(a.render().String(), "测试中…") || !strings.Contains(a.render().String(), "[ 测试 ]") {
 		t.Fatalf("testing: %v, %d", cmd != nil, a.form.testing)
 	}
 	a.Update(cmd())
-	if a.form.result != "" || a.form.testing != 0 || !strings.Contains(a.form.err, "127.0.0.1:1") {
-		t.Errorf("refused: result %q, %q", a.form.result, a.form.err)
+	if a.form.resultOK || a.form.testing != 0 || !strings.Contains(a.form.result, "127.0.0.1:1") || a.form.err != "" {
+		t.Errorf("refused: result %q, ok %v, err %q", a.form.result, a.form.resultOK, a.form.err)
 	}
 	if connections() != "" {
 		t.Errorf("a test saved: %s", connections())
 	}
+	feed(t, a, "<Tab>") // moving between fields leaves it
+	if !strings.Contains(a.form.result, "127.0.0.1:1") {
+		t.Errorf("Tab cleared a failed test: %q", a.form.result)
+	}
 	feed(t, a, "x")
-	if a.form.err != "" {
-		t.Errorf("typing clears the result: %q", a.form.err)
+	if a.form.result != "" {
+		t.Errorf("typing clears the result: %q", a.form.result)
 	}
 	// a result of a test the fields have left behind is dropped, one that is the form's own shown
 	_, cmd = a.Update(teaKey("<C-t>"))
 	late := cmd()
 	feed(t, a, "x")
 	a.Update(late)
-	if a.form.err != "" || a.form.testing != 0 {
-		t.Errorf("a late result: %q", a.form.err)
+	if a.form.result != "" || a.form.testing != 0 {
+		t.Errorf("a late result: %q", a.form.result)
 	}
 	a.form.testing = 7
 	a.Update(connTested{seq: 7, note: "已连接 · PostgreSQL 17.7 · 120ms"})
-	if a.form.result != "已连接 · PostgreSQL 17.7 · 120ms" || a.form.err != "" {
+	if a.form.result != "已连接 · PostgreSQL 17.7 · 120ms" || a.form.err != "" || !a.form.resultOK {
 		t.Errorf("connected: result %q, err %q", a.form.result, a.form.err)
 	}
 	golden.RequireEqual(t, a.render().String())
@@ -273,6 +277,44 @@ func TestConnFormTest(t *testing.T) {
 	a.form.err = ""
 	a.form = nil
 	a.Update(connTested{seq: 7, note: "late"}) // no form: nothing to show it on
+}
+
+// What the fields say changing, by typing, by the engine, by a group taken
+// from the list, by going to another connection, drops a test's result and
+// the test still out (F12.5).
+func TestConnFormUntest(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	a, _ := withSessions()
+	a.sess.Conns[0].Spec.Group = "work"
+	a.run("conn.new", 0)
+	f := a.form
+	shown := func() { f.result, f.resultOK, f.testing = "已连接", true, 3 }
+	for name, change := range map[string]func(){
+		"typing":  func() { feed(t, a, "x") },
+		"engine":  func() { a.formSegment(fieldEngine, 1) },
+		"group":   func() { f.sel = fieldGroup; feed(t, a, "w"); shown(); a.groupAccept() },
+		"another": func() { a.selectConn(0) },
+	} {
+		f = a.form
+		shown()
+		change()
+		if f = a.form; f.result != "" || f.resultOK || f.testing != 0 {
+			t.Errorf("%s: result %q, ok %v, testing %d", name, f.result, f.resultOK, f.testing)
+		}
+		a.selectConn(len(a.sess.Conns))
+	}
+}
+
+func TestVersionText(t *testing.T) {
+	for _, c := range []struct{ engine, v, want string }{
+		{"postgres", "PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc", "PostgreSQL 17.11"},
+		{"postgres", "PostgreSQL 16.2 on x86_64-pc-linux-gnu", "PostgreSQL 16.2"},
+		{"mysql", "8.4.0", "MySQL 8.4.0"},
+	} {
+		if got := versionText(c.engine, c.v); got != c.want {
+			t.Errorf("%s %q: %q, want %q", c.engine, c.v, got, c.want)
+		}
+	}
 }
 
 // An empty dsn field shows the form of a dsn, the engine's; a typed one hides it (F12.5).
@@ -584,14 +626,15 @@ func TestConnFormHints(t *testing.T) {
 				lines := strings.Split(a.render().String(), "\n")
 				at := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "[ "+a.formView().Save+" ]") })
 				i18n.Set("zh")
+				beside := w == 160 && !(edit && lang == "en") // four buttons in English leave the keys 29 of the form's 71
 				switch {
 				case at < 0:
 					t.Errorf("%s %d edit %v: no buttons", lang, w, edit)
-				case w == 160 && !(edit && lang == "en") && (!strings.Contains(lines[at], keys) || strings.Contains(lines[at+1], keys)): // four buttons in English leave the keys 29 of the form's 71
+				case beside && (!strings.Contains(lines[at], keys) || strings.Contains(lines[at+1], keys)):
 					t.Errorf("%s %d edit %v: the keys are not beside the buttons: %q", lang, w, edit, lines[at])
-				case w == 80 && (strings.Contains(lines[at], keys) || !strings.Contains(lines[at+1], keys)):
+				case !beside && (strings.Contains(lines[at], keys) || !strings.Contains(lines[at+1], keys)):
 					t.Errorf("%s %d edit %v: the keys are not under the buttons: %q / %q", lang, w, edit, lines[at], lines[at+1])
-				case w == 80 && !strings.HasPrefix(lines[at+1][strings.Index(lines[at+1], keys)+len(keys):], " │"):
+				case !beside && !strings.HasPrefix(lines[at+1][strings.Index(lines[at+1], keys)+len(keys):], " │"):
 					t.Errorf("%s %d edit %v: the keys are not right-aligned: %q", lang, w, edit, lines[at+1])
 				}
 			}
@@ -623,7 +666,7 @@ func TestConnFormHintsAtEveryWidth(t *testing.T) {
 					t.Errorf("%s %d %s: no buttons", lang, w, state)
 					return
 				}
-				bs := []string{fv.Save, fv.Cancel}
+				bs := []string{fv.Save, fv.Test, fv.Cancel}
 				if edit {
 					bs = append(bs, fv.Delete)
 				}
@@ -645,11 +688,15 @@ func TestConnFormHintsAtEveryWidth(t *testing.T) {
 			}
 			a.run("conn.new", 0)
 			check("new", false)
+			a.form.testing = 1 // a test is out: the button is the same, the row says
+			check("new, testing", false)
 			a.form = nil
 			a.run("conn.manage", 0)
 			check("list", true)
 			feed(t, a, "<Tab>")
 			check("edit", true)
+			a.form.testing = 1
+			check("edit, testing", true)
 		}
 	}
 }

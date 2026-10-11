@@ -81,7 +81,7 @@ func (a *App) runQuick(sql string) tea.Cmd {
 	}
 	c := p.conn
 	if c.State != connReady { // a layout's other session, still connecting (F6.5)
-		return a.showToast(i18n.T("连接还没连上"), toastTTL)
+		return a.notReady(c)
 	}
 	h := slices.Insert(slices.DeleteFunc(a.state.SQL[c.Spec.Name], func(s string) bool { return s == sql }), 0, sql)
 	a.state.SQL[c.Spec.Name] = h[:min(len(h), quickHistory)]

@@ -36,10 +36,11 @@ type connForm struct {
 	groupSel int
 	groupOff bool
 	// testing is the number of the connection test out, 0 for none; result is
-	// what a test that connected found, shown while err, why a save or a test
-	// failed, is not (F12.5)
-	testing int
-	result  string
+	// what a test found, a connection made (resultOK) or why not, shown while
+	// err, why a save or a field did not do, is not (F12.5)
+	testing  int
+	result   string
+	resultOK bool
 }
 
 // The form's fields, in order; the last two are in the 高级 fold.
@@ -256,7 +257,7 @@ func (a *App) formSegment(i, seg int) {
 
 // untest drops a test's result, one still out too: the fields are not the
 // ones it tried.
-func (f *connForm) untest() { f.testing, f.result = 0, "" }
+func (f *connForm) untest() { f.testing, f.result, f.resultOK = 0, "", false }
 
 // formClick is a click on field i: the keys go to it; a check and the fold
 // also turn over (a segment is picked by formSegment).
@@ -489,13 +490,19 @@ func testConn(spec config.Connection, password string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	version := r.Rows[0][0].S
-	if spec.Engine == "mysql" {
-		version = "MySQL " + version
-	} else {
-		version, _, _ = strings.Cut(version, " on ") // the build is not news
+	return i18n.T("已连接 · %s · %s", versionText(spec.Engine, r.Rows[0][0].S), time.Since(start).Round(time.Millisecond)), nil
+}
+
+// versionText is what a server's version() says, as far as news: PG's
+// `PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2) on aarch64…` is PostgreSQL
+// 17.11; MySQL's is the number, with its name before it.
+func versionText(engine, v string) string {
+	if engine == "mysql" {
+		return "MySQL " + v
 	}
-	return i18n.T("已连接 · %s · %s", version, time.Since(start).Round(time.Millisecond)), nil
+	v, _, _ = strings.Cut(v, " on ")
+	v, _, _ = strings.Cut(v, " (")
+	return v
 }
 
 // gotConnTested shows what a test found, unless the form it was for is gone
@@ -505,12 +512,11 @@ func (a *App) gotConnTested(m connTested) {
 	if f == nil || f.testing != m.seq {
 		return
 	}
-	f.testing = 0
-	if m.err != nil {
-		f.err = strings.ReplaceAll(m.err.Error(), "\n", " ") // one row
-		return
-	}
+	f.testing, f.resultOK = 0, m.err == nil
 	f.result = m.note
+	if m.err != nil {
+		f.result = toastLine(m.err.Error())
+	}
 }
 
 // saveEditedConn is ↵ on the form of a connection that is there: what the
@@ -727,12 +733,12 @@ func (a *App) formView() ui.Form {
 			ui.Hint{Key: a.keys.Hint("conns.close", "conns"), Label: i18n.T("关闭"), Action: "conns.close"},
 		)
 	}
-	test := i18n.T("测试")
-	if f.testing != 0 {
-		test = i18n.T("测试中…")
+	note := cmp.Or(f.err, f.result)
+	if note == "" && f.testing != 0 { // the button stays as it is: the row says
+		note = i18n.T("测试中…")
 	}
 	fields[fieldDSN].Example = dsnExample[fields[fieldEngine].Choices[fields[fieldEngine].On]]
-	form := ui.Form{Fields: fields, Sel: f.sel, Err: cmp.Or(f.err, f.result), OK: f.err == "" && f.result != "", Save: i18n.T("保存"), Test: test, Cancel: i18n.T("取消"), Delete: del, Hints: hints, PickAt: fieldGroup}
+	form := ui.Form{Fields: fields, Sel: f.sel, Err: note, OK: f.err == "" && (f.resultOK || f.testing != 0), Save: i18n.T("保存"), Test: i18n.T("测试"), Cancel: i18n.T("取消"), Delete: del, Hints: hints, PickAt: fieldGroup}
 	if cands := a.groupCands(); len(cands) > 0 { // under the group field (F10.6)
 		form.Pick = &ui.Complete{Sel: f.groupPick(len(cands)), Act: "form.pick"}
 		for _, g := range cands {

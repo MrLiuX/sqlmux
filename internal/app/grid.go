@@ -916,6 +916,14 @@ func baseType(t string) string {
 	return t
 }
 
+// plainType is catalog type t in lower case without its (n), nor the
+// unsigned and zerofill of MySQL's, which the driver puts first and the
+// catalog last: the name that says what the values are.
+func plainType(t string) string {
+	t = strings.ToLower(baseType(t))
+	return strings.TrimPrefix(strings.TrimSuffix(strings.TrimSuffix(t, " zerofill"), " unsigned"), "unsigned ")
+}
+
 // timeKind is the parts a column of catalog type t steps (§10.2), PG's
 // and MySQL's; interval has none.
 func timeKind(t string) ui.TimeKind {
@@ -934,7 +942,7 @@ func colType(t string) ui.ColType {
 	case t == "tinyint(1)": // MySQL's boolean
 		return ui.ColBool
 	}
-	t = strings.TrimSuffix(strings.TrimSuffix(baseType(t), " zerofill"), " unsigned")
+	t = plainType(t)
 	// after format_type's names, pgx's for a result's OIDs (quick SQL, §12),
 	// then MySQL's COLUMN_TYPE and the driver's
 	switch t {

@@ -320,7 +320,7 @@ var en = map[string]string{
 	"到底":                       "To the bottom",
 	"表的 DDL 浮窗打开时（F9.8）":       "While the table's DDL is shown (F9.8)",
 	"关闭菜单":                     "Close menu",
-	"树的右键菜单打开时（F8.23）":         "While the tree's right-click menu is open (F8.23)",
+	"右键菜单打开时（F8.23、F12.3）":     "While a right-click menu is open (F8.23, F12.3)",
 	"事务已出错，提交改为了回滚":            "The transaction had failed: the commit rolled it back",
 	"连接断开，事务已丢失，这条没有执行":   "Connection lost, and the transaction with it: this was not run",
 	"事务已丢失，没有提交":          "The transaction is lost: nothing was committed",

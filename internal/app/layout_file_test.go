@@ -23,7 +23,7 @@ import (
 var layoutSpecs = []config.Connection{{Name: "doraemon", Engine: "postgres"}, {Name: "play", Engine: "postgres"}}
 
 // restoredFrom is l restored over doraemon and play, the first session's
-// start connection ready as the program starts it, the rest waiting.
+// start connection made ready as a dial brings it, the rest waiting.
 func restoredFrom(t *testing.T, l *config.Layout) *Restored {
 	t.Helper()
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
@@ -372,9 +372,17 @@ func TestStartConnectionFails(t *testing.T) {
 		}
 	}
 	golden.RequireEqual(t, []byte(screen))
-	cmd := a.run("grid.refresh", 0)
-	if doraemon.State != connConnecting || cmd == nil {
-		t.Errorf("R tries again: %v", doraemon.State)
+	for _, state := range []string{"failed", "dialing"} { // the DDL of a table needs a Meta: none, and no panic
+		a.toast = ""
+		if cmd := a.run("grid.ddl.table", 0); cmd == nil || a.toast != "连接还没连上" || a.ddl != nil {
+			t.Errorf("%s: DDL asked: toast %q, popup %v", state, a.toast, a.ddl)
+		}
+		if state == "failed" {
+			cmd := a.run("grid.refresh", 0)
+			if doraemon.State != connConnecting || cmd == nil {
+				t.Errorf("R tries again: %v", doraemon.State)
+			}
+		}
 	}
 }
 
@@ -423,15 +431,22 @@ func TestUnreadyConnection(t *testing.T) {
 	a.win().focus(0)
 	ns, _ := a.treeNodes() // a connection's node would connect it instead
 	a.treeGo(slices.IndexFunc(ns, func(n node) bool { return n.kind == nodeWorkspace }))
-	for name, run := range map[string]func(){
-		"R on the tree": func() { a.refreshTree() },
-		"quick SQL":     func() { a.palette = &palette{conn: play}; a.runQuick("select 1") },
-		"cancel":        func() { play.cancel() },
+	q := queryOf(a.win().pane(2))
+	for name, run := range map[string]func() tea.Cmd{
+		"R on the tree": func() tea.Cmd { return a.refreshTree() },
+		"quick SQL":     func() tea.Cmd { a.palette = &palette{conn: play}; return a.runQuick("select 1") },
+		"a query's run": func() tea.Cmd { return a.runSQL(q, play, "", "query_1", "select 1", 0, 0) },
+		"cancel":        func() tea.Cmd { play.cancel(); return nil },
 	} {
+		play.State = connConnecting // its dial is on: it is said so
 		a.toast = ""
-		run()
-		if name != "cancel" && !strings.Contains(a.toast, "连接还没连上") {
+		if run(); name != "cancel" && !strings.Contains(a.toast, "连接还没连上") {
 			t.Errorf("%s: toast %q", name, a.toast)
+		}
+		play.State = connFailed // after a failure it is dialed again, nothing said
+		a.toast = ""
+		if cmd := run(); name != "cancel" && (cmd == nil || play.State != connConnecting || a.toast != "") {
+			t.Errorf("%s after a failure: state %v, toast %q", name, play.State, a.toast)
 		}
 	}
 }

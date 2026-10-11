@@ -165,8 +165,8 @@ func startLayout(name, layout string, warning *string) (*config.Layout, error) {
 	return nil, config.BrokenLast()
 }
 
-// open is a session over connections.toml, connected to connection
-// name, or the first one when name is "" (§5).
+// open is a session over connections.toml, started on connection name, or the
+// first one when name is "" (§5); none is connected till the program runs.
 func open(name string) (*app.Session, error) {
 	conns, start, err := config.LoadConnections(name)
 	if err != nil {

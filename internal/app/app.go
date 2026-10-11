@@ -73,7 +73,7 @@ type App struct {
 	drop      *dropdown    // non-nil while a one-pick dropdown is open (§8.6, §7.8)
 	cols      *colsMenu    // non-nil while the COLS list is open (Q-04)
 	confirm   *confirmBox  // non-nil while it asks before changes go (§10.5)
-	menu      *menu        // non-nil while the tree's right-click menu is open (F8.23)
+	menu      *menu        // non-nil while a right-click menu, the tree's or the grid's, is open (F8.23, F12.3)
 	ddl       *ddlPopup    // non-nil while a table's or a column's DDL is shown over the grid (F9.8)
 	value     *valueEditor // non-nil while a cell's value is open in its editor (F12.2)
 	whichKey  bool         // the which-key overlay is up (§6.5)
