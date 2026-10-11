@@ -12,12 +12,14 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
@@ -47,8 +49,22 @@ type exportSrc struct {
 	// all is what runs the statement for the rows of the whole: on the worker,
 	// the first function being what it does first on its connection; nil when
 	// the statement cannot be asked for again, and the page is what "all" gives
-	all  *exportAll
-	conn *Conn
+	all *exportAll
+	// again is the statement of the page, when it can be asked for again: a
+	// page with bytes in it is read so (F12.4), its values in memory being the
+	// grid's, not the file's
+	again *exportAll
+	conn  *Conn
+}
+
+// bytesPage is whether the page has bytes the file writes in hex, which the
+// grid's text of them is not: a column of bytes, or a value that is a
+// placeholder for them.
+func (s exportSrc) bytesPage() bool {
+	return slices.ContainsFunc(s.cols, func(c exportCol) bool { return db.IsBytes(c.typ) }) ||
+		slices.ContainsFunc(s.page.Rows, func(row []db.Val) bool {
+			return slices.ContainsFunc(row, func(v db.Val) bool { return !v.Null && db.IsBinaryShown(v.S) })
+		})
 }
 
 type exportCol struct{ name, typ string }
@@ -101,7 +117,10 @@ func (a *App) exportSource(d *dropdown) exportSrc {
 		}
 		s := t.shown // what the grid shows, not what is asked and not there yet
 		q := db.Query{Schema: t.table.Schema, Table: t.table.Name, Where: s.applied, Order: s.order, Desc: s.desc, Key: t.cols.Key()}
+		// ponytail: select * reads the columns COLS hides too and drops them, so
+		// the wide ones travel for nothing; name the shown ones if that matters
 		src.all = &exportAll{base: t.table.Name, worker: w, sql: db.Select(t.conn.eng, q)}
+		src.again = &exportAll{base: t.table.Name, worker: w, sql: src.all.sql + fmt.Sprintf(" limit %d offset %d", s.limit, s.pageNo*s.limit)}
 		return src
 	}
 	rt := d.result
@@ -120,8 +139,10 @@ func (a *App) exportSource(d *dropdown) exportSrc {
 	if rt.pageable && r.from != nil {
 		s := r.stmts[rt.stmt]
 		schema := r.schema
-		src.all = &exportAll{base: name, worker: r.conn.Main, sql: r.sql[s.Start:s.End],
-			setup: func(ctx context.Context, c db.Conn) error { _, err := r.conn.mainSetup(ctx, c, schema); return err }}
+		setup := func(ctx context.Context, c db.Conn) error { _, err := r.conn.mainSetup(ctx, c, schema); return err }
+		src.all = &exportAll{base: name, worker: r.conn.Main, sql: r.sql[s.Start:s.End], setup: setup}
+		again, _ := sqlkit.AutoLimit(src.all.sql, r.conn.eng.Dialect(), len(rt.page.Rows), rt.offset)
+		src.again = &exportAll{base: name, worker: r.conn.Main, sql: again, setup: setup}
 	}
 	return src
 }
@@ -160,7 +181,14 @@ func (a *App) export(src exportSrc, at int) tea.Cmd {
 		a.exporting = map[any]bool{}
 	}
 	a.exporting[src.owner] = true
-	stream := all && src.all != nil
+	var from *exportAll // what the rows are read from, when they come from the database
+	switch {
+	case all:
+		from = src.all
+	case src.again != nil && src.bytesPage():
+		from = src.again
+	}
+	stream := from != nil
 	if stream {
 		src.conn.busy++
 	}
@@ -168,14 +196,14 @@ func (a *App) export(src exportSrc, at int) tea.Cmd {
 		out := &exportOut{f: f, w: bufio.NewWriter(f), json: asJSON, want: src.cols}
 		var err error
 		if stream {
-			err = src.all.worker.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
-				if src.all.setup != nil {
-					if err := src.all.setup(ctx, c); err != nil {
+			err = from.worker.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
+				if from.setup != nil {
+					if err := from.setup(ctx, c); err != nil {
 						return err
 					}
 				}
 				// in a transaction of the user's a failed read would fail it all (§10.3)
-				return db.Guarded(ctx, c, "sqlmux_export", func() error { return db.Each(ctx, c, src.all.sql, out.head, out.row) })
+				return db.Guarded(ctx, c, "sqlmux_export", func() error { return db.Each(ctx, c, from.sql, out.head, out.row) })
 			})
 		} else {
 			err = out.head(src.page.Cols)
@@ -242,6 +270,12 @@ func createExport(name string) (*os.File, string, error) {
 	return nil, "", fs.ErrExist
 }
 
+// Reference for the file: lazysql helpers/csv.go streams rows through
+// encoding/csv into a temporary file renamed at the end; here the file is made
+// with O_EXCL under its name and removed when the export fails or is cancelled,
+// so a file there already is never touched, and NULL is empty (CSV) or null
+// (JSON), where lazysql cleans its own markers.
+//
 // exportOut writes rows as CSV or a JSON array of objects, the columns want,
 // in that order, found among those of the rows by name; what a result's
 // columns say of their types fills in what want leaves out.

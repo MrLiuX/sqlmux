@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/kackerx/sqlmux/internal/sqlkit"
@@ -24,6 +25,17 @@ func BinaryShown(n int) string { return fmt.Sprintf("<binary %d bytes>", n) }
 var binaryShown = regexp.MustCompile(`^<binary \d+ bytes>$`)
 
 func IsBinaryShown(s string) bool { return binaryShown.MatchString(s) }
+
+// bytesTypes are MySQL's column types that hold bytes, not text, whatever
+// the bytes of a value happen to be (PG's bytea is in hex already).
+var bytesTypes = map[string]bool{"binary": true, "varbinary": true, "tinyblob": true, "blob": true, "mediumblob": true, "longblob": true}
+
+// IsBytes is whether typ, a catalog's or a driver's (varbinary(16), VARBINARY),
+// is one of them.
+func IsBytes(typ string) bool {
+	name, _, _ := strings.Cut(strings.ToLower(typ), "(")
+	return bytesTypes[strings.TrimSpace(name)]
+}
 
 type Col struct {
 	Name string

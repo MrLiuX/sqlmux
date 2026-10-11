@@ -111,37 +111,14 @@ func (c *Conn) Query(ctx context.Context, sql string, args ...db.Val) (db.Result
 
 // Stream reads sql's rows as they come, one at a time, the extended protocol
 // as Query has it (F12.4). The statement is cancelled when row or head fail.
+// Reference: lazysql drivers/query_stream.go reads database/sql rows in a
+// goroutine, 100 a batch, and cancels the query's context when the consumer
+// fails; here the Worker owns the connection, so each row goes to the caller
+// as it comes, on pgconn's reader, and the cancel is the server's.
 func (c *Conn) Stream(ctx context.Context, sql string, head func([]db.Col) error, row func([]db.Val) error) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	rr := c.pg.ExecParams(ctx, sql, nil, nil, nil, nil)
-	var cols []db.Col
-	for _, f := range rr.FieldDescriptions() {
-		col := db.Col{Name: f.Name}
-		if t, ok := types.TypeForOID(f.DataTypeOID); ok {
-			col.Type = t.Name
-		}
-		cols = append(cols, col)
-	}
-	err := head(cols)
-	if err != nil && len(cols) == 0 { // a statement that failed described nothing: its error is the news, not what head made of that
-		if _, cerr := rr.Close(); cerr != nil {
-			return cerr
-		}
-	}
-	for err == nil && rr.NextRow() {
-		vals := make([]db.Val, len(cols))
-		for i, v := range rr.Values() {
-			vals[i] = db.Val{S: string(v), Null: v == nil}
-		}
-		err = row(vals)
-	}
-	if err != nil {
-		cancel() // the rest is not read: it would be dropped
-		_, _ = rr.Close()
-		return err
-	}
-	_, err = rr.Close()
+	_, err := each(c.pg.ExecParams(ctx, sql, nil, nil, nil, nil), cancel, head, func() bool { return true }, row)
 	return err
 }
 
@@ -169,27 +146,57 @@ var types = pgtype.NewMap()
 // rolling back a write with RETURNING and skipping Exec's next statements.
 func read(rr *pgconn.ResultReader, maxRows int, start time.Time) (db.Result, error) {
 	var r db.Result
+	tag, err := each(rr, nil, func(cols []db.Col) error { r.Cols = cols; return nil },
+		func() bool {
+			if maxRows > 0 && len(r.Rows) == maxRows {
+				r.Truncated = true
+				return false
+			}
+			return true
+		},
+		func(vals []db.Val) error { r.Rows = append(r.Rows, vals); return nil })
+	r.Tag, r.Affected, r.Took = tag.String(), tag.RowsAffected(), time.Since(start)
+	return r, err
+}
+
+// each reads the result in rr: head with its columns, then row with each of
+// the rows want says to keep, the others read and dropped. Closed, it is the
+// command's tag and the server's error; head or row failing, it is that, the
+// rest not read: stop, when there is one, cancels the statement first, as the
+// rest would be dropped.
+func each(rr *pgconn.ResultReader, stop func(), head func([]db.Col) error, want func() bool, row func([]db.Val) error) (pgconn.CommandTag, error) {
+	var cols []db.Col
 	for _, f := range rr.FieldDescriptions() {
 		col := db.Col{Name: f.Name}
 		if t, ok := types.TypeForOID(f.DataTypeOID); ok {
 			col.Type = t.Name
 		}
-		r.Cols = append(r.Cols, col)
+		cols = append(cols, col)
 	}
-	for rr.NextRow() {
-		if maxRows > 0 && len(r.Rows) == maxRows {
-			r.Truncated = true
+	err := head(cols)
+	if err != nil && len(cols) == 0 { // a statement that failed described nothing: its error is the news, not what head made of that
+		if _, cerr := rr.Close(); cerr != nil {
+			return pgconn.CommandTag{}, cerr
+		}
+	}
+	for err == nil && rr.NextRow() {
+		if !want() {
 			continue
 		}
-		row := make([]db.Val, len(r.Cols))
+		vals := make([]db.Val, len(cols))
 		for i, v := range rr.Values() {
-			row[i] = db.Val{S: string(v), Null: v == nil}
+			vals[i] = db.Val{S: string(v), Null: v == nil}
 		}
-		r.Rows = append(r.Rows, row)
+		err = row(vals)
 	}
-	tag, err := rr.Close()
-	r.Tag, r.Affected, r.Took = tag.String(), tag.RowsAffected(), time.Since(start)
-	return r, err
+	if err != nil {
+		if stop != nil {
+			stop()
+		}
+		_, _ = rr.Close()
+		return pgconn.CommandTag{}, err
+	}
+	return rr.Close()
 }
 
 // Engine is PG's way with the catalog, SQL and errors (§8.1).

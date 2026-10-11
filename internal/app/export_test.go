@@ -327,3 +327,156 @@ func TestExportDuplicateColumnsAndPathNames(t *testing.T) {
 		t.Errorf("not in the directory: %v, toast %q", err, a.toast)
 	}
 }
+
+// A page with bytes in it is read again, its own LIMIT and OFFSET, the way
+// "all" is, so the file is the same: a column of bytes whose value is text
+// is hex too, and a value the grid has only a placeholder for is there (F12.4).
+func TestExportPageOfBytes(t *testing.T) {
+	dir := inDir(t)
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	d := ordersStream(3)
+	d.row = func(i int) []db.Val {
+		return []db.Val{{S: strconv.Itoa(i + 1)}, {S: "done"}, {S: "1"}, {S: "t"}, {S: "{}"}, {S: "0xff0" + strconv.Itoa(i)}, {S: "2026-09-01 00:00:00+00"}}
+	}
+	tab.conn.Meta = db.NewWorker(d)
+	tab.limit, tab.pageNo = 100, 2
+	tab.shown = tab.request
+	tab.cols.Cols[tab.fieldAt(5)].Type = "varbinary(16)" // note: the page has abc, which is text
+	exportAt(t, a, exportCSVPage)
+	page, err := os.ReadFile(filepath.Join(dir, "t_order.csv"))
+	if err != nil || len(d.sqls) != 1 || !strings.HasSuffix(d.sqls[0], " limit 100 offset 200") {
+		t.Fatalf("page of bytes: %q %v, asked %q", page, err, d.sqls)
+	}
+	exportAt(t, a, exportCSVAll)
+	if all, _ := os.ReadFile(filepath.Join(dir, "t_order-2.csv")); !bytes.Equal(all, page) || !strings.Contains(string(page), "0xff0") {
+		t.Errorf("page %q, all %q", page, all)
+	}
+	// a placeholder for bytes of a column that is no byte column, latin1 text
+	tab.cols.Cols[tab.fieldAt(5)].Type = "text"
+	tab.page.Rows[0][5] = db.Val{S: db.BinaryShown(3)}
+	exportAt(t, a, exportJSONPage)
+	if len(d.sqls) != 3 {
+		t.Errorf("a placeholder: asked %q", d.sqls)
+	}
+	// nothing of the kind: the page in memory is written, nothing asked
+	tab.page.Rows[0][5] = db.Val{S: "text"}
+	exportAt(t, a, exportCSVPage)
+	if len(d.sqls) != 3 {
+		t.Errorf("a plain page: asked %q", d.sqls)
+	}
+}
+
+// The rows of a user's transaction are read on Main, where they are, not on
+// Meta; the read is in a savepoint there (F12.4).
+func TestExportAllInTransactionOnMain(t *testing.T) {
+	inDir(t)
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	meta, main := ordersStream(5), ordersStream(5)
+	main.tx = 'T'
+	tab.conn.Meta, tab.conn.Main, tab.conn.tx = db.NewWorker(meta), db.NewWorker(main), 'T'
+	exportAt(t, a, exportCSVAll)
+	if len(main.sqls) != 1 || len(meta.sqls) != 0 || len(main.saved) != 2 {
+		t.Errorf("main %q %q, meta %q", main.sqls, main.saved, meta.sqls)
+	}
+}
+
+// What a result's "all" runs, it runs where the result ran: the schema its
+// query was on is set first, though another statement has put Main on a
+// schema of its own since (F12.4).
+func TestExportResultSetsItsSchema(t *testing.T) {
+	inDir(t)
+	d := &streamDB{execDB: &execDB{res: map[string]db.Result{"select 1": rows(2)}}, n: 2, cols: []db.Col{{Name: "n", Type: "int4"}}}
+	d.row = func(i int) []db.Val { return []db.Val{{S: strconv.Itoa(i)}} }
+	a, _ := inRun(t, d.execDB, "select 1")
+	conn := a.sess.Conns[0]
+	conn.Main = db.NewWorker(d)
+	press(t, a, "<CR>")
+	a.win().focus(a.win().Result.ID)
+	rt := resultOf(a.focused())
+	rt.run.schema = "zz_s1"
+	conn.mainPath = "zz_s2" // a later statement of another query moved Main
+	d.ran = nil
+	exportAt(t, a, exportCSVAll)
+	if len(d.ran) == 0 || !strings.Contains(d.ran[0], "search_path") || !strings.Contains(d.ran[0], "zz_s1") || len(d.sqls) != 1 {
+		t.Errorf("the schema first: ran %q, asked %q", d.ran, d.sqls)
+	}
+}
+
+// The type the catalog gives a column is the one the file follows, not the
+// stream's: MySQL's tinyint(1) is a boolean in the table, a number from the
+// driver; a column of the page that the stream does not have is said (F12.4).
+func TestExportCatalogTypeAndMissingColumn(t *testing.T) {
+	dir := inDir(t)
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	tab.cols.Cols[tab.fieldAt(3)].Type = "tinyint(1)"
+	d := ordersStream(2)
+	d.cols[3].Type = "tinyint"
+	d.row = func(int) []db.Val {
+		return []db.Val{{S: "1"}, {S: "done"}, {S: "1.5"}, {S: "1"}, {S: "{}"}, {Null: true}, {S: "x"}}
+	}
+	tab.conn.Meta = db.NewWorker(d)
+	exportAt(t, a, exportJSONAll)
+	var rows []map[string]any
+	data, _ := os.ReadFile(filepath.Join(dir, "t_order.json"))
+	if err := json.Unmarshal(data, &rows); err != nil || rows[0]["paid"] != true {
+		t.Errorf("paid: %s %v", data, err)
+	}
+	d.cols = d.cols[:3] // a stream with fewer columns than are asked for
+	exportAt(t, a, exportCSVAll)
+	if !strings.Contains(a.toast, "没有这一列") {
+		t.Errorf("a missing column: toast %q", a.toast)
+	}
+}
+
+// A page of a result that is not the first has -p and its number in the file's
+// name; "all" is no page of it (F10.4, F12.4).
+func TestExportAllIsNoPage(t *testing.T) {
+	dir := inDir(t)
+	d := &streamDB{execDB: &execDB{res: map[string]db.Result{"select 1": rows(2)}}, n: 2, cols: []db.Col{{Name: "n", Type: "int4"}}}
+	d.row = func(i int) []db.Val { return []db.Val{{S: strconv.Itoa(i)}} }
+	a, _ := inRun(t, d.execDB, "select 1")
+	a.sess.Conns[0].Main = db.NewWorker(d)
+	press(t, a, "<CR>")
+	a.win().focus(a.win().Result.ID)
+	rt := resultOf(a.focused())
+	rt.offset = a.maxRows
+	name := "query_1-" + strconv.Itoa(rt.run.seq)
+	exportAt(t, a, exportCSVAll)
+	exportAt(t, a, exportCSVPage)
+	for _, f := range []string{name + ".csv", name + "-p2.csv"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			t.Errorf("%s: %v", f, err)
+		}
+	}
+}
+
+// A connection whose Conn has no Stream gives "all" through its Query, the
+// rows read at once (F12.4).
+func TestExportAllWithoutStream(t *testing.T) {
+	dir := inDir(t)
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	_, cols, page := ordersTable(4)
+	_ = cols
+	d := &execDB{res: map[string]db.Result{}}
+	tab.conn.Meta = db.NewWorker(&queryOnly{execDB: d, res: page})
+	exportAt(t, a, exportCSVAll)
+	data, err := os.ReadFile(filepath.Join(dir, "t_order.csv"))
+	if err != nil || strings.Count(string(data), "\n") < 5 || !strings.HasSuffix(a.toast, " · 4 行") {
+		t.Errorf("%q %v, toast %q", data, err, a.toast)
+	}
+}
+
+// queryOnly answers a SELECT with res and has no Stream: a Conn of the kind
+// a fake is.
+type queryOnly struct {
+	*execDB
+	res db.Result
+}
+
+func (q *queryOnly) Query(context.Context, string, ...db.Val) (db.Result, error) {
+	return q.res, nil
+}
