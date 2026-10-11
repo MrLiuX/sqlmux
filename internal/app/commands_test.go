@@ -285,7 +285,7 @@ func TestSuperKeys(t *testing.T) {
 // F6.1).
 func TestKeyProblemsNotice(t *testing.T) {
 	c := userConfig(t, "", "[keys.normal]\n\"<C-q>\" = \"tab.next\"\n\"<c-q>\" = \"tab.prev\"\n\"<C-p>\" = \"tab.next\"\n\"<c-p>\" = \"tab.prev\"\n")
-	keys, problems := keymap.New(c)
+	keys, problems := keymap.New(c.Leader, c.Vim, c.Timeoutlen, c.Bindings)
 	if len(problems) < 2 {
 		t.Fatalf("problems: %v", problems)
 	}

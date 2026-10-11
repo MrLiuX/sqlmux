@@ -9,7 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/BurntSushi/toml"
+
 	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
@@ -21,15 +22,100 @@ var defaultTOML string
 //go:embed default-novim.toml
 var noVimTOML string
 
-// tables is every [keys.*] / [map.*] table a config may use (§6.4, §6.6),
-// in resolution priority order for the export. which-key is no scope: keys
-// pressed over it resolve as without it (§6.5).
-var tables = []string{
-	"keys.confirm", "keys.value", "keys.menu", "keys.ddl", "keys.palette", "keys.conns", "keys.groups", "keys.form", "keys.jump", "keys.where", "keys.order", "keys.cols", "keys.dropdown", "keys.sessions",
-	"keys.complete", "keys.newrow", "keys.options", "keys.segments", "keys.keyhelp", "keys.cell", "keys.input",
-	"keys.wherenormal", "keys.select", "keys.result", "keys.grid", "keys.tree", "keys.query", "keys.landing", "keys.normal", "keys.global",
-	"map.query.normal", "map.query.visual", "map.grid.normal", "map.grid.visual",
-	"map.tree.normal", "map.tree.visual", "map.normal", "map.visual",
+// table is a [keys.*] / [map.*] table a config may use, with the note above its
+// section of the export: when its keys apply (§6.4).
+type table struct{ name, when string }
+
+// tables is every one of them (§6.4, §6.6), in resolution priority order for
+// the export. which-key is no scope: keys pressed over it resolve as without
+// it (§6.5).
+var tables = []table{
+	{"keys.confirm", i18n.N("确认框打开时")},
+	{"keys.value", i18n.N("值编辑器浮窗打开时：C-s 写回并关闭，其余是它的 vim（F12.2）")},
+	{"keys.menu", i18n.N("右键菜单打开时（F8.23、F12.3）")},
+	{"keys.ddl", i18n.N("表的 DDL 浮窗打开时（F9.8）")},
+	{"keys.palette", i18n.N("命令面板打开时")},
+	{"keys.conns", i18n.N("连接管理的列表有焦点时（F8.16）")},
+	{"keys.groups", i18n.N("连接表单的 group 字段弹出分组列表时，表单的键在它之后（F10.6）")},
+	{"keys.form", i18n.N("连接表单打开时（M5）")},
+	{"keys.jump", i18n.N("flash 式跳转进行中：其余可打印字符进模式，标签字母跳转（F10.8）")},
+	{"keys.where", i18n.N("WHERE 的历史 / 收藏下拉打开时")},
+	{"keys.order", i18n.N("ORDER 列表打开时（F12.9）")},
+	{"keys.cols", i18n.N("COLS 列表打开时")},
+	{"keys.dropdown", i18n.N("LIMIT 等下拉框打开时")},
+	{"keys.sessions", i18n.N("session 列表打开时（M5）")},
+	{"keys.complete", i18n.N("补全列表弹出时（↵、esc 由输入框处理）")},
+	{"keys.newrow", i18n.N("编辑还没保存的新行的格时，叠在选项 / 分段浮层之上（F3.33）")},
+	{"keys.options", i18n.N("非时间列的单元格，选项浮层展开、而且有选项时")},
+	{"keys.segments", i18n.N("时间列的单元格，分段浮层展开时")},
+	{"keys.keyhelp", i18n.N("? 键位帮助打开时")},
+	{"keys.cell", i18n.N("编辑单元格时（M2）")},
+	{"keys.input", i18n.N("任何输入框里")},
+	{"keys.wherenormal", i18n.N("WHERE 输入框在 NORMAL 下（F3.39）")},
+	{"keys.select", i18n.N("表格有选中的记录、或在 VISUAL 扩选时，叠在 grid / result 之上；它的键是完整绑定，不等 timeoutlen（F10.7）")},
+	{"keys.result", i18n.N("结果区，叠在 grid 之上（M3）")},
+	{"keys.grid", i18n.N("焦点在表格（NORMAL）")},
+	{"keys.tree", i18n.N("焦点在 schema 树（NORMAL）")},
+	{"keys.query", i18n.N("query 的 NORMAL / VISUAL（M3）")},
+	{"keys.landing", i18n.N("引导页：新 tab、没有 tab 的 pane（M3）")},
+	{"keys.normal", i18n.N("NORMAL 模式，焦点在任何 pane")},
+	{"keys.global", i18n.N("任何时候，输入框里也生效")},
+	{"map.query.normal", ""},
+	{"map.query.visual", ""},
+	{"map.grid.normal", ""},
+	{"map.grid.visual", ""},
+	{"map.tree.normal", ""},
+	{"map.tree.visual", ""},
+	{"map.normal", ""},
+	{"map.visual", ""},
+}
+
+// Line is one `key = "value"` line of keymaps.toml under [keys.<scope>] or
+// [map.<...>].
+type Line struct {
+	Table string // "keys.normal", "map.query.normal"
+	Key   string // as written, e.g. "<C-p>"
+	Value string // action for keys.*, key sequence for map.*; "" unbinds
+}
+
+// ParseKeys reads keymaps.toml's TOML (§14): [keys]' leader, and the
+// [keys.*] and [map.*] lines in file order, so "first binding" questions
+// have a stable answer.
+func ParseKeys(data string) (leader string, lines []Line, err error) {
+	var raw map[string]any
+	md, err := toml.Decode(data, &raw)
+	if err != nil {
+		return "", nil, err
+	}
+	for _, k := range md.Keys() {
+		if k[0] != "keys" && k[0] != "map" {
+			return "", nil, fmt.Errorf("%s: only [keys] and [map.*] go here", k[0])
+		}
+		if md.Type(k...) == "Hash" {
+			continue
+		}
+		v, ok := lookup(raw, k).(string)
+		if !ok {
+			return "", nil, fmt.Errorf("%s: the value must be a string", k)
+		}
+		if k.String() == "keys.leader" {
+			leader = v
+			continue
+		}
+		if len(k) < 3 {
+			return "", nil, fmt.Errorf("%s: a key goes in a table such as [keys.normal] or [map.normal]", k)
+		}
+		lines = append(lines, Line{strings.Join(k[:len(k)-1], "."), k[len(k)-1], v})
+	}
+	return leader, lines, nil
+}
+
+func lookup(m map[string]any, path []string) any {
+	var v any = m
+	for _, p := range path {
+		v = v.(map[string]any)[p]
+	}
+	return v
 }
 
 // Binding is one effective line of a table.
@@ -59,10 +145,11 @@ type Map struct {
 }
 
 // New builds the keymap from the embedded defaults and the user's
-// keymaps.toml in user. Lines with problems are skipped; the rest still
+// keymaps.toml, its leader and its lines, with the program's vim and
+// timeoutlen. Lines with problems are skipped; the rest still
 // apply.
-func New(user *config.Config) (*Map, []Problem) {
-	leader, def, err := config.ParseKeys(defaultTOML)
+func New(userLeader string, vim bool, timeoutlen int, user []Line) (*Map, []Problem) {
+	leader, def, err := ParseKeys(defaultTOML)
 	if err != nil {
 		panic("default.toml: " + err.Error())
 	}
@@ -70,9 +157,9 @@ func New(user *config.Config) (*Map, []Problem) {
 	m.Leader, _ = Parse(leader)
 	m.defaultLeader = m.Leader
 	var problems []Problem
-	if user.Leader != "" {
-		if ks, err := Parse(user.Leader); err != nil || len(ks) == 0 || slices.Contains(ks, Leader) {
-			problems = append(problems, Problem{"keys", "leader", i18n.T("leader 写法不对：%q", user.Leader)})
+	if userLeader != "" {
+		if ks, err := Parse(userLeader); err != nil || len(ks) == 0 || slices.Contains(ks, Leader) {
+			problems = append(problems, Problem{"keys", "leader", i18n.T("leader 写法不对：%q", userLeader)})
 		} else {
 			m.Leader = ks
 		}
@@ -82,8 +169,8 @@ func New(user *config.Config) (*Map, []Problem) {
 	if ps := m.apply(def); len(ps) > 0 {
 		panic(fmt.Sprint("default.toml: ", ps))
 	}
-	if !user.Vim { // the same defaults, for the export and the check, with the arrow keys on
-		_, nv, err := config.ParseKeys(noVimTOML)
+	if !vim { // the same defaults, for the export and the check, with the arrow keys on
+		_, nv, err := ParseKeys(noVimTOML)
 		if err != nil {
 			panic("default-novim.toml: " + err.Error())
 		}
@@ -100,19 +187,19 @@ func New(user *config.Config) (*Map, []Problem) {
 	for t, bs := range m.tables {
 		m.defaults[t] = slices.Clone(bs)
 	}
-	m.Timeout = time.Duration(user.Timeoutlen) * time.Millisecond
-	problems = append(problems, m.apply(user.Bindings)...)
+	m.Timeout = time.Duration(timeoutlen) * time.Millisecond
+	problems = append(problems, m.apply(user)...)
 	return m, problems
 }
 
 // apply merges one file's bindings: a key already bound in the same table
 // is rebound in place (an ordinary remap, not a conflict), "" unbinds.
-func (m *Map) apply(bs []config.Binding) []Problem {
+func (m *Map) apply(bs []Line) []Problem {
 	var ps []Problem
 	seen := map[string]string{} // table + normalized key → spelling, within this file
 	for _, b := range bs {
 		bad := func(msg string) { ps = append(ps, Problem{b.Table, b.Key, msg}) }
-		if !slices.Contains(tables, b.Table) {
+		if !slices.ContainsFunc(tables, func(t table) bool { return t.name == b.Table }) {
 			bad(i18n.T("没有这个表"))
 			continue
 		}
@@ -197,7 +284,7 @@ func (m *Map) Hint(action, scope string) string {
 func (m *Map) Actions() []string {
 	var ids []string
 	for _, t := range tables {
-		for _, b := range m.tables[t] {
+		for _, b := range m.tables[t.name] {
 			if id, _, _ := strings.Cut(b.Action, " "); id != "" && !slices.Contains(ids, id) {
 				ids = append(ids, id)
 			}
@@ -211,52 +298,18 @@ func (m *Map) Markdown() string {
 	var b strings.Builder
 	b.WriteString(i18n.T("| 作用域 | 键 | 操作 |\n|---|---|---|\n"))
 	for _, t := range tables {
-		for _, bd := range m.tables[t] {
+		for _, bd := range m.tables[t.name] {
 			op := bd.Action
 			if bd.RHS != nil {
 				op = "→ " + String(bd.RHS)
 			}
-			fmt.Fprintf(&b, "| %s | `%s` | %s |\n", strings.TrimPrefix(t, "keys."), mdEscape(Display(m.expand(bd.Keys))), mdEscape(op))
+			fmt.Fprintf(&b, "| %s | `%s` | %s |\n", strings.TrimPrefix(t.name, "keys."), mdEscape(Display(m.expand(bd.Keys))), mdEscape(op))
 		}
 	}
 	return b.String()
 }
 
 func mdEscape(s string) string { return strings.ReplaceAll(s, "|", `\|`) }
-
-// when is the note above each section of the export: when its keys apply (§6.4).
-var when = map[string]string{
-	"keys.global":      i18n.N("任何时候，输入框里也生效"),
-	"keys.normal":      i18n.N("NORMAL 模式，焦点在任何 pane"),
-	"keys.grid":        i18n.N("焦点在表格（NORMAL）"),
-	"keys.tree":        i18n.N("焦点在 schema 树（NORMAL）"),
-	"keys.query":       i18n.N("query 的 NORMAL / VISUAL（M3）"),
-	"keys.landing":     i18n.N("引导页：新 tab、没有 tab 的 pane（M3）"),
-	"keys.result":      i18n.N("结果区，叠在 grid 之上（M3）"),
-	"keys.palette":     i18n.N("命令面板打开时"),
-	"keys.dropdown":    i18n.N("LIMIT 等下拉框打开时"),
-	"keys.order":       i18n.N("ORDER 列表打开时（F12.9）"),
-	"keys.complete":    i18n.N("补全列表弹出时（↵、esc 由输入框处理）"),
-	"keys.where":       i18n.N("WHERE 的历史 / 收藏下拉打开时"),
-	"keys.input":       i18n.N("任何输入框里"),
-	"keys.wherenormal": i18n.N("WHERE 输入框在 NORMAL 下（F3.39）"),
-	"keys.cols":        i18n.N("COLS 列表打开时"),
-	"keys.cell":        i18n.N("编辑单元格时（M2）"),
-	"keys.sessions":    i18n.N("session 列表打开时（M5）"),
-	"keys.form":        i18n.N("连接表单打开时（M5）"),
-	"keys.conns":       i18n.N("连接管理的列表有焦点时（F8.16）"),
-	"keys.jump":        i18n.N("flash 式跳转进行中：其余可打印字符进模式，标签字母跳转（F10.8）"),
-	"keys.select":      i18n.N("表格有选中的记录、或在 VISUAL 扩选时，叠在 grid / result 之上；它的键是完整绑定，不等 timeoutlen（F10.7）"),
-	"keys.groups":      i18n.N("连接表单的 group 字段弹出分组列表时，表单的键在它之后（F10.6）"),
-	"keys.confirm":     i18n.N("确认框打开时"),
-	"keys.menu":        i18n.N("右键菜单打开时（F8.23、F12.3）"),
-	"keys.ddl":         i18n.N("表的 DDL 浮窗打开时（F9.8）"),
-	"keys.value":       i18n.N("值编辑器浮窗打开时：C-s 写回并关闭，其余是它的 vim（F12.2）"),
-	"keys.newrow":      i18n.N("编辑还没保存的新行的格时，叠在选项 / 分段浮层之上（F3.33）"),
-	"keys.options":     i18n.N("非时间列的单元格，选项浮层展开、而且有选项时"),
-	"keys.segments":    i18n.N("时间列的单元格，分段浮层展开时"),
-	"keys.keyhelp":     i18n.N("? 键位帮助打开时"),
-}
 
 // whenPlainQuery is keys.query's note with vim = false, where the query
 // has no NORMAL and the Ctrl keys reach its editor (§6.9).
@@ -289,7 +342,8 @@ func (m *Map) TOML(titles map[string]string) string {
 		leader = "# " + leader
 	}
 	fmt.Fprintf(&b, "[keys]\n%s\n", leader)
-	for _, t := range tables {
+	for _, tb := range tables {
+		t := tb.name
 		lines := []string{}
 		for _, d := range m.defaults[t] {
 			i := slices.IndexFunc(m.tables[t], func(o Binding) bool { return m.same(o.Keys, d.Keys) })
@@ -310,7 +364,7 @@ func (m *Map) TOML(titles map[string]string) string {
 		lines = append(lines, unbound[t]...)
 		if len(lines) > 0 {
 			b.WriteString("\n")
-			note := when[t]
+			note := tb.when
 			if t == "keys.query" && m.novim != nil {
 				note = whenPlainQuery
 			}

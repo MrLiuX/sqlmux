@@ -100,7 +100,7 @@ func run(args []string) error {
 	if err != nil { // the broken file is kept aside; start empty (§14)
 		warning = app.JoinNotes(warning, err.Error())
 	}
-	keys, problems := keymap.New(cfg)
+	keys, problems := keymap.New(cfg.Leader, cfg.Vim, cfg.Timeoutlen, cfg.Bindings)
 	a := app.New(cfg, keys, sess, st, warning)
 	if restored != nil {
 		a.Adopt(restored)
@@ -197,7 +197,7 @@ func keysCmd(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	i18n.Set(cfg.Language)
-	keys, problems := keymap.New(cfg)
+	keys, problems := keymap.New(cfg.Leader, cfg.Vim, cfg.Timeoutlen, cfg.Bindings)
 	for _, p := range problems {
 		fmt.Fprintln(stderr, p)
 	}

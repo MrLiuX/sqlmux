@@ -38,7 +38,7 @@ func readyStart(r *Restored) *Restored {
 
 // layoutApp is the program over r, as main makes it.
 func layoutApp(r *Restored) *App {
-	keys, _ := keymap.New(config.Default())
+	keys, _ := newDefaultKeys()
 	a := New(config.Default(), keys, r.Sessions[0], &config.State{}, "")
 	a.Adopt(r)
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})

@@ -227,7 +227,7 @@ func TestQueryUnreadable(t *testing.T) {
 		t.Fatalf("tabs %v, warning %q", p.Tabs, s.warning)
 	}
 	c := config.Default()
-	keys, _ := keymap.New(c)
+	keys, _ := keymap.New(c.Leader, c.Vim, c.Timeoutlen, c.Bindings)
 	if a := New(c, keys, s, &config.State{}, "careful"); a.warning != "careful；"+s.warning {
 		t.Errorf("warning %q", a.warning)
 	}

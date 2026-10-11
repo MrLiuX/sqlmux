@@ -130,7 +130,7 @@ func sizedWith(w, h int, c *config.Config) *App {
 		dir, _ := os.MkdirTemp(testData, "data")
 		os.Setenv("XDG_DATA_HOME", dir)
 	}
-	keys, _ := keymap.New(c)
+	keys, _ := keymap.New(c.Leader, c.Vim, c.Timeoutlen, c.Bindings)
 	a := New(c, keys, testSession(), &config.State{}, "")
 	a.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	return a
@@ -142,6 +142,12 @@ func configured(t *testing.T, w, h int, toml string) *App {
 	return sizedWith(w, h, userConfig(t, "", toml))
 }
 
+// newDefaultKeys is the keymap of the defaults.
+func newDefaultKeys() (*keymap.Map, []keymap.Problem) {
+	c := config.Default()
+	return keymap.New(c.Leader, c.Vim, c.Timeoutlen, c.Bindings)
+}
+
 // userConfig is the config from the user's config.toml conf and
 // keymaps.toml keys.
 func userConfig(t testing.TB, conf, keys string) *config.Config {
@@ -150,7 +156,7 @@ func userConfig(t testing.TB, conf, keys string) *config.Config {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Leader, c.Bindings, err = config.ParseKeys(keys); err != nil {
+	if c.Leader, c.Bindings, err = keymap.ParseKeys(keys); err != nil {
 		t.Fatal(err)
 	}
 	return c
@@ -745,7 +751,7 @@ func TestWhichKeyKeys(t *testing.T) {
 // only inside an overlay or while typing (cell, input) are Local, which
 // the palette must not list (§12).
 func TestEveryDefaultActionHasATitle(t *testing.T) {
-	keys, _ := keymap.New(config.Default())
+	keys, _ := newDefaultKeys()
 	anywhere := []string{"global", "normal", "grid", "tree", "query", "landing", "result"}
 	for _, id := range keys.Actions() {
 		listed := slices.ContainsFunc(anywhere, func(s string) bool { return keys.Hint(id, s) != "" })
@@ -993,7 +999,7 @@ func (q quitOnMode) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func TestRendererUsesGraphemeWidths(t *testing.T) {
 	var out bytes.Buffer
 	c := config.Default()
-	keys, _ := keymap.New(c)
+	keys, _ := keymap.New(c.Leader, c.Vim, c.Timeoutlen, c.Bindings)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second) // Init stopped sending it
 	defer cancel()
 	p := tea.NewProgram(quitOnMode{New(c, keys, testSession(), &config.State{}, "")}, tea.WithContext(ctx), tea.WithInput(nil), tea.WithOutput(&out),
@@ -1009,7 +1015,7 @@ func TestRendererUsesGraphemeWidths(t *testing.T) {
 // A startup warning, such as a readable plain password (§13), is a toast.
 func TestStartupWarningIsAToast(t *testing.T) {
 	c := config.Default()
-	keys, _ := keymap.New(c)
+	keys, _ := keymap.New(c.Leader, c.Vim, c.Timeoutlen, c.Bindings)
 	a := New(c, keys, testSession(), &config.State{}, "careful")
 	a.Init()
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})

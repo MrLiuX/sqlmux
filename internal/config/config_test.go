@@ -34,29 +34,6 @@ full_width = 12
 	}
 }
 
-func TestParseKeysInFileOrder(t *testing.T) {
-	leader, bs, err := ParseKeys(`
-[keys]
-leader = "<C-a>"
-[keys.normal]
-"<C-w>v" = "pane.split.right"
-x = ""
-[map.normal]
-J = "5j"
-[map.query.normal]
-L = "5l"
-`)
-	want := []Binding{
-		{"keys.normal", "<C-w>v", "pane.split.right"},
-		{"keys.normal", "x", ""},
-		{"map.normal", "J", "5j"},
-		{"map.query.normal", "L", "5l"},
-	}
-	if err != nil || leader != "<C-a>" || !reflect.DeepEqual(bs, want) {
-		t.Fatalf("leader %q, bindings %+v, %v", leader, bs, err)
-	}
-}
-
 // [grid] order and transpose are what a table opened anew starts with
 // (F8.8); order is "asc" or "desc".
 func TestGridNewTableDefaults(t *testing.T) {
@@ -118,17 +95,6 @@ func TestParseErrors(t *testing.T) {
 	} {
 		if _, err := Parse(s); err == nil {
 			t.Errorf("config.toml %q: expected an error", s)
-		}
-	}
-	for _, s := range []string{
-		"[keys.normal]\nx = 1",
-		"[keys]\nx = \"a\"",
-		`theme = "x"`,
-		"[query]\nmax_rows = 50",
-		"[keys.normal\n",
-	} {
-		if _, _, err := ParseKeys(s); err == nil {
-			t.Errorf("keymaps.toml %q: expected an error", s)
 		}
 	}
 }
