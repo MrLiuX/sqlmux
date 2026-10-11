@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"unicode"
@@ -219,15 +220,29 @@ func TestStartSessionWithoutConnections(t *testing.T) {
 	}
 }
 
-// --version says what the build put in, and dev for one with nothing: a
-// test binary has no version of Go's recording either (F11.1).
+// --version says what the build put in; without that the module's version Go
+// recorded, which a `go install ...@v0.2.1` has; dev with neither (F11.1).
 func TestVersionLine(t *testing.T) {
-	if got := versionLine(); !strings.HasPrefix(got, "sqlmux dev (") {
-		t.Errorf("unset: %q", got)
-	}
 	defer func(v, c, d string) { version, commit, date = v, c, d }(version, commit, date)
-	version, commit, date = "v1.2.3", "abc1234", "2026-10-11"
-	if got := versionLine(); got != "sqlmux v1.2.3 (abc1234, 2026-10-11)" {
+	mod := func(v string) *debug.BuildInfo { return &debug.BuildInfo{Main: debug.Module{Version: v}} }
+	for _, c := range []struct {
+		info *debug.BuildInfo
+		inj  string
+		want string
+	}{
+		{nil, "dev", "sqlmux dev (none, unknown)"},
+		{mod("(devel)"), "dev", "sqlmux dev (none, unknown)"},
+		{mod(""), "dev", "sqlmux dev (none, unknown)"},
+		{mod("v0.2.1"), "dev", "sqlmux v0.2.1 (none, unknown)"},
+		{mod("v0.2.1"), "v0.3.0", "sqlmux v0.3.0 (none, unknown)"}, // ldflags win
+	} {
+		version, commit, date = c.inj, "none", "unknown"
+		if got := versionLine(c.info); got != c.want {
+			t.Errorf("%v with %q: %q, want %q", c.info, c.inj, got, c.want)
+		}
+	}
+	version, commit, date = "v1.2.3", "abc1234", "2026-10-11T00:06:40Z"
+	if got := versionLine(nil); got != "sqlmux v1.2.3 (abc1234, 2026-10-11T00:06:40Z)" {
 		t.Errorf("injected: %q", got)
 	}
 	if err := run([]string{"--version"}); err != nil {

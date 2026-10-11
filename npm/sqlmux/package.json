@@ -7,11 +7,5 @@
   "homepage": "https://github.com/kackerx/sqlmux",
   "bin": { "sqlmux": "bin/sqlmux.js" },
   "files": ["bin"],
-  "engines": { "node": ">=18" },
-  "optionalDependencies": {
-    "@kackerx/sqlmux-darwin-arm64": "0.0.0",
-    "@kackerx/sqlmux-darwin-x64": "0.0.0",
-    "@kackerx/sqlmux-linux-arm64": "0.0.0",
-    "@kackerx/sqlmux-linux-x64": "0.0.0"
-  }
+  "engines": { "node": ">=18" }
 }

@@ -29,23 +29,15 @@ var (
 	date    = "unknown"
 )
 
-// versionLine is what --version prints: "sqlmux v0.2.0 (3f2a1b9, 2026-10-11)".
-func versionLine() string {
-	v, c, d := version, commit, date
-	if info, ok := debug.ReadBuildInfo(); ok && v == "dev" {
-		if mv := info.Main.Version; mv != "" && mv != "(devel)" {
-			v = mv // go install ...@v0.2.0
-		}
-		for _, s := range info.Settings {
-			switch {
-			case s.Key == "vcs.revision" && c == "none":
-				c = s.Value[:min(len(s.Value), 7)]
-			case s.Key == "vcs.time" && d == "unknown":
-				d = s.Value
-			}
-		}
+// versionLine is what --version prints: "sqlmux v0.2.1 (3f2a1b9, 2026-10-11T00:06:40Z)".
+// A build without a version of its own takes the module's that Go recorded in
+// info, which is the tag of a `go install ...@v0.2.1`, and is dev with none.
+func versionLine(info *debug.BuildInfo) string {
+	v := version
+	if v == "dev" && info != nil && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		v = info.Main.Version
 	}
-	return fmt.Sprintf("sqlmux %s (%s, %s)", v, c, d)
+	return fmt.Sprintf("sqlmux %s (%s, %s)", v, commit, date)
 }
 
 func main() {
@@ -76,7 +68,8 @@ func run(args []string) error {
 		return err
 	}
 	if *showVersion {
-		fmt.Println(versionLine())
+		info, _ := debug.ReadBuildInfo()
+		fmt.Println(versionLine(info))
 		return nil
 	}
 	name := ""
@@ -85,7 +78,7 @@ func run(args []string) error {
 	case 1:
 		name = flags.Arg(0)
 	default:
-		return errors.New("usage: sqlmux [--layout name-or-path] [connection]")
+		return errors.New("usage: sqlmux [--version] [--layout name-or-path] [connection]")
 	}
 	if name != "" && *layout != "" {
 		return errors.New("give a connection name or --layout, not both")
