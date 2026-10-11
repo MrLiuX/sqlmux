@@ -17,6 +17,7 @@ import (
 // direction runs IconAction, the rest of the chip Action (§7.8).
 type Chip struct {
 	Label, Value string
+	Short        string // Value when the chips do not all fit; "" has none
 	Action       string
 	Input        *Input
 	Suffix       string
@@ -121,8 +122,24 @@ func (q QueryBar) InputRect(r uv.Rectangle) uv.Rectangle {
 	return uv.Rect(x, r.Min.Y, max(end-x, 0), 1)
 }
 
+// fit is q with every chip that has a Short showing it when the chips would
+// not fit r as they are, so one long value cannot push the others off (F12.1).
+func (q QueryBar) fit(r uv.Rectangle) QueryBar {
+	if q.end(r, len(q.Chips), nil) < r.Max.X-1 {
+		return q
+	}
+	q.Chips = slices.Clone(q.Chips)
+	for i, c := range q.Chips {
+		if c.Short != "" {
+			q.Chips[i].Value = c.Short
+		}
+	}
+	return q
+}
+
 // ChipRect is where the chip running action goes when the bar is drawn in r.
 func (q QueryBar) ChipRect(r uv.Rectangle, action string) uv.Rectangle {
+	q = q.fit(r)
 	for i, c := range q.Chips {
 		if c.Action == action {
 			return q.chipRects(r)[i]
@@ -134,6 +151,7 @@ func (q QueryBar) ChipRect(r uv.Rectangle, action string) uv.Rectangle {
 // ButtonRect is where the button running action goes when the bar is
 // drawn in r; empty when it gave way.
 func (q QueryBar) ButtonRect(r uv.Rectangle, action string) uv.Rectangle {
+	q = q.fit(r)
 	chips, groups, _ := q.shown(r)
 	for i, g := range q.buttonRects(r, chips, groups) {
 		for j, br := range g {
@@ -206,6 +224,7 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 		return cursor
 	}
 	y := r.Min.Y + 1
+	q = q.fit(r)
 	chips, groups, sel := q.shown(r)
 	for i, cr := range q.chipRects(r)[:chips] {
 		c := q.Chips[i]

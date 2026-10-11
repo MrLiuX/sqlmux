@@ -551,8 +551,14 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 		if s.order[0].Desc {
 			order.Icon = ic.SortDesc
 		}
-	case len(s.order) > 1: // each column with its arrow, no icon of its own to click (F12.1)
-		order.Value = orderText(s.order)
+	case len(s.order) > 1: // each column with its arrow; the icon is the first's, a click turns it (F12.1)
+		order.Value, order.Icon = orderText(s.order), ic.SortAsc
+		if s.order[0].Desc {
+			order.Icon = ic.SortDesc
+		}
+		if len(s.order) > 2 {
+			order.Short = orderText(s.order[:2]) + ", …"
+		}
 	case key != nil:
 		order.Value, order.Icon = strings.Join(key, ","), ic.SortAsc
 		if s.desc {

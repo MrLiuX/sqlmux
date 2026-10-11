@@ -895,6 +895,29 @@ func TestGoldenOrderMulti(t *testing.T) {
 	golden.RequireEqual(t, a.render().String())
 }
 
+// With several columns the chip's icon is the first one's and a click turns
+// it; too many to leave room for LIMIT, PAGE and COLS, it shows two and … (F12.1).
+func TestOrderChipMulti(t *testing.T) {
+	a, tab, rec := withRecorder(t)
+	tab.order, tab.shown.order = orderOf("status-", "amount"), orderOf("status-", "amount")
+	if sql := lastSQL(t, rec, click(a, find(t, a, ui.Target{Kind: ui.KindHint, Pane: 1, Action: "grid.order.toggle"}).Min)); !slices.Equal(tab.order, orderOf("status", "amount")) || !strings.Contains(sql, `order by "status" asc, "amount" asc`) {
+		t.Fatalf("clicked the icon: %v, %s", tab.order, sql)
+	}
+
+	a = sized(190, 45, "nerd")
+	tab = loadOrders(t, a, 100)
+	tab.order, tab.shown.order = orderOf("c1-", "c2", "c3", "c4", "c5"), orderOf("c1-", "c2", "c3", "c4", "c5")
+	bar := a.render().String()
+	for _, want := range []string{" ORDER c1 ↓, c2 ↑, … " + ui.NerdIcons.SortDesc.Text + " ", " LIMIT ", " PAGE ", " COLS "} {
+		if !strings.Contains(bar, want) {
+			t.Errorf("190 columns, five sorted: no %q", want)
+		}
+	}
+	if strings.Contains(bar, "c3") {
+		t.Error("the third column shows")
+	}
+}
+
 // The marks of the ORDER list line up, ten columns in the sorting or more: a
 // mark is padded to the longest (F12.1).
 func TestOrderMarkWidth(t *testing.T) {
