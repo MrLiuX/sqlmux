@@ -69,12 +69,11 @@ func (c Complete) Draw(f *Frame, box uv.Rectangle, rows int) {
 			st.Bg = th.Row
 		}
 		f.Fill(line, st)
-		nx, x := x1-1-Width(it.Note), x0+1
+		x := x0 + 1
 		if it.Icon.Text != "" {
-			x = f.Text(x, line.Min.Y, nx-1, it.Icon.Text+" ", it.Icon.On(uv.Style{Fg: th.Dim, Bg: st.Bg}))
+			x = f.Text(x, line.Min.Y, x1-1, it.Icon.Text+" ", it.Icon.On(uv.Style{Fg: th.Dim, Bg: st.Bg}))
 		}
-		f.TextMatch(x, line.Min.Y, nx-1, it.Text, it.Pos, st)
-		f.Text(nx, line.Min.Y, x1, it.Note, uv.Style{Fg: th.Dim, Bg: st.Bg})
+		listText(f, x, line.Min.Y, x1-1, it.Text, it.Pos, it.Note, st, uv.Style{Fg: th.Dim, Bg: st.Bg})
 	}
 	if len(c.Foot) > 0 {
 		hintRow(f, x0+1, box.Max.Y-2, x1, c.Foot, uv.Style{Fg: th.Dim, Bg: th.PaneBg}, Target{Kind: KindButton})

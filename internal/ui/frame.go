@@ -245,3 +245,17 @@ func (f *Frame) RenderReusing(last *Rendered) string {
 
 // String is the frame as plain text, for golden tests.
 func (f *Frame) String() string { return f.Buf.String() }
+
+// listText draws a list row's text from x on row y, the match positions pos
+// lit in st, and its note ending at noteRight in noteSt: the text is cut with
+// … to leave the note a blank, the note starts no further left than x, and a
+// row with no note has its text to noteRight (F13.9).
+func listText(f *Frame, x, y, noteRight int, text string, pos []int, note string, st, noteSt uv.Style) {
+	nx, end := max(noteRight-Width(note), x), noteRight
+	if note != "" {
+		end = nx - 1
+	}
+	name, inName := TruncateMatch(text, pos, end-x)
+	f.TextMatch(x, y, end, name, inName, st)
+	f.Text(nx, y, noteRight, note, noteSt)
+}
