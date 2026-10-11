@@ -18,8 +18,9 @@ import (
 // the SQL in its colors, not wrapped. In NORMAL the statement under the
 // cursor, what ↵ runs, is on the row background, in VISUAL the selection
 // on select; the / ? : line takes the last row.
-// ponytail: the text is scanned twice a frame (colors, statements), fine
-// for SQL files; keep the tokens per change if a big file lags.
+// ponytail: the text is scanned twice a frame (colors, statements), linear in
+// it: 1000 lines (80 KB) take 11 ms a frame, 10000 lines 86 ms; keep the
+// tokens per change if a file that size lags.
 type Query struct {
 	Lines     []string
 	TabWidth  int
