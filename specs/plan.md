@@ -20,6 +20,7 @@
 | M13 工程质量审计 | [m13-quality/task.md](m13-quality/task.md) | 用户 2026-10-11 让 reviewer 做的全仓审计，20 条：COMMIT 后断线报成已回滚、多进程写同一文件、确认框漏键、配置未知键静默、浮层优先级散在 12 处、扫描器平方、列表绘制和可见性重复、`C-h`、布局文件、依赖链、小拷贝 | todo（M12 passed 之后开工，排在 SQLite 前） |
 | M14 SQLite 与历史 | [m14-sqlite/task.md](m14-sqlite/task.md) | SQLite（无 cgo）和命令行 DSN、查询历史、树上的索引 / 键 / 函数 / 序列、结构修改的模板 SQL | draft（方向已定，M13 开工后补清单） |
 | M15 PG 数据库层级 | [m15-pg-databases/task.md](m15-pg-databases/task.md) | PG 的树加数据库一层（每库一对连接）、SSH 隧道、query 的签名提示与值补全（INSERT VALUES、UPDATE SET、WHERE 的值；用户后续的编辑体验需求也归这里）、状态栏随机轮播的特性提示 | draft |
+| M16 Redis 初版 | [m16-redis/task.md](m16-redis/task.md) | 用户 2026-10-11 定：go-redis、按命名空间分的树（类型只做图标）、六种类型加 RedisJSON 的键 tab、一行一条命令的控制台、来自 `COMMAND DOCS` 的补全和签名提示；表格 tab 和数据源之间加接口缝；用户体验初版后再定第二轮（候选 M17：Pub/Sub、MONITOR、Cluster） | draft |
 
 ## 发布
 
