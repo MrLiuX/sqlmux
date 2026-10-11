@@ -4,7 +4,7 @@ package sqlkit
 type JSONKind uint8
 
 const (
-	JSONOther   JSONKind = iota // what is no JSON, a space too
+	JSONOther   JSONKind = iota // what is no JSON
 	JSONKey                     // a string that is followed by a colon
 	JSONString                  // any other string
 	JSONNumber                  // 12, -0.5, 1e9
@@ -20,7 +20,8 @@ type JSONToken struct {
 
 // ScanJSON cuts text into tokens for coloring: it reads what is there and
 // does not check it, so a value half typed has its colors as far as it goes.
-// Spaces are tokens of no kind.
+// Spaces are no tokens; a string ends at the end of its line, as JSON has none
+// across lines, so a quote left open does not turn the colors of the rest.
 func ScanJSON(text string) []JSONToken {
 	var out []JSONToken
 	for i := 0; i < len(text); {
@@ -30,13 +31,16 @@ func ScanJSON(text string) []JSONToken {
 		switch {
 		case c == '"':
 			i++
-			for i < len(text) && text[i] != '"' {
+			for i < len(text) && text[i] != '"' && text[i] != '\n' {
 				if text[i] == '\\' {
 					i++
 				}
 				i++
 			}
-			i = min(i+1, len(text)) // the closing quote
+			if i < len(text) && text[i] == '"' { // the closing quote
+				i++
+			}
+			i = min(i, len(text)) // an escape at the very end
 			kind = JSONString
 			if j := skipSpace(text, i); j < len(text) && text[j] == ':' {
 				kind = JSONKey
@@ -56,6 +60,9 @@ func ScanJSON(text string) []JSONToken {
 		case c == '{' || c == '}' || c == '[' || c == ']' || c == ',' || c == ':':
 			i++
 			kind = JSONPunct
+		case c == ' ' || c == '\t' || c == '\n' || c == '\r':
+			i++
+			continue
 		default:
 			i++
 		}

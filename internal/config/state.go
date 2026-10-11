@@ -103,7 +103,7 @@ func (q *Query) UnmarshalJSON(data []byte) error {
 	*q = Query{Where: raw.Where, Desc: raw.Desc, Limit: raw.Limit, At: raw.At}
 	var col string
 	switch {
-	case len(raw.Order) == 0 || string(raw.Order) == "null":
+	case len(raw.Order) == 0:
 	case json.Unmarshal(raw.Order, &col) == nil:
 		if col != "" {
 			q.Order, q.Desc = []db.OrderCol{{Col: col, Desc: raw.Desc}}, false

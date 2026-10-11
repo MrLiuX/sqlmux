@@ -104,6 +104,19 @@ func TestLayoutRoundTrip(t *testing.T) {
 	}
 }
 
+// A direction beside a sorting is the old format's, one column and desc: what
+// is written has desc only for the default order, or the file would read back
+// the other way (F12.1).
+func TestLayoutDescOnlyForDefaultOrder(t *testing.T) {
+	tab := table("doraemon", "public", "t_order")
+	tab.Order, tab.Desc = config.LayoutOrder{{Col: "amount"}}, true
+	l := oneWindow(config.LayoutWindow{Name: "a", Focus: 1, Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{tab}}}})
+	got := layoutApp(restoredFrom(t, l)).layoutOf().Sessions[0].Windows[0].Panes[0].Tabs[0]
+	if got.Desc || !reflect.DeepEqual(got.Order, config.LayoutOrder{{Col: "amount"}}) {
+		t.Errorf("written with %+v desc %v", got.Order, got.Desc)
+	}
+}
+
 // The result area is not saved, its height is: from the area as it is, or
 // as it was left hidden or closed; a focus or zoom in it is the pane focused
 // before it, and none.

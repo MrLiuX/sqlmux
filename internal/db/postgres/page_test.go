@@ -98,7 +98,7 @@ func TestPageWhere(t *testing.T) {
 	if r.Rows[0][2].S != "failed" || r.Rows[0][0].S != "3" || r.Rows[1][0].S != "7" {
 		t.Errorf("status desc, id: %v", r.Rows)
 	}
-	// two columns, each its way, the row identity left out of the tiebreakers since it is one of them (F12.1)
+	// two columns, each its way (F12.1)
 	r, _, err := db.Page(ctx, c, pg, db.Query{Schema: "public", Table: "t_order", Order: []db.OrderCol{{Col: "status", Desc: true}, {Col: "id", Desc: true}}, Key: []string{"id"}, Limit: 50})
 	if err != nil || len(r.Rows) < 10 {
 		t.Fatalf("status desc, id desc: %d rows, %v", len(r.Rows), err)

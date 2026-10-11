@@ -38,9 +38,13 @@ type Query struct {
 	Dialect      sqlkit.Dialect // its connection's SQL
 	Yank         Sel            // what a yank took, flashing (F3.32)
 	// Colors are the text's own colors by byte, a value editor's (F12.2):
-	// with them there are no statements, no ▶ and no click on the text.
+	// with them there are no statements and no ▶; Pane is ValuePane, so a click
+	// on the text is the box's, not that of a query under it.
 	Colors []color.Color
 }
+
+// ValuePane is the Pane of the value editor's text: no pane has it.
+const ValuePane = -1
 
 // TextPos is a line and a byte offset into it, both from 0.
 type TextPos struct{ Line, Col int }
@@ -78,9 +82,7 @@ func (c Query) Draw(f *Frame, r uv.Rectangle) uv.Position {
 	th := f.Theme
 	f.Fill(r, uv.Style{Fg: th.Fg, Bg: th.PaneBg})
 	value := c.Colors != nil
-	if !value {
-		f.Region(r, Target{Kind: KindText, Pane: c.Pane})
-	}
+	f.Region(r, Target{Kind: KindText, Pane: c.Pane})
 	text := strings.Join(c.Lines, "\n")
 	starts := make([]int, len(c.Lines)) // where each line is in text
 	for i := 1; i < len(c.Lines); i++ {

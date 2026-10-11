@@ -84,7 +84,7 @@ func (e *Editor) deleteSelection() bool {
 
 // plainMoves are the keys a ReadOnly modeless editor takes: those that move.
 var plainMoves = map[string]bool{"<Left>": true, "<Right>": true, "<Up>": true, "<Down>": true, "<S-Left>": true, "<S-Right>": true,
-	"<S-Up>": true, "<S-Down>": true, "<C-a>": true, "<C-e>": true, "<Home>": true, "<End>": true, "<PageUp>": true, "<PageDown>": true}
+	"<S-Up>": true, "<S-Down>": true, "<C-a>": true, "<C-e>": true}
 
 // plainKey is key k in the modeless editor. A selection is replaced by what
 // is typed, taken out by BS and Delete; the arrow keys end it, with Shift

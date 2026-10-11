@@ -11,7 +11,7 @@
 │       ▸  mt_task        812 │ │ │    paid       │    │   6.99 │ t    │ {"n": 6, "tags": ["a"│ │                                                             │
 │       ▸  mt_task_log    96k │ │ │    meta       │ed  │   7.99 │ t    │ {"n": 7, "tags": ["a"│ │                                                             │
 │       ▸  schema_migrations  │ │ │    note       │ing │   8.99 │ t    │ {"n": 8, "tags": ["a"│ │                                                             │
-│       ▸  t_order       1.2m │ │ │    created_a  │ing │   9.99 │ t    │ {"n": 9, "tags": ["a"│ │                                                             │
+│       ▸  t_order       1.2m │ │ │    created_at │ing │   9.99 │ t    │ {"n": 9, "tags": ["a"│ │                                                             │
 │       ▸  t_order_item  3.4m │ │ └───────────────┘    │  10.99 │ t    │ {"n": 10, "tags": ["a│ │                                                             │
 │       ▸  t_payment     410k │ │  11 │   11 │ failed  │  11.99 │ t    │ {"n": 11, "tags": ["a│ │                                                             │
 │       ▸  t_refund       12k │ │  12 │   12 │ pending │  12.99 │ t    │ {"n": 12, "tags": ["a│ │                                                             │

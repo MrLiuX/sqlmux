@@ -2,14 +2,17 @@ package app
 
 import (
 	"image/color"
+	"strconv"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/editor"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // valueTab is t_order's first row with its meta, a jsonb, open in the value
@@ -68,7 +71,7 @@ func TestValueOpensJSON(t *testing.T) {
 // "discard" closes it and nothing was recorded (F12.2).
 func TestValueWriteAndClose(t *testing.T) {
 	a, tab := valueTab(t)
-	key := a.value.key
+	key := a.value.cell.key
 	feed(t, a, "j$i9<Esc>:w<CR>")
 	if e, ok := tab.edits[key]; !ok || !strings.Contains(e.val.S, `"n": 19,`) || strings.Count(e.val.S, "\n") != 6 || a.value == nil {
 		t.Fatalf("after :w: %+v %v, box %v", e, ok, a.value != nil)
@@ -93,7 +96,7 @@ func TestValueWriteAndClose(t *testing.T) {
 // NORMAL closes with the question; esc in INSERT is the editor's (F12.2).
 func TestValueKeys(t *testing.T) {
 	a, tab := valueTab(t)
-	key := a.value.key
+	key := a.value.cell.key
 	feed(t, a, "jf1r2<C-s>")
 	if a.value != nil || !strings.Contains(tab.edits[key].val.S, `"n": 2,`) {
 		t.Errorf("C-s: box %v, %q", a.value != nil, tab.edits[key].val.S)
@@ -134,7 +137,7 @@ func TestValueKeys(t *testing.T) {
 // no change (F12.2).
 func TestValueNoChangeEmptyAndTakenBack(t *testing.T) {
 	a, tab := valueTab(t)
-	key := a.value.key
+	key := a.value.cell.key
 	feed(t, a, ":w<CR>")
 	if len(tab.edits) != 0 {
 		t.Errorf("an unchanged :w: %v", tab.edits)
@@ -227,9 +230,10 @@ func TestValueReadOnly(t *testing.T) {
 		}
 	}
 	feed(t, a, "e")
-	cmd := keys(t, a, "yy")
-	if text, ok := clipText(cmd); a.toast == "" && (!ok || !strings.HasPrefix(text, "{")) {
-		t.Errorf("yy: %q %v", text, ok)
+	a.toast = ""              // the last key above left its own
+	cmd := keys(t, a, `"+yy`) // yy alone goes to the register, not the clipboard (§11)
+	if text, ok := clipText(cmd); a.toast != "" || !ok || !strings.HasPrefix(text, "{") {
+		t.Errorf("yy: %q %v, toast %q", text, ok, a.toast)
 	}
 	feed(t, a, ":w<CR>")
 	if len(tab.edits) != 0 {
@@ -307,9 +311,8 @@ func TestValuePlainCloses(t *testing.T) {
 }
 
 // A text that ends in a newline keeps it through an edit; a write of what is
-// no value of the column is refused and :wq, C-s leave the box as it is; the
-// wheel is the box's, not the panes' under it; ? is the editor's search
-// (F12.2).
+// no value of the column is refused and :wq, C-s leave the box as it is; ? is
+// the editor's search (F12.2).
 func TestValueWriteDetails(t *testing.T) {
 	a := wide(160, 45)
 	tab := loadOrders(t, a, 3)
@@ -327,13 +330,172 @@ func TestValueWriteDetails(t *testing.T) {
 	if a.value == nil || a.toast == "" {
 		t.Errorf("C-s of no JSON: box %v, toast %q", a.value != nil, a.toast)
 	}
-	top := tab.top
-	a.Update(tea.MouseWheelMsg{X: 80, Y: 20, Button: tea.MouseWheelDown})
-	if tab.top != top {
-		t.Errorf("the wheel moved the table under the box")
-	}
 	feed(t, a, ":q!<CR>04le?tags<CR>")
 	if a.value.ed.Cursor().Line != 2 {
 		t.Errorf("? is the search: at %+v", a.value.ed.Cursor())
+	}
+}
+
+// An empty text is empty even where it ended in a newline, which the editor
+// does not keep (F12.2).
+func TestValueEmptiedKeepsNoNewline(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	tab.page.Rows[0][5] = db.Val{S: "abc\n"}
+	feed(t, a, "5le")
+	feed(t, a, "ggdG:wq<CR>")
+	if e := tab.edits[editKey{`["1"]`, "note"}]; e.val.Null || e.val.S != "" {
+		t.Errorf("emptied: %+v", e)
+	}
+}
+
+// What takes no change is not changed by :w and C-s: a column of a type that
+// cannot be set, a row marked for deletion, a result's value, which has no
+// table to write to (F12.2).
+func TestValueWriteRefused(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	for i := range tab.cols.Cols {
+		if tab.cols.Cols[i].Name == "note" {
+			tab.cols.Cols[i].Fixed = true
+		}
+	}
+	feed(t, a, "5le")
+	if !a.value.readOnly {
+		t.Fatal("a fixed column opens to be changed")
+	}
+	feed(t, a, "ggx:w<CR>")
+	if len(tab.edits) != 0 || a.toast != "只读" {
+		t.Errorf("a fixed column: %v, toast %q", tab.edits, a.toast)
+	}
+	feed(t, a, ":q<CR>")
+	for i := range tab.cols.Cols {
+		tab.cols.Cols[i].Fixed = false
+	}
+	feed(t, a, "dde")
+	if a.value == nil || !a.value.readOnly {
+		t.Fatal("a row marked for deletion opens to be changed")
+	}
+	feed(t, a, "ggx:w<CR>")
+	if len(tab.edits) != 0 {
+		t.Errorf("a deleted row: %v", tab.edits)
+	}
+
+	r := db.Result{Cols: []db.Col{{Name: "doc", Type: "jsonb"}}, Rows: [][]db.Val{{{S: `{"k": 1}`}}}}
+	ra, _ := inRun(t, &execDB{res: map[string]db.Result{"select 1": r}}, "select 1;")
+	press(t, ra, "<CR>")
+	ra.win().focus(ra.win().Result.ID)
+	feed(t, ra, "e:w<CR>")
+	if ra.value == nil || ra.toast != "只读" {
+		t.Errorf(":w in a result's value: box %v, toast %q", ra.value != nil, ra.toast)
+	}
+	ra.toast = ""
+	feed(t, ra, "<C-s>")
+	if ra.value == nil || ra.toast != "只读" {
+		t.Errorf("C-s in a result's value: box %v, toast %q", ra.value != nil, ra.toast)
+	}
+
+	empty := db.Result{Cols: []db.Col{{Name: "doc", Type: "jsonb"}}}
+	ea, _ := inRun(t, &execDB{res: map[string]db.Result{"select 1": empty}}, "select 1;")
+	press(t, ea, "<CR>")
+	ea.win().focus(ea.win().Result.ID)
+	if feed(t, ea, "e"); ea.value != nil {
+		t.Error("a value of no row")
+	}
+}
+
+// A row added takes the value as a change of its cell, and what is written
+// back as it began is no change, so the cell is DEFAULT again (F12.2).
+func TestValueOnAddedRow(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	feed(t, a, "o5le")
+	if a.value == nil || a.value.cell.add == nil {
+		t.Fatal("not on the row added")
+	}
+	feed(t, a, "ix<Esc>:w<CR>")
+	add := a.value.cell.add
+	if e, ok := add.cells["note"]; !ok || e.val.S != "x" {
+		t.Fatalf("written: %+v", add.cells)
+	}
+	feed(t, a, "x:w<CR>") // empty again, as it opened
+	if _, ok := add.cells["note"]; ok {
+		t.Errorf("not taken back: %+v", add.cells)
+	}
+	if len(tab.edits) != 0 {
+		t.Errorf("the table's: %v", tab.edits)
+	}
+}
+
+// A paste goes to the value's editor, not to the cell under the box (F12.2).
+func TestValuePaste(t *testing.T) {
+	a, tab := valueTab(t)
+	a.Update(tea.PasteMsg{Content: "zz"})
+	if tab.typing != "" || tab.cell != nil || !strings.Contains(a.value.text(), "zz") {
+		t.Errorf("typing %q, cell %v, text %q", tab.typing, tab.cell, a.value.text())
+	}
+}
+
+// The mouse is the editor's, as a query's: a click puts the cursor there, a
+// drag selects, the wheel scrolls the value and not the table under the box
+// (F12.2).
+func TestValueMouse(t *testing.T) {
+	a, tab := valueTab(t)
+	a.View()
+	at := func(line, col int) uv.Position {
+		ed := a.value.ed
+		text := ui.Query{Lines: ed.Lines()}.TextArea(ui.TextBox{}.Inner(a.popupBox()))
+		return uv.Pos(text.Min.X+col, text.Min.Y+line)
+	}
+	p := at(3, 5) // the first "a" of tags
+	click(a, p)
+	if got := a.value.ed.Cursor(); got != (editor.Pos{Line: 3, Col: 5}) || a.dragText != 0 {
+		t.Errorf("click: at %v, dragging %d", got, a.dragText)
+	}
+	a.View()
+	_, _ = a.Update(tea.MouseClickMsg{X: p.X, Y: p.Y, Button: tea.MouseLeft})
+	q := at(5, 2)
+	a.Update(tea.MouseMotionMsg{X: q.X, Y: q.Y, Button: tea.MouseLeft})
+	if got := a.value.ed.Cursor(); got != (editor.Pos{Line: 5, Col: 2}) || a.value.ed.Mode() != editor.Visual {
+		t.Errorf("drag: at %v, mode %v", got, a.value.ed.Mode())
+	}
+	a.Update(tea.MouseReleaseMsg{X: q.X, Y: q.Y, Button: tea.MouseLeft})
+	if a.dragText != 0 {
+		t.Error("the drag goes on after the button is up")
+	}
+
+	long := make([]string, 100)
+	for i := range long {
+		long[i] = "line " + strconv.Itoa(i)
+	}
+	a.value.ed.Load(strings.Join(long, "\n"))
+	a.valueSize()
+	top := tab.top
+	a.Update(tea.MouseWheelMsg{X: 80, Y: 20, Button: tea.MouseWheelDown})
+	if a.value.ed.Top() != wheelStep || tab.top != top {
+		t.Errorf("wheel down: value at %d, table at %d, was %d", a.value.ed.Top(), tab.top, top)
+	}
+	a.Update(tea.MouseWheelMsg{X: 80, Y: 20, Button: tea.MouseWheelUp})
+	if a.value.ed.Top() != 0 {
+		t.Errorf("wheel up: value at %d", a.value.ed.Top())
+	}
+}
+
+// Without modes a selection ends with esc or C-c before the box closes
+// (F12.2, §6.9).
+func TestValuePlainSelectionFirst(t *testing.T) {
+	for _, k := range []string{"<Esc>", "<C-c>"} {
+		a := sizedWith(160, 45, userConfig(t, "vim = false", ""))
+		loadOrders(t, a, 3)
+		feed(t, a, "4le<S-Right><S-Right>")
+		if !a.value.ed.HasSelection() {
+			t.Fatal("no selection")
+		}
+		if feed(t, a, k); a.value == nil || a.value.ed.HasSelection() {
+			t.Errorf("%s with a selection: box %v", k, a.value != nil)
+		}
+		if feed(t, a, k); a.value != nil {
+			t.Errorf("%s again does not close", k)
+		}
 	}
 }

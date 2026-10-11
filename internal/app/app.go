@@ -328,7 +328,11 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.dragTree {
 			a.win().TreeW = treeWidth(a.mouse.X, a.w)
 		}
-		if a.dragText != 0 {
+		switch {
+		case a.dragText == ui.ValuePane && a.value != nil:
+			n, v := a.valueAt(a.mouse)
+			a.value.ed.Drag(n, v)
+		case a.dragText > 0:
 			if t, n, v := a.queryAt(a.dragText, a.mouse); t != nil {
 				t.ed.Drag(n, v)
 			}
@@ -530,6 +534,14 @@ func (a *App) click(p uv.Position) tea.Cmd {
 	case ui.KindPane:
 		return focus()
 	case ui.KindText: // the cursor goes there; dragging from there selects (§11)
+		if t.Pane == ui.ValuePane {
+			if a.valueActive() {
+				n, v := a.valueAt(p)
+				a.value.ed.Click(n, v)
+				a.dragText = ui.ValuePane
+			}
+			return nil
+		}
 		a.focusPane(t.Pane)
 		if c, n, v := a.queryAt(t.Pane, p); c != nil {
 			c.ed.Click(n, v)
@@ -557,7 +569,10 @@ func (a *App) click(p uv.Position) tea.Cmd {
 // swipe (buttons 6 and 7).
 func (a *App) wheel(m tea.Mouse) {
 	a.jump = nil        // what it matched moves
-	if a.value != nil { // the panes under it are not for the wheel (F12.2)
+	if a.value != nil { // the panes under it are not for the wheel; it scrolls the value (F12.2)
+		if d := map[tea.MouseButton]int{tea.MouseWheelUp: -1, tea.MouseWheelDown: 1}[m.Button]; d != 0 && a.valueActive() {
+			a.valueWheel(d)
+		}
 		return
 	}
 	if a.ddl != nil { // the table's DDL scrolls; the column's goes with the wheel as with a key, which then turns (F9.8)

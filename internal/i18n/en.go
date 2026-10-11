@@ -61,7 +61,6 @@ var en = map[string]string{
 	"写回并关闭":            "Write back and close",
 	"放弃":               "Discard",
 	"不是 JSON":          "Not JSON",
-	"这一行已经不在了":         "The row is gone",
 	"切换连接…":            "Switch connection…",
 	"刷新":               "Refresh",
 	"刷新表列表":            "Refresh the tables",

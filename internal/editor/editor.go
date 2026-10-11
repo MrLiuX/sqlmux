@@ -398,6 +398,11 @@ func (e *Editor) edits(c cmd) bool {
 func (e *Editor) run(c cmd) {
 	if e.ReadOnly && e.edits(c) {
 		e.eff.ReadOnly = true
+		if e.visual() { // nvim ends VISUAL, the cursor at the start of what was selected
+			from, _, _ := e.Selection()
+			e.endVisual()
+			e.cur, e.want = from, wantUnset
+		}
 		return
 	}
 	e.curswant()                                                                       // vim settles it before each command (update_topline_cursor)

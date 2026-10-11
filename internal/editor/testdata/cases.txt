@@ -1,5 +1,12 @@
 # Editor cases, run in nvim by go generate (nvim_test.go). Each case:
 # "## title", the keys in vim notation, then the text with █ at the cursor.
+#
+# The "noma" cases set 'nomodifiable', which the editor has as ReadOnly (F12.2).
+# Not here, and the editor differs: a NORMAL operator it turns down (X, db, d0,
+# dk, S, cc, gUU, gUiw) leaves the cursor, nvim first moves it to where the
+# operator began; U with nothing to undo only rings in nvim, here it says so;
+# a block's I ends with the cursor a column left of the editor's in nvim, and
+# VISUAL p is not made.
 
 ## h
 h
@@ -9250,3 +9257,165 @@ i<Up><Paste>"XX"<Up>q<Esc>
 abcdefghijklmnop
 abcdef
 abcdefghi█j
+
+## noma x
+:set noma<CR>x
+on█e two
+three four
+five
+
+## noma dd
+:set noma<CR>dd
+one two
+th█ree four
+five
+
+## noma i
+:set noma<CR>i
+one █two
+three four
+five
+
+## noma a
+:set noma<CR>a
+one █two
+three four
+five
+
+## noma o
+:set noma<CR>o
+one █two
+three four
+five
+
+## noma O
+:set noma<CR>O
+one two
+thr█ee four
+five
+
+## noma p
+:set noma<CR>yyjp
+one █two
+three four
+five
+
+## noma J
+:set noma<CR>J
+one █two
+three four
+five
+
+## noma ~
+:set noma<CR>~
+one █two
+three four
+five
+
+## noma r
+:set noma<CR>rx
+one █two
+three four
+five
+
+## noma u
+:set noma<CR>u
+one █two
+three four
+five
+
+## noma shift
+:set noma<CR>>>
+one █two
+three four
+five
+
+## noma yank
+:set noma<CR>yw
+one █two
+three four
+five
+
+## noma search
+:set noma<CR>/five<CR>
+one █two
+three four
+five
+
+## noma visual d
+:set noma<CR>vjd
+one █two
+three four
+five
+
+## noma visual d backwards
+:set noma<CR>vhhd
+one two
+thr█ee four
+five
+
+## noma visual c
+:set noma<CR>vjlc
+one █two
+three four
+five
+
+## noma visual shift
+:set noma<CR>vj>
+one █two
+three four
+five
+
+## noma visual J
+:set noma<CR>vjJ
+one █two
+three four
+five
+
+## noma visual case
+:set noma<CR>vjU
+one █two
+three four
+five
+
+## noma visual tilde
+:set noma<CR>vj~
+one █two
+three four
+five
+
+## noma visual r
+:set noma<CR>vjrx
+one █two
+three four
+five
+
+## noma visual y
+:set noma<CR>vjy
+one █two
+three four
+five
+
+## noma line d
+:set noma<CR>Vjd
+one █two
+three four
+five
+
+## noma line d backwards
+:set noma<CR>Vkd
+one two
+thr█ee four
+five
+
+## noma block d
+:set noma<CR><C-v>jld
+one █two
+three four
+five
+
+## noma block c
+:set noma<CR><C-v>jlc
+one █two
+three four
+five

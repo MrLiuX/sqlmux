@@ -524,13 +524,16 @@ func (a *App) gridFlash(p *Pane) *[2]int {
 	return nil
 }
 
-// sortedBy is an ORDER as text: "id ↑", "amount ↓".
-func sortedBy(col string, desc bool) string {
+// arrow is a way of sorting as the character that shows it.
+func arrow(desc bool) string {
 	if desc {
-		return col + " ↓"
+		return "↓"
 	}
-	return col + " ↑"
+	return "↑"
 }
+
+// sortedBy is an ORDER as text: "id ↑", "amount ↓".
+func sortedBy(col string, desc bool) string { return col + " " + arrow(desc) }
 
 // orderText is a list of columns sorted by as text: "source ↓, id ↑".
 func orderText(order []db.OrderCol) string {

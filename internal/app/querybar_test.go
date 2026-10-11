@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"image/color"
 	"regexp"
 	"slices"
@@ -933,5 +934,44 @@ func TestOrderMarkWidth(t *testing.T) {
 	}
 	if got := ui.Width(orderMark(order, "x", 1)); got != w {
 		t.Errorf("not in it: %d wide", got)
+	}
+}
+
+// The ORDER the tab asks for, what it shows and the history's entries are one
+// slice after a fetch: turning one column must not turn the others' (F12.1).
+func TestOrderChangesDoNotShare(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	shared := orderOf("status")
+	tab.order, tab.shown.order = shared, shared
+	entry := tab.savedQuery("x")
+	feed(t, a, "go<Space>") // opens on status: turned
+	if !slices.Equal(tab.order, orderOf("status-")) {
+		t.Fatalf("status turned: %v", tab.order)
+	}
+	if !slices.Equal(entry.Order, orderOf("status")) {
+		t.Errorf("a history entry changed with it: %v", entry.Order)
+	}
+	a.Update(pageMsg{tab: tab, seq: tab.seq, err: errors.New("gone")})
+	if !slices.Equal(tab.order, orderOf("status")) || !slices.Equal(tab.shown.order, orderOf("status")) {
+		t.Errorf("a fetch that failed: asks %v, shows %v", tab.order, tab.shown.order)
+	}
+	feed(t, a, "<Esc>")
+	if a.run("grid.order.toggle", 0); !slices.Equal(tab.order, orderOf("status-")) || !slices.Equal(entry.Order, orderOf("status")) {
+		t.Errorf("the icon: %v, an entry %v", tab.order, entry.Order)
+	}
+	a.Update(pageMsg{tab: tab, seq: tab.seq, err: errors.New("gone")})
+	if !slices.Equal(tab.shown.order, orderOf("status")) {
+		t.Errorf("a fetch that failed: shows %v", tab.shown.order)
+	}
+}
+
+// A sorting that has the row identity in it does not get it again after the
+// columns (§7.8): the SQL has "id" once, with the way it was given.
+func TestOrderKeyOnceInSQL(t *testing.T) {
+	a, tab, rec := withRecorder(t)
+	feed(t, a, "go<C-n><C-n><Space><Space><C-p>") // status in and turned, on id
+	_, cmd := a.Update(teaKey("<Space>"))
+	if sql := lastSQL(t, rec, cmd); !strings.Contains(sql, `order by "status" desc, "id" asc limit`) || strings.Contains(sql, `"id" asc, "id"`) {
+		t.Errorf("sql %s, order %v", sql, tab.order)
 	}
 }

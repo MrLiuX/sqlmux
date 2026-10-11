@@ -184,6 +184,49 @@ func hasDefault(col db.Column, added bool) bool {
 	return col.Default != "" && (added || col.Default != "auto_increment")
 }
 
+// cellSrc is the cell under the cursor as an editor of it, the cell's own
+// input or the value editor, starts (§10.1).
+type cellSrc struct {
+	t      *dataTab
+	key    editKey
+	add    *newRow // the row added it is in, if it is
+	orig   db.Val  // as loaded; a row added's is DEFAULT till set
+	text   string  // what it starts with: the change's value, else the loaded one; a NULL or DEFAULT has none
+	before edit    // the change it had, if had
+	had    bool
+	col    db.Column
+	// editable is whether the row takes changes at all; why is what keeps this
+	// cell from them (a read-only connection, a column that cannot be set), ""
+	// when nothing does.
+	editable bool
+	why      string
+}
+
+// cellAtCursor is the cell under the cursor of t, if there is one.
+func (t *dataTab) cellAtCursor() (cellSrc, bool) {
+	sr, key, ok := t.cursor()
+	if !ok {
+		return cellSrc{}, false
+	}
+	field := t.fieldAt(t.col)
+	name := t.page.Cols[field].Name
+	s := cellSrc{t: t, key: editKey{key, name}, add: sr.add, orig: db.Val{Null: true}, col: t.column(name), editable: t.editable(sr, key)}
+	if sr.add == nil {
+		s.orig = t.page.Rows[sr.rec][field]
+	}
+	cur := s.orig
+	if e, ok := t.change(sr, key, name); ok {
+		cur, s.before, s.had = e.val, e, true
+	}
+	if !cur.Null {
+		s.text = cur.S
+	}
+	if s.why = t.whyNoEdit(); s.why == "" && s.col.Fixed {
+		s.why = i18n.T("%s 是 %s，只读", s.col.Name, s.col.Type)
+	}
+	return s, true
+}
+
 // editCell starts editing the focused grid's current cell (§10.1), its
 // text all selected, or with text pasted in its place; not on a table
 // whyNoEdit names.
@@ -192,28 +235,14 @@ func (a *App) editCell(pasted *string) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	sr, key, ok := t.cursor()
-	if !ok || !t.editable(sr, key) {
+	s, ok := t.cellAtCursor()
+	if !ok || !s.editable {
 		return nil
 	}
-	if why := t.whyNoEdit(); why != "" {
-		return a.showToast(why, toastTTL)
+	if s.why != "" {
+		return a.showToast(s.why, toastTTL)
 	}
-	field := t.fieldAt(t.col)
-	if col := t.column(t.page.Cols[field].Name); col.Fixed {
-		return a.showToast(i18n.T("%s 是 %s，只读", col.Name, col.Type), toastTTL)
-	}
-	c := &cellEdit{key: editKey{key, t.page.Cols[field].Name}, add: sr.add, orig: db.Val{Null: true}} // a row added's: DEFAULT, till set
-	if sr.add == nil {
-		c.orig = t.page.Rows[sr.rec][field]
-	}
-	cur := c.orig
-	if e, ok := t.change(sr, c.key.row, c.key.col); ok {
-		cur = e.val
-	}
-	if !cur.Null { // a NULL or DEFAULT starts empty
-		c.start = cur.S
-	}
+	c := &cellEdit{key: s.key, add: s.add, orig: s.orig, start: s.text}
 	c.in, c.sel = ui.Input{Text: c.start, Pos: len(c.start), All: true}, -1
 	if pasted != nil {
 		c.in = ui.Input{Text: *pasted, Pos: len(*pasted)}

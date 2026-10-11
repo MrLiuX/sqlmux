@@ -93,8 +93,11 @@ func (d Dropdown) Draw(f *Frame, box uv.Rectangle, rows int) uv.Position {
 		if d.Notes != nil {
 			note = d.Notes[i]
 		}
-		nx := x1 - Width(note)
-		f.TextMatch(x, line.Min.Y, nx-1, d.Items[i], d.Pos[i], st)
+		nx, end := x1-Width(note), x1 // a blank between the name and its note only when there is a note
+		if note != "" {
+			end = nx - 1
+		}
+		f.TextMatch(x, line.Min.Y, end, d.Items[i], d.Pos[i], st)
 		f.Text(nx, line.Min.Y, x1, note, uv.Style{Fg: th.Dim, Bg: st.Bg})
 	}
 	if len(d.Hints) > 0 && box.Dy() >= 6 {

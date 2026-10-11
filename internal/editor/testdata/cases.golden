@@ -20894,3 +20894,219 @@ abcdefghij
 reg: "" ""
 top: 1
 mode: n
+
+## noma x
+on█e two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma dd
+one two
+th█ree four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma i
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma a
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma o
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma O
+one two
+thr█ee four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma p
+one two
+thre█e four
+five
+reg: "V" "one two\n"
+top: 1
+mode: n
+
+## noma J
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma ~
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma r
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma u
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma shift
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma yank
+one █two
+three four
+five
+reg: "v" "two"
+top: 1
+mode: n
+
+## noma search
+one two
+three four
+█five
+reg: "" ""
+top: 1
+mode: n
+
+## noma visual d
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma visual d backwards
+one two
+t█hree four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma visual c
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma visual shift
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma visual J
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma visual case
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma visual tilde
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma visual r
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma visual y
+one █two
+three four
+five
+reg: "v" "two\nthree"
+top: 1
+mode: n
+
+## noma line d
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma line d backwards
+one█ two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma block d
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n
+
+## noma block c
+one █two
+three four
+five
+reg: "" ""
+top: 1
+mode: n

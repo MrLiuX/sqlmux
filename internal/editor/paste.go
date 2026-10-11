@@ -14,7 +14,7 @@ import (
 // one undo step, or part of the INSERT's.
 func (e *Editor) Paste(text string) Effect {
 	e.eff = Effect{}
-	if e.ReadOnly {
+	if e.ReadOnly && e.mode != Command { // the : and / line is no text of the buffer
 		e.eff.ReadOnly = true
 		return e.eff
 	}

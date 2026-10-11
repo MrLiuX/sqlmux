@@ -148,14 +148,17 @@ func run(t *testing.T, c nvimCase) string {
 	e.SetHeight(nvimRows)
 	e.SetWidth(nvimCols)
 	before, paste, after, ok := splitPaste(t, c.keys)
-	for _, k := range keys(t, before) {
-		e.Feed(k)
+	feed := func(ks string) {
+		for _, k := range keys(t, ks) {
+			if e.Feed(k).Ex == "set noma" { // 'nomodifiable' is the editor's ReadOnly
+				e.ReadOnly = true
+			}
+		}
 	}
+	feed(before)
 	if ok {
 		e.Paste(paste)
-		for _, k := range keys(t, after) {
-			e.Feed(k)
-		}
+		feed(after)
 	}
 	kind := ""
 	switch e.reg.kind {

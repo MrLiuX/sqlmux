@@ -205,6 +205,8 @@ func teaKey(k keymap.Key) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyLeft}
 	case "<Right>":
 		return tea.KeyPressMsg{Code: tea.KeyRight}
+	case "<S-Right>":
+		return tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift}
 	}
 	if s := string(k); len(s) == 5 && s[:3] == "<C-" {
 		return tea.KeyPressMsg{Code: rune(s[3]), Mod: tea.ModCtrl}

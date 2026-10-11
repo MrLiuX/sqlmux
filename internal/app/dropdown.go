@@ -283,7 +283,7 @@ func orderMark(order []db.OrderCol, item string, at int) string {
 	i := slices.IndexFunc(order, func(o db.OrderCol) bool { return o.Col == item })
 	mark := ""
 	if at != 0 && i >= 0 { // 默认 is no column
-		mark = strconv.Itoa(i+1) + strings.TrimSpace(sortedBy("", order[i].Desc))
+		mark = strconv.Itoa(i+1) + arrow(order[i].Desc)
 	}
 	return mark + strings.Repeat(" ", max(w-ui.Width(mark), 0))
 }

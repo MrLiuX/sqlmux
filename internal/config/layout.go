@@ -98,7 +98,11 @@ func (o *LayoutOrder) UnmarshalTOML(data any) error {
 		}
 	case []map[string]any:
 		for _, m := range v {
-			*o = append(*o, orderOf(m))
+			c, err := orderOf(m)
+			if err != nil {
+				return err
+			}
+			*o = append(*o, c)
 		}
 	case []any:
 		for _, e := range v {
@@ -106,7 +110,11 @@ func (o *LayoutOrder) UnmarshalTOML(data any) error {
 			if !ok {
 				return fmt.Errorf("order: %v is no {col, desc} table", e)
 			}
-			*o = append(*o, orderOf(m))
+			c, err := orderOf(m)
+			if err != nil {
+				return err
+			}
+			*o = append(*o, c)
 		}
 	default:
 		return fmt.Errorf("order: %v is no string or array of tables", data)
@@ -114,10 +122,18 @@ func (o *LayoutOrder) UnmarshalTOML(data any) error {
 	return nil
 }
 
-func orderOf(m map[string]any) db.OrderCol {
-	col, _ := m["col"].(string)
-	desc, _ := m["desc"].(bool)
-	return db.OrderCol{Col: col, Desc: desc}
+// orderOf is one {col, desc} table: a layout is written by hand, so a col that
+// is no name or a desc that is no boolean is an error, as limit = "x" is.
+func orderOf(m map[string]any) (db.OrderCol, error) {
+	col, ok := m["col"].(string)
+	if !ok || col == "" {
+		return db.OrderCol{}, fmt.Errorf("order: col = %v is no column name", m["col"])
+	}
+	desc, ok := m["desc"].(bool)
+	if _, set := m["desc"]; set && !ok {
+		return db.OrderCol{}, fmt.Errorf("order: desc = %v is no boolean", m["desc"])
+	}
+	return db.OrderCol{Col: col, Desc: desc}, nil
 }
 
 // QueryName is the name of a query tab's file: Name, or query_<N> in

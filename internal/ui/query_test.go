@@ -159,3 +159,29 @@ func TestValueColors(t *testing.T) {
 		}
 	}
 }
+
+// The text of a value editor is a click target of its own, ValuePane's: with
+// none it would be the pane's under the box, and a click moves that query's
+// cursor (F12.2). A query's text is its pane's.
+func TestQueryTextTarget(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		q    Query
+		want int
+	}{
+		{"value", Query{Lines: []string{"{}"}, Colors: ValueColors(TokyonightStorm, "{}", true), Pane: ValuePane}, ValuePane},
+		{"query", Query{Lines: []string{"select 1"}, Pane: 3}, 3},
+	} {
+		f := NewFrame(40, 6, TokyonightStorm)
+		c.q.Draw(f, uv.Rect(0, 0, 40, 6))
+		var texts []int
+		for _, h := range f.Hits {
+			if h.Target.Kind == KindText {
+				texts = append(texts, h.Target.Pane)
+			}
+		}
+		if len(texts) != 1 || texts[0] != c.want {
+			t.Errorf("%s: text targets of panes %v, want %d", c.name, texts, c.want)
+		}
+	}
+}

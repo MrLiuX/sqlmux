@@ -40,10 +40,21 @@ func TestLayoutOrder(t *testing.T) {
 		"default desc": {"desc = true\n", nil, true},
 		"empty":        {"order = []\n", nil, false},
 		"old, default": {"order = \"\"\ndesc = true\n", nil, true},
+		"two and desc": {"order = [{col = \"source\", desc = true}, {col = \"id\"}]\ndesc = true\n", two, true}, // not the old format: it stays two
 	} {
 		tab := layout(c.tab)
 		if len(tab.Order) != len(c.want) || (len(c.want) > 0 && !reflect.DeepEqual(tab.Order, c.want)) || tab.Desc != c.desc {
 			t.Errorf("%s: %+v desc %v, want %+v desc %v", name, tab.Order, tab.Desc, c.want, c.desc)
+		}
+	}
+	for _, bad := range []string{"order = [{col = 1}]\n", "order = [{desc = true}]\n", "order = [{col = \"\"}]\n", "order = [{col = \"a\", desc = \"yes\"}]\n", "order = [\"a\"]\n"} {
+		path := filepath.Join(t.TempDir(), "bad.toml")
+		text := "version = 1\n[[session]]\nname = \"1\"\nconnection = \"c\"\n[[session.window]]\nname = \"w\"\n[[session.window.pane]]\nid = 1\n[[session.window.pane.tab]]\nkind = \"table\"\ntable = \"t\"\n" + bad
+		if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadLayout(path); err == nil {
+			t.Errorf("%s: read", bad)
 		}
 	}
 	path := filepath.Join(t.TempDir(), "out.toml")

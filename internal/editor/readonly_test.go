@@ -60,25 +60,65 @@ func TestReadOnly(t *testing.T) {
 	}
 }
 
-// Without modes, a ReadOnly editor takes the keys that move and nothing that
-// types or deletes (F12.2).
+// Without modes, a ReadOnly editor takes the keys that move, selecting and Esc
+// among them, and nothing that types or deletes (F12.2).
 func TestReadOnlyPlain(t *testing.T) {
-	e := New("one two")
+	e := New("one two\nthree four\nfive")
 	e.SetPlain(true)
 	e.ReadOnly = true
-	var seen bool
-	for _, k := range []string{"x", "<BS>", "<Del>", "<CR>", "<C-w>", "<Tab>", "<C-z>"} {
-		if eff := e.Feed(k); !eff.ReadOnly || eff.Changed || e.Lines()[0] != "one two" {
+	text := e.Lines()
+	for _, k := range []string{"x", "<BS>", "<Del>", "<CR>", "<C-w>", "<Tab>", "<C-z>", "<Home>", "<End>"} {
+		if eff := e.Feed(k); !eff.ReadOnly || eff.Changed || !slices.Equal(e.Lines(), text) {
 			t.Errorf("%s: %+v %q", k, eff, e.Lines())
 		}
-		seen = true
 	}
-	for _, k := range []string{"<Right>", "<Right>", "<C-e>", "<Left>", "<C-a>", "<S-Right>"} {
-		if eff := e.Feed(k); eff.ReadOnly {
-			t.Errorf("%s: read only", k)
+	// each key moves the cursor to the place, and is no toast
+	for _, c := range []struct {
+		k  string
+		at Pos
+	}{{"<Right>", Pos{0, 1}}, {"<Down>", Pos{1, 1}}, {"<Left>", Pos{1, 0}}, {"<Up>", Pos{0, 0}}, {"<C-e>", Pos{0, 7}}, {"<C-a>", Pos{0, 0}},
+		{"<S-Right>", Pos{0, 1}}, {"<S-Left>", Pos{0, 0}}, {"<S-Down>", Pos{1, 0}}, {"<S-Up>", Pos{0, 0}}} {
+		if eff := e.Feed(c.k); eff.ReadOnly || e.Cursor() != c.at {
+			t.Errorf("%s: read only %v, at %v, want %v", c.k, eff.ReadOnly, e.Cursor(), c.at)
 		}
 	}
-	if !seen || e.Lines()[0] != "one two" {
-		t.Errorf("text %q", e.Lines())
+	e.Feed("<S-Right>")
+	if eff := e.Feed("<Esc>"); eff.ReadOnly || !slices.Equal(e.Lines(), text) {
+		t.Errorf("Esc: %+v", eff)
+	}
+}
+
+// Moving the selection about, in each of VISUAL's three kinds, is no change
+// and no toast (F12.2).
+func TestReadOnlyVisualMoves(t *testing.T) {
+	for ks, mode := range map[string]Mode{"vV": VisualLine, "v<C-v>": VisualBlock, "<C-v>v": Visual, "<C-v>O": VisualBlock, "vo": Visual, "vj<Esc>gv": Visual, "V<C-v>": VisualBlock, "v<C-q>": VisualBlock} {
+		e := New("one two\nthree four\nfive")
+		e.ReadOnly = true
+		for _, k := range keys(t, ks) {
+			if eff := e.Feed(k); eff.ReadOnly {
+				t.Errorf("%s: %s is read only", ks, k)
+			}
+		}
+		if e.Mode() != mode {
+			t.Errorf("%s: mode %v, want %v", ks, e.Mode(), mode)
+		}
+	}
+}
+
+// The : and / line is no text of the buffer: a paste into it works in a read
+// only editor (F12.2).
+func TestReadOnlyPasteCommandLine(t *testing.T) {
+	e := New("one")
+	e.ReadOnly = true
+	e.Feed("/")
+	if eff := e.Paste("on"); eff.ReadOnly {
+		t.Error("read only")
+	}
+	if _, text, _, _ := e.CmdLine(); text != "on" {
+		t.Errorf("the line holds %q", text)
+	}
+	e.Feed("<Esc>")
+	if eff := e.Paste("on"); !eff.ReadOnly {
+		t.Error("the buffer takes a paste")
 	}
 }
