@@ -121,7 +121,7 @@ check "layout.save 的名字是保留名 last：toast 拒绝，layouts 里没有
 e2e_keys C-p; sleep 0.3; e2e_type ">打开布局"; sleep 0.5; key Enter; sleep 0.5; e2e_type d; sleep 0.4; key Enter; sleep 4
 check "layout.open 一个启动连接连不上的布局：程序不退出，toast 提到连接 bad" eval 'running && screen_has "bad"'
 CFG=$D/cfg2 startl --layout d; sleep 3
-check "--layout 启动时连不上（bad）：和 sqlmux <连接名> 一样，是启动错误，退出码 1" eval 'screen_has "[e2e-exit 1]"'
+check "--layout 启动时连不上（bad）：F12.5 起也不退出，和 sqlmux <连接名> 一样进界面，toast 提到 bad" eval 'running && ! screen_has "[e2e-exit" && screen_has "bad"'
 e2e_stop
 
 

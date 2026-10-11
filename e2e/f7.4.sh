@@ -35,7 +35,7 @@ toast_row() { e2e_text 1 "$(e2e_flag pane_width)" $(( $(H) - 1 )); }
 E2E_NOCONN=1 e2e_start "$E2E_BIN"; wait_for 6 flag_is alternate_on 1; sleep 1.5
 check "没有 connections.toml 启动：界面出来（不退出），表单自动打开" eval 'running && form_open'
 check "树里是一行「还没有连接，按 ＋ 新建」" eval 'e2e_plain | sed -n 1,6p | grep -q "还没有连接，按"'
-check "表单：分字段 name / group / engine / host / port 5432 / user / password / database / read_only [ ] / 高级 ▸，底栏有保存、取消和键位提示" eval '[[ $(frows | sed -n 1,10p | tr -s " " | tr "\n" ";") == "name;group;engine postgres │ mysql;host;port 5432;user;password;database;read_only [ ];高级 ▸;" ]] && frows | tail -1 | grep -q "Tab 下一项 · ↵ 保存 · esc 取消" && frows | tail -1 | grep -q "\[ 保存 \] \[ 取消 \]"'
+check "表单：分字段 name / group / engine / host / port 5432 / user / password / database / read_only [ ] / 高级 ▸，底栏有保存、取消和键位提示" eval '[[ $(frows | sed -n 1,10p | tr -s " " | tr "\n" ";") == "name;group;engine postgres │ mysql;host;port 5432;user;password;database;read_only [ ];高级 ▸;" ]] && frows | tail -1 | grep -q "Tab 下一项 · ↵ 保存 · esc 取消" && frows | tail -1 | grep -q "\[ 保存 \] \[ 测试 \] \[ 取消 \]"'
 check "光标在 name 上" on_field 0
 key Escape; sleep 0.3
 check "esc 关掉表单，没有连接也能用（面板能打开）" eval '! form_open && running && { e2e_keys C-p; sleep 0.4; palette_open; }'
@@ -101,7 +101,7 @@ check "Tab 八次到 read_only（值是 select 底）" on_field 8
 key Space
 check "read_only 上 space：切成 [x]" eval '[[ $(frows | sed -n 9p) == "read_only [x]" ]]'
 key Tab; key Space
-check "「高级」上 space：展开（▾），多出 dsn 和 password_cmd 两行" eval '[[ $(frows | sed -n 10p) == "高级 ▾" ]] && frows | grep -qx "dsn" && frows | grep -qx "password_cmd"'
+check "「高级」上 space：展开（▾），多出 dsn 和 password_cmd 两行" eval '[[ $(frows | sed -n 10p) == "高级 ▾" ]] && frows | grep -qE "^dsn( |$)" && frows | grep -qx "password_cmd"'
 key Tab
 check "Tab：到 dsn（输入框有光标）" on_field 10
 key Escape; sleep 0.3
@@ -181,8 +181,8 @@ e2e_stop
 
 # ---- dsn 里的 ${VAR}：启动时没设置报错（带变量名），设置了就连得上；$VAR 不展开
 mkdir -p "$D/env"; (umask 077; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "${E2E_F74_DSN}"\n' >"$D/env/connections.toml")
-e2e_start -C "$D/env" "$E2E_BIN"; sleep 1.5
-check "dsn = \"\${E2E_F74_DSN}\" 而 E2E_F74_DSN 没设置：启动报错退出码 1，说出变量名" eval 'screen_has "[e2e-exit 1]" && screen_has "E2E_F74_DSN"'
+e2e_start -C "$D/env" "$E2E_BIN"; wait_for 8 screen_has E2E_F74_DSN
+check "dsn = \"\${E2E_F74_DSN}\" 而 E2E_F74_DSN 没设置：F12.5 起连不上不退出，进界面，toast 里说出变量名" eval 'running && screen_has "E2E_F74_DSN"'
 e2e_stop
 e2e_start -C "$D/env" "E2E_F74_DSN='$SQLMUX_TEST_PG' $E2E_BIN"; wait_for 6 flag_is alternate_on 1; sleep 2
 check "设置了就连上：树里有 Tables" eval 'e2e_plain | head -14 | grep -q Tables'

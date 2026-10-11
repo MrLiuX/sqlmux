@@ -2,6 +2,7 @@
 # in the script's own database ($D/own/connections.toml, doraemon); t_huge (2M rows) for the cancel. Files land in the app's cwd, $E2E_TMP.
 toast_has() { e2e_cap | grep -qF -- "$1"; }
 export_pick() { key g e; sleep 0.6; local i; for ((i = 0; i < $1; i++)); do e2e_keys C-n; sleep 0.12; done; e2e_keys Enter; }   # N: 0 CSV·页 1 CSV·全部 2 JSON·页 3 JSON·全部
+has4() { local t; for t in "CSV · 当前页" "CSV · 全部" "JSON · 当前页" "JSON · 全部"; do e2e_plain | grep -qF "$t" || { echo "  lacks $t"; return 1; }; done; }
 exported() { wait_for 20 eval 'toast_has "已导出"'; }
 fcount() { ls "$E2E_TMP" | grep -cE "$1"; }
 py() { python3 - "$@"; }
@@ -17,7 +18,11 @@ PY
 export_body() {
   SOLO=1 start -C "$D/own"; open_table t_x; wait_for 8 settled
   key g e; sleep 0.6
-  check "ge：下拉列出 CSV · 当前页 / CSV · 全部 / JSON · 当前页 / JSON · 全部" eval 'for t in "CSV · 当前页" "CSV · 全部" "JSON · 当前页" "JSON · 全部"; do e2e_plain | grep -qF "$t" || { echo "  lacks $t"; exit 1; }; done'
+  check "ge：下拉列出 CSV · 当前页 / CSV · 全部 / JSON · 当前页 / JSON · 全部" eval 'has4'
+  key Escape; sleep 0.3
+  x=$(e2e_find "$(printf '\xef\x80\x99')" 3 | cut -d' ' -f1)      # 查询条第二行的导出按钮（U+F019，转置那一组里）
+  e2e_click "$x" 3; sleep 0.6
+  check "点查询条的导出按钮：开同一个下拉（4 项）" eval '[[ -n $x ]] && has4'
   key Escape; sleep 0.3
   export_pick 3; exported; sleep 0.3
   check "JSON · 全部：toast 带文件名 t_x.json 和 1203 行" eval 'toast_has "t_x.json" && toast_has "1203"'
