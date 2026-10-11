@@ -19,6 +19,7 @@ js() { node -e "const p = JSON.parse(require('fs').readFileSync(process.argv[1],
 check "build.mjs 没有参数：退出码 2 和用法" eval 'node npm/build.mjs 2>"$D/err"; [[ $? -eq 2 ]] && grep -q usage "$D/err"'
 mkdir -p "$D/few"; cp dist/sqlmux_${v}_darwin_arm64.tar.gz "$D/few/"
 check "build.mjs 缺一个平台的压缩包：失败并说是哪个平台" eval 'node npm/build.mjs $TAG "$D/few" "$D/few-out" 2>"$D/few-err"; [[ $? -ne 0 ]] && grep -q "darwin_amd64\|linux_" "$D/few-err"'
+check "build.mjs 在路径带空格的目录里也能出包" eval 'mkdir -p "$D/with space" && cp -R npm "$D/with space/npm" && node "$D/with space/npm/build.mjs" $TAG dist "$D/sp out" && [[ -x "$D/sp out/sqlmux-$os-$cpu/bin/sqlmux" && -f "$D/sp out/sqlmux/bin/sqlmux.js" ]]'
 node npm/build.mjs "$TAG" dist "$D/out" || exit 1
 check "做出五个包：sqlmux 和四个 sqlmux-<os>-<cpu>" eval '[[ $(ls "$D/out" | tr "\n" " ") == "sqlmux sqlmux-darwin-arm64 sqlmux-darwin-x64 sqlmux-linux-arm64 sqlmux-linux-x64 " ]]'
 check "tag 带不带 v 结果一样（version 都是 ${v}）" eval 'node npm/build.mjs "${v}" dist "$D/out2" && [[ $(js "$D/out2/sqlmux/package.json" p.version) == ${v} && $(js "$D/out/sqlmux/package.json" p.version) == ${v} ]]'

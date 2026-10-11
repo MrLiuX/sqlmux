@@ -18,20 +18,22 @@ check "-version 同样；一行、退出码 0、stderr 空" eval '[[ $("$D/inj" 
 go build -buildvcs=false -o "$D/dev0" ./cmd/sqlmux
 check "没注入、没有 vcs 信息：sqlmux dev (none, unknown)" eval '[[ $("$D/dev0" --version) == "sqlmux dev (none, unknown)" ]]'
 go build -o "$D/dev" ./cmd/sqlmux
-check "没注入、在 git 检出里 go build：版本是 Go 记下的（伪版本 v…-<时间>-<sha>），commit 是 vcs.revision 的 7 位，不是 dev" eval 'got=$("$D/dev" --version); [[ $got == "sqlmux v"*"-$(git rev-parse --short=12 HEAD) ($SHORT, "* ]] || { echo "  $got, want a pseudo-version of $SHORT"; false; }'
+check "没注入、在 git 检出里 go build：版本是 Go 记下的伪版本（v…-<时间>-<12 位 sha>），commit / 日期是 none / unknown（不再读 vcs 信息）" eval 'got=$("$D/dev" --version); [[ $got == "sqlmux v"*"-$(git rev-parse --short=12 HEAD) (none, unknown)" ]] || { echo "  $got"; false; }'
+check "参数多了：退出码 1，usage 里带 [--version]" eval '"$D/inj" a b >/dev/null 2>"$D/err"; [[ $? -eq 1 ]] && grep -qF "usage: sqlmux [--version] [--layout name-or-path] [connection]" "$D/err"'
+check "README：Releases 页的压缩包名 sqlmux_<version>_<os>_<arch>.tar.gz 和 checksums.txt" eval 'grep -qF "sqlmux_<version>_<os>_<arch>.tar.gz" README.md && grep -q "checksums.txt" README.md'
 mkdir -p "$D/h" "$D/c" "$D/s" "$D/d"
 check "--version 不读配置、不建文件：空的 HOME / XDG 目录里跑完仍是空的（没有 connections.toml 也照常输出）" eval 'HOME=$D/h XDG_CONFIG_HOME=$D/c XDG_STATE_HOME=$D/s XDG_DATA_HOME=$D/d "$D/inj" --version >/dev/null && [[ -z $(find "$D/h" "$D/c" "$D/s" "$D/d" -mindepth 1) ]]'
 
 # ---- just build 注入 git describe
 just build >/dev/null 2>&1
-check "just build：版本是 git describe（${TAG}）、commit 是 HEAD 的短 sha、日期是今天（UTC）" eval 'got=$(bin/sqlmux --version); want="sqlmux $(git describe --tags --always --dirty) ($SHORT, $(date -u +%Y-%m-%d))"; [[ $got == "$want" ]] || { echo "  $got, want $want"; false; }'
+check "just build：版本是 git describe（${TAG}，m99 在上一个 commit 上也不用它）、commit 是 HEAD 的短 sha、日期是提交时间（UTC）" eval 'got=$(bin/sqlmux --version); want="sqlmux $TAG ($SHORT, $DATE_UTC)"; [[ $got == "$want" ]] || { echo "  $got, want $want"; false; }'
 rm -rf bin
 
 # ---- just release-check：goreleaser check + build --snapshot
 PATH=$(dirname "$(command -v "$GR")"):$PATH just release-check >"$D/rc.log" 2>&1; rc=$?
 check "just release-check 通过（goreleaser check 和 build --snapshot）" eval '[[ $rc -eq 0 ]] || { tail -15 "$D/rc.log"; false; }'
 check "snapshot 在 dist/ 出四个二进制（darwin / linux × amd64 / arm64）" eval 'n=$(ls dist/sqlmux_*/sqlmux | wc -l | tr -d " "); [[ $n == 4 ]] && ls -d dist/sqlmux_darwin_amd64* dist/sqlmux_darwin_arm64* dist/sqlmux_linux_amd64* dist/sqlmux_linux_arm64* >/dev/null || { ls dist; false; }'
-check "本机的 snapshot 二进制 --version：sqlmux <snapshot 版本> (短 sha, 日期)" eval 'got=$($(rel_native) --version); [[ $got =~ ^sqlmux\ [0-9v][^\ ]*\ \($SHORT, ]] && [[ $got != *dev* ]] || { echo "  $got"; false; }'
+check "本机的 snapshot 二进制 --version：sqlmux v<版本>-SNAPSHOT-<短 sha> (短 sha, 日期)" eval 'got=$($(rel_native) --version); [[ $got == "sqlmux v"*"-SNAPSHOT-$SHORT ($SHORT, "* ]] || { echo "  $got"; false; }'
 
 # ---- 打了 tag 的 release（不发布）
 rel_run; rr=$?
@@ -45,7 +47,7 @@ check "二进制的平台对：darwin arm64 / x86_64 是 Mach-O，linux 是静�
 check "本机的二进制 --version：sqlmux ${TAG} ($SHORT, 提交时间)" eval 'got=$($(rel_native) --version); [[ $got == "sqlmux $TAG ($SHORT, $DATE_UTC)" ]] || { echo "  $got"; false; }'
 check "压缩包里的本机二进制同样（-s -w 去符号后还能跑）" eval 'os=$(uname -s | tr A-Z a-z); cpu=$(uname -m | sed "s/x86_64/amd64/"); [[ $("$D/x/${os}_${cpu}/sqlmux" -version) == "sqlmux $TAG ($SHORT, $DATE_UTC)" ]]'
 chlog=dist/CHANGELOG.md
-check "changelog：有 Features 组，列着 F 开头的提交" eval 'grep -q "^### Features" $chlog && grep -q "F11.1: " $chlog'
+check "changelog：m99 的 tag 不算发布，从上一个 v* 起算：有 Features 组，列着 F11.1（它在 m99 之前）" eval 'grep -q "^### Features" $chlog && grep -q "F11.1: " $chlog'
 check "changelog：没有 docs: / e2e: / prune: / Merge 的提交" eval '! grep -Eq "^\* [0-9a-f]+ (docs:|e2e:|prune:|Merge )" $chlog || { grep -E "^\* [0-9a-f]+ (docs:|e2e:|prune:|Merge )" $chlog; false; }'
 
 # ---- release.yml 的结构（workflow 本身要推送后才能跑）
