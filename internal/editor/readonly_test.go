@@ -91,7 +91,7 @@ func TestReadOnlyPlain(t *testing.T) {
 // Moving the selection about, in each of VISUAL's three kinds, is no change
 // and no toast (F12.2).
 func TestReadOnlyVisualMoves(t *testing.T) {
-	for ks, mode := range map[string]Mode{"vV": VisualLine, "v<C-v>": VisualBlock, "<C-v>v": Visual, "<C-v>O": VisualBlock, "vo": Visual, "vj<Esc>gv": Visual, "V<C-v>": VisualBlock, "v<C-q>": VisualBlock} {
+	for ks, mode := range map[string]Mode{"vV": VisualLine, "v<C-v>": VisualBlock, "<C-v>v": Visual, "<C-v>O": VisualBlock, "vo": Visual, "vj<Esc>gv": Visual, "vj<Esc>Gvgv": Visual, "V<C-v>": VisualBlock, "v<C-q>": VisualBlock} {
 		e := New("one two\nthree four\nfive")
 		e.ReadOnly = true
 		for _, k := range keys(t, ks) {

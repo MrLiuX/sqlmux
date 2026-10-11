@@ -440,7 +440,9 @@ func TestValuePaste(t *testing.T) {
 // drag selects, the wheel scrolls the value and not the table under the box
 // (F12.2).
 func TestValueMouse(t *testing.T) {
-	a, tab := valueTab(t)
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 60) // long enough for the wheel to scroll it
+	feed(t, a, "4le")
 	a.View()
 	at := func(line, col int) uv.Position {
 		ed := a.value.ed
