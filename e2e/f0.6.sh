@@ -31,9 +31,9 @@ print(" ".join(keys))'
 titles_cjk() { e2e_plain | sed -n "$(($(top_row "$1 ") + 1)),$(($(H) - 2))p" | python3 -c '
 import re, sys
 ts = [t.strip() for l in sys.stdin for t in re.findall(r"→ (.+?)(?=\s{2,}\S →|\s*│$)", l)]
-sys.exit(0 if ts and all(re.search(r"[一-鿿]|ORDER|LIMIT|PAGE|COLS", t) for t in ts) else 1)'; }
+sys.exit(0 if ts and all(re.search(r"[一-鿿]|ORDER|LIMIT|PAGE|COLS|^…$", t) for t in ts) else 1)'; }
 
-SPC_KEYS='s ) ( L c n p l % " z x q b r ?'   # §6.8 里以 SPC 开头的默认键（F0.11 精简后，F3.17 加了 ?，F3.28 加了 r，F9.10 加了 ) ( L），按 default.toml 的顺序
+SPC_KEYS='s ) ( L c n p l % " z x q b r ? w'   # F12.5 加了 w（SPC wn / wp 把 tab 移到相邻 pane）； §6.8 里以 SPC 开头的默认键（F0.11 精简后，F3.17 加了 ?，F3.28 加了 r，F9.10 加了 ) ( L），按 default.toml 的顺序
 
 # ---- 出现：停在纯前缀节点 400ms 后
 start
@@ -74,7 +74,7 @@ check "随后的 C-c 算第一次：不退出" eval 'running && screen_has "再�
 # ---- grid 里的 g：先 grid 的键，再 normal 的键（F3.7 起空 pane 是引导页，没有 grid 的键，要先开表）
 start; open_table t_order
 e2e_type g; sleep 0.6
-check "grid 里按 g：浮层列出 g o l p c t T" eval '[[ $(items g) == "g o l p c t T" ]] || { echo "  got: $(items g)"; false; }'
+check "grid 里按 g：浮层列出 g o l p c e s S t T（F12.3 加了 s S，F12.4 加了 e）" eval '[[ $(items g) == "g o l p c e s S t T" ]] || { echo "  got: $(items g)"; false; }'
 e2e_keys Escape; sleep 0.2
 
 # ---- 高度不够：只截掉放不下的行，不压状态栏

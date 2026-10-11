@@ -5,12 +5,12 @@ ids() { local y n=${1:-12} out=""; for ((y = $(grid_y) + 1; y <= $(grid_y) + n; 
 ids_are() { local got; got=$(ids "$(echo "$1" | tr -cd , | wc -c)"); [[ $got == "$1" ]] || { echo "  ids [$got], want [$1]"; false; }; }
 # the dropdown (under the ORDER chip): items from row 7 on, "1↓ source" / "id" …; the cursor row has the select background
 DD_Y=7 SELBG=#364a82
-dd_items() { local y t; for ((y = DD_Y; y < DD_Y + 8; y++)); do t=$(e2e_text 36 56 "$y" | sed 's/[│┌┐└┘─┼]//g; s/^ *//; s/ *$//'); [[ $t =~ ^([0-9][↑↓]\ )?[A-Za-z默认_][^\ ]*$ ]] && echo "$t" || break; done; }
+dd_items() { local y t; for ((y = DD_Y; y < DD_Y + 8; y++)); do t=$(e2e_text 36 56 "$y" | sed 's/^ *│//; s/│.*//; s/[┌┐└┘─┼]//g; s/^ *//; s/ *$//'); [[ $t =~ ^([0-9][↑↓]\ )?[A-Za-z默认_][^\ ]*$ ]] && echo "$t" || break; done; }
 dd_has() { dd_items | grep -qxF "$1" || { echo "  dropdown: $(dd_items | tr '\n' '|')"; false; }; }
 dd_cursor() { local y n=0; for ((y = DD_Y; y < DD_Y + 8; y++)); do [[ " $(e2e_style 40 "$y") " == *" bg=$SELBG "* ]] && { echo "$n"; return; }; n=$((n + 1)); done; echo -1; }
 dd_goto() {   # NAME: move the cursor to this item (C-n / C-p); the dropdown opens with the cursor on the current sort column
   local want i=0 cur n=0 item; while read -r item; do [[ ${item##* } == "$1" ]] && want=$n; n=$((n + 1)); done < <(dd_items)
-  cur=$(dd_cursor); [[ -n $want && $cur -ge 0 ]] || { echo "  dd_goto $1: want=$want cur=$cur"; return 1; }
+  cur=$(dd_cursor); [[ -n $want && $cur -ge 0 ]] || { echo "  dd_goto $1: want=$want cur=$cur items=$(dd_items | tr '\n' '|')"; e2e_cap | sed -n 1,14p | cut -c30-110; return 1; }
   while ((cur < want)); do e2e_keys C-n; sleep 0.12; cur=$((cur + 1)); done
   while ((cur > want)); do e2e_keys C-p; sleep 0.12; cur=$((cur - 1)); done
   sleep 0.2

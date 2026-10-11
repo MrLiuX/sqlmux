@@ -27,7 +27,7 @@ paging_body() {
   # ---- 第 2 页导出 CSV：文件名加 -p2（F10.4 导出加页号），内容是这一页的 500 行
   seq_n=$(rtitle | grep -oE '#[0-9]+' | tr -d '#')
   read -r x y <<<"$(g=($(geom $RP)); echo $((g[0] + g[2] - 9)) "${g[1]}")"
-  e2e_click "$x" "$y"; sleep 0.8; key C-k; key C-j
+  e2e_click "$x" "$y"; sleep 0.8; e2e_keys Enter; sleep 0.8; key C-k; key C-j   # F12.4: 导出按钮开下拉，第一项 CSV · 当前页
   check "第 2 页点导出：当前目录下是 query_1-${seq_n}-p2.csv，500 行数据 + 表头，第一行数据是 501" eval 'f=$E2E_TMP/query_1-${seq_n}-p2.csv; [[ -f $f && $(wc -l <"$f" | tr -d " ") == 501 && $(sed -n 2p "$f" | tr -d "\r\" ") == 501 ]] || { ls $E2E_TMP | head; false; }'
   paged "]" "1001–1203 行"
   check "再 ]：第 3 页（最后一页）：标题 1001–1203 行，第一行 id 1001" eval 'title_has "1001–1203 行" && [[ $(firstid) == 1001 ]]'

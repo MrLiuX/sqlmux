@@ -31,21 +31,30 @@ check "文件里没有 [[connection]]（只有注释）：同样进界面、表�
 e2e_stop
 conns 600 "$(conn a "$SQLMUX_TEST_PG")" "$(conn b "$SQLMUX_TEST_PG")"; cli nosuch
 check "sqlmux <名字> 找不到：列出已有的连接名" failed 'a, b'
-conns 600 "$(conn t "$DSN" 'password = "wrong"')"; cli
-check "密码错误：打印数据库返回的错误，不 panic" failed 'password authentication failed'
-conns 600 "$(conn t "$DSN")"; cli
-check "DSN 没有密码、也没有密码来源：连不上（对照：下面三种来源是真的生效了）" failed 'password authentication failed'
-conns 600 "$(conn t "$DSN" 'password_cmd = "echo no-keychain >&2; exit 3"')"; cli
-check "password_cmd 非 0 退出：错误里带它的 stderr" failed 'no-keychain'
-conns 600 "$(conn t "$DSN" 'password_env = "SQLMUX_E2E_UNSET"')"; cli
-check "password_env 指向的变量没设置：错误里写明变量名" failed 'SQLMUX_E2E_UNSET'
-conns 600 "$(conn t "postgres://$PGU@$PGH:1/sqlmux?sslmode=disable")"; cli
-check "端口连不上：打印连接错误" failed 'connection refused'
+# M12 F12.5：启动连接连不上不再退出：进界面，节点标失败，toast 驱动的错误（下面这几条原来是终端打印错误退出 1）
+uifail() { ui "$E2E_BIN"; wait_for 20 screen_has "$1" && running || { echo "  no '$1': $(e2e_plain | grep -m3 -iE 'error|failed|refused|timeout' | tr '\n' '|')"; false; }; }
+conns 600 "$(conn t "$DSN" 'password = "wrong"')"; uifail 'password authentication failed'
+check "密码错误：进界面不退出，toast 里是数据库返回的错误，没有 panic" eval 'running && ! screen_has panic'
+e2e_stop
+conns 600 "$(conn t "$DSN")"; uifail 'password authentication failed'
+check "DSN 没有密码、也没有密码来源：连不上，进界面 + toast（对照：下面三种来源是真的生效了）" eval 'running'
+e2e_stop
+conns 600 "$(conn t "$DSN" 'password_cmd = "echo no-keychain >&2; exit 3"')"; uifail 'no-keychain'
+check "password_cmd 非 0 退出：toast 里带它的 stderr，进界面" eval 'running'
+e2e_stop
+conns 600 "$(conn t "$DSN" 'password_env = "SQLMUX_E2E_UNSET"')"; uifail 'SQLMUX_E2E_UNSET'
+check "password_env 指向的变量没设置：toast 里写明变量名，进界面" eval 'running'
+e2e_stop
+conns 600 "$(conn t "postgres://$PGU@$PGH:1/sqlmux?sslmode=disable")"; uifail 'connection refused'
+check "端口连不上：进界面，toast 打印连接错误" eval 'running'
+e2e_stop
 # 连接超时：没写时补成 10s；DSN 里写了就按 DSN（§8.1）。10.255.255.1 不回包
-conns 600 "$(conn t 'postgres://u@10.255.255.1:5432/x')"; s=$(date +%s); cli; took=$(( $(date +%s) - s ))
-check "没写 connect_timeout：约 10 秒后放弃（${took}s）" eval 'failed timeout && ((took >= 9 && took <= 13))'
-conns 600 "$(conn t 'postgres://u@10.255.255.1:5432/x?connect_timeout=2')"; s=$(date +%s); cli; took=$(( $(date +%s) - s ))
-check "connect_timeout=2：约 2 秒后放弃（${took}s）" eval 'failed timeout && ((took <= 4))'
+conns 600 "$(conn t 'postgres://u@10.255.255.1:5432/x')"; s=$(date +%s); uifail timeout; took=$(( $(date +%s) - s ))
+check "没写 connect_timeout：约 10 秒后 toast 超时错误（${took}s），界面照常" eval 'running && ((took >= 9 && took <= 14))'
+e2e_stop
+conns 600 "$(conn t 'postgres://u@10.255.255.1:5432/x?connect_timeout=2')"; s=$(date +%s); uifail timeout; took=$(( $(date +%s) - s ))
+check "connect_timeout=2：约 2 秒后 toast 超时错误（${took}s）" eval 'running && ((took <= 5))'
+e2e_stop
 
 # ---- 三种密码来源都能连上（§13「凭据」）；session 名取连接的 name
 conns 600 "$(conn viacmd "$DSN" "password_cmd = \"printf '%s\\\\n' '$PW'\"")"; ui "$E2E_BIN"
