@@ -110,10 +110,39 @@ func (a *App) focusedQuery() *queryTab {
 	return queryOf(a.focused())
 }
 
-// overlaid reports whether an overlay has the keys (§7.8).
-func (a *App) overlaid() bool {
-	return a.palette != nil || a.drop != nil || a.cols != nil || a.confirm != nil || a.keyHelp != nil || a.sessList != nil || a.form != nil || a.winRename != nil || a.askName != nil || a.menu != nil || a.ddl != nil || a.value != nil
+// topOverlay names the overlay that has the keys, "" with none (§7.8): the one
+// place that says which there are and which is over which, as the keymap's
+// scope names them. drawOn draws them from the bottom up, this order reversed.
+func (a *App) topOverlay() string {
+	switch {
+	case a.confirm != nil:
+		return "confirm"
+	case a.menu != nil:
+		return "menu"
+	case a.value != nil:
+		return "value"
+	case a.ddl != nil:
+		return "ddl"
+	case a.keyHelp != nil:
+		return "keyhelp"
+	case a.palette != nil:
+		return "palette"
+	case a.sessList != nil:
+		return "sessions"
+	case a.form != nil:
+		return "form"
+	case a.winRename != nil, a.askName != nil:
+		return "rename"
+	case a.drop != nil:
+		return "dropdown"
+	case a.cols != nil:
+		return "cols"
+	}
+	return ""
 }
+
+// overlaid reports whether an overlay has the keys (§7.8).
+func (a *App) overlaid() bool { return a.topOverlay() != "" }
 
 // vim is the editor that has the keys: the value editor's, or with nothing over
 // it the focused query's or the WHERE's being typed (F3.39).

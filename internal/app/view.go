@@ -131,6 +131,8 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 	if a.jump != nil {
 		a.drawJump(f)
 	}
+	// The overlays are drawn here from the bottom up, topOverlay's order
+	// reversed, but for the help, which is drawn first (F13.14).
 	if a.keyHelp != nil {
 		a.keyHelpView().Draw(f, a.overlayArea())
 	}
