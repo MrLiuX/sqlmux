@@ -47,7 +47,7 @@ check "二进制的平台对：darwin arm64 / x86_64 是 Mach-O，linux 是静�
 check "本机的二进制 --version：sqlmux ${TAG} ($SHORT, 提交时间)" eval 'got=$($(rel_native) --version); [[ $got == "sqlmux $TAG ($SHORT, $DATE_UTC)" ]] || { echo "  $got"; false; }'
 check "压缩包里的本机二进制同样（-s -w 去符号后还能跑）" eval 'os=$(uname -s | tr A-Z a-z); cpu=$(uname -m | sed "s/x86_64/amd64/"); [[ $("$D/x/${os}_${cpu}/sqlmux" -version) == "sqlmux $TAG ($SHORT, $DATE_UTC)" ]]'
 chlog=dist/CHANGELOG.md
-check "changelog：m99 的 tag 不算发布，从上一个 v* 起算：有 Features 组，列着 F11.1（它在 m99 之前）" eval 'grep -q "^### Features" $chlog && grep -q "F11.1: " $chlog'
+check "changelog：m99 的 tag 不算发布，从上一个 v* 起算：有 Features 组，F98.1（m99 之前）和 F99.1（之后）都列着" eval 'grep -q "^### Features" $chlog && grep -q "F98.1: before m99" $chlog && grep -q "F99.1: after m99" $chlog'
 check "changelog：没有 docs: / e2e: / prune: / Merge 的提交" eval '! grep -Eq "^\* [0-9a-f]+ (docs:|e2e:|prune:|Merge )" $chlog || { grep -E "^\* [0-9a-f]+ (docs:|e2e:|prune:|Merge )" $chlog; false; }'
 
 # ---- release.yml 的结构（workflow 本身要推送后才能跑）
