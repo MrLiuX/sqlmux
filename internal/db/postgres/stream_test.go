@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -58,5 +59,12 @@ func TestStream(t *testing.T) {
 	}
 	if r, err := c.Query(context.Background(), "select 1"); err != nil || r.Rows[0][0].S != "1" {
 		t.Fatalf("after the stop: %v %v", r.Rows, err)
+	}
+
+	// a statement the server refuses describes no column: its message is the error, not the head's
+	head := errors.New("no such column")
+	err = c.Stream(context.Background(), "select * from no_such_table_x", func([]db.Col) error { return head }, func([]db.Val) error { return nil })
+	if err == nil || errors.Is(err, head) || !strings.Contains(err.Error(), "no_such_table_x") {
+		t.Fatalf("a statement that fails: %v", err)
 	}
 }

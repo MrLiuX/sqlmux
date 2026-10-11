@@ -3,6 +3,7 @@ package app
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -11,7 +12,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -81,16 +81,16 @@ func (a *App) exportOpen() tea.Cmd {
 // exportSource is the table or the result of the dropdown as an export has it.
 func (a *App) exportSource(d *dropdown) exportSrc {
 	if t := d.tab; t != nil {
-		src := exportSrc{owner: t, base: t.table.Name, conn: t.conn, page: db.Result{Rows: t.page.Rows}}
-		for _, f := range t.shownCols() {
+		src := exportSrc{owner: t, base: t.table.Name, conn: t.conn}
+		shown := t.shownCols()
+		for _, f := range shown {
 			name := t.page.Cols[f].Name
 			src.cols = append(src.cols, exportCol{name, t.typeOf(name)})
 			src.page.Cols = append(src.page.Cols, db.Col{Name: name})
 		}
-		src.page.Rows = nil
 		for _, row := range t.page.Rows {
-			out := make([]db.Val, 0, len(src.cols))
-			for _, f := range t.shownCols() {
+			out := make([]db.Val, 0, len(shown))
+			for _, f := range shown {
 				out = append(out, row[f])
 			}
 			src.page.Rows = append(src.page.Rows, out)
@@ -152,7 +152,7 @@ func (a *App) export(src exportSrc, at int) tea.Cmd {
 	if all && src.all != nil {
 		base = src.all.base
 	}
-	f, path, err := createExport(base + ext)
+	f, path, err := createExport(fileSafe.Replace(base) + ext)
 	if err != nil {
 		return a.showToast(err.Error(), toastTTL)
 	}
@@ -174,7 +174,8 @@ func (a *App) export(src exportSrc, at int) tea.Cmd {
 						return err
 					}
 				}
-				return db.Each(ctx, c, src.all.sql, out.head, out.row)
+				// in a transaction of the user's a failed read would fail it all (§10.3)
+				return db.Guarded(ctx, c, "sqlmux_export", func() error { return db.Each(ctx, c, src.all.sql, out.head, out.row) })
 			})
 		} else {
 			err = out.head(src.page.Cols)
@@ -212,6 +213,10 @@ func (a *App) gotExport(m exportDone) tea.Cmd {
 	}
 	return a.showToast(i18n.T("已导出 %s · %d 行", m.path, m.rows), toastTTL)
 }
+
+// fileSafe keeps a table's name, which anyone with CREATE rights chose, from
+// naming a place: it is the file's, in the current directory.
+var fileSafe = strings.NewReplacer("/", "_", "\\", "_")
 
 // createExport makes the file name, or name-2, name-3 before the extension
 // when there is one already, which is not touched; it is made with the
@@ -266,12 +271,20 @@ func (o *exportOut) head(cols []db.Col) error {
 		o.w.Reset(o.f)
 	}
 	o.started, o.n, o.at, o.class, o.names = true, 0, nil, nil, nil
+	taken := make([]bool, len(cols)) // two columns of one name are two (a join's id, id)
 	for _, w := range o.want {
-		i := slices.IndexFunc(cols, func(c db.Col) bool { return c.Name == w.name })
+		i := -1
+		for j, c := range cols {
+			if c.Name == w.name && !taken[j] {
+				i = j
+				break
+			}
+		}
 		if i < 0 {
 			return fmt.Errorf("%s: %s", i18n.T("没有这一列"), w.name)
 		}
-		typ := cmpOr(w.typ, cols[i].Type)
+		taken[i] = true
+		typ := cmp.Or(w.typ, cols[i].Type)
 		o.at, o.class, o.names = append(o.at, i), append(o.class, colType(typ)), append(o.names, w.name)
 	}
 	if o.json {
@@ -280,13 +293,6 @@ func (o *exportOut) head(cols []db.Col) error {
 	}
 	o.csv = csv.NewWriter(o.w)
 	return o.csv.Write(o.names)
-}
-
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }
 
 func (o *exportOut) row(vals []db.Val) error {

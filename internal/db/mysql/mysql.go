@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -207,10 +208,7 @@ func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (
 		}
 		row := make([]db.Val, len(raw))
 		for i, v := range raw {
-			row[i] = db.Val{S: shown(v), Null: v == nil}
-			if r.Cols[i].Type == "bit" && v != nil {
-				row[i].S = bits(v)
-			}
+			row[i] = cell(v, r.Cols[i].Type, shown)
 		}
 		r.Rows = append(r.Rows, row)
 	}
@@ -242,37 +240,39 @@ func (c *Conn) Stream(ctx context.Context, query string, head func([]db.Col) err
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	defer c.watch(ctx)()
 	defer func() { err = c.noted(query, err) }()
 	rows, err := c.c.QueryContext(context.WithoutCancel(ctx), query)
 	if err != nil {
 		return err
 	}
+	// Close reads the rest of the result: a stop kills the statement first
+	// (the cancel is the watch's KILL), as Postgres' does
 	defer rows.Close()
+	stop := func(err error) error { cancel(); return err }
 	types, err := rows.ColumnTypes()
 	if err != nil {
-		return err
+		return stop(err)
 	}
 	raw, dest, cols := make([]sql.RawBytes, len(types)), make([]any, len(types)), make([]db.Col, len(types))
 	for i, t := range types {
 		cols[i], dest[i] = db.Col{Name: t.Name(), Type: strings.ToLower(t.DatabaseTypeName())}, &raw[i]
 	}
 	if err := head(cols); err != nil {
-		return err
+		return stop(err)
 	}
 	for rows.Next() {
 		if err := rows.Scan(dest...); err != nil {
-			return err
+			return stop(err)
 		}
 		vals := make([]db.Val, len(raw))
 		for i, v := range raw {
-			vals[i] = db.Val{S: shown(v), Null: v == nil}
-			if cols[i].Type == "bit" && v != nil {
-				vals[i].S = bits(v)
-			}
+			vals[i] = cell(v, cols[i].Type, hexed)
 		}
 		if err := row(vals); err != nil {
-			return err
+			return stop(err)
 		}
 	}
 	if err := ctx.Err(); err != nil { // killed: the rows so far were all of it
@@ -281,10 +281,36 @@ func (c *Conn) Stream(ctx context.Context, query string, head func([]db.Col) err
 	return rows.Err()
 }
 
+// cell is the value v of a column of type typ, a non-UTF-8 one told by text;
+// a BIT is its number (§8.1).
+func cell(v []byte, typ string, text func(v []byte, typ string) string) db.Val {
+	switch {
+	case v == nil:
+		return db.Val{Null: true}
+	case typ == "bit":
+		return db.Val{S: bits(v)}
+	}
+	return db.Val{S: text(v, typ)}
+}
+
 // shown is a value as the grid shows it: a blob that is no UTF-8 by its size (§8.1).
-func shown(v []byte) string {
+func shown(v []byte, _ string) string {
 	if !utf8.Valid(v) {
 		return db.BinaryShown(len(v))
+	}
+	return string(v)
+}
+
+// binaryTypes are the column types that hold bytes, not text, whatever the
+// bytes of a value happen to be.
+var binaryTypes = map[string]bool{"binary": true, "varbinary": true, "tinyblob": true, "blob": true, "mediumblob": true, "longblob": true}
+
+// hexed is a value as a file has it: a binary one as 0x and its hex, as
+// MySQL writes a literal and as Postgres' bytea reads, not the grid's
+// placeholder, which is no data (F12.4).
+func hexed(v []byte, typ string) string {
+	if binaryTypes[typ] || !utf8.Valid(v) {
+		return "0x" + hex.EncodeToString(v)
 	}
 	return string(v)
 }

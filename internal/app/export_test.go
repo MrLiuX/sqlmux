@@ -2,6 +2,7 @@ package app
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -30,6 +31,16 @@ type streamDB struct {
 	once    sync.Once
 	mu      sync.Mutex
 	sqls    []string
+	saved   []string // the savepoint statements it was asked
+}
+
+func (d *streamDB) Query(ctx context.Context, sql string, args ...db.Val) (db.Result, error) {
+	if strings.Contains(sql, "savepoint") {
+		d.mu.Lock()
+		d.saved = append(d.saved, sql)
+		d.mu.Unlock()
+	}
+	return d.execDB.Query(ctx, sql, args...)
 }
 
 func (d *streamDB) Stream(ctx context.Context, sql string, head func([]db.Col) error, row func([]db.Val) error) error {
@@ -275,5 +286,44 @@ func TestExportResult(t *testing.T) {
 	exportAt(t, a, exportCSVAll)
 	if data, err := os.ReadFile(filepath.Join(dir, name+"-2.csv")); err != nil || string(data) != "n\na\nb\n" || len(d.sqls) != 1 {
 		t.Errorf("all of one not paged: %q %v", data, err)
+	}
+}
+
+// In a transaction of the user's the rows are read in a savepoint, as a page
+// is: a read that fails would fail the transaction and lose what is in it (F12.4).
+func TestExportAllInTransaction(t *testing.T) {
+	inDir(t)
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	d := ordersStream(5)
+	d.tx = 'T'
+	tab.conn.Meta, tab.conn.Main = db.NewWorker(d), db.NewWorker(d)
+	tab.conn.tx = 'T'
+	exportAt(t, a, exportCSVAll)
+	if got := strings.Join(d.saved, "|"); got != "savepoint sqlmux_export|release savepoint sqlmux_export" {
+		t.Errorf("asked %q, toast %q", got, a.toast)
+	}
+}
+
+// Two columns of one name, a join's id and id, are two in the file, each with
+// its own values; a table named as a path is a file of the current directory.
+func TestExportDuplicateColumnsAndPathNames(t *testing.T) {
+	var buf bytes.Buffer
+	o := &exportOut{w: bufio.NewWriter(&buf), want: []exportCol{{name: "id"}, {name: "id"}, {name: "x"}}}
+	if err := o.head([]db.Col{{Name: "id"}, {Name: "id"}, {Name: "x"}}); err != nil {
+		t.Fatal(err)
+	}
+	_ = o.row([]db.Val{{S: "1"}, {S: "2"}, {S: "3"}})
+	_ = o.finish()
+	if buf.String() != "id,id,x\n1,2,3\n" {
+		t.Errorf("%q", buf.String())
+	}
+	dir := inDir(t)
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 2)
+	tab.table.Name = "../up/t"
+	exportAt(t, a, exportCSVPage)
+	if _, err := os.Stat(filepath.Join(dir, ".._up_t.csv")); err != nil {
+		t.Errorf("not in the directory: %v, toast %q", err, a.toast)
 	}
 }

@@ -124,6 +124,11 @@ func (c *Conn) Stream(ctx context.Context, sql string, head func([]db.Col) error
 		cols = append(cols, col)
 	}
 	err := head(cols)
+	if err != nil && len(cols) == 0 { // a statement that failed described nothing: its error is the news, not what head made of that
+		if _, cerr := rr.Close(); cerr != nil {
+			return cerr
+		}
+	}
 	for err == nil && rr.NextRow() {
 		vals := make([]db.Val, len(cols))
 		for i, v := range rr.Values() {

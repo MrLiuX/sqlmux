@@ -5,6 +5,7 @@ package mysql
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,15 +49,27 @@ func TestStream(t *testing.T) {
 
 	boom := errors.New("boom")
 	n = 0
+	start = time.Now()
 	if err := c.Stream(context.Background(), big, func([]db.Col) error { return nil }, func([]db.Val) error {
 		if n++; n == 10 {
 			return boom
 		}
 		return nil
-	}); !errors.Is(err, boom) {
-		t.Fatalf("an error of row: %v", err)
+	}); !errors.Is(err, boom) || time.Since(start) > time.Second { // the statement is killed, the rest of its result not read
+		t.Fatalf("an error of row after %v: %v", time.Since(start), err)
 	}
 	if r, err := c.Query(context.Background(), "select 1"); err != nil || r.Rows[0][0].S != "1" {
 		t.Fatalf("after the stop: %v %v", r.Rows, err)
+	}
+
+	// a file has bytes as hex, a column of bytes always, not the grid's placeholder
+	var got []string
+	if err := c.Stream(context.Background(), "select unhex('00ff'), cast(unhex('4142') as binary(2)), 'text'", func([]db.Col) error { return nil }, func(row []db.Val) error {
+		for _, v := range row {
+			got = append(got, v.S)
+		}
+		return nil
+	}); err != nil || strings.Join(got, " ") != "0x00ff 0x4142 text" {
+		t.Fatalf("binary: %v %v", got, err)
 	}
 }
