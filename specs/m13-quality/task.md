@@ -28,7 +28,7 @@
 - [ ] 提交结果未知时界面上的修改标记保留，toast「连接断开，提交结果未知：刷新后核对」，让用户刷新后自己判断（决策者定）。
 
 **验收**
-- [ ] 集成（PG、MySQL，自建库）：reviewer 的 `zz_savecommit_probe_test.go` 过；query 手写 commit 后断线报「提交结果未知」。
+- [ ] 集成（PG、MySQL，自建库）：reviewer 的 `zz_savecommit_probe_test.go` 过；query 手写 commit 后断线报「提交结果未知」；表格保存在 COMMIT 前断线：错误栏是原来的错误加「，已回滚」，toast「连接断开，事务已丢失」，修改标记还在（审查时定，§8.2）。
 - [ ] 单测：修改标记在 ErrCommitUnknown 后仍在。
 
 ## F13.2 两个进程写同一个 query 文件互相覆盖 · 状态：todo
@@ -39,7 +39,7 @@
 - **涉及**：`internal/app`（query flush）、`internal/config`
 
 **开发**
-- [ ] 读写时记 mtime + size，flush 前比对，不同就拒写并 toast（同 vim 的 W11），约 10 行。
+- [ ] 读写时记 mtime + size，flush 前比对，不同就拒写并 toast（同 vim 的 W11），约 10 行。拒一次、同一操作再来一次就覆盖；自动保存永不覆盖、只提示一次（审查时定，§11）。
 
 **验收**
 - [ ] 单测：reviewer 的 `internal/app/zz_twoproc_probe_test.go` 过；外部改过文件后 `:w` 拒写、toast。
@@ -93,7 +93,7 @@
 - [ ] 各一行 `defer func() { _, _ = db.End(ctx, c, "rollback") }()`。
 
 **验收**
-- [ ] 集成：reviewer 的 `db/postgres/zz_quickrollback_probe_test.go` 过（MySQL 同样一个）。
+- [ ] 集成：reviewer 的 `db/postgres/zz_quickrollback_probe_test.go` 过。MySQL 不要测试：它的取消靠另开连接 KILL，服务端不可达时 db.End 也兜不住（审查时在真库复跑过），对齐 PG 的兜底是 M14 F14.6。
 
 ## F13.7 浮层的集合和顺序收成一处 · 状态：todo
 

@@ -14,6 +14,7 @@
 - **F14.2 查询历史**：每次执行（成功和失败都记）追加到 `~/.local/share/sqlmux/history.jsonl`：时间、连接、schema、语句、结果摘要；query 里 `C-r` 打开，和 WHERE 历史同一个下拉，fzf 模糊匹配，`↵` 插到光标处；`[query] history_max = 1000`，启动时截掉最旧的，不按天数。
 - **F14.3 树上的对象**：表下面 `Indexes`（名、列、UNIQUE，`↵` 开 DDL 浮窗）和 `Keys`（主键、外键，外键显示指向的表，`↵` 跳到那张表）；schema 下面 `Functions`（名加参数签名，`↵` 把定义开进 query）和 `Sequences`。运算符、类型、扩展不做。
 - **F14.5 表格的 JSON 视图**（用户 2026-10-11 验收 M12 时提：参考 DataGrip 的「查看方式」，只要 表 和 JSON 两种，不做树；JSON 是只读视图）：`grid.view.json`「以 JSON 查看」在表 tab 和结果 tab 上切换：内容区换成只读的编辑器（同值编辑器的只读规则，JSON 着色、vim 移动、`/` 搜索、`y` 复制），文字是当前页的 JSON 数组，每个对象同 `Y`（键按显示顺序、值按类型）；查询条照旧，chip 行末多一段 `JSON`；再执行一次或 `esc` 回表格；翻页、刷新、改 WHERE / ORDER 在 JSON 视图里照常，内容跟着换；转置和 JSON 视图互斥（开一个关另一个）；视图按 tab 记、不进布局文件；右键菜单和命令面板里都有。M16 Redis 的「以 JSON 查看」复用它。
+- **F14.6 MySQL 取消的兜底**（M13 F13.6 审查时发现：MySQL 的 Query 用 WithoutCancel 发语句，取消只能另开连接 KILL QUERY，服务端或网络不回应时 KILL 发不出去，Worker 一直锁到语句自己结束，快速 SQL 取消后 25 秒还占着 Meta）：给驱动一个带截止时间的 ctx，KILL 发出 N 秒（倾向 5 秒，同 PG）后取消，驱动关掉连接、Worker 按断线重连（§8.2）；§8.3 的已知上限随之去掉。验收：reviewer 的 MySQL quickrollback 探针 2 秒内返回。
 - **F14.4 结构修改的模板**：右键菜单和命令面板加「加列…」「加索引…」「改名…」「删除列 / 索引…」，每个把一条模板 SQL 开进当前连接的新 query，光标停在要填的位置，`C-e` 执行；不做表单（用户 2026-10-11 定：编辑表单先不做）。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
