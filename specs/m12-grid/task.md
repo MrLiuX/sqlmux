@@ -214,12 +214,12 @@
 - **涉及**：`internal/app`（gridselect）、`internal/ui`（主题色 `selected`）
 
 **开发**（§7.6「选择」、§7.7）
-- [ ] 主题加 `selected`：已确认选中的记录的序号格底色，默认取黄色系（和 `warn` 同色相、压暗到能当底色，默认主题和 ristretto 各给一个值）；VISUAL 里正在选的范围仍用 `visual`。主题里没写 `selected` 时退回 `visual`（旧主题文件不报错）。
+- [ ] 主题加 `selected`：已确认选中的记录的序号格底色，默认取黄色系（和 `warn` 同色相、压暗到能当底色，默认主题和 ristretto 各给一个值）；VISUAL 里正在选的范围仍用 `visual`。主题里没写 `selected` 时退回 `visual`（旧主题文件不报错）。chip 行的 `3 selected` 文字改用 `warn` 色（用户 2026-10-11 补：和选中的黄色对应）。
 - [ ] `V`（`grid.select.unset`「取消选择（范围）」）：进 VISUAL 的 unset 变体，范围的记录在 `esc` 或再按 `V` 时从选中集里去掉；模式块显示 `UNSET`；范围的底色用 `visual`；范围内本来没选中的不受影响。`v` 不变。
 - [ ] 细节（已定）：`m` 不变；`d` / `y` 在 UNSET 里按去掉之后的选中集算（同 yazi：先结束模式再执行）。
 
 **验收**
-- [ ] golden：两条已确认（`selected` 底）加一段正在选（`visual` 底）；UNSET 模式块。
+- [ ] golden：两条已确认（`selected` 底）加一段正在选（`visual` 底）、chip 行的 `2 selected` 是 `warn` 色；UNSET 模式块。
 - [ ] 单测：`v` `j` `esc` 后两条选中；`V` `k` `esc` 后剩一条；主题缺 `selected` 时用 `visual`。
 - [ ] e2e：`m` 两行、`V` 覆盖其中一行、`esc` 后 chip 是 `1 selected`。
 - [ ] 用户的 ristretto.toml 由决策者加 `selected`（备份后缀按当天），`visual` 要不要从灰改蓝由用户定。
