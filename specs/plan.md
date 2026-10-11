@@ -22,7 +22,7 @@
 
 ## 发布
 
-2026-10-10 推送：`m5`–`m9` 打在各自最后一个产品 commit 上，`v0.1.0` 打在 ffbcec5（m9 之后只多一个让 keychain 测试在 Linux 上过的 commit；93e9d8c 的首次 CI 是红的，tag 打在绿的那个），`go install` 还装不了：go.mod 的 module 是 `sqlmux` 而不是 `github.com/kackerx/sqlmux`，M10 F10.12 改掉后下一个 tag 才能 `go install github.com/kackerx/sqlmux/cmd/sqlmux@latest`；2026-10-11 M10 passed 后推送 `m10`、`v0.2.0`（de62155；M10 新功能，配置键 console → query 不兼容，所以升 minor），CI run 38096306240 绿，第一个 GitHub Release 发在 v0.2.0 上，只有源码包和说明，`go install …@v0.2.0` 验过；`kackerx/homebrew-tap` 仓库已建（空，M11 F11.2 填）；GoReleaser、Homebrew、npm 是 M11。每个里程碑的 tag 在用户验收通过后由 worker 打并推送（M5–M9 由用户 10-10 定为先打 tag 再慢慢验收）。
+2026-10-10 推送：`m5`–`m9` 打在各自最后一个产品 commit 上，`v0.1.0` 打在 ffbcec5（m9 之后只多一个让 keychain 测试在 Linux 上过的 commit；93e9d8c 的首次 CI 是红的，tag 打在绿的那个），`go install` 还装不了：go.mod 的 module 是 `sqlmux` 而不是 `github.com/kackerx/sqlmux`，M10 F10.12 改掉后下一个 tag 才能 `go install github.com/kackerx/sqlmux/cmd/sqlmux@latest`；2026-10-11 M10 passed 后推送 `m10`、`v0.2.0`（de62155；M10 新功能，配置键 console → query 不兼容，所以升 minor），CI run 38096306240 绿，第一个 GitHub Release 发在 v0.2.0 上，只有源码包和说明，`go install …@v0.2.0` 验过；`kackerx/homebrew-tap` 仓库已建；`v0.2.1` 打在 b1cb1c6（M11 节点 1 passed，只推了 tag），release.yml 第一次真跑（run 38104197358）：ci、release（四个压缩包加 checksums）、tap（formula 已是 v0.2.1，Linux docker 里 brew 装出 `sqlmux v0.2.1`）都绿，`go install …@v0.2.1` 的 `--version` 是 v0.2.1；npm 红：publish 的路径不带 `./` 被 npm 当成 GitHub 简写，37206c0 修了，0.2.1 在 npm 上缺席，npm 从 `v0.2.2` 开始，v0.2.2 等 F11.4 passed 后打在 main 上；GoReleaser、Homebrew、npm 是 M11。每个里程碑的 tag 在用户验收通过后由 worker 打并推送（M5–M9 由用户 10-10 定为先打 tag 再慢慢验收）。
 
 ## 任务文件的格式
 

@@ -54,7 +54,7 @@
 - [x] 细节（已定）：Windows 不出子包；壳包不带 `engines` 之外的依赖。
 
 **验收**
-- [ ] 干净的 macOS 和 Linux 上 `npx sqlmux@<tag> --version` 和 `npm i -g sqlmux` 后 `sqlmux --version` 都是那个 tag；TUI 能正常打开和退出。
+- [ ] （v0.2.1 的 npm job 红：`npm publish out/x` 被当成 GitHub 简写，37206c0 改成 `./`；npm 从 v0.2.2 起）干净的 macOS 和 Linux 上 `npx sqlmux@<tag> --version` 和 `npm i -g sqlmux` 后 `sqlmux --version` 都是那个 tag；TUI 能正常打开和退出。
 - [x] `pnpm dlx sqlmux --version` 同样（默认禁脚本也能用）。
 
 ## F11.4 结果区滚动卡顿 · 状态：todo
