@@ -51,6 +51,7 @@ func TestCellCondition(t *testing.T) {
 		{sqlkit.MySQL, "float unsigned zerofill", false, db.Val{S: "0.1"}, ""},
 		{sqlkit.MySQL, "unsigned float", false, db.Val{S: "0.1"}, ""},
 		{sqlkit.MySQL, "unsigned bigint", false, db.Val{S: "7"}, `"c" = 7`},
+		{sqlkit.MySQL, "geomcollection", false, db.Val{S: "\x00\x00\x00\x00\x01\x07"}, ""}, // valid UTF-8: only its type keeps it out
 		{sqlkit.MySQL, "geomcollection", false, db.Val{S: "<binary 34 bytes>"}, ""},
 		{sqlkit.MySQL, "geometry", false, db.Val{S: "<binary 34 bytes>"}, ""},
 		{sqlkit.MySQL, "text", false, db.Val{S: "<binary 3 bytes>"}, ""}, // whatever the type says, bytes the grid does not have are no value to ask for
@@ -277,6 +278,24 @@ func TestGridMenu(t *testing.T) {
 		t.Errorf("the ninth item is not drawn: sel %d", a.menu.sel)
 	}
 	feed(t, a, "<Esc>")
+	// a window with room for five rows: the list scrolls with the selection, the ninth is seen with its highlight
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 12})
+	rightClick(a, find(t, a, ui.Target{Kind: ui.KindCell, Pane: 1, Action: "grid.goto 0 1"}).Min.Add(uv.Pos(1, 0)))
+	feed(t, a, "jjjjjjjj")
+	f := a.render()
+	hit := -1
+	for y, l := range strings.Split(f.String(), "\n") {
+		if strings.Contains(l, "导出…") {
+			hit = y
+		}
+	}
+	if hit < 0 || a.menu.sel != 8 || strings.Contains(f.String(), "在值编辑器中打开") {
+		t.Errorf("short window: ninth item at row %d, sel %d", hit, a.menu.sel)
+	} else if x := strings.Index(strings.Split(f.String(), "\n")[hit], "导出…"); f.Buf.CellAt(ui.Width(strings.Split(f.String(), "\n")[hit][:x])-1, hit).Style.Bg != a.theme.Select {
+		t.Error("the ninth item is not highlighted")
+	}
+	feed(t, a, "<Esc>")
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
 	rightClick(a, cell)
 
 	tab.pageNo = 2
