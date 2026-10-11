@@ -144,7 +144,7 @@ func configured(t *testing.T, w, h int, toml string) *App {
 
 // userConfig is the config from the user's config.toml conf and
 // keymaps.toml keys.
-func userConfig(t *testing.T, conf, keys string) *config.Config {
+func userConfig(t testing.TB, conf, keys string) *config.Config {
 	t.Helper()
 	c, err := config.Parse(conf)
 	if err != nil {
@@ -215,7 +215,7 @@ func teaKey(k keymap.Key) tea.KeyPressMsg {
 
 // feed presses keys written in vim notation and reports whether any of them
 // quit the program.
-func feed(t *testing.T, a *App, s string) (quit bool) {
+func feed(t testing.TB, a *App, s string) (quit bool) {
 	t.Helper()
 	ks, err := keymap.Parse(s)
 	if err != nil {

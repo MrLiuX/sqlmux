@@ -25,7 +25,7 @@ import (
 // inQuery is the default layout with focus on query_1 (⟨2⟩), whose
 // file is in a directory of the test's own, with the user's config.toml
 // conf and keymaps.toml keys.
-func inQuery(t *testing.T, conf, keys string) (*App, *queryTab) {
+func inQuery(t testing.TB, conf, keys string) (*App, *queryTab) {
 	t.Helper()
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sizedWith(160, 45, userConfig(t, conf, keys))

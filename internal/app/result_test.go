@@ -64,7 +64,7 @@ func rows(n int) db.Result {
 }
 
 // press presses keys and delivers what a run they start does.
-func press(t *testing.T, a *App, keys string) {
+func press(t testing.TB, a *App, keys string) {
 	t.Helper()
 	ks, err := keymap.Parse(keys)
 	if err != nil {
@@ -109,7 +109,7 @@ func runOf(t *testing.T, cmd tea.Cmd) runDone {
 
 // inRun is inQuery with Main answering from d and the query holding
 // text, with no schema of its own: no search_path is set (TestRunSchema).
-func inRun(t *testing.T, d *execDB, text string) (*App, *queryTab) {
+func inRun(t testing.TB, d *execDB, text string) (*App, *queryTab) {
 	t.Helper()
 	a, c := inQuery(t, "", "")
 	a.sess.Conns[0].Main = db.NewWorker(d)
