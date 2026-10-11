@@ -20,8 +20,8 @@ func (e Engine) Quick(ctx context.Context, w *db.Worker, sql, schema string, max
 		if _, err := c.Query(ctx, "start transaction read only"); err != nil {
 			return err
 		}
-		// not on ctx: a cancelled request still ends its transaction
-		defer func() { _, _ = c.Query(context.Background(), "rollback") }()
+		// a cancelled request still ends its transaction, in a time of its own (db.End, F13.6)
+		defer func() { _, _ = db.End(ctx, c, "rollback") }()
 		if schema != "" {
 			if err := e.UseSchema(ctx, c, schema, ""); err != nil {
 				return err

@@ -24,8 +24,8 @@ func (Engine) Quick(ctx context.Context, w *db.Worker, sql, schema string, maxRo
 		if _, err := c.Query(ctx, "begin read only"); err != nil {
 			return err
 		}
-		// not on ctx: a cancelled request still ends its transaction
-		defer func() { _, _ = c.Query(context.Background(), "rollback") }()
+		// a cancelled request still ends its transaction, in a time of its own (db.End, F13.6)
+		defer func() { _, _ = db.End(ctx, c, "rollback") }()
 		// SET LOCAL search_path TO <schema>, <as connected> (§8.6): Meta
 		// never sets it for good, so the current path is the one it connected with.
 		path := "select set_config('search_path', $1 || ', ' || current_setting('search_path'), true)"
