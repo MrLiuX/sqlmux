@@ -94,7 +94,7 @@ sqlmux/
 ├─ internal/
 │  ├─ app/                    Model / Update / View、Action 注册表、工作现场模型、布局树
 │  ├─ ui/                     Frame、Block、主题、命中表、模糊匹配（fzf 算法的封装）、各组件绘制
-│  ├─ keymap/                 键位记法解析、作用域 trie、次数前缀、用户映射、冲突检测、提示查询、default.toml（embed）
+│  ├─ keymap/                 键位记法解析（含 keymaps.toml 的键位语法 ParseKeys，M13 F13.15 起）、作用域 trie、次数前缀、用户映射、冲突检测、提示查询、default.toml（embed）；不 import config / ui
 │  ├─ editor/                 vim 编辑器的纯逻辑，不 import ui 和 bubbletea；testdata/ 放 nvim 差分用例
 │  ├─ sqlkit/                 词法扫描、分句、读写判定、自动 LIMIT、WHERE 拼接校验、补全上下文、格式化（内嵌 sql-formatter）
 │  ├─ db/                     Conn / Engine 接口、Worker、postgres/、mysql/、catalog 查询

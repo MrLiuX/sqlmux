@@ -10,7 +10,7 @@
   2. F13.13 之后：F13.7–F13.13 一批（浮层收成一处、扫描器、列表绘制、可见性、`C-h`、布局文件、守卫的测试）；
   3. F13.19 之后：F13.14–F13.19 一批（可以改：小的收拾）。
 
-审计里第 20 条（`sqlkit/json.go` 挪不挪）不做。每条「探针」是 reviewer 审计时写的复现测试，改完要能让它过。
+审计里第 20 条（`sqlkit/json.go` 挪不挪）不做；session 列表、连接管理列表的名字截断加 `…` 和注释也不在 M13 做，留给以后的小收拾统一用 listText（审查时定）。每条「探针」是 reviewer 审计时写的复现测试，改完要能让它过。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
 
@@ -25,7 +25,7 @@
 
 **开发**（§8.2）
 - [ ] worker 记下本请求最近一次成功调用后的 TxStatus，`lost()` 用它判 `TxLost{Sent}`；Save 在 `failed == -1` 且 Sent 时返回 `ErrCommitUnknown`；gotSave 遇到它不拼「已回滚」。
-- [ ] 提交结果未知时界面上的修改标记保留，toast「连接断开，提交结果未知：刷新后核对」，让用户刷新后自己判断（决策者定）。
+- [ ] 提交结果未知时表格按事务丢失那条路自动重载，修改标记保留在上面，toast「<连接名>：连接断开，提交结果未知：已刷新，请核对」，让用户自己核对（决策者定；复审时定为自动重载）。
 
 **验收**
 - [ ] 集成（PG、MySQL，自建库）：reviewer 的 `zz_savecommit_probe_test.go` 过；query 手写 commit 后断线报「提交结果未知」；表格保存在 COMMIT 前断线：错误栏是原来的错误加「，已回滚」，toast「连接断开，事务已丢失」，修改标记还在（审查时定，§8.2）。
@@ -128,7 +128,7 @@
 - **涉及**：`internal/ui`
 
 **开发**
-- [ ] 合成一个行绘制，用 TruncateMatch，注释起点不小于 x。
+- [ ] 合成一个行绘制，用 TruncateMatch；注释比剩下的空间宽时先丢注释保名字，同树（§7.8，审查时定）。
 
 **验收**
 - [ ] 单测：reviewer 的 `ui/zz_listcut_probe_test.go` 过；golden 只有 `…` 的差别。
@@ -164,7 +164,7 @@
 - **涉及**：`internal/app`
 
 **开发**（§14）
-- [ ] 不认识的 split 照「不认识的 tab」给 warning（决策者定，和缺字段给缺省值一个路子）。
+- [ ] 有 `a` / `b` 两半就是分割：没写 `split` 按 h 不 warning，值不认识照「不认识的 tab」给 warning；只有 `pane` 的是叶子，多带 `split` 也不丢（§14，审查时定）。
 
 **验收**
 - [ ] 单测：reviewer 的 `internal/app/zz_layoutcheck_probe_test.go` 过。
@@ -185,8 +185,8 @@
 
 审计第 14 条。Ctrl leader 时在命令面板里打开键位帮助，帮助画在面板下面，键却给了帮助。`app/view.go:134、194`。
 
-- **开发**：帮助画在面板之后。
-- **验收**：reviewer 的 `TestZZOverlayKeyHelpUnderPalette` 过。
+- **开发**：帮助画在面板、表单、session 列表、COLS 之后；标题照别处显示打开它的键（`?` / `C-a ?`），这些浮层的上下文没有 Focus 时也取（审查时发现露出来后标题是空的）。
+- **验收**：帮助开着时屏幕最上面是帮助、键给帮助、标题非空。审计探针 `TestZZOverlayKeyHelpUnderPalette` 断言的是相反的行为，作废。
 
 ## F13.15 键位记法的解析挪进 keymap · 状态：todo
 
@@ -223,8 +223,8 @@
 - **涉及**：`internal/sqlkit`（Format）、`internal/app`（gq / query.format）
 
 **开发**（§9.5）
-- [ ] 多语句的 `gq` 和 `query.format` 逐条格式化再拼回（语句之间的空行和注释原样保留），单条仍一次。
+- [ ] 多语句的 `gq` 和 `query.format` 逐条格式化再拼回，输出和整段一次格式化一致（每条从上一个 `;` 之后切到自己的 `;`，语句前的注释随这条交给 sql-formatter；不是原样保留，审查时定）；一次 `gq` 共用一个 5s 截止时间，每条拿剩下的时间；单条仍一次。
 - [ ] 细节（已定）：不换格式化库；VM 常驻照旧。
 
 **验收**
-- [ ] benchmark：reviewer 的 `TestZZGojaPerStmt` 的数字；单测：48 条的输出和整段格式化一致。
+- [ ] benchmark：reviewer 的 `TestZZGojaPerStmt` 的数字；单测：12 条的输出和整段格式化一致（48 条整段必超时、没法比）；4 条 1.5KB 的 insert 总时长过 5s 要提示超时。
