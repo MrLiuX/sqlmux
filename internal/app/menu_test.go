@@ -560,3 +560,18 @@ func TestOverlayWheelIsModal(t *testing.T) {
 		}
 	}
 }
+
+// The palette over a WHERE being typed takes what is pasted, not the WHERE
+// under it (F13.13).
+func TestPasteGoesToPaletteOverWhere(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	feed(t, a, "/id<Esc>") // its NORMAL: C-p is no candidate's up here
+	feed(t, a, "<C-p>")
+	if a.palette == nil || tab.typing != "where" {
+		t.Fatalf("palette %v typing %q", a.palette != nil, tab.typing)
+	}
+	a.Update(tea.PasteMsg{Content: "zz"})
+	if tab.where.Text != "id" || a.palette.input.Text != "zz" {
+		t.Errorf("the paste went under the palette: WHERE %q, palette %q", tab.where.Text, a.palette.input.Text)
+	}
+}
