@@ -778,6 +778,22 @@ func TestWhereValuesPreselected(t *testing.T) {
 	}
 }
 
+// The connection manager's list has keys but no text: what it does not bind
+// is not typed into the WHERE under it (F13.4).
+func TestManagerListTakesNoText(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	feed(t, a, "/id")
+	a.run("conn.manage", 0)
+	if a.form == nil || !a.form.list {
+		t.Fatal("no manager list")
+	}
+	feed(t, a, "Z9;")
+	a.Update(tea.PasteMsg{Content: "Q"})
+	if tab.where.Text != "id" {
+		t.Errorf("WHERE under the manager: %q", tab.where.Text)
+	}
+}
+
 // A confirm box is a question: a key it does not bind, and a paste, go to
 // nothing under it: not the WHERE being typed (F13.4).
 func TestConfirmTakesNoText(t *testing.T) {

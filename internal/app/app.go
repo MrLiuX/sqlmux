@@ -702,6 +702,7 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 				}
 			case a.form != nil && !a.form.list:
 				a.formKey(k)
+			case a.form != nil: // the manager's list has the keys, and no text (F13.4)
 			case a.winRename != nil:
 				cmds = append(cmds, a.renameWindowKey(k))
 			case a.askName != nil:
