@@ -4,6 +4,7 @@ package mysql
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/kackerx/sqlmux/internal/db"
@@ -73,9 +74,22 @@ func TestPageWhere(t *testing.T) {
 	if _, _, err := db.Page(ctx, c, my, q); errno(err) != 1054 {
 		t.Errorf("a bad condition says why: %v", err)
 	}
-	r, _, _ := db.Page(ctx, c, my, db.Query{Schema: "sqlmux", Table: "t_order", Order: "status", Desc: true, Key: []string{"id"}, Limit: 2})
+	r, _, _ := db.Page(ctx, c, my, db.Query{Schema: "sqlmux", Table: "t_order", Order: []db.OrderCol{{Col: "status", Desc: true}}, Key: []string{"id"}, Limit: 2})
 	if r.Rows[0][2].S != "failed" || r.Rows[0][0].S != "3" || r.Rows[1][0].S != "7" {
 		t.Errorf("status desc, id: %v", r.Rows)
+	}
+	// two columns, each its way, the row identity left out of the tiebreakers since it is one of them (F12.1)
+	r, _, err := db.Page(ctx, c, my, db.Query{Schema: "sqlmux", Table: "t_order", Order: []db.OrderCol{{Col: "status", Desc: true}, {Col: "id", Desc: true}}, Key: []string{"id"}, Limit: 50})
+	if err != nil || len(r.Rows) < 10 {
+		t.Fatalf("status desc, id desc: %d rows, %v", len(r.Rows), err)
+	}
+	for i := 1; i < len(r.Rows); i++ {
+		prev, cur := r.Rows[i-1], r.Rows[i]
+		pid, _ := strconv.Atoi(prev[0].S)
+		cid, _ := strconv.Atoi(cur[0].S)
+		if prev[2].S < cur[2].S || prev[2].S == cur[2].S && pid < cid {
+			t.Fatalf("row %d: %s %s after %s %s", i, cur[2].S, cur[0].S, prev[2].S, prev[0].S)
+		}
 	}
 }
 

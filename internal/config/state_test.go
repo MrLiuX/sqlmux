@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kackerx/sqlmux/internal/db"
 )
 
 // state.json round-trips, is 0600, and an older snapshot never overwrites
@@ -29,7 +31,7 @@ func TestState(t *testing.T) {
 		Queries: map[string]QueryState{"query_1": {Conn: "doraemon", Schema: "agentable"}, "query_2": {Conn: "play"}},
 		Tables: map[string]*TableState{"doraemon/public.t_order": {
 			History:   []Query{{Where: "id > 5", At: at}},
-			Favorites: []Query{{Where: "status = 'done'", Order: "amount", Desc: true, Limit: 500, At: at}},
+			Favorites: []Query{{Where: "status = 'done'", Order: []db.OrderCol{{Col: "amount", Desc: true}}, Limit: 500, At: at}},
 		}},
 	}
 	older := Snapshot(&State{})
@@ -114,7 +116,7 @@ func TestLayoutFile(t *testing.T) {
 			Layout: &LayoutNode{Split: "h", Ratio: 0.55, A: &LayoutNode{Pane: 1}, B: &LayoutNode{Split: "v", Ratio: 0.5, A: &LayoutNode{Pane: 2}, B: &LayoutNode{Pane: 3}}},
 			Panes: []LayoutPane{
 				{ID: 1, Current: 1, Tabs: []LayoutTab{
-					{Kind: "table", Connection: "doraemon", Schema: "public", Table: "t_order", Where: "id > 5", Order: "amount", Desc: true, Limit: 500, Page: 2, Cols: []string{"meta", "note"}, Transpose: true},
+					{Kind: "table", Connection: "doraemon", Schema: "public", Table: "t_order", Where: "id > 5", Order: LayoutOrder{{Col: "amount", Desc: true}}, Limit: 500, Page: 2, Cols: []string{"meta", "note"}, Transpose: true},
 					{Kind: "query", Name: "query_1", Connection: "doraemon", Schema: "agentable"},
 				}},
 				{ID: 2}, {ID: 3},

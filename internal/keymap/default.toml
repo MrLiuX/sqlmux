@@ -141,6 +141,7 @@ leader = "<Space>"
 "<C-p>" = "dropdown.up"
 "<C-n>" = "dropdown.down"
 "<CR>" = "dropdown.select"
+"<Space>" = "dropdown.toggle" # ORDER: the column under the cursor joins, turns, leaves the sorting; a character of the filter once it has any (F12.1)
 "<Esc>" = "dropdown.close"
 
 [keys.menu] # the tree's right-click menu (§7.8, F8.23)

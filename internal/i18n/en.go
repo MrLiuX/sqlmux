@@ -53,6 +53,7 @@ var en = map[string]string{
 	"切换 schema":        "Switch schema",
 	"切换主题…":            "Switch theme…",
 	"切换排序方向":           "Reverse the sort",
+	"加入 / 翻转 / 移出排序":   "Add, reverse or remove from the sort",
 	"切换连接…":            "Switch connection…",
 	"刷新":               "Refresh",
 	"刷新表列表":            "Refresh the tables",

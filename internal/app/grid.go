@@ -101,11 +101,11 @@ type dataTab struct {
 
 // request is a page of a table as asked for.
 type request struct {
-	applied string // the WHERE in effect: the input shows it unless typing
-	order   string // the column sorted by; "" for the row identity
-	desc    bool   // ORDER's direction
-	limit   int    // rows a page: 100, 500 or 1000 (§8.5)
-	pageNo  int    // from 0
+	applied string        // the WHERE in effect: the input shows it unless typing
+	order   []db.OrderCol // the columns sorted by, in order; none for the row identity
+	desc    bool          // with none: the row identity turned
+	limit   int           // rows a page: 100, 500 or 1000 (§8.5)
+	pageNo  int           // from 0
 }
 
 type countState int
@@ -532,16 +532,27 @@ func sortedBy(col string, desc bool) string {
 	return col + " ↑"
 }
 
+// orderText is a list of columns sorted by as text: "source ↓, id ↑".
+func orderText(order []db.OrderCol) string {
+	parts := make([]string, len(order))
+	for i, o := range order {
+		parts[i] = sortedBy(o.Col, o.Desc)
+	}
+	return strings.Join(parts, ", ")
+}
+
 // queryBar is the two rows over t's table (§7.8「查询条」).
 func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 	ic := a.icons
 	order := ui.Chip{Label: "ORDER", Value: "—", Action: "grid.order", IconAction: "grid.order.toggle", Stay: stayOrder} // no row identity to sort by
 	switch s, key := t.shown, t.cols.Key(); {
-	case s.order != "":
-		order.Value, order.Icon = s.order, ic.SortAsc
-		if s.desc {
+	case len(s.order) == 1:
+		order.Value, order.Icon = s.order[0].Col, ic.SortAsc
+		if s.order[0].Desc {
 			order.Icon = ic.SortDesc
 		}
+	case len(s.order) > 1: // each column with its arrow, no icon of its own to click (F12.1)
+		order.Value = orderText(s.order)
 	case key != nil:
 		order.Value, order.Icon = strings.Join(key, ","), ic.SortAsc
 		if s.desc {

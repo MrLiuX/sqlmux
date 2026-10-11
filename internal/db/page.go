@@ -3,17 +3,24 @@ package db
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
 
+// OrderCol is a column an ORDER sorts by and the way (§7.6, F12.1).
+type OrderCol struct {
+	Col  string `toml:"col" json:"col"`
+	Desc bool   `toml:"desc,omitempty" json:"desc,omitempty"`
+}
+
 // Query is what a data tab asks of its table (§8.5, §9.6).
 type Query struct {
 	Schema, Table string
-	Where         string // a condition as typed; "" for none
-	Order         string // the column to sort by; "" for Key alone
-	Desc          bool
-	Key           []string // the row identity: the order, or Order's tiebreaker
+	Where         string     // a condition as typed; "" for none
+	Order         []OrderCol // the columns to sort by, in order; none for Key alone
+	Desc          bool       // with no Order: Key turned
+	Key           []string   // the row identity: the order, or Order's tiebreaker
 	Limit, Offset int
 }
 
@@ -29,25 +36,26 @@ func (q Query) from(e Engine) string {
 }
 
 // Page reads one page of a table (§8.5): every column, sorted by Order and
-// then the row identity so pages are stable (unordered with neither); with
-// no Order the row identity sorts, Desc turning it. It
+// then the row identity, the columns of it Order has left out, so pages are
+// stable (unordered with neither); with no Order the row identity sorts,
+// Desc turning it. It
 // asks for one row more than Limit to tell whether a next page exists, even
 // before the count is in. One statement only: PG's extended protocol and a
 // MySQL connection without multiStatements refuse more, whatever Where
 // holds.
 func Page(ctx context.Context, c Conn, e Engine, q Query) (r Result, next bool, err error) {
 	var order []string
-	if q.Order != "" {
+	for _, o := range q.Order {
 		dir := " asc"
-		if q.Desc {
+		if o.Desc {
 			dir = " desc"
 		}
-		order = append(order, e.Quote(q.Order)+dir)
+		order = append(order, e.Quote(o.Col)+dir)
 	}
 	for _, k := range q.Key {
 		switch {
-		case k == q.Order:
-		case q.Order == "" && q.Desc: // the row identity is what sorts: the other way
+		case slices.ContainsFunc(q.Order, func(o OrderCol) bool { return o.Col == k }):
+		case len(q.Order) == 0 && q.Desc: // the row identity is what sorts: the other way
 			order = append(order, e.Quote(k)+" desc")
 		default:
 			order = append(order, e.Quote(k))

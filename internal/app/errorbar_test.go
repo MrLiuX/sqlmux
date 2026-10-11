@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -108,7 +109,7 @@ func TestFailedFetchBackToShown(t *testing.T) {
 	fail()
 	feed(t, a, "/bad<CR>")
 	fail()
-	if tab.request != (request{applied: "bad", limit: 100}) || tab.where.Text != "bad" {
+	if !reflect.DeepEqual(tab.request, request{applied: "bad", limit: 100}) || tab.where.Text != "bad" {
 		t.Errorf("the WHERE stays: %+v, input %q", tab.request, tab.where.Text)
 	}
 	if sql := lastSQL(t, rec, a.run("grid.refresh", 0)); !strings.Contains(sql, "bad") {
@@ -117,7 +118,7 @@ func TestFailedFetchBackToShown(t *testing.T) {
 	fail()
 	n := len(rec.sqls)
 	feed(t, a, "/<C-u>1=1; x<CR>gl500<CR>")
-	if tab.request != (request{applied: "1=1; x", limit: 100}) || len(rec.sqls) != n || tab.bar == nil {
+	if !reflect.DeepEqual(tab.request, request{applied: "1=1; x", limit: 100}) || len(rec.sqls) != n || tab.bar == nil {
 		t.Errorf("a ; turned down: %+v, sent %q", tab.request, rec.sqls[n:])
 	}
 }

@@ -242,6 +242,7 @@ func init() {
 		"dropdown.up":     {Title: i18n.N("上移"), Local: true, Run: when(inDrop, func(a *App) tea.Cmd { a.dropMove(-1); return nil })},
 		"dropdown.down":   {Title: i18n.N("下移"), Local: true, Run: when(inDrop, func(a *App) tea.Cmd { a.dropMove(1); return nil })},
 		"dropdown.select": {Title: i18n.N("选中"), Local: true, Run: when(inDrop, func(a *App) tea.Cmd { return a.dropPick(a.drop.sel) })},
+		"dropdown.toggle": {Title: i18n.N("加入 / 翻转 / 移出排序"), Local: true, Run: when(inDrop, func(a *App) tea.Cmd { return a.dropToggle() })},
 		"dropdown.close":  {Title: i18n.N("关闭下拉框"), Local: true, Run: when(inDrop, func(a *App) tea.Cmd { a.drop = nil; return nil })},
 		"complete.up":     {Title: i18n.N("上一个候选"), Local: true, Run: when(inComplete, func(a *App) tea.Cmd { a.completing().move(-1); return nil })},
 		"complete.down":   {Title: i18n.N("下一个候选"), Local: true, Run: when(inComplete, func(a *App) tea.Cmd { a.completing().move(1); return nil })},

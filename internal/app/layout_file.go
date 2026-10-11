@@ -82,7 +82,7 @@ func paneLayout(p *Pane) config.LayoutPane {
 		case tb.Data != nil:
 			d := tb.Data
 			lt = config.LayoutTab{Kind: "table", Connection: d.conn.Spec.Name, Schema: d.table.Schema, Table: d.table.Name,
-				Where: d.applied, Order: d.order, Desc: d.desc, Limit: d.limit, Page: d.pageNo, Transpose: d.transpose}
+				Where: d.applied, Order: config.LayoutOrder(d.order), Desc: d.desc, Limit: d.limit, Page: d.pageNo, Transpose: d.transpose}
 			for name, hidden := range d.hidden {
 				if hidden {
 					lt.Cols = append(lt.Cols, name)

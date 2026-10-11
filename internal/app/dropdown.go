@@ -9,6 +9,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
@@ -129,7 +130,7 @@ func (a *App) dropItems() (items []string, current int) {
 		for i, f := range d.tab.ordered() { // as the grid has them (F10.3)
 			name := d.tab.page.Cols[f].Name
 			items = append(items, name)
-			if name == d.tab.order {
+			if len(d.tab.order) > 0 && name == d.tab.order[0].Col {
 				current = i + 1
 			}
 		}
@@ -186,6 +187,9 @@ func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 		}
 		if d.kind == dropQueryConn {
 			n += ui.Width(a.connIcon(i).Text) + 1
+		}
+		if d.kind == dropOrder { // the mark before it
+			n += ui.Width(orderMark(d.tab.order, "", 0)) + 1
 		}
 		w = max(w, n+4) // border and padding on both sides
 	}
@@ -257,11 +261,11 @@ func (a *App) dropPick(i int) tea.Cmd {
 	case dropOrder:
 		switch {
 		case at == 0: // 默认: by the row identity
-			t.order, t.desc = "", a.newDesc
-		case item == t.order, t.order == "" && len(t.cols.Key()) > 0 && t.cols.Key()[0] == item: // the column the chip shows first: the other way (§7.8)
+			t.order, t.desc = nil, a.newDesc
+		case len(t.order) == 1 && t.order[0].Col == item, len(t.order) == 0 && len(t.cols.Key()) > 0 && t.cols.Key()[0] == item: // the column the chip shows first, alone: the other way (§7.8)
 			return a.toggleOrder(t)
-		default:
-			t.order, t.desc = item, a.newDesc
+		default: // only this column
+			t.order, t.desc = []db.OrderCol{{Col: item, Desc: a.newDesc}}, false
 		}
 	case dropLimit:
 		t.limit, _ = strconv.Atoi(item)
@@ -271,15 +275,62 @@ func (a *App) dropPick(i int) tea.Cmd {
 	return a.fetch(d.tab, false)
 }
 
+// orderMark is what leads an item of the ORDER list: the place of the column
+// in the sorting and its way, "1↓", "2↑", blank for one that does not sort;
+// padded to the width of the longest, as the rows line up (F12.1).
+func orderMark(order []db.OrderCol, item string, at int) string {
+	w := len(strconv.Itoa(len(order))) + 1
+	i := slices.IndexFunc(order, func(o db.OrderCol) bool { return o.Col == item })
+	if at == 0 || i < 0 { // 默认 is no column
+		return strings.Repeat(" ", w)
+	}
+	return strconv.Itoa(i+1) + strings.TrimSpace(sortedBy("", order[i].Desc))
+}
+
+// orderCycle is space on a column of the ORDER list: in the sorting at the
+// end, the way `[grid] order` says; the other way; out of it. The dropdown
+// stays open to go on (F12.1).
+func (a *App) orderCycle(t *dataTab, col string) tea.Cmd {
+	order := slices.Clone(t.order)
+	switch i := slices.IndexFunc(order, func(o db.OrderCol) bool { return o.Col == col }); {
+	case i < 0:
+		order = append(order, db.OrderCol{Col: col, Desc: a.newDesc})
+	case order[i].Desc == a.newDesc:
+		order[i].Desc = !a.newDesc
+	default:
+		order = slices.Delete(order, i, i+1)
+	}
+	t.order, t.desc = order, len(order) == 0 && a.newDesc
+	t.pageNo = 0
+	return a.fetch(t, false)
+}
+
+// dropToggle is space in a dropdown: the column under the cursor goes through
+// ORDER's cycle while the filter is empty; else it is a character of the
+// filter, as in any other.
+func (a *App) dropToggle() tea.Cmd {
+	d := a.drop
+	if d.kind != dropOrder || d.input.Text != "" {
+		a.dropKey("<Space>")
+		return nil
+	}
+	if ms := a.dropMatches(); d.sel < len(ms) && ms[d.sel].Index > 0 { // 默认 is no column
+		items, _ := a.dropItems()
+		return a.orderCycle(d.tab, items[ms[d.sel].Index])
+	}
+	return nil
+}
+
 // toggleOrder turns t's ORDER the other way, from the first page (§7.8):
 // sorted by default, its row identity's first column goes the other way
 // than the default does.
 func (a *App) toggleOrder(t *dataTab) tea.Cmd {
 	switch key := t.cols.Key(); {
-	case t.order != "":
-		t.desc = !t.desc
+	case len(t.order) > 0: // the first column of several
+		t.order = slices.Clone(t.order)
+		t.order[0].Desc = !t.order[0].Desc
 	case key != nil:
-		t.order, t.desc = key[0], !t.desc
+		t.order, t.desc = []db.OrderCol{{Col: key[0], Desc: !t.desc}}, false
 	default: // nothing to turn: the chip shows no direction
 		return nil
 	}
@@ -314,6 +365,9 @@ func (a *App) dropView() ui.Dropdown {
 			v.Mark = i
 		}
 		v.Items, v.Pos = append(v.Items, items[m.Index]), append(v.Pos, m.Pos)
+		if a.drop.kind == dropOrder {
+			v.Icons = append(v.Icons, ui.Icon{Text: orderMark(a.drop.tab.order, items[m.Index], m.Index)})
+		}
 		if a.drop.kind == dropQueryConn {
 			v.Notes, v.Icons = append(v.Notes, a.dropNote(m.Index)), append(v.Icons, a.connIcon(m.Index))
 		}

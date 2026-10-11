@@ -627,8 +627,8 @@ func tabSummary(t *dataTab) (out []string) {
 	if s := t.shown; strings.TrimSpace(s.applied) != "" {
 		out = append(out, s.applied)
 	}
-	if s := t.shown; s.order != "" {
-		out = append(out, sortedBy(s.order, s.desc))
+	if s := t.shown; len(s.order) > 0 {
+		out = append(out, orderText(s.order))
 	}
 	return out
 }

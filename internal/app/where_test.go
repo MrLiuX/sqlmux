@@ -301,10 +301,10 @@ func TestAcceptKeywordSpace(t *testing.T) {
 func TestWhereHistory(t *testing.T) {
 	a, tab, _ := withRecorder(t)
 	feed(t, a, "/id > 5<CR>")
-	tab.order, tab.limit = "amount", 500
+	tab.order, tab.limit = orderOf("amount"), 500
 	wipe := strings.Repeat("<BS>", 20)
 	feed(t, a, "/"+wipe+"status = 'done'<CR>")
-	tab.order, tab.limit = "", 100
+	tab.order, tab.limit = nil, 100
 	feed(t, a, "/"+wipe+"id > 5<CR>") // again: to the top, once
 	st := a.tableState(tab)
 	if len(st.History) != 2 || st.History[0].Where != "id > 5" || st.History[1].Limit != 500 {
@@ -332,8 +332,8 @@ func TestWhereHistory(t *testing.T) {
 		t.Fatalf("filtered: %+v", es)
 	}
 	feed(t, a, "<CR>")
-	if tab.applied != "status = 'done'" || tab.order != "amount" || tab.limit != 500 || tab.hist != nil {
-		t.Fatalf("applied %q order %q limit %d", tab.applied, tab.order, tab.limit)
+	if tab.applied != "status = 'done'" || !slices.Equal(tab.order, orderOf("amount")) || tab.limit != 500 || tab.hist != nil {
+		t.Fatalf("applied %q order %v limit %d", tab.applied, tab.order, tab.limit)
 	}
 
 	loaded, err := config.LoadState()
@@ -352,9 +352,9 @@ func TestWhereStarInTheInput(t *testing.T) {
 	if len(st.Favorites) != 0 || a.toast != "" {
 		t.Fatalf("nothing typed: %+v, toast %q", st.Favorites, a.toast)
 	}
-	tab.order, tab.limit = "amount", 500
+	tab.order, tab.limit = orderOf("amount"), 500
 	feed(t, a, "id > 5 <C-f>") // trimmed
-	if len(st.Favorites) != 1 || st.Favorites[0].Where != "id > 5" || st.Favorites[0].Order != "amount" || st.Favorites[0].Limit != 500 || a.toast != "已收藏" {
+	if len(st.Favorites) != 1 || st.Favorites[0].Where != "id > 5" || !slices.Equal(st.Favorites[0].Order, orderOf("amount")) || st.Favorites[0].Limit != 500 || a.toast != "已收藏" {
 		t.Fatalf("starred: %+v, toast %q", st.Favorites, a.toast)
 	}
 	if tab.typing != "where" || tab.where.Text != "id > 5 " {
@@ -364,11 +364,11 @@ func TestWhereStarInTheInput(t *testing.T) {
 	if len(st.Favorites) != 0 || a.toast != "已取消收藏" {
 		t.Errorf("again: %+v, toast %q", st.Favorites, a.toast)
 	}
-	tab.order, tab.limit = "", 100 // another ORDER: another entry
+	tab.order, tab.limit = nil, 100 // another ORDER: another entry
 	feed(t, a, "<C-f>")
-	tab.order = "amount"
+	tab.order = orderOf("amount")
 	feed(t, a, "<C-f>")
-	if len(st.Favorites) != 2 || st.Favorites[0].Order != "amount" || st.Favorites[1].Order != "" || st.Favorites[1].Limit != 0 {
+	if len(st.Favorites) != 2 || !slices.Equal(st.Favorites[0].Order, orderOf("amount")) || len(st.Favorites[1].Order) != 0 || st.Favorites[1].Limit != 0 {
 		t.Errorf("two: %+v", st.Favorites)
 	}
 	if loaded, err := config.LoadState(); err != nil || len(loaded.Tables["doraemon/public.t_order"].Favorites) != 2 {
@@ -396,9 +396,9 @@ func TestWhereHistoryEdit(t *testing.T) {
 	a, tab, _ := withRecorder(t)
 	wipe := strings.Repeat("<BS>", 20)
 	feed(t, a, "/id > 5<CR>")
-	tab.order, tab.limit = "amount", 500
+	tab.order, tab.limit = orderOf("amount"), 500
 	feed(t, a, "/"+wipe+"status = 'done'<CR>")
-	tab.order, tab.limit = "", 100
+	tab.order, tab.limit = nil, 100
 	feed(t, a, "/"+wipe+"<C-r>")
 	if es, _ := a.histEntries(tab); tab.hist == nil || len(es) != 2 || es[0].q.Where != "status = 'done'" {
 		t.Fatalf("the list: %+v", es)
@@ -408,12 +408,12 @@ func TestWhereHistoryEdit(t *testing.T) {
 	if tab.hist != nil || tab.typing != "where" || tab.ed.Mode() != editor.Insert || tab.where.Text != "status = 'done'" || tab.where.Pos != len("status = 'done'") {
 		t.Fatalf("C-e: list %v, typing %q, mode %v, input %q at %d", tab.hist != nil, tab.typing, tab.ed.Mode(), tab.where.Text, tab.where.Pos)
 	}
-	if tab.applied != applied || tab.order != "" || tab.limit != 100 {
-		t.Errorf("run, or order / limit taken: applied %q order %q limit %d", tab.applied, tab.order, tab.limit)
+	if tab.applied != applied || len(tab.order) != 0 || tab.limit != 100 {
+		t.Errorf("run, or order / limit taken: applied %q order %v limit %d", tab.applied, tab.order, tab.limit)
 	}
 	feed(t, a, "<BS><BS><BS><BS><BS>new'<CR>")
-	if tab.applied != "status = 'new'" || tab.order != "" {
-		t.Errorf("edited, then ↵: applied %q order %q", tab.applied, tab.order)
+	if tab.applied != "status = 'new'" || len(tab.order) != 0 {
+		t.Errorf("edited, then ↵: applied %q order %v", tab.applied, tab.order)
 	}
 	// an empty list: nothing to put in
 	b, btab, _ := withRecorder(t)
@@ -675,7 +675,7 @@ func TestWhereHistoryLayout(t *testing.T) {
 func TestGoldenWhereHistory(t *testing.T) {
 	at := time.Date(2026, 10, 7, 12, 0, 0, 0, time.Local)
 	for name, favs := range map[string][]config.Query{
-		"both":    {{Where: "status = 'done'", Order: "amount", Desc: true, Limit: 500, At: at}},
+		"both":    {{Where: "status = 'done'", Order: []db.OrderCol{{Col: "amount", Desc: true}}, Limit: 500, At: at}},
 		"history": nil,
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kackerx/sqlmux/internal/db"
 )
 
 // State is what the app keeps between runs (§14), in state.json: the
@@ -76,12 +78,42 @@ type TableState struct {
 }
 
 // Query is a WHERE as it ran, with the ORDER and LIMIT it ran with (Q-02).
+// Desc is the default order turned, with no Order.
 type Query struct {
-	Where string    `json:"where"`
-	Order string    `json:"order,omitempty"`
-	Desc  bool      `json:"desc,omitempty"`
-	Limit int       `json:"limit,omitempty"`
-	At    time.Time `json:"at"`
+	Where string        `json:"where"`
+	Order []db.OrderCol `json:"order,omitempty"`
+	Desc  bool          `json:"desc,omitempty"`
+	Limit int           `json:"limit,omitempty"`
+	At    time.Time     `json:"at"`
+}
+
+// UnmarshalJSON reads what a state.json of before F12.1 says, "order": "col"
+// with "desc" beside it, as one column.
+func (q *Query) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Where string          `json:"where"`
+		Order json.RawMessage `json:"order"`
+		Desc  bool            `json:"desc"`
+		Limit int             `json:"limit"`
+		At    time.Time       `json:"at"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*q = Query{Where: raw.Where, Desc: raw.Desc, Limit: raw.Limit, At: raw.At}
+	var col string
+	switch {
+	case len(raw.Order) == 0 || string(raw.Order) == "null":
+	case json.Unmarshal(raw.Order, &col) == nil:
+		if col != "" {
+			q.Order, q.Desc = []db.OrderCol{{Col: col, Desc: raw.Desc}}, false
+		}
+	default:
+		if err := json.Unmarshal(raw.Order, &q.Order); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // StateDir is $XDG_STATE_HOME/sqlmux, falling back to ~/.local/state/sqlmux (§14).
