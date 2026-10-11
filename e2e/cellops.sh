@@ -41,6 +41,13 @@ cell_body() {
   check "* 在带单引号的值（o'neil）：引号翻倍 'o''neil'，只剩 id 3" eval 'where_is "$(q name) = '"'o''neil'"'" && ids_are "3,"'
   clear_where
 
+  # ---- 原 WHERE 里有顶层 OR：先括起来再 AND，不能让 OR 吃掉新条件
+  key /; clear_in; e2e_type "qty = 10 or qty = 20"; key Enter; wait_for 8 settled; sleep 0.4
+  check "（准备）WHERE qty = 10 or qty = 20：id 2、3、5" eval 'ids_are "2,3,5,"'
+  key g g; key 0; key l; key "*"; wait_for 8 settled; sleep 0.5      # row 1 = id 2, name bob
+  check "原条件有顶层 OR 时 * 先把它括起来：(qty = 10 or qty = 20) AND name = 'bob'，只剩 id 2" eval 'w=$(where_in | sed "s/ *$//"); [[ $w == "(qty = 10 or qty = 20) AND $(q name) = '"'bob'"'" ]] && ids_are "2," || { echo "  WHERE [$w]"; false; }'
+  clear_where
+
   # ---- 表头点击：只按这一列 → 翻转 → 默认
   x=$(colx qty); e2e_click $((x + 1)) "$(hy)"; wait_for 8 settled; sleep 0.5
   check "点 qty 表头：ORDER qty ↑，第一行是最小值（10：id 2、5 先，再 20、30、40）" eval 'qb_has "ORDER qty $ASC" && ids_are "2,5,3,1,4,"'
@@ -91,6 +98,14 @@ PY' || echo "  clipboard [$(clip)]"
   check "表头上右键：菜单 4 项（排序 ↑ ↓、加入排序、隐藏这一列），没有「复制」" eval 'menu_all "按这一列排序 ↑" "按这一列排序 ↓" "加入排序" "隐藏这一列" && ! menu_has "复制这一格" >/dev/null 2>&1'
   menu_click "隐藏这一列"
   check "菜单「隐藏这一列」：表头少了 qty 列，COLS 3/4" eval '[[ $(e2e_text 35 159 "$(hy)") != *" qty "* ]] && qb_has "COLS 3/4"'
+  _e2e_kill
+
+  # ---- 不支持按值过滤的类型：toast，WHERE 不变
+  start -C "$D/own"; open_table t_u; wait_for 8 settled
+  key l; key "*"; sleep 0.6
+  check "json 列（PG 的 json 没有 = 运算符；MySQL 的 json）的格上 *：toast「这一列的类型不支持按值过滤」，WHERE 还是空" eval 'screen_has "这一列的类型不支持按值过滤" && [[ -z $(e2e_text 42 80 2 | tr -d " ") ]]'
+  sleep 3.2; key l; key "*"; sleep 0.6
+  check "二进制列（bytea / blob）的格上 *：同样 toast，WHERE 还是空" eval 'screen_has "这一列的类型不支持按值过滤" && [[ -z $(e2e_text 42 80 2 | tr -d " ") ]]'
   _e2e_kill
 
   # ---- 结果 tab 的格：只有 值编辑器 / 复制 / 导出

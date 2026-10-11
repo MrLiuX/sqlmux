@@ -6,6 +6,7 @@
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 . "$(dirname "$0")/palette.sh"
+. "$(dirname "$0")/paging.sh"
 
 read -r DSN PGU PW PGH PGP <<<"$(python3 -c 'import sys, urllib.parse as u; p = u.urlsplit(sys.argv[1]); print(p._replace(netloc=f"{p.username}:{p.password}@127.0.0.1:PORT").geturl(), p.username, p.password, p.hostname, p.port)' "$SQLMUX_TEST_PG")"
 LP=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
@@ -51,6 +52,9 @@ check "表 tab 还在（标签 1: t_order，没有被关掉），查询条照旧
 g=($(geom 1)); cx=$((g[0] + g[2] / 2))
 check "内容区居中画错误页：第一行是连接名 play，下面是错误原文（connection refused）" eval 'y=$(e2e_plain | awk "/^│.*│ +play +│/ && NR > 8 { print NR; exit }"); [[ -n $y ]] && c=$(e2e_find play $y | tr " " "\n" | awk -v l=${g[0]} "\$1 > l + 20 { print; exit }") && (( c > cx - 10 && c < cx + 10 )) && e2e_plain | sed -n "$((y + 1)),$((y + 3))p" | grep -q "connection refused" || { echo "  y=$y c=$c cx=$cx"; false; }'
 check "错误页是 error 色（play 那一行）" eval 'y=$(e2e_plain | awk "/^│.*│ +play +│/ && NR > 8 { print NR; exit }"); c=$(e2e_find play $y | tr " " "\n" | awk -v l=${g[0]} "\$1 > l + 20 { print; exit }"); style_has "$c" "$y" fg=$ERR'
+e2e_keys C-p; sleep 0.3; e2e_type ">表的 DDL"; sleep 0.6; key Enter; sleep 0.8
+check "错误页上从命令面板开「表的 DDL」：不崩，toast「连接还没连上」或照常报错，界面还在" eval 'running && ! screen_has "panic" && ! screen_has "[e2e-exit"'
+key Escape; sleep 0.3
 # ---- 连接恢复（转发起来）：R 重试，取到数据，错误页没了
 fwd_start
 key R; sleep 2.5; wait_for 8 settled
@@ -64,6 +68,13 @@ check "sqlmux play 连不上：进界面，toast 里是驱动的错误" eval 'ru
 sleep 3
 check "默认布局的 query tab 照旧在（② 里有 query_1），树里 play 是失败色" eval '[[ $(tabbar 2) == *query_1* ]] && y=$(tree_y play) && c=$(e2e_find play $y | cut -d" " -f1) && style_has "$c" "$y" fg=$ERR'
 
+fwd_start
+key C-l; sleep 0.3
+setsql "select 1 as one"; key Enter; sleep 3
+check "转发起来之后在 query 里第一次执行：触发重拨（树里 play 有表了），这一次不跑" eval '[[ $(e2e_plain | grep -c "t_order") -ge 1 ]] && ! e2e_plain | grep -qE "│ +one +│"'
+key Enter; sleep 1.5; wait_for 8 settled
+check "连上之后再执行：结果 tab 出来（列 one）" eval 'e2e_plain | grep -qE "│ +one +│"'
+fwd_stop
 # ---- 管理连接能开，新建连接能建（连不上的 play 还在）
 e2e_keys C-p; sleep 0.3; e2e_type ">manage conn"; sleep 0.2; for i in $(seq 20); do e2e_keys BSpace; done; e2e_type ">管理连接"; sleep 0.6; key Enter; sleep 0.8
 check "conn.manage（管理连接）能开：列表里有连不上的 play 和「新建」" eval 'e2e_plain | grep -q "┌─ 连接" && e2e_plain | grep -qE "│ [^│]*play[^│]* │ " && e2e_plain | grep -qE "│ [^│]*新建[^│]* │ "'
@@ -96,4 +107,21 @@ key Space; key w n; sleep 0.8
 check "SPC wn：t_order 挪到 ②（排在 query_1 后面，成为当前 tab），焦点跟过去" eval '[[ $(tabbar 2) == *query_1*t_order* ]] && focus_is 2 && ! [[ $(tabbar 1) == *t_order* ]]'
 key Space; key w p; sleep 0.8
 check "SPC wp：挪回 ①，焦点回 ①，② 里只剩 query_1" eval '[[ $(tabbar 1) == *t_order* && $(tabbar 2) == *query_1* && $(tabbar 2) != *t_order* ]] && focus_is 1'
+_e2e_kill
+# 目标只有引导页时替换它；来源空了留引导页
+start; sleep 1; key C-l; sleep 0.3
+check "（准备）默认布局：① 引导页（没有 tab），② query_1，焦点在 ②" eval 'focus_is 2 && [[ $(tabbar 2) == *query_1* ]]'
+key Space; key w p; sleep 0.8
+check "② 的 query_1 用 SPC wp 移到 ①：① 的引导页被换掉（tab 栏里是 query_1），焦点在 ①，② 空了留引导页" eval '[[ $(tabbar 1) == *query_1* ]] && focus_is 1 && [[ $(tabbar 2) != *query_1* ]]'
+_e2e_kill
+# zoom 时不做事
+SOLO= start; open_table t_order; wait_for 8 settled
+key Space; key z; sleep 0.6; key Space; key w n; sleep 0.8
+key Space; key z; sleep 0.6
+check "zoom 时 SPC wn 不做事：t_order 还在 ①，焦点还在 ①" eval '[[ $(tabbar 1) == *t_order* ]] && focus_is 1'
+_e2e_kill
+# 只有一个普通 pane 时不做事
+SOLO=1 start; open_table t_order; wait_for 8 settled
+key Space; key w n; sleep 0.8
+check "只有一个普通 pane：SPC wn 不做事，t_order 还在，没崩" eval 'running && [[ $(tabbar 1) == *t_order* ]]'
 e2e_done

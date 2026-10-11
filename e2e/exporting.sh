@@ -90,3 +90,20 @@ PY'
   e2e_keys C-c; sleep 1.5
   check "导出 200 万行时 C-c：toast「导出已取消」，半截文件被删掉（目录里没有 t_huge.csv）" eval 'toast_has "导出已取消" && [[ $(fcount "^t_huge") == 0 ]] || { echo "  files: $(ls "$E2E_TMP" | tr "\n" " ")"; false; }'
 }
+
+# 二进制列：表格里是 \x… / <binary N bytes>，导出的文件里写成十六进制（PG bytea \x…，MySQL 0x…），当前页和「全部」的文件逐字节相同
+bin_body() {
+  _e2e_kill
+  SOLO=1 start -C "$D/own"; open_table t_bin; wait_for 8 settled
+  export_pick 0; exported; sleep 3.2
+  export_pick 1; exported; sleep 0.3
+  check "二进制列：CSV · 当前页 t_bin.csv 和 CSV · 全部 t_bin-2.csv 逐字节相同（含非 UTF-8 的 c3 28）" eval '[[ -f $E2E_TMP/t_bin.csv && -f $E2E_TMP/t_bin-2.csv ]] && cmp -s "$E2E_TMP/t_bin.csv" "$E2E_TMP/t_bin-2.csv" || { ls "$E2E_TMP"; false; }'
+  check "文件里二进制写成十六进制：第 1 行 ${BINPFX}00ff10，第 2 行 ${BINPFX}c328（不是乱码、不是 <binary…>）" eval 'grep -qF -- "1,${BINPFX}00ff10" "$E2E_TMP/t_bin.csv" && grep -qF -- "2,${BINPFX}c328" "$E2E_TMP/t_bin.csv" && ! grep -q "<binary" "$E2E_TMP/t_bin.csv"'
+  sleep 3.2
+  export_pick 3; exported; sleep 0.3
+  check "JSON · 全部：二进制是十六进制字符串（${BINPFX}00ff10），文件是合法 JSON" eval 'py "$E2E_TMP/t_bin.json" <<PY
+import json, sys
+d = json.load(open(sys.argv[1]))
+sys.exit(0 if len(d) == 2 and d[0]["b"].lower().replace("\\\\x", "0x") == "0x00ff10" else 1)
+PY'
+}

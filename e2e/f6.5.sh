@@ -83,8 +83,8 @@ e2e_stop
 # ---- 布局里的表被删掉：其余照常恢复，toast 一条
 sed 's/table = "t_user"/table = "no_such_table"/' "$D/cfg/layouts/a.toml" >"$D/cfg/layouts/c.toml"
 startl --layout c
+check "有 toast 说明哪张表没有了" eval 'wait_for 8 screen_has "no_such_table"'  # 负载高时恢复慢，toast 只有 3 秒：先查它
 check "布局里的 t_user 不存在：其余恢复（t_order 带 WHERE），tab 栏里没有 t_user" eval '[[ $(wh) == "id < 50" && $(tabbar 1) == *t_order* && $(tabbar 1) != *t_user* ]] || { echo "  $(snap)"; false; }'
-check "有 toast 说明哪张表没有了" eval 'screen_has "no_such_table"'
 e2e_stop
 
 # ---- 连接名和 --layout 一起给：报错退出
