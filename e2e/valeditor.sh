@@ -47,6 +47,14 @@ value_body() {
   e2e_type ":"; sleep 0.3; e2e_type "q"; key Enter; sleep 0.6
   check "没改动 :q：直接关，不问" eval '! pop_open && ! toast_has "放弃修改"'
 
+  # ---- gq{移动}：不论范围都格式化整个值（JSON 是一个文档）
+  key e; sleep 0.7
+  key g g; key d G; key i; e2e_type '{"k":1,"l":[1,2]}'; key Escape; sleep 0.3
+  e2e_type "gq"; sleep 0.2; e2e_type '$'; sleep 0.6
+  check "gq$（有移动、范围只是一行的一部分）：整个值格式化成多行" eval 'has_line "{" && has_line "  \"k\": 1," && has_line "  \"l\": ["'
+  e2e_type ":"; sleep 0.3; e2e_type "q"; key Enter; sleep 0.5; key y; sleep 0.5
+  check "放弃（:q y）：浮窗关了" eval '! pop_open'
+
   # ---- gq 对非 JSON 不动，toast「不是 JSON」
   key l; key e; sleep 0.7
   check "note 格（纯文本 plain text）：浮窗标题 note · text，内容原样" eval 'pop_open && [[ $(pop_title) == "note · text" ]] && has_line "plain text"'
