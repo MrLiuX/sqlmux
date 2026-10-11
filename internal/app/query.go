@@ -35,9 +35,9 @@ type queryTab struct {
 	ver, saved int // changes made, and the one the file has
 	// disk is the file as this tab last read or wrote it; another process or
 	// editor having changed it since, a write is refused once (F13.2). armed
-	// is the file as it was then, that was said: a save of it is the user's
-	// yes, one of a file changed again is told again; told: an autosave said
-	// it, not to say it again.
+	// is the file as it was when that was said, by an autosave or a save: a
+	// save of it is the user's yes, one of a file changed again is told again;
+	// told: an autosave said it, not to say it again.
 	disk, armed fileStamp
 	told        bool
 	failed      int       // the first line of the statement whose last run failed, its ▶ red; -1 for none
@@ -318,12 +318,11 @@ func (t *queryTab) write(explicit bool) error {
 		return nil
 	}
 	if cur := stampOf(t.path); cur != (fileStamp{}) && cur != t.disk && (!explicit || cur != t.armed) { // a file gone is written again
-		switch {
-		case explicit:
-			t.armed = cur
-		case t.told:
-			return nil
-		default:
+		t.armed = cur // what was said, an autosave's too, the next explicit write of this very file is the yes
+		if !explicit {
+			if t.told {
+				return nil
+			}
 			t.told = true
 		}
 		return changedOutside()
