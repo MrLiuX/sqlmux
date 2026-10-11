@@ -148,8 +148,13 @@ func TestFormatAllIsFormat(t *testing.T) {
 // count them, or to take the time a call would (F13.19).
 func wrapFormat(t *testing.T, f func(orig goja.Callable, this goja.Value, args ...goja.Value) (goja.Value, error)) {
 	t.Helper()
-	if _, err := Format("select 1", PG, Options{KeywordCase: "upper", TabWidth: 2}); err != nil { // the VM is made
-		t.Fatal(err)
+	formatter.Lock()
+	loaded := formatter.vm != nil
+	formatter.Unlock()
+	if !loaded {
+		if _, err := Format("select 1", PG, Options{KeywordCase: "upper", TabWidth: 2}); err != nil { // the VM is made
+			t.Fatal(err)
+		}
 	}
 	formatter.Lock()
 	orig := formatter.format
@@ -187,6 +192,41 @@ func TestFormatAllIsOneCallEachUnderOneDeadline(t *testing.T) {
 	if _, err := FormatAll(s, PG, o); !errors.Is(err, ErrTimeout) || calls != 1 {
 		t.Errorf("past the one deadline: %d calls, %v", calls, err)
 	}
+}
+
+// What a format said is not turned into a timeout by the second go at it, made
+// for where it was, and the first statement is not gone at twice (F13.19).
+func TestFormatAllErrorIsKept(t *testing.T) {
+	o := Options{KeywordCase: "upper", TabWidth: 2}
+	parse := errors.New("parse error")
+	t.Run("first", func(t *testing.T) {
+		slowFormat(t)
+		calls := 0
+		wrapFormat(t, func(_ goja.Callable, _ goja.Value, _ ...goja.Value) (goja.Value, error) {
+			calls++
+			return nil, parse
+		})
+		calls = 0
+		if _, err := FormatAll("select 1; select 2;", PG, o); !errors.Is(err, parse) || calls != 1 {
+			t.Errorf("the first statement fails: %d calls, %v", calls, err)
+		}
+	})
+	t.Run("second", func(t *testing.T) {
+		slowFormat(t)
+		FormatTimeout = 200 * time.Millisecond
+		calls := 0
+		wrapFormat(t, func(orig goja.Callable, this goja.Value, args ...goja.Value) (goja.Value, error) {
+			if calls++; calls == 1 {
+				return orig(this, args...)
+			}
+			time.Sleep(300 * time.Millisecond) // the second fails, past the deadline
+			return nil, parse
+		})
+		calls = 0
+		if _, err := FormatAll("select 1; select 2;", PG, o); !errors.Is(err, parse) || calls != 2 {
+			t.Errorf("the second statement fails, and the time is gone: %d calls, %v", calls, err)
+		}
+	})
 }
 
 // A syntax error is where it is in the text, not in the statement it is in

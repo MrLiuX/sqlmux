@@ -332,9 +332,23 @@ func TestCursorIsTheTopOverlays(t *testing.T) {
 			t.Logf("%s: the lower one shows no cursor of its own, nothing to leak", name)
 		}
 		c.over(a)
-		if got := a.render().Cursor; got != nil && a.topOverlay() != "form" && a.topOverlay() != "dropdown" {
+		if got := a.render().Cursor; got != nil { // what is on top has no input: the lists and the DDL
 			t.Errorf("%s: top %q, the cursor at %v is the one under it", name, a.topOverlay(), *got)
 		}
+	}
+	// the which-key of a Ctrl leader over the palette: its input is not the one with the keys
+	w := configured(t, 100, 24, "[keys]\nleader = \"<C-a>\"")
+	feed(t, w, "<C-p>")
+	if w.render().Cursor == nil {
+		t.Fatal("the palette has no cursor")
+	}
+	feed(t, w, "<C-a>")
+	due(w)
+	if !w.whichKey {
+		t.Fatal("no which-key")
+	}
+	if got := w.render().Cursor; got != nil {
+		t.Errorf("the which-key over the palette: the cursor at %v is the palette's", *got)
 	}
 }
 
