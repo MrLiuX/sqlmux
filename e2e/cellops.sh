@@ -55,20 +55,22 @@ cell_body() {
   check "再点：翻转，ORDER qty ↓，最大值（40：id 4）在前" eval 'qb_has "ORDER qty $DESC" && ids_are "4,1,3,2,5,"'
   e2e_click $((x + 1)) "$(hy)"; wait_for 8 settled; sleep 0.5
   check "第三次点：回到默认排序 ORDER id ↑" eval 'qb_has "ORDER id $ASC" && ids_are "$ALL"'
-  # ---- S-click：同下拉框的 space（追加 → 翻转 → 去掉）
+  # ---- S-click：同 ORDER 列表的 space（F12.9：追加 → 翻转，不再去掉）
   sclick $((x + 1)) "$(hy)"; wait_for 8 settled; sleep 0.5
   check "S-click qty 表头：追加（ORDER qty ↑）" eval 'qb_has "ORDER qty $ASC" && ids_are "2,5,3,1,4,"'
   sclick $((x + 1)) "$(hy)"; wait_for 8 settled; sleep 0.5
   check "再 S-click：翻转（ORDER qty ↓）" eval 'qb_has "ORDER qty $DESC"'
   sclick $((x + 1)) "$(hy)"; wait_for 8 settled; sleep 0.5
-  check "第三次 S-click：去掉，回到默认" eval 'qb_has "ORDER id $ASC" && ids_are "$ALL"'
+  check "第三次 S-click：又翻转（ORDER qty ↑），不是去掉" eval 'qb_has "ORDER qty $ASC" && ids_are "2,5,3,1,4,"'
+  key g o; sleep 0.5; key A; sleep 0.8; key Escape; sleep 0.5; wait_for 8 settled
+  check "（还原）ORDER 列表里 A 清空：回到默认" eval 'qb_has "ORDER id $ASC" && ids_are "$ALL"'
   # ---- gs / gS
   key g g; key 0; key l; key l; key g s; wait_for 8 settled; sleep 0.5
   check "gs（光标在 qty 列）：只按这一列，ORDER qty ↑" eval 'qb_has "ORDER qty $ASC" && ids_are "2,5,3,1,4,"'
   key h; key g S; wait_for 8 settled; sleep 0.5
   check "h 到 name 列，gS：加入排序，ORDER qty ↑, name ↑（qty 同为 10 的按 name：bob 2、cat 5）" eval 'qb_has "ORDER qty ↑, name ↑" && ids_are "2,5,3,1,4,"'
-  key g o; sleep 0.5; dd_goto 默认; key Enter; wait_for 8 settled; sleep 0.5
-  check "（还原）下拉里选「默认」" eval 'qb_has "ORDER id $ASC"'
+  key g o; sleep 0.5; key A; sleep 0.8; key Escape; wait_for 8 settled; sleep 0.5
+  check "（还原）ORDER 列表里 A 清空" eval 'qb_has "ORDER id $ASC"'
   # ---- 转置下表头不响应
   key T; sleep 0.5
   e2e_click $((x + 1)) "$(hy)"; sleep 0.8
@@ -92,7 +94,7 @@ PY' || echo "  clipboard [$(clip)]"
   rclick "$cx" "$cy"; sleep 0.6; menu_click "按这一列排序 ↓"; wait_for 8 settled; sleep 0.4
   check "菜单「按这一列排序 ↓」：ORDER qty ↓，id 4 在前" eval 'qb_has "ORDER qty $DESC" && ids_are "4,1,3,2,5,"'
   rclick "$cx" "$cy"; sleep 0.6; menu_click "加入排序"; wait_for 8 settled; sleep 0.4
-  check "菜单「加入排序」：qty 已在排序里（↓），再循环一次就是去掉，回到默认 ORDER id ↑" eval 'qb_has "ORDER id $ASC" && ids_are "$ALL"'
+  check "菜单「加入排序」：qty 已在排序里（↓），F12.9 起再加入就是翻转（ORDER qty ↑），不是去掉" eval 'qb_has "ORDER qty $ASC" && ids_are "2,5,3,1,4,"'
   # ---- 表头上右键
   rclick $((x + 1)) "$(hy)"; sleep 0.6
   check "表头上右键：菜单 4 项（排序 ↑ ↓、加入排序、隐藏这一列），没有「复制」" eval 'menu_all "按这一列排序 ↑" "按这一列排序 ↓" "加入排序" "隐藏这一列" && ! menu_has "复制这一格" >/dev/null 2>&1'

@@ -121,7 +121,7 @@ check "没有关过的 tab：F4 什么都不做，不弹 toast" eval '[[ $(panes
 two_tabs; settle
 key /; clear_in; e2e_type "id < 50"; key Enter; settle
 key g l; key C-n; key Enter; settle
-key g o; sleep 0.3; e2e_type amount; key Enter; settle
+order_by amount; settle
 check "（准备）① 里 t_user、t_order，t_order：WHERE id < 50、ORDER amount、LIMIT 500" eval 'tabs_are 1 "1:t_user- │ 2:t_order*" && [[ $(wh) == "id < 50" && $(qbar) == *"ORDER amount"* && $(qbar) == *"LIMIT 500"* ]]'
 key x
 check "x 关掉 t_order：① 里只剩 t_user" eval 'tabs_are 1 "1:t_user*" && [[ $(panes) == "0 1 2 " ]]'

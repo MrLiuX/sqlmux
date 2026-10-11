@@ -21,9 +21,9 @@ cfg $'[grid]\norder = "desc"\n'
 start -c "$D/config.toml"; open_table t_order; wait_for 8 settled
 check "order = desc：打开表时默认排序是 id ↓，第 1 行是 id 6000" eval 'qb_has "ORDER id $DESC" && [[ $(idv 1) == 6000 ]] || { echo "  $(qb) / $(idv 1)"; false; }'
 check "发出的 SQL 带 order by id desc" eval 'true'
-key g o; sleep 0.4; e2e_type amount; sleep 0.3; key Enter; wait_for 8 settled
+order_by amount; wait_for 8 settled
 check "ORDER 下拉里选别的列（amount）：第一次也按 desc" eval 'qb_has "ORDER amount $DESC"'
-key g o; sleep 0.4; e2e_type amount; sleep 0.3; key Enter; wait_for 8 settled
+order_by amount; wait_for 8 settled
 check "在当前排序列上再选一次：翻转成 asc（原来的规则不变）" eval 'qb_has "ORDER amount $ASC"'
 
 # ---- transpose = true

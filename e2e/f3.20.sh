@@ -66,10 +66,10 @@ check "又一次出错：替换先前的，只剩一条" eval 'errbar_is 1 "[427
 where "status = 'done'"
 
 # ---- 出错之后 ORDER / LIMIT / PAGE 退回画着的那一份（§7.6，reviewer 在 F3.20 实测：chip 显示 id ↑，点箭头发出去的却是失败的那列）
-key go; e2e_type raw; sleep 0.3; key Enter; sleep 1
+order_by raw; sleep 1
 check "按 json 列 raw 排序：错误栏 [42883]，chip 仍是 id ↑" eval 'errbar_is 1 "[42883] could not identify an ordering operator for type json ×" && qb_has "ORDER id $ASC"'
 key go
-check "ORDER 下拉框的当前项是「默认」（画着的数据按它排），不是 raw" eval '[[ $(dd_sel) == 默认 ]] || { echo "  selected: $(dd_sel)"; false; }'
+check "ORDER 列表打开时光标在第一项 id（画着的数据按 id 排，没有 raw 的标记），不是 raw" eval '[[ $(dd_sel) == id* ]] || { echo "  selected: $(dd_sel)"; false; }'
 key Escape
 mark; e2e_click "$(e2e_find "$ASC" 3 | cut -d' ' -f1)" 3; wait_for 8 settled; sleep 0.3
 check "点方向图标：发出 order by \"id\" desc（按画着的 id ↑ 翻转），成功后错误栏消失" eval 'sent_has "order by \"id\" desc limit 101 offset 0" && qb_has "ORDER id $DESC" && [[ -z $(errbar 1) ]]'

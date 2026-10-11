@@ -267,6 +267,7 @@ qb_has() { [[ $(qb) == *"$1"* ]] || { echo "  query bar: '$(qb)', want '$1'"; fa
 cnt() { qb | grep -oE 'auto · [^ ]+ 行' | awk '{ print $3 }'; }
 settled() { [[ $(bar) != *busy* && $(cnt) != "…" ]]; }
 clear_in() { local i; for ((i = 0; i < 80; i++)); do e2e_keys BSpace; done; sleep 0.2; }
+order_by() { e2e_keys g o; sleep 0.5; e2e_keys /; sleep 0.2; e2e_type "$1"; sleep 0.3; e2e_keys Enter; sleep 0.3; e2e_keys Enter; }   # NAME: ORDER 列表（F12.9）里 / 过滤到这一列、↵ 回列表、↵ 只按这一列并关闭；在唯一的排序列上就是翻转
 hy() { echo $(( $(grid_y) - 1 )); }                                     # the grid's header row
 
 # form_dsn NAME DSN [PASSWORD_CMD [mysql]]: with the new-connection form open and the focus on name (M7 F7.4), fill name and

@@ -77,29 +77,29 @@ end_shown() { [[ $(e2e_text 42 159 2) == *END* ]] && c=$(e2e_find END 2) && [[ $
 check "输入超出宽度：结尾 END 可见，光标在它后面、仍在 pane 里" wait_for 3 end_shown   # 负载高时 150 个字要一会儿才画完
 key Escape; key Escape
 
-# ---- ORDER（go）：通用下拉框，第一项「默认」；同列 ↵ 翻转；行标识列作 tiebreaker；换了回第 1 页
+# ---- ORDER（go）：F12.9 起是 COLS 式的列表（j / k 移动、/ 过滤、↵ 只按这一列、A 清空）；同列 ↵ 翻转；行标识列作 tiebreaker；换了回第 1 页
 key go
-check "go：下拉框在 ORDER chip 下方，状态栏 COMMAND，第一项是「默认」，列出全部 10 列" eval 'g=($(dd)); [[ ${g[0]} == $(( $(chip_x ORDER) - 1 )) && ${g[1]} == 4 ]] && mode_is COMMAND && [[ $(dd_rows | head -1) == 默认 ]] || { echo "  dropdown [$(dd)] rows: $(dd_rows | tr "\n" ,)"; false; }'
-key C-n; s1=$(dd_sel); key Down; s2=$(dd_sel); key C-p; s3=$(dd_sel); key Up; s4=$(dd_sel)
-check "C-n / ↓ / C-p / ↑ 移动选中项" eval '[[ "$s1 $s2 $s3 $s4" == "id user_id id 默认" ]] || { echo "  $s1 $s2 $s3 $s4"; false; }'
+check "go：列表在 ORDER chip 下方（第 4 行起），状态栏 COMMAND，第一项是 id，列出全部 10 列，没有「默认」" eval 'g=($(dd)); [[ ${g[1]} == 4 ]] && mode_is COMMAND && [[ $(dd_rows | head -1) == id* && $(dd_rows | grep -cE "^[a-z_]+ ") == 10 && $(dd_rows | grep -c 默认) == 0 ]] || { echo "  dropdown [$(dd)] rows: $(dd_rows | tr "\n" ,)"; false; }'
+key j; s1=$(dd_sel | sed "s/ .*//"); key j; s2=$(dd_sel | sed "s/ .*//"); key k; s3=$(dd_sel | sed "s/ .*//")
+check "j / k 移动选中项（不是往过滤框打字）：id → user_id → status → user_id" eval '[[ "$s1 $s2 $s3" == "user_id status user_id" ]] || { echo "  $s1 $s2 $s3"; false; }'
 key Escape
 check "esc 关闭，排序不变" eval '[[ -z $(dd) ]] && qb_has "ORDER id $ASC" && mode_is NORMAL'
 key ']'; wait_for 8 settled
-sent eval 'key go; e2e_type status; sleep 0.3; e2e_keys Enter'
+sent eval 'order_by status'
 check "选 status：chip 为 status ↑，回到第 1 页，SQL 以 id 作 tiebreaker" eval 'qb_has "ORDER status $ASC" && qb_has "PAGE 1/60" && sql_is "select * from \"public\".\"t_order\" order by \"status\" asc, \"id\" limit 101 offset 0"'
-sent eval 'key go; e2e_type status; sleep 0.3; e2e_keys Enter'
+sent eval 'order_by status'
 check "在当前排序列上再 ↵：翻转为 status ↓（order by \"status\" desc, \"id\"）" eval 'qb_has "ORDER status $DESC" && sql_is "select * from \"public\".\"t_order\" order by \"status\" desc, \"id\" limit 101 offset 0"'
 check "status ↓：第一行是 failed（枚举的最后一个值），同值按 id 升序（3, 7）" eval '[[ $(val status 1) == failed && $(nums id 1) == 3 && $(nums id 2) == 7 ]]'
-sent eval 'key go; e2e_type 默认; sleep 0.3; e2e_keys Enter'
-check "选「默认」：回到按行标识列排（id ↑）" eval 'qb_has "ORDER id $ASC" && sql_is "select * from \"public\".\"t_order\" order by \"id\" limit 101 offset 0"'
+sent eval 'key go; sleep 0.5; key A; sleep 0.8; key Escape'
+check "A 清空：回到按行标识列排（id ↑）" eval 'qb_has "ORDER id $ASC" && sql_is "select * from \"public\".\"t_order\" order by \"id\" limit 101 offset 0"'
 key go
-check "下拉框打开时选中的是当前排序列（默认排序时是「默认」）" eval '[[ $(dd_sel) == 默认 ]]'
+check "列表打开时光标在第一项 id（默认排序，没有标记）" eval '[[ $(dd_sel) == id* ]]'
 key Escape
-sent eval 'key go; e2e_type id; sleep 0.3; e2e_keys Enter'
+sent eval 'order_by id'
 check "默认排序时 chip 上的 id 就是当前排序列：选 id 直接翻转为 id ↓，SQL 里 id 不重复，第一行 id 6000" eval 'qb_has "ORDER id $DESC" && sql_is "select * from \"public\".\"t_order\" order by \"id\" desc limit 101 offset 0" && [[ $(nums id 1) == 6000 ]]'
 e2e_click $(( $(chip_x ORDER) + 1 )) 3; sleep 0.3
-check "点击 ORDER chip：打开同一个下拉框" eval '[[ $(dd_rows | head -1) == 默认 ]] && mode_is COMMAND'
-e2e_type 默认; sleep 0.3; key Enter; wait_for 8 settled
+check "点击 ORDER chip：打开同一个列表" eval '[[ $(dd_rows | head -1) == id* ]] && mode_is COMMAND'
+key A; sleep 0.8; key Escape; wait_for 8 settled
 
 # ---- LIMIT（gl）：100 / 500 / 1000，换了回第 1 页
 key ']'; wait_for 8 settled
@@ -223,9 +223,7 @@ key '['; wait_for 8 settled
 mkdir -p "$D/own/themes"; printf 'theme = "x"\n' >"$D/own/config.toml"; printf '[icon]\nrefresh = { fg = "#ff0000" }\n' >"$D/own/themes/x.toml"
 start -C "$D/own"; open_table t_zh
 check "[icon] refresh = { fg = \"#ff0000\" }：查询条的刷新按钮变色" eval 'x=$(bx "\xef\x80\xa1"); [[ -n $x ]] && style_has $x 3 fg=#ff0000'
-key go; e2e_type 默认; sleep 0.3
-check "t_zh 的 ORDER 列表里有两项「默认」：第一项是默认排序，第二项是这一列" eval '[[ $(dd_rows | tr "\n" " ") == "默认 默认 " ]] || { echo "  $(dd_rows | tr "\n" ,)"; false; }'
-key C-n; key Enter; wait_for 8 settled
+order_by 默认; wait_for 8 settled
 check "选第二项：按「默认」列排（第 1 行 id 5），chip 为 默认 ↑" eval 'qb_has "ORDER 默认 $ASC" && [[ $(nums id 1) == 5 ]]'
 
 e2e_done

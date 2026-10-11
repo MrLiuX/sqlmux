@@ -5,19 +5,22 @@ ids() { local y n=${1:-12} out=""; for ((y = $(grid_y) + 1; y <= $(grid_y) + n; 
 ids_are() { local got; got=$(ids "$(echo "$1" | tr -cd , | wc -c)"); [[ $got == "$1" ]] || { echo "  ids [$got], want [$1]"; false; }; }
 # the dropdown (under the ORDER chip): items from row 7 on, "1↓ source" / "id" …; the cursor row has the select background
 DD_Y=7 SELBG=#364a82
-dd_items() { local y t; for ((y = DD_Y; y < DD_Y + 8; y++)); do t=$(e2e_text 36 56 "$y" | sed 's/^ *│//; s/│.*//; s/[┌┐└┘─┼]//g; s/^ *//; s/ *$//'); [[ $t =~ ^([0-9][↑↓]\ )?[A-Za-z默认_][^\ ]*$ ]] && echo "$t" || break; done; }
-dd_has() { dd_items | grep -qxF "$1" || { echo "  dropdown: $(dd_items | tr '\n' '|')"; false; }; }
-dd_cursor() { local y n=0; for ((y = DD_Y; y < DD_Y + 8; y++)); do [[ " $(e2e_style 40 "$y") " == *" bg=$SELBG "* ]] && { echo "$n"; return; }; n=$((n + 1)); done; echo -1; }
-dd_goto() {   # NAME: move the cursor to this item (C-n / C-p); the dropdown opens with the cursor on the current sort column
-  local want i=0 cur n=0 item; while read -r item; do [[ ${item##* } == "$1" ]] && want=$n; n=$((n + 1)); done < <(dd_items)
+dd_items() { local y t; for ((y = DD_Y; y < DD_Y + 12; y++)); do t=$(e2e_text 36 98 "$y" | sed 's/^ *│//; s/│.*//; s/[┌┐└┘─┼]//g; s/  */ /g; s/^ //; s/ $//'); [[ -n $t ]] || break; echo "$t"; done; }   # 一行一项："1↓ source text"（F12.9：ORDER 是 COLS 式的列表，行末是类型；分隔线那一行截断）
+list_open() { e2e_plain | grep -qF "j/k 移动 · SPC 方向"; }   # ORDER 列表开着（它的提示行；不能看「3/3」，chip 的 COLS 3/3 一直在）
+list_n() { e2e_plain | python3 -c 'import re, sys; m = re.findall(r" (\d+/\d+) │", sys.stdin.read()); print(m[-1] if m else "")'; }   # 列表右上角的计数 "匹配数/总数"（chip 的 COLS n/m 后面有很多空格，不会混进来）
+dd_has() { dd_items | grep "^$1\( \|$\)" >/dev/null || { echo "  list: $(dd_items | tr '\n' '|')"; false; }; }
+dd_cursor() { local y n=0; for ((y = DD_Y; y < DD_Y + 12; y++)); do [[ " $(e2e_style 40 "$y") " == *" bg=$SELBG "* ]] && { echo "$n"; return; }; n=$((n + 1)); done; echo -1; }
+dd_goto() {   # NAME: move the cursor to this item (j / k); the list opens with the cursor on the first column
+  local want cur n=0 item name; while read -r item; do name=$(echo "$item" | sed -E 's/^[0-9][↑↓] //; s/ .*//'); [[ $name == "$1" ]] && want=$n; n=$((n + 1)); done < <(dd_items)
   cur=$(dd_cursor); [[ -n $want && $cur -ge 0 ]] || { echo "  dd_goto $1: want=$want cur=$cur items=$(dd_items | tr '\n' '|')"; e2e_cap | sed -n 1,14p | cut -c30-110; return 1; }
-  while ((cur < want)); do e2e_keys C-n; sleep 0.12; cur=$((cur + 1)); done
-  while ((cur > want)); do e2e_keys C-p; sleep 0.12; cur=$((cur - 1)); done
+  while ((cur < want)); do e2e_keys j; sleep 0.12; cur=$((cur + 1)); done
+  while ((cur > want)); do e2e_keys k; sleep 0.12; cur=$((cur - 1)); done
   sleep 0.2
 }
-sp() { dd_goto "$1" && { key Space; sleep 0.7; }; }   # NAME: space on this item
+sp() { dd_goto "$1" && { key Space; sleep 0.7; }; }    # NAME: space (the direction: add at the end, or flip) on this item
+rm_col() { dd_goto "$1" && { key a; sleep 0.7; }; }    # NAME: a moves it out of the sorting (F12.9)
 go_open() { key g o; sleep 0.5; }
-marks() { dd_items | grep -E '^[0-9][↑↓]' | tr '\n' '|'; }
+marks() { dd_items | grep -E '^[0-9][↑↓]' | awk '{ print $1 " " $2 }' | tr '\n' '|'; }
 
 order_body() {
   SOLO=1 start -C "$D/own"; open_table t_ord; wait_for 8 settled
@@ -41,17 +44,19 @@ order_body() {
   key Escape; sleep 0.5
   check "esc 关下拉：排序留着，第一行是 source 最大（c）里 id 最大的记录（11）：11 8 5 2 | 10 7 4 1 | 12 9 6 3" eval 'qb_has "ORDER source ↓, id ↓" && ids_are "11,8,5,2,10,7,4,1,12,9,6,3," && ! e2e_plain | grep -q "2↓ id"'
 
-  # ---- 第三次 space 去掉 id：只剩 source ↓，id 作 tiebreaker（升序）
+  # ---- a 把 id 移出排序（F12.9：space 不再去掉，再按只是翻转）：只剩 source ↓，id 作 tiebreaker（升序）
   go_open; sp id
-  check "第三次 space：id 从排序里去掉，只剩 1↓ source，chip source ↓" eval '[[ $(marks) == "1↓ source|" ]] && qb_has "ORDER source $DESC"'
+  check "再 space：翻回 2↑（不是去掉）" eval '[[ $(marks) == "2↑ id|1↓ source|" ]]'
+  rm_col id
+  check "a：id 从排序里移出，只剩 1↓ source，chip source ↓" eval '[[ $(marks) == "1↓ source|" ]] && qb_has "ORDER source $DESC"'
   key Escape; sleep 0.5
   check "esc 后：同 source 里 id 升序（行标识列作 tiebreaker）：2 5 8 11 | 1 4 7 10 | 3 6 9 12" eval 'ids_are "2,5,8,11,1,4,7,10,3,6,9,12,"'
 
-  # ---- 非行标识列 n：追加、翻转、去掉
+  # ---- 非行标识列 n：追加、翻转，a 移出
   go_open; sp n; sp n
-  check "n 上 space 两次：2↓ n、1↓ source，chip source ↓, n ↓" eval '[[ $(marks) == "1↓ source|2↓ n|" ]] || [[ $(marks) == "2↓ n|1↓ source|" ]]; qb_has "ORDER source ↓, n ↓"'
-  sp n
-  check "第三次：n 去掉，回到只有 source ↓" eval '[[ $(marks) == "1↓ source|" ]] && qb_has "ORDER source $DESC"'
+  check "n 上 space 两次：追加再翻转，2↓ n、1↓ source，chip source ↓, n ↓" eval '[[ $(marks) == "1↓ source|2↓ n|" ]] || [[ $(marks) == "2↓ n|1↓ source|" ]]; qb_has "ORDER source ↓, n ↓"'
+  rm_col n
+  check "a：n 移出，回到只有 source ↓" eval '[[ $(marks) == "1↓ source|" ]] && qb_has "ORDER source $DESC"'
   key Escape; sleep 0.4
 
   # ---- ↵ 在别的列上：清掉列表，只剩这一列（方向按 [grid] order，默认 asc）
@@ -69,14 +74,18 @@ order_body() {
   check "唯一排序列 source 上 ↵：翻转成 ↓" eval 'qb_has "ORDER source $DESC" && ids_are "2,5,8,11,1,4,7,10,3,6,9,12,"'
 
   # ---- 过滤框非空时 space 是字符
-  go_open; e2e_type "so"; sleep 0.3; key Space; sleep 0.5
-  check "过滤框里有字（so）时 space 是字符：过滤框是 'so '，排序没变（chip 还是 source ↓）" eval 'e2e_plain | grep -q "so " && qb_has "ORDER source $DESC"'
-  key Escape; key Escape; sleep 0.4
-  check "esc 两次关下拉，排序没变" eval 'qb_has "ORDER source $DESC" && ids_are "2,5,8,11,1,4,7,10,3,6,9,12,"'
+  go_open; key /; sleep 0.3; e2e_type "so"; sleep 0.3; key Space; sleep 0.5
+  check "/ 进过滤框，打 so 再 space：space 是字符（过滤框是 'so '），列表只剩 source（1/3），排序没变（chip 还是 source ↓）" eval 'e2e_plain | grep -q "so " && [[ $(list_n) == 1/3 ]] && qb_has "ORDER source $DESC"'
+  key Escape; sleep 0.3
+  check "esc 一次：回到列表（过滤保留），浮层还在" eval 'list_open && [[ $(list_n) == 1/3 ]]'
+  key Escape; sleep 0.3
+  check "esc 再一次：先清空过滤（列表回到 3/3），浮层还在" eval 'list_open && [[ $(list_n) == 3/3 ]]'
+  key Escape; sleep 0.4
+  check "esc 第三次：关浮层，排序没变" eval 'qb_has "ORDER source $DESC" && ids_are "2,5,8,11,1,4,7,10,3,6,9,12,"'
 
-  # ---- 回默认：下拉里选「默认」
-  go_open; dd_goto 默认; key Enter; sleep 0.8
-  check "选「默认」：chip 回到 id ↑，按 id 升序" eval 'qb_has "ORDER id $ASC" && ids_are "1,2,3,4,5,6,7,8,9,10,11,12,"'
+  # ---- 回默认：A 清空（F12.9：没有「默认」这一项了）
+  go_open; key A; sleep 0.8; key Escape; sleep 0.4
+  check "A 清空：chip 回到 id ↑，按 id 升序" eval 'qb_has "ORDER id $ASC" && ids_are "1,2,3,4,5,6,7,8,9,10,11,12,"'
 
   # ---- 布局文件：存成数组，--layout 读回；旧的 order = "x" + desc = true 读成一列
   go_open; sp source; sp source; sp id; key Escape; sleep 0.5    # source ↓, id ↑
