@@ -17,7 +17,7 @@ commit_body() {
   key l; key i; sleep 0.3; e2e_type "X"; key Enter; sleep 0.5
   check "（准备）v 改成 X，保存计数 1" eval 'has_pending'
   e2e_keys C-s; wait_for 8 eval 'toast_has "提交结果未知"'
-  check "C-s 时 COMMIT 发出去之后连接断了：toast「连接断开，提交结果未知：刷新后核对」" eval 'toast_has "连接断开，提交结果未知：刷新后核对"'
+  check "C-s 时 COMMIT 发出去之后连接断了：toast「<连接名>：连接断开，提交结果未知：已刷新，请核对」（§8.2）" eval 'toast_has "连接断开，提交结果未知：已刷新，请核对"'
   check "不是「已回滚」：没有「已回滚」，错误栏里也没有" eval '! screen_has "已回滚"'
   sleep 3.5
   check "修改标记还在（保存计数 1），格子里还是 X——让用户刷新后自己核对" eval 'has_pending && e2e_plain | grep -qE "│ +1 │ +1 │ X"'
@@ -33,6 +33,6 @@ commit_body() {
   start -C "$D/c"; key C-l
   setsql "begin; update t_c set v = 'Q' where id = 2; commit"; key g g; key V G; key Enter     # 选区执行：整段（↵ 在 NORMAL 下只跑光标所在的那一条语句）
   sleep 1.5
-  check "query 里 begin; update; commit，COMMIT 发出去后断线：报提交结果未知（结果区 / toast），不是普通错误或「已回滚」" eval 'screen_has "提交结果未知" && ! screen_has "已回滚"' || e2e_cap | tail -12
+  check "query 里 begin; update; commit，COMMIT 发出去后断线：toast「连接断开，提交结果未知：请先查一下数据」（§8.2），不是普通错误或「已回滚」" eval 'toast_has "连接断开，提交结果未知：请先查一下数据" && ! screen_has "已回滚"' || e2e_cap | tail -12
   check "库里是提交了的（id 2 是 Q）" eval '[[ $(DBVALS) == "X,Q,THREE" ]]'
 }

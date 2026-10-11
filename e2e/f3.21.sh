@@ -44,9 +44,7 @@ check "C-p：不开面板" eval 'editing amount && ! palette_open'
 key C-s
 check "C-s：不保存" eval 'editing amount && [[ $(qb) != *已保存* && $(psql_n "select amount from t_order where id = 1") == 1.99 ]]'
 key C-h
-check "C-h（换焦点）：焦点不动" eval 'editing amount && [[ $(focused) == 1 ]]'
-key BSpace
-check "退格成 10：提示和波浪线都没了" eval 'editing amount && [[ -z $(hint) ]] && ! wavy $(row_y 1)'
+check "C-h 在单元格输入框里是退格（§7.8，F13.11）：删掉 d 成 10，不换焦点，提示和波浪线都没了" eval 'editing amount && [[ $(focused) == 1 && $(cell amount 1) == 10 ]] && [[ -z $(hint) ]] && ! wavy $(row_y 1)'
 key Enter
 check "改成 10 后 ↵：提交，回到 NORMAL，格子是 10" eval 'mode_is NORMAL && [[ $(cell amount 1) == 10 ]]'
 edit x; key Escape
