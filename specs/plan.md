@@ -17,8 +17,9 @@
 | M10 第三轮使用反馈 | [m10-feedback3/task.md](m10-feedback3/task.md) | 用户 2026-10-10 在 M9 审查期间提的 9 条：表格多选、flash 式跳转、树去掉 pane 层、连接分组、WHERE 下拉撑满、新建 session 先要名字、console 结果 500 行并翻页、COLS 调列顺序、侧栏去掉键位文字、删开着的 console；最后 console 改名 query（单独一个节点） | 完成（F10.1–F10.12 passed，08d9009，完整回归 2982 项全过，2026-10-11；tag `m10`、`v0.2.0`；用户照 M9 的办法先打 tag 再验收） |
 | M11 分发 | [m11-distribution/task.md](m11-distribution/task.md) | GoReleaser 与 release workflow、`--version`、Homebrew tap（源码编译的 formula）、npm / npx（壳包加平台子包） | todo（2026-10-10 用户定；2026-10-11 M10 passed 后开工） |
 | M12 表格日常 | [m12-grid/task.md](m12-grid/task.md) | 用户 2026-10-11 对照 DataGrip 规划：多列排序、值编辑器（JSON 格式化和高亮、vim）、按单元值过滤 / 表头排序 / 表格右键菜单、导出 CSV 和 JSON | todo（M11 F11.4 passed 之后开工） |
-| M13 SQLite 与历史 | [m13-sqlite/task.md](m13-sqlite/task.md) | SQLite（无 cgo）和命令行 DSN、查询历史、树上的索引 / 键 / 函数 / 序列、结构修改的模板 SQL | draft（方向已定，M12 开工后补清单） |
-| M14 PG 数据库层级 | [m14-pg-databases/task.md](m14-pg-databases/task.md) | PG 的树加数据库一层（每库一对连接）、SSH 隧道、query 的签名提示与值补全（INSERT VALUES、UPDATE SET、WHERE 的值；用户后续的编辑体验需求也归这里）、状态栏随机轮播的特性提示 | draft |
+| M13 工程质量审计 | [m13-quality/task.md](m13-quality/task.md) | 用户 2026-10-11 让 reviewer 做的全仓审计，20 条：COMMIT 后断线报成已回滚、多进程写同一文件、确认框漏键、配置未知键静默、浮层优先级散在 12 处、扫描器平方、列表绘制和可见性重复、`C-h`、布局文件、依赖链、小拷贝 | todo（M12 passed 之后开工，排在 SQLite 前） |
+| M14 SQLite 与历史 | [m14-sqlite/task.md](m14-sqlite/task.md) | SQLite（无 cgo）和命令行 DSN、查询历史、树上的索引 / 键 / 函数 / 序列、结构修改的模板 SQL | draft（方向已定，M13 开工后补清单） |
+| M15 PG 数据库层级 | [m15-pg-databases/task.md](m15-pg-databases/task.md) | PG 的树加数据库一层（每库一对连接）、SSH 隧道、query 的签名提示与值补全（INSERT VALUES、UPDATE SET、WHERE 的值；用户后续的编辑体验需求也归这里）、状态栏随机轮播的特性提示 | draft |
 
 ## 发布
 
