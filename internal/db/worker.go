@@ -210,9 +210,14 @@ func (w *Worker) lost(ctx context.Context, safe, redialed bool, lost Lost, err e
 		w.broken = true
 		return err
 	}
-	txLost, sent := w.inTx() || w.conn.tx == 'T' || w.conn.tx == 'E', w.conn.calls > 0
+	// the transaction the connection had before this request is the user's, the
+	// app is told when it is lost; one the request began is the request's own
+	// (F13.1): its COMMIT lost is TxLost, a read that begins one and runs again
+	// has lost nothing
+	had := w.inTx()
+	txLost, sent := had || w.conn.tx == 'T' || w.conn.tx == 'E', w.conn.calls > 0
 	again := safe || !txLost && lost == LostUnsent && !sent
-	if rerr := w.redial(ctx, txLost, again); rerr != nil {
+	if rerr := w.redial(ctx, had, again); rerr != nil {
 		return rerr
 	}
 	switch {

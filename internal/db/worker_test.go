@@ -455,6 +455,20 @@ func TestWorkerTransactionBegunInTheRequestIsLost(t *testing.T) {
 	}
 }
 
+// A read that begins a transaction of its own, quick SQL's, and runs again on
+// the new connection, has lost nothing the user had: no TxLost to tell the app
+// (F13.1).
+func TestWorkerReadsOwnTransactionIsNoLoss(t *testing.T) {
+	l := newLostWorker(errSent)
+	l.first.tx, l.first.lives, l.first.failAt = 'T', 100, "select"
+	if err := l.RunSafe(context.Background(), query("begin read only", "select")); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(l.events, []Event{{Rerun: true}}) || !slices.Equal(l.ran, []string{"1:begin read only", "2:begin read only", "2:select"}) {
+		t.Errorf("events %v, ran %v", l.events, l.ran)
+	}
+}
+
 // The transaction is lost once: with the first connection a second loss in
 // the same request or the next has none to lose; and a connection that says
 // it is out of one because it is closed does not make the Worker forget it.
