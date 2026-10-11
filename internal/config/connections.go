@@ -44,8 +44,18 @@ func UnknownKeys(c *Config) (lines []string) {
 	var file struct {
 		Connection []map[string]any `toml:"connection"`
 	}
-	if _, err := toml.Decode(string(data), &file); err != nil {
+	md, err := toml.Decode(string(data), &file)
+	if err != nil {
 		return lines
+	}
+	var outside []string // what is not in a [[connection]]: `default = "prod"`, a block of another name
+	for _, k := range md.Undecoded() {
+		if top := k[0]; !slices.Contains(outside, top) {
+			outside = append(outside, top)
+		}
+	}
+	if slices.Sort(outside); len(outside) > 0 {
+		lines = append(lines, i18n.T("connections.toml: 不认识的键 %s", strings.Join(outside, ", ")))
 	}
 	known, t := map[string]bool{}, reflect.TypeFor[Connection]()
 	for i := range t.NumField() {

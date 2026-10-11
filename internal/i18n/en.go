@@ -472,8 +472,9 @@ var en = map[string]string{
 	"；":      "; ",
 
 	// F13.5
-	"config.toml: 不认识的键 %s":                     "config.toml: unknown keys %s",
-	"connections.toml: 不认识的键 %s（connection %q）": "connections.toml: unknown keys %s (connection %q)",
+	"config.toml: 不认识的键 %s":                     "config.toml: unknown key(s) %s",
+	"connections.toml: 不认识的键 %s":                "connections.toml: unknown key(s) %s",
+	"connections.toml: 不认识的键 %s（connection %q）": "connections.toml: unknown key(s) %s (connection %q)",
 
 	// F13.1, F13.2
 	"文件在别处改过，没有保存；再保存一次会覆盖它": "The file was changed elsewhere and not saved; save again to overwrite it",

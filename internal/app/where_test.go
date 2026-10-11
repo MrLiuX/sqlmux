@@ -435,10 +435,10 @@ func TestWhereHistoryEdit(t *testing.T) {
 // A table's WHERE history keeps its last 100 runs (§9.7).
 func TestWhereHistoryRows(t *testing.T) {
 	a, tab, _ := withRecorder(t)
-	for i := range whereRows + 1 {
+	for i := range config.WhereRows + 1 {
 		feed(t, a, "/<C-u>id = "+strconv.Itoa(i)+"<CR>")
 	}
-	if h := a.tableState(tab).History; len(h) != whereRows || h[0].Where != "id = 100" || h[len(h)-1].Where != "id = 1" {
+	if h := a.tableState(tab).History; len(h) != config.WhereRows || h[0].Where != "id = 100" || h[len(h)-1].Where != "id = 1" {
 		t.Errorf("%d kept, %q to %q", len(h), h[0].Where, h[len(h)-1].Where)
 	}
 }

@@ -155,7 +155,9 @@ func Parse(data string) (*Config, error) {
 		return nil, err
 	}
 	for _, k := range md.Undecoded() {
-		c.Unknown = append(c.Unknown, k.String())
+		if s := k.String(); !slices.Contains(c.Unknown, s) { // a [[table]] twice says each key twice
+			c.Unknown = append(c.Unknown, s)
+		}
 	}
 	if raw.Keys != nil || raw.Map != nil { // F5.9 moved them
 		return nil, errors.New("[keys] / [map] belong in keymaps.toml (sqlmux keys --format toml writes a complete reference)")
