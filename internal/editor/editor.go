@@ -45,6 +45,9 @@ type Effect struct {
 	Error   string      // what went wrong, for a toast: 找不到：foo
 	Format  *FormatSpan // gq asked to lay out this text, which the query does (§9.5)
 	Yank    *Yank       // what a yank took, not a delete: the query flashes it (F3.32)
+	// ReadOnly: a command that changes the text was not run, the editor
+	// being ReadOnly.
+	ReadOnly bool
 }
 
 // Yank is what a yank took, as vim's TextYankPost has it: From to To, To
@@ -80,6 +83,10 @@ type Editor struct {
 	// the / ? : lines do nothing, and a put is charwise, newlines spaces.
 	// The app runs INSERT's <CR> and turns a paste's newlines to spaces.
 	OneLine bool
+	// ReadOnly lets nothing change the text, a value shown but not to be
+	// edited (F12.2): the commands that would are not run and say so in
+	// Effect.ReadOnly; moving, searching, VISUAL and yanking go on.
+	ReadOnly bool
 
 	// plain is the modeless editing (SetPlain), anchor the end its selection
 	// began at.
@@ -368,7 +375,31 @@ func count(keys []string) (int, []string) {
 	return n, keys
 }
 
+// changes are the NORMAL commands that change the text; in VISUAL the
+// visualCommands but those that only move the selection or take it.
+var changes = map[string]bool{"i": true, "a": true, "I": true, "A": true, "o": true, "O": true, "R": true, "p": true, "P": true,
+	"J": true, "~": true, "r": true, "u": true, "<C-r>": true, "U": true}
+
+var visualMoves = map[string]bool{"<Esc>": true, "v": true, "V": true, "<C-v>": true, "<C-q>": true, "o": true, "O": true, "gv": true, "y": true}
+
+// edits is whether c would change the text.
+func (e *Editor) edits(c cmd) bool {
+	switch sh, ok := shorthands[c.name]; {
+	case c.op != "":
+		return c.op != "y"
+	case e.visual():
+		return visualCommands[c.name] != nil && !visualMoves[c.name]
+	case ok:
+		return sh[0] != "y"
+	}
+	return changes[c.name]
+}
+
 func (e *Editor) run(c cmd) {
+	if e.ReadOnly && e.edits(c) {
+		e.eff.ReadOnly = true
+		return
+	}
 	e.curswant()                                                                       // vim settles it before each command (update_topline_cursor)
 	if c.reg == "+" && c.op == "" && (c.name == "p" || c.name == "P") && !e.visual() { // the text comes later: PutClip
 		e.eff.Paste = &ClipPut{c}

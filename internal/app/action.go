@@ -87,6 +87,9 @@ func init() {
 			return nil
 		}},
 		"cancel": {Title: i18n.N("取消 / 连按两次退出"), Run: func(a *App, _ Args) tea.Cmd {
+			if a.value != nil && a.confirm == nil { // esc, as in any input (§6.8)
+				return a.valueKey(keymap.Esc)
+			}
 			if p := a.palette; p != nil && p.quick != nil && p.quick.running != "" { // the palette stays (§12)
 				p.conn.Meta.Cancel()
 				return nil
@@ -227,6 +230,9 @@ func init() {
 		"tree.delete":   {Title: i18n.N("删除 query 文件、表、视图"), Run: func(a *App, _ Args) tea.Cmd { return a.treeDelete() }},
 		// Keys inside the dropdowns and the COLS list (§6.8): untitled, like the palette's.
 		"grid.ddl.column": {Title: i18n.N("列的定义"), Run: func(a *App, _ Args) tea.Cmd { return a.openDDL(true) }},
+		"grid.value":      {Title: i18n.N("在值编辑器中打开"), Run: func(a *App, _ Args) tea.Cmd { return a.valueOpen() }},
+		"value.leave":     {Title: i18n.N("值编辑器：退出"), Local: true, Run: when(inValue, func(a *App) tea.Cmd { return a.valueKey(keymap.Esc) })},
+		"value.save":      {Title: i18n.N("写回并关闭"), Local: true, Run: when(inValue, func(a *App) tea.Cmd { return a.valueSave() })},
 		"grid.ddl.table":  {Title: i18n.N("表的 DDL"), Run: func(a *App, _ Args) tea.Cmd { return a.openDDL(false) }},
 		"ddl.down":        {Title: i18n.N("下移"), Local: true, Run: when(inDDL, func(a *App) tea.Cmd { a.scrollDDL(1, false); return nil })},
 		"ddl.up":          {Title: i18n.N("上移"), Local: true, Run: when(inDDL, func(a *App) tea.Cmd { a.scrollDDL(-1, false); return nil })},
@@ -594,6 +600,9 @@ func title(action string) string {
 // run executes "id [arg]" from the registry.
 func (a *App) run(action string, count int) tea.Cmd {
 	id, arg, _ := strings.Cut(action, " ")
+	if a.value != nil && a.confirm == nil && !strings.HasPrefix(id, "value.") && id != "cancel" { // what it has no key for is no one's (F12.2)
+		return nil
+	}
 	if a.menu != nil && !strings.HasPrefix(id, "menu.") && id != "cancel" || a.ddl != nil && !strings.HasPrefix(id, "ddl.") && id != "cancel" { // what it has no key for is no one's: cancel is esc, which closes it (F8.23, F9.8)
 		return nil
 	}

@@ -72,10 +72,17 @@ func (TextBox) Inner(box uv.Rectangle) uv.Rectangle {
 }
 
 func (b TextBox) Draw(f *Frame, box uv.Rectangle) {
+	if b.Frame(f, box) {
+		b.View.Draw(f, b.Inner(box), uv.Style{Fg: f.Theme.Fg, Bg: f.Theme.PaneBg})
+	}
+}
+
+// Frame draws the box without the text, and is whether there was room for it.
+func (b TextBox) Frame(f *Frame, box uv.Rectangle) bool {
 	th := f.Theme
 	f.Region(f.Bounds(), Target{Kind: KindBackdrop})
 	if box.Dx() < 6 || box.Dy() < 3 {
-		return
+		return false
 	}
 	f.Region(box, Target{}) // inside, a click is not outside
 	f.Fill(box, uv.Style{Bg: th.PaneBg})
@@ -84,5 +91,5 @@ func (b TextBox) Draw(f *Frame, box uv.Rectangle) {
 	if b.Title != "" {
 		f.Text(box.Min.X+2, box.Min.Y, box.Max.X-1, " "+b.Title+" ", uv.Style{Fg: th.Focus, Bg: th.PaneBg, Attrs: uv.AttrBold})
 	}
-	b.View.Draw(f, b.Inner(box), uv.Style{Fg: th.Fg, Bg: th.PaneBg})
+	return true
 }
