@@ -114,4 +114,48 @@ t = d["session"][0]["window"][0]["pane"][0]["tab"][0]
 o = t["order"]
 sys.exit(0 if isinstance(o, list) and [x["col"] for x in o] == ["source"] and o[0].get("desc") is True and "desc" not in t else 1)
 PY' || { ls "$D/st2/sqlmux" 2>&1; sed -n '/kind = "table"/,$p' "$D/st2/sqlmux/last.toml" 2>&1 | head -12; }
+  # ---- 读布局文件时 col / desc 的类型要对：col 为空串、desc 不是布尔值，启动就报错（不是取数时才报 SQL 错）
+  python3 - "$D/keep/layouts/o.toml" "$D/keep/layouts/badcol.toml" "$D/keep/layouts/baddesc.toml" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+open(sys.argv[2], "w").write(s.replace('col = "source"', 'col = ""'))
+open(sys.argv[3], "w").write(s.replace('desc = true', 'desc = "yes"'))
+PY
+  cp -R "$D/keep/layouts"/. "$D/c2/layouts/"
+  for bad in badcol baddesc; do
+    e2e_start -C "$D/c2" -S "$D/st3" -D "$D/data3" "$E2E_BIN --layout $bad"; wait_for 8 exited; sleep 0.3
+    check "--layout $bad（order 里 col 是空串 / desc 不是布尔）：启动报错退出 1，提示里有 order" eval 'screen_has "[e2e-exit 1]" && e2e_plain | grep -qi "order"' || e2e_cap | tail -5
+  done
+
+  # ---- 默认排序倒序（[grid] order = "desc"：order 列表是空的，只有方向）：布局文件里只写 desc = true，用默认配置（asc）读回时布局的方向优先
+  _e2e_kill
+  printf '[grid]\norder = "desc"\n' >"$D/desc.toml"
+  SOLO=1 start -c "$D/desc.toml" -C "$D/own"; open_table t_ord; wait_for 8 settled
+  check "[grid] order = desc：默认排序是 id ↓，第一行 12" eval 'qb_has "ORDER id $DESC" && ids_are "12,11,10,9,8,7,6,5,4,3,2,1,"'
+  save_layout d
+  L=$E2E_TMP/config/sqlmux/layouts/d.toml
+  check "layout.save d：表 tab 里是 desc = true，没有 order 数组" eval 'python3 - "$L" <<PY
+import sys, tomllib
+d = tomllib.load(open(sys.argv[1], "rb"))
+t = d["session"][0]["window"][0]["pane"][0]["tab"][0]
+sys.exit(0 if t.get("desc") is True and not t.get("order") else 1)
+PY'
+  mkdir -p "$D/keep2"; cp -R "$E2E_TMP/config/sqlmux/layouts" "$D/keep2/"
+  e2e_type ":"; sleep 0.3; e2e_type qa; key Enter; sleep 1.2
+  cp -R "$D/keep2/layouts"/. "$D/c2/layouts/"
+  e2e_start -C "$D/c2" -S "$D/st4" -D "$D/data4" "$E2E_BIN --layout d"; wait_for 6 flag_is alternate_on 1; sleep 2; wait_for 8 settled
+  check "--layout d（默认配置 asc）：chip id ↓，第一行 12（布局里的方向优先，没有反）" eval 'qb_has "ORDER id $DESC" && ids_are "12,11,10,9,8,7,6,5,4,3,2,1,"'
+  e2e_type ":"; sleep 0.3; e2e_type qa; key Enter; sleep 1.2
+
+  # ---- 点 chip 的方向图标把默认排序翻成降序：存的是显式的 id desc，读回一样
+  _e2e_kill
+  SOLO=1 start -C "$D/own"; open_table t_ord; wait_for 8 settled
+  x=$(e2e_find "$ASC" 3 | tr ' ' '\n' | awk '$1 > 34 { print; exit }'); e2e_click "$x" 3; wait_for 8 settled; sleep 0.5
+  check "点 chip 的方向图标：默认排序翻成 id ↓，第一行是 12" eval 'qb_has "ORDER id $DESC" && ids_are "12,11,10,9,8,7,6,5,4,3,2,1,"'
+  save_layout e
+  cp "$E2E_TMP/config/sqlmux/layouts/e.toml" "$D/c2/layouts/e.toml"
+  e2e_type ":"; sleep 0.3; e2e_type qa; key Enter; sleep 1.2
+  e2e_start -C "$D/c2" -S "$D/st5" -D "$D/data5" "$E2E_BIN --layout e"; wait_for 6 flag_is alternate_on 1; sleep 2; wait_for 8 settled
+  check "--layout e（点图标翻出来的降序，存成显式的 id desc）：方向仍是 ↓，第一行 12" eval 'qb_has "ORDER id $DESC" && ids_are "12,11,10,9,8,7,6,5,4,3,2,1,"'
+  e2e_type ":"; sleep 0.3; e2e_type qa; key Enter; sleep 1.2
 }

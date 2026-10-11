@@ -47,6 +47,14 @@ value_body() {
   e2e_type ":"; sleep 0.3; e2e_type "q"; key Enter; sleep 0.6
   check "没改动 :q：直接关，不问" eval '! pop_open && ! toast_has "放弃修改"'
 
+  # ---- gq{移动}：不论范围都格式化整个值（JSON 是一个文档）
+  key e; sleep 0.7
+  key g g; key d G; key i; e2e_type '{"k":1,"l":[1,2]}'; key Escape; sleep 0.3
+  e2e_type "gq"; sleep 0.2; e2e_type '$'; sleep 0.6
+  check "gq$（有移动、范围只是一行的一部分）：整个值格式化成多行" eval 'has_line "{" && has_line "  \"k\": 1," && has_line "  \"l\": ["'
+  e2e_type ":"; sleep 0.3; e2e_type "q"; key Enter; sleep 0.5; key y; sleep 0.5
+  check "放弃（:q y）：浮窗关了" eval '! pop_open'
+
   # ---- gq 对非 JSON 不动，toast「不是 JSON」
   key l; key e; sleep 0.7
   check "note 格（纯文本 plain text）：浮窗标题 note · text，内容原样" eval 'pop_open && [[ $(pop_title) == "note · text" ]] && has_line "plain text"'
@@ -69,8 +77,10 @@ value_body() {
   check "? 向后搜索：光标到 plain 所在行（这个文本只有一行），浮窗还在" eval 'pop_open && has_line "plain text"'
   for k in Space C-p C-l C-h C-j C-k; do key "$k"; done
   check "空格 / C-p / C-l / C-h / C-j / C-k 不会跳出浮窗（还在、焦点没变）" eval 'pop_open && [[ $(pop_title) == "note · text" ]]'
+  key g t; key Space; key q; sleep 0.5
+  check "gt、SPC q 也不漏到底下：浮窗还在，标题没变" eval 'pop_open && [[ $(pop_title) == "note · text" ]]'
   key Escape; sleep 0.4
-  check "esc（NORMAL，没有改动）：关浮窗" eval '! pop_open'
+  check "esc（NORMAL，没有改动）：关浮窗，表 tab 还在（gt / SPC q 没有切走或关掉它）" eval '! pop_open && [[ $(tabbar 1) == *t_val* ]]'
 }
 
 ro_body() {   # read_only 连接 / 结果 tab：能开，改动的键 toast「只读」，esc / q 关，y 照常
@@ -87,6 +97,15 @@ ro_body() {   # read_only 连接 / 结果 tab：能开，改动的键 toast「�
   check "esc 关浮窗，不问" eval '! pop_open'
   key e; sleep 0.6; key q; sleep 0.4
   check "q 也关浮窗（只读）" eval '! pop_open'
+  _e2e_kill
+  # 没有主键的表：进不了编辑，也只读
+  SOLO=1 start -C "$D/own"; open_table t_nopk; wait_for 8 settled
+  key e; sleep 0.7
+  check "没有行标识列的表：e 能开（标题 doc · ${JT}）" eval 'pop_open && [[ $(pop_title) == "doc · ${JT}" ]]'
+  key x; sleep 0.4
+  check "没有主键的表里 x：toast 只读，文字没变" eval 'toast_has "只读" && has_line "{"'
+  key Escape; sleep 0.4
+  check "esc 关浮窗" eval '! pop_open'
   _e2e_kill
   # 结果 tab
   start -C "$D/own"; key C-l

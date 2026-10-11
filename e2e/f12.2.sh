@@ -10,6 +10,7 @@ e2e_build || exit 1
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; rm -rf "$D"' EXIT
 e2e_own_db || { echo "e2e: could not create the private database" >&2; exit 1; }
 psql "$E2E_DB" -q -c "create table t_val (id int primary key, doc jsonb, note text)" -c "insert into t_val values (1, '{\"b\":1,\"a\":[1,2],\"s\":\"hi\",\"t\":true,\"n\":null}', 'plain text'), (2, null, '{\"x\":1}')" >/dev/null
+psql "$E2E_DB" -q -c "create table t_nopk (doc jsonb)" -c "insert into t_nopk values ('{\"a\":1}')" >/dev/null
 JT=jsonb
 doc1() { psql "$E2E_DB" -At -c "select doc from t_val where id = 1"; }
 mkdir -p "$D/own" "$D/ro"; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$E2E_DB" >"$D/own/connections.toml"; chmod 600 "$D/own/connections.toml"

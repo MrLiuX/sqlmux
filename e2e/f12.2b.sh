@@ -9,6 +9,7 @@ e2e_build || exit 1
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; rm -rf "$D"' EXIT
 e2e_own_mydb || { echo "e2e: could not create the private MySQL database" >&2; exit 1; }
 e2e_mysql "sqlmux_e2e_$$" <<<"create table t_val (id int primary key, doc json, note text); insert into t_val values (1, '{\"b\":1,\"a\":[1,2],\"s\":\"hi\",\"t\":true,\"n\":null}', 'plain text'), (2, null, '{\"x\":1}')"
+e2e_mysql "sqlmux_e2e_$$" <<<"create table t_nopk (doc json); insert into t_nopk values ('{\"a\":1}')"
 JT=json
 doc1() { e2e_mysql "sqlmux_e2e_$$" <<<"select doc from t_val where id = 1"; }
 mkdir -p "$D/own" "$D/ro"; printf '[[connection]]\nname = "doraemon"\nengine = "mysql"\ndsn = "%s"\n' "$E2E_MYDB" >"$D/own/connections.toml"; chmod 600 "$D/own/connections.toml"
