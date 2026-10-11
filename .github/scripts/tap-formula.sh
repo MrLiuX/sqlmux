@@ -11,7 +11,6 @@ class Sqlmux < Formula
   url "https://github.com/kackerx/sqlmux/archive/refs/tags/${tag}.tar.gz"
   sha256 "${sha}"
   license "MIT"
-  head "https://github.com/kackerx/sqlmux.git", branch: "main"
 
   depends_on "go" => :build
 

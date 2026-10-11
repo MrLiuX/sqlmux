@@ -31,7 +31,7 @@ npm-check:
 
 # build bin/sqlmux
 build:
-    go build -ldflags "-X main.version=$(git describe --tags --always --dirty) -X main.commit=$(git rev-parse --short HEAD) -X main.date=$(date -u +%Y-%m-%d)" -o bin/sqlmux ./cmd/sqlmux
+    go build -ldflags "-X main.version=$(git describe --tags --match 'v*' --always --dirty) -X main.commit=$(git rev-parse --short HEAD) -X main.date=$(TZ=UTC git log -1 --date=iso-strict-local --format=%cd)" -o bin/sqlmux ./cmd/sqlmux
 
 # run sqlmux from source
 run *args:

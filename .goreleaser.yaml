@@ -4,6 +4,9 @@
 version: 2
 project_name: sqlmux
 
+git:
+  ignore_tags: ["m*"] # a milestone's tag is no release: the changelog goes back to the last v*
+
 builds:
   - id: sqlmux
     main: ./cmd/sqlmux
@@ -12,8 +15,9 @@ builds:
       - CGO_ENABLED=0
     goos: [darwin, linux] # no Windows: not supported
     goarch: [amd64, arm64]
+    flags: [-trimpath]
     ldflags:
-      - -s -w -X main.version={{ if .IsSnapshot }}{{ .Version }}{{ else }}{{ .Tag }}{{ end }} -X main.commit={{.ShortCommit}} -X main.date={{.CommitDate}}
+      - -s -w -X main.version=v{{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.CommitDate}}
 
 archives:
   - formats: [tar.gz]

@@ -3,8 +3,7 @@
 // @kackerx/sqlmux-<os>-<arch>, each with the binary of its archive, and the
 // shell package sqlmux that runs it, all at the tag's version.
 import { execFileSync } from "node:child_process";
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const [tag, archives, out] = process.argv.slice(2);
@@ -13,7 +12,7 @@ if (!out) {
   process.exit(2);
 }
 const version = tag.replace(/^v/, "");
-const here = new URL(".", import.meta.url).pathname;
+const here = import.meta.dirname;
 // [GOOS, GOARCH of the archive, process.platform, process.arch of Node]
 const platforms = [
   ["darwin", "arm64", "darwin", "arm64"],
@@ -30,13 +29,9 @@ for (const [goos, goarch, os, cpu] of platforms) {
   const name = `@kackerx/sqlmux-${os}-${cpu}`;
   const archive = readdirSync(archives).find((f) => f.endsWith(`_${goos}_${goarch}.tar.gz`));
   if (!archive) throw new Error(`no archive for ${goos}_${goarch} in ${archives}`);
-  const tmp = mkdtempSync(join(tmpdir(), "sqlmux-"));
-  execFileSync("tar", ["-xzf", join(archives, archive), "-C", tmp, "sqlmux"]);
   const dir = join(out, `sqlmux-${os}-${cpu}`);
   mkdirSync(join(dir, "bin"), { recursive: true });
-  cpSync(join(tmp, "sqlmux"), join(dir, "bin", "sqlmux"));
-  chmodSync(join(dir, "bin", "sqlmux"), 0o755);
-  rmSync(tmp, { recursive: true });
+  execFileSync("tar", ["-xzf", join(archives, archive), "-C", join(dir, "bin"), "sqlmux"]); // keeps its mode
   const pkg = {
     name,
     version,
