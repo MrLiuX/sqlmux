@@ -34,6 +34,7 @@ type connForm struct {
 	// the group field's list of the groups there are (F10.6): the one picked
 	// with ↓ and ↑, -1 for none; esc closes it till something is typed
 	groupSel int
+	groupTop int // the first group shown, held while the selection is in view (F13.10)
 	groupOff bool
 	// testing is the number of the connection test out, 0 for none; result is
 	// what a test found, a connection made (resultOK) or why not, shown while
@@ -740,7 +741,7 @@ func (a *App) formView() ui.Form {
 	fields[fieldDSN].Example = dsnExample[fields[fieldEngine].Choices[fields[fieldEngine].On]]
 	form := ui.Form{Fields: fields, Sel: f.sel, Err: note, OK: f.err == "" && (f.resultOK || f.testing != 0), Save: i18n.T("保存"), Test: i18n.T("测试"), Cancel: i18n.T("取消"), Delete: del, Hints: hints, PickAt: fieldGroup}
 	if cands := a.groupCands(); len(cands) > 0 { // under the group field (F10.6)
-		form.Pick = &ui.Complete{Sel: f.groupPick(len(cands)), Act: "form.pick"}
+		form.Pick = &ui.Complete{Sel: f.groupPick(len(cands)), Top: f.groupTop, Act: "form.pick"}
 		for _, g := range cands {
 			form.Pick.Items = append(form.Pick.Items, ui.CompleteItem{Text: g})
 		}

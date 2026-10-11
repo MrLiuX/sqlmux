@@ -54,8 +54,7 @@ func (a *App) sessionsMove(d int) {
 	l := a.sessList
 	n := len(a.sessionRows())
 	_, rows := ui.SessionBox(a.window(), n)
-	l.sel = max(min(l.sel+d, n-1), 0)
-	l.top = max(min(l.top, l.sel), l.sel-rows+1, 0)
+	l.sel, l.top = ui.ListView(l.sel+d, l.top, n, rows)
 }
 
 // sessionsFold is l (open) and h on the selection: a session shows or hides

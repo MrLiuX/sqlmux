@@ -227,8 +227,7 @@ func (a *App) dropMove(d int) {
 	m := a.drop
 	n := len(a.dropMatches())
 	_, rows := a.dropBox(a.dropView(), a.hits)
-	m.sel = max(min(m.sel+d, n-1), 0)
-	m.top = max(min(m.top, m.sel), m.sel-rows+1)
+	m.sel, m.top = ui.ListView(m.sel+d, m.top, n, rows)
 }
 
 // dropPick takes the item at i, closes the dropdown and refetches from the

@@ -43,6 +43,7 @@ type cellEdit struct {
 	start  string  // the text the edit started with: left so, nothing changes
 	in     ui.Input
 	sel    int  // the option picked; -1 for none, as they open (§10.2)
+	top    int  // the first option shown, held while the one picked is in view (F13.10)
 	folded bool // its ▾ hid the options
 	seg    int  // a time's part the keys step
 }
@@ -462,7 +463,8 @@ func (a *App) drawCellMenu(f *ui.Frame, p *Pane, t *dataTab) {
 			w = max(w, ui.Width(o.label+"  "+o.note)+4)
 		}
 		box, rows := place(w, len(v.Items))
-		v.Top = max(0, v.Sel-rows+1)
+		_, t.cell.top = ui.ListView(v.Sel, t.cell.top, len(v.Items), rows)
+		v.Top = t.cell.top
 		draw = func() { v.Draw(f, box, rows) }
 	}
 	if h.Text != "" {

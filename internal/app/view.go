@@ -189,8 +189,12 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 		}
 	}
 	if a.form != nil {
-		if c := a.managerView().Draw(f, a.window()); c.X >= 0 {
+		v := a.managerView()
+		if c := v.Draw(f, a.window()); c.X >= 0 {
 			f.Cursor = &c
+		}
+		if v.Form.Pick != nil { // where its list was left scrolled
+			a.form.groupTop = v.Form.Pick.Top
 		}
 	}
 	if a.palette != nil { // over the list and the form, whose keys it takes (context)

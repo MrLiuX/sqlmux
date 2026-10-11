@@ -809,3 +809,26 @@ func TestConfirmTakesNoText(t *testing.T) {
 		t.Errorf("WHERE under the confirm box: %q, confirm up %v", tab.where.Text, a.confirm != nil)
 	}
 }
+
+// The completion list holds still while the selection moves in the rows it
+// shows, up as well as down, as nvim's menu does (F13.10).
+func TestCompleteViewHoldsStill(t *testing.T) {
+	a := &App{w: 120, h: 40}
+	c := &completion{}
+	for i := range 20 {
+		c.items = append(c.items, candidate{label: fmt.Sprint("col_", i)})
+	}
+	var tops []int
+	for _, sel := range []int{12, 11, 10, 9, 8, 7, 12} {
+		c.sel = sel
+		v, _, _ := a.completeView(c, uv.Pos(0, 2))
+		tops = append(tops, v.Top)
+	}
+	if want := []int{5, 5, 5, 5, 5, 5, 5}; !slices.Equal(tops, want) {
+		t.Errorf("tops %v, want %v", tops, want)
+	}
+	c.sel = 3
+	if v, _, _ := a.completeView(c, uv.Pos(0, 2)); v.Top != 3 {
+		t.Errorf("above the view: top %d, want 3", v.Top)
+	}
+}

@@ -30,6 +30,7 @@ type completion struct {
 	sel   int  // the first as it opens: ↵ takes it; -1 when nothing is typed and it came up on its own, ↵ then is the input's (§9.7, F8.17)
 	start int  // where the text it replaces starts in the input
 	moved bool // the user moved the selection: a list made again for columns that came keeps the pick
+	top   int  // the first candidate shown, held while the selection is in view (F13.10)
 }
 
 type candidate struct {
@@ -754,7 +755,8 @@ func (a *App) completeView(c *completion, at uv.Position) (ui.Complete, uv.Recta
 		w = max(w, ui.Width(cd.label+"  "+cd.note)+4)
 	}
 	box, rows := ui.CompleteBox(a.window(), at, w, len(v.Items), 0, ui.CompleteRows)
-	v.Top = max(0, v.Sel-rows+1)
+	_, c.top = ui.ListView(c.sel, c.top, len(v.Items), rows)
+	v.Top = c.top
 	return v, box, rows
 }
 
@@ -762,6 +764,7 @@ func (a *App) completeView(c *completion, at uv.Position) (ui.Complete, uv.Recta
 // it as it opens, filtered by the WHERE input once typed into.
 type histMenu struct {
 	sel   int
+	top   int // the first row shown, held while the selection is in view (F13.10)
 	typed bool
 }
 
@@ -966,7 +969,8 @@ func (a *App) histView(p *Pane, t *dataTab) (ui.Complete, uv.Rectangle, int) {
 	if b, r := ui.CompleteBox(a.window(), at, w, n, foot, ui.CompleteRows); r > rows {
 		box, rows = b, r
 	}
-	v.Top = max(0, v.Sel-rows+1)
+	_, t.hist.top = ui.ListView(v.Sel, t.hist.top, n, rows)
+	v.Top = t.hist.top
 	return v, box, rows
 }
 

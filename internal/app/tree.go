@@ -439,12 +439,6 @@ func b2i(b bool) int {
 // treeRows is how many nodes the sidebar shows.
 func (a *App) treeRows() int { return ui.TreeRows(a.sidebarRect().Dy() - 2) }
 
-// treeView is cursor and top kept on a list of n and in a view of rows.
-func treeView(cursor, top, n, rows int) (int, int) {
-	cursor = max(min(cursor, n-1), 0)
-	return cursor, max(min(top, cursor, n-rows), cursor-rows+1, 0)
-}
-
 // treeAt is where the cursor is among ns, on its node while that shows,
 // else on the row it was on, a rule not being where it rests (F10.6); and
 // the first row the view shows.
@@ -456,7 +450,7 @@ func (a *App) treeAt(ns []node) (cursor, top int) {
 	for t.cursor < len(ns)-1 && ns[t.cursor].kind == nodeSep {
 		t.cursor++
 	}
-	cursor, top = treeView(t.cursor, t.top, len(ns), a.treeRows())
+	cursor, top = ui.ListView(t.cursor, t.top, len(ns), a.treeRows())
 	if top == cursor && cursor > 0 && ns[cursor-1].kind == nodeSep { // a rule shows with the node it is over
 		top--
 	}

@@ -330,9 +330,8 @@ func (a *App) keyFor(id string) string {
 func (a *App) paletteMove(d int) {
 	_, ms := a.paletteMatches()
 	p := a.palette
-	p.sel = max(min(p.sel+d, len(ms)-1), 0)
 	_, rows, _ := a.paletteBox(len(ms))
-	p.top = max(min(p.top, p.sel), p.sel-rows+1)
+	p.sel, p.top = ui.ListView(p.sel+d, p.top, len(ms), rows)
 }
 
 // paletteBox is where the palette sits for n candidates, and its result's

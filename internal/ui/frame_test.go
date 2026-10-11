@@ -60,3 +60,21 @@ func TestEveryBoxUsesFrameBorder(t *testing.T) {
 		}
 	}
 }
+
+// A list holds still while the selection is in view, moves the least to bring
+// it in, and keeps its top in the list (F13.10).
+func TestInView(t *testing.T) {
+	for _, c := range []struct{ top, sel, rows, want int }{
+		{0, 3, 8, 0}, {5, 7, 8, 5}, {5, 5, 8, 5}, {5, 4, 8, 4}, {0, 8, 8, 1}, {0, 20, 8, 13}, {3, -1, 8, 0}, {0, 0, 0, 1},
+	} {
+		if got := InView(c.top, c.sel, c.rows); got != c.want {
+			t.Errorf("InView(%d, %d, %d) = %d, want %d", c.top, c.sel, c.rows, got, c.want)
+		}
+	}
+	if sel, top := ListView(30, 12, 20, 8); sel != 19 || top != 12 {
+		t.Errorf("ListView past the end: %d, %d", sel, top)
+	}
+	if sel, top := ListView(2, 15, 20, 8); sel != 2 || top != 2 {
+		t.Errorf("ListView: %d, %d", sel, top)
+	}
+}

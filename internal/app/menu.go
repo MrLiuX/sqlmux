@@ -22,6 +22,7 @@ type menu struct {
 	at    uv.Position // the pointer
 	items []menuItem
 	sel   int
+	top   int // the first row shown, held while the selection is in view (F13.10)
 }
 
 type menuItem struct {
@@ -104,7 +105,8 @@ func (a *App) drawMenu(f *ui.Frame) {
 	}
 	// from the row under the pointer; over it, ending on the row above, when it does not fit below: the node clicked is seen
 	box, rows := ui.CompleteBox(a.window(), m.at, w, len(v.Items), 0, len(v.Items))
-	v.Top = max(m.sel-rows+1, 0) // a window too short for all of them scrolls with the selection
+	_, m.top = ui.ListView(m.sel, m.top, len(v.Items), rows) // a window too short for all of them scrolls with the selection
+	v.Top = m.top
 	f.Region(f.Bounds(), ui.Target{Kind: ui.KindBackdrop})
 	v.Draw(f, box, rows)
 }
