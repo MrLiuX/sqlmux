@@ -695,3 +695,50 @@ func TestRestoreQueryOnStart(t *testing.T) {
 		t.Errorf("schema %q, want %v, conn %v", q.schema, q.want, q.conn == start)
 	}
 }
+
+// A split the file spells in a way nothing reads is said, and read as h: the
+// panes and their tabs it holds are not dropped silently (F13.12).
+func TestLayoutUnknownSplit(t *testing.T) {
+	body := func(split string) string {
+		return `version = 1
+[[session]]
+name = "s"
+connection = "doraemon"
+[[session.window]]
+name = "w"
+layout = {split = "` + split + `", a = {pane = 1}, b = {pane = 2}}
+[[session.window.pane]]
+id = 1
+[[session.window.pane.tab]]
+kind = "table"
+table = "users"
+[[session.window.pane]]
+id = 2
+[[session.window.pane.tab]]
+kind = "table"
+table = "orders"
+`
+	}
+	for split, warned := range map[string]bool{"h": false, "v": false, "H": true} {
+		p := filepath.Join(t.TempDir(), "a.toml")
+		if err := os.WriteFile(p, []byte(body(split)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		l, err := config.LoadLayout(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := restoredFrom(t, l)
+		w := r.Sessions[0].Windows[0]
+		var tabs []string
+		for _, p := range w.Root.Leaves() {
+			for _, tb := range p.Tabs {
+				tabs = append(tabs, tb.Name)
+			}
+		}
+		said := slices.ContainsFunc(r.Warnings, func(s string) bool { return strings.Contains(s, "split") })
+		if len(w.Root.Leaves()) != 2 || said != warned || split == "H" && w.Root.Split != Horiz {
+			t.Errorf("split %q: %d panes, tabs %v, warnings %q", split, len(w.Root.Leaves()), tabs, r.Warnings)
+		}
+	}
+}

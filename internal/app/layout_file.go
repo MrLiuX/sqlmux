@@ -169,7 +169,12 @@ func restoreWindow(s *Session, lw config.LayoutWindow, used map[string]bool) (*W
 		if n == nil {
 			return nil
 		}
-		if n.Split == "h" || n.Split == "v" {
+		if n.Split != "" {
+			split := n.Split
+			if split != "h" && split != "v" { // said, and read as h: the panes and their tabs are not dropped for a slip
+				warns = append(warns, i18n.T("不认识的 split %s，按 h", n.Split))
+				split = "h"
+			}
 			a, b := build(n.A), build(n.B)
 			switch {
 			case a == nil:
@@ -181,7 +186,7 @@ func restoreWindow(s *Session, lw config.LayoutWindow, used map[string]bool) (*W
 			if ratio <= 0 || ratio >= 1 {
 				ratio = 0.5
 			}
-			return &Node{Split: map[string]Dir{"h": Horiz, "v": Vert}[n.Split], Ratio: ratio, A: a, B: b}
+			return &Node{Split: map[string]Dir{"h": Horiz, "v": Vert}[split], Ratio: ratio, A: a, B: b}
 		}
 		if n.Pane <= 0 || panes[n.Pane] != nil {
 			return nil

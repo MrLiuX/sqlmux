@@ -410,6 +410,7 @@ var en = map[string]string{
 	"%s: version = %d，只认识 %d":        "%s: version = %d, only %d is known",
 	"%s: 里面没有 [[session]]":           "%s: no [[session]] in it",
 	"last 是保留名，指上次退出时的布局":            "last is reserved: it is the layout of the last quit",
+	"不认识的 split %s，按 h":              "unknown split %s, read as h",
 	"不认识的 tab":                       "Not a kind of tab",
 	"名字不能含 / 或 \\，也不能以 . 开头":         "A name has no / or \\, and no . at the start",
 	"已保存布局 %s":                       "Saved layout %s",
