@@ -23,7 +23,7 @@
 **开发**（§5、§7.6「ORDER」、§14）
 - [ ] `Query.Order` 从一列改成有序的 `[]OrderCol{Col, Desc}`，空是默认排序；SQL `ORDER BY <列1> <方向1>, …, <行标识列>`，行标识列作 tiebreaker，列表里已有的不重复。
 - [ ] 下拉框：已在排序里的列前面标 `1↓` `2↑`；`↵` 保持原来单列的语义（唯一排序列上翻转，别的列上换成只按这一列）；`space`（`dropdown.toggle`，过滤框为空时）把光标所在列循环：追加（方向按 `[grid] order`）→ 翻转 → 去掉，下拉框不关；过滤框非空时 `space` 是字符。
-- [ ] chip 显示整个列表 `source ↓, id ↑`，放不下照 §10.3 中间截短；点方向图标翻转第一列。
+- [ ] chip 显示整个列表 `source ↓, id ↑`，末尾画第一列方向的图标按钮（点它翻转第一列）；放不下只显示前两列加 `…`（审查时定）。
 - [ ] 布局文件 `order` 改成 `[{col, desc}]` 数组，旧的 `order` 字符串加 `desc` 照读成一列，写回新格式。换了排序回到第 1 页，同原来。
 - [ ] 细节（已定）：默认排序的 chip 显示和「选行标识列得到降序」的规则不变（§7.6）。
 
@@ -41,7 +41,7 @@
 
 **开发**（§10「值编辑器」、§6.4 `value`）
 - [ ] `e`（`grid.value`「在值编辑器中打开」，grid 和 result）打开居中浮窗，宽高同表 DDL 浮窗，标题 `<列名> · <类型>`，内容是 `internal/editor` 的编辑器，作用域 `value`：`C-s` 写回并关闭，其余交给 vim；`[map.normal]` / `[map.visual]` 照常。模式块显示编辑器的模式。
-- [ ] JSON：列类型 json / jsonb / json，或文字 `json.Valid`，打开时格式化成 2 空格缩进；着色用一个小的 JSON 词法（放 `internal/sqlkit/json.go`，和 SQL 词法同包，不新增目录；键名 `sql_column`、字符串 `string`、数字 `number`、true / false / null `keyword`、标点 `sql_operator`）；`gq` 格式化 JSON，不合法 toast「不是 JSON」。
+- [ ] JSON：列类型 json / jsonb / json，或文字以 `{` / `[` 开头且 `json.Valid`，打开时格式化成 2 空格缩进；着色用一个小的 JSON 词法（放 `internal/sqlkit/json.go`，和 SQL 词法同包，不新增目录；键名 `sql_column`、字符串 `string`、数字 `number`、true / false / null `keyword`、标点 `sql_operator`）；`gq` 格式化 JSON，不合法 toast「不是 JSON」。
 - [ ] 写回：`:w` 记成这一格的修改（规则同行内输入框：没改不记；空是空字符串），不关；`C-s` / `:wq` 写回并关；`esc`（NORMAL）/ `:q` 不写，有改动先确认「放弃修改？」。JSON 列写回原文含缩进。
 - [ ] 只读：进不了编辑的格和结果 tab 也能开，改动的键 toast「只读」，`y` 照常，`esc` / `q` 关。编辑器需要一个只读开关（最小改动：改动的操作统一拦在一处）。
 - [ ] 细节（已定）：不做 DataGrip 的「设置高亮显示语言」，只认 JSON；不做记录视图。
