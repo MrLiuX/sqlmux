@@ -76,3 +76,39 @@ func TestWhereWantsColumn(t *testing.T) {
 		}
 	}
 }
+
+// AddCondition joins with AND; an OR at the top is put in parentheses, a
+// comment ending the line stays at the end; a condition already there, by
+// the AND cut, is not added again (F12.3).
+func TestAddCondition(t *testing.T) {
+	for _, c := range []struct {
+		where, cond, want string
+		changed           bool
+	}{
+		{"", `"id" = 5`, `"id" = 5`, true},
+		{"a = 1", `"id" = 5`, `a = 1 AND "id" = 5`, true},
+		{"a = 1 or b = 2", `"id" = 5`, `(a = 1 or b = 2) AND "id" = 5`, true},
+		{"a in (1 or 2)", `"id" = 5`, `a in (1 or 2) AND "id" = 5`, true}, // an OR in parentheses is no OR at the top
+		{"a = 'x or y'", `"id" = 5`, `a = 'x or y' AND "id" = 5`, true},
+		{"a = 1 -- 备注", `"id" = 5`, `a = 1 AND "id" = 5 -- 备注`, true},
+		{"a = 1 /* c */", `"id" = 5`, `a = 1 AND "id" = 5 /* c */`, true},
+		{"-- only", `"id" = 5`, `"id" = 5 -- only`, true},
+		{`a = 1 AND "id" = 5`, `"id" = 5`, `a = 1 AND "id" = 5`, false},
+		{`a = 1   and   "id"=5`, `"id" = 5`, `a = 1   and   "id"=5`, false},
+		{`"id" = 5 AND a = 1`, `"id" = 5`, `"id" = 5 AND a = 1`, false},
+		{`b = 'X'`, `b = 'x'`, `b = 'X' AND b = 'x'`, true}, // a string's case is its value
+		{`a = 1 AND b = 2 or c = 3`, `b = 2`, `(a = 1 AND b = 2 or c = 3) AND b = 2`, true},
+		{`x between 1 and 5`, `"id" = 5`, `x between 1 and 5 AND "id" = 5`, true},
+		{`x between 1 and 5 and b = 2`, `b = 2`, `x between 1 and 5 and b = 2`, false}, // the AND after it cuts again
+		{`a = 1 AND x IS NULL`, `x is null`, `a = 1 AND x IS NULL`, false},
+		{`x between 1 and 5`, `5`, `x between 1 and 5 AND 5`, true}, // the AND of BETWEEN cuts nothing
+	} {
+		got, changed := AddCondition(c.where, c.cond, PG)
+		if got != c.want || changed != c.changed {
+			t.Errorf("%q + %q: %q %v, want %q %v", c.where, c.cond, got, changed, c.want, c.changed)
+		}
+	}
+	if got, _ := AddCondition("a = 1 # c", "b = 2", MySQL); got != "a = 1 AND b = 2 # c" {
+		t.Errorf("MySQL's #: %q", got)
+	}
+}

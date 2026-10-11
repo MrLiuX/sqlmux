@@ -481,6 +481,19 @@ func init() {
 			}
 		})},
 		"grid.order": {Title: i18n.N("ORDER"), Run: do(func(a *App, _ Args) { a.openDrop(dropOrder) })},
+		"grid.order.cycle": {Title: i18n.N("按这一列排序"), Run: func(a *App, _ Args) tea.Cmd {
+			if t, col, ok := a.cursorColumn(); ok {
+				return a.orderHead(t, col)
+			}
+			return nil
+		}},
+		"grid.order.add": {Title: i18n.N("加入排序"), Run: func(a *App, _ Args) tea.Cmd {
+			if t, col, ok := a.cursorColumn(); ok {
+				return a.orderCycle(t, col)
+			}
+			return nil
+		}},
+		"grid.filter.cell": {Title: i18n.N("按这个值过滤"), Run: func(a *App, _ Args) tea.Cmd { return a.filterCell() }},
 		"grid.order.toggle": {Title: i18n.N("切换排序方向"), Run: func(a *App, _ Args) tea.Cmd {
 			if t := dataOf(a.focused()); t != nil && t.page.Cols != nil {
 				return a.toggleOrder(t)

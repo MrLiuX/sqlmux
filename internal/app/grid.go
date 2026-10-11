@@ -427,7 +427,7 @@ func gridRect(r uv.Rectangle, t *dataTab) uv.Rectangle {
 func (a *App) grid(p *Pane, t *dataTab) ui.Grid {
 	g := ui.Grid{
 		Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose, FullWidth: a.fullWidth, First: t.shown.pageNo * t.shown.limit,
-		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Selected: t.selected(), FlashNums: a.flashNums(p), Widest: t.widestCache(),
+		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Selected: t.selected(), FlashNums: a.flashNums(p), Widest: t.widestCache(), Heads: true,
 	}
 	shown := t.shownCols()
 	for _, i := range shown {

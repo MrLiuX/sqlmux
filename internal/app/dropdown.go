@@ -262,7 +262,7 @@ func (a *App) dropPick(i int) tea.Cmd {
 		switch {
 		case at == 0: // 默认: by the row identity
 			t.order, t.desc = nil, a.newDesc
-		case len(t.order) == 1 && t.order[0].Col == item, len(t.order) == 0 && len(t.cols.Key()) > 0 && t.cols.Key()[0] == item: // the column the chip shows first, alone: the other way (§7.8)
+		case t.sortsAlone(item): // the column the chip shows first, alone: the other way (§7.8)
 			return a.toggleOrder(t)
 		default: // only this column
 			t.order, t.desc = []db.OrderCol{{Col: item, Desc: a.newDesc}}, false
@@ -286,6 +286,34 @@ func orderMark(order []db.OrderCol, item string, at int) string {
 		mark = strconv.Itoa(i+1) + arrow(order[i].Desc)
 	}
 	return mark + strings.Repeat(" ", max(w-ui.Width(mark), 0))
+}
+
+// sortsAlone is whether col is all the chip shows: the only column of the
+// ORDER, or with none the row identity's first.
+func (t *dataTab) sortsAlone(col string) bool {
+	key := t.cols.Key()
+	return len(t.order) == 1 && t.order[0].Col == col || len(t.order) == 0 && len(key) > 0 && key[0] == col
+}
+
+// orderHead is a click on col's head, and gs: by that column alone, then the
+// other way, then back to the default (§7.6「表头」).
+func (a *App) orderHead(t *dataTab, col string) tea.Cmd {
+	switch {
+	case t.sortsAlone(col) && len(t.order) == 1 && t.order[0].Desc != a.newDesc: // the other way already
+		t.order, t.desc = nil, a.newDesc
+	case t.sortsAlone(col):
+		return a.toggleOrder(t)
+	default:
+		t.order, t.desc = []db.OrderCol{{Col: col, Desc: a.newDesc}}, false
+	}
+	t.pageNo = 0
+	return a.fetch(t, false)
+}
+
+// orderOnly is the menu's 排序 ↑ and ↓: by col alone, its way given.
+func (a *App) orderOnly(t *dataTab, col string, desc bool) tea.Cmd {
+	t.order, t.desc, t.pageNo = []db.OrderCol{{Col: col, Desc: desc}}, false, 0
+	return a.fetch(t, false)
 }
 
 // orderCycle is space on a column of the ORDER list: in the sorting at the

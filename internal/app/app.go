@@ -98,6 +98,7 @@ type App struct {
 	mouse       uv.Position // pointer, for hover styles
 	drag        *handle     // the split border being dragged
 	dragTree    bool        // the sidebar's edge is being dragged
+	shiftClick  bool        // the left click being handled had Shift down (a column head's: add to the sorting)
 	dragText    int         // the pane whose query text is being selected by dragging; 0 for none
 	dragWhere   int         // the same for a WHERE's text (vim = false)
 	lastClick   ui.Target   // with lastClickAt, to spot a double click
@@ -354,6 +355,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.jump = nil // a click goes where it is, the jump over (F10.8)
 		switch m := msg.Mouse(); m.Button {
 		case tea.MouseLeft:
+			a.shiftClick = m.Mod.Contains(tea.ModShift) // the terminal says it, or does not (§7.6「表头」)
 			return a, a.click(uv.Pos(m.X, m.Y))
 		case tea.MouseRight: // the menu of a tree node (F8.23)
 			a.rightClick(uv.Pos(m.X, m.Y))
@@ -547,6 +549,8 @@ func (a *App) click(p uv.Position) tea.Cmd {
 			c.ed.Click(n, v)
 			a.dragText, c.comp = t.Pane, nil
 		}
+	case ui.KindHead:
+		return a.headClick(t.Pane, t.I, a.shiftClick)
 	case ui.KindTab:
 		a.focusPane(t.Pane)
 		if p := a.win().pane(t.Pane); p != nil {

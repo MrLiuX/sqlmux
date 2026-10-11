@@ -16,7 +16,8 @@ import (
 )
 
 // menu is the right-click menu over a tree node (§7.8「右键菜单」, F8.23): the
-// node is under the tree's cursor, which is what the items act on.
+// node is under the tree's cursor, which is what the items act on; or over a
+// grid's cell or head (§7.6, F12.3), the cursor on it.
 type menu struct {
 	at    uv.Position // the pointer
 	items []menuItem
@@ -64,7 +65,11 @@ func (a *App) rightClick(p uv.Position) {
 		hits = slices.DeleteFunc(slices.Clone(a.hits), func(h ui.Hit) bool { return h.Target.Kind == ui.KindBackdrop })
 	}
 	t, _ := ui.HitAt(hits, p)
-	if t.Kind != ui.KindNode && t.Kind != ui.KindFold || a.overlaid() || !a.endEdit() { // on the ▸ too
+	if t.Kind != ui.KindNode && t.Kind != ui.KindFold && t.Kind != ui.KindCell && t.Kind != ui.KindHead || a.overlaid() || !a.endEdit() { // on the ▸ too
+		return
+	}
+	if t.Kind == ui.KindCell || t.Kind == ui.KindHead { // a grid's (F12.3)
+		a.gridMenu(t, p)
 		return
 	}
 	a.focusPane(t.Pane)
