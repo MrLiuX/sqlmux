@@ -556,7 +556,10 @@ func (a *App) click(p uv.Position) tea.Cmd {
 // Shift turns the vertical wheel horizontal, as does a touchpad's sideways
 // swipe (buttons 6 and 7).
 func (a *App) wheel(m tea.Mouse) {
-	a.jump = nil      // what it matched moves
+	a.jump = nil        // what it matched moves
+	if a.value != nil { // the panes under it are not for the wheel (F12.2)
+		return
+	}
 	if a.ddl != nil { // the table's DDL scrolls; the column's goes with the wheel as with a key, which then turns (F9.8)
 		if a.ddl.col == "" {
 			a.scrollDDL(map[tea.MouseButton]int{tea.MouseWheelUp: -wheelStep, tea.MouseWheelDown: wheelStep}[m.Button], false)
@@ -624,8 +627,8 @@ func (a *App) paste(s string) tea.Cmd {
 	if a.ddl != nil && a.ddl.col != "" { // the column's box goes with it, as with a key, and what is pasted is then typed (F9.8)
 		a.ddl = nil
 	}
-	if a.value != nil && a.confirm == nil {
-		a.valueView(ui.TextBox{}.Inner(a.popupBox()))
+	if a.valueActive() {
+		a.valueSize()
 		return a.valueDid(a.value.ed.Paste(s))
 	}
 	if t := a.focusedQuery(); t != nil {
@@ -665,7 +668,7 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 			switch t := a.typingTab(); {
 			case a.jump != nil:
 				cmds = append(cmds, a.jumpKey(k))
-			case a.value != nil && a.confirm == nil:
+			case a.valueActive():
 				cmds = append(cmds, a.valueKey(k))
 			case a.menu != nil || a.ddl != nil: // no text to type: the key is none of theirs
 			case a.keyHelp != nil:
@@ -703,7 +706,7 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 // mode is derived from state, never stored (§3 principle 3).
 func (a *App) mode() keymap.Mode {
 	switch t, ed := a.typingTab(), a.vim(); {
-	case a.value != nil && a.confirm == nil: // its editor's, a table's cell under it not typing (F12.2)
+	case a.valueActive(): // its editor's, a table's cell under it not typing (F12.2)
 		return vimMode(a.value.ed.Mode())
 	case a.form != nil && !a.form.list, a.winRename != nil, a.askName != nil, a.sessList != nil && a.sessList.rename != nil: // inputs with the keys over the panes (§7.8)
 		return keymap.Insert

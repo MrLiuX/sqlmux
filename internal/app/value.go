@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/editor"
@@ -23,6 +22,7 @@ type valueEditor struct {
 	title    string
 	json     bool
 	readOnly bool   // a result's, or a cell that takes no change
+	trail    bool   // the value ended in a newline, which the editor does not keep
 	opened   string // what the editor began with: written back, it is no change
 	saved    string // what :w last wrote back, or opened
 
@@ -77,11 +77,12 @@ func (a *App) valueOpen() tea.Cmd {
 	if typ != "" {
 		v.title += " · " + typ
 	}
-	if raw := []byte(text); json.Valid(raw) && (strings.Contains(strings.ToLower(typ), "json") || isJSONObject(text)) {
+	if raw := []byte(text); json.Valid(raw) && (colType(typ) == ui.ColJSON || isJSONObject(text)) {
 		if pretty, err := indentJSON(raw); err == nil {
 			text, v.json = pretty, true
 		}
 	}
+	v.trail = !v.json && strings.HasSuffix(text, "\n")
 	v.ed = editor.New(text)
 	v.ed.ReadOnly = v.readOnly
 	v.ed.SetPlain(a.plain)
@@ -100,17 +101,29 @@ func isJSONObject(s string) bool {
 
 func inValue(a *App) bool { return a.value != nil }
 
+// valueActive is whether the value editor has the keys: a question asked over
+// it has them instead.
+func (a *App) valueActive() bool { return a.value != nil && a.confirm == nil }
+
 // valueText is what the editor holds.
 func (v *valueEditor) text() string { return strings.Join(v.ed.Lines(), "\n") }
 
-// valueView is the editor as it draws in the box inner, sized to it.
-func (a *App) valueView(inner uv.Rectangle) ui.Query {
-	v := a.value
-	ed := v.ed
-	text := ui.Query{Lines: ed.Lines()}.TextArea(inner)
+// valueSize gives the editor the size of its box, which H M L, C-d and the
+// scrolling go by.
+func (a *App) valueSize() {
+	ed := a.value.ed
+	text := ui.Query{Lines: ed.Lines()}.TextArea(ui.TextBox{}.Inner(a.popupBox()))
 	ed.TabWidth, ed.AutoPairs = a.tabWidth, a.autoPairs
 	ed.SetHeight(text.Dy())
 	ed.SetWidth(text.Dx())
+}
+
+// valueView is the editor as it draws.
+// ponytail: the colors of the whole text are made every frame; a value of
+// some MB wants them kept by the text's version, or made for the lines in view.
+func (a *App) valueView() ui.Query {
+	v := a.value
+	ed := v.ed
 	q := ui.Query{
 		Lines: ed.Lines(), TabWidth: ed.TabWidth, Top: ed.Top(), Left: ed.Left(),
 		Cursor: ui.TextPos(ed.Cursor()), CursorCol: ed.CursorCol(), Sel: vimSel(ed),
@@ -131,7 +144,8 @@ func (a *App) drawValue(f *ui.Frame) {
 		return
 	}
 	inner := tb.Inner(box)
-	if cur := a.valueView(inner).Draw(f, inner); cur.X >= 0 {
+	a.valueSize()
+	if cur := a.valueView().Draw(f, inner); cur.X >= 0 {
 		f.Cursor = &cur
 	}
 }
@@ -140,8 +154,8 @@ func (a *App) drawValue(f *ui.Frame) {
 // read only, close it; C-c is esc (§6.8).
 func (a *App) valueKey(k keymap.Key) tea.Cmd {
 	v := a.value
-	a.valueView(ui.TextBox{}.Inner(a.popupBox()))
-	if v.ed.Mode() == editor.Normal && v.ed.Pending() == "" && (k == keymap.Esc || k == "q" && v.readOnly) {
+	a.valueSize()
+	if (v.ed.Mode() == editor.Normal || v.ed.Plain()) && v.ed.Pending() == "" && (k == keymap.Esc || k == "q" && v.readOnly) {
 		return a.valueClose(false)
 	}
 	return a.valueDid(v.ed.Feed(string(k)))
@@ -174,9 +188,14 @@ func (a *App) valueDid(eff editor.Effect) tea.Cmd {
 func (a *App) valueEx(c string) tea.Cmd {
 	switch strings.TrimSpace(c) {
 	case "w":
-		return a.valueWrite()
+		cmd, _ := a.valueWrite()
+		return cmd
 	case "wq", "x":
-		return tea.Batch(a.valueWrite(), a.valueClose(true))
+		cmd, ok := a.valueWrite()
+		if ok {
+			a.value = nil
+		}
+		return cmd
 	case "q":
 		return a.valueClose(false)
 	case "q!":
@@ -200,20 +219,28 @@ func (a *App) valueFormat() tea.Cmd {
 
 // valueWrite is :w: the text is the cell's change, unless it is what the
 // editor began with, which takes the change the cell had back; an empty text
-// is an empty string, not NULL (§10.1). A row that went meanwhile is toasted.
-func (a *App) valueWrite() tea.Cmd {
+// is an empty string, not NULL (§10.1). What is no value of the column, a row
+// that went meanwhile and a read-only value are toasted and are not ok.
+func (a *App) valueWrite() (cmd tea.Cmd, ok bool) {
 	v := a.value
 	if v.readOnly {
-		return a.showToast(i18n.T("只读"), toastTTL)
+		return a.showToast(i18n.T("只读"), toastTTL), false
 	}
 	t := v.tab
 	if v.add != nil && !slices.Contains(t.added, v.add) {
-		return a.showToast(i18n.T("这一行已经不在了"), toastTTL)
+		return a.showToast(i18n.T("这一行已经不在了"), toastTTL), false
 	}
 	text := v.text()
 	switch {
 	case text != v.opened:
-		t.put(v.add, v.key, edit{val: db.Val{S: text}, orig: v.orig})
+		if why := t.checkText(v.key.col, text); why != "" { // as the cell's input (§10.7)
+			return a.showToast(why, toastTTL), false
+		}
+		out := text
+		if v.trail {
+			out += "\n"
+		}
+		t.put(v.add, v.key, edit{val: db.Val{S: out}, orig: v.orig})
 	case v.had:
 		t.put(v.add, v.key, v.before)
 	case v.add != nil:
@@ -222,7 +249,7 @@ func (a *App) valueWrite() tea.Cmd {
 		delete(t.edits, v.key)
 	}
 	v.saved = text
-	return nil
+	return nil, true
 }
 
 // valueClose closes the box; with text not written back it asks first, unless
@@ -244,10 +271,9 @@ func (a *App) valueClose(force bool) tea.Cmd {
 
 // valueSave is C-s: written back and closed.
 func (a *App) valueSave() tea.Cmd {
-	if a.value.readOnly {
-		return a.showToast(i18n.T("只读"), toastTTL)
+	cmd, ok := a.valueWrite()
+	if ok {
+		a.value = nil
 	}
-	cmd := a.valueWrite()
-	a.value = nil
 	return cmd
 }

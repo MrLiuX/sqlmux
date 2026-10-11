@@ -88,7 +88,7 @@ func (a *App) overlaid() bool {
 // vim is the editor that has the keys, with nothing over it: the focused
 // query's, or the WHERE's being typed (F3.39).
 func (a *App) vim() *editor.Editor {
-	if a.value != nil && a.confirm == nil { // a question asked over it has the keys
+	if a.valueActive() {
 		return a.value.ed
 	}
 	if a.overlaid() {

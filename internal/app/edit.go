@@ -449,8 +449,17 @@ func (a *App) drawCellMenu(f *ui.Frame, p *Pane, t *dataTab) {
 // maybe PG's own output, which cellCheck may not take (1900's +08:05:43).
 // ponytail: PG's types alone; MySQL's text goes to the database as typed
 func (t *dataTab) cellHint() string {
-	if c := t.cell; c.in.Text != c.start && t.conn.eng.Dialect() == sqlkit.PG {
-		return cellCheck(t.typeOf(c.key.col), c.in.Text)
+	if c := t.cell; c.in.Text != c.start {
+		return t.checkText(c.key.col, c.in.Text)
+	}
+	return ""
+}
+
+// checkText is what is wrong with text as a value of column col, "" when
+// nothing is (the cell's input and the value editor both ask it).
+func (t *dataTab) checkText(col, text string) string {
+	if t.conn.eng.Dialect() == sqlkit.PG {
+		return cellCheck(t.typeOf(col), text)
 	}
 	return ""
 }

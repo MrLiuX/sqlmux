@@ -48,6 +48,12 @@ func TestReadOnly(t *testing.T) {
 	if feed(e, "ggVjo<Esc>"); e.Mode() != Normal {
 		t.Errorf("VISUAL o: %v", e.Mode())
 	}
+	if eff := e.Paste("XX"); !eff.ReadOnly || e.Lines()[0] != "one two" {
+		t.Errorf("a paste: %+v %q", eff, e.Lines())
+	}
+	if eff := feed(e, ":%s/one/ZZ/<CR>"); !eff.ReadOnly || e.Lines()[0] != "one two" {
+		t.Errorf(":s: %+v %q", eff, e.Lines())
+	}
 	e.ReadOnly = false
 	if feed(e, "x"); e.Lines()[0] != "ne two" {
 		t.Errorf("not read only: %q", e.Lines())

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/kackerx/sqlmux/internal/db"
@@ -93,13 +94,13 @@ func TestValueWriteAndClose(t *testing.T) {
 func TestValueKeys(t *testing.T) {
 	a, tab := valueTab(t)
 	key := a.value.key
-	feed(t, a, "jA!<C-s>")
-	if a.value != nil || !strings.Contains(tab.edits[key].val.S, `"n": 1,!`) {
+	feed(t, a, "jf1r2<C-s>")
+	if a.value != nil || !strings.Contains(tab.edits[key].val.S, `"n": 2,`) {
 		t.Errorf("C-s: box %v, %q", a.value != nil, tab.edits[key].val.S)
 	}
 	delete(tab.edits, key)
 	feed(t, a, "e")
-	feed(t, a, "jA?<Esc>")
+	feed(t, a, "jf1r3A?<Esc>")
 	if a.value == nil || a.value.ed.Mode() != editor.Normal {
 		t.Fatalf("esc in INSERT: box %v", a.value != nil)
 	}
@@ -109,7 +110,11 @@ func TestValueKeys(t *testing.T) {
 	}
 	feed(t, a, "n")
 	feed(t, a, ":wq<CR>")
-	if a.value != nil || !strings.Contains(tab.edits[key].val.S, `"n": 1,?`) {
+	if a.value == nil || a.confirm != nil { // "n": 3,? is no JSON: refused, the box stays
+		t.Fatalf(":wq of no JSON: box %v", a.value != nil)
+	}
+	feed(t, a, "x:wq<CR>")
+	if a.value != nil || !strings.Contains(tab.edits[key].val.S, `"n": 3,`) {
 		t.Errorf(":wq: box %v, %q", a.value != nil, tab.edits[key].val.S)
 	}
 	delete(tab.edits, key)
@@ -142,11 +147,18 @@ func TestValueNoChangeEmptyAndTakenBack(t *testing.T) {
 	if len(tab.edits) != 0 {
 		t.Errorf("taken back: %v", tab.edits)
 	}
-	feed(t, a, "ggdG:w<CR>")
-	if e := tab.edits[key]; e.val.Null || e.val.S != "" || e.val == e.orig {
+	feed(t, a, "ggdG:w<CR>") // no JSON: refused
+	if len(tab.edits) != 0 || a.toast == "" {
+		t.Errorf("an empty jsonb: %v, toast %q", tab.edits, a.toast)
+	}
+	feed(t, a, ":q!<CR>l")
+	nkey := editKey{key.row, "note"}
+	feed(t, a, "eggdG:w<CR>") // note, a text: empty is empty
+	if e := tab.edits[nkey]; e.val.Null || e.val.S != "" || e.val == e.orig {
 		t.Errorf("an empty text: %+v", e)
 	}
-	feed(t, a, ":q!<CR>")
+	feed(t, a, ":q!<CR>h")
+	delete(tab.edits, nkey)
 	if a.value != nil {
 		t.Fatal("not closed")
 	}
@@ -263,5 +275,65 @@ func TestValueTakesTheKeys(t *testing.T) {
 	feed(t, a, "u<C-c>")
 	if a.value != nil {
 		t.Errorf("C-c in NORMAL with nothing changed closes it")
+	}
+}
+
+// With vim = false the box closes with esc and C-c, and a read-only value with
+// q too: the editor never leaves INSERT there (F12.2).
+func TestValuePlainCloses(t *testing.T) {
+	a := sizedWith(160, 45, userConfig(t, "vim = false", ""))
+	tab := loadOrders(t, a, 3)
+	feed(t, a, "4le")
+	if a.value == nil {
+		t.Fatal("not opened")
+	}
+	feed(t, a, "<Esc>")
+	if a.value != nil {
+		t.Errorf("esc")
+	}
+	feed(t, a, "e<C-c>")
+	if a.value != nil {
+		t.Errorf("C-c")
+	}
+	tab.conn.readOnly = true
+	feed(t, a, "ex")
+	if a.value == nil || a.toast != "只读" || a.value.text() != a.value.opened {
+		t.Errorf("a key in a read-only plain value: toast %q", a.toast)
+	}
+	feed(t, a, "<Esc>")
+	if a.value != nil {
+		t.Errorf("esc on a read-only one")
+	}
+}
+
+// A text that ends in a newline keeps it through an edit; a write of what is
+// no value of the column is refused and :wq, C-s leave the box as it is; the
+// wheel is the box's, not the panes' under it; ? is the editor's search
+// (F12.2).
+func TestValueWriteDetails(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	tab.page.Rows[0][5] = db.Val{S: "abc\n"}
+	feed(t, a, "5le")
+	if a.value.text() != "abc" {
+		t.Fatalf("text %q", a.value.text())
+	}
+	feed(t, a, "x:wq<CR>")
+	if e := tab.edits[editKey{`["1"]`, "note"}]; a.value != nil || e.val.S != "bc\n" {
+		t.Errorf("the newline: %+v", tab.edits)
+	}
+	feed(t, a, "4le")
+	feed(t, a, "ggdG<C-s>") // an empty jsonb
+	if a.value == nil || a.toast == "" {
+		t.Errorf("C-s of no JSON: box %v, toast %q", a.value != nil, a.toast)
+	}
+	top := tab.top
+	a.Update(tea.MouseWheelMsg{X: 80, Y: 20, Button: tea.MouseWheelDown})
+	if tab.top != top {
+		t.Errorf("the wheel moved the table under the box")
+	}
+	feed(t, a, ":q!<CR>04le?tags<CR>")
+	if a.value.ed.Cursor().Line != 2 {
+		t.Errorf("? is the search: at %+v", a.value.ed.Cursor())
 	}
 }

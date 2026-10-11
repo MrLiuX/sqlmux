@@ -281,10 +281,11 @@ func (a *App) dropPick(i int) tea.Cmd {
 func orderMark(order []db.OrderCol, item string, at int) string {
 	w := len(strconv.Itoa(len(order))) + 1
 	i := slices.IndexFunc(order, func(o db.OrderCol) bool { return o.Col == item })
-	if at == 0 || i < 0 { // 默认 is no column
-		return strings.Repeat(" ", w)
+	mark := ""
+	if at != 0 && i >= 0 { // 默认 is no column
+		mark = strconv.Itoa(i+1) + strings.TrimSpace(sortedBy("", order[i].Desc))
 	}
-	return strconv.Itoa(i+1) + strings.TrimSpace(sortedBy("", order[i].Desc))
+	return mark + strings.Repeat(" ", max(w-ui.Width(mark), 0))
 }
 
 // orderCycle is space on a column of the ORDER list: in the sorting at the

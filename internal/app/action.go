@@ -87,7 +87,7 @@ func init() {
 			return nil
 		}},
 		"cancel": {Title: i18n.N("取消 / 连按两次退出"), Run: func(a *App, _ Args) tea.Cmd {
-			if a.value != nil && a.confirm == nil { // esc, as in any input (§6.8)
+			if a.valueActive() { // esc, as in any input (§6.8)
 				return a.valueKey(keymap.Esc)
 			}
 			if p := a.palette; p != nil && p.quick != nil && p.quick.running != "" { // the palette stays (§12)
@@ -600,7 +600,7 @@ func title(action string) string {
 // run executes "id [arg]" from the registry.
 func (a *App) run(action string, count int) tea.Cmd {
 	id, arg, _ := strings.Cut(action, " ")
-	if a.value != nil && a.confirm == nil && !strings.HasPrefix(id, "value.") && id != "cancel" { // what it has no key for is no one's (F12.2)
+	if a.valueActive() && !strings.HasPrefix(id, "value.") && id != "cancel" { // what it has no key for is no one's (F12.2)
 		return nil
 	}
 	if a.menu != nil && !strings.HasPrefix(id, "menu.") && id != "cancel" || a.ddl != nil && !strings.HasPrefix(id, "ddl.") && id != "cancel" { // what it has no key for is no one's: cancel is esc, which closes it (F8.23, F9.8)

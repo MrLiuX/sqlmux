@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -892,4 +893,22 @@ func TestGoldenOrderMulti(t *testing.T) {
 	tab.order, tab.shown.order = orderOf("status-", "amount"), orderOf("status-", "amount")
 	feed(t, a, "go<C-n><C-n>")
 	golden.RequireEqual(t, a.render().String())
+}
+
+// The marks of the ORDER list line up, ten columns in the sorting or more: a
+// mark is padded to the longest (F12.1).
+func TestOrderMarkWidth(t *testing.T) {
+	var order []db.OrderCol
+	for i := range 10 {
+		order = append(order, db.OrderCol{Col: "c" + strconv.Itoa(i), Desc: i%2 == 0})
+	}
+	w := ui.Width(orderMark(order, "c9", 1))
+	for i := range 10 {
+		if got := ui.Width(orderMark(order, "c"+strconv.Itoa(i), 1)); got != w {
+			t.Errorf("c%d: %d wide, want %d", i, got, w)
+		}
+	}
+	if got := ui.Width(orderMark(order, "x", 1)); got != w {
+		t.Errorf("not in it: %d wide", got)
+	}
 }
