@@ -3,6 +3,7 @@ package ui
 import (
 	"image/color"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -305,5 +306,79 @@ func TestGridRecordNumbers(t *testing.T) {
 		if num(" 1 ") != th.Warn || num(" 2 ") != th.Error || num(" 3 ") == th.Warn {
 			t.Errorf("transposed %v: %v %v %v", tr, num(" 1 "), num(" 2 "), num(" 3 "))
 		}
+	}
+}
+
+// The widest values of a page are measured once while it is the same page: a
+// second layout reads them, and any value that is not the same, a new page, an
+// edited cell, a column hidden, the grid turned, is measured again (F11.4).
+func TestWidestCache(t *testing.T) {
+	page := func(vals ...string) Grid {
+		g := Grid{Cols: []GridCol{{Name: "a"}, {Name: "b"}}, Widest: &Widest{}}
+		for i := 0; i+1 < len(vals); i += 2 {
+			g.Rows = append(g.Rows, []db.Val{{S: vals[i]}, {S: vals[i+1]}})
+		}
+		return g
+	}
+	same := func(x, y []int) bool { return len(x) > 0 && &x[0] == &y[0] }
+	g := page("1", "中文字", "22", "x")
+	first := g.view().widest()
+	if first[0] != 2 || first[1] != 6 {
+		t.Fatalf("widest %v", first)
+	}
+	if !same(first, g.view().widest()) {
+		t.Error("the same page was measured again")
+	}
+	turned := page("1", "中文字", "22", "x")
+	turned.Widest, turned.Transpose = g.Widest, true
+	if w := turned.view().widest(); len(w) != 2 || w[0] != 6 || w[1] != 2 { // a record's widest field
+		t.Errorf("turned: %v", w)
+	}
+	g.Widest = turned.Widest
+	first = g.view().widest()              // turned back: measured again
+	rebuilt := page("1", "中文字", "22", "x") // as a table's grid is made each frame: the same values
+	rebuilt.Widest = g.Widest
+	if !same(first, rebuilt.view().widest()) {
+		t.Error("the same values in new rows were measured again")
+	}
+	next := page("1", "中文字", "22", "xyz789") // a cell changed
+	next.Widest = g.Widest
+	if w := next.view().widest(); w[1] != 6 || same(first, w) {
+		t.Errorf("an edited cell: %v", w)
+	}
+	longer := page("1", "中文字", "22", "xyz789", "333333", "b") // a page of more rows
+	longer.Widest = g.Widest
+	if w := longer.view().widest(); w[0] != 6 {
+		t.Errorf("a new page: %v", w)
+	}
+	hidden := Grid{Cols: []GridCol{{Name: "a"}}, Widest: g.Widest}
+	for _, r := range longer.Rows {
+		hidden.Rows = append(hidden.Rows, r[:1])
+	}
+	if w := hidden.view().widest(); len(w) != 1 || w[0] != 6 {
+		t.Errorf("a column hidden: %v", w)
+	}
+	turned = page("1", "中文字", "22", "x")
+	turned.Widest, turned.Transpose = &Widest{}, true
+	cached := turned.view().widest()
+	turned.Widest = nil
+	if measured := turned.view().widest(); !slices.Equal(cached, measured) {
+		t.Errorf("cached %v, measured %v", cached, measured)
+	}
+	// the same values in other rows and columns are another page
+	w := &Widest{}
+	two := Grid{Cols: []GridCol{{Name: "a"}, {Name: "b"}}, Widest: w, Rows: [][]db.Val{{{S: "a"}, {S: "bbb"}}, {{S: "c"}, {S: "dd"}}}}
+	one := Grid{Cols: []GridCol{{Name: "a"}}, Widest: w, Rows: [][]db.Val{{{S: "a"}}, {{S: "bbb"}}, {{S: "c"}}, {{S: "dd"}}}}
+	prefix := Grid{Cols: []GridCol{{Name: "a"}}, Widest: w, Rows: [][]db.Val{{{S: "a"}}, {{S: "bbb"}}}}
+	two.view().widest()
+	if got := one.view().widest(); len(got) != 1 || got[0] != 3 {
+		t.Errorf("four rows of one column: %v", got)
+	}
+	two.view().widest()
+	if got := prefix.view().widest(); len(got) != 1 || got[0] != 3 {
+		t.Errorf("the first two values: %v", got)
+	}
+	if got := two.view().widest(); len(got) != 2 || got[1] != 3 { // more columns than the page kept
+		t.Errorf("a column shown again: %v", got)
 	}
 }

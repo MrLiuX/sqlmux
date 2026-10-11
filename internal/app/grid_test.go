@@ -576,3 +576,25 @@ func TestQueryBarGivesWayInOrder(t *testing.T) {
 		}
 	}
 }
+
+// The columns follow the data through the memory of the widest values: a
+// longer value in a new page, a hidden column and the turned table each show
+// as they are measured (F11.4).
+func TestGridWidthsFollowTheData(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	a.View()
+	const long = "a note longer than the others"
+	tab.page.Rows[1][5] = db.Val{S: long} // a new page, as a refresh brings it
+	if !strings.Contains(a.render().String(), long) {
+		t.Error("the new page's longest value is cut")
+	}
+	tab.hidden["status"] = true
+	if !strings.Contains(a.render().String(), long) || strings.Contains(a.render().String(), "pending") {
+		t.Error("a column hidden")
+	}
+	tab.transpose = true
+	if !strings.Contains(a.render().String(), long[:20]) {
+		t.Error("the turned table")
+	}
+}

@@ -43,6 +43,15 @@ type gridState struct {
 	marked map[int]bool
 	visual bool
 	anchor int
+	widest *ui.Widest // what the grid measured of the rows on screen (F11.4)
+}
+
+// widestCache is the grid's memory of the widths of the rows on screen.
+func (s *gridState) widestCache() *ui.Widest {
+	if s.widest == nil {
+		s.widest = &ui.Widest{}
+	}
+	return s.widest
 }
 
 // dataTab is a table open in a tab (§5, §7.6, §7.8「查询条」); its grid
@@ -418,7 +427,7 @@ func gridRect(r uv.Rectangle, t *dataTab) uv.Rectangle {
 func (a *App) grid(p *Pane, t *dataTab) ui.Grid {
 	g := ui.Grid{
 		Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose, FullWidth: a.fullWidth, First: t.shown.pageNo * t.shown.limit,
-		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Selected: t.selected(), FlashNums: a.flashNums(p),
+		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Selected: t.selected(), FlashNums: a.flashNums(p), Widest: t.widestCache(),
 	}
 	shown := t.shownCols()
 	for _, i := range shown {
@@ -726,7 +735,7 @@ func (a *App) gridOf(p *Pane) (s *gridState, g ui.Grid, area uv.Rectangle, ok bo
 func (a *App) resultGrid(p *Pane, t *resultTab) ui.Grid {
 	g := ui.Grid{
 		Rows: t.page.Rows, Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose, FullWidth: a.fullWidth,
-		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Yank: a.gridFlash(p), Selected: t.selected(), FlashNums: a.flashNums(p),
+		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Yank: a.gridFlash(p), Selected: t.selected(), FlashNums: a.flashNums(p), Widest: t.widestCache(),
 	}
 	for _, c := range t.page.Cols {
 		g.Cols = append(g.Cols, ui.GridCol{Name: c.Name, Type: colType(c.Type)})

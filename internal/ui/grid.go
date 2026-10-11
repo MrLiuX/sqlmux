@@ -67,6 +67,42 @@ type Grid struct {
 	// Selected are the records selected: their numbers on the visual
 	// background; FlashNums those whose numbers a yank of them flashes (F10.7)
 	Selected, FlashNums map[int]bool
+
+	// Widest keeps the widest value of each column of the page between frames
+	// (F11.4); nil measures every frame.
+	Widest *Widest
+}
+
+// Widest is the width of the widest value of each screen column of a page,
+// kept with the page it measured: measuring takes a pass over every value
+// with a grapheme walk for each, and a key held down draws the same page many
+// times (F11.4). A page whose values are not the same ones, or turned, is
+// measured again, so nothing has to say that the data changed.
+type Widest struct {
+	vals      []db.Val // the page, record by record
+	rows      int
+	transpose bool
+	w         []int
+}
+
+// same is whether the page of g, turned or not, is the one w measured.
+func (w *Widest) same(g Grid) bool {
+	if w.w == nil || w.rows != len(g.Rows) || w.transpose != g.Transpose {
+		return false
+	}
+	i := 0
+	for _, row := range g.Rows {
+		if i+len(row) > len(w.vals) {
+			return false
+		}
+		for _, v := range row {
+			if w.vals[i] != v {
+				return false
+			}
+			i++
+		}
+	}
+	return i == len(w.vals)
 }
 
 // maxColWidth caps a column's wish (§7.6).
@@ -191,6 +227,29 @@ func (v view) labelWidth() int {
 	return min(w, maxColWidth)
 }
 
+// widest is the width of the widest value of each screen column, from the
+// grid's Widest when it has the page.
+func (v view) widest() []int {
+	w := v.g.Widest
+	if w != nil && w.same(v.g) {
+		return w.w
+	}
+	out := make([]int, v.cols)
+	for c := range v.cols {
+		for r := range v.rows {
+			val, _ := v.val(r, c)
+			out[c] = max(out[c], Width(Cell(val)))
+		}
+	}
+	if w != nil {
+		w.vals, w.rows, w.transpose, w.w = w.vals[:0], len(v.g.Rows), v.g.Transpose, out
+		for _, row := range v.g.Rows {
+			w.vals = append(w.vals, row...)
+		}
+	}
+	return out
+}
+
 // widths sizes each screen column (§7.6): the larger of its header and its
 // widest value on the page, at most maxColWidth; when they don't fit in room
 // the ones wishing more than FullWidth are squeezed in proportion, never below
@@ -201,14 +260,10 @@ func (v view) widths(room int) []int {
 	ws := make([]int, v.cols)
 	heads := make([]int, v.cols)
 	total := 0
+	widest := v.widest()
 	for c := range v.cols {
 		heads[c] = Width(v.head(c))
-		widest := 0
-		for r := range v.rows {
-			val, _ := v.val(r, c)
-			widest = max(widest, Width(Cell(val)))
-		}
-		ws[c] = min(max(heads[c], widest), maxColWidth)
+		ws[c] = min(max(heads[c], widest[c]), maxColWidth)
 		total += ws[c]
 	}
 	if total > room && !v.g.Transpose {
