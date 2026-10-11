@@ -68,7 +68,7 @@ leader = "<Space>"
 "gc" = "grid.cols"
 "ge" = "grid.export" # CSV or JSON, the page or all of it (F12.4)
 "gs" = "grid.order.cycle" # this column alone, the other way, the default (F12.3)
-"gS" = "grid.order.add" # in the ORDER, the other way, out: space of its dropdown
+"gS" = "grid.order.add" # joins the ORDER, or turns: space of its list
 "*" = "grid.filter.cell" # the cell as a condition of the WHERE
 "e" = "grid.value" # the cell in the value editor (F12.2)
 "]" = "grid.page.next"
@@ -142,13 +142,12 @@ leader = "<Space>"
 "<C-b>" = "palette.preview.up"
 "<C-e>" = "quicksql.edit"
 
-[keys.dropdown] # schema, ORDER, LIMIT (§6.8): typing goes to the filter, so no j/k
+[keys.dropdown] # schema, LIMIT and the rest (§6.8): typing goes to the filter, so no j/k
 "<Up>" = "dropdown.up"
 "<Down>" = "dropdown.down"
 "<C-p>" = "dropdown.up"
 "<C-n>" = "dropdown.down"
 "<CR>" = "dropdown.select"
-"<Space>" = "dropdown.toggle" # ORDER: the column under the cursor joins, turns, leaves the sorting; a character of the filter once it has any (F12.1)
 "<Esc>" = "dropdown.close"
 
 [keys.menu] # the right-click menus: the tree's (§7.8, F8.23) and the grid's (F12.3)
@@ -208,6 +207,16 @@ leader = "<Space>"
 [keys.input] # every input
 "<C-r>" = "where.history" # does something in the WHERE input only
 "<C-f>" = "where.star" # so does this one (F9.2)
+
+[keys.order] # the ORDER list (F12.9): the list has the keys until / gives them to the filter
+"j" = "cols.down"
+"k" = "cols.up"
+"<Space>" = "order.toggle" # joins the sorting at the end, or turns
+"a" = "order.remove"
+"A" = "order.clear" # back to the default
+"<CR>" = "order.only" # this column alone, and closes
+"/" = "cols.filter"
+"<Esc>" = "cols.close"
 
 [keys.cols] # Q-04: the list has the keys until / gives them to the filter
 "j" = "cols.down"

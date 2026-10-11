@@ -25,7 +25,7 @@ var noVimTOML string
 // in resolution priority order for the export. which-key is no scope: keys
 // pressed over it resolve as without it (§6.5).
 var tables = []string{
-	"keys.confirm", "keys.value", "keys.menu", "keys.ddl", "keys.palette", "keys.conns", "keys.groups", "keys.form", "keys.jump", "keys.where", "keys.cols", "keys.dropdown", "keys.sessions",
+	"keys.confirm", "keys.value", "keys.menu", "keys.ddl", "keys.palette", "keys.conns", "keys.groups", "keys.form", "keys.jump", "keys.where", "keys.order", "keys.cols", "keys.dropdown", "keys.sessions",
 	"keys.complete", "keys.newrow", "keys.options", "keys.segments", "keys.keyhelp", "keys.cell", "keys.input",
 	"keys.wherenormal", "keys.select", "keys.result", "keys.grid", "keys.tree", "keys.query", "keys.landing", "keys.normal", "keys.global",
 	"map.query.normal", "map.query.visual", "map.grid.normal", "map.grid.visual",
@@ -234,7 +234,8 @@ var when = map[string]string{
 	"keys.landing":     i18n.N("引导页：新 tab、没有 tab 的 pane（M3）"),
 	"keys.result":      i18n.N("结果区，叠在 grid 之上（M3）"),
 	"keys.palette":     i18n.N("命令面板打开时"),
-	"keys.dropdown":    i18n.N("ORDER / LIMIT 下拉框打开时"),
+	"keys.dropdown":    i18n.N("LIMIT 等下拉框打开时"),
+	"keys.order":       i18n.N("ORDER 列表打开时（F12.9）"),
 	"keys.complete":    i18n.N("补全列表弹出时（↵、esc 由输入框处理）"),
 	"keys.where":       i18n.N("WHERE 的历史 / 收藏下拉打开时"),
 	"keys.input":       i18n.N("任何输入框里"),

@@ -51,7 +51,7 @@ func TestKeyHelp(t *testing.T) {
 	if feed(t, a, "J"); a.keyHelp != nil || tab.row != 5 {
 		t.Fatalf("J runs the mapping: row %d", tab.row)
 	}
-	if feed(t, a, "?go"); a.keyHelp != nil || a.drop == nil {
+	if feed(t, a, "?go"); a.keyHelp != nil || a.cols == nil || !a.cols.order {
 		t.Fatal("g o opens ORDER")
 	}
 	feed(t, a, "<Esc>?<Esc>")

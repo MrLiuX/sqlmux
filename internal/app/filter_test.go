@@ -167,8 +167,8 @@ func TestOrderHeadKeys(t *testing.T) {
 		t.Errorf("gS on a column in it: turned: %v", tab.order)
 	}
 	feed(t, a, "gS")
-	if len(tab.order) != 0 {
-		t.Errorf("gS again: out: %v", tab.order)
+	if len(tab.order) != 1 || tab.order[0].Desc {
+		t.Errorf("gS again: turned back, not out: %v", tab.order)
 	}
 }
 

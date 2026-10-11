@@ -251,7 +251,6 @@ func init() {
 		"dropdown.up":     {Title: i18n.N("上移"), Local: true, Run: when(inDrop, func(a *App) tea.Cmd { a.dropMove(-1); return nil })},
 		"dropdown.down":   {Title: i18n.N("下移"), Local: true, Run: when(inDrop, func(a *App) tea.Cmd { a.dropMove(1); return nil })},
 		"dropdown.select": {Title: i18n.N("选中"), Local: true, Run: when(inDrop, func(a *App) tea.Cmd { return a.dropPick(a.drop.sel) })},
-		"dropdown.toggle": {Title: i18n.N("加入 / 翻转 / 移出排序"), Local: true, Run: when(inDrop, func(a *App) tea.Cmd { return a.dropToggle() })},
 		"dropdown.close":  {Title: i18n.N("关闭下拉框"), Local: true, Run: when(inDrop, func(a *App) tea.Cmd { a.drop = nil; return nil })},
 		"complete.up":     {Title: i18n.N("上一个候选"), Local: true, Run: when(inComplete, func(a *App) tea.Cmd { a.completing().move(-1); return nil })},
 		"complete.down":   {Title: i18n.N("下一个候选"), Local: true, Run: when(inComplete, func(a *App) tea.Cmd { a.completing().move(1); return nil })},
@@ -364,6 +363,10 @@ func init() {
 		"cols.all":          {Title: i18n.N("全部显示"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsSetAll(true); return nil })},
 		"cols.none":         {Title: i18n.N("全部隐藏"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsSetAll(false); return nil })},
 		"cols.filter":       {Title: i18n.N("过滤列"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.cols.typing = true; return nil })},
+		"order.toggle":      {Title: i18n.N("加入 / 翻转排序"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { return a.orderToggleSel() })},
+		"order.remove":      {Title: i18n.N("移出排序"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { return a.orderRemove() })},
+		"order.clear":       {Title: i18n.N("清空排序"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { return a.orderClear() })},
+		"order.only":        {Title: i18n.N("只按这一列排序"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { return a.orderPick(a.cols.sel) })},
 		"cols.close":        {Title: i18n.N("关闭 COLS"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsEsc(); return nil })},
 		"pane.error.close": {Title: i18n.N("关闭错误栏"), Run: func(a *App, args Args) tea.Cmd { // "pane.error.close <id>" is its ×
 			p := a.focused()
@@ -484,7 +487,7 @@ func init() {
 				t.typing, t.pageIn = "page", ui.Input{Text: n, Pos: len(n)}
 			}
 		})},
-		"grid.order": {Title: i18n.N("ORDER"), Run: do(func(a *App, _ Args) { a.openDrop(dropOrder) })},
+		"grid.order": {Title: i18n.N("ORDER"), Run: do(func(a *App, _ Args) { a.openCols(true) })},
 		"grid.order.cycle": {Title: i18n.N("按这一列排序"), Run: func(a *App, _ Args) tea.Cmd {
 			if t, col, ok := a.cursorColumn(); ok {
 				return a.orderHead(t, col)
@@ -493,7 +496,7 @@ func init() {
 		}},
 		"grid.order.add": {Title: i18n.N("加入排序"), Run: func(a *App, _ Args) tea.Cmd {
 			if t, col, ok := a.cursorColumn(); ok {
-				return a.orderCycle(t, col)
+				return a.orderToggle(t, col)
 			}
 			return nil
 		}},
@@ -505,7 +508,7 @@ func init() {
 			return nil
 		}},
 		"grid.limit":     {Title: i18n.N("LIMIT"), Run: do(func(a *App, _ Args) { a.openDrop(dropLimit) })},
-		"grid.cols":      {Title: i18n.N("COLS"), Run: do(func(a *App, _ Args) { a.openCols() })},
+		"grid.cols":      {Title: i18n.N("COLS"), Run: do(func(a *App, _ Args) { a.openCols(false) })},
 		"grid.page.next": {Title: i18n.N("下一页"), Run: func(a *App, _ Args) tea.Cmd { return a.turnPage(1) }},
 		"grid.page.prev": {Title: i18n.N("上一页"), Run: func(a *App, _ Args) tea.Cmd { return a.turnPage(-1) }},
 		"grid.refresh": {Title: i18n.N("刷新"), Run: func(a *App, _ Args) tea.Cmd {
@@ -583,6 +586,7 @@ func inConns(a *App) bool    { return a.form != nil && a.form.list }
 func inConfirm(a *App) bool  { return a.confirm != nil }
 func inDrop(a *App) bool     { return a.drop != nil }
 func inCols(a *App) bool     { return a.cols != nil }
+func inOrder(a *App) bool    { return a.cols != nil && a.cols.order }
 func inComplete(a *App) bool { return a.completing() != nil }
 func inHist(a *App) bool {
 	t := a.typingTab()
