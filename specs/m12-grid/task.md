@@ -95,13 +95,13 @@
 - **涉及**：`cmd/sqlmux`、`internal/app`（启动、form、tab）、`internal/db`（测试连接）、`internal/keymap/default.toml`
 
 **开发**（§5、§14「恢复」、§7.8「新建连接表单」「把 tab 移到相邻 pane」）
-- [ ] 启动连接连不上（`sqlmux`、`sqlmux <连接名>`、`--layout` 三条路都是）不再是启动错误：进界面，节点标失败、toast 驱动的错误、丢掉用它的挂起 tab，同别的连接；启动错误只剩配置本身的问题。
+- [ ] 启动连接连不上（`sqlmux`、`sqlmux <连接名>`、`--layout` 三条路都是）不再是启动错误：进界面，节点标失败、toast 驱动的错误；用它的挂起 tab 不关（用户 2026-10-11 补：DataGrip 那样留着显示报错），内容区居中画 `error` 色的错误页（连接名加驱动的错误原文，折行），`R`、展开节点、连上都重试，连上后照常取数；query tab 本来就留着。启动错误只剩配置本身的问题。
 - [ ] 表单加「测试」按钮（`form.test`，`C-t`）：校验通过后用当前值真连一次（10s 超时），`测试中…`，结果写在底栏上方一行：`已连接 · <引擎 版本> · <耗时>` 或驱动的错误；不保存、测完断开。连接管理里同样。
 - [ ] dsn 字段空时显示 `dim` 色的示例（按 engine）；别的字段照旧不预填。
 - [ ] `tab.move.next` / `tab.move.prev`（默认 `<Leader>wn` / `<Leader>wp`）：当前 tab 挪到顺时针下一个 / 上一个普通 pane 的末尾并成为当前 tab，焦点跟过去；来源空了留引导页；只有一个普通 pane 或引导 tab 时无事。
 - [ ] 细节（已定）：测试不把连接留在树里；MySQL 的 dsn 两种写法（`mysql://` URL 和驱动的 `user:pass@tcp(host:port)/db`）本来就都认（§8），示例只写 URL 那种。
 
 **验收**
-- [ ] 单测：启动连接拨号失败时 App 照常建出 session、节点状态是失败、toast 有错误；`form.test` 成功和失败两种结果行；`tab.move.next` 后两个 pane 的 tab 列表和焦点；单 pane 无事。
+- [ ] 单测：启动连接拨号失败时 App 照常建出 session、节点状态是失败、toast 有错误、表 tab 还在且内容是错误页，连接恢复后 `R` 取到数据；`form.test` 成功和失败两种结果行；`tab.move.next` 后两个 pane 的 tab 列表和焦点；单 pane 无事。
 - [ ] golden：带「测试」按钮和结果行的表单。
-- [ ] e2e：把 play 的端口改成没人听的，`sqlmux` 能进界面、树里 play 变红、toast 有错误、`conn.manage` 能建新连接；表单填一个错端口 `C-t` 结果行是错误、改对后是「已连接」；`SPC wn` 后 tab 在右边的 pane。
+- [ ] e2e：把 play 的端口改成没人听的，`sqlmux` 能进界面、树里 play 变红、表 tab 居中显示错误、`conn.manage` 能建新连接；表单填一个错端口 `C-t` 结果行是错误、改对后是「已连接」；`SPC wn` 后 tab 在右边的 pane。
