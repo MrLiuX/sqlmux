@@ -180,7 +180,7 @@ func (a *App) Init() tea.Cmd {
 		}
 	}
 	if a.warning != "" {
-		cmds = append(cmds, a.showToast(a.warning, toastTTL))
+		cmds = append(cmds, a.showToast(a.warning))
 	}
 	return tea.Batch(cmds...)
 }
@@ -304,7 +304,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.runTick(msg.r)
 		}
 	case stateErr:
-		return a, a.showToast(msg.err.Error(), toastTTL)
+		return a, a.showToast(msg.err.Error())
 	case toastExpired:
 		if msg.seq == a.toastSeq {
 			a.toast = ""
@@ -882,7 +882,10 @@ func (a *App) focused() *Pane {
 	return a.win().Tree
 }
 
-func (a *App) showToast(s string, ttl time.Duration) tea.Cmd {
+func (a *App) showToast(s string) tea.Cmd { return a.showToastFor(s, toastTTL) }
+
+// showToastFor is showToast for ttl, as long as it takes the user to do what it asks.
+func (a *App) showToastFor(s string, ttl time.Duration) tea.Cmd {
 	a.toast = toastLine(s) // one row: a driver's error may have many (§7.8)
 	a.toastSeq++
 	seq := a.toastSeq

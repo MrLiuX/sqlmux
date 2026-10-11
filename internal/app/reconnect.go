@@ -70,12 +70,12 @@ func (a *App) gotConnEvent(m connEvent) tea.Cmd {
 	name := c.Spec.Name
 	switch {
 	case m.Err != nil:
-		return a.showToast(i18n.T("%s：%s", name, m.Err), toastTTL)
+		return a.showToast(i18n.T("%s：%s", name, m.Err))
 	case m.TxLost:
 		c.tx = 'I'
-		return tea.Batch(append(a.txEnded(c), a.showToast(i18n.T("%s：连接断开，事务已丢失", name), toastTTL))...)
+		return tea.Batch(append(a.txEnded(c), a.showToast(i18n.T("%s：连接断开，事务已丢失", name)))...)
 	case !m.Rerun:
-		return a.showToast(i18n.T("%s：已重连，请重新执行", name), toastTTL)
+		return a.showToast(i18n.T("%s：已重连，请重新执行", name))
 	}
 	return nil
 }

@@ -906,7 +906,7 @@ func (a *App) starWhere(t *dataTab) tea.Cmd {
 	} else {
 		st.Favorites, toast = slices.Insert(st.Favorites, 0, q), i18n.T("已收藏")
 	}
-	return tea.Batch(a.saveState(), a.showToast(toast, toastTTL))
+	return tea.Batch(a.saveState(), a.showToast(toast))
 }
 
 // histSep is where the rule between the history and the favorites goes: the

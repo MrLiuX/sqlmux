@@ -180,7 +180,7 @@ func bgs(a *App, f *ui.Frame, y, x0, x1 int) string {
 // flattened (§7.8).
 func TestToastOneRow(t *testing.T) {
 	a := sized(160, 45, "nerd")
-	a.showToast("play：failed to connect\n\t127.0.0.1: refused", toastTTL)
+	a.showToast("play：failed to connect\n\t127.0.0.1: refused")
 	if a.toast != "play：failed to connect； 127.0.0.1: refused" {
 		t.Errorf("toast %q", a.toast)
 	}

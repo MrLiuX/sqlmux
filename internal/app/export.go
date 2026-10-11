@@ -162,7 +162,7 @@ type exportDone struct {
 // on the connection, which is busy till they have, C-c cancelling.
 func (a *App) export(src exportSrc, at int) tea.Cmd {
 	if a.exporting[src.owner] {
-		return a.showToast(i18n.T("正在导出"), toastTTL)
+		return a.showToast(i18n.T("正在导出"))
 	}
 	all, asJSON := at == exportCSVAll || at == exportJSONAll, at >= exportJSONPage
 	ext := ".csv"
@@ -175,7 +175,7 @@ func (a *App) export(src exportSrc, at int) tea.Cmd {
 	}
 	f, path, err := createExport(fileSafe.Replace(base) + ext)
 	if err != nil {
-		return a.showToast(err.Error(), toastTTL)
+		return a.showToast(err.Error())
 	}
 	if a.exporting == nil {
 		a.exporting = map[any]bool{}
@@ -235,11 +235,11 @@ func (a *App) gotExport(m exportDone) tea.Cmd {
 	}
 	switch {
 	case errors.Is(m.err, context.Canceled):
-		return a.showToast(i18n.T("导出已取消"), toastTTL)
+		return a.showToast(i18n.T("导出已取消"))
 	case m.err != nil:
-		return a.showToast(m.err.Error(), toastTTL)
+		return a.showToast(m.err.Error())
 	}
-	return a.showToast(i18n.T("已导出 %s · %d 行", m.path, m.rows), toastTTL)
+	return a.showToast(i18n.T("已导出 %s · %d 行", m.path, m.rows))
 }
 
 // fileSafe keeps a table's name, which anyone with CREATE rights chose, from

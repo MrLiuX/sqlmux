@@ -349,15 +349,15 @@ func (a *App) deleteConn() tea.Cmd {
 	}
 	c := *f.was
 	if a.connInUse(c.Name) {
-		return a.showToast(i18n.T("先关掉用它的 tab"), toastTTL)
+		return a.showToast(i18n.T("先关掉用它的 tab"))
 	}
 	a.confirm = &confirmBox{text: i18n.T("删除连接 %s？", c.Name), yes: i18n.T("删除"), then: func() tea.Cmd {
 		if err := config.DeleteConnection(c.Name); err != nil {
-			return a.showToast(err.Error(), toastTTL)
+			return a.showToast(err.Error())
 		}
 		var toast tea.Cmd
 		if err := config.DeletePassword(c.PasswordCmd); err != nil {
-			toast = a.showToast(err.Error(), toastTTL)
+			toast = a.showToast(err.Error())
 		}
 		secrets.Delete(c.Name) // a connection of the name made next asks again
 		for _, s := range a.sessions {
@@ -566,7 +566,7 @@ func (a *App) saveEditedConn() tea.Cmd {
 			return a.fail(fieldPassword, i18n.T("没有钥匙串工具：password 里的 ${ 会被当成环境变量"))
 		default: // the file is read password_cmd first: the plaintext would never be used beside one
 			c.PasswordCmd, c.Password = "", pw
-			toast = a.showToast(i18n.T("没有钥匙串工具，密码以明文存进了 connections.toml"), toastTTL)
+			toast = a.showToast(i18n.T("没有钥匙串工具，密码以明文存进了 connections.toml"))
 		}
 	}
 	saved, err := config.UpdateConnection(was.Name, was, c)
@@ -576,7 +576,7 @@ func (a *App) saveEditedConn() tea.Cmd {
 	}
 	if !config.SamePassword(was.PasswordCmd, saved.PasswordCmd) { // the old item, of a name or a source left, is no one's now
 		if err := config.DeletePassword(was.PasswordCmd); err != nil {
-			toast = tea.Batch(toast, a.showToast(err.Error(), toastTTL))
+			toast = tea.Batch(toast, a.showToast(err.Error()))
 		}
 	}
 	secrets.Delete(was.Name) // a changed password, or a name's, is asked for again
@@ -602,7 +602,7 @@ func (a *App) saveEditedConn() tea.Cmd {
 		toast = tea.Batch(toast, a.saveState())
 	}
 	if told {
-		toast = tea.Batch(toast, a.showToast(i18n.T("下次连接时生效"), toastTTL))
+		toast = tea.Batch(toast, a.showToast(i18n.T("下次连接时生效")))
 	}
 	a.regroup()
 	a.selectConn(slices.IndexFunc(a.sess.Conns, func(c *Conn) bool { return c.Spec.Name == saved.Name }))
@@ -643,7 +643,7 @@ func (a *App) saveConnForm() tea.Cmd {
 			return a.fail(fieldPassword, i18n.T("没有钥匙串工具：password 里的 ${ 会被当成环境变量"))
 		default: // plaintext, the user's call (§13): a file AppendConnection makes is 0600, one there is keeps its permissions
 			c.Password = pw
-			toast = a.showToast(i18n.T("没有钥匙串工具，密码以明文存进了 connections.toml"), toastTTL)
+			toast = a.showToast(i18n.T("没有钥匙串工具，密码以明文存进了 connections.toml"))
 		}
 	}
 	if err := config.AppendConnection(c); err != nil {
@@ -673,7 +673,7 @@ func (a *App) startFirst(conn *Conn) tea.Cmd {
 		if p := w.pane(2); p != nil && len(p.Tabs) == 0 {
 			cons, err := openQuery(conn, a.freeQuery())
 			if err != nil {
-				cmds = append(cmds, a.showToast(err.Error(), toastTTL))
+				cmds = append(cmds, a.showToast(err.Error()))
 				break
 			}
 			putTab(p, Tab{Name: cons.name, Query: cons}, false)

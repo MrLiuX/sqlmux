@@ -42,7 +42,7 @@ func (a *App) openDDL(column bool) tea.Cmd {
 		return nil
 	}
 	if t.conn.State != connReady { // its error page, or its dial still on: no Meta to ask
-		return a.showToast(i18n.T("连接还没连上"), toastTTL)
+		return a.showToast(i18n.T("连接还没连上"))
 	}
 	d := &ddlPopup{conn: t.conn, table: t.table}
 	if column {

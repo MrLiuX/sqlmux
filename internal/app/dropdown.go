@@ -84,10 +84,10 @@ func (a *App) openThemeDrop() {
 func (a *App) setTheme(name string) tea.Cmd {
 	th, ic, err := config.LoadTheme(name, a.baseIcons)
 	if err != nil {
-		return a.showToast(err.Error(), toastTTL)
+		return a.showToast(err.Error())
 	}
 	a.theme, a.icons, a.themeName = th, ic, name
-	return a.showToast(i18n.T("写进 config.toml 的 theme 才会保留"), toastTTL)
+	return a.showToast(i18n.T("写进 config.toml 的 theme 才会保留"))
 }
 
 // openQueryDrop opens the focused query's dropdown of kind k, schema

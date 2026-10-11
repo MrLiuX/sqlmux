@@ -53,7 +53,7 @@ func (a *App) notReady(c *Conn) tea.Cmd {
 	if cmd := a.connect(c); cmd != nil {
 		return cmd
 	}
-	return a.showToast(i18n.T("连接还没连上"), toastTTL)
+	return a.showToast(i18n.T("连接还没连上"))
 }
 
 // gotConnected takes c's connections in, or marks it failed; the queries
@@ -75,13 +75,13 @@ func (a *App) gotConnected(m connected) tea.Cmd {
 	}
 	if m.err != nil {
 		c.State, c.err = connFailed, m.err // the tabs waiting on it stay, saying why (F12.5)
-		return a.showToast(i18n.T("%s：%s", c.Spec.Name, m.err), toastTTL)
+		return a.showToast(i18n.T("%s：%s", c.Spec.Name, m.err))
 	}
 	c.take(m.d)
 	cmds := []tea.Cmd{a.loadCatalog(c)}
 	for _, t := range waiting {
 		if why := t.stayReason(); why != "" { // begun, or running, meanwhile
-			cmds = append(cmds, a.showToast(why, toastTTL))
+			cmds = append(cmds, a.showToast(why))
 			continue
 		}
 		cmds = append(cmds, a.switchConn(t, c, cmp.Or(t.wantSchema, c.Schema)))
@@ -119,7 +119,7 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	}
 	if m.err != nil {
 		a.dropPending(m.conn)
-		return a.showToast(i18n.T("%s：%s", m.conn.Spec.Name, m.err), toastTTL)
+		return a.showToast(i18n.T("%s：%s", m.conn.Spec.Name, m.err))
 	}
 	c := m.conn
 	c.Schemas, c.Tables = m.schemas, m.tables

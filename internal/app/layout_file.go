@@ -352,7 +352,7 @@ func (a *App) resolvePending(c *Conn) []tea.Cmd {
 					cmds = append(cmds, a.fetch(d, true))
 					continue
 				}
-				cmds = append(cmds, a.showToast(i18n.T("%s 里没有表 %s，跳过", c.Spec.Name, d.table.Schema+"."+d.table.Name), toastTTL))
+				cmds = append(cmds, a.showToast(i18n.T("%s 里没有表 %s，跳过", c.Spec.Name, d.table.Schema+"."+d.table.Name)))
 				dropTab(p, i)
 			}
 		}
@@ -397,16 +397,16 @@ func (a *App) saveLast() {
 func (a *App) askLayoutName() {
 	a.askName = &nameAsk{label: i18n.T("布局名："), done: func(a *App, name string) (tea.Cmd, bool) {
 		if err := config.CheckLayoutName(name); err != nil {
-			return a.showToast(err.Error(), toastTTL), false
+			return a.showToast(err.Error()), false
 		}
 		l := a.layoutOf()
 		if len(l.Sessions) == 0 { // a start with no connection has nothing to save (F7.4)
 			return a.noConnection(), false
 		}
 		if err := config.SaveLayout(config.LayoutPath(name), l); err != nil {
-			return a.showToast(err.Error(), toastTTL), false
+			return a.showToast(err.Error()), false
 		}
-		return a.showToast(i18n.T("已保存布局 %s", name), toastTTL), false
+		return a.showToast(i18n.T("已保存布局 %s", name)), false
 	}}
 }
 
@@ -448,7 +448,7 @@ func (a *App) pickLayout(name string) tea.Cmd {
 		}
 		l, err := config.LoadLayout(path)
 		if err != nil {
-			return a.showToast(err.Error(), toastTTL)
+			return a.showToast(err.Error())
 		}
 		specs := make([]config.Connection, len(a.sess.Conns))
 		for i, c := range a.sess.Conns {
@@ -463,7 +463,7 @@ func (a *App) pickLayout(name string) tea.Cmd {
 		a.attach(r.Sessions[r.Active])
 		cmds := append(a.connectsNow(), closeWorkers(ws))
 		if len(r.Warnings) > 0 {
-			cmds = append(cmds, a.showToast(JoinNotes(r.Warnings...), toastTTL))
+			cmds = append(cmds, a.showToast(JoinNotes(r.Warnings...)))
 		}
 		return tea.Batch(cmds...)
 	})

@@ -78,7 +78,7 @@ func (a *App) openQueryFile(name string) tea.Cmd {
 	}
 	t, err := openQuery(c, name)
 	if err != nil {
-		return a.showToast(err.Error(), toastTTL)
+		return a.showToast(err.Error())
 	}
 	if kept {
 		t.schema = last.Schema
@@ -105,7 +105,7 @@ func (a *App) deleteQuery() tea.Cmd {
 		open := slices.DeleteFunc(a.queries(), func(t *queryTab) bool { return !strings.EqualFold(t.name, name) })
 		return a.closeAsking(0, "", open, func() tea.Cmd {
 			if err := config.DeleteQuery(name); err != nil {
-				return a.showToast(err.Error(), toastTTL)
+				return a.showToast(err.Error())
 			}
 			a.dropQueryTabs(name)
 			delete(a.state.Queries, name)

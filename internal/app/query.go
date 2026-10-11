@@ -171,6 +171,14 @@ func vimMode(m editor.Mode) keymap.Mode {
 	}[m]
 }
 
+// sizeEditor gives ed the program's settings and the size of its text in text,
+// which H M L, C-d and the scrolling go by.
+func (a *App) sizeEditor(ed *editor.Editor, text uv.Rectangle) {
+	ed.TabWidth, ed.AutoPairs = a.tabWidth, a.autoPairs
+	ed.SetHeight(text.Dy())
+	ed.SetWidth(text.Dx())
+}
+
 // queryView is query t in pane p as it draws, and the area it draws
 // in; t's editor gets the size of its text there, which H M L, C-d and
 // the scrolling go by.
@@ -179,9 +187,7 @@ func (a *App) queryView(p *Pane, t *queryTab) (ui.Query, uv.Rectangle) {
 	body := bodyRect(a.layout()[p.ID])
 	body.Max.Y = max(body.Max.Y-t.bar.rows(), body.Min.Y)
 	text := ui.Query{Lines: ed.Lines()}.TextArea(body)
-	ed.TabWidth, ed.AutoPairs = a.tabWidth, a.autoPairs
-	ed.SetHeight(text.Dy())
-	ed.SetWidth(text.Dx())
+	a.sizeEditor(ed, text)
 	c := ui.Query{
 		Lines: ed.Lines(), TabWidth: ed.TabWidth, Top: ed.Top(), Left: ed.Left(),
 		Cursor: ui.TextPos(ed.Cursor()), CursorCol: ed.CursorCol(), Normal: ed.Mode() == editor.Normal,
@@ -284,7 +290,7 @@ func (a *App) vimCmds(eff editor.Effect, put func(text string, p editor.ClipPut)
 		cmds = append(cmds, clipPaste)
 	}
 	if eff.Error != "" {
-		cmds = append(cmds, a.showToast(eff.Error, toastTTL))
+		cmds = append(cmds, a.showToast(eff.Error))
 	}
 	return cmds
 }
@@ -330,7 +336,7 @@ func (a *App) ex(c string) tea.Cmd {
 	if id := exAliases[strings.TrimSpace(c)]; id != "" {
 		return a.run(id, 0)
 	}
-	return a.showToast(i18n.T("不支持的命令：%s", c), toastTTL)
+	return a.showToast(i18n.T("不支持的命令：%s", c))
 }
 
 // flush writes query t's file if it changed since it was last written, for
@@ -384,7 +390,7 @@ func (a *App) flushAll(panes ...*Pane) (tea.Cmd, bool) {
 }
 
 func (a *App) saveFailed(err error) tea.Cmd {
-	return a.showToast(i18n.T("保存失败：%s", err.Error()), toastTTL)
+	return a.showToast(i18n.T("保存失败：%s", err.Error()))
 }
 
 type externalDone struct {
@@ -412,12 +418,12 @@ func (a *App) gotExternal(msg externalDone) tea.Cmd {
 	disk := stampOf(t.path)
 	text, err := config.ReadQuery(t.path)
 	if err != nil {
-		return a.showToast(err.Error(), toastTTL)
+		return a.showToast(err.Error())
 	}
 	cmd := a.queryDid(t, t.ed.Load(text))
 	t.saved, t.disk, t.armed, t.told = t.ver, disk, fileStamp{}, false // what the file has
 	if msg.err != nil {
-		return tea.Batch(cmd, a.showToast(msg.err.Error(), toastTTL))
+		return tea.Batch(cmd, a.showToast(msg.err.Error()))
 	}
 	return cmd
 }

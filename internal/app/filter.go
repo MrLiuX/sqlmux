@@ -85,11 +85,11 @@ func (a *App) filterCell() tea.Cmd {
 	d := t.conn.eng.Dialect()
 	cond, ok := cellCondition(d, t.conn.eng.Quote(s.key.col), s.col.Type, s.col.Fixed, s.orig)
 	if !ok {
-		return a.showToast(i18n.T("这一列的类型不支持按值过滤"), toastTTL)
+		return a.showToast(i18n.T("这一列的类型不支持按值过滤"))
 	}
 	where, changed := sqlkit.AddCondition(t.applied, cond, d)
 	if !changed {
-		return a.showToast(i18n.T("条件已在 WHERE 里"), toastTTL)
+		return a.showToast(i18n.T("条件已在 WHERE 里"))
 	}
 	t.where.Text, t.where.Pos = where, len(where)
 	return a.runWhere(t)

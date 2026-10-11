@@ -112,7 +112,7 @@ func init() {
 			if a.toast != "" && a.toastSeq == a.quitToast { // the first press's toast is still up
 				return a.quit()
 			}
-			cmd := a.showToast(fmt.Sprintf(i18n.T("再按一次 %s 退出"), a.keys.Hint("cancel", "global")), quitWindow)
+			cmd := a.showToastFor(fmt.Sprintf(i18n.T("再按一次 %s 退出"), a.keys.Hint("cancel", "global")), quitWindow)
 			a.quitToast = a.toastSeq
 			return cmd
 		}},

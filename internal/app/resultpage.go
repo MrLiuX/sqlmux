@@ -41,7 +41,7 @@ func (a *App) resultPage(d int) tea.Cmd {
 	}
 	r := rt.run
 	if r.conn.State != connReady {
-		return a.showToast(i18n.T("连接还没连上"), toastTTL)
+		return a.showToast(i18n.T("连接还没连上"))
 	}
 	offset := rt.offset + d*a.maxRows
 	s := r.stmts[rt.stmt]
@@ -76,7 +76,7 @@ func (a *App) gotResultPage(m pageDone) tea.Cmd {
 	if m.m.err != nil {
 		if errors.Is(m.m.err, context.Canceled) {
 			a.log(r, stmt, i18n.T("已取消"), false)
-			return a.showToast(i18n.T("查询已取消"), toastTTL)
+			return a.showToast(i18n.T("查询已取消"))
 		}
 		a.logError(r, stmt, m.m.err)
 		if p != nil {

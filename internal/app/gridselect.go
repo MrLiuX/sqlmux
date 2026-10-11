@@ -152,7 +152,7 @@ func (a *App) selectYank() tea.Cmd {
 		}
 		raw, err := rowRaw(fs)
 		if err != nil {
-			return a.showToast(err.Error(), toastTTL)
+			return a.showToast(err.Error())
 		}
 		objects = append(objects, string(raw))
 	}
@@ -163,7 +163,7 @@ func (a *App) selectYank() tea.Cmd {
 	}
 	text, err := indentJSON([]byte("[" + strings.Join(objects, ",") + "]"))
 	if err != nil {
-		return a.showToast(err.Error(), toastTTL)
+		return a.showToast(err.Error())
 	}
 	return tea.Batch(clipCopy(text), a.flashYank(flash))
 }

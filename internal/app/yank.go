@@ -136,7 +136,7 @@ func (a *App) yankInsert() tea.Cmd {
 	tab := p.tab()
 	if tab.Data == nil {
 		if tab.Result != nil {
-			return a.showToast(i18n.T("只有表里的行能复制为 INSERT"), toastTTL)
+			return a.showToast(i18n.T("只有表里的行能复制为 INSERT"))
 		}
 		return nil
 	}
@@ -152,7 +152,7 @@ func (a *App) yankInsert() tea.Cmd {
 		col := t.column(pc.Name)
 		v, set := t.value(sr, key, pc.Name)
 		if set && db.IsBinaryShown(v.S) { // the bytes are not here: no statement of what they are
-			return a.showToast(i18n.T("有二进制列，复制不了"), toastTTL)
+			return a.showToast(i18n.T("有二进制列，复制不了"))
 		}
 		if col.Generated || !set {
 			continue
@@ -292,7 +292,7 @@ func (a *App) yankJSON() tea.Cmd {
 		text, err = indentJSON(raw)
 	}
 	if err != nil {
-		return a.showToast(err.Error(), toastTTL)
+		return a.showToast(err.Error())
 	}
 	return tea.Batch(clipCopy(text), a.flashYank(yankFlash{pane: p.ID, cell: [2]int{gs.row, -1}}))
 }
@@ -334,7 +334,7 @@ func (a *App) pasteRow() tea.Cmd {
 		return nil
 	}
 	if slices.ContainsFunc(slices.Collect(maps.Values(a.rowCopy.vals)), func(v db.Val) bool { return db.IsBinaryShown(v.S) }) {
-		return a.showToast(i18n.T("有二进制列，复制不了"), toastTTL) // what yy took of them is the text shown, not the bytes
+		return a.showToast(i18n.T("有二进制列，复制不了")) // what yy took of them is the text shown, not the bytes
 	}
 	cmd := a.addRow()
 	sr, _, ok := t.cursor()

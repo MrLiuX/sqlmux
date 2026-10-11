@@ -169,11 +169,11 @@ func (a *App) dropTable() tea.Cmd {
 	c, t := n.conn, n.table
 	switch {
 	case c.readOnly:
-		return a.showToast(i18n.T("%s 是只读连接", c.Spec.Name), toastTTL)
+		return a.showToast(i18n.T("%s 是只读连接", c.Spec.Name))
 	case c.Manual:
-		return a.showToast(i18n.T("手动事务模式下不能删表：先提交或回滚，或切回自动"), toastTTL)
+		return a.showToast(i18n.T("手动事务模式下不能删表：先提交或回滚，或切回自动"))
 	case c.inTx(): // begun by the user in a query: MySQL's DROP would commit it, PG's join it
-		return a.showToast(i18n.T("事务中不能删表：先提交或回滚"), toastTTL)
+		return a.showToast(i18n.T("事务中不能删表：先提交或回滚"))
 	}
 	sql := dropSQL(c.eng, t)
 	title := i18n.T("删除表 %s，不能撤销：", t.Schema+"."+t.Name)
@@ -213,9 +213,9 @@ func (a *App) gotDropped(m dropped) tea.Cmd {
 		if len(e.More) > 0 && strings.HasPrefix(e.More[0], "DETAIL: ") { // what depends on it
 			msg += " · " + e.More[0]
 		}
-		return tea.Batch(a.showToast(msg, toastTTL), a.loadCatalog(c))
+		return tea.Batch(a.showToast(msg), a.loadCatalog(c))
 	}
-	cmds := []tea.Cmd{a.showToast(i18n.T("已删除 %s", m.table.Schema+"."+m.table.Name), toastTTL)}
+	cmds := []tea.Cmd{a.showToast(i18n.T("已删除 %s", m.table.Schema+"."+m.table.Name))}
 	for _, s := range a.sessions { // a session has its own Conn of a connection's name
 		for _, o := range s.Conns {
 			if o.Spec.Name != c.Spec.Name {

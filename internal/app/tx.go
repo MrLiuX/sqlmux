@@ -23,7 +23,7 @@ func (a *App) setTxMode(c *Conn, manual bool) tea.Cmd {
 		return a.noConnection()
 	}
 	if !manual && c.inTx() {
-		return a.showToast(i18n.T(txOpen), toastTTL)
+		return a.showToast(i18n.T(txOpen))
 	}
 	c.Manual = manual
 	return nil
@@ -32,7 +32,7 @@ func (a *App) setTxMode(c *Conn, manual bool) tea.Cmd {
 // noConnection is the toast of a command that needs a connection when there
 // is none (F7.4).
 func (a *App) noConnection() tea.Cmd {
-	return a.showToast(i18n.T("还没有连接，先新建一个"), toastTTL)
+	return a.showToast(i18n.T("还没有连接，先新建一个"))
 }
 
 // txDone answers endTx.
@@ -114,9 +114,9 @@ func (a *App) gotTx(m txDone) tea.Cmd {
 	cmds := a.txEnded(m.conn)
 	switch {
 	case m.err != nil:
-		cmds = append(cmds, a.showToast(m.err.Error(), toastTTL))
+		cmds = append(cmds, a.showToast(m.err.Error()))
 	case m.sql == "commit" && m.tag == "ROLLBACK":
-		cmds = append(cmds, a.showToast(i18n.T("事务已出错，提交改为了回滚"), toastTTL))
+		cmds = append(cmds, a.showToast(i18n.T("事务已出错，提交改为了回滚")))
 	}
 	return tea.Batch(cmds...)
 }
@@ -147,7 +147,7 @@ func (a *App) deadlocked(c *Conn, err error) tea.Cmd {
 	if !errors.As(err, new(db.RolledBack)) {
 		return nil
 	}
-	return tea.Batch(append(a.txEnded(c), a.showToast(i18n.T("死锁，整个事务已回滚"), toastTTL))...)
+	return tea.Batch(append(a.txEnded(c), a.showToast(i18n.T("死锁，整个事务已回滚")))...)
 }
 
 // orphaned is the connections in a transaction that closing the queries cs
@@ -173,7 +173,7 @@ func (a *App) orphaned(cs []*queryTab) []*Conn {
 // come in after, a connection left in a transaction with no query.
 func (a *App) closeAsking(n int, what string, cs []*queryTab, shut func() tea.Cmd) tea.Cmd {
 	if slices.ContainsFunc(cs, func(t *queryTab) bool { return t.running != nil }) {
-		return a.showToast(i18n.T("正在执行，结束后再关闭"), toastTTL)
+		return a.showToast(i18n.T("正在执行，结束后再关闭"))
 	}
 	lost := a.orphaned(cs)
 	return a.unlessLost(n, what, lost, verbClose, func() tea.Cmd {
