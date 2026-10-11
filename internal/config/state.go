@@ -134,23 +134,38 @@ func statePath() string { return filepath.Join(StateDir(), "state.json") }
 func LoadState() (*State, error) {
 	data, err := os.ReadFile(statePath())
 	if errors.Is(err, fs.ErrNotExist) {
+		setBase(&State{})
 		return &State{}, nil
 	}
-	s := &State{}
+	var s *State
 	if err == nil {
-		err = json.Unmarshal(data, s)
+		s, err = parseState(data)
 	}
 	if err != nil {
 		if rerr := os.Rename(statePath(), statePath()+".broken"); rerr != nil { // the next save will overwrite it
 			err = errors.Join(err, rerr)
 		}
+		setBase(&State{})
 		return &State{}, fmt.Errorf("%s: %w", statePath(), err)
+	}
+	b, _ := parseState(data) // a copy of its own: this one is what the writes are told apart from the file by (F13.3)
+	setBase(b)
+	return s, nil
+}
+
+// parseState is a state.json's state: a table picked before its id named the
+// connection dropped (F5.10), the queries called consoles before F10.11 read
+// as queries.
+func parseState(data []byte) (*State, error) {
+	s := &State{}
+	if err := json.Unmarshal(data, s); err != nil {
+		return nil, err
 	}
 	s.Recent = slices.DeleteFunc(s.Recent, func(r Recent) bool { return r.Kind == "table" && !strings.Contains(r.ID, "/") })
 	var old struct {
 		Consoles map[string]QueryState `json:"consoles"`
 	}
-	if json.Unmarshal(data, &old) == nil { // what the queries were called, F10.11: read, written as queries
+	if json.Unmarshal(data, &old) == nil {
 		for k, v := range old.Consoles {
 			if _, ok := s.Queries[currentName(k)]; !ok {
 				if s.Queries == nil {
@@ -161,6 +176,12 @@ func LoadState() (*State, error) {
 		}
 	}
 	return s, nil
+}
+
+func setBase(s *State) {
+	saveMu.Lock()
+	defer saveMu.Unlock()
+	base = s
 }
 
 var (
@@ -193,10 +214,24 @@ func save(data []byte, t int) error {
 	if t <= savedTick {
 		return nil
 	}
-	if err := writeFile(statePath(), data); err != nil {
+	var ours State
+	if err := json.Unmarshal(data, &ours); err != nil {
 		return err
 	}
-	savedTick = t
+	disk := &State{}
+	if b, err := os.ReadFile(statePath()); err == nil {
+		if disk, err = parseState(b); err != nil {
+			disk = &State{} // one that does not read is the next load's to set aside
+		}
+	}
+	merged, err := json.Marshal(merge(base, &ours, disk))
+	if err != nil {
+		return err
+	}
+	if err := writeFile(statePath(), merged); err != nil {
+		return err
+	}
+	savedTick, base = t, &ours
 	return nil
 }
 
