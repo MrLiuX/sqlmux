@@ -11,7 +11,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/kackerx/sqlmux/internal/db"
-	"github.com/kackerx/sqlmux/internal/editor"
 	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
@@ -684,33 +683,6 @@ func (a *App) filterKey(k keymap.Key) {
 func (a *App) treeFirstMatch() {
 	ns, _ := a.treeNodes()
 	a.treeGo(max(slices.IndexFunc(ns, func(n node) bool { return n.kind == nodeTable }), 0))
-}
-
-// editInput applies an input's own editing keys to in (they are no
-// bindings) and reports whether its text changed.
-func editInput(in *ui.Input, k keymap.Key) bool {
-	switch k {
-	case "<Left>":
-		in.Left()
-		return false
-	case "<Right>":
-		in.Right()
-		return false
-	case "<BS>":
-		in.Backspace()
-		return true
-	case "<C-w>", "<M-BS>": // M-BS is C-w in all typing (§7.9)
-		in.DeleteBack(editor.WordStart(in.Text, in.Pos))
-		return true
-	case "<C-u>":
-		in.DeleteBack(0)
-		return true
-	}
-	if keymap.Text(k) == "" {
-		return false
-	}
-	in.Insert(keymap.Text(k))
-	return true
 }
 
 // openTarget is the pane a table opens in (§5, §12): the focused one;
