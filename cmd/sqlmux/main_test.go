@@ -274,3 +274,23 @@ func TestStartNotes(t *testing.T) {
 		t.Errorf("a key and a move that failed: %q", got)
 	}
 }
+
+// The keys the ORDER list has are its own actions, in the reference as in the
+// keymap: none of COLS's (F12.9).
+func TestOrderKeysReference(t *testing.T) {
+	writeConfig(t, "keymaps.toml", "")
+	var out, errb bytes.Buffer
+	if code := keysCmd([]string{"--format", "toml"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	_, after, ok := strings.Cut(out.String(), "[keys.order]")
+	if !ok {
+		t.Fatal("no [keys.order]")
+	}
+	section, _, _ := strings.Cut(after, "\n\n")
+	for _, l := range strings.Split(section, "\n") {
+		if strings.Contains(l, " = ") && !strings.Contains(l, `"order.`) || strings.Contains(l, "COLS") {
+			t.Errorf("a line of [keys.order]: %q", l)
+		}
+	}
+}

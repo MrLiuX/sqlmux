@@ -109,7 +109,8 @@ func (a *App) selectVisual(unset bool) {
 	}
 }
 
-// selectClear is esc: out of VISUAL, its range marked; with only marks, none.
+// selectClear is esc: out of VISUAL, its range marked, or out of UNSET, its
+// range taken out; with only marks, none.
 func (a *App) selectClear() {
 	if s := gridStateOf(a.focused()); s != nil {
 		if s.visual {
@@ -126,7 +127,12 @@ func (a *App) selectDelete() tea.Cmd {
 	if !ok {
 		return nil
 	}
-	return a.deleteRecords(t, t.positions())
+	pos := t.positions()
+	if len(pos) == 0 { // an UNSET took them all out: the mode is over, there is nothing to delete
+		t.deselect()
+		return nil
+	}
+	return a.deleteRecords(t, pos)
 }
 
 // selectYank is y on the records selected: a JSON array of them, in the order

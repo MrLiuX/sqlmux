@@ -14,7 +14,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
-// valueEditor is a cell's value open in the editor of a box in the middle
+// valueEditor is a cell's value open in the editor of a box under its cell
 // (§10「值编辑器」, F12.2): the editor of the queries, JSON laid out and
 // colored, its text written back to the cell as a change.
 type valueEditor struct {
@@ -104,7 +104,7 @@ func (a *App) valueBox() uv.Rectangle {
 		}
 	}
 	w := min(max(pane.Dx()/2, 40), pane.Dx())
-	x := max(min(cell.Min.X, pane.Max.X-w), pane.Min.X)
+	x := min(cell.Min.X, pane.Max.X-w) // the cell is in the pane, which w does not outgrow
 	below, above := pane.Max.Y-cell.Max.Y, cell.Min.Y-pane.Min.Y
 	if below < valueMinRows && above > below {
 		return uv.Rect(x, pane.Min.Y, w, above)

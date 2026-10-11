@@ -213,14 +213,14 @@ leader = "<Space>"
 "<C-f>" = "where.star" # so does this one (F9.2)
 
 [keys.order] # the ORDER list (F12.9): the list has the keys until / gives them to the filter
-"j" = "cols.down"
-"k" = "cols.up"
+"j" = "order.down"
+"k" = "order.up"
 "<Space>" = "order.toggle" # joins the sorting at the end, or turns
 "a" = "order.remove"
 "A" = "order.clear" # back to the default
 "<CR>" = "order.only" # this column alone, and closes
-"/" = "cols.filter"
-"<Esc>" = "cols.close"
+"/" = "order.filter"
+"<Esc>" = "order.close"
 
 [keys.cols] # Q-04: the list has the keys until / gives them to the filter
 "j" = "cols.down"

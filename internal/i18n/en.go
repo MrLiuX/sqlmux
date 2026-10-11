@@ -55,6 +55,7 @@ var en = map[string]string{
 	"切换排序方向":     "Reverse the sort",
 	"加入 / 翻转排序":  "Add to the sort, or reverse it",
 	"移出排序":       "Remove from the sort",
+	"关闭 ORDER":   "Close ORDER",
 	"清空排序":       "Clear the sort",
 	"只按这一列排序":    "Sort by this column alone",
 	"方向":         "Direction",

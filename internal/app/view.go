@@ -573,7 +573,7 @@ func (a *App) statusLine() ui.StatusLine {
 	if a.jump != nil {
 		name, modeColor = "JUMP", th.Info
 	}
-	if s := gridStateOf(a.focused()); s != nil && s.unset && mode == keymap.Visual && a.jump == nil {
+	if s := gridStateOf(a.focused()); s != nil && s.unset && a.vim() == nil && mode == keymap.Visual && a.jump == nil { // another editor's VISUAL is its own
 		name = "UNSET"
 	}
 	s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: " " + name + " ", Style: uv.Style{Fg: th.Bg, Bg: modeColor, Attrs: uv.AttrBold}}}})

@@ -67,8 +67,9 @@ type Grid struct {
 
 	Yank *[2]int // the record and field a yank flashes, field -1 for all of it (F3.32)
 
-	// Selected are the records selected: their numbers on the visual
-	// background; FlashNums those whose numbers a yank of them flashes (F10.7)
+	// Selected are the records selected for good: their numbers on the
+	// selected background; FlashNums those whose numbers a yank of them
+	// flashes (F10.7, F12.12)
 	Selected, FlashNums map[int]bool
 	// Ranged are the records the range being selected covers, in VISUAL or
 	// UNSET: on the visual background over the selected ones (F12.12)

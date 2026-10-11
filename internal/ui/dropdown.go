@@ -7,19 +7,19 @@ import (
 )
 
 // Dropdown picks from a list under a filter input (§8.6, §7.8): the one-pick
-// dropdowns (schema, ORDER, LIMIT), and with Checks the COLS list.
+// dropdowns (schema, LIMIT), and with Checks or Icons the COLS and ORDER lists.
 type Dropdown struct {
 	Search   Icon // leads the input
 	Input    Input
 	Typing   bool     // the input has the keys: its cursor shows
 	Items    []string // what passes the filter
 	Pos      [][]int  // each item's match positions
-	Notes    []string // dim, after each item (COLS: the type and the key); nil for none
-	Icons    []Icon   // info, before each item (connections: the engine's); nil for none
+	Notes    []string // dim, after each item (COLS, ORDER: the type and the key); nil for none
+	Icons    []Icon   // info, before each item (connections: the engine's, ORDER: its place in the sort); nil for none
 	Checks   []bool   // COLS: each item's box; nil for none
 	Mark     int      // the item drawn in pk color (the current one); -1 for none
 	Count    string   // right of the input (COLS: how many match)
-	Hints    []Hint   // under the list (COLS: all / none)
+	Hints    []Hint   // under the list (COLS: all / none; ORDER: its keys)
 	Sel, Top int
 	Pane     int // the pane the hints act on
 }
