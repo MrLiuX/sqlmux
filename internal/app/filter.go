@@ -14,10 +14,14 @@ import (
 )
 
 // noEquals are the types whose values a condition cannot be written for: no
-// literal, or no = (PG's json), or one that never matches (MySQL's JSON
-// against a string); arrays are cut by their [] (§7.6「按单元值过滤」).
-var noEquals = []string{"bytea", "blob", "tinyblob", "mediumblob", "longblob", "binary", "varbinary", "json",
-	"geometry", "point", "linestring", "polygon", "multipoint", "multilinestring", "multipolygon", "geometrycollection"}
+// literal, or no = (PG's json, xml, the geometric ones but point), or one
+// that never matches (MySQL's JSON against a string; a four-byte float, PG's
+// real and MySQL's float, against a literal: 0.1 is not the float 0.1, where
+// the eight-byte ones are); arrays are cut by their []
+// (§7.6「按单元值过滤」).
+var noEquals = []string{"bytea", "blob", "tinyblob", "mediumblob", "longblob", "binary", "varbinary", "json", "xml",
+	"geometry", "point", "linestring", "polygon", "multipoint", "multilinestring", "multipolygon", "geometrycollection",
+	"box", "circle", "path", "lseg", "line", "real", "float4", "float"}
 
 // cellCondition is the condition that keeps the rows whose column col, of
 // type typ, holds v: col = literal, col IS NULL for a NULL; ok is false for

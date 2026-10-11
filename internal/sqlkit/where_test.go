@@ -98,6 +98,7 @@ func TestAddCondition(t *testing.T) {
 		{`"id" = 5 AND a = 1`, `"id" = 5`, `"id" = 5 AND a = 1`, false},
 		{`b = 'X'`, `b = 'x'`, `b = 'X' AND b = 'x'`, true}, // a string's case is its value
 		{`a = 1 AND b = 2 or c = 3`, `b = 2`, `(a = 1 AND b = 2 or c = 3) AND b = 2`, true},
+		{`x = 1 AND y = 2 OR z = 3`, `x = 1`, `(x = 1 AND y = 2 OR z = 3) AND x = 1`, true}, // the first piece is it, but z = 3 holds without it
 		{`x between 1 and 5`, `"id" = 5`, `x between 1 and 5 AND "id" = 5`, true},
 		{`x between 1 and 5 and b = 2`, `b = 2`, `x between 1 and 5 and b = 2`, false}, // the AND after it cuts again
 		{`a = 1 AND x IS NULL`, `x is null`, `a = 1 AND x IS NULL`, false},
