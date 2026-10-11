@@ -34,11 +34,12 @@ type queryTab struct {
 	path       string
 	ver, saved int // changes made, and the one the file has
 	// disk is the file as this tab last read or wrote it; another process or
-	// editor having changed it since, a write is refused once (F13.2). armed:
-	// that was said, the next write is the user's yes; told: an autosave said
+	// editor having changed it since, a write is refused once (F13.2). armed
+	// is the file as it was then, that was said: a save of it is the user's
+	// yes, one of a file changed again is told again; told: an autosave said
 	// it, not to say it again.
-	disk        fileStamp
-	armed, told bool
+	disk, armed fileStamp
+	told        bool
 	failed      int       // the first line of the statement whose last run failed, its ▶ red; -1 for none
 	running     *run      // the run going on, if one is: another ↵ waits for it (§11)
 	bar         *errorBar // the last run's error, under the text (§7.8「错误栏」)
@@ -64,11 +65,12 @@ type compWait struct {
 // with what its file keeps (§11).
 func openQuery(c *Conn, name string) (*queryTab, error) {
 	path := config.QueryPath(name)
+	disk := stampOf(path) // before the read: a file changed between is then not taken for the one read
 	text, err := config.ReadQuery(path)
 	if err != nil {
 		return nil, fmt.Errorf(i18n.T("读取失败：%w"), err)
 	}
-	return &queryTab{conn: c, schema: c.Schema, ed: editor.New(text), name: name, path: path, disk: stampOf(path), failed: -1}, nil
+	return &queryTab{conn: c, schema: c.Schema, ed: editor.New(text), name: name, path: path, disk: disk, failed: -1}, nil
 }
 
 // fileStamp is what tells a file changed under us: its time and size; zero
@@ -315,10 +317,10 @@ func (t *queryTab) write(explicit bool) error {
 	if t.ver == t.saved {
 		return nil
 	}
-	if cur := stampOf(t.path); cur != (fileStamp{}) && cur != t.disk && !t.armed { // a file gone is written again
+	if cur := stampOf(t.path); cur != (fileStamp{}) && cur != t.disk && (!explicit || cur != t.armed) { // a file gone is written again
 		switch {
 		case explicit:
-			t.armed = true
+			t.armed = cur
 		case t.told:
 			return nil
 		default:
@@ -333,7 +335,7 @@ func (t *queryTab) write(explicit bool) error {
 	if err := config.WriteQuery(t.path, text); err != nil {
 		return err
 	}
-	t.saved, t.disk, t.armed, t.told = t.ver, stampOf(t.path), false, false
+	t.saved, t.disk, t.armed, t.told = t.ver, stampOf(t.path), fileStamp{}, false
 	return nil
 }
 
@@ -379,12 +381,13 @@ func (a *App) external() tea.Cmd {
 
 func (a *App) gotExternal(msg externalDone) tea.Cmd {
 	t := msg.t
+	disk := stampOf(t.path)
 	text, err := config.ReadQuery(t.path)
 	if err != nil {
 		return a.showToast(err.Error(), toastTTL)
 	}
 	cmd := a.queryDid(t, t.ed.Load(text))
-	t.saved, t.disk, t.armed, t.told = t.ver, stampOf(t.path), false, false // what the file has
+	t.saved, t.disk, t.armed, t.told = t.ver, disk, fileStamp{}, false // what the file has
 	if msg.err != nil {
 		return tea.Batch(cmd, a.showToast(msg.err.Error(), toastTTL))
 	}

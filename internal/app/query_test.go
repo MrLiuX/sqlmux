@@ -1254,10 +1254,26 @@ func TestQueryFileChangedOutside(t *testing.T) {
 	if data, _ := os.ReadFile(ca.path); string(data) != "select 'written in A';\n" || !strings.Contains(b.toast, "再保存一次会覆盖") {
 		t.Errorf("B's :w: file %q, toast %q", data, b.toast)
 	}
+	// the refusal is no standing yes: an autosave still does not write, and a
+	// file changed again after it is told again
+	feed(t, b, "ox<Esc>")
+	b.Update(autosave{cb, cb.ver})
+	if data, _ := os.ReadFile(ca.path); string(data) != "select 'written in A';\n" {
+		t.Fatalf("an autosave after the refusal wrote: %q", data)
+	}
+	if err := os.WriteFile(ca.path, []byte("a third\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	b.toast = ""
+	feed(t, b, ":w<CR>")
+	if data, _ := os.ReadFile(ca.path); string(data) != "a third\n" || !strings.Contains(b.toast, "再保存一次会覆盖") {
+		t.Fatalf("a file changed again: %q, toast %q", data, b.toast)
+	}
 	feed(t, b, ":w<CR>") // the yes
-	if data, _ := os.ReadFile(ca.path); string(data) != "select 'written in B';\n" {
+	if data, _ := os.ReadFile(ca.path); !strings.Contains(string(data), "select 'written in B';") {
 		t.Errorf("B's second :w: %q", data)
 	}
+	feed(t, b, "dd") // back to what it was typing
 	// and it is B's file again: a change in it is written as it goes
 	feed(t, b, "ox<Esc>:w<CR>")
 	if data, _ := os.ReadFile(ca.path); !strings.Contains(string(data), "x") {
