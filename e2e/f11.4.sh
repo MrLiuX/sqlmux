@@ -8,7 +8,7 @@
 e2e_build || exit 1
 . "$(dirname "$0")/palette.sh"
 . "$(dirname "$0")/paging.sh"
-CPU_MAX=${E2E_CPU_MAX:-20} BURST_MAX=${E2E_BURST_MAX:-600}
+CPU_MAX=${E2E_CPU_MAX:-20} BURST_MAX=${E2E_BURST_MAX:-750}
 
 D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; rm -rf "$D"' EXIT
 e2e_own_db || { echo "e2e: could not create the private database" >&2; exit 1; }

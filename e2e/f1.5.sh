@@ -113,7 +113,7 @@ e2e_click 60 $(item_y "status = "); sleep 0.5; wait_for 8 settled
 check "点击一行就应用这一项" eval '[[ $(where_in) == "status = '"'done'"'" && -z $(pop) ]] && qb_has "LIMIT 500"'
 
 # ---- state.json（§14）：0600、按「连接名/schema.表」、面板的最近使用；重启后收藏和最近使用都在
-check "state.json 在 \$XDG_STATE_HOME/sqlmux/，权限 0600，目录里没有留下临时文件" eval '[[ $(stat -f %Lp "$SJ") == 600 && $(ls "$ST/sqlmux") == state.json ]]'
+check "state.json 在 \$XDG_STATE_HOME/sqlmux/，权限 0600，目录里只有 state.json 和它的锁文件 state.json.lock（F13.3，没有临时文件）" eval '[[ $(stat -f %Lp "$SJ") == 600 && -z $(ls "$ST/sqlmux" | grep -vx -e state.json -e state.json.lock) ]]'
 check "按 doraemon/public.t_order 存；最近使用记着表 doraemon/public.t_order（F5.10 起带连接名）" eval 'python3 -c "import json,sys; s=json.load(open(sys.argv[1])); assert \"doraemon/public.t_order\" in s[\"tables\"]; assert {\"kind\": \"table\", \"id\": \"doraemon/public.t_order\"} in s[\"recent\"], s[\"recent\"]" "$SJ"'
 start -S "$ST"
 pal ""
