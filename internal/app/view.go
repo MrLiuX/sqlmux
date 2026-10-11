@@ -131,14 +131,9 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 	if a.jump != nil {
 		a.drawJump(f)
 	}
-	// The overlays are drawn here from the bottom up, topOverlay's order
-	// reversed, but for the help, which is drawn first (F13.14).
-	if a.keyHelp != nil {
-		a.keyHelpView().Draw(f, a.overlayArea())
-	}
-	if a.whichKey { // over the help too: a Ctrl leader's keys there (§6.5)
-		a.whichKeyOverlay().Draw(f, a.overlayArea())
-	}
+	// The overlays are drawn from the bottom up, topOverlay's order reversed as
+	// far as they can be open together: the help, which has the keys over the
+	// palette, is drawn after it (F13.14).
 	if t := a.typingTab(); t != nil { // the WHERE's lists (§9.7), a cell's options (§10.2)
 		switch p := a.focused(); {
 		case t.cell != nil:
@@ -207,6 +202,12 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 				v.Draw(f, box, rows)
 			}
 		}
+	}
+	if a.keyHelp != nil {
+		a.keyHelpView().Draw(f, a.overlayArea())
+	}
+	if a.whichKey { // over the help too: a Ctrl leader's keys there (§6.5)
+		a.whichKeyOverlay().Draw(f, a.overlayArea())
 	}
 	if c := a.confirm; c != nil {
 		cf := ui.Confirm{Text: c.text, Danger: c.danger, YesKey: a.keys.Hint("confirm.yes", "confirm"), Yes: c.yes}
