@@ -41,7 +41,7 @@
 
 **开发**（§10「值编辑器」、§6.4 `value`）
 - [ ] `e`（`grid.value`「在值编辑器中打开」，grid 和 result）打开居中浮窗，宽高同表 DDL 浮窗，标题 `<列名> · <类型>`，内容是 `internal/editor` 的编辑器，作用域 `value`：`C-s` 写回并关闭，其余交给 vim；`[map.normal]` / `[map.visual]` 照常。模式块显示编辑器的模式。
-- [ ] JSON：列类型 json / jsonb / json，或文字 `json.Valid`，打开时格式化成 2 空格缩进；着色用一个小的 JSON 词法（键名 `sql_column`、字符串 `string`、数字 `number`、true / false / null `keyword`、标点 `sql_operator`）；`gq` 格式化 JSON，不合法 toast「不是 JSON」。
+- [ ] JSON：列类型 json / jsonb / json，或文字 `json.Valid`，打开时格式化成 2 空格缩进；着色用一个小的 JSON 词法（放 `internal/sqlkit/json.go`，和 SQL 词法同包，不新增目录；键名 `sql_column`、字符串 `string`、数字 `number`、true / false / null `keyword`、标点 `sql_operator`）；`gq` 格式化 JSON，不合法 toast「不是 JSON」。
 - [ ] 写回：`:w` 记成这一格的修改（规则同行内输入框：没改不记；空是空字符串），不关；`C-s` / `:wq` 写回并关；`esc`（NORMAL）/ `:q` 不写，有改动先确认「放弃修改？」。JSON 列写回原文含缩进。
 - [ ] 只读：进不了编辑的格和结果 tab 也能开，改动的键 toast「只读」，`y` 照常，`esc` / `q` 关。编辑器需要一个只读开关（最小改动：改动的操作统一拦在一处）。
 - [ ] 细节（已定）：不做 DataGrip 的「设置高亮显示语言」，只认 JSON；不做记录视图。
@@ -95,7 +95,7 @@
 - **涉及**：`cmd/sqlmux`、`internal/app`（启动、form、tab）、`internal/db`（测试连接）、`internal/keymap/default.toml`
 
 **开发**（§5、§14「恢复」、§7.8「新建连接表单」「把 tab 移到相邻 pane」）
-- [ ] 启动连接连不上（`sqlmux`、`sqlmux <连接名>`、`--layout` 三条路都是）不再是启动错误：进界面，节点标失败、toast 驱动的错误；用它的挂起 tab 不关（用户 2026-10-11 补：DataGrip 那样留着显示报错），内容区居中画 `error` 色的错误页（连接名加驱动的错误原文，折行），`R`、展开节点、连上都重试，连上后照常取数；query tab 本来就留着。启动错误只剩配置本身的问题。
+- [ ] 启动连接连不上（`sqlmux`、`sqlmux <连接名>`、`--layout` 三条路都是）不再是启动错误（`app.Open` 永远建出 Session，拨号失败记在启动连接的状态上、第一帧 toast；`error` 只剩配置类，worker 定）：进界面，节点标失败、toast 驱动的错误；用它的挂起 tab 不关（用户 2026-10-11 补：DataGrip 那样留着显示报错），内容区居中画 `error` 色的错误页（连接名加驱动的错误原文，折行），`R`、展开节点、连上都重试，连上后照常取数；query tab 本来就留着。启动错误只剩配置本身的问题。
 - [ ] 表单加「测试」按钮（`form.test`，`C-t`）：校验通过后用当前值真连一次（10s 超时），`测试中…`，结果写在底栏上方一行：`已连接 · <引擎 版本> · <耗时>` 或驱动的错误；不保存、测完断开。连接管理里同样。
 - [ ] dsn 字段空时显示 `dim` 色的示例（按 engine）；别的字段照旧不预填。
 - [ ] `tab.move.next` / `tab.move.prev`（默认 `<Leader>wn` / `<Leader>wp`）：当前 tab 挪到顺时针下一个 / 上一个普通 pane 的末尾并成为当前 tab，焦点跟过去；来源空了留引导页；只有一个普通 pane 或引导 tab 时无事。
