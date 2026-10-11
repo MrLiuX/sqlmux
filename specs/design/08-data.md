@@ -44,7 +44,7 @@ type Result struct {
 
 每个 session 的每个连接（`Conn`，§5「一个 session 多个连接」）用到时建两条：`Meta` / `Main`，这个连接上的 query 共用 `Main`（M5 起；原来是每个 session 两条，分工不变）。每条连接由一个 `db.Worker` 独占，用互斥锁保证同一时刻只跑一个请求，因为连接对象不能并发使用。`tea.Cmd` 本来就各在自己的 goroutine 里执行，所以 Worker 不再单开 goroutine 和 channel；请求的先后由 tab 的 `seq` 兜底（§8.3）。`Worker.Cancel()` 取消当前请求的 ctx。
 
-**启动**：`main` 里同步给启动时的连接（`sqlmux <名字>` 指定的，不带参数时是第一个）建连，先 `Main` 后 `Meta`，两条都连上才进入界面，期间不显示提示（每条最多 10s）。任何一步失败都按 §14「启动时找不到连接」处理。其他连接在用到时（树里展开、query 选它、新 session）在 Cmd 里连，失败只标在树上、进 toast（§7.8）。
+**启动**：启动时的连接（`sqlmux <名字>` 指定的，不带参数时是第一个）M12 F12.5 起和其他连接一样在 Cmd 里连（先 `Main` 后 `Meta`，每条最多 10s），界面立刻进入、节点显示连接中；失败标在树上、进 toast，它的 tab 留着显示错误页（§14「恢复」）。原来是 `main` 里同步建连、两条都连上才进入界面、失败退出。其他连接在用到时（树里展开、query 选它、新 session）同样在 Cmd 里连。连接失败后在它的 query 里执行、query pane 按 `R`、表 tab 错误页上 `R` 都重拨（同 fetch）；只有拨号还在进行时才 toast「<连接名> 还没连上」（审查时定）。
 
 | 连接 | 用途 |
 |---|---|
