@@ -545,3 +545,56 @@ func TestPaletteQueryPreview(t *testing.T) {
 		t.Errorf("row %+v, enter %q", r, enterOf(a))
 	}
 }
+
+// The preview colors a query by the schema state.json says it was in on the
+// connection it says it was on, by the current connection's when none is kept,
+// and a connection that is gone keeps no schema (F12.10).
+func TestPaletteQueryPreviewPlace(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a, seed := withConns()
+	other := db.Table{Schema: "other", Name: "o_tab"}
+	seed.Tables = append(seed.Tables, other)
+	seed.cols[idOf(other)] = db.Columns{Cols: []db.Column{{Name: "only_col"}}}
+	queryFile(t, "q_other", "select only_col from o_tab\n")
+	queryFile(t, "q_public", "select only_col from o_tab\n")
+	queryFile(t, "q_none", "select * from agent\n")
+	queryFile(t, "q_gone", "select 1\n")
+	a.state.Queries = map[string]config.QueryState{
+		"q_other":  {Conn: "seed", Schema: "other"},
+		"q_public": {Conn: "seed", Schema: "public"},
+		"q_gone":   {Conn: "gone", Schema: "other"},
+	}
+	a.run("palette.open", 0)
+	pick := func(name string) *ui.PalettePreview {
+		t.Helper()
+		a.palette.input.Text, a.palette.input.Pos = "@"+name, len(name)+1
+		items, ms := a.paletteMatches()
+		for i, m := range ms {
+			if items[m.Index].kind == itemQuery && items[m.Index].id == name {
+				a.palette.sel = i
+				return a.palettePreview()
+			}
+		}
+		t.Fatalf("no query %s", name)
+		return nil
+	}
+	if pv := pick("q_other"); pv == nil || pv.Names(7, "only_col") != ui.ColumnName {
+		t.Errorf("in the schema it was in: %+v", pv)
+	}
+	if pv := pick("q_public"); pv == nil || pv.Names(7, "only_col") == ui.ColumnName {
+		t.Errorf("in another schema: the column is not its table's: %+v", pv)
+	}
+	if pv := pick("q_none"); pv == nil || pv.Names(14, "agent") != ui.TableName {
+		t.Errorf("no connection kept, the current one's: %+v", pv)
+	}
+	cur := a.sess.Conns[0]
+	if c, schema := a.queryPlace("q_gone", cur); c != cur || schema != cur.Schema {
+		t.Errorf("a connection that is gone: %v %q", c.Spec.Name, schema)
+	}
+	if c, schema := a.queryPlace("q_other", cur); c != seed || schema != "other" {
+		t.Errorf("a connection kept: %v %q", c.Spec.Name, schema)
+	}
+	if c, schema := a.queryPlace("q_none", nil); c != nil || schema != "" {
+		t.Errorf("no connection at all: %v %q", c, schema)
+	}
+}

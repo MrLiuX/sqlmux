@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -430,7 +431,7 @@ func (a *App) palettePreview() *ui.PalettePreview {
 }
 
 // queryPreviewRows and queryPreviewBytes are how much of a query file the
-// preview reads: its first rows, and no more than a few KB of them, one line
+// preview shows: its first rows, and no more than a few KB of them, one line
 // of a file being as long as it likes.
 const (
 	queryPreviewRows  = 100
@@ -465,14 +466,14 @@ func (a *App) queryPreview() *ui.PalettePreview {
 		text = strings.Join(lines[:queryPreviewRows], "")
 	}
 	if len(text) > queryPreviewBytes {
-		text = strings.ToValidUTF8(text[:queryPreviewBytes], "") // not through a character
+		n := queryPreviewBytes
+		for n > 0 && !utf8.RuneStart(text[n]) { // not through a character
+			n--
+		}
+		text = text[:n]
 	}
 	pv := &ui.PalettePreview{Text: strings.TrimRight(text, "\n"), Top: a.palette.pvTop}
-	if c, last, kept := a.queryPlace(name, a.palette.conn); c != nil {
-		schema := c.Schema
-		if kept {
-			schema = last.Schema
-		}
+	if c, schema := a.queryPlace(name, a.palette.conn); c != nil {
 		pv.Dialect = c.eng.Dialect()
 		pv.Names, _ = a.sqlNames(c, text, schema, nil)
 	}
@@ -535,9 +536,7 @@ func (a *App) wantDDL() tea.Cmd {
 	}
 	id, c, t, ok := a.previewed()
 	if !ok { // a query's preview is held by its name, apart from a table's id
-		if id = a.selectedQuery(); id != "" {
-			id = "\x00" + id
-		}
+		id = a.selectedQuery() // a table's id has a /, a query's name has none
 	}
 	if id == p.preview {
 		return nil

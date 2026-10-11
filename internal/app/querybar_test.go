@@ -1004,10 +1004,37 @@ func TestOrderListClickAndRemove(t *testing.T) {
 	}
 	answer(a, tab)
 	tab.pageNo = 2
-	feed(t, a, "gojj") // amount, which is not in it
+	feed(t, a, "gojj") // paid (it opens on status), which is not in it
 	sent := len(rec.sqls)
 	feed(t, a, "a")
 	if len(rec.sqls) != sent || tab.pageNo != 2 || !slices.Equal(tab.order, orderOf("status")) {
 		t.Errorf("a on a column not in the sorting: %d sent after %d, page %d, order %v", len(rec.sqls), sent, tab.pageNo, tab.order)
+	}
+}
+
+// The ORDER list's keys are its own: with COLS open they do nothing, and with
+// `[grid] order = "desc"` a head clicked back to the default sorts the row
+// identity down, as a table opened anew does (F12.9).
+func TestOrderActionsOnlyInOrderList(t *testing.T) {
+	a, tab, rec := withRecorder(t)
+	feed(t, a, "gc")
+	sel := a.cols.sel
+	a.run("order.down", 0)
+	a.run("order.filter", 0)
+	a.run("order.close", 0)
+	if a.cols == nil || a.cols.sel != sel || a.cols.typing {
+		t.Errorf("COLS open, order.* moved it: %+v", a.cols)
+	}
+	feed(t, a, "<Esc>")
+	a.newDesc = true
+	feed(t, a, "l")
+	for i, want := range []string{`order by "status" desc, "id" limit`, `order by "status" asc, "id" limit`, `order by "id" desc limit`} {
+		if sql := lastSQL(t, rec, a.run("grid.order.cycle", 0)); !strings.Contains(sql, want) {
+			t.Fatalf("gs %d: %s, order %v desc %v", i+1, sql, tab.order, tab.desc)
+		}
+		answer(a, tab)
+	}
+	if len(tab.order) != 0 || !tab.desc {
+		t.Errorf("back to the default: order %v, desc %v", tab.order, tab.desc)
 	}
 }

@@ -54,14 +54,17 @@ func (a *App) queryList() []string {
 }
 
 // queryPlace is where query name opens: the connection state.json says it
-// last used and the schema it was in, kept true; with none kept, or one that is
-// not in the session, cur and nothing (§11).
-func (a *App) queryPlace(name string, cur *Conn) (c *Conn, last config.QueryState, kept bool) {
-	last, kept = a.state.Queries[name]
+// last used and the schema it was in; with none kept, or one that is not in the
+// session, cur and its schema (§11).
+func (a *App) queryPlace(name string, cur *Conn) (c *Conn, schema string) {
+	last, kept := a.state.Queries[name]
 	if i := slices.IndexFunc(a.sess.Conns, func(cn *Conn) bool { return cn.Spec.Name == last.Conn }); kept && i >= 0 {
-		return a.sess.Conns[i], last, true
+		return a.sess.Conns[i], last.Schema
 	}
-	return cur, last, false
+	if cur == nil {
+		return nil, ""
+	}
+	return cur, cur.Schema
 }
 
 // openQueryFile is ↵ on a query of the Queries node: one that is open
@@ -72,7 +75,7 @@ func (a *App) openQueryFile(name string) tea.Cmd {
 	if a.focusQuery(name) {
 		return nil
 	}
-	c, last, kept := a.queryPlace(name, a.conn())
+	c, schema := a.queryPlace(name, a.conn())
 	if c == nil {
 		return a.noConnection()
 	}
@@ -80,9 +83,7 @@ func (a *App) openQueryFile(name string) tea.Cmd {
 	if err != nil {
 		return a.showToast(err.Error())
 	}
-	if kept {
-		t.schema = last.Schema
-	}
+	t.schema = schema
 	p := a.openTarget()
 	a.showPane(p.ID)
 	putTab(p, Tab{Name: name, Query: t}, p.tab().landing())
