@@ -432,7 +432,17 @@ func (a *App) grid(p *Pane, t *dataTab) ui.Grid {
 	shown := t.shownCols()
 	for _, i := range shown {
 		name := t.page.Cols[i].Name
-		g.Cols = append(g.Cols, ui.GridCol{Name: name, PK: slices.Contains(t.cols.PK, name), Type: colType(t.typeOf(name))})
+		col := ui.GridCol{Name: name, PK: slices.Contains(t.cols.PK, name), Type: colType(t.typeOf(name))}
+		if at := slices.IndexFunc(t.shown.order, func(o db.OrderCol) bool { return o.Col == name }); at >= 0 { // not the default, which every table's id would show
+			col.Sort = a.icons.SortAsc
+			if t.shown.order[at].Desc {
+				col.Sort = a.icons.SortDesc
+			}
+			if len(t.shown.order) > 1 {
+				col.Rank = at + 1
+			}
+		}
+		g.Cols = append(g.Cols, col)
 	}
 	keyed := (len(t.edits) > 0 || len(t.deleted) > 0) && t.cols.Key() != nil
 	changed := map[string]bool{} // rows with changes, COLS hiding them or not

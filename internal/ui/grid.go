@@ -17,6 +17,8 @@ type GridCol struct {
 	Name string
 	PK   bool // header gets the key icon
 	Type ColType
+	Sort Icon // the way it is sorted by: after the name, in warn; none when its Text is empty (F12.7)
+	Rank int  // its place among several columns sorted by, 1 on; 0 for no number
 }
 
 // ColType is the class of a column's values: it picks their color, and
@@ -182,7 +184,11 @@ func (v view) head(c int) string {
 	if v.g.Transpose {
 		return v.g.number(c)
 	}
-	return v.g.header(v.g.Cols[c])
+	h := v.g.header(v.g.Cols[c])
+	if m := v.g.sortMark(v.g.Cols[c]); m != "" {
+		h += " " + m
+	}
+	return h
 }
 
 // label is what leads screen row r: a record's number, or a field's name.
@@ -219,6 +225,17 @@ func (g Grid) header(col GridCol) string {
 		return g.Key.Text + " " + col.Name
 	}
 	return col.Name
+}
+
+// sortMark is what shows how col is sorted by: "↓", or "2↑" when several are.
+func (g Grid) sortMark(col GridCol) string {
+	if col.Sort.Text == "" {
+		return ""
+	}
+	if col.Rank > 0 {
+		return strconv.Itoa(col.Rank) + col.Sort.Text
+	}
+	return col.Sort.Text
 }
 
 // labelWidth is the width of the column that leads each row.
@@ -437,6 +454,13 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 	for i, c := range cols {
 		right := min(cellX(i)+ws[c], area.Max.X)
 		h := Truncate(v.head(c), ws[c])
+		var mark string
+		if !g.Transpose {
+			// the mark outlives the name's tail when they do not both fit (F12.7)
+			if mark = g.sortMark(g.Cols[c]); mark != "" {
+				h = Truncate(g.header(g.Cols[c]), max(ws[c]-Width(mark)-1, 0))
+			}
+		}
 		switch {
 		case g.Transpose:
 			rowNo(uv.Rect(cellX(i)-1, y, ws[c]+2, 1), c)
@@ -449,6 +473,9 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 				f.Region(uv.Rect(cellX(i)-1, y, ws[c]+2, 1).Intersect(area), Target{Kind: KindHead, Pane: g.Pane, I: c})
 			}
 			f.Text(cellX(i), y, right, h, name)
+			if mark != "" {
+				f.Text(min(cellX(i)+Width(h)+1, right), y, right, mark, g.Cols[c].Sort.On(uv.Style{Fg: th.Warn, Bg: th.PaneBg}))
+			}
 			if g.Cols[c].PK && g.Key.Fg != nil { // the key icon keeps its own color (§7.7)
 				f.Text(cellX(i), y, right, g.Key.Text, g.Key.On(name))
 			}

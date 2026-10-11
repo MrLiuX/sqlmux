@@ -406,3 +406,35 @@ func TestWidestCache(t *testing.T) {
 		t.Errorf("measured %d times", empty.Passes)
 	}
 }
+
+// A column sorted by has its way after its name, numbered when several are; a
+// narrow column keeps the mark and loses the name's tail; turned there is none
+// (F12.7).
+func TestGridSortMarks(t *testing.T) {
+	head := func(g Grid, w int) string {
+		f := NewFrame(w, 7, TokyonightStorm)
+		g.Draw(f, uv.Rect(0, 0, w, 7))
+		return strings.Split(f.String(), "\n")[0]
+	}
+	g := testGrid()
+	if h := head(g, 60); strings.ContainsAny(h, "↑↓") {
+		t.Errorf("no sorting, a mark: %q", h)
+	}
+	g.Cols[1].Sort, g.Cols[1].Rank = Icon{Text: "↓"}, 1
+	g.Cols[2].Sort, g.Cols[2].Rank = Icon{Text: "↑"}, 2
+	if h := head(g, 60); !strings.Contains(h, "name 1↓") || !strings.Contains(h, "note 2↑") {
+		t.Errorf("two columns: %q", h)
+	}
+	g.Cols[1].Rank, g.Cols[2].Sort = 0, Icon{}
+	if h := head(g, 60); !strings.Contains(h, "name ↓") || strings.Contains(h, "↑") {
+		t.Errorf("one column: %q", h)
+	}
+	g.Cols[1].Name = strings.Repeat("n", maxColWidth+5) // wider than a column goes
+	if h := head(g, 100); !strings.Contains(h, "…") || !strings.Contains(h, "↓") {
+		t.Errorf("squeezed: %q", h)
+	}
+	g.Transpose = true
+	if h := head(g, 60); strings.ContainsAny(h, "↑↓") {
+		t.Errorf("turned, a mark: %q", h)
+	}
+}

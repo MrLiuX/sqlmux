@@ -205,6 +205,45 @@ func TestOrderHeadClick(t *testing.T) {
 	}
 }
 
+// A column in the sorting has its way after its name, numbered once there are
+// two; the default sorting by the row identity shows none, and a click back to
+// it takes the mark away (F12.7).
+func TestHeadSortMarks(t *testing.T) {
+	a, tab, rec := withRecorder(t)
+	head := func(i int) uv.Position {
+		return find(t, a, ui.Target{Kind: ui.KindHead, Pane: 1, I: i}).Min.Add(uv.Pos(1, 0))
+	}
+	asc, desc := a.icons.SortAsc.Text, a.icons.SortDesc.Text
+	headRow := func() string {
+		p := head(0)
+		return strings.Split(a.render().String(), "\n")[p.Y]
+	}
+	if h := headRow(); strings.ContainsAny(h, asc+desc) {
+		t.Fatalf("the default sorting: %q", h)
+	}
+	lastSQL(t, rec, click(a, head(2)))
+	answer(a, tab)
+	if h := headRow(); !strings.Contains(h, "amount "+asc) {
+		t.Fatalf("one column: %q", h)
+	}
+	a.run("grid.order.cycle", 0)
+	answer(a, tab)
+	a.Update(tea.MouseClickMsg{X: head(1).X, Y: head(1).Y, Button: tea.MouseLeft, Mod: tea.ModShift})
+	a.Update(tea.MouseReleaseMsg{X: head(1).X, Y: head(1).Y, Button: tea.MouseLeft})
+	answer(a, tab)
+	h := headRow()
+	if !strings.Contains(h, "amount 1"+desc) || !strings.Contains(h, "status 2"+asc) {
+		t.Fatalf("two columns: %q", h)
+	}
+	golden.RequireEqual(t, a.render().String())
+	tab.order = nil
+	a.fetch(tab, false)
+	answer(a, tab)
+	if h := headRow(); strings.ContainsAny(h, asc+desc) {
+		t.Errorf("back to the default: %q", h)
+	}
+}
+
 // A head cut at the pane's edge is brought into sight by a click on it and by
 // a right-click, as a move to its cell is (F12.3).
 func TestHeadClipped(t *testing.T) {
