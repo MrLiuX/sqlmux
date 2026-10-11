@@ -63,3 +63,29 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m "sqlmux $TAG"
           git push
+
+  # the npm packages: the binaries of the Release's archives under
+  # @kackerx/sqlmux-<os>-<arch>, and sqlmux that runs them (NPM_TOKEN)
+  npm:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: the archives of the Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download "$GITHUB_REF_NAME" --pattern '*.tar.gz' --dir archives
+      - run: node npm/build.mjs "$GITHUB_REF_NAME" archives out
+      - name: the binary of this runner says the tag
+        run: out/sqlmux-linux-x64/bin/sqlmux --version | grep -F "sqlmux $GITHUB_REF_NAME "
+      - name: publish the platform packages, then the shell package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for d in out/sqlmux-*; do npm publish "$d" --access public; done
+          npm publish out/sqlmux --access public

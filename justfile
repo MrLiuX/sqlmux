@@ -15,6 +15,20 @@ release-check:
     goreleaser check
     goreleaser build --snapshot --clean
 
+# the npm packages of a snapshot build are made, installed side by side and run (needs goreleaser, node, npm)
+npm-check:
+    #!/usr/bin/env bash
+    set -eu
+    goreleaser release --snapshot --clean --skip=publish
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    node npm/build.mjs v0.0.0 dist "$tmp/out"
+    os=$(uname -s | tr A-Z a-z); cpu=$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')
+    mkdir "$tmp/tgz" "$tmp/use"
+    for d in "$tmp/out/sqlmux" "$tmp/out/sqlmux-$os-$cpu"; do (cd "$d" && npm pack --pack-destination "$tmp/tgz" >/dev/null); done
+    cd "$tmp/use" && npm init -y >/dev/null && npm i --offline "$tmp"/tgz/*.tgz >/dev/null
+    ./node_modules/.bin/sqlmux --version
+
 # build bin/sqlmux
 build:
     go build -ldflags "-X main.version=$(git describe --tags --always --dirty) -X main.commit=$(git rev-parse --short HEAD) -X main.date=$(date -u +%Y-%m-%d)" -o bin/sqlmux ./cmd/sqlmux
