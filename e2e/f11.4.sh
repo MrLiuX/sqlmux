@@ -85,10 +85,13 @@ for ch in line:
     if ch == "│": out.append(str(col))
 print(",".join(out))' "$1"; }
 
+# 每列的宽度（相邻 │ 的间距，去掉行号栏）：行数变少时行号栏会变窄，整体位置跟着移，列宽才是不变的
+colw() { seps "$1" | python3 -c 'import sys; a = [int(x) for x in sys.stdin.read().strip().split(",")]; print(",".join(str(b - c) for b, c in zip(a[2:], a[1:])))'; }
+
 # ---- 表格 pane（一页 100 行）：打开 t_wide，j 按住 3 秒
 start -C "$D/own"; sleep 1; open_table t_wide; wait_for 8 settled
 HY=$(hy)
-S0=$(seps "$HY")
+S0=$(seps "$HY"); W0=$(colw "$HY")
 r=$(hold 90 30 j)
 echo "  表格 pane：j × 90 @30/s → $r"
 check "表格 pane：每秒 30 个 j 持续 3 秒，最后一个键之后 100ms 内光标在第 91 行" eval '[[ $(pos_of "$r") == "91,1" ]] || { echo "  光标 $(pos_of "$r")"; false; }'
@@ -120,6 +123,35 @@ check "刷新后：owner 这一页最宽的值变了，列的位置变了，新�
 psql "$E2E_DB" -q -c "update t_wide set owner = 'owner1' where id = 1" >/dev/null
 key R; wait_for 8 settled; sleep 0.4
 check "改回来再刷新：列的位置回到原来的" eval '[[ $(seps "$HY") == "$S0" ]]'
+
+# ---- WHERE 去掉的行里有最宽的值：列缩窄；再去掉 WHERE：宽回来（缓存不能停在旧页）
+psql "$E2E_DB" -q -c "update t_wide set owner = repeat('长名字', 12) where id = 50" >/dev/null
+key R; wait_for 8 settled; sleep 0.4
+S1=$(seps "$HY"); W1=$(colw "$HY")
+check "（准备）第 50 行的 owner 很长：这一页的 owner 列变宽，列的位置变了" eval '[[ $S1 != "$S0" ]]'
+key /; sleep 0.3; e2e_type "id < 10"; key Enter; wait_for 8 settled; sleep 0.4
+ow() { colw "$HY" | cut -d, -f5; }   # owner 列的宽度（id 列的宽度随行数位数变，所以不比整行）
+check "WHERE id < 10：最长的值在被去掉的行里，owner 列缩回去，宽度同没有那个值时（$(echo "$W0" | cut -d, -f5)，不是 $(echo "$W1" | cut -d, -f5)）" eval '[[ $(ow) == $(echo "$W0" | cut -d, -f5) && $(ow) != $(echo "$W1" | cut -d, -f5) ]] || { echo "  W0 $W0"; echo "  W1 $W1"; echo "  now $(colw "$HY")"; false; }'
+key /; sleep 0.3; clear_in; key Enter; wait_for 8 settled; sleep 0.4
+check "去掉 WHERE：第 50 行回来，列又变宽（同 S1）" eval '[[ $(seps "$HY") == "$S1" ]]'
+psql "$E2E_DB" -q -c "update t_wide set owner = 'owner' || (50 % 7) where id = 50" >/dev/null
+key R; wait_for 8 settled; sleep 0.4
+check "库里改回来再刷新：列的位置回到 S0" eval '[[ $(seps "$HY") == "$S0" ]]'
+
+# ---- 隐藏一列、WHERE 一行都不匹配、取消隐藏：不崩，列回到原来的
+key g; key c; sleep 0.5; key j; key Space; key Escape; sleep 0.4
+key /; sleep 0.3; e2e_type "id < 0"; key Enter; wait_for 8 settled; sleep 0.5
+check "隐藏 id 后 WHERE id < 0（0 行）：还在跑，查询条 0 行" eval 'flag_is alternate_on 1 && ! screen_has "[e2e-exit" && qb_has "COLS 14/15" && ! e2e_plain | grep -qE "│ +1 │"'
+key g; key c; sleep 0.5; key j; key Space; key Escape; sleep 0.5
+check "0 行时取消隐藏 id：没有崩（还在跑，COLS 15/15）" eval 'flag_is alternate_on 1 && ! screen_has "[e2e-exit" && qb_has "COLS 15/15"'
+key /; sleep 0.3; clear_in; key Enter; wait_for 8 settled; sleep 0.5
+check "去掉 WHERE：100 行回来，列的位置回到 S0" eval '[[ $(seps "$HY") == "$S0" ]]'
+
+# ---- COLS 里调列顺序（J）：列宽跟着列走
+key g; key c; sleep 0.5; key J; key Escape; sleep 0.5
+check "COLS 里把 id 下移一位（J）：表头顺序变了（name 在 id 前），列的位置变了" eval '[[ $(seps "$HY") != "$S0" ]] && [[ $(e2e_text 35 159 "$HY") =~ name\ +│[^│]*id ]]'
+key g; key c; sleep 0.5; key j; key K; key Escape; sleep 0.5
+check "K 移回去：列的位置回到 S0" eval '[[ $(seps "$HY") == "$S0" ]]'
 
 # ---- 编辑单元格（还没保存）：新值进了列宽，r 还原后回去
 key l; key l; key i; sleep 0.3; e2e_type "$(printf '长名字%.0s' 1 2 3 4 5 6 7 8)"; key Enter; sleep 0.5
