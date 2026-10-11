@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/kackerx/sqlmux/internal/db"
@@ -181,7 +182,7 @@ func parseState(data []byte) (*State, error) {
 func setBase(s *State) {
 	saveMu.Lock()
 	defer saveMu.Unlock()
-	base = s
+	base, basePath = s, statePath()
 }
 
 var (
@@ -218,21 +219,50 @@ func save(data []byte, t int) error {
 	if err := json.Unmarshal(data, &ours); err != nil {
 		return err
 	}
-	disk := &State{}
+	unlock, err := lockFile(statePath() + ".lock") // another program may read, merge and rename at this moment too
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	out := &ours
 	if b, err := os.ReadFile(statePath()); err == nil {
-		if disk, err = parseState(b); err != nil {
-			disk = &State{} // one that does not read is the next load's to set aside
+		if disk, err := parseState(b); err == nil {
+			from := base
+			if basePath != statePath() { // a state this program did not begin from
+				from = &State{}
+			}
+			out = merge(from, &ours, disk)
+		} else {
+			_ = os.Rename(statePath(), statePath()+".broken") // not read: set aside, as a load does; this program's own whole is what is written
 		}
 	}
-	merged, err := json.Marshal(merge(base, &ours, disk))
+	merged, err := json.Marshal(out)
 	if err != nil {
 		return err
 	}
 	if err := writeFile(statePath(), merged); err != nil {
 		return err
 	}
-	savedTick, base = t, &ours
+	savedTick, base, basePath = t, &ours, statePath()
 	return nil
+}
+
+// lockFile takes the exclusive lock of the file at path for as long as the
+// returned unlock is not called: one program reads, merges and renames
+// state.json at a time (F13.3).
+func lockFile(path string) (unlock func(), err error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN); f.Close() }, nil
 }
 
 // beforeRename is the test that kills a write between the temp file and the

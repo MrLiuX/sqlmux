@@ -8,15 +8,18 @@ import (
 // base is the state as this program last had it from the file or wrote it
 // to it, what a write is told apart from the file's by: another program's
 // changes in the file since are not undone by this one's, and what this one
-// dropped does not come back from the file (F13.3). Guarded by saveMu.
-var base = &State{}
+// dropped does not come back from the file (F13.3); basePath the file it is of,
+// another one being none. Guarded by saveMu.
+var (
+	base     = &State{}
+	basePath string
+)
 
 // merge is what the program's state ours says, over base, which it began
 // from, on the file as it is now, disk, which others may have changed: each
 // entry this program left alone is the file's; one it changed or added is its
 // own, the lists of an entry both changed put together; one it dropped is gone.
 func merge(base, ours, disk *State) *State {
-	ident := func(s string) string { return s }
 	out := &State{
 		Tables:  mergeMap(base.Tables, ours.Tables, disk.Tables, mergeTable),
 		SQL:     mergeMap(base.SQL, ours.SQL, disk.SQL, func(b, o, d []string) []string { return union(b, o, d, ident) }),
@@ -25,7 +28,7 @@ func merge(base, ours, disk *State) *State {
 	if same(base.Recent, ours.Recent) { // not touched here
 		out.Recent = disk.Recent
 	} else {
-		out.Recent = union(base.Recent, ours.Recent, disk.Recent, func(r Recent) Recent { return r })
+		out.Recent = union(base.Recent, ours.Recent, disk.Recent, ident)
 	}
 	return out
 }
@@ -68,13 +71,14 @@ func mergeMap[V any](base, ours, disk map[string]V, both func(base, ours, disk V
 }
 
 func mergeTable(b, o, d *TableState) *TableState {
-	if b == nil {
-		b = &TableState{}
+	for _, t := range []**TableState{&b, &o, &d} { // a null entry reads as none
+		if *t == nil {
+			*t = &TableState{}
+		}
 	}
-	return &TableState{
-		History:   union(b.History, o.History, d.History, queryKey),
-		Favorites: union(b.Favorites, o.Favorites, d.Favorites, queryKey),
-	}
+	history := union(b.History, o.History, d.History, queryKey)
+	slices.SortStableFunc(history, func(x, y Query) int { return y.At.Compare(x.At) }) // newest first, whose program it was
+	return &TableState{History: history, Favorites: union(b.Favorites, o.Favorites, d.Favorites, queryKey)}
 }
 
 // queryKey is what makes two WHEREs one: all but the time.
@@ -88,8 +92,13 @@ func queryKey(q Query) string {
 	return string(b)
 }
 
+func ident[T any](v T) T { return v }
+
 // union is ours, then what is in disk that ours has not, each once, by key;
 // what base had and ours has not was dropped here and stays so.
+// ponytail: lists with no time (quick SQL, the palette's picks) keep the
+// other program's newest after ours, where a cut at their limit takes them
+// first; sort them by a time if that shows.
 func union[T any, K comparable](base, ours, disk []T, key func(T) K) []T {
 	seen := map[K]bool{}
 	var out []T

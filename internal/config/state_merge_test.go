@@ -150,3 +150,84 @@ func TestSnapshotKeepsDropping(t *testing.T) {
 		t.Errorf("queries after a drop: %v %v", got.Queries, err)
 	}
 }
+
+// A state.json that does not read is set aside, and this program's own state
+// is what is written, whole: its unchanged entries are not lost with the file
+// (F13.3).
+func TestSnapshotOverABrokenFile(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", dir)
+	s, _ := LoadState()
+	s.Queries = map[string]QueryState{"query_1": {Conn: "c"}}
+	s.SQL = map[string][]string{"c": {"select 1"}}
+	if err := Snapshot(s)(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(statePath(), []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s.Queries["query_2"] = QueryState{Conn: "c"}
+	if err := Snapshot(s)(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadState()
+	if err != nil || len(got.Queries) != 2 || len(got.SQL["c"]) != 1 {
+		t.Errorf("after a broken file: %+v %v", got, err)
+	}
+	if b, err := os.ReadFile(statePath() + ".broken"); err != nil || string(b) != "{not json" {
+		t.Errorf("set aside: %q %v", b, err)
+	}
+}
+
+// A write waits for another program's: the lock is held across the read, the
+// merge and the rename (F13.3).
+func TestSnapshotWaitsForTheLock(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	unlock, err := lockFile(statePath() + ".lock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- Snapshot(&State{SQL: map[string][]string{"c": {"x"}}})() }()
+	select {
+	case <-done:
+		t.Fatal("wrote while another held the lock")
+	case <-time.After(300 * time.Millisecond):
+	}
+	unlock()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A state this program did not begin from is no baseline: a write in another
+// directory keeps what it has (tests, and a changed XDG_STATE_HOME), and a null
+// table of the file does not stop a merge (F13.3).
+func TestMergeEdges(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	s1 := &State{Queries: map[string]QueryState{"query_1": {Conn: "c"}}}
+	if err := Snapshot(s1)(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	if err := writeFile(statePath(), []byte(`{"queries":{"query_1":{"conn":"c"}}}`)); err != nil { // another program's, here
+		t.Fatal(err)
+	}
+	s2 := &State{Queries: map[string]QueryState{"query_2": {Conn: "c"}}}
+	if err := Snapshot(s2)(); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := LoadState(); len(got.Queries) != 2 {
+		t.Errorf("another directory's base dropped what the file has: %+v", got.Queries)
+	}
+	q := func(w string, at int) Query { return Query{Where: w, At: time.Unix(int64(at), 0)} }
+	got := merge(&State{}, &State{Tables: map[string]*TableState{"t": {History: []Query{q("o", 20)}}}},
+		&State{Tables: map[string]*TableState{"t": {History: []Query{q("d", 30)}}}})
+	if h := got.Tables["t"].History; len(h) != 2 || h[0].Where != "d" { // the other's newer is first
+		t.Errorf("history order: %+v", h)
+	}
+	got = merge(&State{}, &State{Tables: map[string]*TableState{"t": {History: []Query{q("o", 20)}}}}, &State{Tables: map[string]*TableState{"t": nil}})
+	if got.Tables["t"] == nil || len(got.Tables["t"].History) != 1 {
+		t.Errorf("a null table of the file: %+v", got.Tables)
+	}
+}
