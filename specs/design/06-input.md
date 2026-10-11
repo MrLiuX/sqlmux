@@ -48,7 +48,8 @@ type Action struct {                // 注册表是 map[id]Action，id 如 "pane
 
 | 作用域 | 何时生效 |
 |---|---|
-| `palette` / `where` / `cols` / `dropdown` / `sessions` / `form` / `complete` / `options` / `segments` / `confirm` / `keyhelp` / `menu` / `conns` / `ddl` | 对应的浮层打开时，取最上层的一个。`menu` 是树的右键菜单（M8 F8.23）、`conns` 是连接管理的列表（M8 F8.16）、`ddl` 是表 DDL 浮窗（M9 F9.8：`j` / `↓`、`k` / `↑` 一行，`C-d` / `C-u` 半页，`gg` / `G`，`esc` / `C-c` 关；滚轮也滚它，点浮窗外关）。`options` 是单元格的选项浮层，`segments` 是时间列的分段浮层，都只在展开时生效（§10.2）；`keyhelp` 是 `?` 的键位帮助（§6.5）；`sessions` 是 session 列表，`form` 是新建连接的表单（M5 F5.1，§7.8）。which-key 浮层不是作用域（§6.5） |
+| `palette` / `where` / `cols` / `dropdown` / `sessions` / `form` / `complete` / `options` / `segments` / `confirm` / `keyhelp` / `menu` / `conns` / `ddl` | 对应的浮层打开时，取最上层的一个。`menu` 是树和表格的右键菜单（M8 F8.23；表格 M12 F12.3）、`conns` 是连接管理的列表（M8 F8.16）、`ddl` 是表 DDL 浮窗（M9 F9.8：`j` / `↓`、`k` / `↑` 一行，`C-d` / `C-u` 半页，`gg` / `G`，`esc` / `C-c` 关；滚轮也滚它，点浮窗外关）。`options` 是单元格的选项浮层，`segments` 是时间列的分段浮层，都只在展开时生效（§10.2）；`keyhelp` 是 `?` 的键位帮助（§6.5）；`sessions` 是 session 列表，`form` 是新建连接的表单（M5 F5.1，§7.8）。which-key 浮层不是作用域（§6.5） |
+| `value` | 值编辑器浮窗打开时（M12 F12.2，§10「值编辑器」）：只有应用层的键（`C-s` 写回并关闭），其余按键交给 vim 引擎，同 `query`；`[map.normal]` / `[map.visual]` 照常，`[map.query.*]` 不用 |
 | `wherenormal` | WHERE 输入框在 NORMAL 下（F3.39）：`↵` 执行、`/` 历史 / 收藏、`esc` 回表格，其余交给编辑器；`normal` 照常在它下面 |
 | `newrow` | 编辑还没保存的新行的格时生效（F3.33），叠在 `options` / `segments` 之上：浮层层级里它在最上，没绑的键再落到下面那层浮层。默认只有 `Tab` / `S-Tab`（`cell.field.next` / `cell.field.prev`） |
 | `cell` | 正在编辑单元格（INSERT） |
@@ -165,6 +166,8 @@ H = "0"
 | 表格 | `yy` · `yl` · `p` · `yi` · `Y` | 复制整行 · 复制单元格 · 把复制的行粘贴成新行 · 把行复制为 INSERT 语句（F3.32 起 `yy` 从单元格改为整行）· 把行复制为 JSON（M9 F9.5） | y / yi |
 | 表格 | `0` / `^` · `$` | 首列（`^` 是 M9 F9.3 加的，用户要映射 `_`）· 末列 | 0 / $ |
 | 表格 | `r` · `o` · `dd` | 撤回这一格的修改 · 新增一行 · 标记 / 取消删除这一行（§10.1、§10.6） | 新增（M2/M3 验收） |
+| 表格 | `e` · `*` · `gs` / `gS` · `ge` | 在值编辑器中打开这一格（§10）· 按这个值过滤 · 按这一列排序 / 加入排序 · 导出下拉（§7.6）（M12 F12.2–F12.4；`e`、`ge` result 同） | 新增（M12） |
+| 下拉框 | `space` | ORDER 下拉里把光标所在的列加进 / 翻转 / 移出排序（过滤框为空时，M12 F12.1） | 新增（M12） |
 | 表格 | `m` · `v` / `V` · `s` | 标记 / 取消标记光标所在的记录 · 进 VISUAL 扩选（§7.6「选择」）· flash 式跳转（§6.10）（M10 F10.7、F10.8；result 同） | 新增（M10） |
 | NORMAL | `?` | 键位帮助（§6.5），所有 pane 通用，绑在 `[keys.normal]`（F3.25 起；原来在 grid / tree / landing 各绑一个） | 新增（M2/M3 验收） |
 | NORMAL | `<leader>?` | 键位帮助，哪里都能用 | 新增（M2/M3 验收） |

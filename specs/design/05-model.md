@@ -55,7 +55,7 @@ type Pane struct {
 
 Tab 的种类：
 
-- `DataTab`：所属的 `*Conn`（M5 起）、表引用、`Query{Where, Order, Limit, Page}`、隐藏列集合、`GridState{Row, Col, Scroll, Transpose}`、当前页数据、`Edits map[CellKey]Edit`（修改后的值为文本、NULL 或 DEFAULT）、总行数（-1 表示未知）、请求序号 `seq`。
+- `DataTab`：所属的 `*Conn`（M5 起）、表引用、`Query{Where, Order, Limit, Page}`（`Order` 是有序的 `[]OrderCol{Col, Desc}`，M12 F12.1 起多列；空表示默认排序）、隐藏列集合、`GridState{Row, Col, Scroll, Transpose}`、当前页数据、`Edits map[CellKey]Edit`（修改后的值为文本、NULL 或 DEFAULT）、总行数（-1 表示未知）、请求序号 `seq`。
 - `QueryTab`：文件路径、`*editor.Buffer`、所选的连接 `*Conn`（M5 起）和 schema（仅 PG，§8.6）、它在结果区里的结果 tab。执行走所选连接的 `Main`，同一个连接上的 query 共用它（用户 2026-10-02 定：每个 query 一条连接更复杂、更容易出错，这一版先复用）。
 - `ResultTab`：来源 query、执行序号、`*db.Result`、`GridState`、是否固定。
 
