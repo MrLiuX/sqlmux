@@ -458,4 +458,13 @@ var en = map[string]string{
 	"%s 不可写": "%s is read-only",
 	"知道了":    "Got it",
 	"；":      "; ",
+
+	// F12.5
+	"测试":               "Test",
+	"测试中…":             "Testing…",
+	"测试连接":             "Test connection",
+	"已连接 · %s · %s":    "Connected · %s · %s",
+	"把 tab 移到下一个 pane": "Move tab to the next pane",
+	"把 tab 移到上一个 pane": "Move tab to the previous pane",
+	"目标 pane 里已有这张表":   "The target pane already has this table",
 }

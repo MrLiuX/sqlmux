@@ -30,17 +30,21 @@ type FormField struct {
 	Dim     bool // not taking part: drawn dim
 	Bad     bool // its name in the error color: why ↵ did not save
 	Hidden  bool // not drawn
+	// Example is drawn dim in an input with nothing in it (F12.5)
+	Example string
 }
 
 // Form is a box of fields over the screen: Sel is the field with the keys,
-// Err why it did not save, in error above the buttons.
+// Err why it did not save, in error above the buttons, or, with OK, what a
+// test found, in the ok color.
 type Form struct {
-	Fields       []FormField
-	Sel          int
-	Err          string
-	Save, Cancel string // the buttons' words
-	Delete       string // a third button's word, when a connection there already is can go (F8.16); "" for none
-	Hints        []Hint
+	Fields             []FormField
+	Sel                int
+	Err                string
+	OK                 bool
+	Save, Test, Cancel string // the buttons' words
+	Delete             string // a third button's word, when a connection there already is can go (F8.16); "" for none
+	Hints              []Hint
 	// Pick is a list opened under the input of field PickAt, drawn over what
 	// is below it (the connection form's groups, F10.6); nil for none
 	Pick   *Complete
@@ -49,7 +53,7 @@ type Form struct {
 
 // buttons are the buttons' words and what they run.
 func (fm Form) buttons() []struct{ text, action string } {
-	bs := []struct{ text, action string }{{fm.Save, "form.save"}, {fm.Cancel, "form.cancel"}}
+	bs := []struct{ text, action string }{{fm.Save, "form.save"}, {fm.Test, "form.test"}, {fm.Cancel, "form.cancel"}}
 	if fm.Delete != "" {
 		bs = append(bs, struct{ text, action string }{fm.Delete, "conns.delete"})
 	}
@@ -136,6 +140,10 @@ func (fm Form) drawIn(f *Frame, area uv.Rectangle, focus bool) uv.Position {
 			if c := fd.Input.Draw(f, r, in); sel {
 				cursor = c
 			}
+			if fd.Input.Text == "" && fd.Example != "" {
+				in.Fg = th.Dim
+				f.Text(r.Min.X, y, r.Max.X, fd.Example, in)
+			}
 		case FormSegments:
 			x := r.Min.X
 			for j, ch := range fd.Choices {
@@ -164,7 +172,11 @@ func (fm Form) drawIn(f *Frame, area uv.Rectangle, focus bool) uv.Position {
 		}
 		y++
 	}
-	f.Text(x0, y, x1, fm.Err, uv.Style{Fg: th.Error, Bg: th.PaneBg})
+	note := uv.Style{Fg: th.Error, Bg: th.PaneBg}
+	if fm.OK {
+		note.Fg = th.Focus // the theme has no ok token: the green of what is on
+	}
+	f.Text(x0, y, x1, Truncate(fm.Err, x1-x0), note)
 	f.Text(area.Min.X, y+1, area.Max.X, strings.Repeat("─", area.Dx()), uv.Style{Fg: th.Sep, Bg: th.PaneBg})
 	x, y := x0, y+2
 	for _, b := range fm.buttons() {

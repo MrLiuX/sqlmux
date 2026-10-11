@@ -176,7 +176,7 @@ func (t *dataTab) query() db.Query {
 func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 	if t.pending || t.conn.State != connReady { // a layout's, or one reopened meanwhile: it fetches once its catalog is in (F6.5)
 		t.pending = true
-		return nil
+		return a.connect(t.conn) // R on the error page tries again (F12.5); nil while it connects
 	}
 	t.note, t.failed = ui.Note{}, nil // until the next fetch the user asks for (§10.3)
 	// what is on its way is older than this now, whether this goes or not

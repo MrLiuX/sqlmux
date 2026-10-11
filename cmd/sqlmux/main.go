@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -132,9 +131,6 @@ func startSession(name, layout string, l *config.Layout) (*app.Session, *app.Res
 			return nil, nil, err
 		}
 		restored := app.Restore(conns, l)
-		if err := restored.DialStart(context.Background()); err != nil {
-			return nil, nil, err
-		}
 		return restored.Sessions[0], restored, nil
 	}
 	sess, err := open(name)
@@ -176,11 +172,7 @@ func open(name string) (*app.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	sess, err := app.Open(context.Background(), conns, start)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", conns[start].Name, err)
-	}
-	return sess, nil
+	return app.Open(conns, start), nil
 }
 
 // keysCmd is `sqlmux keys [--format md|toml] [--check]` (§6.7).

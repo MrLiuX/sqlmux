@@ -324,10 +324,13 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 	if c := a.queryBar(p, t).Draw(f, bodyRect(r)); c.X >= 0 {
 		f.Cursor = &c
 	}
-	if t.page.Cols != nil {
+	switch {
+	case t.page.Cols != nil:
 		if c := a.grid(p, t).Draw(f, gridRect(r, t)); c.X >= 0 {
 			f.Cursor = &c
 		}
+	case t.pending && t.conn.State == connFailed: // a layout's tab, its connection not to be had (F12.5)
+		ui.ErrorPage{Title: t.conn.Spec.Name, Text: t.conn.err.Error()}.Draw(f, gridRect(r, t))
 	}
 	drawBar(f, t.bar, p, r)
 }

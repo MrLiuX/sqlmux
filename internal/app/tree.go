@@ -66,8 +66,7 @@ func (a *App) gotConnected(m connected) tea.Cmd {
 		}
 	}
 	if m.err != nil {
-		c.State = connFailed
-		a.dropPending(c)
+		c.State, c.err = connFailed, m.err // the tabs waiting on it stay, saying why (F12.5)
 		return a.showToast(i18n.T("%s：%s", c.Spec.Name, m.err), toastTTL)
 	}
 	c.take(m.d)

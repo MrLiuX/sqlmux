@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 	"testing"
 
@@ -58,5 +59,35 @@ func TestConnManagerScrolls(t *testing.T) {
 	}
 	if m.ListRows(80) != 3+5-2 {
 		t.Errorf("rows %d", m.ListRows(80))
+	}
+}
+
+// The row above the buttons is a test's result in the ok color when it
+// connected, in error otherwise; an input with nothing in it shows its
+// example, dim (F12.5).
+func TestFormResultAndExample(t *testing.T) {
+	fgOf := func(fm Form, mark string) color.Color {
+		f := NewFrame(80, 14, TokyonightStorm)
+		ConnManager{Title: "t", Rows: []ConnRow{{Name: "a"}}, Form: fm}.Draw(f, f.Bounds())
+		for y := range 14 {
+			for x := range 80 {
+				if c := f.Buf.CellAt(x, y); c != nil && c.Content == mark {
+					return c.Style.Fg
+				}
+			}
+		}
+		t.Fatalf("no %s drawn:\n%s", mark, f.String())
+		return nil
+	}
+	fm := Form{Save: "s", Test: "t", Cancel: "c", Err: "ZZ", Fields: []FormField{{Label: "dsn", Example: "QQ://x"}}}
+	if got := fgOf(fm, "Z"); got != TokyonightStorm.Error {
+		t.Errorf("an error: %v", got)
+	}
+	fm.OK = true
+	if got := fgOf(fm, "Z"); got != TokyonightStorm.Focus {
+		t.Errorf("a connection: %v", got)
+	}
+	if got := fgOf(fm, "Q"); got != TokyonightStorm.Dim {
+		t.Errorf("the example: %v", got)
 	}
 }

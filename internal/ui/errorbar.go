@@ -2,8 +2,10 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // ErrorBar is a database's error at the bottom of a pane's content, over
@@ -45,5 +47,27 @@ func (b ErrorBar) Draw(f *Frame, r uv.Rectangle) {
 			l = "…"
 		}
 		f.Text(r.Min.X+1, r.Min.Y+1+i, r.Max.X-1, Truncate(l, r.Dx()-2), st)
+	}
+}
+
+// ErrorPage is what a tab shows in the middle of its content when what it
+// shows is not to be had (F12.5): Title on the first row, Text, a
+// driver's error as it came, wrapped to the width below it; all in the error
+// color, each row centered.
+type ErrorPage struct{ Title, Text string }
+
+func (e ErrorPage) Draw(f *Frame, r uv.Rectangle) {
+	if r.Dx() < 4 {
+		return
+	}
+	lines := []string{e.Title}
+	for _, l := range strings.Split(e.Text, "\n") {
+		lines = append(lines, strings.Split(ansi.Wrap(l, r.Dx()-2, ""), "\n")...)
+	}
+	lines = lines[:min(len(lines), r.Dy())]
+	st := uv.Style{Fg: f.Theme.Error, Bg: f.Theme.PaneBg}
+	for i, l := range lines {
+		l = Truncate(l, r.Dx())
+		f.Text(r.Min.X+(r.Dx()-Width(l))/2, r.Min.Y+(r.Dy()-len(lines))/2+i, r.Max.X, l, st)
 	}
 }

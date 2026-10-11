@@ -21,6 +21,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/db/mysql"
 	"github.com/kackerx/sqlmux/internal/db/postgres"
 	"github.com/kackerx/sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // settle delivers what connecting, the catalog, a run, a page, a save and a
@@ -80,14 +81,11 @@ func ownDB(t *testing.T, eng string) string {
 func TestConnectOnOpen(t *testing.T) { eachEngine(t, connectOnOpen) }
 
 func connectOnOpen(t *testing.T, eng, dsn string) {
-	sess, err := Open(context.Background(), []config.Connection{
+	sess := openUp(t, []config.Connection{
 		{Name: "play", Engine: eng, DSN: dsn},
 		{Name: "seed", Engine: eng, DSN: dsn},
 		{Name: "broken", Engine: "postgres", DSN: "postgres://nobody@127.0.0.1:1/x?connect_timeout=2"},
-	}, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	})
 	defer sess.Close()
 	cfg := config.Default()
 	keys, _ := keymap.New(cfg)
@@ -122,13 +120,10 @@ func connectOnOpen(t *testing.T, eng, dsn string) {
 func TestOpenGroupedStart(t *testing.T) { eachEngine(t, openGroupedStart) }
 
 func openGroupedStart(t *testing.T, eng, dsn string) {
-	sess, err := Open(context.Background(), []config.Connection{
+	sess := openUp(t, []config.Connection{
 		{Name: "grouped", Group: "g", Engine: eng, DSN: dsn},
 		{Name: "plain", Engine: eng, DSN: dsn},
-	}, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	})
 	defer sess.Close()
 	if s, p := sess.Conns[1], sess.Conns[0]; sess.start != s || s.Spec.Name != "grouped" || s.State != connReady || p.State != connIdle {
 		t.Errorf("start %s; %s %v, %s %v", sess.start.Spec.Name, s.Spec.Name, s.State, p.Spec.Name, p.State)
@@ -178,13 +173,10 @@ func TestSecretCached(t *testing.T) {
 func TestQueriesShareMain(t *testing.T) { eachEngine(t, queriesShareMain) }
 
 func queriesShareMain(t *testing.T, eng, dsn string) {
-	sess, err := Open(context.Background(), []config.Connection{
+	sess := openUp(t, []config.Connection{
 		{Name: "play", Engine: eng, DSN: dsn},
 		{Name: "seed", Engine: eng, DSN: dsn},
-	}, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	})
 	defer sess.Close()
 	cfg := config.Default()
 	keys, _ := keymap.New(cfg)
@@ -221,13 +213,10 @@ func queriesShareMain(t *testing.T, eng, dsn string) {
 func TestNewSession(t *testing.T) { eachEngine(t, newSessionOn) }
 
 func newSessionOn(t *testing.T, eng, dsn string) {
-	sess, err := Open(context.Background(), []config.Connection{
+	sess := openUp(t, []config.Connection{
 		{Name: "play", Engine: eng, DSN: dsn},
 		{Name: "seed", Engine: eng, DSN: dsn},
-	}, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	})
 	cfg := config.Default()
 	keys, _ := keymap.New(cfg)
 	a := New(cfg, keys, sess, &config.State{}, "")
@@ -252,10 +241,7 @@ func newSessionOn(t *testing.T, eng, dsn string) {
 // catalog in, on 160 × 45.
 func opened(t *testing.T, specs ...config.Connection) *App {
 	t.Helper()
-	sess, err := Open(context.Background(), specs, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	sess := openUp(t, specs)
 	cfg := config.Default()
 	keys, _ := keymap.New(cfg)
 	a := New(cfg, keys, sess, &config.State{}, "")
@@ -748,5 +734,89 @@ func dropTableOn(t *testing.T, eng, dsn string) {
 	treeTo(t, b, "t_user")
 	if feed(t, b, "dd"); b.confirm != nil || b.toast != "ro 是只读连接" {
 		t.Errorf("read only: asked %v, toast %q", b.confirm != nil, b.toast)
+	}
+}
+
+// openUp is Open on the first of specs with it connected, as the program has it
+// once its first dial is in.
+func openUp(t *testing.T, specs []config.Connection) *Session {
+	t.Helper()
+	sess := Open(specs, 0)
+	d, err := dial(context.Background(), specs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess.start.take(d)
+	return sess
+}
+
+// C-t on a form whose dsn is a database's connects and says the server's
+// version and how long it took, on either engine; the connection is not
+// kept (F12.5).
+func TestConnFormTestConnects(t *testing.T) { eachEngine(t, connFormTestConnects) }
+
+func connFormTestConnects(t *testing.T, eng, dsn string) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	a, _ := withSessions()
+	a.openConnForm()
+	f := a.form
+	f.fields[fieldName].Input = ui.Input{Text: "tried", Pos: 5}
+	f.fields[fieldEngine].On = slices.Index(f.fields[fieldEngine].Choices, eng)
+	f.fields[fieldAdvanced].On = 1
+	f.fields[fieldDSN].Input = ui.Input{Text: dsn, Pos: len(dsn)}
+	_, cmd := a.Update(teaKey("<C-t>"))
+	if cmd == nil {
+		t.Fatalf("not tested: %q", f.err)
+	}
+	a.Update(cmd())
+	want := map[string]string{"postgres": "已连接 · PostgreSQL ", "mysql": "已连接 · MySQL "}[eng]
+	if !f.ok || !strings.HasPrefix(f.err, want) || !strings.HasSuffix(f.err, "s") {
+		t.Errorf("ok %v: %q", f.ok, f.err)
+	}
+	if len(a.sess.Conns) != 1 {
+		t.Errorf("the tested connection is in the tree: %d", len(a.sess.Conns))
+	}
+}
+
+// password_cmd, password_env and ~/.pgpass all connect (§13); with none of
+// them, nothing else supplies the password; a wrong one is the server's error.
+func TestDialPasswordSources(t *testing.T) {
+	u, err := url.Parse(postgres.IntegrationDSN(t))
+	if err != nil || u.User == nil {
+		t.Fatal("SQLMUX_TEST_PG must be a postgres:// URL with a password")
+	}
+	pw, _ := u.User.Password()
+	u.User = url.User(u.User.Username())
+	dsn := u.String() // without its password
+	pgpass := filepath.Join(t.TempDir(), "pgpass")
+	if err := os.WriteFile(pgpass, []byte(strings.Join([]string{u.Hostname(), "*", "*", u.User.Username(), pw}, ":")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, c := range map[string]struct {
+		spec     config.Connection
+		env, val string
+		wrong    bool
+		fails    bool
+	}{
+		"password_cmd": {spec: config.Connection{PasswordCmd: "printf '%s\\n' '" + pw + "'"}},
+		"password_env": {spec: config.Connection{PasswordEnv: "SQLMUX_TEST_PW"}, env: "SQLMUX_TEST_PW", val: pw},
+		"pgpass":       {env: "PGPASSFILE", val: pgpass},
+		"none":         {fails: true},
+		"wrong":        {spec: config.Connection{Password: "wrong"}, wrong: true, fails: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if c.env != "" {
+				t.Setenv(c.env, c.val)
+			}
+			spec := c.spec
+			spec.Name, spec.Engine, spec.DSN = "pw-"+name, "postgres", dsn // a run caches passwords by name (§13): one each
+			d, err := dial(context.Background(), spec)
+			if (err != nil) != c.fails || c.wrong && (err == nil || !strings.Contains(err.Error(), "password authentication failed")) {
+				t.Fatalf("error %v, want one: %v", err, c.fails)
+			}
+			if err == nil {
+				d.discard()()
+			}
+		})
 	}
 }

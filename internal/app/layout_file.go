@@ -2,8 +2,6 @@ package app
 
 import (
 	"cmp"
-	"context"
-	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -113,18 +111,6 @@ type Restored struct {
 	Sessions []*Session
 	Active   int
 	Warnings []string
-}
-
-// DialStart connects the first session's start connection now: at the
-// program's start, a failure is the start's error (§14「恢复」).
-func (r *Restored) DialStart(ctx context.Context) error {
-	c := r.Sessions[0].start
-	d, err := dial(ctx, c.Spec)
-	if err != nil {
-		return fmt.Errorf("%s: %w", c.Spec.Name, err)
-	}
-	c.take(d)
-	return nil
 }
 
 // Restore builds the sessions of l over the connections of specs (§14),
@@ -320,7 +306,9 @@ func (a *App) connectsNow() []tea.Cmd {
 		}
 	}
 	for _, s := range a.sessions {
-		want(s.last)
+		if s.last != nil { // none at a start with no connection (F7.4)
+			want(s.last)
+		}
 		for _, p := range s.panes() {
 			for _, tb := range p.Tabs {
 				switch {
@@ -369,8 +357,8 @@ func (a *App) resolvePending(c *Conn) []tea.Cmd {
 	return cmds
 }
 
-// dropPending closes the table tabs waiting on connection c, which is not
-// to be had, without a word: the connection's own toast says it (§14).
+// dropPending closes the table tabs waiting on connection c, whose catalog
+// is not to be had, without a word: the catalog's own toast says it (§14).
 func (a *App) dropPending(c *Conn) {
 	for _, s := range a.sessions {
 		for _, p := range s.panes() {

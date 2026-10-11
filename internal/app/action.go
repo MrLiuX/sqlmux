@@ -140,11 +140,13 @@ func init() {
 			}
 			return a.run("tab.close", 0)
 		}},
-		"tab.quit":   {Title: i18n.N("关闭 tab，空了连 pane / window 一起关"), Run: func(a *App, _ Args) tea.Cmd { return a.quitTab() }},
-		"tab.reopen": {Title: i18n.N("重开关掉的 tab"), Run: func(a *App, _ Args) tea.Cmd { return a.reopenTab() }},
-		"tab.next":   {Title: i18n.N("下一个 tab"), Run: do(func(a *App, args Args) { a.cycleTab(1, args.Count) })},
-		"tab.prev":   {Title: i18n.N("上一个 tab"), Run: do(func(a *App, args Args) { a.cycleTab(-1, args.Count) })},
-		"tab.new":    {Title: i18n.N("新建 tab"), Run: do(func(a *App, _ Args) { a.newTab() })},
+		"tab.quit":      {Title: i18n.N("关闭 tab，空了连 pane / window 一起关"), Run: func(a *App, _ Args) tea.Cmd { return a.quitTab() }},
+		"tab.reopen":    {Title: i18n.N("重开关掉的 tab"), Run: func(a *App, _ Args) tea.Cmd { return a.reopenTab() }},
+		"tab.next":      {Title: i18n.N("下一个 tab"), Run: do(func(a *App, args Args) { a.cycleTab(1, args.Count) })},
+		"tab.prev":      {Title: i18n.N("上一个 tab"), Run: do(func(a *App, args Args) { a.cycleTab(-1, args.Count) })},
+		"tab.move.next": {Title: i18n.N("把 tab 移到下一个 pane"), Run: func(a *App, _ Args) tea.Cmd { return a.moveTab(1) }},
+		"tab.move.prev": {Title: i18n.N("把 tab 移到上一个 pane"), Run: func(a *App, _ Args) tea.Cmd { return a.moveTab(-1) }},
+		"tab.new":       {Title: i18n.N("新建 tab"), Run: do(func(a *App, _ Args) { a.newTab() })},
 		// a landing page's two buttons (§5「引导页」)
 		"tab.table": {Title: i18n.N("打开表"), Run: do(func(a *App, _ Args) {
 			p := a.focused()
@@ -320,6 +322,7 @@ func init() {
 		"form.next":   {Title: i18n.N("下一项"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formMove(1); return nil })},
 		"form.prev":   {Title: i18n.N("上一项"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formMove(-1); return nil })},
 		"form.save":   {Title: i18n.N("保存"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { return a.saveConnForm() })},
+		"form.test":   {Title: i18n.N("测试连接"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { return a.testConnForm() })},
 		"form.cancel": {Title: i18n.N("取消"), Local: true, Run: when(inForm, func(a *App) tea.Cmd { a.formCancel(); return nil })},
 		// the group field's list of the groups there are (F10.6): Tab and ↵ take the one selected, or do what they do without it
 		"form.group.tab": {Title: i18n.N("接受分组 / 下一项"), Local: true, Run: when(inForm, func(a *App) tea.Cmd {

@@ -1,12 +1,14 @@
 package app
 
 import (
+	"context"
 	"net"
 	"net/url"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -32,6 +34,10 @@ type connForm struct {
 	// with ↓ and ↑, -1 for none; esc closes it till something is typed
 	groupSel int
 	groupOff bool
+	// testing is the number of the connection test out, 0 for none; err then
+	// holds what it found, ok when that is a connection made (F12.5)
+	testing int
+	ok      bool
 }
 
 // The form's fields, in order; the last two are in the 高级 fold.
@@ -57,6 +63,10 @@ var connFields = []string{fieldName: "name", fieldGroup: "group", fieldEngine: "
 
 // defaultPort is the port of an engine's server.
 var defaultPort = map[string]string{"postgres": "5432", "mysql": "3306"}
+
+// dsnExample is what an empty dsn field shows of each engine, the URL form
+// of both (§8): the driver's own form of MySQL is read as well, not shown.
+var dsnExample = map[string]string{"postgres": "postgres://user:pass@host:5432/db?sslmode=prefer", "mysql": "mysql://user:pass@host:3306/db"}
 
 // specs are the connections the session has, as connections.toml says them.
 func (a *App) specs() []config.Connection {
@@ -106,6 +116,7 @@ func (a *App) openConnManager() {
 func (a *App) selectConn(i int) {
 	f, specs := a.form, a.specs()
 	f.cur, f.err, f.sel, f.direct, f.groupSel, f.groupOff = i, "", 0, false, -1, false
+	f.untest()
 	defer a.keepConnInSight()
 	if i >= len(specs) {
 		f.fields, f.was = blankFields(), nil
@@ -202,6 +213,7 @@ func (a *App) formMove(d int) {
 func (a *App) formKey(k keymap.Key) {
 	f := a.form
 	f.clearErr()
+	f.untest()
 	fd := &f.fields[f.sel]
 	switch fd.Kind {
 	case ui.FormInput:
@@ -227,6 +239,7 @@ func (a *App) formKey(k keymap.Key) {
 func (a *App) formSegment(i, seg int) {
 	f := a.form
 	f.clearErr()
+	f.untest()
 	f.sel = i
 	fd := &f.fields[i]
 	if i == fieldEngine && seg != fd.On {
@@ -237,6 +250,15 @@ func (a *App) formSegment(i, seg int) {
 		}
 	}
 	fd.On = seg
+}
+
+// untest drops a test's result, one still out too: the fields are not the
+// ones it tried.
+func (f *connForm) untest() {
+	if f.ok {
+		f.err = ""
+	}
+	f.testing, f.ok = 0, false
 }
 
 // formClick is a click on field i: the keys go to it; a check and the fold
@@ -356,6 +378,143 @@ func (a *App) deleteConn() tea.Cmd {
 	return nil
 }
 
+// formConn is the connection the form says, checked as saving checks the
+// fields: the new one's dsn composed from the parts, or the one that is
+// typed; one that does not check says why, its field getting the keys (§7.8),
+// and is not returned.
+func (a *App) formConn() (config.Connection, bool) {
+	f := a.form
+	fs := f.fields
+	text := func(i int) string { return strings.TrimSpace(fs[i].Input.Text) }
+	var c config.Connection
+	var names []string // the other connections'
+	if f.was != nil {
+		c = *f.was
+		c.Name, c.Group, c.Engine, c.DSN = text(fieldName), text(fieldGroup), fs[fieldEngine].Choices[fs[fieldEngine].On], text(fieldDSN)
+		c.PasswordCmd, c.ReadOnly = text(fieldPasswordCmd), fs[fieldReadOnly].On == 1
+		for _, s := range a.specs() {
+			if s.Name != f.was.Name {
+				names = append(names, s.Name)
+			}
+		}
+	} else {
+		c = config.Connection{Name: text(fieldName), Group: text(fieldGroup), Engine: fs[fieldEngine].Choices[fs[fieldEngine].On], DSN: "-", ReadOnly: fs[fieldReadOnly].On == 1}
+		if f.advanced() {
+			c.PasswordCmd = text(fieldPasswordCmd)
+		}
+		for _, conn := range a.sess.Conns {
+			names = append(names, conn.Spec.Name)
+		}
+	}
+	if field, problem := c.Check(names); problem != "" { // a new one's dsn is "-" here: composed or typed below
+		a.fail(slices.Index(connFields, field), problem)
+		return c, false
+	}
+	if f.was != nil {
+		return c, true
+	}
+	if f.dsnGiven() {
+		c.DSN = text(fieldDSN)
+		return c, true
+	}
+	for _, i := range []int{fieldHost, fieldUser, fieldDatabase} {
+		if text(i) == "" {
+			a.fail(i, i18n.T("缺少 %s", connFields[i]))
+			return c, false
+		}
+	}
+	host := strings.Trim(text(fieldHost), "[]") // an IPv6 address may be written with them
+	if strings.Contains(host, ":") && net.ParseIP(host) == nil {
+		a.fail(fieldHost, i18n.T("host 里不要带端口，端口在下面"))
+		return c, false
+	}
+	p, err := strconv.Atoi(text(fieldPort))
+	if err != nil || p < 1 || p > 65535 {
+		a.fail(fieldPort, i18n.T("port 要是 1–65535 的数字"))
+		return c, false
+	}
+	c.DSN = composeDSN(c.Engine, host, strconv.Itoa(p), text(fieldUser), text(fieldDatabase)) // +5432 is 5432
+	return c, true
+}
+
+// testTimeout is how long a connection test waits, as a dial does (§8).
+const testTimeout = 10 * time.Second
+
+// connTested is what testConn found, of the test numbered seq.
+type connTested struct {
+	seq  int
+	note string
+	err  error
+}
+
+// testConnForm is C-t: the form checked as saving checks it, then what it
+// says connected to once, and closed (F12.5). Nothing is saved or put in
+// the tree. A password typed is the one tried, else the connection's own
+// source, as a dial reads it.
+func (a *App) testConnForm() tea.Cmd {
+	f := a.form
+	f.clearErr()
+	f.untest()
+	c, ok := a.formConn()
+	if !ok {
+		return nil
+	}
+	a.formTests++
+	seq, pw := a.formTests, f.fields[fieldPassword].Input.Text
+	f.testing = seq
+	return func() tea.Msg {
+		note, err := testConn(c, pw)
+		return connTested{seq, note, err}
+	}
+}
+
+// testConn connects to spec once, read only, and says what it reached:
+// `已连接 · PostgreSQL 17.7 · 120ms`. password "" is the spec's own.
+func testConn(spec config.Connection, password string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	start := time.Now()
+	spec, err := spec.Expanded()
+	if err != nil {
+		return "", err
+	}
+	if password == "" {
+		if password, err = spec.Secret(); err != nil {
+			return "", err
+		}
+	}
+	conn, _, err := engines[spec.Engine].Connect(ctx, spec.DSN, password, true)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	r, err := conn.Query(ctx, "select version()")
+	if err != nil {
+		return "", err
+	}
+	version := r.Rows[0][0].S
+	if spec.Engine == "mysql" {
+		version = "MySQL " + version
+	} else {
+		version, _, _ = strings.Cut(version, " on ") // the build is not news
+	}
+	return i18n.T("已连接 · %s · %s", version, time.Since(start).Round(time.Millisecond)), nil
+}
+
+// gotConnTested shows what a test found, unless the form it was for is gone
+// or its fields changed since (F12.5).
+func (a *App) gotConnTested(m connTested) {
+	f := a.form
+	if f == nil || f.testing != m.seq {
+		return
+	}
+	f.testing, f.ok = 0, m.err == nil
+	f.err = m.note
+	if m.err != nil {
+		f.err = strings.ReplaceAll(m.err.Error(), "\n", " ") // one row
+	}
+}
+
 // saveEditedConn is ↵ on the form of a connection that is there: what the
 // form changed is rewritten in its block of connections.toml, nothing else
 // of the file. A password typed, or the one of a connection renamed that
@@ -366,18 +525,9 @@ func (a *App) deleteConn() tea.Cmd {
 func (a *App) saveEditedConn() tea.Cmd {
 	f := a.form
 	fs, was := f.fields, *f.was
-	text := func(i int) string { return strings.TrimSpace(fs[i].Input.Text) }
-	c := was
-	c.Name, c.Group, c.Engine, c.DSN = text(fieldName), text(fieldGroup), fs[fieldEngine].Choices[fs[fieldEngine].On], text(fieldDSN)
-	c.PasswordCmd, c.ReadOnly = text(fieldPasswordCmd), fs[fieldReadOnly].On == 1
-	var names []string
-	for _, s := range a.specs() {
-		if s.Name != was.Name {
-			names = append(names, s.Name)
-		}
-	}
-	if field, problem := c.Check(names); problem != "" {
-		return a.fail(slices.Index(connFields, field), problem)
+	c, ok := a.formConn()
+	if !ok {
+		return nil
 	}
 	pw, typed := fs[fieldPassword].Input.Text, true
 	if pw == "" && c.Name != was.Name && c.PasswordCmd == was.PasswordCmd && config.OwnPassword(was.PasswordCmd) {
@@ -465,35 +615,9 @@ func (a *App) saveConnForm() tea.Cmd {
 		return a.saveEditedConn()
 	}
 	fs := f.fields
-	text := func(i int) string { return strings.TrimSpace(fs[i].Input.Text) }
-	c := config.Connection{Name: text(fieldName), Group: text(fieldGroup), Engine: fs[fieldEngine].Choices[fs[fieldEngine].On], DSN: "-", ReadOnly: fs[fieldReadOnly].On == 1}
-	if f.advanced() {
-		c.PasswordCmd = text(fieldPasswordCmd)
-	}
-	var names []string
-	for _, conn := range a.sess.Conns {
-		names = append(names, conn.Spec.Name)
-	}
-	if field, problem := c.Check(names); problem != "" { // the dsn is "-" here: composed or typed below
-		return a.fail(slices.Index(connFields, field), problem)
-	}
-	if f.dsnGiven() {
-		c.DSN = text(fieldDSN)
-	} else {
-		for _, i := range []int{fieldHost, fieldUser, fieldDatabase} {
-			if text(i) == "" {
-				return a.fail(i, i18n.T("缺少 %s", connFields[i]))
-			}
-		}
-		host := strings.Trim(text(fieldHost), "[]") // an IPv6 address may be written with them
-		if strings.Contains(host, ":") && net.ParseIP(host) == nil {
-			return a.fail(fieldHost, i18n.T("host 里不要带端口，端口在下面"))
-		}
-		p, err := strconv.Atoi(text(fieldPort))
-		if err != nil || p < 1 || p > 65535 {
-			return a.fail(fieldPort, i18n.T("port 要是 1–65535 的数字"))
-		}
-		c.DSN = composeDSN(c.Engine, host, strconv.Itoa(p), text(fieldUser), text(fieldDatabase)) // +5432 is 5432
+	c, ok := a.formConn()
+	if !ok {
+		return nil
 	}
 	if err := config.CheckAppend(c); err != nil { // before a password goes into the keychain for it
 		f.err = err.Error()
@@ -605,7 +729,12 @@ func (a *App) formView() ui.Form {
 			ui.Hint{Key: a.keys.Hint("conns.close", "conns"), Label: i18n.T("关闭"), Action: "conns.close"},
 		)
 	}
-	form := ui.Form{Fields: fields, Sel: f.sel, Err: f.err, Save: i18n.T("保存"), Cancel: i18n.T("取消"), Delete: del, Hints: hints, PickAt: fieldGroup}
+	test := i18n.T("测试")
+	if f.testing != 0 {
+		test = i18n.T("测试中…")
+	}
+	fields[fieldDSN].Example = dsnExample[fields[fieldEngine].Choices[fields[fieldEngine].On]]
+	form := ui.Form{Fields: fields, Sel: f.sel, Err: f.err, OK: f.ok, Save: i18n.T("保存"), Test: test, Cancel: i18n.T("取消"), Delete: del, Hints: hints, PickAt: fieldGroup}
 	if cands := a.groupCands(); len(cands) > 0 { // under the group field (F10.6)
 		form.Pick = &ui.Complete{Sel: f.groupPick(len(cands)), Act: "form.pick"}
 		for _, g := range cands {
@@ -669,5 +798,6 @@ func (a *App) groupAccept() bool {
 	g := cands[i]
 	f.fields[fieldGroup].Input = ui.Input{Text: g, Pos: len(g)}
 	f.groupSel = -1
+	f.untest()
 	return true
 }

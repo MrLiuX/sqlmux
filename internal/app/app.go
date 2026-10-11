@@ -20,8 +20,9 @@ import (
 )
 
 type App struct {
-	w, h  int
-	theme *ui.Theme
+	formTests int // the connection tests started, to tell a late result from the form's own (F12.5)
+	w, h      int
+	theme     *ui.Theme
 	// rendered is the last frame, whose lines the next reuses; probes what it
 	// asked of the pointer, seenAt where that was, seen the view it made;
 	// fresh is that nothing changed since, reuse that an Update found the
@@ -172,12 +173,8 @@ func (a *App) KeyProblems(ps []keymap.Problem) {
 // has appeared.
 func (a *App) Init() tea.Cmd {
 	cmds := []tea.Cmd{func() tea.Msg { return tea.ModeReportMsg{Mode: ansi.ModeUnicodeCore, Value: ansi.ModeSet} }}
-	if a.restored { // a layout's: its connections now, its queries as it had them (F6.5)
-		cmds = append(cmds, a.connectsNow()...)
-	} else {
-		if a.sess.last != nil { // none at a start with no connection (F7.4)
-			cmds = append(cmds, a.loadCatalog(a.sess.last))
-		}
+	cmds = append(cmds, a.connectsNow()...) // the start's, and a layout's others (F6.5, F12.5)
+	if !a.restored {
 		for _, t := range a.sess.queries() { // query_1, where it last ran (§11)
 			cmds = append(cmds, a.restoreQuery(t))
 		}
@@ -256,6 +253,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case connected:
 		return a, a.gotConnected(msg)
+	case connTested:
+		a.gotConnTested(msg)
 	case sessionDialed:
 		return a, a.gotSessionDialed(msg)
 	case catalogMsg:

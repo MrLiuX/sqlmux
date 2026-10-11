@@ -13,6 +13,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
@@ -294,7 +295,7 @@ func TestLayoutRestoreGaps(t *testing.T) {
 // A table tab of a layout waits for its connection's catalog: with the table
 // there it fetches (a schema it did not name is the connection's home),
 // without it the tab is closed and a toast says so; a connection that fails
-// takes its waiting tabs, the toast being its own. Until then nothing goes
+// leaves its waiting tabs, showing why, and R dials it again. Until then nothing goes
 // out for it. A query waiting for another connection keeps where it is
 // going (§14「恢复」, F6.5).
 func TestLayoutPendingTabs(t *testing.T) {
@@ -338,8 +339,42 @@ func TestLayoutPendingTabs(t *testing.T) {
 		t.Errorf("nor is the start's schema its: %q", c.schema)
 	}
 	a.Update(connected{conn: play, err: errors.New("refused")})
-	if len(p.Tabs) != 2 || !strings.Contains(a.toast, "refused") {
+	if len(p.Tabs) != 3 || !strings.Contains(a.toast, "play：refused") || play.State != connFailed || !p.Tabs[1].Data.pending {
 		t.Errorf("play failed: %d tabs, toast %q", len(p.Tabs), a.toast)
+	}
+	if cmd := a.fetch(p.Tabs[1].Data, true); cmd == nil || play.State != connConnecting { // R on its error page dials again
+		t.Errorf("R on a failed connection's tab: %v, %v", cmd != nil, play.State)
+	}
+}
+
+// The start connection that cannot be connected is no reason to end: the
+// program starts connecting it like any other, its node turns failed, the
+// toast says why, and the table tab that waits for it stays, with the error
+// in the middle of its content; once it connects R fetches (F12.5).
+func TestStartConnectionFails(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	l := oneWindow(config.LayoutWindow{Name: "a", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{table("doraemon", "public", "t_order")}}}})
+	r := Restore(layoutSpecs, l)
+	a := layoutApp(r)
+	doraemon := r.Sessions[0].Conns[0]
+	if cmds := a.connectsNow(); doraemon.State != connConnecting || len(cmds) == 0 {
+		t.Fatalf("the start connects as the program runs: %v", doraemon.State)
+	}
+	a.Update(connected{conn: doraemon, err: errors.New("failed to connect: context deadline exceeded")})
+	p := r.Sessions[0].Windows[0].pane(1)
+	if doraemon.State != connFailed || !strings.Contains(a.toast, "doraemon：failed to connect") || len(p.Tabs) != 1 {
+		t.Fatalf("after the failure: %v, toast %q, %d tabs", doraemon.State, a.toast, len(p.Tabs))
+	}
+	screen := a.render().String()
+	for _, want := range []string{"doraemon", "failed to connect: context deadline exceeded"} {
+		if !strings.Contains(screen, want) {
+			t.Errorf("the error page lacks %q:\n%s", want, screen)
+		}
+	}
+	golden.RequireEqual(t, []byte(screen))
+	cmd := a.run("grid.refresh", 0)
+	if doraemon.State != connConnecting || cmd == nil {
+		t.Errorf("R tries again: %v", doraemon.State)
 	}
 }
 
@@ -573,16 +608,6 @@ func TestNewSessionStart(t *testing.T) {
 	a.sessions, a.sess = []*Session{s}, s
 	if got := a.layoutOf().Sessions[0].Connection; got != "b" {
 		t.Errorf("started on b, saved %q", got)
-	}
-}
-
-// The first session's start connection is dialed now, and a failure names
-// it (§14「恢复」).
-func TestDialStartFails(t *testing.T) {
-	specs := []config.Connection{{Name: "far", Engine: "postgres", DSN: "postgres://u@127.0.0.1:1/db?connect_timeout=1"}}
-	r := Restore(specs, &config.Layout{Version: 1, Sessions: []config.LayoutSession{{Name: "1", Connection: "far"}}})
-	if err := r.DialStart(context.Background()); err == nil || !strings.HasPrefix(err.Error(), "far: ") {
-		t.Errorf("a refused connection: %v", err)
 	}
 }
 

@@ -200,6 +200,7 @@ type Conn struct {
 	eng        db.Engine
 	readOnly   bool
 	State      connState
+	err        error      // why the last dial failed (connFailed): the table tabs waiting on it say it (F12.5)
 	Main, Meta *db.Worker // §8.2; nil till connected
 	Addr       string     // shown in the status bar, e.g. ctw@localhost:5432
 	busy       int        // its requests out that C-c cancels (§8.3)
@@ -572,21 +573,16 @@ func OpenEmpty() *Session {
 	return s
 }
 
-// Open is a session over specs, start the connection it connects now
-// (§5); the others wait to be used.
-func Open(ctx context.Context, specs []config.Connection, start int) (*Session, error) {
+// Open is a session over specs, start the connection it starts on (§5):
+// none is connected yet, the program connects them as it runs (§14「恢复」).
+func Open(specs []config.Connection, start int) *Session {
 	conns := make([]*Conn, len(specs))
 	for i, spec := range specs {
 		conns[i] = newConn(spec)
 	}
 	first := conns[start] // before groupOrder moves it
 	groupOrder(conns)
-	d, err := dial(ctx, specs[start])
-	if err != nil {
-		return nil, err
-	}
-	first.take(d)
-	return newSession(specs[start].Name, conns, first, config.QueryName(1)), nil
+	return newSession(specs[start].Name, conns, first, config.QueryName(1))
 }
 
 // dialed is a connection's Main and Meta as dial connected them, where
@@ -648,6 +644,7 @@ func connectTo(ctx context.Context, spec config.Connection, readOnly bool) (db.C
 
 // take makes c connected over d.
 func (c *Conn) take(d dialed) {
+	c.err = nil
 	c.State, c.Main, c.Meta = connReady, c.worker(d.main, d.spec, false), c.worker(d.meta, d.spec, true)
 	c.Addr, c.DB, c.startedPath = d.info.Addr, d.info.Database, d.info.Path
 }
@@ -923,6 +920,40 @@ func (a *App) paneShowing(t *dataTab) *Pane {
 	return nil
 }
 
+// moveTab is tab.move.next (d 1) and tab.move.prev (-1): the focused pane's
+// current tab goes to the next or previous ordinary pane going clockwise
+// (pane.focus.next's order) and becomes its current tab, the focus after it;
+// the pane it leaves empty is a landing page. Nothing moves from the sidebar,
+// the result area or a landing page, or with one ordinary pane on screen,
+// as when one is zoomed; nor does a
+// table to a pane that has it (F3.37), which says so: a merge would lose
+// the changes of one (F12.5).
+func (a *App) moveTab(d int) tea.Cmd {
+	win, src := a.win(), a.focused()
+	if src.tab().landing() {
+		return nil
+	}
+	var ids []int
+	for _, id := range a.clockwise() {
+		if id != win.Tree.ID && (win.Result == nil || id != win.Result.ID) {
+			ids = append(ids, id)
+		}
+	}
+	i := slices.Index(ids, src.ID) // not the sidebar, nor the result area
+	if i < 0 || len(ids) < 2 {
+		return nil
+	}
+	dst := win.pane(ids[(i+d+len(ids))%len(ids)])
+	tb := src.Tabs[src.Cur]
+	if t := tb.Data; t != nil && slices.ContainsFunc(dst.Tabs, func(o Tab) bool { return o.Data != nil && o.Data.conn == t.conn && idOf(o.Data.table) == idOf(t.table) }) {
+		return a.showToast(i18n.T("目标 pane 里已有这张表"), toastTTL)
+	}
+	dropTab(src, src.Cur)
+	putTab(dst, tb, dst.tab().landing()) // a landing tab there gives way to it (§5「引导页」)
+	win.focus(dst.ID)
+	return nil
+}
+
 // closeTab closes pane p's tab i: the current one (:q) gives way to the
 // previous, as vim's alternate; another leaves the current and previous
 // tabs as they were. Closing the last tab closes the pane too, except the
@@ -1044,12 +1075,20 @@ func (a *App) focusSide(side string) {
 	}
 }
 
-// focusNext is pane.focus.next: the pane after the focused one going
-// clockwise round the middle of the screen, the status bar in it, as each
-// pane's middle lies from 12 o'clock; a tie is by ⟨n⟩, tmux's order; the
-// last gives way to the first (§6.8, F5.16). Whole numbers, doubled so a
-// middle is one, which keeps two on one ray equal.
+// focusNext is pane.focus.next: the pane after the focused one in
+// clockwise, the last giving way to the first (§6.8, F5.16).
 func (a *App) focusNext() {
+	ids := a.clockwise()
+	if i := slices.Index(ids, a.win().Focus); i >= 0 {
+		a.win().focus(ids[(i+1)%len(ids)])
+	}
+}
+
+// clockwise is the IDs of the window's panes on screen going round the
+// middle of the screen, the status bar in it, as each pane's middle lies
+// from 12 o'clock; a tie is by ⟨n⟩, tmux's order (§6.8, F5.16). Whole
+// numbers, doubled so a middle is one, which keeps two on one ray equal.
+func (a *App) clockwise() []int {
 	win := a.win()
 	rects := a.layout()
 	if !win.TreeOpen {
@@ -1080,9 +1119,7 @@ func (a *App) focusNext() {
 		}
 		return cmp.Compare(u.x*v.y, u.y*v.x) // v clockwise of u: the cross product u × v is negative
 	})
-	if i := slices.Index(ids, win.Focus); i >= 0 {
-		win.focus(ids[(i+1)%len(ids)])
-	}
+	return ids
 }
 
 // recent reports whether pane x beats y as the one focused most recently:

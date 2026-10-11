@@ -432,6 +432,80 @@ func TestCloseTabPicksNext(t *testing.T) {
 	}
 }
 
+// SPC w n and SPC w p move the current tab to the next and the previous
+// ordinary pane going clockwise, to the end of its tabs, current, the focus
+// with it; the pane left empty is a landing page. The sidebar, a landing
+// page and a window of one pane move nothing; a table goes to no pane that
+// has it (F12.5).
+func TestTabMove(t *testing.T) {
+	a := twoPanes(160, 45)
+	one, two := a.win().pane(1), a.win().pane(2)
+	a.win().focus(1)
+	feed(t, a, "<Space>wn") // t_order: ⟨1⟩ → ⟨2⟩
+	if tabNames(one) != "t_user" || tabNames(two) != "query_1 t_order" || two.Cur != 1 || a.win().Focus != 2 || one.Cur != 0 {
+		t.Fatalf("next: %q / %q cur %d, focus %d", tabNames(one), tabNames(two), two.Cur, a.win().Focus)
+	}
+	feed(t, a, "<Space>wn") // round the end: ⟨2⟩ → ⟨1⟩
+	if tabNames(one) != "t_user t_order" || one.Cur != 1 || a.win().Focus != 1 || tabNames(two) != "query_1" {
+		t.Fatalf("round: %q / %q, focus %d", tabNames(one), tabNames(two), a.win().Focus)
+	}
+	feed(t, a, "<Space>wp") // back
+	if tabNames(two) != "query_1 t_order" || a.win().Focus != 2 {
+		t.Fatalf("prev: %q / %q", tabNames(one), tabNames(two))
+	}
+	a.win().Zoom = 2 // only it is on screen: there is no other to go to
+	feed(t, a, "<Space>wp")
+	if a.win().Focus != 2 || tabNames(two) != "query_1 t_order" {
+		t.Errorf("zoomed: focus %d, %q", a.win().Focus, tabNames(two))
+	}
+	a.win().Zoom = 0
+	feed(t, a, "<Space>wn") // t_order again, then query_1: its pane is left a landing page
+	a.win().focus(2)
+	feed(t, a, "<Space>wn")
+	if len(two.Tabs) != 0 || !two.tab().landing() || tabNames(one) != "t_user t_order query_1" {
+		t.Errorf("emptied: %q / %q", tabNames(one), tabNames(two))
+	}
+	a.win().focus(2)
+	feed(t, a, "<Space>wn") // a landing page is not moved
+	if tabNames(one) != "t_user t_order query_1" || a.win().Focus != 2 {
+		t.Errorf("landing: %q", tabNames(one))
+	}
+	a.win().focus(a.win().Tree.ID)
+	feed(t, a, "<Space>wn")
+	if tabNames(one) != "t_user t_order query_1" || a.win().Focus != a.win().Tree.ID {
+		t.Errorf("sidebar moved a tab")
+	}
+	res := a.showResult(a.win()) // its tabs stay where they are
+	a.win().focus(res.ID)
+	n := len(res.Tabs)
+	feed(t, a, "<Space>wn")
+	if len(res.Tabs) != n || a.win().Focus != res.ID {
+		t.Errorf("the result area moved a tab: %d, focus %d", len(res.Tabs), a.win().Focus)
+	}
+	// a table is in a pane once (F3.37)
+	putTab(two, Tab{Name: "t_user", Data: newDataTab(a.sess.Conns[0], db.Table{Schema: "m0", Name: "t_user"})}, false)
+	a.win().focus(2)
+	feed(t, a, "<Space>wn")
+	if !strings.Contains(a.toast, "已有这张表") || tabNames(two) != "t_user" || len(one.Tabs) != 3 {
+		t.Errorf("a table to a pane that has it: toast %q, %q / %q", a.toast, tabNames(one), tabNames(two))
+	}
+	// a landing tab where it goes gives way to it
+	two.Tabs, two.Cur = []Tab{{Name: "t_sku", Data: newDataTab(a.sess.Conns[0], db.Table{Schema: "m0", Name: "t_sku"})}}, 0
+	putTab(one, landing(), false)
+	a.win().focus(2)
+	feed(t, a, "<Space>wn")
+	if tabNames(one) != "t_user t_order query_1 t_sku" || one.Cur != 3 {
+		t.Errorf("onto a landing tab: %q cur %d", tabNames(one), one.Cur)
+	}
+	a.removePane(2)
+	a.win().focus(1)
+	selectTab(one, 2) // query_1: to itself it would go last
+	feed(t, a, "<Space>wn")
+	if tabNames(one) != "t_user t_order query_1 t_sku" {
+		t.Errorf("one pane: %q", tabNames(one))
+	}
+}
+
 // gt / gT go round the focused pane's tabs as in vim; with a count gt goes
 // to that tab and gT back that many (§7.8「tab 栏」).
 func TestTabCycle(t *testing.T) {
@@ -627,7 +701,7 @@ func TestWhichKeyShowsAfterDelay(t *testing.T) {
 		}
 	}
 	// §6.8's SPC keys, in default.toml order
-	if got := strings.Join(keys, " "); got != `s ) ( L c n p l % " z x q b r ?` {
+	if got := strings.Join(keys, " "); got != `s ) ( L c n p l % " z x q b r ? w` {
 		t.Errorf("SPC items: %s", got)
 	}
 	if row := strings.Split(a.render().String(), "\n")[a.h-2]; !strings.HasPrefix(row, "└") {

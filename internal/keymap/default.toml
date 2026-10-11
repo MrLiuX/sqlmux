@@ -37,6 +37,8 @@ leader = "<Space>"
 "<Esc>" = "pane.error.close" # a query's VISUAL esc stays vim's: no normal scope there (§7.8)
 "gt" = "tab.next"
 "gT" = "tab.prev"
+"<Leader>wn" = "tab.move.next" # the tab goes to the next pane clockwise, the focus after it (F12.5)
+"<Leader>wp" = "tab.move.prev"
 
 [keys.grid]
 "h" = "grid.left"
@@ -245,6 +247,7 @@ leader = "<Space>"
 "<CR>" = "conns.form"
 "x" = "conns.delete"
 "<C-s>" = "form.save" # the form's own, saved from the list too, not the global save of the table behind
+"<C-t>" = "form.test" # connects with what the form says, once, and shows how it went (F12.5)
 "<Esc>" = "conns.close"
 
 [keys.form] # the connection form (§7.8); space flips a switch, the form's own
@@ -252,6 +255,7 @@ leader = "<Space>"
 "<S-Tab>" = "form.prev"
 "<CR>" = "form.save"
 "<C-s>" = "form.save"
+"<C-t>" = "form.test"
 "<Esc>" = "form.cancel"
 
 [keys.groups] # the connection form's group field with its list of the groups there are (F10.6): the form's keys come after

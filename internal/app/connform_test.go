@@ -223,6 +223,72 @@ func TestConnFormAdvanced(t *testing.T) {
 	}
 }
 
+// C-t checks the form as saving does, then connects once with what it says
+// and shows how it went on the row above the buttons; nothing is saved, and
+// typing or a newer test makes a result that comes late no one's (F12.5).
+func TestConnFormTest(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	keychain(t, "none")
+	a, _ := withSessions()
+	feed(t, a, "<C-p>conn.new<CR>far")
+	_, cmd := a.Update(teaKey("<C-t>"))
+	if cmd != nil || !strings.Contains(a.form.err, "host") || a.form.sel != fieldHost {
+		t.Fatalf("a form that does not check is not tested: %v, %q on %d", cmd != nil, a.form.err, a.form.sel)
+	}
+	a.form.sel = fieldAdvanced
+	feed(t, a, "<Space><Tab>postgres://u@127.0.0.1:1/d?connect_timeout=1")
+	_, cmd = a.Update(teaKey("<C-t>"))
+	if cmd == nil || a.form.testing == 0 || !strings.Contains(a.render().String(), "测试中…") {
+		t.Fatalf("testing: %v, %d", cmd != nil, a.form.testing)
+	}
+	a.Update(cmd())
+	if a.form.ok || a.form.testing != 0 || !strings.Contains(a.form.err, "127.0.0.1:1") {
+		t.Errorf("refused: ok %v, %q", a.form.ok, a.form.err)
+	}
+	if connections() != "" {
+		t.Errorf("a test saved: %s", connections())
+	}
+	feed(t, a, "x")
+	if a.form.err != "" {
+		t.Errorf("typing clears the result: %q", a.form.err)
+	}
+	// a result of a test the fields have left behind is dropped, one that is the form's own shown
+	_, cmd = a.Update(teaKey("<C-t>"))
+	late := cmd()
+	feed(t, a, "x")
+	a.Update(late)
+	if a.form.err != "" || a.form.testing != 0 {
+		t.Errorf("a late result: %q", a.form.err)
+	}
+	a.form.testing = 7
+	a.Update(connTested{seq: 7, note: "已连接 · PostgreSQL 17.7 · 120ms"})
+	if !a.form.ok || a.form.err != "已连接 · PostgreSQL 17.7 · 120ms" {
+		t.Errorf("connected: ok %v, %q", a.form.ok, a.form.err)
+	}
+	golden.RequireEqual(t, a.render().String())
+	a.form = nil
+	a.Update(connTested{seq: 7, note: "late"}) // no form: nothing to show it on
+}
+
+// An empty dsn field shows the form of a dsn, the engine's; a typed one hides it (F12.5).
+func TestDSNExample(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	a, _ := withSessions()
+	feed(t, a, "<C-p>conn.new<CR>x<S-Tab><Space><Tab>")
+	if !strings.Contains(a.render().String(), dsnExample["postgres"]) {
+		t.Error("no example under postgres")
+	}
+	a.formSegment(fieldEngine, 1)
+	a.form.sel = fieldDSN
+	if s := a.render().String(); !strings.Contains(s, dsnExample["mysql"]) || strings.Contains(s, dsnExample["postgres"]) {
+		t.Error("the example does not follow the engine")
+	}
+	feed(t, a, "m")
+	if strings.Contains(a.render().String(), dsnExample["mysql"]) {
+		t.Error("the example stays under what is typed")
+	}
+}
+
 func TestComposeDSN(t *testing.T) {
 	for _, c := range []struct{ engine, host, port, user, db, want string }{
 		{"postgres", "localhost", "5432", "u", "d", "postgres://u@localhost:5432/d?sslmode=prefer"},
@@ -516,7 +582,7 @@ func TestConnFormHints(t *testing.T) {
 				switch {
 				case at < 0:
 					t.Errorf("%s %d edit %v: no buttons", lang, w, edit)
-				case w == 160 && (!strings.Contains(lines[at], keys) || strings.Contains(lines[at+1], keys)):
+				case w == 160 && !(edit && lang == "en") && (!strings.Contains(lines[at], keys) || strings.Contains(lines[at+1], keys)): // four buttons in English leave the keys 29 of the form's 71
 					t.Errorf("%s %d edit %v: the keys are not beside the buttons: %q", lang, w, edit, lines[at])
 				case w == 80 && (strings.Contains(lines[at], keys) || !strings.Contains(lines[at+1], keys)):
 					t.Errorf("%s %d edit %v: the keys are not under the buttons: %q / %q", lang, w, edit, lines[at], lines[at+1])
@@ -528,13 +594,14 @@ func TestConnFormHints(t *testing.T) {
 	}
 }
 
-// Every width from 70 to 110, zh and en, new / list / edit: the buttons
+// Every width from 70 to 110 (from 75 in English, whose four buttons of an
+// edit take 40 of the form's width less 33, F12.5), zh and en, new / list / edit: the buttons
 // whole, the keys whole on the buttons' row or the one under it and on
 // one of them only, the box's bottom border right after (F8.16).
 func TestConnFormHintsAtEveryWidth(t *testing.T) {
 	defer i18n.Set("zh")
 	for _, lang := range []string{"zh", "en"} {
-		for w := 70; w <= 110; w++ {
+		for w := map[string]int{"zh": 70, "en": 75}[lang]; w <= 110; w++ {
 			i18n.Set(lang)
 			a := managed(t)
 			a.Update(tea.WindowSizeMsg{Width: w, Height: 24})
