@@ -36,4 +36,6 @@ paths:
 - **值的处理不同**：它们先解码成 Go 类型再转字符串；本项目统一走文本协议，值用 `db.Val{S, Null}`（§8.1）。
 - **连接方式不同**：lazysql 用 `database/sql` 连接池；本项目每个 session 固定两条独占连接（§8.2）。
 
+仓库里已经合并到 `internal/db` 的不在驱动包里再写一份：保存回写、分页、事务收尾（`db.End`，rollback 也走它，不用 `context.Background()`）、读循环（`Query` 和 `Stream` 共用一个）；`postgres/`、`mysql/` 只留方言部分（catalog SQL、标识符引号、错误识别）。
+
 许可证：借鉴思路不受限制。直接拷贝代码要在文件头注明出处并保留原许可证声明；Apache-2.0 的代码还要遵守它对 NOTICE 文件的要求。

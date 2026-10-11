@@ -1,7 +1,7 @@
 # M13 工程质量审计 · 任务清单
 
 - **状态**：**todo**（2026-10-11 用户让 reviewer 做全仓工程质量审计，20 条发给决策者排进清单；M12 全部 passed 之后开工，排在 SQLite 之前，因为前五条是数据安全）。
-- **目标**：修掉审计里的数据安全和多进程问题，把浮层的优先级收成一处，其余重复和性能按条做。reviewer 的探针（`aud/src`、`aud-app`、`aud-data`、`aud-core`，名字在各条里）放在 `/Users/ctw/proj/sqlmux-review/aud/`（不入库），worker 直接搬进测试。
+- **目标**：修掉审计里的数据安全和多进程问题，把浮层的优先级收成一处，其余重复和性能按条做。reviewer 的探针（`aud/src`、`aud-app`、`aud-data`、`aud-core`，名字在各条里）放在 `/Users/ctw/proj/sqlmux-aud/`（worktree 外面、不入库：i18n 的单测会扫到 worktree 里未跟踪的 `.go` 文件；各自是独立 go module，README 写了怎么跑），worker 直接搬进测试。
 - **范围**：tech-design §8.2（提交结果未知）、§14（state.json 合并、未知键、布局文件）、§7.4（浮层开着时的滚轮）、§7.9（输入框的 `C-h`）、§9.7（补全列表滚动）；其余是实现层面的改动，不改设计。
 - **依赖**：M12 passed。
 - **完成标准**：F13.1–F13.19 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m13`。

@@ -3,7 +3,7 @@
 流程全文在 [`../../AGENTS.md`](../../AGENTS.md)。只有 worker 在主工作区改代码、提交到 `main`。
 
 - **按清单逐步做**：严格按 task.md 的开发清单逐项实现，不跳步，不顺手做清单以外的事。开工一个 feature 前，把清单里没写死的细节连同你的提议一条消息发给决策者；清单漏了或不合理也一并提。
-- **代码质量**：ponytail（AGENTS.md「通用规则」）。包的边界按 tech-design §4；命名清楚；注释写「为什么」；不留死代码。
+- **代码质量**：ponytail（AGENTS.md「通用规则」）。包的边界按 tech-design §4；命名清楚；注释写「为什么」；不留死代码。动手前先 grep 仓库里已有的那一处（AGENTS.md 列的几类：浮层、列表可见性、单行输入、toast、事务收尾、驱动共用的读写），用它、不复制它。
 - **不改、不提交 `specs/` 和 `AGENTS.md`**：`git status` 里这两处的改动是决策者的，留着不动。
 - **每个 commit 自己保证测试通过**（按批审查后没有人逐个 commit 把关）：
   - `just check` 全绿。lint 用仓库的 `.golangci.yml`、golangci-lint v2.14.0；要屏蔽某条报告，用带理由的 `//nolint:<linter> // 为什么`，不放宽配置（放宽规则是设计变更，提给决策者和 reviewer）。

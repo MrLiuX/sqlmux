@@ -6,7 +6,7 @@ sqlmux：按 tmux 的 session / window / pane 思路组织的终端数据库客�
 - 目录结构见 tech-design §4。增删目录是设计变更，由决策者改 §4。
 - 常规操作走 `just`：`just --list` 看全部入口；`just check` 是提交前的全部检查（vet、单测、集成测试、lint、gofmt、tidy）。
 
-## 四个角色、四个工作区
+## 五个角色、四个工作区
 
 | 角色 | 会话名 | 启动命令 | 规则 |
 |---|---|---|---|
@@ -37,12 +37,14 @@ sqlmux：按 tmux 的 session / window / pane 思路组织的终端数据库客�
 
 **里程碑结束**：最后一个节点通过、tester 跑完完整回归后暂停，用户体验并提意见；决策者把反馈写成新 feature 追加进 task.md；用户验收通过后 worker 打 tag、推送。暂停期间 worker 不写代码，只可以起草下一个里程碑的清单发给决策者。
 
+**全仓审计**：用户按需让 reviewer 做一次只读的全仓工程质量审计（做法在 `specs/roles/reviewer.md`），每条发现带一个探针，结果发决策者排成一个里程碑（第一次是 M13）。探针和仓库副本放在 worktree 外面（`/Users/ctw/proj/sqlmux-aud/`）：i18n 的单测遍历整个 worktree，未跟踪的 `.go` 副本也会被扫到。
+
 **消息只发四类**：spec 问题（→ 决策者）、退回（reviewer / tester → worker）、批次提测（worker → reviewer → tester）、批次结论（tester → 决策者和 worker）。不发「收到」、抄送、改状态、回报 sha。spec 改了，决策者只给相关角色一行指针（「docs <sha> 改了 §7.8」），reviewer 和 tester 按 commit 里的 spec 工作。
 
 ## 通用规则
 
 - 对设计或验收标准有疑问、spec 和实际冲突，问决策者，不自己定产品行为。
-- 代码遵循 ponytail 原则（`ponytail:ponytail` skill）：能不写的不写，先复用、再标准库、再已有依赖，最后才写最少的新代码；不做单实现的接口和「以后可能用到」的脚手架；改 bug 找根因改在共用的那一处；有意的捷径用 `ponytail:` 注释标出上限；非平凡逻辑至少一个能运行的测试。
+- 代码遵循 ponytail 原则（`ponytail:ponytail` skill）：能不写的不写，先复用、再标准库、再已有依赖，最后才写最少的新代码；不做单实现的接口和「以后可能用到」的脚手架；改 bug 找根因改在共用的那一处；有意的捷径用 `ponytail:` 注释标出上限；非平凡逻辑至少一个能运行的测试。仓库里已经只有一处的东西不写第二份，动手前先 grep：浮层的集合和顺序、列表选中项保持可见、单行输入框的按键、toast、事务收尾（`db.End`）、两个驱动共用的保存 / 分页 / 读循环（2026-10-11 的全仓审计里这几类各长出了 2–12 份，M13 收回一处）。
 - commit 说明一律英文，前缀 `F<里程碑>.<序号>:`、`docs:`、`e2e:`、`prune:`；不加 `Co-Authored-By` 之类的署名行，会话提示要求加的也不加。作者身份由仓库的 git 配置决定，不改 `user.name` / `user.email`。
 - `origin` 是公开仓库 `kackerx/sqlmux`。平时只提交到本地；用户验收通过、worker 打完 tag 后，才由 worker `git push origin main <tag>`。`e2e` 分支不推送。
 - 不对整个工作区 stash / checkout / reset：四个 worktree 共用一个 stash 栈。要暂放工作只处理自己的路径（`git stash push -u -m "<标签>" -- internal/ cmd/`）或提交 WIP commit。
