@@ -11,9 +11,9 @@ D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; rm -rf "
 e2e_own_db || { echo "e2e: could not create the private database" >&2; exit 1; }
 psql "$E2E_DB" -q -c "create table t_sel (id int primary key, v text)" -c "insert into t_sel select g, 'v' || g from generate_series(1, 8) g" >/dev/null
 mkdir -p "$D/own"; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$E2E_DB" >"$D/own/connections.toml"; chmod 600 "$D/own/connections.toml"
-VISUAL=#2d3f76
+VISUAL=#2d3f76 SELECTED=#5c4a1e   # F12.12：m / esc 确认的是 selected 底
 row_y() { echo $(( $(grid_y) + $1 )); }
-hl() { [[ " $(e2e_style 36 "$(row_y "$1")") " == *" bg=$VISUAL "* ]]; }
+hl() { local st; st=" $(e2e_style 36 "$(row_y "$1")") "; [[ $st == *" bg=$VISUAL "* || $st == *" bg=$SELECTED "* ]]; }
 hl_rows() { local n out=""; for n in $(seq 1 8); do hl "$n" && out+="$n,"; done; echo "$out"; }
 hl_is() { [[ $(hl_rows) == "$1" ]] || { echo "  highlighted: '$(hl_rows)', want '$1'"; false; }; }
 mark_of() { e2e_text 35 38 "$(row_y "$1")" | python3 -c "import re, sys; print(re.sub(r'[^0-9+−-]', '', sys.stdin.read()))"; }
@@ -25,7 +25,7 @@ run() { key Enter; done_run; }
 RP=3
 rgeom() { geom $RP; }
 rrow_y() { local g; g=($(rgeom)); echo $(( g[1] + 2 + $1 )); }               # 结果区第 N 条数据所在的屏幕行
-rhl() { local g; g=($(rgeom)); [[ " $(e2e_style $((g[0] + 2)) "$(rrow_y "$1")") " == *" bg=$VISUAL "* ]]; }
+rhl() { local g st; g=($(rgeom)); st=" $(e2e_style $((g[0] + 2)) "$(rrow_y "$1")") "; [[ $st == *" bg=$VISUAL "* || $st == *" bg=$SELECTED "* ]]; }
 save_count_is_1() { qb | python3 -c "import re, sys; sys.exit(0 if re.search(r'│[^│0-9]*1[^│0-9]*│', sys.stdin.read()) else 1)"; }   # 保存按钮组里的未保存数（图标后的 1）
 rhl_rows() { local n out=""; for n in 1 2 3 4; do rhl "$n" && out+="$n,"; done; echo "$out"; }
 
@@ -54,7 +54,7 @@ _e2e_kill; start -C "$D/own"; key C-l
 setsql "select id, v from t_sel where id <= 4 order by id"; run
 key C-j; sleep 0.3
 key m; key j; key m; sleep 0.3
-check "结果 tab：m j m 选中第 1、2 行，序号格 visual 底" eval 'rhl_rows | grep -q "^1,2,$" || { echo "  [$(rhl_rows)]"; false; }'
+check "结果 tab：m j m 选中第 1、2 行，序号格 selected 底" eval 'rhl_rows | grep -q "^1,2,$" || { echo "  [$(rhl_rows)]"; false; }'
 key d; sleep 0.4
 check "d：不做事（结果只读），选中保留" eval '[[ $(rhl_rows) == "1,2," ]]'
 key y; sleep 0.6

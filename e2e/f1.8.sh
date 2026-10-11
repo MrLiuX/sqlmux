@@ -54,8 +54,7 @@ open_table t_event; wait_for 8 settled
 sent t_event e2e_click "$(at "$ASC")" 3
 check "t_event 默认排序时点方向图标：order by \"occurred_at\" desc, \"id\"" sql_has 'order by "occurred_at" desc, "id" limit 101'
 e2e_click "$(at "$DESC")" 3; wait_for 8 settled                        # 回到默认的升序
-key g o; e2e_type occurred_at; sleep 0.3
-sent t_event key Enter
+sent t_event order_by occurred_at
 check "在下拉框选 occurred_at：同样 order by \"occurred_at\" desc, \"id\"" sql_has 'order by "occurred_at" desc, "id" limit 101'
 
 # ---- 没有行标识列（t_log）：chip 是 —，没有方向图标

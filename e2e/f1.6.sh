@@ -23,7 +23,7 @@ check "C-t 新开 t_user：当前 tab 标 *，上一个标 -" tabs_are 1 "1:t_or
 
 # ---- 每个 tab 各自保留 WHERE / ORDER / LIMIT / PAGE / COLS / 光标 / 转置（T-01~T-03）
 where "id > 10"
-key g o; e2e_type name; sleep 0.3; key Enter; wait_for 8 settled
+order_by name; wait_for 8 settled
 key g c; key j j Space Escape
 key 3 j 2 l; key T
 user_kept() { [[ $(where_in) == "id > 10" ]] && qb_has "ORDER name $ASC   LIMIT 100   PAGE 1/1   COLS 4/5" && [[ $(cnt) == 40 ]] && pos_is 4,3 && transposed; }

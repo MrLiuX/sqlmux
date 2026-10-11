@@ -12,9 +12,10 @@ D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; rm -rf "
 e2e_own_db || { echo "e2e: could not create the private database" >&2; exit 1; }
 psql "$E2E_DB" -q -c "create table t_sel (id int primary key, v text)" -c "insert into t_sel select g, 'v' || g from generate_series(1, 8) g" >/dev/null
 mkdir -p "$D/own"; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$E2E_DB" >"$D/own/connections.toml"; chmod 600 "$D/own/connections.toml"
-VISUAL=#2d3f76
+VISUAL=#2d3f76 SELECTED=#5c4a1e   # F12.12：正在选的范围是 visual 底，esc 确认 / m 标记的是 selected 底（黄褐）
 row_y() { echo $(( $(grid_y) + $1 )); }
-hl() { [[ " $(e2e_style 36 "$(row_y "$1")") " == *" bg=$VISUAL "* ]]; }                       # 第 N 行的序号格是 visual 底
+hl() { local st; st=" $(e2e_style 36 "$(row_y "$1")") "; [[ $st == *" bg=$VISUAL "* || $st == *" bg=$SELECTED "* ]]; }   # 第 N 行的序号格是 visual（范围）或 selected（确认）底
+hl_c() { e2e_style 36 "$(row_y "$1")" | tr " " "\n" | grep "^bg=" | cut -d= -f2; }   # 第 N 行序号格的底色
 hl_rows() { local n out=""; for n in $(seq 1 8); do hl "$n" && out+="$n,"; done; echo "$out"; }   # 高亮着的行："1,3,"
 hl_is() { [[ $(hl_rows) == "$1" ]] || { echo "  highlighted: '$(hl_rows)', want '$1'"; false; }; }
 mark_of() { e2e_text 35 38 "$(row_y "$1")" | tr -d ' │'; }                                   # 序号格的字：行号，标记删除的是 −
@@ -28,7 +29,7 @@ check "（准备）8 行，没有选中" eval 'sel_is 0 && hl_is "" && [[ $(cnt)
 
 # ---- m：标记当前记录，不进 VISUAL
 key m
-check "m：第 1 行的序号格 visual 底，chip 行「1 selected」，模式还是 NORMAL" eval 'hl_is "1," && sel_is 1 && mode_is NORMAL'
+check "m：第 1 行的序号格是 selected 底（黄褐，不是 visual 蓝），chip 行「1 selected」，模式还是 NORMAL" eval 'hl_is "1," && [[ $(hl_c 1) == "$SELECTED" ]] && sel_is 1 && mode_is NORMAL'
 key m
 check "再 m：取消标记" eval 'hl_is "" && sel_is 0'
 key m; key j; key j; key m
@@ -46,9 +47,9 @@ check "刷新后表格 6 行" eval '[[ $(cnt) == 6 ]]'
 key g g; key v
 check "v：模式块 VISUAL，当前记录算选中（第 1 行高亮）" eval 'mode_is VISUAL && hl_is "1," && sel_is 1'
 key 2 j
-check "v 2j：第 1–3 行选中，VISUAL，「3 selected」" eval 'mode_is VISUAL && hl_is "1,2,3," && sel_is 3'
+check "v 2j：第 1–3 行选中，VISUAL，范围是 visual 底，「3 selected」" eval 'mode_is VISUAL && hl_is "1,2,3," && [[ $(hl_c 2) == "$VISUAL" ]] && sel_is 3'
 key Escape
-check "esc：回到 NORMAL，三行仍选中（范围并入选中集）" eval 'mode_is NORMAL && hl_is "1,2,3," && sel_is 3'
+check "esc：回到 NORMAL，三行仍选中（范围并入选中集，变成 selected 底）" eval 'mode_is NORMAL && hl_is "1,2,3," && [[ $(hl_c 2) == "$SELECTED" ]] && sel_is 3'
 key y; sleep 0.6
 check "y：剪贴板是 3 条记录的 JSON 数组（id 2、4、5，键按列顺序），选中清空、仍是 NORMAL" eval 'pj "import json, sys; a = json.load(sys.stdin); print(\"ok\" if isinstance(a, list) and [r[\"id\"] for r in a] == [2, 4, 5] and list(a[0]) == [\"id\", \"v\"] else \"bad\")" | grep -q ok && hl_is "" && sel_is 0 && mode_is NORMAL' || clip
 

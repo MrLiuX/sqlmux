@@ -23,7 +23,7 @@ commit_body() {
   check "修改标记还在（保存计数 1），格子里还是 X——让用户刷新后自己核对" eval 'has_pending && e2e_plain | grep -qE "│ +1 │ +1 │ X"'
   check "库里是真的提交了（v = X，只写了一次）" eval '[[ $(DBVALS) == "X,two,three" ]]'
   key r; sleep 0.5
-  check "r 放弃这条修改（它的结果未知，用户决定不要）：修改标记清掉，格子回到打开时读到的值 one" eval 'e2e_plain | grep -qE "│ +1 │ +1 │ one" && ! has_pending'
+  check "r 放弃这条修改：修改标记清掉；表格在事务丢失时已经重载成库里的值，所以格子是 X（不是打开时的 one，§8.2：事务丢失同时重载）" eval 'e2e_plain | grep -qE "│ +1 │ +1 │ X" && ! has_pending'
   DBEXEC "update t_c set v = 'THREE' where id = 3"
   key R; wait_for 8 settled; sleep 0.8
   check "R 刷新：取回库里的真实值——第 1 行 X（那次提交其实成功了）、第 3 行 THREE（别处改的）" eval 'e2e_plain | grep -qE "│ +1 │ +1 │ X" && e2e_plain | grep -qE "│ +3 │ +3 │ THREE"'

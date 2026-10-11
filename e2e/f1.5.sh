@@ -83,7 +83,7 @@ key Escape; key Escape
 run ""; run "id < 50"
 key gl; key C-n; key Enter; wait_for 8 settled      # LIMIT 500
 run "status = 'done'"
-key go; typ amount; key Enter; wait_for 8 settled   # ORDER amount ↑
+order_by amount; wait_for 8 settled   # ORDER amount ↑
 run "id < 50"
 edit; key C-r
 hist() { items | cut -d'|' -f1 | sed -E '/^─/d; /^C-p/d; s/ [0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$//' | tr '\n' ,; }   # 去掉右侧的时间、F8.14 的分隔线和底部提示行
