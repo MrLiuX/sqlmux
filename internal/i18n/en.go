@@ -459,8 +459,9 @@ var en = map[string]string{
 	"知道了":    "Got it",
 	"；":      "; ",
 
-	// F13.1
-	"连接断开，提交结果未知：刷新后核对": "Connection lost, commit result unknown: refresh and check",
+	// F13.1, F13.2
+	"文件在别处改过，没有保存；再保存一次会覆盖它": "The file was changed elsewhere and not saved; save again to overwrite it",
+	"连接断开，提交结果未知：刷新后核对":      "Connection lost, commit result unknown: refresh and check",
 
 	// F12.5
 	"测试":               "Test",

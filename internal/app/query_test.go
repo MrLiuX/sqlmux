@@ -1220,3 +1220,56 @@ func TestSQLCompleteRank(t *testing.T) {
 		t.Errorf("tiers %v, want %v", got, want)
 	}
 }
+
+// Two programs on one data directory both start on query_1: what the one
+// wrote is not written over by the other without the other being told, once;
+// its next save is the yes. An autosave never overwrites, and says it once
+// (F13.2).
+func TestQueryFileChangedOutside(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a := sizedWith(160, 45, config.Default())
+	feed(t, a, "<C-l>")
+	ca := queryOf(a.focused())
+	b := sizedWith(160, 45, config.Default())
+	feed(t, b, "<C-l>")
+	cb := queryOf(b.focused())
+	if ca.path != cb.path {
+		t.Fatalf("not one file: %s %s", ca.path, cb.path)
+	}
+	feed(t, a, "iselect 'written in A';<Esc>:w<CR>")
+	feed(t, b, "iselect 'written in B';<Esc>")
+	// B's autosave: refused and said, the file as A left it; said once
+	_, cmd := b.Update(autosave{cb, cb.ver})
+	if cmd == nil || !strings.Contains(b.toast, "别处改过") {
+		t.Errorf("autosave: toast %q", b.toast)
+	}
+	b.toast = ""
+	if _, cmd := b.Update(autosave{cb, cb.ver}); cmd != nil || b.toast != "" {
+		t.Errorf("an autosave says it again: toast %q", b.toast)
+	}
+	if data, _ := os.ReadFile(ca.path); string(data) != "select 'written in A';\n" {
+		t.Fatalf("B's autosave wrote: %q", data)
+	}
+	feed(t, b, ":w<CR>") // asked: refused once
+	if data, _ := os.ReadFile(ca.path); string(data) != "select 'written in A';\n" || !strings.Contains(b.toast, "再保存一次会覆盖") {
+		t.Errorf("B's :w: file %q, toast %q", data, b.toast)
+	}
+	feed(t, b, ":w<CR>") // the yes
+	if data, _ := os.ReadFile(ca.path); string(data) != "select 'written in B';\n" {
+		t.Errorf("B's second :w: %q", data)
+	}
+	// and it is B's file again: a change in it is written as it goes
+	feed(t, b, "ox<Esc>:w<CR>")
+	if data, _ := os.ReadFile(ca.path); !strings.Contains(string(data), "x") {
+		t.Errorf("after the yes: %q", data)
+	}
+	// the file is read again after an external editor: no refusal
+	if err := os.WriteFile(ca.path, []byte("outside\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a.gotExternal(externalDone{t: ca})
+	feed(t, a, "Ax<Esc>:w<CR>")
+	if data, _ := os.ReadFile(ca.path); !strings.Contains(string(data), "outside") || !strings.Contains(string(data), "x") {
+		t.Errorf("after an external edit: %q", data)
+	}
+}

@@ -287,7 +287,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.gotConnEvent(msg)
 	case autosave:
 		if msg.ver == msg.t.ver {
-			if err := msg.t.flush(); err != nil {
+			if err := msg.t.write(false); err != nil {
 				return a, a.saveFailed(err)
 			}
 		}

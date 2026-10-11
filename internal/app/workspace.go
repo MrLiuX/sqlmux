@@ -513,7 +513,7 @@ func (a *App) askQueryName() {
 			return a.showToast(err.Error(), toastTTL), true
 		}
 		delete(a.state.Queries, t.name)
-		t.name, t.path = name, path
+		t.name, t.path, t.disk = name, path, stampOf(path)
 		for _, s := range a.sessions {
 			for _, w := range s.Windows {
 				for _, p := range w.Root.Leaves() {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -31,10 +32,16 @@ type queryTab struct {
 	ed         *editor.Editor
 	name       string // the file's name, query_1: the state keeps where it runs by it
 	path       string
-	ver, saved int       // changes made, and the one the file has
-	failed     int       // the first line of the statement whose last run failed, its ▶ red; -1 for none
-	running    *run      // the run going on, if one is: another ↵ waits for it (§11)
-	bar        *errorBar // the last run's error, under the text (§7.8「错误栏」)
+	ver, saved int // changes made, and the one the file has
+	// disk is the file as this tab last read or wrote it; another process or
+	// editor having changed it since, a write is refused once (F13.2). armed:
+	// that was said, the next write is the user's yes; told: an autosave said
+	// it, not to say it again.
+	disk        fileStamp
+	armed, told bool
+	failed      int       // the first line of the statement whose last run failed, its ▶ red; -1 for none
+	running     *run      // the run going on, if one is: another ↵ waits for it (§11)
+	bar         *errorBar // the last run's error, under the text (§7.8「错误栏」)
 	// schema is the one it runs in, first on search_path (§8.6): its
 	// connection's Schema as it opens, "" until the catalog is in.
 	schema string
@@ -61,7 +68,28 @@ func openQuery(c *Conn, name string) (*queryTab, error) {
 	if err != nil {
 		return nil, fmt.Errorf(i18n.T("读取失败：%w"), err)
 	}
-	return &queryTab{conn: c, schema: c.Schema, ed: editor.New(text), name: name, path: path, failed: -1}, nil
+	return &queryTab{conn: c, schema: c.Schema, ed: editor.New(text), name: name, path: path, disk: stampOf(path), failed: -1}, nil
+}
+
+// fileStamp is what tells a file changed under us: its time and size; zero
+// when there is no file.
+type fileStamp struct {
+	mod  time.Time
+	size int64
+}
+
+func stampOf(path string) fileStamp {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return fileStamp{}
+	}
+	return fileStamp{fi.ModTime(), fi.Size()}
+}
+
+// changedOutside is a write refused: the file is not what this tab read or
+// wrote, as vim's W11 says (F13.2).
+func changedOutside() error {
+	return errors.New(i18n.T("文件在别处改过，没有保存；再保存一次会覆盖它"))
 }
 
 func queryOf(p *Pane) *queryTab {
@@ -274,12 +302,29 @@ func (a *App) ex(c string) tea.Cmd {
 	return a.showToast(i18n.T("不支持的命令：%s", c), toastTTL)
 }
 
-// flush writes query t's file if it changed since it was last written.
+// flush writes query t's file if it changed since it was last written, for
+// the user's asking (a save, a close, a quit): a file changed outside since
+// this tab had it is refused once, the next flush is the yes (F13.2).
 // ponytail: written in Update, a slow disk holds up a key; write from a
 // Cmd, in order, if that shows.
-func (t *queryTab) flush() error {
+func (t *queryTab) flush() error { return t.write(true) }
+
+// write is flush, or for an autosave (explicit false) one that never
+// overwrites a file changed outside: the text stays in the buffer, said once.
+func (t *queryTab) write(explicit bool) error {
 	if t.ver == t.saved {
 		return nil
+	}
+	if cur := stampOf(t.path); cur != (fileStamp{}) && cur != t.disk && !t.armed { // a file gone is written again
+		switch {
+		case explicit:
+			t.armed = true
+		case t.told:
+			return nil
+		default:
+			t.told = true
+		}
+		return changedOutside()
 	}
 	text := strings.Join(t.ed.Lines(), "\n") + "\n"
 	if text == "\n" { // nothing: an empty file, as vim writes it
@@ -288,7 +333,7 @@ func (t *queryTab) flush() error {
 	if err := config.WriteQuery(t.path, text); err != nil {
 		return err
 	}
-	t.saved = t.ver
+	t.saved, t.disk, t.armed, t.told = t.ver, stampOf(t.path), false, false
 	return nil
 }
 
@@ -339,7 +384,7 @@ func (a *App) gotExternal(msg externalDone) tea.Cmd {
 		return a.showToast(err.Error(), toastTTL)
 	}
 	cmd := a.queryDid(t, t.ed.Load(text))
-	t.saved = t.ver // what the file has
+	t.saved, t.disk, t.armed, t.told = t.ver, stampOf(t.path), false, false // what the file has
 	if msg.err != nil {
 		return tea.Batch(cmd, a.showToast(msg.err.Error(), toastTTL))
 	}
