@@ -74,7 +74,7 @@ start
 e2e_type ':ab'; sleep 0.2; e2e_keys C-c; sleep 0.3
 check "面板里 C-c：只关闭面板，不弹提示" eval '! palette_open && ! screen_has "再按一次" && running'
 e2e_keys C-c; sleep 0.3
-check "随后的 C-c 算第一次：不退出，出现提示" eval 'running && toast_is "再按一次 C-c 退出"'
+check "随后的 C-c 算第一次：不退出，出现提示" eval 'running && wait_for 2 toast_is "再按一次 C-c 退出"'
 e2e_keys C-c
 check "再按一次退出" quit_clean
 

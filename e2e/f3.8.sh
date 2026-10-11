@@ -92,7 +92,7 @@ setsql "select id, status, note from t_order where id in (9, 10) order by id"
 run
 seq_n=$(rtitle | grep -oE '#[0-9]+' | tr -d '#')
 read x y <<<"$(g=($(geom 3)); echo $((g[0] + g[2] - 9)) "${g[1]}")"    # 5 个按钮各 4 列，导出是倒数第二个
-e2e_click $x $y; sleep 0.5; key C-k                                       # 点按钮让 ③ 获得了焦点，回到 ②
+e2e_click $x $y; sleep 0.8; e2e_keys Enter; sleep 0.8; key C-k                  # F12.4: 开下拉，第一项 CSV · 当前页； 点按钮让 ③ 获得了焦点，回到 ②
 CSV=$E2E_TMP/query_1-$seq_n.csv
 check "点导出：写到当前目录的 query_1-$seq_n.csv，toast 显示路径" eval '[[ -f $CSV ]] && screen_has "已导出 " && screen_has "/${E2E_TMP##*/}/query_1-$seq_n.csv"'
 check "CSV 内容与 psql 的 copy 一致（NULL 写空串）" eval '[[ $(cat "$CSV") == "$(psql "$E2E_DB" -c "copy (select id, status, note from t_order where id in (9, 10) order by id) to stdout with (format csv, header)")" ]] || { cat "$CSV"; false; }'

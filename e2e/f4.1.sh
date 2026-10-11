@@ -120,7 +120,7 @@ check "query 再执行：只替换没固定的 query_1 #1，quick 的 tab 都留
 psql_n "insert into t_log (logged_at, msg) values (now(), 'e2e')" >/dev/null
 click_tab $RP "3:"; key R; done_run
 check "quick #2 上按 R：原地换成新的行数（$((n0 + 1))），tab 还是 quick #2，没有多出 tab" eval 'rtabs_are "1:日志 │ 2:query_1 #6 │ 3:quick #2* │ 4:quick #3 │ 5:quick #4 │ 6:quick #5" && [[ $(rval) == $((n0 + 1)) ]] || { rrow 3; false; }'
-g=($(geom $RP)); e2e_click $((g[0] + g[2] - 9)) "${g[1]}"; sleep 0.5   # 标题上的导出按钮（倒数第二个，同 f3.8）
+g=($(geom $RP)); e2e_click $((g[0] + g[2] - 9)) "${g[1]}"; sleep 0.8; e2e_keys Enter; sleep 0.8   # F12.4: 开下拉，第一项 CSV · 当前页；标题上的导出按钮（倒数第二个，同 f3.8）
 check "导出：当前目录的 quick-2.csv，内容是重跑之后的" eval '[[ $(cat "$E2E_TMP/quick-2.csv" 2>/dev/null) == "$(printf "count\n%s" $((n0 + 1)))" ]] || { ls "$E2E_TMP"; false; }'
 pal; sql "select current_schema()"; e2e_keys C-t; sleep 0.5; e2e_keys Escape; sleep 0.3
 check "树在 public：quick #7 里是 public" eval '[[ $(rval) == public ]] || { rrow 3; false; }'
