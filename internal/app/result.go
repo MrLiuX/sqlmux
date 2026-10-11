@@ -3,11 +3,8 @@ package app
 import (
 	"cmp"
 	"context"
-	"encoding/csv"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -308,41 +305,18 @@ func (a *App) startRun(t *queryTab, conn *Conn, schema, name, sql string, base, 
 // is what a run and a page of a result are sent as (F10.4); it goes on the
 // request's goroutine, so r and what it holds are read, not changed.
 func mainRun(r *run, texts []string, maxRows int, manual, resets bool) runDone {
-	s, schema, d := r.conn, r.schema, r.conn.eng.Dialect()
-	set := "set search_path to " // as the log names it when it fails (§8.6)
-	if d == sqlkit.MySQL {
-		set = "use "
-	}
+	s, d := r.conn, r.conn.eng.Dialect()
 	m := runDone{r: r}
 	m.err = s.Main.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
-		// mainPath is read and written in Main's requests only, one at
-		// a time: runs of two queries may queue in either order. It is
-		// kept out of transactions only: in a failed one a SET fails too
-		// and the user's rollback would never run; in one going on, a
-		// rollback may take the SET back.
 		defer func() { m.tx = db.TxStatus(c) }()
-		if s.mainOn != c { // a connection dialed again has the search_path it started with (F8.19)
-			s.mainPath, s.mainOn = "", c
-		}
-		switch tx := db.TxStatus(c); {
-		case schema == "":
-		case tx == 'E':
-			s.mainPath = ""
-		case s.mainPath != schema:
-			if err := db.Setup(c, func() error { return s.eng.UseSchema(ctx, c, schema, s.startedPath) }); err != nil {
-				s.mainPath, m.set = "", set+schema
-				return err
-			}
-			s.mainPath = ""
-			if tx == 'I' { // set in a transaction, the run's rollback may take it back
-				s.mainPath = schema
-			}
+		var err error
+		if m.set, err = s.mainSetup(ctx, c, r.schema); err != nil {
+			return err
 		}
 		var begin func(string) bool // after the SET, which is kept so
 		if manual {
 			begin = func(stmt string) bool { return !sqlkit.NoBegin(stmt, d) }
 		}
-		var err error
 		m.rs, err = db.ExecEach(ctx, c, texts, maxRows, begin)
 		if resets || db.TxStatus(c) != 'I' {
 			s.mainPath = ""
@@ -354,6 +328,38 @@ func mainRun(r *run, texts []string, maxRows int, manual, resets bool) runDone {
 	}
 	m.rs, m.err = runTxLost(m.rs, m.err, texts, d)
 	return m
+}
+
+// mainSetup puts schema first on c's search_path (MySQL's database) before a
+// statement of a query runs on Main, when it is not there; set is the
+// statement that failed, as the log names it (§8.6). mainPath is read and
+// written in Main's requests only, one at a time: runs of two queries may
+// queue in either order. It is kept out of transactions only: in a failed one
+// a SET fails too and the user's rollback would never run; in one going on, a
+// rollback may take the SET back.
+func (s *Conn) mainSetup(ctx context.Context, c db.Conn, schema string) (set string, err error) {
+	set = "set search_path to " // as the log names it when it fails (§8.6)
+	if s.eng.Dialect() == sqlkit.MySQL {
+		set = "use "
+	}
+	if s.mainOn != c { // a connection dialed again has the search_path it started with (F8.19)
+		s.mainPath, s.mainOn = "", c
+	}
+	switch tx := db.TxStatus(c); {
+	case schema == "":
+	case tx == 'E':
+		s.mainPath = ""
+	case s.mainPath != schema:
+		if err := db.Setup(c, func() error { return s.eng.UseSchema(ctx, c, schema, s.startedPath) }); err != nil {
+			s.mainPath = ""
+			return set + schema, err
+		}
+		s.mainPath = ""
+		if tx == 'I' { // set in a transaction, the run's rollback may take it back
+			s.mainPath = schema
+		}
+	}
+	return "", nil
 }
 
 // runTickEvery is how often a placeholder's time is redrawn while its run
@@ -549,48 +555,4 @@ func (a *App) rerun() tea.Cmd {
 		return a.rerunQuick(rt)
 	}
 	return a.runSQL(r.from, r.conn, r.schema, r.name, r.sql, r.base, r.ver) // base holds only while the text is still r.ver
-}
-
-// exportResult writes the result tab to <query>-<n>.csv in the current
-// directory (§11): the header and every row, NULL as nothing.
-func (a *App) exportResult() tea.Cmd {
-	rt := resultOf(a.focused())
-	if rt == nil || rt.run == nil || rt.page.Cols == nil {
-		return nil
-	}
-	name := fmt.Sprintf("%s-%d", rt.run.name, rt.run.seq)
-	if rt.part > 1 {
-		name += fmt.Sprintf("-%d", rt.part)
-	}
-	if rt.offset > 0 { // the page shown is what is written, so the file says which (F10.4)
-		name += fmt.Sprintf("-p%d", rt.offset/a.maxRows+1)
-	}
-	path, err := filepath.Abs(name + ".csv")
-	if err == nil {
-		err = os.WriteFile(path, []byte(csvOf(rt.page)), 0o600)
-	}
-	if err != nil {
-		return a.showToast(err.Error(), toastTTL)
-	}
-	return a.showToast(i18n.T("已导出 %s", path), toastTTL)
-}
-
-// csvOf is r as CSV: the header, the rows, NULL as nothing, as lazysql's
-// helpers/csv.go writes it.
-func csvOf(r db.Result) string {
-	var b strings.Builder
-	w := csv.NewWriter(&b)
-	rec := make([]string, len(r.Cols))
-	for i, c := range r.Cols {
-		rec[i] = c.Name
-	}
-	_ = w.Write(rec)
-	for _, row := range r.Rows {
-		for i, v := range row {
-			rec[i] = v.S // "" when NULL
-		}
-		_ = w.Write(rec)
-	}
-	w.Flush()
-	return b.String()
 }

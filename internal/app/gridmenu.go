@@ -33,6 +33,7 @@ func (a *App) gridMenu(t ui.Target, p uv.Position) {
 		items = []menuItem{
 			{i18n.T("在值编辑器中打开"), func() tea.Cmd { return a.valueOpen() }},
 			{i18n.T("复制这一格"), func() tea.Cmd { return a.yankGrid(false) }},
+			{i18n.T("导出…"), a.exportOpen},
 		}
 	}
 	if len(items) > 0 {
@@ -62,6 +63,7 @@ func (a *App) columnItems(t *dataTab, cell bool) []menuItem {
 	return append(items,
 		menuItem{i18n.T("复制这一格"), func() tea.Cmd { return a.yankGrid(false) }},
 		menuItem{i18n.T("复制行为 JSON"), func() tea.Cmd { return a.yankJSON() }},
+		menuItem{i18n.T("导出…"), a.exportOpen},
 	)
 }
 

@@ -4,8 +4,14 @@ package app
 
 import (
 	"context"
+	"encoding/csv"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
+	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/db/mysql"
 	"github.com/kackerx/sqlmux/internal/db/postgres"
@@ -82,5 +88,47 @@ func TestFilterCellOnServer(t *testing.T) {
 					`insert into f values (3, 'plain', 0, 0, 0, '2000-01-01 00:00:00', '2000-01-01', 'a', '', 0)`,
 				})
 		})
+	}
+}
+
+// "All" of a table written to a file has every row, in the order the grid
+// shows them (F12.4): t_order, 6000 rows, by status descending; the first page
+// of it is the first rows of the file.
+func TestExportAllOnServer(t *testing.T) { eachEngine(t, exportAllOn) }
+
+func exportAllOn(t *testing.T, eng, dsn string) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: dsn})
+	play := a.sess.Conns[0]
+	i := slices.IndexFunc(play.Tables, func(tb db.Table) bool { return tb.Schema == play.Schema && tb.Name == "t_order" })
+	settle(a, a.openTable(play, play.Tables[i]))
+	tab := dataOf(a.focused())
+	tab.order, tab.pageNo = orderOf("status-"), 0
+	settle(a, a.fetch(tab, false))
+	id := slices.IndexFunc(tab.page.Cols, func(c db.Col) bool { return c.Name == "id" })
+	a.run("grid.export", 0)
+	a.Update(teaKey("<C-n>")) // CSV · 全部
+	_, cmd := a.Update(teaKey("<CR>"))
+	a.Update(cmd())
+	data, err := os.ReadFile(filepath.Join(dir, "t_order.csv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	recs, err := csv.NewReader(strings.NewReader(string(data))).ReadAll()
+	if err != nil || len(recs) != 6001 || tab.conn.busy != 0 {
+		t.Fatalf("%d records, %v, busy %d, toast %q", len(recs), err, tab.conn.busy, a.toast)
+	}
+	for r, row := range tab.page.Rows {
+		if recs[r+1][id] != row[id].S {
+			t.Fatalf("row %d: id %s in the file, %s in the grid", r+1, recs[r+1][id], row[id].S)
+		}
+	}
+	seen := map[string]bool{}
+	for _, rec := range recs[1:] {
+		seen[rec[id]] = true
+	}
+	if len(seen) != 6000 {
+		t.Errorf("%d different ids", len(seen))
 	}
 }

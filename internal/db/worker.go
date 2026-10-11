@@ -51,6 +51,15 @@ func (c *counted) Query(ctx context.Context, sql string, args ...Val) (Result, e
 	return r, err
 }
 
+// Stream is Each on the connection, counted as a call when it went through.
+func (c *counted) Stream(ctx context.Context, sql string, head func([]Col) error, row func([]Val) error) error {
+	err := Each(ctx, c.Conn, sql, head, row)
+	if err == nil {
+		c.calls++
+	}
+	return err
+}
+
 // Setup runs f on c, a session's setting up that a request run again would
 // repeat harmlessly, search_path say: what it does is not counted as done.
 func Setup(c Conn, f func() error) error {

@@ -94,14 +94,15 @@ type App struct {
 	warning   string // shown as a toast on start
 
 	// Mouse (§7.4).
-	hits        []ui.Hit    // the last frame's hit table
-	mouse       uv.Position // pointer, for hover styles
-	drag        *handle     // the split border being dragged
-	dragTree    bool        // the sidebar's edge is being dragged
-	shiftClick  bool        // the left click being handled had Shift down (a column head's: add to the sorting)
-	dragText    int         // the pane whose query text is being selected by dragging; 0 for none
-	dragWhere   int         // the same for a WHERE's text (vim = false)
-	lastClick   ui.Target   // with lastClickAt, to spot a double click
+	hits        []ui.Hit     // the last frame's hit table
+	mouse       uv.Position  // pointer, for hover styles
+	drag        *handle      // the split border being dragged
+	dragTree    bool         // the sidebar's edge is being dragged
+	exporting   map[any]bool // the tabs with an export going on (F12.4)
+	shiftClick  bool         // the left click being handled had Shift down (a column head's: add to the sorting)
+	dragText    int          // the pane whose query text is being selected by dragging; 0 for none
+	dragWhere   int          // the same for a WHERE's text (vim = false)
+	lastClick   ui.Target    // with lastClickAt, to spot a double click
 	lastClickAt time.Time
 }
 
@@ -277,6 +278,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.gotCols(msg)
 	case saveMsg:
 		return a, a.gotSave(msg)
+	case exportDone:
+		return a, a.gotExport(msg)
 	case dropped:
 		return a, a.gotDropped(msg)
 	case txDone:

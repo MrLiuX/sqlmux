@@ -636,7 +636,7 @@ const (
 )
 
 // toolButtons are t's query bar buttons (§7.8「工具按钮」): + −, save and
-// refresh, auto refresh and stop, transpose, giving way in the order above.
+// refresh, auto refresh and stop, transpose and export, giving way in the order above.
 // Stop and auto refresh go by their state: an [icon] color only when lit.
 func (a *App) toolButtons(t *dataTab) []ui.ButtonGroup {
 	th, ic := a.theme, a.icons
@@ -656,7 +656,7 @@ func (a *App) toolButtons(t *dataTab) []ui.ButtonGroup {
 		{Buttons: []ui.Button{{Icon: ic.RowAdd, Action: "grid.row.add", Fg: th.Focus}, {Icon: ic.RowDelete, Action: "grid.row.delete", Fg: th.Error}}, Stay: stayRows},
 		{Buttons: []ui.Button{save, {Icon: ic.Refresh, Action: "grid.refresh", Fg: th.Info}}, Stay: staySave},
 		{Buttons: []ui.Button{auto, stop}, Stay: stayAuto},
-		{Buttons: []ui.Button{{Icon: ic.Transpose, Action: "grid.transpose", Fg: th.Info}}, Stay: stayTranspose},
+		{Buttons: []ui.Button{{Icon: ic.Transpose, Action: "grid.transpose", Fg: th.Info}, {Icon: ic.Export, Action: "grid.export", Fg: th.Info}}, Stay: stayTranspose},
 	}
 }
 

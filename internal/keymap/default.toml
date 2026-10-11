@@ -64,6 +64,7 @@ leader = "<Space>"
 "gl" = "grid.limit"
 "gp" = "grid.page"
 "gc" = "grid.cols"
+"ge" = "grid.export" # CSV or JSON, the page or all of it (F12.4)
 "gs" = "grid.order.cycle" # this column alone, the other way, the default (F12.3)
 "gS" = "grid.order.add" # in the ORDER, the other way, out: space of its dropdown
 "*" = "grid.filter.cell" # the cell as a condition of the WHERE

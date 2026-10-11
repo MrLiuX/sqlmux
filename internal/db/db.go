@@ -53,6 +53,35 @@ type Conn interface {
 	Close() error
 }
 
+// Streamer is a Conn that hands the rows of a statement over as they come,
+// not all at once (F12.4): head with the columns first, then row for each,
+// the slice its own. An error of either stops it, the rest of the rows left
+// unread and the statement cancelled.
+type Streamer interface {
+	Stream(ctx context.Context, sql string, head func([]Col) error, row func([]Val) error) error
+}
+
+// Each runs one statement on c and gives its rows to row one at a time, head
+// first; a Conn that does not stream reads them all, then gives them.
+func Each(ctx context.Context, c Conn, sql string, head func([]Col) error, row func([]Val) error) error {
+	if s, ok := c.(Streamer); ok {
+		return s.Stream(ctx, sql, head, row)
+	}
+	r, err := c.Query(ctx, sql)
+	if err != nil {
+		return err
+	}
+	if err := head(r.Cols); err != nil {
+		return err
+	}
+	for _, v := range r.Rows {
+		if err := row(v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // TxStatus is where c's transaction is: 'I' out of one, 'T' in one, 'E'
 // in one that failed (PG's alone), as c tells; taken as out of one when
 // it can't.

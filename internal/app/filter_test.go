@@ -229,7 +229,7 @@ func TestGridMenu(t *testing.T) {
 	if tab.row != 2 || tab.col != 1 {
 		t.Errorf("the cursor: %d, %d", tab.row, tab.col)
 	}
-	want := []string{"在值编辑器中打开", "按这个值过滤", "按这一列排序 ↑", "按这一列排序 ↓", "加入排序", "隐藏这一列", "复制这一格", "复制行为 JSON"}
+	want := []string{"在值编辑器中打开", "按这个值过滤", "按这一列排序 ↑", "按这一列排序 ↓", "加入排序", "隐藏这一列", "复制这一格", "复制行为 JSON", "导出…"}
 	if got := menuLabels(a); strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("the cell's menu: %v", got)
 	}
@@ -283,7 +283,7 @@ func TestGridMenuResult(t *testing.T) {
 	id := a.win().Result.ID
 	cell := find(t, a, ui.Target{Kind: ui.KindCell, Pane: id, Action: "grid.goto 0 0"}).Min.Add(uv.Pos(1, 0))
 	rightClick(a, cell)
-	if got := menuLabels(a); strings.Join(got, "|") != "在值编辑器中打开|复制这一格" {
+	if got := menuLabels(a); strings.Join(got, "|") != "在值编辑器中打开|复制这一格|导出…" {
 		t.Fatalf("the result cell's menu: %v", got)
 	}
 	feed(t, a, "<CR>")

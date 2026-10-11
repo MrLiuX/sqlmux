@@ -109,6 +109,37 @@ func (c *Conn) Query(ctx context.Context, sql string, args ...db.Val) (db.Result
 	return read(c.pg.ExecParams(ctx, sql, params, nil, nil, nil), 0, start)
 }
 
+// Stream reads sql's rows as they come, one at a time, the extended protocol
+// as Query has it (F12.4). The statement is cancelled when row or head fail.
+func (c *Conn) Stream(ctx context.Context, sql string, head func([]db.Col) error, row func([]db.Val) error) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	rr := c.pg.ExecParams(ctx, sql, nil, nil, nil, nil)
+	var cols []db.Col
+	for _, f := range rr.FieldDescriptions() {
+		col := db.Col{Name: f.Name}
+		if t, ok := types.TypeForOID(f.DataTypeOID); ok {
+			col.Type = t.Name
+		}
+		cols = append(cols, col)
+	}
+	err := head(cols)
+	for err == nil && rr.NextRow() {
+		vals := make([]db.Val, len(cols))
+		for i, v := range rr.Values() {
+			vals[i] = db.Val{S: string(v), Null: v == nil}
+		}
+		err = row(vals)
+	}
+	if err != nil {
+		cancel() // the rest is not read: it would be dropped
+		_, _ = rr.Close()
+		return err
+	}
+	_, err = rr.Close()
+	return err
+}
+
 func (c *Conn) Close() error { return c.pg.Close(context.Background()) }
 
 // Closed is whether pgconn has closed the connection: the server dropped

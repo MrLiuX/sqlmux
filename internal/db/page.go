@@ -44,6 +44,16 @@ func (q Query) from(e Engine) string {
 // MySQL connection without multiStatements refuse more, whatever Where
 // holds.
 func Page(ctx context.Context, c Conn, e Engine, q Query) (r Result, next bool, err error) {
+	r, err = c.Query(ctx, Select(e, q)+fmt.Sprintf(" limit %d offset %d", q.Limit+1, q.Offset))
+	if next = len(r.Rows) > q.Limit; next {
+		r.Rows = r.Rows[:q.Limit]
+	}
+	return r, next, err
+}
+
+// Select is the statement Page asks, with no LIMIT and no OFFSET: every row
+// of the table the condition keeps, in the order q gives (F12.4).
+func Select(e Engine, q Query) string {
 	var order []string
 	for _, o := range q.Order {
 		dir := " asc"
@@ -65,11 +75,7 @@ func Page(ctx context.Context, c Conn, e Engine, q Query) (r Result, next bool, 
 	if len(order) > 0 {
 		sql += " order by " + strings.Join(order, ", ")
 	}
-	r, err = c.Query(ctx, sql+fmt.Sprintf(" limit %d offset %d", q.Limit+1, q.Offset))
-	if next = len(r.Rows) > q.Limit; next {
-		r.Rows = r.Rows[:q.Limit]
-	}
-	return r, next, err
+	return sql
 }
 
 // Count counts the rows q's condition keeps (§8.5); the caller bounds it

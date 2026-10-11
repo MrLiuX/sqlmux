@@ -85,7 +85,7 @@ func deliver(a *App, cmd tea.Cmd) {
 		for _, c := range m {
 			deliver(a, c)
 		}
-	case runDone, pageDone:
+	case runDone, pageDone, exportDone:
 		a.Update(m)
 	}
 }
@@ -255,6 +255,7 @@ func TestResultKeys(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(wd) }()
 	a.run("result.export", 0)
+	press(t, a, "<CR>") // CSV · 当前页
 	if data, err := os.ReadFile(filepath.Join(dir, "query_1-2.csv")); err != nil || string(data) != "n\na\nb\n" || !strings.HasPrefix(a.toast, "已导出 ") {
 		t.Errorf("export: %q %v, toast %q", data, err, a.toast)
 	}

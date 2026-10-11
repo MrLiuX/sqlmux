@@ -189,7 +189,8 @@ func init() {
 		"jump.confirm":     {Title: i18n.N("跳到最近的匹配"), Local: true, Run: func(a *App, _ Args) tea.Cmd { return a.jumpConfirm() }},
 		"result.page.next": {Title: i18n.N("结果下一页"), Run: func(a *App, _ Args) tea.Cmd { return a.resultPage(1) }},
 		"result.page.prev": {Title: i18n.N("结果上一页"), Run: func(a *App, _ Args) tea.Cmd { return a.resultPage(-1) }},
-		"result.export":    {Title: i18n.N("导出 CSV"), Run: func(a *App, _ Args) tea.Cmd { return a.exportResult() }},
+		"result.export":    {Title: i18n.N("导出…"), Run: func(a *App, _ Args) tea.Cmd { return a.exportOpen() }},
+		"grid.export":      {Title: i18n.N("导出…"), Run: func(a *App, _ Args) tea.Cmd { return a.exportOpen() }},
 		"result.pin": {Title: i18n.N("固定结果"), Run: do(func(a *App, _ Args) {
 			if rt := resultOf(a.focused()); rt != nil && rt.run != nil && rt.run.done {
 				rt.pinned = !rt.pinned

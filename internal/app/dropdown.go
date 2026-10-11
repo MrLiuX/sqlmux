@@ -29,6 +29,7 @@ const (
 	dropAuto   // auto refresh's interval (§7.8「自动刷新」)
 	dropTheme  // the theme in use (F6.2)
 	dropLayout // layout.open: the layouts there are (F6.5)
+	dropExport // what to export, of a table or a result (F12.4)
 )
 
 // dropdown is the open one-pick dropdown; tab or query, in pane, is what
@@ -36,6 +37,7 @@ const (
 type dropdown struct {
 	kind     dropKind
 	tab      *dataTab
+	result   *resultTab // dropExport's, when it is of a result
 	query    *queryTab
 	pane     *Pane
 	input    ui.Input
@@ -135,6 +137,8 @@ func (a *App) dropItems() (items []string, current int) {
 			}
 		}
 		return items, current
+	case dropExport:
+		return exportItems(), 0
 	case dropAuto:
 		for _, i := range autoIntervals {
 			items = append(items, autoLabel(i))
@@ -216,6 +220,22 @@ func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 		if entry = a.queryBar(d.pane, d.tab).ButtonRect(bodyRect(r), "grid.refresh.auto"); entry.Empty() {
 			entry = uv.Rect(r.Max.X-w, bodyRect(r).Min.Y+1, w, 1)
 		}
+	case dropExport:
+		r := a.layout()[d.pane.ID]
+		if d.tab != nil {
+			entry = a.queryBar(d.pane, d.tab).ButtonRect(bodyRect(r), "grid.export")
+		}
+		for _, h := range hits { // a result's button on its pane's title
+			if d.result != nil && h.Target.Pane == d.pane.ID && h.Target.Action == "result.export" {
+				entry = h.Rect
+			}
+		}
+		if entry.Empty() {
+			entry = uv.Rect(r.Max.X-w, bodyRect(r).Min.Y+1, w, 1)
+			if d.result != nil {
+				entry = uv.Rect(r.Max.X-w, r.Min.Y, w, 1)
+			}
+		}
 	}
 	return v.Box(a.window(), entry, w)
 }
@@ -250,6 +270,8 @@ func (a *App) dropPick(i int) tea.Cmd {
 		return a.setTheme(item)
 	case dropLayout:
 		return a.pickLayout(item)
+	case dropExport:
+		return a.export(a.exportSource(d), at)
 	case dropAuto: // the ticking so far stops; this interval's starts
 		if t.auto, t.autoGen = autoIntervals[at], t.autoGen+1; t.auto == 0 {
 			return nil
@@ -269,7 +291,7 @@ func (a *App) dropPick(i int) tea.Cmd {
 		}
 	case dropLimit:
 		t.limit, _ = strconv.Atoi(item)
-	case dropSchema, dropQueryConn, dropTx, dropAuto, dropTheme, dropLayout: // above
+	case dropSchema, dropQueryConn, dropTx, dropAuto, dropTheme, dropLayout, dropExport: // above
 	}
 	d.tab.pageNo = 0
 	return a.fetch(d.tab, false)

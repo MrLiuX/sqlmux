@@ -166,16 +166,7 @@ func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (
 		return r, err
 	}
 	defer c.watch(ctx)()
-	defer func() {
-		switch {
-		case err == nil:
-			c.tx = sqlkit.MySQLTx(query, c.tx)
-		case errno(err) == 1213:
-			c.tx, err = 'I', db.RolledBack{Err: err}
-		case (Engine{}).Broken(err) != db.NotLost: // the server took the transaction with the connection
-			c.tx, c.dead = 'I', true // a cancelled request, whose Worker does not dial, may find it so
-		}
-	}()
+	defer func() { err = c.noted(query, err) }()
 	run, start := context.WithoutCancel(ctx), time.Now()
 	word := sqlkit.FirstWord(query, sqlkit.MySQL)
 	if !rowWords[word] || word == "with" && !sqlkit.IsRead(query, sqlkit.MySQL) {
@@ -228,6 +219,66 @@ func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (
 		return r, err
 	}
 	return r, rows.Err()
+}
+
+// noted is what a statement's outcome does to c: the transaction it is in, or
+// the connection it lost, and err as the caller has it (a deadlock comes as
+// db.RolledBack).
+func (c *Conn) noted(query string, err error) error {
+	switch {
+	case err == nil:
+		c.tx = sqlkit.MySQLTx(query, c.tx)
+	case errno(err) == 1213:
+		c.tx, err = 'I', db.RolledBack{Err: err}
+	case (Engine{}).Broken(err) != db.NotLost: // the server took the transaction with the connection
+		c.tx, c.dead = 'I', true // a cancelled request, whose Worker does not dial, may find it so
+	}
+	return err
+}
+
+// Stream reads the rows of a statement that answers with them as they come,
+// one at a time (F12.4); cancelled, it is killed as run's is.
+func (c *Conn) Stream(ctx context.Context, query string, head func([]db.Col) error, row func([]db.Val) error) (err error) {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	defer c.watch(ctx)()
+	defer func() { err = c.noted(query, err) }()
+	rows, err := c.c.QueryContext(context.WithoutCancel(ctx), query)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	types, err := rows.ColumnTypes()
+	if err != nil {
+		return err
+	}
+	raw, dest, cols := make([]sql.RawBytes, len(types)), make([]any, len(types)), make([]db.Col, len(types))
+	for i, t := range types {
+		cols[i], dest[i] = db.Col{Name: t.Name(), Type: strings.ToLower(t.DatabaseTypeName())}, &raw[i]
+	}
+	if err := head(cols); err != nil {
+		return err
+	}
+	for rows.Next() {
+		if err := rows.Scan(dest...); err != nil {
+			return err
+		}
+		vals := make([]db.Val, len(raw))
+		for i, v := range raw {
+			vals[i] = db.Val{S: shown(v), Null: v == nil}
+			if cols[i].Type == "bit" && v != nil {
+				vals[i].S = bits(v)
+			}
+		}
+		if err := row(vals); err != nil {
+			return err
+		}
+	}
+	if err := ctx.Err(); err != nil { // killed: the rows so far were all of it
+		return err
+	}
+	return rows.Err()
 }
 
 // shown is a value as the grid shows it: a blob that is no UTF-8 by its size (§8.1).
