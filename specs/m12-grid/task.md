@@ -41,7 +41,7 @@
 
 **开发**（§10「值编辑器」、§6.4 `value`）
 - [ ] `e`（`grid.value`「在值编辑器中打开」，grid 和 result）打开居中浮窗，宽高同表 DDL 浮窗，标题 `<列名> · <类型>`，内容是 `internal/editor` 的编辑器，作用域 `value`：`C-s` 写回并关闭，其余交给 vim；`[map.normal]` / `[map.visual]` 照常。模式块显示编辑器的模式。
-- [ ] JSON：列类型 json / jsonb / json，或文字以 `{` / `[` 开头且 `json.Valid`，打开时格式化成 2 空格缩进；着色用一个小的 JSON 词法（放 `internal/sqlkit/json.go`，和 SQL 词法同包，不新增目录；键名 `sql_column`、字符串 `string`、数字 `number`、true / false / null `keyword`、标点 `sql_operator`）；`gq` 格式化 JSON，不合法 toast「不是 JSON」。
+- [ ] JSON：列类型 json / jsonb / json，或文字以 `{` / `[` 开头且 `json.Valid`，打开时格式化成 2 空格缩进；着色用一个小的 JSON 词法（放 `internal/sqlkit/json.go`，和 SQL 词法同包，不新增目录；键名 `sql_column`、字符串 `string`、数字 `number`、true / false / null `keyword`、标点 `sql_operator`）；`gq` 仍是操作符（`gqq` / `gq{移动}`），不论范围都格式化整个值，不合法 toast「不是 JSON」。
 - [ ] 写回：`:w` 记成这一格的修改（规则同行内输入框：没改不记；空是空字符串），不关；`C-s` / `:wq` 写回并关；`esc`（NORMAL）/ `:q` 不写，有改动先确认「放弃修改？」。JSON 列写回原文含缩进。
 - [ ] 只读：进不了编辑的格和结果 tab 也能开，照 nvim `nomodifiable`：改动的键统一拦在一处、toast「只读」；VISUAL 下被拒的操作回 NORMAL、光标到选区起点（审查时定，加 `:set noma` 生成的 nvim 用例）；NORMAL 下不移光标、`U` 也 toast 是有意的差异，用例里注明。鼠标同 query 编辑器（点击、拖选、滚轮）；`vim = false` 时 `C-c` / `esc` 先取消选区再关。
 - [ ] 细节（已定）：不做 DataGrip 的「设置高亮显示语言」，只认 JSON；不做记录视图。
@@ -49,7 +49,7 @@
 **验收**
 - [ ] 单测：json 列打开后文字是格式化的 JSON、着色的 token 类型正确；`:w` 后格的修改是编辑后的文字；没改 `:q` 不留修改；只读格里 `x` 不改文字且 toast；`gq` 对非 JSON 不动。
 - [ ] golden：JSON 值的浮窗。
-- [ ] e2e：表格上 `e`，`gq`，`:wq`，`C-s` 后库里的 json 列是编辑后的值（PG 的 jsonb 会规范化，比对解析后的值）。
+- [ ] e2e：表格上 `e`，`gqq`，`:wq`，`C-s` 后库里的 json 列是编辑后的值（PG 的 jsonb 会规范化，比对解析后的值）。
 
 ## F12.3 按值过滤、按列排序、表格右键菜单 · 状态：todo
 
