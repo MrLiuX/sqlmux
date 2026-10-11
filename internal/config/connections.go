@@ -50,17 +50,20 @@ func UnknownKeys(c *Config) (lines []string) {
 	known, t := map[string]bool{}, reflect.TypeFor[Connection]()
 	for i := range t.NumField() {
 		name, _, _ := strings.Cut(t.Field(i).Tag.Get("toml"), ",")
-		known[name] = true
+		known[strings.ToLower(name)] = true // the decoder matches a key whatever its case
 	}
 	for _, m := range file.Connection {
 		var unknown []string
-		for k := range m {
-			if !known[k] {
+		name := ""
+		for k, v := range m {
+			if strings.EqualFold(k, "name") {
+				name, _ = v.(string)
+			}
+			if !known[strings.ToLower(k)] {
 				unknown = append(unknown, k)
 			}
 		}
 		if slices.Sort(unknown); len(unknown) > 0 {
-			name, _ := m["name"].(string)
 			lines = append(lines, i18n.T("connections.toml: 不认识的键 %s（connection %q）", strings.Join(unknown, ", "), name))
 		}
 	}

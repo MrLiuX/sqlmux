@@ -164,7 +164,7 @@ func startLayout(name, layout string, warning *string) (*config.Layout, error) {
 	case errors.Is(err, fs.ErrNotExist):
 		return nil, nil
 	}
-	*warning = err.Error()
+	*warning = app.JoinNotes(*warning, err.Error())
 	return nil, config.BrokenLast()
 }
 

@@ -303,4 +303,12 @@ func TestUnknownKeys(t *testing.T) {
 	if got := UnknownKeys(ok); len(got) != 1 || strings.HasPrefix(got[0], "config.toml") {
 		t.Errorf("only the connection: %q", got)
 	}
+	// the decoder reads a key whatever its case: not unknown
+	upper := "[[connection]]\nName = \"x\"\nDSN = \"postgres://u@h/d\"\nEngine = \"postgres\"\nRead_Only = true\n"
+	if err := os.WriteFile(filepath.Join(dir, "sqlmux", "connections.toml"), []byte(upper), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := UnknownKeys(ok); len(got) != 0 {
+		t.Errorf("keys of another case: %q", got)
+	}
 }

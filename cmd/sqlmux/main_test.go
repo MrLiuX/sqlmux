@@ -173,7 +173,8 @@ func TestStartLayout(t *testing.T) {
 	if err := os.WriteFile(config.LastPath(), []byte("{"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if l, err := startLayout("", "", &warning); l != nil || err != nil || !strings.Contains(warning, "last.toml") {
+	warning = "config.toml: unknown keys x" // said before: the last.toml's joins it (F13.5)
+	if l, err := startLayout("", "", &warning); l != nil || err != nil || !strings.Contains(warning, "last.toml") || !strings.Contains(warning, "unknown keys x") {
 		t.Errorf("a last.toml that does not read: %v %v %q", l, err, warning)
 	}
 	if _, err := os.Stat(config.LastPath() + ".broken"); err != nil {
