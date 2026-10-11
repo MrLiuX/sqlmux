@@ -55,6 +55,7 @@ var en = map[string]string{
 	"切换排序方向":     "Reverse the sort",
 	"加入 / 翻转排序":  "Add to the sort, or reverse it",
 	"移出排序":       "Remove from the sort",
+	"关闭 ORDER":   "Close ORDER",
 	"清空排序":       "Clear the sort",
 	"只按这一列排序":    "Sort by this column alone",
 	"方向":         "Direction",
@@ -410,6 +411,7 @@ var en = map[string]string{
 	"%s: version = %d，只认识 %d":        "%s: version = %d, only %d is known",
 	"%s: 里面没有 [[session]]":           "%s: no [[session]] in it",
 	"last 是保留名，指上次退出时的布局":            "last is reserved: it is the layout of the last quit",
+	"不认识的 split %s，按 h":              "unknown split %s, read as h",
 	"不认识的 tab":                       "Not a kind of tab",
 	"名字不能含 / 或 \\，也不能以 . 开头":         "A name has no / or \\, and no . at the start",
 	"已保存布局 %s":                       "Saved layout %s",
@@ -472,8 +474,9 @@ var en = map[string]string{
 	"；":      "; ",
 
 	// F13.5
-	"config.toml: 不认识的键 %s":                     "config.toml: unknown keys %s",
-	"connections.toml: 不认识的键 %s（connection %q）": "connections.toml: unknown keys %s (connection %q)",
+	"config.toml: 不认识的键 %s":                     "config.toml: unknown key(s) %s",
+	"connections.toml: 不认识的键 %s":                "connections.toml: unknown key(s) %s",
+	"connections.toml: 不认识的键 %s（connection %q）": "connections.toml: unknown key(s) %s (connection %q)",
 
 	// F13.1, F13.2
 	"文件在别处改过，没有保存；再保存一次会覆盖它": "The file was changed elsewhere and not saved; save again to overwrite it",

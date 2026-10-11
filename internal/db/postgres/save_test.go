@@ -18,13 +18,13 @@ func saver(t *testing.T) (*db.Worker, func(sql string) string, string) {
 	t.Helper()
 	ctx := context.Background()
 	dsn := OwnDB(t)
-	main, err := Connect(ctx, dsn, "", false)
+	main, _, err := Connect(ctx, dsn, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	w := db.NewWorker(main)
 	t.Cleanup(func() { w.Close() })
-	other, err := Connect(ctx, dsn, "", false)
+	other, _, err := Connect(ctx, dsn, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestSaveRollsBack(t *testing.T) {
 func TestSaveCancel(t *testing.T) {
 	ctx := context.Background()
 	w, q, dsn := saver(t)
-	lock, err := Connect(ctx, dsn, "", false)
+	lock, _, err := Connect(ctx, dsn, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

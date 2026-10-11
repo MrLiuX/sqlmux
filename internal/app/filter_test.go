@@ -432,4 +432,9 @@ func TestGridFGroup(t *testing.T) {
 	if !tab.hidden["paid"] {
 		t.Errorf("fc turned: hidden %v", tab.hidden)
 	}
+	feed(t, a, "T$fc") // the last column: the cursor goes to the one before it
+	last := tab.page.Cols[len(tab.page.Cols)-1].Name
+	if !tab.hidden[last] || tab.col != len(tab.shownCols())-1 || tab.page.Cols[tab.fieldAt(tab.col)].Name == last {
+		t.Errorf("fc on the last column: hidden %v, cursor %d of %d", tab.hidden, tab.col, len(tab.shownCols()))
+	}
 }

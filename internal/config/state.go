@@ -88,6 +88,20 @@ type Query struct {
 	At    time.Time     `json:"at"`
 }
 
+// WhereRows is how many runs a table's WHERE history keeps (§9.7).
+const WhereRows = 100
+
+// Key is what makes two WHEREs one: all but the time.
+func (q Query) Key() string {
+	b, _ := json.Marshal(struct {
+		Where string
+		Order any
+		Desc  bool
+		Limit int
+	}{q.Where, q.Order, q.Desc, q.Limit})
+	return string(b)
+}
+
 // UnmarshalJSON reads what a state.json of before F12.1 says, "order": "col"
 // with "desc" beside it, as one column.
 func (q *Query) UnmarshalJSON(data []byte) error {
@@ -135,7 +149,6 @@ func statePath() string { return filepath.Join(StateDir(), "state.json") }
 func LoadState() (*State, error) {
 	data, err := os.ReadFile(statePath())
 	if errors.Is(err, fs.ErrNotExist) {
-		setBase(&State{})
 		return &State{}, nil
 	}
 	var s *State
@@ -146,11 +159,12 @@ func LoadState() (*State, error) {
 		if rerr := os.Rename(statePath(), statePath()+".broken"); rerr != nil { // the next save will overwrite it
 			err = errors.Join(err, rerr)
 		}
-		setBase(&State{})
 		return &State{}, fmt.Errorf("%s: %w", statePath(), err)
 	}
 	b, _ := parseState(data) // a copy of its own: this one is what the writes are told apart from the file by (F13.3)
-	setBase(b)
+	saveMu.Lock()
+	base = b
+	saveMu.Unlock()
 	return s, nil
 }
 
@@ -177,12 +191,6 @@ func parseState(data []byte) (*State, error) {
 		}
 	}
 	return s, nil
-}
-
-func setBase(s *State) {
-	saveMu.Lock()
-	defer saveMu.Unlock()
-	base, basePath = s, statePath()
 }
 
 var (
@@ -227,11 +235,7 @@ func save(data []byte, t int) error {
 	out := &ours
 	if b, err := os.ReadFile(statePath()); err == nil {
 		if disk, err := parseState(b); err == nil {
-			from := base
-			if basePath != statePath() { // a state this program did not begin from
-				from = &State{}
-			}
-			out = merge(from, &ours, disk)
+			out = merge(base, &ours, disk)
 		} else {
 			_ = os.Rename(statePath(), statePath()+".broken") // not read: set aside, as a load does; this program's own whole is what is written
 		}
@@ -243,7 +247,7 @@ func save(data []byte, t int) error {
 	if err := writeFile(statePath(), merged); err != nil {
 		return err
 	}
-	savedTick, base, basePath = t, &ours, statePath()
+	savedTick, base = t, &ours
 	return nil
 }
 

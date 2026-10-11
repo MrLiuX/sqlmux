@@ -245,3 +245,28 @@ func (f *Frame) RenderReusing(last *Rendered) string {
 
 // String is the frame as plain text, for golden tests.
 func (f *Frame) String() string { return f.Buf.String() }
+
+// listText draws a list row's text from x on row y, the match positions pos
+// lit in st, and its note ending at noteRight in noteSt: the text is cut with
+// … to leave the note a blank, the note starts no further left than x, and a
+// row with no note has its text to noteRight (F13.9).
+func listText(f *Frame, x, y, noteRight int, text string, pos []int, note string, st, noteSt uv.Style) {
+	nx, end := max(noteRight-Width(note), x), noteRight
+	if note != "" {
+		end = nx - 1
+	}
+	name, inName := TruncateMatch(text, pos, end-x)
+	f.TextMatch(x, y, end, name, inName, st)
+	f.Text(nx, y, noteRight, note, noteSt)
+}
+
+// InView is the first row a list shows with selection sel in view and rows
+// rows to show: top, where the selection is in view already, as nvim's
+// completion menu holds still, else the least that brings it in (F13.10).
+func InView(top, sel, rows int) int { return max(min(top, sel), sel-rows+1, 0) }
+
+// ListView is sel and top kept on a list of n rows and in a view of rows.
+func ListView(sel, top, n, rows int) (int, int) {
+	sel = max(min(sel, n-1), 0)
+	return sel, InView(min(top, n-rows), sel, rows)
+}

@@ -435,10 +435,10 @@ func TestWhereHistoryEdit(t *testing.T) {
 // A table's WHERE history keeps its last 100 runs (§9.7).
 func TestWhereHistoryRows(t *testing.T) {
 	a, tab, _ := withRecorder(t)
-	for i := range whereRows + 1 {
+	for i := range config.WhereRows + 1 {
 		feed(t, a, "/<C-u>id = "+strconv.Itoa(i)+"<CR>")
 	}
-	if h := a.tableState(tab).History; len(h) != whereRows || h[0].Where != "id = 100" || h[len(h)-1].Where != "id = 1" {
+	if h := a.tableState(tab).History; len(h) != config.WhereRows || h[0].Where != "id = 100" || h[len(h)-1].Where != "id = 1" {
 		t.Errorf("%d kept, %q to %q", len(h), h[0].Where, h[len(h)-1].Where)
 	}
 }
@@ -807,5 +807,28 @@ func TestConfirmTakesNoText(t *testing.T) {
 	a.Update(tea.PasteMsg{Content: "Z"})
 	if tab.where.Text != "id" || a.confirm == nil {
 		t.Errorf("WHERE under the confirm box: %q, confirm up %v", tab.where.Text, a.confirm != nil)
+	}
+}
+
+// The completion list holds still while the selection moves in the rows it
+// shows, up as well as down, as nvim's menu does (F13.10).
+func TestCompleteViewHoldsStill(t *testing.T) {
+	a := &App{w: 120, h: 40}
+	c := &completion{}
+	for i := range 20 {
+		c.items = append(c.items, candidate{label: fmt.Sprint("col_", i)})
+	}
+	var tops []int
+	for _, sel := range []int{12, 11, 10, 9, 8, 7, 12} {
+		c.sel = sel
+		v, _, _ := a.completeView(c, uv.Pos(0, 2))
+		tops = append(tops, v.Top)
+	}
+	if want := []int{5, 5, 5, 5, 5, 5, 5}; !slices.Equal(tops, want) {
+		t.Errorf("tops %v, want %v", tops, want)
+	}
+	c.sel = 3
+	if v, _, _ := a.completeView(c, uv.Pos(0, 2)); v.Top != 3 {
+		t.Errorf("above the view: top %d, want 3", v.Top)
 	}
 }

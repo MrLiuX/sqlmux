@@ -417,7 +417,7 @@ func (a *App) renameWindowKey(k keymap.Key) tea.Cmd {
 		return nil
 	}
 	if name != "" && slices.ContainsFunc(a.sess.Windows, func(w *Window) bool { return w != a.win() && w.Name == name }) {
-		return a.showToast(i18n.T("已有同名 window"), toastTTL)
+		return a.showToast(i18n.T("已有同名 window"))
 	}
 	if name != "" {
 		a.win().Name = name
@@ -464,7 +464,7 @@ func (a *App) askSessionName() {
 	s := a.sess
 	a.askName = &nameAsk{label: i18n.T("session 名："), in: ui.Input{Text: s.Name, Pos: len(s.Name)}, done: func(a *App, name string) (tea.Cmd, bool) {
 		if a.sessionNameTaken(s, name) {
-			return a.showToast(i18n.T("已有同名 session"), toastTTL), true
+			return a.showToast(i18n.T("已有同名 session")), true
 		}
 		s.Name = name
 		return nil, false
@@ -496,21 +496,21 @@ func (a *App) askQueryName() {
 		}
 		path := config.QueryPath(name)
 		if err := config.CheckQueryName(name); err != nil {
-			return a.showToast(err.Error(), toastTTL), true
+			return a.showToast(err.Error()), true
 		}
 		fi, err := os.Stat(path)
 		old, _ := os.Stat(t.path)
 		switch {
 		case err == nil && !os.SameFile(fi, old) || a.queryOpen(name, t): // a name of its own file only differing in case is its own
-			return a.showToast(i18n.T("已有同名 query"), toastTTL), true
+			return a.showToast(i18n.T("已有同名 query")), true
 		case err != nil && !errors.Is(err, fs.ErrNotExist):
-			return a.showToast(err.Error(), toastTTL), true
+			return a.showToast(err.Error()), true
 		}
 		if err := t.flush(); err != nil {
 			return a.saveFailed(err), true
 		}
 		if err := os.Rename(t.path, path); err != nil && !errors.Is(err, fs.ErrNotExist) { // no file yet: nothing typed
-			return a.showToast(err.Error(), toastTTL), true
+			return a.showToast(err.Error()), true
 		}
 		delete(a.state.Queries, t.name)
 		t.name, t.path = name, path // the rename keeps the time and size: what the tab had of the file is still what it is compared to
@@ -761,7 +761,7 @@ func (a *App) newQuery(conn *Conn) (cmd tea.Cmd, ok bool) {
 	p, name := a.openTarget(), a.freeQuery()
 	c, err := openQuery(conn, name)
 	if err != nil {
-		return a.showToast(err.Error(), toastTTL), false
+		return a.showToast(err.Error()), false
 	}
 	a.showPane(p.ID)
 	putTab(p, Tab{Name: name, Query: c}, p.tab().landing())
@@ -798,7 +798,7 @@ func (a *App) pickConn(t *queryTab, c *Conn) tea.Cmd {
 	case c == t.conn:
 		return nil
 	case why != "":
-		return a.showToast(why, toastTTL)
+		return a.showToast(why)
 	case c.State == connReady:
 		return a.switchConn(t, c, c.Schema)
 	}
@@ -951,7 +951,7 @@ func (a *App) moveTab(d int) tea.Cmd {
 	dst := win.pane(ids[(i+d+len(ids))%len(ids)])
 	tb := src.Tabs[src.Cur]
 	if t := tb.Data; t != nil && dst.tableTab(t.conn, t.table) >= 0 {
-		return a.showToast(i18n.T("目标 pane 里已有这张表"), toastTTL)
+		return a.showToast(i18n.T("目标 pane 里已有这张表"))
 	}
 	dropTab(src, src.Cur)
 	putTab(dst, tb, dst.tab().landing()) // a landing tab there gives way to it (§5「引导页」)
@@ -1305,7 +1305,7 @@ func (a *App) reopenTab() tea.Cmd {
 	}
 	t, err := openQuery(c.conn, c.query)
 	if err != nil {
-		return a.showToast(err.Error(), toastTTL)
+		return a.showToast(err.Error())
 	}
 	t.schema = c.schema
 	a.showPane(p.ID)

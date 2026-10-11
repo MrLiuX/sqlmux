@@ -78,7 +78,7 @@ func format(sql string, d sqlkit.Dialect, prg string, o sqlkit.Options) (string,
 	var out string
 	var err error
 	if prg == "" {
-		out, err = sqlkit.Format(sql, d, o)
+		out, err = sqlkit.FormatAll(sql, d, o)
 	} else {
 		out, err = runPrg(sql, prg)
 	}
@@ -114,9 +114,9 @@ func (a *App) gotFormat(m formatDone) tea.Cmd {
 	case m.t.ver != m.ver, m.t.ed.Mode() != editor.Normal && !m.t.ed.Plain(): // the text changed meanwhile, or is being typed
 		return nil
 	case errors.Is(m.err, sqlkit.ErrTimeout):
-		return a.showToast(i18n.T("格式化超时（%v）", sqlkit.FormatTimeout), toastTTL)
+		return a.showToast(i18n.T("格式化超时（%v）", sqlkit.FormatTimeout))
 	case m.err != nil:
-		return a.showToast(i18n.T("格式化失败：%s", m.err.Error()), toastTTL)
+		return a.showToast(i18n.T("格式化失败：%s", m.err.Error()))
 	}
 	cur := m.t.ed.Cursor()
 	eff := m.t.ed.Replace(m.from, m.to, m.text)

@@ -131,12 +131,9 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 	if a.jump != nil {
 		a.drawJump(f)
 	}
-	if a.keyHelp != nil {
-		a.keyHelpView().Draw(f, a.overlayArea())
-	}
-	if a.whichKey { // over the help too: a Ctrl leader's keys there (§6.5)
-		a.whichKeyOverlay().Draw(f, a.overlayArea())
-	}
+	// The overlays are drawn from the bottom up, topOverlay's order reversed as
+	// far as they can be open together: the help, which has the keys over the
+	// palette, is drawn after it (F13.14).
 	if t := a.typingTab(); t != nil { // the WHERE's lists (§9.7), a cell's options (§10.2)
 		switch p := a.focused(); {
 		case t.cell != nil:
@@ -187,8 +184,12 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 		}
 	}
 	if a.form != nil {
-		if c := a.managerView().Draw(f, a.window()); c.X >= 0 {
+		v := a.managerView()
+		if c := v.Draw(f, a.window()); c.X >= 0 {
 			f.Cursor = &c
+		}
+		if v.Form.Pick != nil { // where its list was left scrolled
+			a.form.groupTop = v.Form.Pick.Top
 		}
 	}
 	if a.palette != nil { // over the list and the form, whose keys it takes (context)
@@ -201,6 +202,12 @@ func (a *App) drawOn(f *ui.Frame) *ui.Frame {
 				v.Draw(f, box, rows)
 			}
 		}
+	}
+	if a.keyHelp != nil {
+		a.keyHelpView().Draw(f, a.overlayArea())
+	}
+	if a.whichKey { // over the help too: a Ctrl leader's keys there (§6.5)
+		a.whichKeyOverlay().Draw(f, a.overlayArea())
 	}
 	if c := a.confirm; c != nil {
 		cf := ui.Confirm{Text: c.text, Danger: c.danger, YesKey: a.keys.Hint("confirm.yes", "confirm"), Yes: c.yes}
@@ -567,7 +574,7 @@ func (a *App) statusLine() ui.StatusLine {
 	if a.jump != nil {
 		name, modeColor = "JUMP", th.Info
 	}
-	if s := gridStateOf(a.focused()); s != nil && s.unset && mode == keymap.Visual && a.jump == nil {
+	if s := gridStateOf(a.focused()); s != nil && s.unset && a.vim() == nil && mode == keymap.Visual && a.jump == nil { // another editor's VISUAL is its own
 		name = "UNSET"
 	}
 	s.Right = append(s.Right, ui.Segment{Runs: []ui.Run{{Text: " " + name + " ", Style: uv.Style{Fg: th.Bg, Bg: modeColor, Attrs: uv.AttrBold}}}})

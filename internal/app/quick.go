@@ -109,7 +109,7 @@ func (a *App) gotQuick(m quickMsg) tea.Cmd {
 	sql := q.running
 	q.running = ""
 	if errors.Is(m.err, context.Canceled) {
-		return a.showToast(i18n.T("查询已取消"), toastTTL)
+		return a.showToast(i18n.T("查询已取消"))
 	}
 	q.ran, q.res, q.err, q.write, q.top, q.left = sql, m.res, "", false, 0, 0
 	q.conn, q.schema = m.conn, m.schema
@@ -214,7 +214,7 @@ func (a *App) gotQuickRerun(m quickRerun) tea.Cmd {
 	switch {
 	case errors.Is(m.err, context.Canceled):
 		a.log(r, r.sql, i18n.T("已取消"), false)
-		return a.showToast(i18n.T("查询已取消"), toastTTL)
+		return a.showToast(i18n.T("查询已取消"))
 	case m.err != nil:
 		a.logError(r, r.sql, m.err)
 		selectTab(r.win.Result, 0) // the log's, made if need be

@@ -89,3 +89,42 @@ func TestFormatTimeout(t *testing.T) {
 		t.Errorf("after: %q %v", out, err)
 	}
 }
+
+// Several statements formatted one by one are what one call lays out of them:
+// the same text, an empty line between, the comments between as they were,
+// the last ; or none; what the split has no account of goes in one call (F13.19).
+func TestFormatAllIsFormat(t *testing.T) {
+	o := Options{KeywordCase: "upper", TabWidth: 2}
+	st := "select a.id, b.name, count(*) from orders a join users b on a.uid = b.id where a.ts > now() - interval '1 day' group by 1, 2 having count(*) > 3;\n"
+	for _, s := range []string{
+		strings.Repeat(st, 12),
+		"select 1; select 2",
+		"select 1;\n\n\n-- note\nselect 2;\n",
+		"select 1; -- trailing\nselect 2; /* block */",
+		"select 1;;select 2;",
+		"-- head\nselect 1;\nselect 2;\n-- tail\n",
+		"select 1;\n\n-- a\n-- b\n\nselect 2;",
+		"select 1 /* c */ ; select 2;",
+		"select 1",
+	} {
+		want, err := Format(s, PG, o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, err := FormatAll(s, PG, o); err != nil || got != want {
+			t.Errorf("%q:\n got %q (%v)\nwant %q", s, got, err, want)
+		}
+	}
+}
+
+// Each statement is a call of its own: 48 of them take what a few cost, where
+// one call over the lot took seconds (F13.19).
+func BenchmarkFormatAll48(b *testing.B) {
+	o := Options{KeywordCase: "upper", TabWidth: 2}
+	s := strings.Repeat("select a.id, b.name, count(*) from orders a join users b on a.uid = b.id where a.ts > now() - interval '1 day' group by 1, 2 having count(*) > 3;\n", 48)
+	for range b.N {
+		if _, err := FormatAll(s, PG, o); err != nil {
+			b.Fatal(err)
+		}
+	}
+}

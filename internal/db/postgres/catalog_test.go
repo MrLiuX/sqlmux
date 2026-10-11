@@ -103,7 +103,7 @@ func TestTableColumns(t *testing.T) {
 // expression (F3.32).
 func TestTableColumnsIdentity(t *testing.T) {
 	ctx := context.Background()
-	c, err := Connect(ctx, OwnDB(t), "", false)
+	c, _, err := Connect(ctx, OwnDB(t), "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ CREATE UNIQUE INDEX t_sku_title_priced ON public.t_sku USING btree (title) WHERE
 		}
 	}
 
-	own, err := Connect(ctx, OwnDB(t), "", false)
+	own, _, err := Connect(ctx, OwnDB(t), "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

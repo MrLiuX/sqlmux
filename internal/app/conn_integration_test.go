@@ -88,7 +88,7 @@ func connectOnOpen(t *testing.T, eng, dsn string) {
 	})
 	defer sess.Close()
 	cfg := config.Default()
-	keys, _ := keymap.New(cfg)
+	keys, _ := keymap.New(cfg.Leader, cfg.Vim, cfg.Timeoutlen, cfg.Bindings)
 	a := New(cfg, keys, sess, &config.State{}, "")
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
 	settle(a, a.loadCatalog(sess.Conns[0]))
@@ -179,7 +179,7 @@ func queriesShareMain(t *testing.T, eng, dsn string) {
 	})
 	defer sess.Close()
 	cfg := config.Default()
-	keys, _ := keymap.New(cfg)
+	keys, _ := keymap.New(cfg.Leader, cfg.Vim, cfg.Timeoutlen, cfg.Bindings)
 	a := New(cfg, keys, sess, &config.State{}, "")
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
 	settle(a, a.loadCatalog(sess.Conns[0]))
@@ -218,7 +218,7 @@ func newSessionOn(t *testing.T, eng, dsn string) {
 		{Name: "seed", Engine: eng, DSN: dsn},
 	})
 	cfg := config.Default()
-	keys, _ := keymap.New(cfg)
+	keys, _ := keymap.New(cfg.Leader, cfg.Vim, cfg.Timeoutlen, cfg.Bindings)
 	a := New(cfg, keys, sess, &config.State{}, "")
 	defer a.Close()
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
@@ -243,7 +243,7 @@ func opened(t *testing.T, specs ...config.Connection) *App {
 	t.Helper()
 	sess := openUp(t, specs)
 	cfg := config.Default()
-	keys, _ := keymap.New(cfg)
+	keys, _ := keymap.New(cfg.Leader, cfg.Vim, cfg.Timeoutlen, cfg.Bindings)
 	a := New(cfg, keys, sess, &config.State{}, "")
 	t.Cleanup(a.Close)
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
@@ -417,7 +417,7 @@ func manualTxTable(t *testing.T, eng, _ string) {
 // backends is how many connections named app the server has.
 func backends(t *testing.T, app string) int {
 	t.Helper()
-	c, err := postgres.Connect(context.Background(), postgres.IntegrationDSN(t), "", true)
+	c, _, err := postgres.Connect(context.Background(), postgres.IntegrationDSN(t), "", true)
 	if err != nil {
 		t.Fatal(err)
 	}

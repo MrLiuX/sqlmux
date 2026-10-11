@@ -112,7 +112,7 @@ func init() {
 			if a.toast != "" && a.toastSeq == a.quitToast { // the first press's toast is still up
 				return a.quit()
 			}
-			cmd := a.showToast(fmt.Sprintf(i18n.T("再按一次 %s 退出"), a.keys.Hint("cancel", "global")), quitWindow)
+			cmd := a.showToastFor(fmt.Sprintf(i18n.T("再按一次 %s 退出"), a.keys.Hint("cancel", "global")), quitWindow)
 			a.quitToast = a.toastSeq
 			return cmd
 		}},
@@ -364,6 +364,10 @@ func init() {
 		"cols.all":          {Title: i18n.N("全部显示"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsSetAll(true); return nil })},
 		"cols.none":         {Title: i18n.N("全部隐藏"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsSetAll(false); return nil })},
 		"cols.filter":       {Title: i18n.N("过滤列"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.cols.typing = true; return nil })},
+		"order.up":          {Title: i18n.N("上移"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { a.colsMove(-1); return nil })},
+		"order.down":        {Title: i18n.N("下移"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { a.colsMove(1); return nil })},
+		"order.filter":      {Title: i18n.N("过滤列"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { a.cols.typing = true; return nil })},
+		"order.close":       {Title: i18n.N("关闭 ORDER"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { a.colsEsc(); return nil })},
 		"order.toggle":      {Title: i18n.N("加入 / 翻转排序"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { return a.orderToggleSel() })},
 		"order.remove":      {Title: i18n.N("移出排序"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { return a.orderRemove() })},
 		"order.clear":       {Title: i18n.N("清空排序"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { return a.orderClear() })},

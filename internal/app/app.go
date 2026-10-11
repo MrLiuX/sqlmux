@@ -180,7 +180,7 @@ func (a *App) Init() tea.Cmd {
 		}
 	}
 	if a.warning != "" {
-		cmds = append(cmds, a.showToast(a.warning, toastTTL))
+		cmds = append(cmds, a.showToast(a.warning))
 	}
 	return tea.Batch(cmds...)
 }
@@ -304,7 +304,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.runTick(msg.r)
 		}
 	case stateErr:
-		return a, a.showToast(msg.err.Error(), toastTTL)
+		return a, a.showToast(msg.err.Error())
 	case toastExpired:
 		if msg.seq == a.toastSeq {
 			a.toast = ""
@@ -576,25 +576,35 @@ func (a *App) click(p uv.Position) tea.Cmd {
 // Shift turns the vertical wheel horizontal, as does a touchpad's sideways
 // swipe (buttons 6 and 7).
 func (a *App) wheel(m tea.Mouse) {
-	a.jump = nil        // what it matched moves
-	if a.value != nil { // the panes under it are not for the wheel; it scrolls the value (F12.2)
-		if d := map[tea.MouseButton]int{tea.MouseWheelUp: -1, tea.MouseWheelDown: 1}[m.Button]; d != 0 && a.valueActive() {
-			a.valueWheel(d)
-		}
-		return
-	}
-	if a.ddl != nil { // the table's DDL scrolls; the column's goes with the wheel as with a key, which then turns (F9.8)
-		if a.ddl.col == "" {
-			a.scrollDDL(map[tea.MouseButton]int{tea.MouseWheelUp: -wheelStep, tea.MouseWheelDown: wheelStep}[m.Button], false)
-			return
-		}
+	a.jump = nil // what it matched moves
+	notch := map[tea.MouseButton]int{tea.MouseWheelUp: -1, tea.MouseWheelDown: 1}[m.Button]
+	if a.ddl != nil && a.ddl.col != "" && a.topOverlay() == "ddl" { // the column's box goes with the wheel as with a key, which then turns (F9.8)
 		a.ddl = nil
 	}
-	if a.menu != nil { // the menu is of the node the cursor is on: the wheel goes no further (F8.23)
+	down, right := wheelMove(m)
+	switch a.topOverlay() {
+	case "":
+	case "value": // the panes under it are not for the wheel; it scrolls the value (F12.2)
+		if notch != 0 {
+			a.valueWheel(notch)
+		}
 		return
-	}
-	if a.keyHelp != nil { // a notch a row (§6.5)
-		a.scrollKeyHelp(map[tea.MouseButton]int{tea.MouseWheelUp: -1, tea.MouseWheelDown: 1}[m.Button], false)
+	case "ddl": // the table's DDL scrolls
+		a.scrollDDL(notch*wheelStep, false)
+		return
+	case "keyhelp": // a notch a row (§6.5)
+		a.scrollKeyHelp(notch, false)
+		return
+	case "palette": // over the result's table: that scrolls
+		if a.quickShows() {
+			_, ms := a.paletteMatches()
+			if _, _, area := a.paletteBox(len(ms)); uv.Pos(m.X, m.Y).In(area) {
+				q := a.palette.quick
+				q.top, q.left, _, _ = a.quickView(q).Grid.Scroll(area, down*wheelStep, right)
+			}
+		}
+		return
+	default: // the others are modal: the panes under them are not for the wheel (F13.7)
 		return
 	}
 	if t, _ := ui.HitAt(a.hits, uv.Pos(m.X, m.Y)); strings.HasPrefix(t.Action, "cell.seg ") { // over a time's part: step it (§10.2)
@@ -607,7 +617,16 @@ func (a *App) wheel(m tea.Mouse) {
 	if !a.endEdit() { // the cell it is in may scroll away (§10.1)
 		return
 	}
-	down, right := 0, 0
+	for id, r := range a.layout() {
+		if uv.Pos(m.X, m.Y).In(r) {
+			a.scrollPane(id, down, right)
+		}
+	}
+}
+
+// wheelMove is the notches a wheel event scrolls down and to the right: Shift
+// turns the vertical wheel horizontal, the other buttons do not scroll.
+func wheelMove(m tea.Mouse) (down, right int) {
 	switch m.Button {
 	case tea.MouseWheelUp:
 		down = -1
@@ -622,19 +641,7 @@ func (a *App) wheel(m tea.Mouse) {
 	if m.Mod.Contains(tea.ModShift) {
 		down, right = 0, down
 	}
-	if a.palette != nil && a.quickShows() { // over the result's table: that scrolls
-		_, ms := a.paletteMatches()
-		if _, _, area := a.paletteBox(len(ms)); uv.Pos(m.X, m.Y).In(area) {
-			q := a.palette.quick
-			q.top, q.left, _, _ = a.quickView(q).Grid.Scroll(area, down*wheelStep, right)
-			return
-		}
-	}
-	for id, r := range a.layout() {
-		if uv.Pos(m.X, m.Y).In(r) {
-			a.scrollPane(id, down, right)
-		}
-	}
+	return down, right
 }
 
 // paste types s into the input that has the keys, each its own way, a
@@ -688,43 +695,59 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 			cmds = append(cmds, a.feed(k, false))
 		}
 		for _, k := range r.Keys { // unbound keys go to the input that has them
-			switch t := a.typingTab(); {
-			case a.jump != nil:
-				cmds = append(cmds, a.jumpKey(k))
-			case a.valueActive():
-				cmds = append(cmds, a.valueKey(k))
-			case a.confirm != nil || a.menu != nil || a.ddl != nil: // no text to type: the key is none of theirs
-			case a.keyHelp != nil:
-				cmds = append(cmds, a.keyHelpKey(k))
-			case a.palette != nil:
-				cmds = append(cmds, a.paletteKey(k))
-			case a.sessList != nil:
-				if a.sessList.rename != nil {
-					cmds = append(cmds, a.renameKey(k))
-				}
-			case a.form != nil && !a.form.list:
-				a.formKey(k)
-			case a.form != nil: // the manager's list has the keys, and no text (F13.4)
-			case a.winRename != nil:
-				cmds = append(cmds, a.renameWindowKey(k))
-			case a.askName != nil:
-				cmds = append(cmds, a.askNameKey(k))
-			case a.drop != nil:
-				a.dropKey(k)
-			case a.cols != nil:
-				if a.cols.typing {
-					a.colsFilterKey(k)
-				}
-			case a.win().tree.filtering:
-				a.filterKey(k)
-			case t != nil:
-				cmds = append(cmds, a.typeKey(t, k))
-			case a.focusedQuery() != nil: // what the query's keymap leaves goes to its vim (§6.4)
-				cmds = append(cmds, a.queryKey(a.focused(), a.focusedQuery(), k))
-			}
+			cmds = append(cmds, a.typeInto(k))
 		}
 	}
 	return tea.Batch(cmds...)
+}
+
+// typeInto gives key k, which no binding took, to the input that has the keys:
+// the overlay on top (topOverlay), else the pane's.
+func (a *App) typeInto(k keymap.Key) tea.Cmd {
+	if a.jump != nil {
+		return a.jumpKey(k)
+	}
+	switch a.topOverlay() {
+	case "":
+	case "value":
+		return a.valueKey(k)
+	case "keyhelp":
+		return a.keyHelpKey(k)
+	case "palette":
+		return a.paletteKey(k)
+	case "sessions": // a name typed in place
+		if a.sessList.rename != nil {
+			return a.renameKey(k)
+		}
+	case "form": // the manager's list has the keys, and no text (F13.4)
+		if !a.form.list {
+			a.formKey(k)
+		}
+	case "rename":
+		if a.winRename != nil {
+			return a.renameWindowKey(k)
+		}
+		return a.askNameKey(k)
+	case "dropdown":
+		a.dropKey(k)
+	case "cols":
+		if a.cols.typing {
+			a.colsFilterKey(k)
+		}
+	default: // a box with no text to type: the key is none of its
+	}
+	if a.topOverlay() != "" {
+		return nil
+	}
+	switch t := a.typingTab(); {
+	case a.win().tree.filtering:
+		a.filterKey(k)
+	case t != nil:
+		return a.typeKey(t, k)
+	case a.focusedQuery() != nil: // what the query's keymap leaves goes to its vim (§6.4)
+		return a.queryKey(a.focused(), a.focusedQuery(), k)
+	}
+	return nil
 }
 
 // mode is derived from state, never stored (§3 principle 3).
@@ -751,41 +774,13 @@ func (a *App) mode() keymap.Mode {
 
 // context tells the keymap which scopes apply to the next key (§6.4).
 func (a *App) context() keymap.Context {
-	switch typing := a.typingTab(); {
-	case a.jump != nil:
+	if a.jump != nil {
 		return keymap.Context{Overlay: "jump", Mode: keymap.Insert}
-	case a.confirm != nil:
-		return keymap.Context{Overlay: "confirm", Mode: keymap.Command}
-	case a.menu != nil:
-		return keymap.Context{Overlay: "menu", Mode: keymap.Command}
-	case a.value != nil:
-		return keymap.Context{Overlay: "value", Mode: vimMode(a.value.ed.Mode()), Plain: a.plain}
-	case a.ddl != nil:
-		return keymap.Context{Overlay: "ddl", Mode: keymap.Command}
-	case a.keyHelp != nil: // the keys it lists come to keyHelpKey
-		return keymap.Context{Overlay: "keyhelp", Mode: keymap.Command}
-	case a.palette != nil && a.palette.comp != nil: // the palette's keys under the list's: its ↵ and esc see to the list first (§9.7)
-		return keymap.Context{Overlay: "complete", Under: "palette", Focus: []string{"input"}, Mode: keymap.Command}
-	case a.palette != nil:
-		return keymap.Context{Overlay: "palette", Mode: keymap.Command}
-	case a.sessList != nil && a.sessList.rename != nil: // the name typed in place (§7.8)
-		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Insert}
-	case a.sessList != nil:
-		return keymap.Context{Overlay: "sessions", Mode: keymap.Command}
-	case a.form != nil && a.form.list: // the list of connections (F8.16)
-		return keymap.Context{Overlay: "conns", Mode: keymap.Command}
-	case a.form != nil && len(a.groupCands()) > 0: // the group field's list over the form's keys (F10.6)
-		return keymap.Context{Overlay: "groups", Under: "form", Mode: keymap.Insert}
-	case a.form != nil: // its inputs: unbound keys are text
-		return keymap.Context{Overlay: "form", Mode: keymap.Insert}
-	case a.winRename != nil, a.askName != nil:
-		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Insert}
-	case a.drop != nil:
-		return keymap.Context{Overlay: "dropdown", Mode: keymap.Command}
-	case a.cols != nil && !a.cols.typing:
-		return keymap.Context{Overlay: a.cols.scope(), Mode: keymap.Command}
-	case a.cols != nil: // its filter: unbound keys are text
-		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Command}
+	}
+	if ov := a.topOverlay(); ov != "" {
+		return a.overlayContext(ov)
+	}
+	switch typing := a.typingTab(); {
 	case typing != nil && typing.hist != nil: // filtered by the WHERE typed
 		return keymap.Context{Overlay: "where", Focus: []string{"input"}, Mode: keymap.Command}
 	case typing != nil && typing.comp != nil:
@@ -833,6 +828,38 @@ func (a *App) context() keymap.Context {
 	return keymap.Context{Focus: append(over, scope), Pane: scope, Mode: mode, Plain: a.plain && scope == "query", Firm: firm}
 }
 
+// overlayContext is context() with overlay ov, topOverlay's, on top.
+func (a *App) overlayContext(ov string) keymap.Context {
+	switch ov {
+	case "value":
+		return keymap.Context{Overlay: "value", Mode: vimMode(a.value.ed.Mode()), Plain: a.plain}
+	case "palette":
+		if a.palette.comp != nil { // the palette's keys under the list's: its ↵ and esc see to the list first (§9.7)
+			return keymap.Context{Overlay: "complete", Under: "palette", Focus: []string{"input"}, Mode: keymap.Command}
+		}
+	case "sessions":
+		if a.sessList.rename != nil { // the name typed in place (§7.8)
+			return keymap.Context{Focus: []string{"input"}, Mode: keymap.Insert}
+		}
+	case "form":
+		switch {
+		case a.form.list: // the list of connections (F8.16)
+			return keymap.Context{Overlay: "conns", Mode: keymap.Command}
+		case len(a.groupCands()) > 0: // the group field's list over the form's keys (F10.6)
+			return keymap.Context{Overlay: "groups", Under: "form", Mode: keymap.Insert}
+		}
+		return keymap.Context{Overlay: "form", Mode: keymap.Insert} // its inputs: unbound keys are text
+	case "rename":
+		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Insert}
+	case "cols":
+		if a.cols.typing { // its filter: unbound keys are text
+			return keymap.Context{Focus: []string{"input"}, Mode: keymap.Command}
+		}
+		return keymap.Context{Overlay: a.cols.scope(), Mode: keymap.Command}
+	}
+	return keymap.Context{Overlay: ov, Mode: keymap.Command}
+}
+
 // paneScope is the keymap scope of the focused pane: its current tab's.
 func (a *App) paneScope() string {
 	switch p := a.focused(); {
@@ -855,7 +882,10 @@ func (a *App) focused() *Pane {
 	return a.win().Tree
 }
 
-func (a *App) showToast(s string, ttl time.Duration) tea.Cmd {
+func (a *App) showToast(s string) tea.Cmd { return a.showToastFor(s, toastTTL) }
+
+// showToastFor is showToast for ttl, as long as it takes the user to do what it asks.
+func (a *App) showToastFor(s string, ttl time.Duration) tea.Cmd {
 	a.toast = toastLine(s) // one row: a driver's error may have many (§7.8)
 	a.toastSeq++
 	seq := a.toastSeq

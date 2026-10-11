@@ -38,7 +38,7 @@ func IntegrationDSN(t *testing.T) string {
 func OwnDB(t *testing.T) string {
 	t.Helper()
 	ctx := context.Background()
-	admin, err := Connect(ctx, IntegrationDSN(t), "", false)
+	admin, _, err := Connect(ctx, IntegrationDSN(t), "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func OwnDB(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := Connect(ctx, u.String(), "", false)
+	c, _, err := Connect(ctx, u.String(), "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -433,8 +433,24 @@ func TestGridSortMarks(t *testing.T) {
 	if h := head(g, 100); !strings.Contains(h, "…") || !strings.Contains(h, "↓") {
 		t.Errorf("squeezed: %q", h)
 	}
+	// the mark is in warn, the name is not
+	g.Cols[1].Name = "name"
+	f := NewFrame(60, 7, TokyonightStorm)
+	g.Draw(f, uv.Rect(0, 0, 60, 7))
+	for x := range 60 {
+		switch c := f.Buf.CellAt(x, 0); c.Content {
+		case "↓":
+			if c.Style.Fg != TokyonightStorm.Warn {
+				t.Errorf("the mark is %v, want warn", c.Style.Fg)
+			}
+		case "n":
+			if c.Style.Fg == TokyonightStorm.Warn {
+				t.Error("the name is in warn")
+			}
+		}
+	}
 	g.Transpose = true
-	if h := head(g, 60); strings.ContainsAny(h, "↑↓") {
-		t.Errorf("turned, a mark: %q", h)
+	if h := head(g, 60); strings.ContainsAny(h, "↑↓") || strings.Contains(h, "name") || !strings.Contains(h, "1") || !strings.Contains(h, "4") {
+		t.Errorf("turned, the heads are the records' numbers and no marks: %q", h)
 	}
 }

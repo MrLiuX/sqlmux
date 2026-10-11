@@ -5,10 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // blockConn's Query waits for its ctx, counting how many run at once.
@@ -73,10 +77,11 @@ type lostConn struct {
 	n      int
 	dead   error
 	lives  int
-	failAt string // the statement that fails with dead, the connection being good for the rest
+	failAt string // the statement (its start) that fails with dead, the connection being good for the rest
 	tx     byte
-	closed bool      // what Closed says, as PG's after a cancel took too long
-	ran    *[]string // "<n>:<sql>", across connections
+	after  map[string]byte // the transaction status a statement that went through leaves
+	closed bool            // what Closed says, as PG's after a cancel took too long
+	ran    *[]string       // "<n>:<sql>", across connections
 
 	mu     sync.Mutex
 	gone   bool
@@ -102,7 +107,7 @@ func (c *lostConn) Query(_ context.Context, sql string, _ ...Val) (Result, error
 	switch {
 	case c.gone:
 		return Result{}, errGone
-	case c.isDead(), sql == c.failAt && c.failAt != "":
+	case c.isDead(), c.failAt != "" && strings.HasPrefix(sql, c.failAt):
 		return Result{}, c.dead
 	}
 	if c.dead != nil {
@@ -112,7 +117,14 @@ func (c *lostConn) Query(_ context.Context, sql string, _ ...Val) (Result, error
 		return Result{}, errSQL
 	}
 	*c.ran = append(*c.ran, fmt.Sprintf("%d:%s", c.n, sql))
-	return Result{Tag: sql}, nil
+	if tx, ok := c.after[sql]; ok {
+		c.tx = tx
+	}
+	res := Result{Tag: sql}
+	if strings.HasPrefix(sql, "update") || strings.HasPrefix(sql, "insert") || strings.HasPrefix(sql, "delete") {
+		res.Affected = 1
+	}
+	return res, nil
 }
 
 func (c *lostConn) Exec(ctx context.Context, sql string, _ int) ([]Result, error) {
@@ -524,5 +536,111 @@ func TestWorkerWithoutRedialStaysLost(t *testing.T) {
 	l.Redial = nil
 	if _, err := l.Query(context.Background(), "q"); !errors.Is(err, errSent) {
 		t.Fatal(err)
+	}
+}
+
+// A request that COMMITs its transaction and then loses the connection has
+// lost none: the COMMIT went through, whatever the request before it left
+// open; so it is not TxLost and the app is told of no transaction lost, and
+// the request is not run again (F13.1).
+func TestWorkerCommitThenLostIsNoTxLoss(t *testing.T) {
+	ctx := context.Background()
+	l := newLostWorker(errSent)
+	l.first.after = map[string]byte{"begin": 'T', "commit": 'I'}
+	l.first.lives, l.first.failAt, l.first.tx = 100, "select 2", 'I'
+	if err := l.Run(ctx, query("begin")); err != nil { // the user's: the Worker knows it is in one
+		t.Fatal(err)
+	}
+	err := l.Run(ctx, query("insert", "commit", "select 2"))
+	if !errors.Is(err, errSent) || errors.As(err, new(TxLost)) {
+		t.Fatalf("err %v", err)
+	}
+	if !slices.Equal(l.events, []Event{{}}) || !slices.Equal(l.ran, []string{"1:begin", "1:insert", "1:commit"}) {
+		t.Errorf("events %v, ran %v", l.events, l.ran)
+	}
+}
+
+// A request that begins a transaction, writes, and loses the connection at
+// its COMMIT has lost one: TxLost, Sent if the COMMIT had gone out, and the app
+// is told, though the transaction was not there when the request began
+// (F13.1).
+func TestWorkerOwnCommitLostIsTxLost(t *testing.T) {
+	for _, dead := range []error{errSent, errUnsent} {
+		l := newLostWorker(dead)
+		l.first.after = map[string]byte{"begin": 'T'}
+		l.first.lives, l.first.failAt = 100, "commit"
+		err := l.Run(context.Background(), query("begin", "insert", "commit"))
+		var lost TxLost
+		if !errors.As(err, &lost) || lost.Sent != errors.Is(dead, errSent) {
+			t.Fatalf("%v: %v", dead, err)
+		}
+		if !slices.Equal(l.events, []Event{{TxLost: true}}) {
+			t.Errorf("%v: events %v", dead, l.events)
+		}
+	}
+}
+
+// What the last request's calls left of the connection's status is not the
+// next one's: a request that fails before any call went through knows the
+// transaction as the Worker last read it (F13.1).
+func TestWorkerStatusOfTheLastRequestIsNotCarried(t *testing.T) {
+	ctx := context.Background()
+	l := newLostWorker(nil)
+	l.first.after = map[string]byte{"begin": 'T'}
+	err := l.Run(ctx, func(ctx context.Context, c Conn) error {
+		if _, err := c.Query(ctx, "begin"); err != nil { // the last call went through in a transaction ...
+			return err
+		}
+		l.first.tx = 'I' // ... which a later one, not counted, ended
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.first.dead = errUnsent
+	if err := l.Run(ctx, query("update")); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(l.events, []Event{{Rerun: true}}) || !slices.Equal(l.ran, []string{"1:begin", "2:update"}) {
+		t.Errorf("events %v, ran %v", l.events, l.ran)
+	}
+}
+
+// saveEngine is the Engine of Save's statements and no more.
+type saveEngine struct{ Engine }
+
+func (saveEngine) Dialect() sqlkit.Dialect      { return sqlkit.PG }
+func (saveEngine) Quote(names ...string) string { return strings.Join(names, ".") }
+func (saveEngine) Arg(n int) string             { return "$" + strconv.Itoa(n) }
+func (saveEngine) Same(col, arg string) string  { return col + " = " + arg }
+
+// A save in a transaction of its own that loses the connection before its
+// COMMIT is the statement's own error, which the app shows as rolled back,
+// and the app is told the transaction is lost; at its COMMIT it is not
+// committed, or not known to be, by whether the COMMIT had gone out (F13.1).
+func TestSaveLost(t *testing.T) {
+	ch := Changes{Updates: []Row{{Key: []string{"1"}, Cols: []Change{{Name: "v", Val: Val{S: "x"}, Old: Val{S: "y"}}}}}}
+	for _, c := range []struct {
+		failAt string
+		dead   error
+		want   error
+		failed int
+	}{
+		{"update", errSent, errSent, 0},
+		{"update", errUnsent, errUnsent, 0},
+		{"commit", errSent, ErrCommitUnknown, -1},
+		{"commit", errUnsent, ErrNotCommitted, -1},
+	} {
+		l := newLostWorker(c.dead)
+		l.first.after = map[string]byte{"begin": 'T'}
+		l.first.lives, l.first.failAt, l.first.tx = 100, c.failAt, 'I'
+		l.first.after["commit"] = 'I'
+		failed, _, err := Save(context.Background(), l.Worker, saveEngine{}, "s", "t", []string{"id"}, ch, false)
+		if !errors.Is(err, c.want) || errors.As(err, new(TxLost)) || failed != c.failed {
+			t.Errorf("%s %v: %v at %d", c.failAt, c.dead, err, failed)
+		}
+		if !slices.Equal(l.events, []Event{{TxLost: true}}) {
+			t.Errorf("%s %v: events %v", c.failAt, c.dead, l.events)
+		}
 	}
 }

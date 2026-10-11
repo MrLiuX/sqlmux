@@ -35,9 +35,9 @@ type queryTab struct {
 	ver, saved int // changes made, and the one the file has
 	// disk is the file as this tab last read or wrote it; another process or
 	// editor having changed it since, a write is refused once (F13.2). armed
-	// is the file as it was then, that was said: a save of it is the user's
-	// yes, one of a file changed again is told again; told: an autosave said
-	// it, not to say it again.
+	// is the file as it was when that was said, by an autosave or a save: a
+	// save of it is the user's yes, one of a file changed again is told again;
+	// told: an autosave said it, not to say it again.
 	disk, armed fileStamp
 	told        bool
 	failed      int       // the first line of the statement whose last run failed, its ▶ red; -1 for none
@@ -110,10 +110,39 @@ func (a *App) focusedQuery() *queryTab {
 	return queryOf(a.focused())
 }
 
-// overlaid reports whether an overlay has the keys (§7.8).
-func (a *App) overlaid() bool {
-	return a.palette != nil || a.drop != nil || a.cols != nil || a.confirm != nil || a.keyHelp != nil || a.sessList != nil || a.form != nil || a.winRename != nil || a.askName != nil || a.menu != nil || a.ddl != nil || a.value != nil
+// topOverlay names the overlay that has the keys, "" with none (§7.8): the one
+// place that says which there are and which is over which, as the keymap's
+// scope names them. drawOn draws them from the bottom up, this order reversed.
+func (a *App) topOverlay() string {
+	switch {
+	case a.confirm != nil:
+		return "confirm"
+	case a.menu != nil:
+		return "menu"
+	case a.value != nil:
+		return "value"
+	case a.ddl != nil:
+		return "ddl"
+	case a.keyHelp != nil:
+		return "keyhelp"
+	case a.palette != nil:
+		return "palette"
+	case a.sessList != nil:
+		return "sessions"
+	case a.form != nil:
+		return "form"
+	case a.winRename != nil, a.askName != nil:
+		return "rename"
+	case a.drop != nil:
+		return "dropdown"
+	case a.cols != nil:
+		return "cols"
+	}
+	return ""
 }
+
+// overlaid reports whether an overlay has the keys (§7.8).
+func (a *App) overlaid() bool { return a.topOverlay() != "" }
 
 // vim is the editor that has the keys: the value editor's, or with nothing over
 // it the focused query's or the WHERE's being typed (F3.39).
@@ -142,6 +171,14 @@ func vimMode(m editor.Mode) keymap.Mode {
 	}[m]
 }
 
+// sizeEditor gives ed the program's settings and the size of its text in text,
+// which H M L, C-d and the scrolling go by.
+func (a *App) sizeEditor(ed *editor.Editor, text uv.Rectangle) {
+	ed.TabWidth, ed.AutoPairs = a.tabWidth, a.autoPairs
+	ed.SetHeight(text.Dy())
+	ed.SetWidth(text.Dx())
+}
+
 // queryView is query t in pane p as it draws, and the area it draws
 // in; t's editor gets the size of its text there, which H M L, C-d and
 // the scrolling go by.
@@ -150,9 +187,7 @@ func (a *App) queryView(p *Pane, t *queryTab) (ui.Query, uv.Rectangle) {
 	body := bodyRect(a.layout()[p.ID])
 	body.Max.Y = max(body.Max.Y-t.bar.rows(), body.Min.Y)
 	text := ui.Query{Lines: ed.Lines()}.TextArea(body)
-	ed.TabWidth, ed.AutoPairs = a.tabWidth, a.autoPairs
-	ed.SetHeight(text.Dy())
-	ed.SetWidth(text.Dx())
+	a.sizeEditor(ed, text)
 	c := ui.Query{
 		Lines: ed.Lines(), TabWidth: ed.TabWidth, Top: ed.Top(), Left: ed.Left(),
 		Cursor: ui.TextPos(ed.Cursor()), CursorCol: ed.CursorCol(), Normal: ed.Mode() == editor.Normal,
@@ -255,7 +290,7 @@ func (a *App) vimCmds(eff editor.Effect, put func(text string, p editor.ClipPut)
 		cmds = append(cmds, clipPaste)
 	}
 	if eff.Error != "" {
-		cmds = append(cmds, a.showToast(eff.Error, toastTTL))
+		cmds = append(cmds, a.showToast(eff.Error))
 	}
 	return cmds
 }
@@ -301,7 +336,7 @@ func (a *App) ex(c string) tea.Cmd {
 	if id := exAliases[strings.TrimSpace(c)]; id != "" {
 		return a.run(id, 0)
 	}
-	return a.showToast(i18n.T("不支持的命令：%s", c), toastTTL)
+	return a.showToast(i18n.T("不支持的命令：%s", c))
 }
 
 // flush writes query t's file if it changed since it was last written, for
@@ -318,12 +353,11 @@ func (t *queryTab) write(explicit bool) error {
 		return nil
 	}
 	if cur := stampOf(t.path); cur != (fileStamp{}) && cur != t.disk && (!explicit || cur != t.armed) { // a file gone is written again
-		switch {
-		case explicit:
-			t.armed = cur
-		case t.told:
-			return nil
-		default:
+		t.armed = cur // what was said, an autosave's too, the next explicit write of this very file is the yes
+		if !explicit {
+			if t.told {
+				return nil
+			}
 			t.told = true
 		}
 		return changedOutside()
@@ -356,7 +390,7 @@ func (a *App) flushAll(panes ...*Pane) (tea.Cmd, bool) {
 }
 
 func (a *App) saveFailed(err error) tea.Cmd {
-	return a.showToast(i18n.T("保存失败：%s", err.Error()), toastTTL)
+	return a.showToast(i18n.T("保存失败：%s", err.Error()))
 }
 
 type externalDone struct {
@@ -384,12 +418,12 @@ func (a *App) gotExternal(msg externalDone) tea.Cmd {
 	disk := stampOf(t.path)
 	text, err := config.ReadQuery(t.path)
 	if err != nil {
-		return a.showToast(err.Error(), toastTTL)
+		return a.showToast(err.Error())
 	}
 	cmd := a.queryDid(t, t.ed.Load(text))
 	t.saved, t.disk, t.armed, t.told = t.ver, disk, fileStamp{}, false // what the file has
 	if msg.err != nil {
-		return tea.Batch(cmd, a.showToast(msg.err.Error(), toastTTL))
+		return tea.Batch(cmd, a.showToast(msg.err.Error()))
 	}
 	return cmd
 }

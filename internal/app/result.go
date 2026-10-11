@@ -235,7 +235,7 @@ func (a *App) runSQL(t *queryTab, conn *Conn, schema, name, sql string, base, ve
 			asked := t.conn // a connection that lands meanwhile may take the query over
 			a.confirm = &confirmBox{text: dangerText(risky), yes: i18n.T("执行"), danger: true, then: func() tea.Cmd {
 				if t.conn != asked {
-					return a.showToast(i18n.T("确认时 query 换了连接，没有执行"), toastTTL)
+					return a.showToast(i18n.T("确认时 query 换了连接，没有执行"))
 				}
 				return a.startRun(t, conn, schema, name, sql, base, ver, stmts) // the overlay had the keys: nothing began a run meanwhile
 			}}
@@ -460,7 +460,7 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 		}
 		if errors.Is(m.err, context.Canceled) {
 			a.log(r, stmt, i18n.T("已取消"), false)
-			cmds = append(cmds, a.showToast(i18n.T("查询已取消"), toastTTL))
+			cmds = append(cmds, a.showToast(i18n.T("查询已取消")))
 		} else {
 			e, text := a.logError(r, stmt, m.err), strings.Join(r.from.ed.Lines(), "\n")
 			var at []string

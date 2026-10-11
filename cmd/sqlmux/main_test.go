@@ -250,3 +250,47 @@ func TestVersionLine(t *testing.T) {
 		t.Errorf("--version: %v", err)
 	}
 }
+
+// What the start says is every note joined: a misspelt key, and the queries
+// not moved, none replacing the other (F13.5).
+func TestStartNotes(t *testing.T) {
+	writeConfig(t, "config.toml", "confirm_dngerous = false\n")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := startNotes(cfg); !strings.Contains(got, "confirm_dngerous") {
+		t.Errorf("a misspelt key: %q", got)
+	}
+	data := os.Getenv("XDG_DATA_HOME")
+	if err := os.MkdirAll(filepath.Join(data, "sqlmux", "consoles"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(data, "sqlmux"), 0o500); err != nil { // consoles cannot move to queries
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(filepath.Join(data, "sqlmux"), 0o700) })
+	if got := startNotes(cfg); !strings.Contains(got, "confirm_dngerous") || !strings.Contains(got, "consoles") {
+		t.Errorf("a key and a move that failed: %q", got)
+	}
+}
+
+// The keys the ORDER list has are its own actions, in the reference as in the
+// keymap: none of COLS's (F12.9).
+func TestOrderKeysReference(t *testing.T) {
+	writeConfig(t, "keymaps.toml", "")
+	var out, errb bytes.Buffer
+	if code := keysCmd([]string{"--format", "toml"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	_, after, ok := strings.Cut(out.String(), "[keys.order]")
+	if !ok {
+		t.Fatal("no [keys.order]")
+	}
+	section, _, _ := strings.Cut(after, "\n\n")
+	for _, l := range strings.Split(section, "\n") {
+		if strings.Contains(l, " = ") && !strings.Contains(l, `"order.`) || strings.Contains(l, "COLS") {
+			t.Errorf("a line of [keys.order]: %q", l)
+		}
+	}
+}

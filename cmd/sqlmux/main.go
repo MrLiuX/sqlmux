@@ -87,13 +87,7 @@ func run(args []string) error {
 		return err
 	}
 	i18n.Set(cfg.Language) // from here on, what is shown follows it (§14)
-	var warning string
-	for _, line := range config.UnknownKeys(cfg) { // a misspelt key, not a reason to stay out (F13.5)
-		warning = app.JoinNotes(warning, line)
-	}
-	if err := config.MigrateConsoles(); err != nil { // the queries were consoles before F10.11
-		warning = app.JoinNotes(warning, err.Error())
-	}
+	warning := startNotes(cfg)
 	l, err := startLayout(name, *layout, &warning)
 	if err != nil {
 		return err
@@ -106,7 +100,7 @@ func run(args []string) error {
 	if err != nil { // the broken file is kept aside; start empty (§14)
 		warning = app.JoinNotes(warning, err.Error())
 	}
-	keys, problems := keymap.New(cfg)
+	keys, problems := keymap.New(cfg.Leader, cfg.Vim, cfg.Timeoutlen, cfg.Bindings)
 	a := app.New(cfg, keys, sess, st, warning)
 	if restored != nil {
 		a.Adopt(restored)
@@ -144,6 +138,16 @@ func startSession(name, layout string, l *config.Layout) (*app.Session, *app.Res
 		return nil, nil, err
 	}
 	return sess, nil, nil
+}
+
+// startNotes is what the start has to say that is no reason to stay out: a
+// misspelt key (F13.5), the queries that were consoles before F10.11 not moved.
+func startNotes(cfg *config.Config) string {
+	warning := app.JoinNotes(config.UnknownKeys(cfg)...)
+	if err := config.MigrateConsoles(); err != nil {
+		warning = app.JoinNotes(warning, err.Error())
+	}
+	return warning
 }
 
 // startLayout is the layout the program starts from, nil for the default
@@ -193,7 +197,7 @@ func keysCmd(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	i18n.Set(cfg.Language)
-	keys, problems := keymap.New(cfg)
+	keys, problems := keymap.New(cfg.Leader, cfg.Vim, cfg.Timeoutlen, cfg.Bindings)
 	for _, p := range problems {
 		fmt.Fprintln(stderr, p)
 	}

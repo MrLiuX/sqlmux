@@ -174,3 +174,18 @@ func TestGoldenKeyHelp160x45(t *testing.T) {
 	feed(t, a, "?")
 	golden.RequireEqual(t, a.render().String())
 }
+
+// The ? help opened over the palette, which a Ctrl leader allows, is drawn
+// over it, where its keys go: what is typed is not in the palette's input and
+// the help's title is on the screen (F13.14).
+func TestKeyHelpOverPalette(t *testing.T) {
+	a := configured(t, 100, 24, "[keys]\nleader = \"<C-a>\"") // the two boxes overlap
+	feed(t, a, "<C-p>")
+	feed(t, a, "<C-a>?")
+	if a.palette == nil || a.keyHelp == nil {
+		t.Fatalf("palette %v keyHelp %v", a.palette != nil, a.keyHelp != nil)
+	}
+	if got := a.render().String(); !strings.Contains(got, "[keys.palette]") || !strings.Contains(got, "C-p   → 上移") {
+		t.Errorf("the help is under the palette:\n%s", got)
+	}
+}

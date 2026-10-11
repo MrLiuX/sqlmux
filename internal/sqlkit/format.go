@@ -87,6 +87,65 @@ func Format(sql string, d Dialect, o Options) (string, error) {
 	return v.String(), nil
 }
 
+// FormatAll is Format of a text of several statements, each by a call of its
+// own: the VM's time grows faster than the text, 7 KB of statements taking 4 s
+// at once and 1.4 s one by one. Between them is what sql-formatter leaves, an
+// empty line, and the comments there as they were (§9.5). One statement, or a
+// text the split has no account of (an empty statement, a comment before a ;),
+// goes in one call.
+func FormatAll(s string, d Dialect, o Options) (string, error) {
+	stmts := Statements(s, d)
+	if len(stmts) < 2 {
+		return Format(s, d, o)
+	}
+	var units []string
+	comment := strings.TrimSpace(s[:stmts[0].Start]) // what is before the next statement
+	for i, st := range stmts {
+		end := len(s)
+		if i+1 < len(stmts) {
+			end = stmts[i+1].Start
+		}
+		terminated, after, ok := terminator(s[st.End:end], d)
+		if !ok {
+			return Format(s, d, o)
+		}
+		text := s[st.Start:st.End]
+		if terminated {
+			text += ";"
+		}
+		out, err := Format(text, d, o)
+		if err != nil {
+			return "", err
+		}
+		if comment != "" {
+			out = comment + "\n" + out
+		}
+		units, comment = append(units, out), after
+	}
+	if comment != "" {
+		units = append(units, comment)
+	}
+	return strings.Join(units, "\n\n"), nil
+}
+
+// terminator reads what lies after a statement up to the next: blanks, the ;
+// that ends it if it is there, and the comments, which are after. ok is false
+// for anything else.
+func terminator(gap string, d Dialect) (terminated bool, after string, ok bool) {
+	rest := 0
+	for _, t := range Scan(gap, d) {
+		switch {
+		case t.Kind == Space:
+		case t.Kind == Punct && gap[t.Start] == ';' && !terminated:
+			terminated, rest = true, t.End
+		case t.Kind == Comment && terminated:
+		default:
+			return false, "", false
+		}
+	}
+	return terminated, strings.TrimSpace(gap[rest:]), true
+}
+
 func load() (*goja.Runtime, goja.Callable, error) {
 	js := formatterJS
 	for _, u := range unicodeNames {

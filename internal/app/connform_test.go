@@ -700,3 +700,29 @@ func TestConnFormHintsAtEveryWidth(t *testing.T) {
 		}
 	}
 }
+
+// A click on a row of the manager's list gives the list the keys, as the
+// form's field had them (F8.16, F13.13).
+func TestConnListClickHasTheKeys(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	a.openConnForm()
+	if a.form.list {
+		t.Fatal("the new form has the keys")
+	}
+	a.View()
+	var at *uv.Rectangle
+	for _, h := range a.hits {
+		if h.Target.Kind == ui.KindConn {
+			r := h.Rect
+			at = &r
+			break
+		}
+	}
+	if at == nil {
+		t.Fatal("no row in the list")
+	}
+	click(a, at.Min)
+	if !a.form.list {
+		t.Error("a click on a row of the list leaves the keys to the form")
+	}
+}

@@ -136,7 +136,7 @@ func (a *App) paletteScope() (scope int, query string) {
 // paletteItems is every candidate, recent ones first and the rest in kind
 // order: the sessions, windows as the tree's workspace has them, this one's
 // panes by ⟨n⟩,
-// each pane's tabs after it (F4.3), then tables, commands by action id
+// each pane's tabs after it (F4.3), then tables, queries, commands by action id
 // (§12). A pane and a tab are placed by the tree's names for them:
 // doraemon › 0: data › pane-1.
 func (a *App) paletteItems() []paletteItem {
@@ -330,9 +330,8 @@ func (a *App) keyFor(id string) string {
 func (a *App) paletteMove(d int) {
 	_, ms := a.paletteMatches()
 	p := a.palette
-	p.sel = max(min(p.sel+d, len(ms)-1), 0)
 	_, rows, _ := a.paletteBox(len(ms))
-	p.top = max(min(p.top, p.sel), p.sel-rows+1)
+	p.sel, p.top = ui.ListView(p.sel+d, p.top, len(ms), rows)
 }
 
 // paletteBox is where the palette sits for n candidates, and its result's
@@ -430,30 +429,52 @@ func (a *App) palettePreview() *ui.PalettePreview {
 	return &ui.PalettePreview{Text: d.text, Err: d.err, Names: a.ddlNames(c, t, d.text), Dialect: c.eng.Dialect(), Top: a.palette.pvTop}
 }
 
-// queryPreviewRows is how many rows of a query file the preview reads.
-const queryPreviewRows = 100
+// queryPreviewRows and queryPreviewBytes are how much of a query file the
+// preview reads: its first rows, and no more than a few KB of them, one line
+// of a file being as long as it likes.
+const (
+	queryPreviewRows  = 100
+	queryPreviewBytes = 8 << 10
+)
 
-// queryPreview is the first rows of the query the palette's selection is on,
-// colored as a query is by the current connection's catalog; none when the
-// selection is not a query, or it has no file or nothing in it (F12.10).
-// ponytail: read on every frame it is asked for; keep it by the selection if
-// a slow disk shows.
-func (a *App) queryPreview() *ui.PalettePreview {
+// selectedQuery is the name of the query the palette's selection is on, "" when
+// it is on none.
+func (a *App) selectedQuery() string {
 	items, ms := a.paletteMatches()
 	if a.palette.sel >= len(ms) || items[ms[a.palette.sel].Index].kind != itemQuery {
+		return ""
+	}
+	return items[ms[a.palette.sel].Index].id
+}
+
+// queryPreview is the start of the query the palette's selection is on, as a
+// query colors it, by the catalog of the connection it opens on; none when the
+// selection is not a query, or it has no file or nothing in it (F12.10).
+// ponytail: the file is read whole, three times a frame this is asked for; keep
+// the text by the selection if a big file or a slow disk lags.
+func (a *App) queryPreview() *ui.PalettePreview {
+	name := a.selectedQuery()
+	if name == "" {
 		return nil
 	}
-	text, err := config.ReadQuery(config.QueryPath(items[ms[a.palette.sel].Index].id))
+	text, err := config.ReadQuery(config.QueryPath(name))
 	if err != nil || strings.TrimSpace(text) == "" {
 		return nil
 	}
 	if lines := strings.SplitAfterN(text, "\n", queryPreviewRows+1); len(lines) > queryPreviewRows {
 		text = strings.Join(lines[:queryPreviewRows], "")
 	}
-	pv := &ui.PalettePreview{Text: text, Top: a.palette.pvTop}
-	if c := a.palette.conn; c != nil {
+	if len(text) > queryPreviewBytes {
+		text = strings.ToValidUTF8(text[:queryPreviewBytes], "") // not through a character
+	}
+	pv := &ui.PalettePreview{Text: strings.TrimRight(text, "\n"), Top: a.palette.pvTop}
+	if c, last, kept := a.queryPlace(name, a.palette.conn); c != nil {
+		schema := c.Schema
+		if kept {
+			schema = last.Schema
+		}
 		pv.Dialect = c.eng.Dialect()
-		pv.Names, _ = a.sqlNames(c, text, c.Schema, nil)
+		pv.Names, _ = a.sqlNames(c, text, schema, nil)
 	}
 	return pv
 }
@@ -513,10 +534,15 @@ func (a *App) wantDDL() tea.Cmd {
 		return nil
 	}
 	id, c, t, ok := a.previewed()
+	if !ok { // a query's preview is held by its name, apart from a table's id
+		if id = a.selectedQuery(); id != "" {
+			id = "\x00" + id
+		}
+	}
 	if id == p.preview {
 		return nil
 	}
-	p.preview, p.pvTop = id, 0 // another table, or none: the top
+	p.preview, p.pvTop = id, 0 // another table or query, or none: the top
 	if !ok {
 		return nil
 	}

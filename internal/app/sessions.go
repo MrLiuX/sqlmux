@@ -54,8 +54,7 @@ func (a *App) sessionsMove(d int) {
 	l := a.sessList
 	n := len(a.sessionRows())
 	_, rows := ui.SessionBox(a.window(), n)
-	l.sel = max(min(l.sel+d, n-1), 0)
-	l.top = max(min(l.top, l.sel), l.sel-rows+1, 0)
+	l.sel, l.top = ui.ListView(l.sel+d, l.top, n, rows)
 }
 
 // sessionsFold is l (open) and h on the selection: a session shows or hides
@@ -132,7 +131,7 @@ func (a *App) askNewSession() tea.Cmd {
 	pre := a.freeSessionName()
 	a.askName = &nameAsk{label: i18n.T("session 名："), in: ui.Input{Text: pre, Pos: len(pre)}, blank: pre, done: func(a *App, name string) (tea.Cmd, bool) {
 		if a.sessionNamed(name) {
-			return a.showToast(i18n.T("已有同名 session"), toastTTL), true
+			return a.showToast(i18n.T("已有同名 session")), true
 		}
 		return a.dialSession(name), false
 	}}
@@ -153,7 +152,7 @@ func (a *App) freeSessionName() string {
 // makes none, the session staying the one it is (F5.1).
 func (a *App) dialSession(name string) tea.Cmd {
 	spec := a.conn().Spec
-	return tea.Batch(a.showToast(i18n.T("正在连接 %s…", spec.Name), toastTTL), func() tea.Msg {
+	return tea.Batch(a.showToast(i18n.T("正在连接 %s…", spec.Name)), func() tea.Msg {
 		d, err := dial(context.Background(), spec)
 		return sessionDialed{name, spec, d, err}
 	})
@@ -163,10 +162,10 @@ func (a *App) dialSession(name string) tea.Cmd {
 // the form added meanwhile too (§7.8).
 func (a *App) gotSessionDialed(m sessionDialed) tea.Cmd {
 	if m.err != nil {
-		return a.showToast(i18n.T("%s：%s", m.spec.Name, m.err), toastTTL)
+		return a.showToast(i18n.T("%s：%s", m.spec.Name, m.err))
 	}
 	if a.sessionNamed(m.name) { // another session took it while this one dialed
-		return tea.Batch(a.showToast(i18n.T("已有同名 session"), toastTTL), m.d.discard())
+		return tea.Batch(a.showToast(i18n.T("已有同名 session")), m.d.discard())
 	}
 	conns, start := make([]*Conn, len(a.sess.Conns)), 0
 	for i, c := range a.sess.Conns {
@@ -247,7 +246,7 @@ func (a *App) renameKey(k keymap.Key) tea.Cmd {
 	switch s := a.sessionRows()[l.sel].s; {
 	case name == "" || name == s.Name:
 	case a.sessionNameTaken(s, name):
-		return a.showToast(i18n.T("已有同名 session"), toastTTL)
+		return a.showToast(i18n.T("已有同名 session"))
 	default:
 		s.Name = name
 	}

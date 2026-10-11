@@ -65,7 +65,7 @@ func TestQuick(t *testing.T) {
 func TestQuickRefusesWrites(t *testing.T) {
 	ctx := context.Background()
 	dsn := OwnDB(t)
-	own, err := Connect(ctx, dsn, "", false)
+	own, _, err := Connect(ctx, dsn, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestQuickRefusesWrites(t *testing.T) {
 	if _, err := own.Exec(ctx, "create table t (x int); insert into t select generate_series(1, 10); create sequence s", 0); err != nil {
 		t.Fatal(err)
 	}
-	meta, err := Connect(ctx, dsn, "", true)
+	meta, _, err := Connect(ctx, dsn, "", true)
 	if err != nil {
 		t.Fatal(err)
 	}

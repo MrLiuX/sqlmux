@@ -129,8 +129,8 @@ catalog 按连接缓存（每个 session 的每个 `Conn` 一份，M5 起；原�
   - 点击它，或在 query 的 NORMAL 模式下按 `gs`，打开 schema 下拉框。
   - 下拉框列出当前库的 schema，系统 schema（`pg_catalog`、`information_schema` 等）不列出。顶部有过滤输入框，支持模糊匹配（§9.7）。
   - 下拉框照命令面板的做法：打开后输入直接进过滤框（模式为 COMMAND，§7.8），`C-n` / `C-p` / `↑` / `↓` 移动，`↵` 选中，`esc` 关闭；`j` / `k` 会被当成输入，所以不用。鼠标：点选，点浮层外部关闭，悬停 `row` 底。
-  - 位置在入口（query 标题的 schema 按钮、查询条的 chip）下方、与入口左对齐，宽度取 max(最长 schema 名 + 边距, 入口所在栏的右边界 − 入口起点 x)，这样右边框和所在栏的右边框对齐；仍放不下时向左移。当前所在的 schema 用 `pk` 色标出（§7.3 里 pk 也用于 schema 值）。键位在 `[keys.dropdown]`，Action 为 `dropdown.up` / `dropdown.down` / `dropdown.select` / `dropdown.close`，ORDER、LIMIT 下拉框共用（F1.2 时叫 `schema.*`，F1.4 改名），只在浮层里用，不带标题。
-  - 组件放在 `ui` 里，M1 用于 ORDER、LIMIT，M3 给 query 选 schema。树不再用它：M1 F1.12 起 schema 是树里的节点（§7.8）。
+  - 位置在入口（query 标题的 schema 按钮、查询条的 chip）下方、与入口左对齐，宽度取 max(最长 schema 名 + 边距, 入口所在栏的右边界 − 入口起点 x)，这样右边框和所在栏的右边框对齐；仍放不下时向左移。当前所在的 schema 用 `pk` 色标出（§7.3 里 pk 也用于 schema 值）。键位在 `[keys.dropdown]`，Action 为 `dropdown.up` / `dropdown.down` / `dropdown.select` / `dropdown.close`，LIMIT 下拉框共用（F1.2 时叫 `schema.*`，F1.4 改名；ORDER M12 F12.9 起是 COLS 式的浮层，§7.6），只在浮层里用，不带标题。
+  - 组件放在 `ui` 里，M1 用于 ORDER（到 M12 F12.9 为止）、LIMIT，M3 给 query 选 schema。树不再用它：M1 F1.12 起 schema 是树里的节点（§7.8）。
   - 命令面板里也有对应的「Switch schema…」命令。
 - **默认值**：新建的 query（`c`、引导页按钮、面板命令、`C-e`）一律用当前连接和这个连接的 Schema（§5、§7.8），不管这个 query_n 文件在 state 里记着什么，并把它写回 state；之后两者互不影响。state 里记下的连接和 schema 只在启动时恢复默认布局里的 query_1 时用（M6 F6.5 恢复布局时也用，§11）。
 - **执行方式**：同一个连接上的 query 共用 `Main`，所以每次执行前比较一下（`Conn` 记下 `Main` 当前的 search_path，初始为建连时读到的值；一次执行里有 SET / RESET / DISCARD 语句时把记下的值作废，下次一定重新 SET。代价是用户在 query 里自己 `set search_path` 只持续到这次执行结束，以下拉框为准）：如果连接当前的 `search_path` 与这个 query 选择的 schema 不一致，先执行 `SET search_path TO <所选 schema>, <建连时的原始 search_path>`。

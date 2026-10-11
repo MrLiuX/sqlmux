@@ -18,12 +18,19 @@ import (
 
 func connect(t *testing.T, readOnly bool) *Conn {
 	t.Helper()
-	c, err := Connect(context.Background(), IntegrationDSN(t), "", readOnly)
+	c, _ := connectInfo(t, readOnly)
+	return c
+}
+
+// connectInfo is connect with where it is, as Connect says it.
+func connectInfo(t *testing.T, readOnly bool) (*Conn, db.Info) {
+	t.Helper()
+	c, info, err := Connect(context.Background(), IntegrationDSN(t), "", readOnly)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { c.Close() })
-	return c
+	return c, info
 }
 
 func sqlState(err error) string {
@@ -35,7 +42,7 @@ func sqlState(err error) string {
 }
 
 func TestConnectSetsStartupParams(t *testing.T) {
-	c := connect(t, false)
+	c, info := connectInfo(t, false)
 	r, err := c.Query(context.Background(),
 		"select current_setting('application_name'), current_setting('DateStyle'), current_setting('default_transaction_read_only')")
 	if err != nil {
@@ -44,11 +51,11 @@ func TestConnectSetsStartupParams(t *testing.T) {
 	if got := r.Rows[0]; got[0].S != "sqlmux" || got[1].S != "ISO, YMD" || got[2].S != "off" {
 		t.Fatalf("startup params %v", got)
 	}
-	if c.SearchPath != `"$user", public` {
-		t.Fatalf("search_path %q", c.SearchPath)
+	if info.Path != `"$user", public` {
+		t.Fatalf("search_path %q", info.Path)
 	}
-	if cfg, _ := pgconn.ParseConfig(IntegrationDSN(t)); c.Addr != fmt.Sprintf("%s@%s:%d", cfg.User, cfg.Host, cfg.Port) {
-		t.Fatalf("addr %q", c.Addr)
+	if cfg, _ := pgconn.ParseConfig(IntegrationDSN(t)); info.Addr != fmt.Sprintf("%s@%s:%d", cfg.User, cfg.Host, cfg.Port) {
+		t.Fatalf("addr %q", info.Addr)
 	}
 }
 
@@ -143,29 +150,29 @@ func execEach(ctx context.Context, w *db.Worker, stmts ...string) (rs []db.Resul
 // path goes as a parameter: "" (the server's search_path set empty) and
 // $user,public (a DSN's) take no quoting (§8.6).
 func TestSetSearchPath(t *testing.T) {
-	c := connect(t, false)
+	c, info := connectInfo(t, false)
 	ctx := context.Background()
-	for _, started := range []string{c.SearchPath, `""`, "$user,public", ""} {
+	for _, started := range []string{info.Path, `""`, "$user,public", ""} {
 		if err := pg.UseSchema(ctx, c, "agentable", started); err != nil {
 			t.Fatalf("%s: %v", started, err)
 		}
 	}
-	if err := pg.UseSchema(ctx, c, "agentable", c.SearchPath); err != nil {
+	if err := pg.UseSchema(ctx, c, "agentable", info.Path); err != nil {
 		t.Fatal(err)
 	}
 	r, err := c.Query(ctx, "select current_schemas(false)::text, (select count(*) from agent) >= 0, (select count(*) from t_order) >= 0")
 	if err != nil || r.Rows[0][0].S != "{agentable,public}" {
 		t.Fatalf("%v %v", r.Rows, err)
 	}
-	if c.Database != "sqlmux" || c.TxStatus() != 'I' {
-		t.Errorf("database %q, tx %c", c.Database, c.TxStatus())
+	if info.Database != "sqlmux" || c.TxStatus() != 'I' {
+		t.Errorf("database %q, tx %c", info.Database, c.TxStatus())
 	}
 }
 
 // A query's run (§11「执行」): each statement commits on its own, and the
 // first to fail stops the rest; a cancelled run leaves Main usable.
 func TestExecEach(t *testing.T) {
-	c, err := Connect(context.Background(), OwnDB(t), "", false)
+	c, _, err := Connect(context.Background(), OwnDB(t), "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +274,7 @@ func TestReadOnlyUnlocks(t *testing.T) {
 // What sqlkit.Literal writes is read back as it was, the nasty ones too
 // (F8.7).
 func TestLiteralRoundTrip(t *testing.T) {
-	c, err := Connect(context.Background(), OwnDB(t), "", false)
+	c, _, err := Connect(context.Background(), OwnDB(t), "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

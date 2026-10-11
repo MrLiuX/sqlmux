@@ -990,3 +990,24 @@ func TestOrderKeyOnceInSQL(t *testing.T) {
 		t.Errorf("sql %s, order %v", sql, tab.order)
 	}
 }
+
+// A click on a row of the ORDER list is ↵ on it, sorting by that column alone
+// and closing the list, not a box of COLS to tick; a on a column that is not in
+// the sorting does nothing, no fetch and no first page (F12.9).
+func TestOrderListClickAndRemove(t *testing.T) {
+	a, tab, rec := withRecorder(t)
+	feed(t, a, "go")
+	a.View()
+	click(a, find(t, a, ui.Target{Kind: ui.KindRow, I: 1}).Min) // status
+	if !slices.Equal(tab.order, orderOf("status")) || a.cols != nil || tab.hidden["status"] {
+		t.Errorf("a click: order %v, list open %v, hidden %v", tab.order, a.cols != nil, tab.hidden)
+	}
+	answer(a, tab)
+	tab.pageNo = 2
+	feed(t, a, "gojj") // amount, which is not in it
+	sent := len(rec.sqls)
+	feed(t, a, "a")
+	if len(rec.sqls) != sent || tab.pageNo != 2 || !slices.Equal(tab.order, orderOf("status")) {
+		t.Errorf("a on a column not in the sorting: %d sent after %d, page %d, order %v", len(rec.sqls), sent, tab.pageNo, tab.order)
+	}
+}

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
@@ -18,12 +17,11 @@ func init() { i18n.Set("zh") }
 // load builds the keymap with toml as the user's keymaps.toml.
 func load(t *testing.T, toml string) (*Map, []Problem) {
 	t.Helper()
-	c := config.Default()
-	var err error
-	if c.Leader, c.Bindings, err = config.ParseKeys(toml); err != nil {
+	leader, lines, err := ParseKeys(toml)
+	if err != nil {
 		t.Fatal(err)
 	}
-	return New(c)
+	return New(leader, true, 1000, lines)
 }
 
 func mustLoad(t *testing.T, toml string) *Map {
@@ -38,13 +36,11 @@ func mustLoad(t *testing.T, toml string) *Map {
 // loadNoVim is mustLoad with vim = false, default-novim.toml over the defaults.
 func loadNoVim(t *testing.T, toml string) *Map {
 	t.Helper()
-	cfg := config.Default()
-	cfg.Vim = false
-	var err error
-	if cfg.Leader, cfg.Bindings, err = config.ParseKeys(toml); err != nil {
+	leader, lines, err := ParseKeys(toml)
+	if err != nil {
 		t.Fatal(err)
 	}
-	m, ps := New(cfg)
+	m, ps := New(leader, false, 1000, lines)
 	if len(ps) > 0 {
 		t.Fatalf("problems: %v", ps)
 	}
@@ -689,6 +685,45 @@ func TestOldConsoleTables(t *testing.T) {
 	for _, toml := range []string{"[keys.console]\n\"x\" = \"query.run\"\n", "[map.console.normal]\n\"x\" = \"j\"\n"} {
 		if _, ps := load(t, toml); len(ps) != 1 || !strings.Contains(ps[0].String(), "没有这个表") {
 			t.Errorf("%q: %v", toml, ps)
+		}
+	}
+}
+
+func TestParseKeysInFileOrder(t *testing.T) {
+	leader, bs, err := ParseKeys(`
+[keys]
+leader = "<C-a>"
+[keys.normal]
+"<C-w>v" = "pane.split.right"
+x = ""
+[map.normal]
+J = "5j"
+[map.query.normal]
+L = "5l"
+`)
+	want := []Line{
+		{"keys.normal", "<C-w>v", "pane.split.right"},
+		{"keys.normal", "x", ""},
+		{"map.normal", "J", "5j"},
+		{"map.query.normal", "L", "5l"},
+	}
+	if err != nil || leader != "<C-a>" || !reflect.DeepEqual(bs, want) {
+		t.Fatalf("leader %q, bindings %+v, %v", leader, bs, err)
+	}
+}
+
+// A keymaps.toml with a value that is no string, a key outside a table, or
+// what belongs in config.toml is an error (§14).
+func TestParseKeysErrors(t *testing.T) {
+	for _, s := range []string{
+		"[keys.normal]\nx = 1",
+		"[keys]\nx = \"a\"",
+		`theme = "x"`,
+		"[query]\nmax_rows = 50",
+		"[keys.normal\n",
+	} {
+		if _, _, err := ParseKeys(s); err == nil {
+			t.Errorf("keymaps.toml %q: expected an error", s)
 		}
 	}
 }

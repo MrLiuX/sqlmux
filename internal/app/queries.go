@@ -53,6 +53,17 @@ func (a *App) queryList() []string {
 	return names
 }
 
+// queryPlace is where query name opens: the connection state.json says it
+// last used and the schema it was in, kept true; with none kept, or one that is
+// not in the session, cur and nothing (§11).
+func (a *App) queryPlace(name string, cur *Conn) (c *Conn, last config.QueryState, kept bool) {
+	last, kept = a.state.Queries[name]
+	if i := slices.IndexFunc(a.sess.Conns, func(cn *Conn) bool { return cn.Spec.Name == last.Conn }); kept && i >= 0 {
+		return a.sess.Conns[i], last, true
+	}
+	return cur, last, false
+}
+
 // openQueryFile is ↵ on a query of the Queries node: one that is open
 // is gone to, as tab.reopen does, and one that is not opens in a tab of the
 // data pane that takes what is opened, on the connection it last used, the
@@ -61,19 +72,15 @@ func (a *App) openQueryFile(name string) tea.Cmd {
 	if a.focusQuery(name) {
 		return nil
 	}
-	c := a.conn()
-	last, kept := a.state.Queries[name]
-	if i := slices.IndexFunc(a.sess.Conns, func(cn *Conn) bool { return cn.Spec.Name == last.Conn }); kept && i >= 0 {
-		c = a.sess.Conns[i]
-	}
+	c, last, kept := a.queryPlace(name, a.conn())
 	if c == nil {
 		return a.noConnection()
 	}
 	t, err := openQuery(c, name)
 	if err != nil {
-		return a.showToast(err.Error(), toastTTL)
+		return a.showToast(err.Error())
 	}
-	if kept && c.Spec.Name == last.Conn {
+	if kept {
 		t.schema = last.Schema
 	}
 	p := a.openTarget()
@@ -98,7 +105,7 @@ func (a *App) deleteQuery() tea.Cmd {
 		open := slices.DeleteFunc(a.queries(), func(t *queryTab) bool { return !strings.EqualFold(t.name, name) })
 		return a.closeAsking(0, "", open, func() tea.Cmd {
 			if err := config.DeleteQuery(name); err != nil {
-				return a.showToast(err.Error(), toastTTL)
+				return a.showToast(err.Error())
 			}
 			a.dropQueryTabs(name)
 			delete(a.state.Queries, name)

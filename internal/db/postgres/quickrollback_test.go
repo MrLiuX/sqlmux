@@ -28,7 +28,7 @@ func (h holdAtRollback) Query(ctx context.Context, sql string, args ...db.Val) (
 // are not left waiting for it (F13.6).
 func TestQuickRollbackIsBounded(t *testing.T) {
 	p, via := proxied(t, IntegrationDSN(t))
-	c, err := Connect(context.Background(), via, "", true)
+	c, _, err := Connect(context.Background(), via, "", true)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -70,11 +70,14 @@ type TextBox struct {
 // padding, and over the hints' row.
 func (b TextBox) Inner(box uv.Rectangle) uv.Rectangle {
 	rows := box.Dy() - 2
-	if len(b.Hints) > 0 && rows > 1 {
+	if b.hinted(box) {
 		rows--
 	}
 	return uv.Rect(box.Min.X+2, box.Min.Y+1, max(box.Dx()-4, 0), max(rows, 0))
 }
+
+// hinted is whether the hints have a row in box, with a row of text left.
+func (b TextBox) hinted(box uv.Rectangle) bool { return len(b.Hints) > 0 && box.Dy() > 3 }
 
 func (b TextBox) Draw(f *Frame, box uv.Rectangle) {
 	if b.Frame(f, box) {
@@ -96,7 +99,7 @@ func (b TextBox) Frame(f *Frame, box uv.Rectangle) bool {
 	if b.Title != "" {
 		f.Text(box.Min.X+2, box.Min.Y, box.Max.X-1, " "+b.Title+" ", uv.Style{Fg: th.Focus, Bg: th.PaneBg, Attrs: uv.AttrBold})
 	}
-	if hs := b.Hints; len(hs) > 0 && box.Dy() > 3 {
+	if hs := b.Hints; b.hinted(box) {
 		x0, x1 := box.Min.X+2, box.Max.X-2
 		for len(hs) > 1 && hintRowWidth(hs) > x1-x0 {
 			hs = hs[:len(hs)-1]

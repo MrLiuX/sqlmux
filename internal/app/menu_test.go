@@ -525,3 +525,53 @@ func TestMenuKeysAreNotTypedInTheFilter(t *testing.T) {
 		t.Errorf("the filter has %q", got)
 	}
 }
+
+// The wheel over a modal overlay does not scroll the table under it: the COLS
+// and ORDER lists, a dropdown, the palette, the sessions and the connection
+// manager, a question; without one it does (F13.7).
+func TestOverlayWheelIsModal(t *testing.T) {
+	wheel := func(a *App) {
+		r := a.layout()[a.focused().ID]
+		a.Update(tea.MouseWheelMsg{X: r.Min.X + 3, Y: r.Min.Y + 8, Button: tea.MouseWheelDown})
+		a.Update(tea.MouseWheelMsg{X: r.Min.X + 3, Y: r.Min.Y + 8, Button: tea.MouseWheelDown})
+	}
+	a, tab, _ := withRecorder(t)
+	top := tab.top
+	if wheel(a); tab.top == top {
+		t.Fatal("the wheel scrolls no table with no overlay open")
+	}
+	for name, open := range map[string]func(a *App){
+		"cols":     func(a *App) { a.run("grid.cols", 0) },
+		"order":    func(a *App) { a.run("grid.order", 0) },
+		"dropdown": func(a *App) { a.openDrop(dropLimit) },
+		"palette":  func(a *App) { feed(t, a, "<C-p>") },
+		"sessions": func(a *App) { a.run("session.list", 0) },
+		"form":     func(a *App) { a.openConnForm() },
+		"confirm":  func(a *App) { a.confirm = &confirmBox{text: "?", yes: "y", then: func() tea.Cmd { return nil }} },
+	} {
+		a, tab, _ := withRecorder(t)
+		open(a)
+		if a.topOverlay() == "" {
+			t.Fatalf("%s: not open", name)
+		}
+		top := tab.top
+		if wheel(a); tab.top != top {
+			t.Errorf("%s: the wheel scrolled the table under it, %d -> %d", name, top, tab.top)
+		}
+	}
+}
+
+// The palette over a WHERE being typed takes what is pasted, not the WHERE
+// under it (F13.13).
+func TestPasteGoesToPaletteOverWhere(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	feed(t, a, "/id<Esc>") // its NORMAL: C-p is no candidate's up here
+	feed(t, a, "<C-p>")
+	if a.palette == nil || tab.typing != "where" {
+		t.Fatalf("palette %v typing %q", a.palette != nil, tab.typing)
+	}
+	a.Update(tea.PasteMsg{Content: "zz"})
+	if tab.where.Text != "id" || a.palette.input.Text != "zz" {
+		t.Errorf("the paste went under the palette: WHERE %q, palette %q", tab.where.Text, a.palette.input.Text)
+	}
+}

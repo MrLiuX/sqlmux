@@ -30,6 +30,7 @@ type completion struct {
 	sel   int  // the first as it opens: ↵ takes it; -1 when nothing is typed and it came up on its own, ↵ then is the input's (§9.7, F8.17)
 	start int  // where the text it replaces starts in the input
 	moved bool // the user moved the selection: a list made again for columns that came keeps the pick
+	top   int  // the first candidate shown, held while the selection is in view (F13.10)
 }
 
 type candidate struct {
@@ -754,7 +755,8 @@ func (a *App) completeView(c *completion, at uv.Position) (ui.Complete, uv.Recta
 		w = max(w, ui.Width(cd.label+"  "+cd.note)+4)
 	}
 	box, rows := ui.CompleteBox(a.window(), at, w, len(v.Items), 0, ui.CompleteRows)
-	v.Top = max(0, v.Sel-rows+1)
+	_, c.top = ui.ListView(c.sel, c.top, len(v.Items), rows)
+	v.Top = c.top
 	return v, box, rows
 }
 
@@ -762,6 +764,7 @@ func (a *App) completeView(c *completion, at uv.Position) (ui.Complete, uv.Recta
 // it as it opens, filtered by the WHERE input once typed into.
 type histMenu struct {
 	sel   int
+	top   int // the first row shown, held while the selection is in view (F13.10)
 	typed bool
 }
 
@@ -849,7 +852,7 @@ func (a *App) histStar(t *dataTab) tea.Cmd {
 		return nil
 	}
 	e, st := es[t.hist.sel], a.tableState(t)
-	same := func(q config.Query) bool { return sameQuery(q, e.q) }
+	same := func(q config.Query) bool { return q.Key() == e.q.Key() }
 	if e.fav {
 		st.Favorites = slices.DeleteFunc(st.Favorites, same)
 	} else if !slices.ContainsFunc(st.Favorites, same) {
@@ -858,13 +861,6 @@ func (a *App) histStar(t *dataTab) tea.Cmd {
 	a.histMove(t, 0)
 	return a.saveState()
 }
-
-func sameQuery(x, y config.Query) bool {
-	return x.Where == y.Where && slices.Equal(x.Order, y.Order) && x.Desc == y.Desc && x.Limit == y.Limit
-}
-
-// whereRows is how many runs a table's WHERE history keeps (§9.7).
-const whereRows = 100
 
 // runWhere runs the WHERE typed, from the first page, counting again; a
 // condition goes into the history, a repeat moving up to the top (§9.7).
@@ -877,8 +873,8 @@ func (a *App) runWhere(t *dataTab) tea.Cmd {
 	if t.applied != "" && fetch != nil { // not one fetch refuses
 		st := a.tableState(t)
 		q := t.savedQuery(t.applied)
-		st.History = slices.Insert(slices.DeleteFunc(st.History, func(h config.Query) bool { return sameQuery(h, q) }), 0, q)
-		st.History = st.History[:min(len(st.History), whereRows)]
+		st.History = slices.Insert(slices.DeleteFunc(st.History, func(h config.Query) bool { return h.Key() == q.Key() }), 0, q)
+		st.History = st.History[:min(len(st.History), config.WhereRows)]
 		cmds = append(cmds, a.saveState())
 	}
 	return tea.Batch(cmds...)
@@ -903,14 +899,14 @@ func (a *App) starWhere(t *dataTab) tea.Cmd {
 		return nil
 	}
 	q, st := t.savedQuery(where), a.tableState(t)
-	same := func(f config.Query) bool { return sameQuery(f, q) }
+	same := func(f config.Query) bool { return f.Key() == q.Key() }
 	toast := i18n.T("已取消收藏")
 	if slices.ContainsFunc(st.Favorites, same) {
 		st.Favorites = slices.DeleteFunc(st.Favorites, same)
 	} else {
 		st.Favorites, toast = slices.Insert(st.Favorites, 0, q), i18n.T("已收藏")
 	}
-	return tea.Batch(a.saveState(), a.showToast(toast, toastTTL))
+	return tea.Batch(a.saveState(), a.showToast(toast))
 }
 
 // histSep is where the rule between the history and the favorites goes: the
@@ -973,7 +969,8 @@ func (a *App) histView(p *Pane, t *dataTab) (ui.Complete, uv.Rectangle, int) {
 	if b, r := ui.CompleteBox(a.window(), at, w, n, foot, ui.CompleteRows); r > rows {
 		box, rows = b, r
 	}
-	v.Top = max(0, v.Sel-rows+1)
+	_, t.hist.top = ui.ListView(v.Sel, t.hist.top, n, rows)
+	v.Top = t.hist.top
 	return v, box, rows
 }
 

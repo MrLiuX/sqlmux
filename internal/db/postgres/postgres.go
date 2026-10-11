@@ -17,12 +17,7 @@ import (
 )
 
 type Conn struct {
-	pg       *pgconn.PgConn
-	Addr     string // user@host:port, for the status bar (§7.8)
-	Database string // on query titles, before the schema (§8.6)
-	// SearchPath is search_path as the connection started, before any
-	// query sets its own schema in front of it (§8.6).
-	SearchPath string
+	pg *pgconn.PgConn
 }
 
 // cancelGrace is how long a cancelled request may take to stop on the
@@ -33,10 +28,13 @@ const cancelGrace = 5 * time.Second
 // Connect opens one connection. dsn goes through pgconn.ParseConfig, which
 // reads PG* variables and ~/.pgpass; password, when not "", wins over both.
 // readOnly makes every transaction read only, as the Meta connection is (§8.2).
-func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, error) {
+// Connect opens a connection, and says where it is: the address for the status
+// bar (§7.8), the database for query titles (§8.6), and search_path as it
+// started, before any query sets its own schema in front of it (§8.6).
+func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, db.Info, error) {
 	cfg, err := pgconn.ParseConfig(dsn)
 	if err != nil {
-		return nil, err
+		return nil, db.Info{}, err
 	}
 	if password != "" {
 		cfg.Password = password
@@ -59,16 +57,15 @@ func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, e
 	}
 	pg, err := pgconn.ConnectConfig(ctx, cfg)
 	if err != nil {
-		return nil, err
+		return nil, db.Info{}, err
 	}
-	c := &Conn{pg: pg, Addr: fmt.Sprintf("%s@%s:%d", cfg.User, cfg.Host, cfg.Port)}
+	c := &Conn{pg: pg}
 	r, err := c.Query(ctx, "select current_setting('search_path'), current_database()") // the DSN may name no database
 	if err != nil {
 		c.Close()
-		return nil, err
+		return nil, db.Info{}, err
 	}
-	c.SearchPath, c.Database = r.Rows[0][0].S, r.Rows[0][1].S
-	return c, nil
+	return c, db.Info{Addr: fmt.Sprintf("%s@%s:%d", cfg.User, cfg.Host, cfg.Port), Database: r.Rows[0][1].S, Path: r.Rows[0][0].S}, nil
 }
 
 // UseSchema puts schema first on c's search_path, then started, the path
@@ -203,11 +200,11 @@ func each(rr *pgconn.ResultReader, stop func(), head func([]db.Col) error, want 
 type Engine struct{}
 
 func (Engine) Connect(ctx context.Context, dsn, password string, readOnly bool) (db.Conn, db.Info, error) {
-	c, err := Connect(ctx, dsn, password, readOnly)
+	c, info, err := Connect(ctx, dsn, password, readOnly)
 	if err != nil {
 		return nil, db.Info{}, err
 	}
-	return c, db.Info{Addr: c.Addr, Database: c.Database, Path: c.SearchPath}, nil
+	return c, info, nil
 }
 
 func (Engine) Dialect() sqlkit.Dialect      { return sqlkit.PG }

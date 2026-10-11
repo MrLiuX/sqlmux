@@ -14,7 +14,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
-// valueEditor is a cell's value open in the editor of a box in the middle
+// valueEditor is a cell's value open in the editor of a box under its cell
 // (§10「值编辑器」, F12.2): the editor of the queries, JSON laid out and
 // colored, its text written back to the cell as a change.
 type valueEditor struct {
@@ -104,7 +104,7 @@ func (a *App) valueBox() uv.Rectangle {
 		}
 	}
 	w := min(max(pane.Dx()/2, 40), pane.Dx())
-	x := max(min(cell.Min.X, pane.Max.X-w), pane.Min.X)
+	x := min(cell.Min.X, pane.Max.X-w) // the cell is in the pane, which w does not outgrow
 	below, above := pane.Max.Y-cell.Max.Y, cell.Min.Y-pane.Min.Y
 	if below < valueMinRows && above > below {
 		return uv.Rect(x, pane.Min.Y, w, above)
@@ -144,10 +144,7 @@ func (a *App) valueTextBox() ui.TextBox {
 // scrolling go by.
 func (a *App) valueSize() {
 	ed := a.value.ed
-	text := ui.Query{Lines: ed.Lines()}.TextArea(a.valueText())
-	ed.TabWidth, ed.AutoPairs = a.tabWidth, a.autoPairs
-	ed.SetHeight(text.Dy())
-	ed.SetWidth(text.Dx())
+	a.sizeEditor(ed, ui.Query{Lines: ed.Lines()}.TextArea(a.valueText()))
 }
 
 // valueAt is the line and display column of the value's text under p.
@@ -220,7 +217,7 @@ func (a *App) valueDid(eff editor.Effect) tea.Cmd {
 		return a.valueDid(v.ed.PutClip(text, p))
 	})
 	if eff.ReadOnly {
-		cmds = append(cmds, a.showToast(i18n.T("只读"), toastTTL))
+		cmds = append(cmds, a.showToast(i18n.T("只读")))
 	}
 	if eff.Ex != "" {
 		cmds = append(cmds, a.valueEx(eff.Ex))
@@ -249,7 +246,7 @@ func (a *App) valueEx(c string) tea.Cmd {
 	case "q!":
 		return a.valueClose(true)
 	}
-	return a.showToast(i18n.T("不支持的命令：%s", c), toastTTL)
+	return a.showToast(i18n.T("不支持的命令：%s", c))
 }
 
 // valueFormat is gq: the whole text laid out as JSON, or left as it is and
@@ -258,7 +255,7 @@ func (a *App) valueFormat() tea.Cmd {
 	v := a.value
 	pretty, err := indentJSON([]byte(v.text()))
 	if err != nil {
-		return a.showToast(i18n.T("不是 JSON"), toastTTL)
+		return a.showToast(i18n.T("不是 JSON"))
 	}
 	v.json = true
 	v.ed.Load(pretty)
@@ -272,14 +269,14 @@ func (a *App) valueFormat() tea.Cmd {
 func (a *App) valueWrite() (cmd tea.Cmd, ok bool) {
 	v := a.value
 	if v.readOnly {
-		return a.showToast(i18n.T("只读"), toastTTL), false
+		return a.showToast(i18n.T("只读")), false
 	}
 	c := v.cell
 	text := v.text()
 	switch {
 	case text != v.opened:
 		if why := c.t.checkText(c.key.col, text); why != "" { // as the cell's input (§10.7)
-			return a.showToast(why, toastTTL), false
+			return a.showToast(why), false
 		}
 		out := text
 		if v.trail && text != "" { // an empty value stays empty

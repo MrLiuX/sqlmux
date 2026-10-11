@@ -16,6 +16,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
@@ -55,19 +56,12 @@ type Config struct {
 	// Leader and Bindings are keymaps.toml's raw [keys] and [map.*]
 	// entries; the keymap package gives them meaning.
 	Leader   string
-	Bindings []Binding
+	Bindings []keymap.Line
 
 	// Unknown are the keys of config.toml nothing reads, a misspelt one among
 	// them, as TOML names them (`query.max_rowz`); said at the start, not an
 	// error (F13.5).
 	Unknown []string
-}
-
-// Binding is one `key = "value"` line under [keys.<scope>] or [map.<...>].
-type Binding struct {
-	Table string // "keys.normal", "map.query.normal"
-	Key   string // as written, e.g. "<C-p>"
-	Value string // action for keys.*, key sequence for map.*; "" unbinds
 }
 
 func Default() *Config {
@@ -112,7 +106,7 @@ func Load() (*Config, error) {
 	case err != nil:
 		return nil, err
 	default:
-		if c.Leader, c.Bindings, err = ParseKeys(string(data)); err != nil {
+		if c.Leader, c.Bindings, err = keymap.ParseKeys(string(data)); err != nil {
 			return nil, fmt.Errorf("%s: %w", path, err)
 		}
 	}
@@ -155,7 +149,9 @@ func Parse(data string) (*Config, error) {
 		return nil, err
 	}
 	for _, k := range md.Undecoded() {
-		c.Unknown = append(c.Unknown, k.String())
+		if s := k.String(); !slices.Contains(c.Unknown, s) { // a [[table]] twice says each key twice
+			c.Unknown = append(c.Unknown, s)
+		}
 	}
 	if raw.Keys != nil || raw.Map != nil { // F5.9 moved them
 		return nil, errors.New("[keys] / [map] belong in keymaps.toml (sqlmux keys --format toml writes a complete reference)")
@@ -244,38 +240,6 @@ func Parse(data string) (*Config, error) {
 	return c, nil
 }
 
-// ParseKeys reads keymaps.toml's TOML (§14): [keys]' leader, and the
-// [keys.*] and [map.*] lines in file order, so "first binding" questions
-// have a stable answer.
-func ParseKeys(data string) (leader string, bindings []Binding, err error) {
-	var raw map[string]any
-	md, err := toml.Decode(data, &raw)
-	if err != nil {
-		return "", nil, err
-	}
-	for _, k := range md.Keys() {
-		if k[0] != "keys" && k[0] != "map" {
-			return "", nil, fmt.Errorf("%s: only [keys] and [map.*] go here", k[0])
-		}
-		if md.Type(k...) == "Hash" {
-			continue
-		}
-		v, ok := lookup(raw, k).(string)
-		if !ok {
-			return "", nil, fmt.Errorf("%s: the value must be a string", k)
-		}
-		if k.String() == "keys.leader" {
-			leader = v
-			continue
-		}
-		if len(k) < 3 {
-			return "", nil, fmt.Errorf("%s: a key goes in a table such as [keys.normal] or [map.normal]", k)
-		}
-		bindings = append(bindings, Binding{strings.Join(k[:len(k)-1], "."), k[len(k)-1], v})
-	}
-	return leader, bindings, nil
-}
-
 // ThemeNames are the themes there are: the files of themes/ and the
 // built-in ones, by name.
 func ThemeNames() []string {
@@ -308,12 +272,4 @@ func LoadTheme(name string, icons *ui.Icons) (*ui.Theme, *ui.Icons, error) {
 		return nil, nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return th, icons, nil
-}
-
-func lookup(m map[string]any, path []string) any {
-	var v any = m
-	for _, p := range path {
-		v = v.(map[string]any)[p]
-	}
-	return v
 }

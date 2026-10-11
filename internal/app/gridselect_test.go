@@ -502,3 +502,75 @@ func TestSelectColors(t *testing.T) {
 		t.Errorf("a theme with selected: %v, %v", th.Selected, err)
 	}
 }
+
+// UNSET over the selected ones: the range is on the visual background over
+// them, the others stay on the selected one, the numbers of the selected are
+// not dim; an esc takes the range out (F12.12).
+func TestSelectUnsetColors(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 6)
+	feed(t, a, "mjjmkVj") // 0 and 2 selected, the range 1..2 over one of them
+	band := func() string {
+		f := a.render()
+		_, _, area, _ := a.gridOf(a.focused())
+		var rows []string
+		for r := range 4 {
+			rows = append(rows, bgBand(a, f, area.Min.Y+2+r, area.Min.X, area.Min.X+5))
+		}
+		return strings.Join(rows, " ")
+	}
+	if got := band(); got != "sss.. vvv.. vvv.. ....." {
+		t.Errorf("the range over the selected: %s", got)
+	}
+	feed(t, a, "<Esc>")
+	if got := band(); got != "sss.. ..... ..... ....." {
+		t.Errorf("after esc: %s", got)
+	}
+	f := a.render()
+	_, _, area, _ := a.gridOf(a.focused())
+	y := area.Min.Y + 2
+	for x := area.Min.X; x < area.Min.X+5; x++ {
+		if c := f.Buf.CellAt(x, y); strings.TrimSpace(c.Content) == "1" && c.Style.Fg != a.theme.Fg {
+			t.Errorf("the number of a selected record is not in fg: %v", c.Style.Fg)
+		}
+	}
+	if got := markedOf(&tab.gridState); !slices.Equal(got, []int{0}) {
+		t.Errorf("marked %v", got)
+	}
+}
+
+// d with UNSET having taken all of the selected out ends the mode and deletes
+// nothing, as y ends it (F12.12).
+func TestSelectDeleteWhenUnsetTookAll(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 5)
+	feed(t, a, "mjmkVjd")
+	if tab.visual || tab.unset || tab.selecting() || len(tab.deleted) != 0 || a.mode() != keymap.Normal {
+		t.Errorf("visual %v, unset %v, selecting %v, deleted %v, mode %v", tab.visual, tab.unset, tab.selecting(), tab.deleted, a.mode())
+	}
+}
+
+// The mode block names UNSET only while the table's editor has the keys: a
+// WHERE's or the value editor's own VISUAL is VISUAL (F12.12).
+func TestUnsetIsNoOtherEditorsMode(t *testing.T) {
+	a := wide(160, 45)
+	loadOrders(t, a, 6)
+	feed(t, a, "vjj<Esc>Vk")
+	if !strings.Contains(statusRow(a), "UNSET") {
+		t.Fatalf("status %q", statusRow(a))
+	}
+	feed(t, a, "/id<Esc>v")
+	if r := statusRow(a); !strings.Contains(r, "VISUAL") || strings.Contains(r, "UNSET") {
+		t.Errorf("a WHERE's VISUAL: %q", r)
+	}
+	b := wide(160, 45)
+	loadOrders(t, b, 6)
+	feed(t, b, "vjj<Esc>VkO")
+	if b.value == nil {
+		t.Fatal("no value editor")
+	}
+	feed(t, b, "v")
+	if r := statusRow(b); !strings.Contains(r, "VISUAL") || strings.Contains(r, "UNSET") {
+		t.Errorf("the value editor's VISUAL: %q", r)
+	}
+}

@@ -151,10 +151,15 @@ func Save(ctx context.Context, w *Worker, e Engine, schema, table string, keyCol
 		return err
 	})
 	var lost TxLost
-	if committing && errors.As(err, &lost) { // the connection went with the COMMIT: it took, if it was sent (§8.2)
-		err = ErrNotCommitted
-		if lost.Sent {
-			err = ErrCommitUnknown
+	if errors.As(err, &lost) {
+		switch {
+		case committing: // the connection went with the COMMIT: it took, if it was sent (§8.2)
+			err = ErrNotCommitted
+			if lost.Sent {
+				err = ErrCommitUnknown
+			}
+		case lost.Err != nil: // before it: the statement's own error, the transaction was this save's and is gone, as rolled back (§8.2)
+			err = lost.Err
 		}
 	}
 	return failed, tx, err

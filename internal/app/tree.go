@@ -11,7 +11,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/kackerx/sqlmux/internal/db"
-	"github.com/kackerx/sqlmux/internal/editor"
 	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
@@ -54,7 +53,7 @@ func (a *App) notReady(c *Conn) tea.Cmd {
 	if cmd := a.connect(c); cmd != nil {
 		return cmd
 	}
-	return a.showToast(i18n.T("连接还没连上"), toastTTL)
+	return a.showToast(i18n.T("连接还没连上"))
 }
 
 // gotConnected takes c's connections in, or marks it failed; the queries
@@ -76,13 +75,13 @@ func (a *App) gotConnected(m connected) tea.Cmd {
 	}
 	if m.err != nil {
 		c.State, c.err = connFailed, m.err // the tabs waiting on it stay, saying why (F12.5)
-		return a.showToast(i18n.T("%s：%s", c.Spec.Name, m.err), toastTTL)
+		return a.showToast(i18n.T("%s：%s", c.Spec.Name, m.err))
 	}
 	c.take(m.d)
 	cmds := []tea.Cmd{a.loadCatalog(c)}
 	for _, t := range waiting {
 		if why := t.stayReason(); why != "" { // begun, or running, meanwhile
-			cmds = append(cmds, a.showToast(why, toastTTL))
+			cmds = append(cmds, a.showToast(why))
 			continue
 		}
 		cmds = append(cmds, a.switchConn(t, c, cmp.Or(t.wantSchema, c.Schema)))
@@ -120,7 +119,7 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	}
 	if m.err != nil {
 		a.dropPending(m.conn)
-		return a.showToast(i18n.T("%s：%s", m.conn.Spec.Name, m.err), toastTTL)
+		return a.showToast(i18n.T("%s：%s", m.conn.Spec.Name, m.err))
 	}
 	c := m.conn
 	c.Schemas, c.Tables = m.schemas, m.tables
@@ -439,12 +438,6 @@ func b2i(b bool) int {
 // treeRows is how many nodes the sidebar shows.
 func (a *App) treeRows() int { return ui.TreeRows(a.sidebarRect().Dy() - 2) }
 
-// treeView is cursor and top kept on a list of n and in a view of rows.
-func treeView(cursor, top, n, rows int) (int, int) {
-	cursor = max(min(cursor, n-1), 0)
-	return cursor, max(min(top, cursor, n-rows), cursor-rows+1, 0)
-}
-
 // treeAt is where the cursor is among ns, on its node while that shows,
 // else on the row it was on, a rule not being where it rests (F10.6); and
 // the first row the view shows.
@@ -456,7 +449,7 @@ func (a *App) treeAt(ns []node) (cursor, top int) {
 	for t.cursor < len(ns)-1 && ns[t.cursor].kind == nodeSep {
 		t.cursor++
 	}
-	cursor, top = treeView(t.cursor, t.top, len(ns), a.treeRows())
+	cursor, top = ui.ListView(t.cursor, t.top, len(ns), a.treeRows())
 	if top == cursor && cursor > 0 && ns[cursor-1].kind == nodeSep { // a rule shows with the node it is over
 		top--
 	}
@@ -690,33 +683,6 @@ func (a *App) filterKey(k keymap.Key) {
 func (a *App) treeFirstMatch() {
 	ns, _ := a.treeNodes()
 	a.treeGo(max(slices.IndexFunc(ns, func(n node) bool { return n.kind == nodeTable }), 0))
-}
-
-// editInput applies an input's own editing keys to in (they are no
-// bindings) and reports whether its text changed.
-func editInput(in *ui.Input, k keymap.Key) bool {
-	switch k {
-	case "<Left>":
-		in.Left()
-		return false
-	case "<Right>":
-		in.Right()
-		return false
-	case "<BS>":
-		in.Backspace()
-		return true
-	case "<C-w>", "<M-BS>": // M-BS is C-w in all typing (§7.9)
-		in.DeleteBack(editor.WordStart(in.Text, in.Pos))
-		return true
-	case "<C-u>":
-		in.DeleteBack(0)
-		return true
-	}
-	if keymap.Text(k) == "" {
-		return false
-	}
-	in.Insert(keymap.Text(k))
-	return true
 }
 
 // openTarget is the pane a table opens in (§5, §12): the focused one;

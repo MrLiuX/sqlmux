@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 var (
@@ -357,5 +359,49 @@ func TestRedialAsksForThePasswordAgain(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(runs); strings.Count(string(b), "\n") != 1 {
 		t.Errorf("password_cmd ran %q", b)
+	}
+}
+
+// lostSaveDB is Main of a save whose UPDATE loses the connection: BEGIN puts
+// it in a transaction, the UPDATE fails with errLost.
+type lostSaveDB struct {
+	noDB
+	tx byte
+}
+
+func (d *lostSaveDB) Query(_ context.Context, sql string, _ ...db.Val) (db.Result, error) {
+	switch {
+	case sql == "begin":
+		d.tx = 'T'
+	case strings.HasPrefix(sql, "update"):
+		return db.Result{}, errLost
+	}
+	return db.Result{}, nil
+}
+
+func (d *lostSaveDB) TxStatus() byte { return cmp.Or(d.tx, 'I') }
+
+// A save that loses the connection before its COMMIT shows the statement's
+// own error as rolled back, as any failure of it, the changes still marked;
+// and says the transaction is lost, as one of the user's (F13.1, §8.2).
+func TestSaveLostBeforeCommit(t *testing.T) {
+	evs := heard(t)
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	a.sess.Conns[0].Main = db.NewWorker(&lostSaveDB{})
+	redialed(a, &lostSaveDB{})
+	feed(t, a, "lix<Esc>")
+	n := len(tab.edits)
+	_, cmd := a.Update(teaKey("<C-s>"))
+	m := cmd().(saveMsg)
+	a.Update(m)
+	if b := tab.bar; b == nil || b.First != (ui.Note{Head: "id = 1：", Mid: "broken pipe", Tail: "，已回滚"}) || len(tab.edits) != n || n == 0 {
+		t.Fatalf("bar %+v, edits %d of %d", tab.bar, len(tab.edits), n)
+	}
+	if len(*evs) != 1 || !(*evs)[0].TxLost {
+		t.Fatalf("events %+v", *evs)
+	}
+	if a.Update((*evs)[0]); a.toast != "doraemon：连接断开，事务已丢失" {
+		t.Errorf("toast %q", a.toast)
 	}
 }

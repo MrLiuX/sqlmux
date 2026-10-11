@@ -34,29 +34,6 @@ full_width = 12
 	}
 }
 
-func TestParseKeysInFileOrder(t *testing.T) {
-	leader, bs, err := ParseKeys(`
-[keys]
-leader = "<C-a>"
-[keys.normal]
-"<C-w>v" = "pane.split.right"
-x = ""
-[map.normal]
-J = "5j"
-[map.query.normal]
-L = "5l"
-`)
-	want := []Binding{
-		{"keys.normal", "<C-w>v", "pane.split.right"},
-		{"keys.normal", "x", ""},
-		{"map.normal", "J", "5j"},
-		{"map.query.normal", "L", "5l"},
-	}
-	if err != nil || leader != "<C-a>" || !reflect.DeepEqual(bs, want) {
-		t.Fatalf("leader %q, bindings %+v, %v", leader, bs, err)
-	}
-}
-
 // [grid] order and transpose are what a table opened anew starts with
 // (F8.8); order is "asc" or "desc".
 func TestGridNewTableDefaults(t *testing.T) {
@@ -118,17 +95,6 @@ func TestParseErrors(t *testing.T) {
 	} {
 		if _, err := Parse(s); err == nil {
 			t.Errorf("config.toml %q: expected an error", s)
-		}
-	}
-	for _, s := range []string{
-		"[keys.normal]\nx = 1",
-		"[keys]\nx = \"a\"",
-		`theme = "x"`,
-		"[query]\nmax_rows = 50",
-		"[keys.normal\n",
-	} {
-		if _, _, err := ParseKeys(s); err == nil {
-			t.Errorf("keymaps.toml %q: expected an error", s)
 		}
 	}
 }
@@ -302,6 +268,18 @@ func TestUnknownKeys(t *testing.T) {
 	ok, _ := Parse("[query]\nmax_rows = 20\n")
 	if got := UnknownKeys(ok); len(got) != 1 || strings.HasPrefix(got[0], "config.toml") {
 		t.Errorf("only the connection: %q", got)
+	}
+	// outside a [[connection]]: a key of the top, a block misspelt, said once
+	stray := "default = \"prod\"\n[[servers]]\nname = \"x\"\n[[servers]]\nname = \"y\"\n[[connection]]\nname = \"z\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "sqlmux", "connections.toml"), []byte(stray), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := UnknownKeys(ok); !slices.Equal(got, []string{"connections.toml: 不认识的键 default, servers"}) {
+		t.Errorf("outside the connections: %q", got)
+	}
+	twice, _ := Parse("[[foo]]\na = 1\n[[foo]]\na = 2\n")
+	if !slices.Equal(twice.Unknown, []string{"foo", "foo.a"}) {
+		t.Errorf("a table twice: %v", twice.Unknown)
 	}
 	// the decoder reads a key whatever its case: not unknown
 	upper := "[[connection]]\nName = \"x\"\nDSN = \"postgres://u@h/d\"\nEngine = \"postgres\"\nRead_Only = true\n"

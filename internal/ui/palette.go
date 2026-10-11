@@ -119,7 +119,7 @@ func (p Palette) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 		preview = p.Preview.Lines()
 	}
 	box, rows, grid := PaletteBox(screen, len(p.Rows), p.Result != nil, preview)
-	top := max(min(p.Top, p.Sel), p.Sel-rows+1, 0) // the selection in view as the list loses rows: to a preview, or the window
+	top := InView(p.Top, p.Sel, rows) // the selection in view as the list loses rows: to a preview, or the window
 	f.Dim()
 	f.Region(f.Bounds(), Target{Kind: KindBackdrop}) // a click outside closes it
 	if box.Dx() < 8 {

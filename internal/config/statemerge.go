@@ -3,22 +3,21 @@ package config
 import (
 	"encoding/json"
 	"slices"
+	"time"
 )
 
-// base is the state as this program last had it from the file or wrote it
-// to it, what a write is told apart from the file's by: another program's
-// changes in the file since are not undone by this one's, and what this one
-// dropped does not come back from the file (F13.3); basePath the file it is of,
-// another one being none. Guarded by saveMu.
-var (
-	base     = &State{}
-	basePath string
-)
+// base is the state as this program last had it from the file, or last wrote
+// to it as it was then (what it had, not what the merge made): what a write is
+// told apart from the file's by, so another program's changes in the file
+// since are not undone by this one's, nor this one's drops undone by the
+// file's (F13.3). Guarded by saveMu.
+var base = &State{}
 
 // merge is what the program's state ours says, over base, which it began
 // from, on the file as it is now, disk, which others may have changed: each
 // entry this program left alone is the file's; one it changed or added is its
-// own, the lists of an entry both changed put together; one it dropped is gone.
+// own, the lists of an entry both changed put together; one either dropped is
+// gone.
 func merge(base, ours, disk *State) *State {
 	out := &State{
 		Tables:  mergeMap(base.Tables, ours.Tables, disk.Tables, mergeTable),
@@ -64,9 +63,6 @@ func mergeMap[V any](base, ours, disk map[string]V, both func(base, ours, disk V
 			out[k] = o
 		}
 	}
-	if len(out) == 0 {
-		return nil
-	}
 	return out
 }
 
@@ -76,46 +72,52 @@ func mergeTable(b, o, d *TableState) *TableState {
 			*t = &TableState{}
 		}
 	}
-	history := union(b.History, o.History, d.History, queryKey)
+	at := map[string]time.Time{} // a WHERE both ran: the later time
+	for _, q := range append(slices.Clone(o.History), d.History...) {
+		at[q.Key()] = laterOf(at[q.Key()], q.At)
+	}
+	history := union(b.History, o.History, d.History, Query.Key)
+	for i := range history {
+		history[i].At = at[history[i].Key()]
+	}
 	slices.SortStableFunc(history, func(x, y Query) int { return y.At.Compare(x.At) }) // newest first, whose program it was
-	return &TableState{History: history, Favorites: union(b.Favorites, o.Favorites, d.Favorites, queryKey)}
+	return &TableState{History: history[:min(len(history), WhereRows)], Favorites: union(b.Favorites, o.Favorites, d.Favorites, Query.Key)}
 }
 
-// queryKey is what makes two WHEREs one: all but the time.
-func queryKey(q Query) string {
-	b, _ := json.Marshal(struct {
-		Where string
-		Order any
-		Desc  bool
-		Limit int
-	}{q.Where, q.Order, q.Desc, q.Limit})
-	return string(b)
+func laterOf(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
 }
 
 func ident[T any](v T) T { return v }
 
-// union is ours, then what is in disk that ours has not, each once, by key;
-// what base had and ours has not was dropped here and stays so.
+// union is ours, then what is in disk that ours has not, each once, by key: an
+// item is kept if base did not have it, or both ours and disk do; one base had
+// that either dropped stays dropped.
 // ponytail: lists with no time (quick SQL, the palette's picks) keep the
 // other program's newest after ours, where a cut at their limit takes them
 // first; sort them by a time if that shows.
 func union[T any, K comparable](base, ours, disk []T, key func(T) K) []T {
+	keys := func(list []T) map[K]bool {
+		set := map[K]bool{}
+		for _, v := range list {
+			set[key(v)] = true
+		}
+		return set
+	}
+	inBase, inDisk := keys(base), keys(disk)
 	seen := map[K]bool{}
 	var out []T
 	for _, v := range ours {
-		if k := key(v); !seen[k] {
+		if k := key(v); !seen[k] && (!inBase[k] || inDisk[k]) { // the file dropped it: it stays dropped
 			seen[k] = true
 			out = append(out, v)
 		}
 	}
-	gone := map[K]bool{}
-	for _, v := range base {
-		if k := key(v); !seen[k] {
-			gone[k] = true
-		}
-	}
 	for _, v := range disk {
-		if k := key(v); !seen[k] && !gone[k] {
+		if k := key(v); !seen[k] && !inBase[k] {
 			seen[k] = true
 			out = append(out, v)
 		}

@@ -42,7 +42,7 @@ func (a *App) openDDL(column bool) tea.Cmd {
 		return nil
 	}
 	if t.conn.State != connReady { // its error page, or its dial still on: no Meta to ask
-		return a.showToast(i18n.T("连接还没连上"), toastTTL)
+		return a.showToast(i18n.T("连接还没连上"))
 	}
 	d := &ddlPopup{conn: t.conn, table: t.table}
 	if column {
@@ -102,8 +102,8 @@ func (a *App) ddlContent() (ui.TextView, string) {
 	return ui.TextView{Text: text, Colors: ui.SQLColors(a.theme, text, c.eng.Dialect(), names)}, title
 }
 
-// popupBox is the box in the middle of the window the table's DDL and a
-// value's editor are in: two thirds of it each way, 40 by 8 at least.
+// popupBox is the box in the middle of the window the table's DDL is in: two
+// thirds of it each way, 40 by 8 at least.
 func (a *App) popupBox() uv.Rectangle {
 	win := a.window()
 	w, h := max(win.Dx()*2/3, min(win.Dx(), 40)), max(win.Dy()*2/3, min(win.Dy(), 8))

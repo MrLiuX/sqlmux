@@ -227,7 +227,7 @@ func TestQueryUnreadable(t *testing.T) {
 		t.Fatalf("tabs %v, warning %q", p.Tabs, s.warning)
 	}
 	c := config.Default()
-	keys, _ := keymap.New(c)
+	keys, _ := keymap.New(c.Leader, c.Vim, c.Timeoutlen, c.Bindings)
 	if a := New(c, keys, s, &config.State{}, "careful"); a.warning != "careful；"+s.warning {
 		t.Errorf("warning %q", a.warning)
 	}
@@ -1250,27 +1250,30 @@ func TestQueryFileChangedOutside(t *testing.T) {
 	if data, _ := os.ReadFile(ca.path); string(data) != "select 'written in A';\n" {
 		t.Fatalf("B's autosave wrote: %q", data)
 	}
-	feed(t, b, ":w<CR>") // asked: refused once
-	if data, _ := os.ReadFile(ca.path); string(data) != "select 'written in A';\n" || !strings.Contains(b.toast, "再保存一次会覆盖") {
-		t.Errorf("B's :w: file %q, toast %q", data, b.toast)
+	feed(t, b, ":w<CR>") // the autosave asked: this is the yes
+	if data, _ := os.ReadFile(ca.path); !strings.Contains(string(data), "select 'written in B';") {
+		t.Fatalf("B's :w after the autosave said it: %q, toast %q", data, b.toast)
 	}
-	// the refusal is no standing yes: an autosave still does not write, and a
-	// file changed again after it is told again
+	// a file changed again after it: an autosave still does not write, a :w is
+	// refused once, the next is the yes
+	if err := os.WriteFile(ca.path, []byte("a third\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	feed(t, b, "ox<Esc>")
 	b.Update(autosave{cb, cb.ver})
-	if data, _ := os.ReadFile(ca.path); string(data) != "select 'written in A';\n" {
-		t.Fatalf("an autosave after the refusal wrote: %q", data)
+	if data, _ := os.ReadFile(ca.path); string(data) != "a third\n" {
+		t.Fatalf("an autosave wrote over it: %q", data)
 	}
-	if err := os.WriteFile(ca.path, []byte("a third\n"), 0o600); err != nil {
+	if err := os.WriteFile(ca.path, []byte("a fourth\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	b.toast = ""
 	feed(t, b, ":w<CR>")
-	if data, _ := os.ReadFile(ca.path); string(data) != "a third\n" || !strings.Contains(b.toast, "再保存一次会覆盖") {
-		t.Fatalf("a file changed again: %q, toast %q", data, b.toast)
+	if data, _ := os.ReadFile(ca.path); string(data) != "a fourth\n" || !strings.Contains(b.toast, "再保存一次会覆盖") {
+		t.Fatalf("B's :w: file %q, toast %q", data, b.toast)
 	}
 	feed(t, b, ":w<CR>") // the yes
-	if data, _ := os.ReadFile(ca.path); !strings.Contains(string(data), "select 'written in B';") {
+	if data, _ := os.ReadFile(ca.path); !strings.Contains(string(data), "x") || strings.Contains(string(data), "fourth") {
 		t.Errorf("B's second :w: %q", data)
 	}
 	feed(t, b, "dd") // back to what it was typing
@@ -1287,5 +1290,64 @@ func TestQueryFileChangedOutside(t *testing.T) {
 	feed(t, a, "Ax<Esc>:w<CR>")
 	if data, _ := os.ReadFile(ca.path); !strings.Contains(string(data), "outside") || !strings.Contains(string(data), "x") {
 		t.Errorf("after an external edit: %q", data)
+	}
+}
+
+// A file that was there before the start is written by the first :w, as the
+// stamp was taken at the read (F13.2).
+func TestQueryExistingFileSaves(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	if err := config.WriteQuery(config.QueryPath("query_1"), "select 0;\n"); err != nil {
+		t.Fatal(err)
+	}
+	a := sizedWith(160, 45, config.Default())
+	feed(t, a, "<C-l>")
+	c := queryOf(a.focused())
+	if c == nil || text(c) != "select 0;" {
+		t.Fatal("not on query_1 with its text")
+	}
+	feed(t, a, "oselect 1;<Esc>:w<CR>")
+	if data, _ := os.ReadFile(c.path); string(data) != "select 0;\nselect 1;\n" {
+		t.Errorf("the first :w of an existing file: %q, toast %q", data, a.toast)
+	}
+}
+
+// A rename moves the file and keeps its stamp: a save after it is no
+// refusal; a told autosave is told again after a write that the user said yes
+// to; an autosave writes a file that is gone (F13.2).
+func TestQueryFileStampKept(t *testing.T) {
+	a, c := inQuery(t, "", "")
+	feed(t, a, "iselect 1;<Esc>:w<CR>")
+	a.run("query.rename", 0)
+	a.askName.in.Text, a.askName.in.Pos = "", 0
+	feed(t, a, "renamed<CR>")
+	if c.name != "renamed" {
+		t.Fatalf("not renamed: %q toast %q", c.name, a.toast)
+	}
+	feed(t, a, "oselect 2;<Esc>:w<CR>")
+	if data, _ := os.ReadFile(c.path); string(data) != "select 1;\nselect 2;\n" {
+		t.Errorf("after a rename: %q toast %q", data, a.toast)
+	}
+	// told, then written over, then changed outside again: told again
+	_ = os.WriteFile(c.path, []byte("outside\n"), 0o600)
+	feed(t, a, "ox<Esc>")
+	a.Update(autosave{c, c.ver})
+	feed(t, a, ":w<CR>")
+	if data, _ := os.ReadFile(c.path); strings.Contains(string(data), "outside") {
+		t.Fatalf("not overwritten: %q", data)
+	}
+	_ = os.WriteFile(c.path, []byte("outside again\n"), 0o600)
+	feed(t, a, "oy<Esc>")
+	a.toast = ""
+	a.Update(autosave{c, c.ver})
+	if !strings.Contains(a.toast, "别处改过") {
+		t.Errorf("a second change outside is not said by the autosave: %q", a.toast)
+	}
+	// the file gone: written again
+	_ = os.Remove(c.path)
+	feed(t, a, "oz<Esc>")
+	a.Update(autosave{c, c.ver})
+	if data, err := os.ReadFile(c.path); err != nil || !strings.Contains(string(data), "z") {
+		t.Errorf("a deleted file, autosaved: %q %v", data, err)
 	}
 }

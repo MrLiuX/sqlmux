@@ -14,7 +14,7 @@ import (
 // functions, but where a case says otherwise (§10.7).
 func TestCellCasesAgainstPG(t *testing.T) {
 	ctx := context.Background()
-	c, err := postgres.Connect(ctx, postgres.IntegrationDSN(t), "", true)
+	c, _, err := postgres.Connect(ctx, postgres.IntegrationDSN(t), "", true)
 	if err != nil {
 		t.Fatal(err)
 	}

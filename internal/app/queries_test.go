@@ -4,8 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/x/exp/golden"
 
@@ -450,7 +452,7 @@ func TestPaletteQueries(t *testing.T) {
 		t.Error("query_1 has no file: no preview")
 	}
 	feed(t, a, "<C-n>")
-	if pv := a.palettePreview(); pv == nil || pv.Text != "select 1 -- one\nfrom t\n" {
+	if pv := a.palettePreview(); pv == nil || pv.Text != "select 1 -- one\nfrom t" {
 		t.Errorf("preview %+v", pv)
 	}
 	feed(t, a, "<CR>")
@@ -465,5 +467,81 @@ func TestPaletteQueries(t *testing.T) {
 	feed(t, a, "<CR>") // open: gone to, not opened again
 	if q := queryOf(a.focused()); q == nil || q.name != "query_1" || len(a.queries()) != 2 {
 		t.Errorf("↵ on an open query: %v, %d open", q, len(a.queries()))
+	}
+}
+
+// The preview of a query is its first 100 rows and a few KB of them, ends in no
+// newline, is colored by the catalog of the connection the query opens on, not
+// the current one's, scrolls, and is at the top again for another query; a
+// table of the same score is before the query (F12.10).
+func TestPaletteQueryPreview(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a, seed := withConns()
+	seed.Tables = append(seed.Tables, db.Table{Schema: "public", Name: "only_in_seed"})
+	var long []string
+	for i := range 300 {
+		long = append(long, "select "+strconv.Itoa(i)+";")
+	}
+	queryFile(t, "q_long", strings.Join(long, "\n")+"\n")
+	queryFile(t, "q_long2", strings.Join(long, "\n")+"\n")
+	queryFile(t, "q_wide", strings.Repeat("中", 20000))
+	queryFile(t, "q_seed", "select * from only_in_seed\n")
+	queryFile(t, "agent", "select 1\n")
+	a.state.Queries = map[string]config.QueryState{"q_seed": {Conn: "seed"}, "agent": {Conn: "doraemon"}}
+	a.run("palette.open", 0)
+	pick := func(name string) *ui.PalettePreview {
+		t.Helper()
+		a.palette.input.Text, a.palette.input.Pos = "@"+name, len(name)+1
+		a.palette.sel = 0
+		items, ms := a.paletteMatches()
+		for i, m := range ms {
+			if items[m.Index].kind == itemQuery && items[m.Index].id == name {
+				a.palette.sel = i
+				a.wantDDL()
+				return a.palettePreview()
+			}
+		}
+		t.Fatalf("no query %s", name)
+		return nil
+	}
+	if pv := pick("q_long"); pv == nil || strings.Count(pv.Text, "\n")+1 != queryPreviewRows || strings.HasSuffix(pv.Text, "\n") {
+		t.Errorf("the rows: %+v", pv)
+	}
+	if pv := pick("q_wide"); pv == nil || len(pv.Text) > queryPreviewBytes || !utf8.ValidString(pv.Text) || len(pv.Text) < queryPreviewBytes-3 {
+		t.Errorf("one long line: %d bytes", len(pv.Text))
+	}
+	if pv := pick("q_seed"); pv == nil || pv.Names(14, "only_in_seed") != ui.TableName {
+		t.Errorf("the catalog of the connection it opens on: %+v", pv)
+	}
+	// scrolled, then another query: the top
+	pick("q_long")
+	a.palette.pvTop = 5
+	if pv := a.palettePreview(); pv == nil || pv.Top != 5 {
+		t.Errorf("scrolled: %+v", pv)
+	}
+	pick("q_long2")
+	if a.palette.pvTop != 0 {
+		t.Errorf("another query: the preview is at row %d", a.palette.pvTop)
+	}
+	pick("q_long")
+	if a.palette.pvTop != 0 || a.palettePreview().Top != 0 {
+		t.Errorf("back: row %d", a.palette.pvTop)
+	}
+	// a table and a query of one name, one score: the table first
+	a.palette.input.Text, a.palette.input.Pos = "@agent", 6
+	var tags []string
+	for _, r := range a.paletteView().Rows {
+		if r.Name == "agent" {
+			tags = append(tags, r.Tag)
+		}
+	}
+	if !slices.Equal(tags, []string{"表", "Query"}) {
+		t.Errorf("the same name: %v", tags)
+	}
+	// the enter hint and the icon
+	a.palette.input.Text, a.palette.input.Pos = "@q_seed", 7
+	a.palette.sel = 0
+	if r := a.paletteView().Rows[0]; r.Icon != a.icons.Query || !strings.Contains(enterOf(a), "打开") {
+		t.Errorf("row %+v, enter %q", r, enterOf(a))
 	}
 }

@@ -1,6 +1,7 @@
 package db
 
 import (
+	"cmp"
 	"context"
 	"sync"
 )
@@ -210,14 +211,16 @@ func (w *Worker) lost(ctx context.Context, safe, redialed bool, lost Lost, err e
 		w.broken = true
 		return err
 	}
-	// the transaction the connection had before this request is the user's, the
-	// app is told when it is lost; one the request began is the request's own
-	// (F13.1): its COMMIT lost is TxLost, a read that begins one and runs again
-	// has lost nothing
+	// the transaction the connection was in as the request last knew it: after
+	// its last call that went through, else as the request found it (F13.1). A
+	// COMMIT of this request's that went through ends the transaction, one it
+	// began that is lost is lost as the user's is; the app is told of it unless
+	// the request is a read run again, which has lost nothing the user had
 	had := w.inTx()
-	txLost, sent := had || w.conn.tx == 'T' || w.conn.tx == 'E', w.conn.calls > 0
+	tx := cmp.Or(w.conn.tx, w.tx)
+	txLost, sent := tx == 'T' || tx == 'E', w.conn.calls > 0
 	again := safe || !txLost && lost == LostUnsent && !sent
-	if rerr := w.redial(ctx, had, again); rerr != nil {
+	if rerr := w.redial(ctx, txLost && (had || !safe), again); rerr != nil {
 		return rerr
 	}
 	switch {

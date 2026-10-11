@@ -3,6 +3,8 @@ package app
 import (
 	"fmt"
 	"slices"
+	"strconv"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -84,8 +86,7 @@ func (a *App) colsMove(d int) {
 	m := a.cols
 	n := len(a.colsMatches())
 	_, rows := a.colsBox(a.colsView())
-	m.sel = max(min(m.sel+d, n-1), 0)
-	m.top = max(min(m.top, m.sel), m.sel-rows+1)
+	m.sel, m.top = ui.ListView(m.sel+d, m.top, n, rows)
 }
 
 // colsShift is J (d 1) and K on the selected column: it and the one next to
@@ -173,12 +174,12 @@ func (a *App) colsView() ui.Dropdown {
 	}
 	if m.order {
 		v.Hints = bound(
-			ui.Hint{Key: a.hints("order", "/", "cols.down", "cols.up"), Label: i18n.T("移动")},
+			ui.Hint{Key: a.hints("order", "/", "order.down", "order.up"), Label: i18n.T("移动")},
 			ui.Hint{Key: a.keys.Hint("order.toggle", "order"), Label: i18n.T("方向"), Action: "order.toggle"},
 			ui.Hint{Key: a.keys.Hint("order.remove", "order"), Label: i18n.T("移出"), Action: "order.remove"},
 			ui.Hint{Key: a.keys.Hint("order.clear", "order"), Label: i18n.T("清空"), Action: "order.clear"},
 			ui.Hint{Key: a.keys.Hint("order.only", "order"), Label: i18n.T("只按这一列"), Action: "order.only"},
-			ui.Hint{Key: a.keys.Hint("cols.filter", "order"), Label: i18n.T("搜索"), Action: "cols.filter"},
+			ui.Hint{Key: a.keys.Hint("order.filter", "order"), Label: i18n.T("搜索"), Action: "order.filter"},
 		)
 	}
 	for _, mt := range ms {
@@ -246,4 +247,76 @@ func (a *App) orderPick(i int) tea.Cmd {
 		return a.toggleOrder(t)
 	}
 	return a.setOrder(t, []db.OrderCol{{Col: col, Desc: a.newDesc}})
+}
+
+// orderMark is what leads a column of the ORDER list: the place of the column
+// in the sorting and its way, "1↓", "2↑", blank for one that does not sort;
+// padded to the width of the longest, as the rows line up (F12.1).
+func orderMark(order []db.OrderCol, col string) string {
+	w := len(strconv.Itoa(len(order))) + 1
+	i := slices.IndexFunc(order, func(o db.OrderCol) bool { return o.Col == col })
+	mark := ""
+	if i >= 0 {
+		mark = strconv.Itoa(i+1) + arrow(order[i].Desc)
+	}
+	return mark + strings.Repeat(" ", max(w-ui.Width(mark), 0))
+}
+
+// sortsAlone is whether col is all the chip shows: the only column of the
+// ORDER, or with none the row identity's first.
+func (t *dataTab) sortsAlone(col string) bool {
+	key := t.cols.Key()
+	return len(t.order) == 1 && t.order[0].Col == col || len(t.order) == 0 && len(key) > 0 && key[0] == col
+}
+
+// orderHead is a click on col's head, and gs: by that column alone, then the
+// other way, then back to the default (§7.6「表头」).
+func (a *App) orderHead(t *dataTab, col string) tea.Cmd {
+	switch {
+	case t.sortsAlone(col) && len(t.order) == 1 && t.order[0].Desc != a.newDesc: // the other way already
+		return a.setOrder(t, nil)
+	case t.sortsAlone(col):
+		return a.toggleOrder(t)
+	}
+	return a.setOrder(t, []db.OrderCol{{Col: col, Desc: a.newDesc}})
+}
+
+// orderOnly is the menu's 排序 ↑ and ↓: by col alone, its way given.
+func (a *App) orderOnly(t *dataTab, col string, desc bool) tea.Cmd {
+	return a.setOrder(t, []db.OrderCol{{Col: col, Desc: desc}})
+}
+
+// orderToggle is space on a column of the ORDER list, gS and Shift-click on a
+// head: the column joins the sorting at the end, the way `[grid] order` says,
+// or if it is in it goes the other way; out of it is a, not this (F12.9).
+func (a *App) orderToggle(t *dataTab, col string) tea.Cmd {
+	order := slices.Clone(t.order)
+	if i := slices.IndexFunc(order, func(o db.OrderCol) bool { return o.Col == col }); i < 0 {
+		order = append(order, db.OrderCol{Col: col, Desc: a.newDesc})
+	} else {
+		order[i].Desc = !order[i].Desc
+	}
+	return a.setOrder(t, order)
+}
+
+// setOrder sorts t by order, from the first page; none is the default, by the
+// row identity.
+func (a *App) setOrder(t *dataTab, order []db.OrderCol) tea.Cmd {
+	t.order, t.desc, t.pageNo = order, len(order) == 0 && a.newDesc, 0
+	return a.fetch(t, false)
+}
+
+// toggleOrder turns t's ORDER the other way, from the first page (§7.8):
+// sorted by default, its row identity's first column goes the other way
+// than the default does.
+func (a *App) toggleOrder(t *dataTab) tea.Cmd {
+	switch key := t.cols.Key(); {
+	case len(t.order) > 0: // the first column of several
+		order := slices.Clone(t.order)
+		order[0].Desc = !order[0].Desc
+		return a.setOrder(t, order)
+	case key != nil:
+		return a.setOrder(t, []db.OrderCol{{Col: key[0], Desc: !t.desc}})
+	}
+	return nil // nothing to turn: the chip shows no direction
 }
