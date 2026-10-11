@@ -48,7 +48,7 @@ type Action struct {                // 注册表是 map[id]Action，id 如 "pane
 
 | 作用域 | 何时生效 |
 |---|---|
-| `palette` / `where` / `cols` / `dropdown` / `sessions` / `form` / `complete` / `options` / `segments` / `confirm` / `keyhelp` / `menu` / `conns` / `ddl` | 对应的浮层打开时，取最上层的一个。`menu` 是树和表格的右键菜单（M8 F8.23；表格 M12 F12.3）、`conns` 是连接管理的列表（M8 F8.16）、`ddl` 是表 DDL 浮窗（M9 F9.8：`j` / `↓`、`k` / `↑` 一行，`C-d` / `C-u` 半页，`gg` / `G`，`esc` / `C-c` 关；滚轮也滚它，点浮窗外关）。`options` 是单元格的选项浮层，`segments` 是时间列的分段浮层，都只在展开时生效（§10.2）；`keyhelp` 是 `?` 的键位帮助（§6.5）；`sessions` 是 session 列表，`form` 是新建连接的表单（M5 F5.1，§7.8）。which-key 浮层不是作用域（§6.5） |
+| `palette` / `where` / `cols` / `order` / `dropdown` / `sessions` / `form` / `complete` / `options` / `segments` / `confirm` / `keyhelp` / `menu` / `conns` / `ddl` | 对应的浮层打开时，取最上层的一个。`menu` 是树和表格的右键菜单（M8 F8.23；表格 M12 F12.3）、`order` 是 ORDER 浮层（M12 F12.9，COLS 式的列表，§7.6）、`conns` 是连接管理的列表（M8 F8.16）、`ddl` 是表 DDL 浮窗（M9 F9.8：`j` / `↓`、`k` / `↑` 一行，`C-d` / `C-u` 半页，`gg` / `G`，`esc` / `C-c` 关；滚轮也滚它，点浮窗外关）。`options` 是单元格的选项浮层，`segments` 是时间列的分段浮层，都只在展开时生效（§10.2）；`keyhelp` 是 `?` 的键位帮助（§6.5）；`sessions` 是 session 列表，`form` 是新建连接的表单（M5 F5.1，§7.8）。which-key 浮层不是作用域（§6.5） |
 | `value` | 值编辑器浮窗打开时（M12 F12.2，§10「值编辑器」）：只有应用层的键（`C-s` 写回并关闭），其余按键交给 vim 引擎，同 `query`；`[map.normal]` / `[map.visual]` 照常，`[map.query.*]` 不用 |
 | `wherenormal` | WHERE 输入框在 NORMAL 下（F3.39）：`↵` 执行、`/` 历史 / 收藏、`esc` 回表格，其余交给编辑器；`normal` 照常在它下面 |
 | `newrow` | 编辑还没保存的新行的格时生效（F3.33），叠在 `options` / `segments` 之上：浮层层级里它在最上，没绑的键再落到下面那层浮层。默认只有 `Tab` / `S-Tab`（`cell.field.next` / `cell.field.prev`） |
@@ -220,7 +220,8 @@ query 里的 `x` 是 vim 的删除字符，所以 query 的 tab 用 `:q` 关闭�
 | COLS 下拉（`cols`） | `/` · `j` / `k` · `space` · `a` · `A` · `J` / `K` · `esc` | 聚焦过滤框 · 移动 · 勾选 · 全选 · 全不选 · 下移 / 上移这一列（M10 F10.3）· 先清空过滤，再按一次关闭。打开时焦点在列表上，PRD 写的「打开时焦点在过滤框」与这些键冲突，按这里做（§18） | Q-04 |
 | session 列表（`sessions`） | `j` / `k` · `l` / `h` · `↵` · `n` · `x` · `$` · `esc` | 移动 · 展开 / 收起（session 下面是它的 window）· attach（停在 window 上时还切到这个 window）· 新建 session（M10 F10.2 起先要名字）· 关闭 · 重命名 · 关闭列表。`n` 原为新建连接：M5 起 session 是工作区，新建连接改为命令 `conn.new`（§18） | S-03 |
 | 命令面板（`palette`） | `↑` / `↓` 或 `C-n` / `C-p` · `Tab` / `S-Tab` · `↵` · `C-t` · `C-y` · `C-e` · `C-f` / `C-b` · `esc` | 移动 · 切换范围 · 执行 · 打开表（同 `↵`）/ 把结果送到结果区 · 复制 CSV · 在 query 中打开 · DDL 预览翻半页（M9 F9.7；`C-u` 仍是输入框的清行）· 关闭 | K-01~K-04、F-04 |
-| 通用下拉（`dropdown`）：schema、ORDER、LIMIT | `C-n` / `C-p` / `↑` / `↓` · `↵` · `esc` | 移动 · 选中 · 关闭。输入直接进过滤框，所以不用 j/k。Action 为 `dropdown.up/down/select/close` | §8.6 |
+| 通用下拉（`dropdown`）：schema、LIMIT 等（ORDER M12 F12.9 起不是） | `C-n` / `C-p` / `↑` / `↓` · `↵` · `esc` | 移动 · 选中 · 关闭。输入直接进过滤框，所以不用 j/k。Action 为 `dropdown.up/down/select/close` | §8.6 |
+| ORDER 浮层（`order`，M12 F12.9） | `/` · `j` / `k` · `space` · `a` · `A` · `↵` · `esc` | 聚焦过滤框 · 移动 · 加入或翻转方向 · 移出 · 清空 · 只按这一列并关闭 · 先清空过滤，再按一次关闭。Action 为 `order.filter/down/up/toggle/remove/clear/only/close` | §7.6 |
 | 补全列表（`complete`） | `Tab` / `C-n` / `↓` · `S-Tab` / `C-p` / `↑` | 下一项 · 上一项，到头绕回；弹出时第一项已选中；列表滚动照 nvim 的补全弹窗，选中项在视图里就不动、出了视图才滚（M13 F13.10，原来有的列表把选中项钉在最底行）。`↵`（接受，文字不变时照常执行）和 `esc`（第一次关列表）由输入框处理，不在这个作用域里 | §9.7 |
 | 确认框（`confirm`） | `y` / `↵` · `n` / `esc` | 确认 · 取消；`C-c` 等同 `esc`；两个按钮都能点击 | §10.5 |
 | 跳转（`jump`） | `esc` · `backspace` · `↵` | 退出 · 删一个字符 · 跳到当前匹配；标签字母由跳转自己处理（M10 F10.8，§6.10） | 新增（M10） |

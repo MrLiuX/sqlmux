@@ -26,10 +26,11 @@ type Dropdown struct {
 
 const dropdownRows = 10
 
-// Box is where d opens: under anchor and left aligned with it, w wide,
-// moved left to stay on screen; rows is how many of its items show.
+// Box is where d opens: under anchor and left aligned with it, w wide or as
+// wide as its hints, moved left to stay on screen; rows is how many of its
+// items show.
 func (d Dropdown) Box(screen, anchor uv.Rectangle, w int) (box uv.Rectangle, rows int) {
-	w = min(w, screen.Dx())
+	w = min(max(w, hintRowWidth(d.Hints)+4), screen.Dx())
 	x := min(anchor.Min.X, screen.Max.X-w)
 	chrome := 4 // border, input, rule | items | border
 	if len(d.Hints) > 0 {

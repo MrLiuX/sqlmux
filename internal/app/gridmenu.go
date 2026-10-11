@@ -49,7 +49,7 @@ func (a *App) columnItems(t *dataTab, cell bool) []menuItem {
 	sort := []menuItem{
 		{i18n.T("按这一列排序 ↑"), func() tea.Cmd { return a.orderOnly(t, col, false) }},
 		{i18n.T("按这一列排序 ↓"), func() tea.Cmd { return a.orderOnly(t, col, true) }},
-		{i18n.T("加入排序"), func() tea.Cmd { return a.orderCycle(t, col) }},
+		{i18n.T("加入排序"), func() tea.Cmd { return a.orderToggle(t, col) }},
 		{i18n.T("隐藏这一列"), func() tea.Cmd { a.hideColumn(t, t.fieldAt(t.col)); return nil }},
 	}
 	if !cell {

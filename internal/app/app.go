@@ -494,6 +494,8 @@ func (a *App) click(p uv.Position) tea.Cmd {
 			return a.histApply(tab, histRow(es, t.I))
 		case a.drop != nil:
 			return a.dropPick(t.I)
+		case a.cols != nil && a.cols.order: // that column alone, as ↵ (F12.9)
+			return a.orderPick(t.I)
 		case a.cols != nil: // a column's row: show or hide it (Q-04)
 			a.colsToggle(t.I)
 		}
@@ -781,7 +783,7 @@ func (a *App) context() keymap.Context {
 	case a.drop != nil:
 		return keymap.Context{Overlay: "dropdown", Mode: keymap.Command}
 	case a.cols != nil && !a.cols.typing:
-		return keymap.Context{Overlay: "cols", Mode: keymap.Command}
+		return keymap.Context{Overlay: a.cols.scope(), Mode: keymap.Command}
 	case a.cols != nil: // its filter: unbound keys are text
 		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Command}
 	case typing != nil && typing.hist != nil: // filtered by the WHERE typed

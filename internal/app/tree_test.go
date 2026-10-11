@@ -243,7 +243,7 @@ func TestPaletteTablesOfConns(t *testing.T) {
 	for _, r := range a.paletteView().Rows {
 		wheres = append(wheres, r.Name+"@"+r.Where)
 	}
-	if got := strings.Join(wheres, " "); got != "agent@doraemon.public agent_version@doraemon.public planner@doraemon.agentable t_order@seed.public planner@seed.s2" {
+	if got := strings.Join(wheres, " "); got != "agent@doraemon.public agent_version@doraemon.public planner@doraemon.agentable t_order@seed.public planner@seed.s2 query_1@" { // the open query after them (F12.10)
 		t.Errorf("order: %s", got)
 	}
 	feed(t, a, "t_order<CR>")
@@ -612,7 +612,7 @@ func TestPaletteTablesFromCatalog(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	feed(t, a, "<C-p>@")
 	names := namesOf(a)
-	if len(names) != 15 || names[0] != "表:agent" || names[14] != "表:planner" {
+	if len(names) != 16 || names[0] != "表:agent" || names[14] != "表:planner" || names[15] != "Query:query_1" { // the open query is the one after them (F12.10)
 		t.Fatalf("tables: %v", names)
 	}
 	if p := a.paletteView().Rows[14]; p.Where != "doraemon.agentable" {

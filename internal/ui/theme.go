@@ -20,7 +20,8 @@ type Theme struct {
 	Border, Focus, Warn      color.Color
 	Cursor, CursorBlur       color.Color
 	Select, Row, RowAlt      color.Color // RowAlt: the grid's zebra rows (§7.6)
-	Visual                   color.Color // a query's VISUAL, an input all selected
+	Visual                   color.Color // a query's VISUAL, an input all selected, the range being selected on a table
+	Selected                 color.Color // a table's records selected for good (F12.12); a theme that has none gets its visual
 	EditedBg                 color.Color
 	Keyword, Info            color.Color
 	Error, ErrorBg           color.Color // ErrorBg: the error bar's (§7.8「错误栏」)
@@ -43,6 +44,7 @@ var TokyonightStorm = &Theme{
 	Cursor: c("#3d59a1"), CursorBlur: c("#2f3549"),
 	Select: c("#364a82"), Row: c("#292e42"), RowAlt: c("#1f2335"),
 	Visual:   c("#2d3f76"),
+	Selected: c("#5c4a1e"),
 	EditedBg: c("#2d2a24"),
 	Keyword:  c("#bb9af7"), Info: c("#7dcfff"),
 	Error: c("#f7768e"), ErrorBg: c("#3b2230"),
@@ -114,6 +116,9 @@ func ParseTheme(data string, icons *Icons) (*Theme, *Icons, error) {
 			return nil, nil, err
 		}
 	}
+	if _, ok := raw["selected"]; !ok {
+		th.Selected = th.Visual // an older theme file: the selection as it was drawn
+	}
 	if _, ok := raw["zoom"]; !ok {
 		th.Zoom = th.Warn // as the theme has it, not as tokyonight-storm's
 	}
@@ -139,6 +144,7 @@ func (th *Theme) tokens() map[string]*color.Color {
 		"cursor": &th.Cursor, "cursor_blur": &th.CursorBlur,
 		"select": &th.Select, "row": &th.Row, "row_alt": &th.RowAlt,
 		"visual":    &th.Visual,
+		"selected":  &th.Selected,
 		"edited_bg": &th.EditedBg,
 		"keyword":   &th.Keyword, "info": &th.Info,
 		"error": &th.Error, "error_bg": &th.ErrorBg,

@@ -56,13 +56,14 @@ const (
 	itemPane
 	itemTab // an open tab, any window's (F4.3)
 	itemTable
+	itemQuery // a query of the Queries node (F12.10)
 	itemCommand
 	itemSQL // a quick SQL from the history
 )
 
 // itemTags name a row's kind. The SQL history, a list of one kind, has
 // none (§12).
-var itemTags = [...]string{itemSession: i18n.N("会话"), itemWindow: i18n.N("窗口"), itemPane: "Pane", itemTab: "Tab", itemTable: i18n.N("表"), itemCommand: i18n.N("命令"), itemSQL: ""}
+var itemTags = [...]string{itemSession: i18n.N("会话"), itemWindow: i18n.N("窗口"), itemPane: "Pane", itemTab: "Tab", itemTable: i18n.N("表"), itemQuery: "Query", itemCommand: i18n.N("命令"), itemSQL: ""}
 
 // scopes are the palette's tabs (K-02). The prefix typed in the input is the
 // only scope state: Tab rewrites it, and palette.command is `>` typed (§12).
@@ -72,12 +73,12 @@ type scopeTab struct {
 }
 
 var scopes = []scopeTab{
-	{i18n.N("所有"), "", []itemKind{itemSession, itemWindow, itemPane, itemTab, itemTable, itemCommand}}, // not the SQL history (§12)
+	{i18n.N("所有"), "", []itemKind{itemSession, itemWindow, itemPane, itemTab, itemTable, itemQuery, itemCommand}}, // not the SQL history (§12)
 	{i18n.N("会话"), "$", []itemKind{itemSession}},
 	{i18n.N("窗口·Pane"), "%", []itemKind{itemWindow, itemPane, itemTab}},
 	{i18n.N("窗口"), "&", []itemKind{itemWindow}},
 	{"Tab", "#", []itemKind{itemTab}},
-	{i18n.N("表"), "@", []itemKind{itemTable}},
+	{i18n.N("表"), "@", []itemKind{itemTable, itemQuery}},
 	{i18n.N("命令"), ">", []itemKind{itemCommand}},
 	{"SQL", ";", []itemKind{itemSQL}}, // what follows the ; is SQL, the history while there is none
 }
@@ -106,7 +107,7 @@ func (it paletteItem) key() itemKey { return itemKey{it.kind, it.id} }
 func (it paletteItem) recent() config.Recent {
 	// never kept for SQL (the history is its own) nor for a tab or a
 	// session (paletteRun), but paletteItems sorts them too
-	kind := [...]string{itemSession: "session", itemWindow: "window", itemPane: "pane", itemTab: "tab", itemTable: "table", itemCommand: "command", itemSQL: "sql"}[it.kind]
+	kind := [...]string{itemSession: "session", itemWindow: "window", itemPane: "pane", itemTab: "tab", itemTable: "table", itemQuery: "query", itemCommand: "command", itemSQL: "sql"}[it.kind]
 	return config.Recent{Kind: kind, ID: it.id}
 }
 
@@ -177,6 +178,9 @@ func (a *App) paletteItems() []paletteItem {
 				}
 			}
 		}
+	}
+	for _, name := range a.queryList() { // after the tables, as the tree lists them (F12.10)
+		items = append(items, paletteItem{itemQuery, name, a.icons.Query, name, a.state.Queries[name].Conn})
 	}
 	var ids []string
 	for id, act := range actions {
@@ -299,7 +303,7 @@ func (a *App) paletteView() ui.Palette {
 		p.Enter = bound(ui.Hint{Key: run, Label: label, Action: "palette.run"})
 	case a.palette.sel < len(ms):
 		it := items[ms[a.palette.sel].Index]
-		enter := [...]string{itemSession: i18n.T("切换"), itemWindow: i18n.T("切换"), itemPane: i18n.T("聚焦"), itemTab: i18n.T("切换"), itemTable: i18n.T("打开"), itemCommand: i18n.T("执行"), itemSQL: i18n.T("执行")}[it.kind]
+		enter := [...]string{itemSession: i18n.T("切换"), itemWindow: i18n.T("切换"), itemPane: i18n.T("聚焦"), itemTab: i18n.T("切换"), itemTable: i18n.T("打开"), itemQuery: i18n.T("打开"), itemCommand: i18n.T("执行"), itemSQL: i18n.T("执行")}[it.kind]
 		if it.kind == itemCommand && actions[it.id].On != nil {
 			enter = i18n.T("切换")
 		}
@@ -416,11 +420,42 @@ func (a *App) previewedView() (c *Conn, text, schema string) {
 // view's by the tables its query names, as a query's (F3.27).
 func (a *App) palettePreview() *ui.PalettePreview {
 	_, c, t, ok := a.previewed()
-	if !ok || !c.ddl[idOf(t)].got {
+	if !ok {
+		return a.queryPreview()
+	}
+	if !c.ddl[idOf(t)].got {
 		return nil
 	}
 	d := c.ddl[idOf(t)]
 	return &ui.PalettePreview{Text: d.text, Err: d.err, Names: a.ddlNames(c, t, d.text), Dialect: c.eng.Dialect(), Top: a.palette.pvTop}
+}
+
+// queryPreviewRows is how many rows of a query file the preview reads.
+const queryPreviewRows = 100
+
+// queryPreview is the first rows of the query the palette's selection is on,
+// colored as a query is by the current connection's catalog; none when the
+// selection is not a query, or it has no file or nothing in it (F12.10).
+// ponytail: read on every frame it is asked for; keep it by the selection if
+// a slow disk shows.
+func (a *App) queryPreview() *ui.PalettePreview {
+	items, ms := a.paletteMatches()
+	if a.palette.sel >= len(ms) || items[ms[a.palette.sel].Index].kind != itemQuery {
+		return nil
+	}
+	text, err := config.ReadQuery(config.QueryPath(items[ms[a.palette.sel].Index].id))
+	if err != nil || strings.TrimSpace(text) == "" {
+		return nil
+	}
+	if lines := strings.SplitAfterN(text, "\n", queryPreviewRows+1); len(lines) > queryPreviewRows {
+		text = strings.Join(lines[:queryPreviewRows], "")
+	}
+	pv := &ui.PalettePreview{Text: text, Top: a.palette.pvTop}
+	if c := a.palette.conn; c != nil {
+		pv.Dialect = c.eng.Dialect()
+		pv.Names, _ = a.sqlNames(c, text, c.Schema, nil)
+	}
+	return pv
 }
 
 // ddlNames are the names in t's DDL text the catalog knows, for their colors:
@@ -625,6 +660,8 @@ func (a *App) paletteDo(it paletteItem) tea.Cmd {
 			}
 			return a.openTable(c, t)
 		}
+	case itemQuery:
+		return a.openQueryFile(it.id)
 	case itemSession:
 		i, _ := strconv.Atoi(it.id)
 		a.attach(a.sessions[i])

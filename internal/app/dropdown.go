@@ -15,14 +15,13 @@ import (
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
-// dropKind is what an open dropdown picks: a table's ORDER or LIMIT (§7.8
+// dropKind is what an open dropdown picks: a table's LIMIT (§7.8
 // 「查询条」), a query's schema (§8.6), connection or transaction mode
 // (§7.8「query 标题」).
 type dropKind int
 
 const (
-	dropOrder dropKind = iota
-	dropLimit
+	dropLimit dropKind = iota
 	dropSchema
 	dropQueryConn
 	dropTx
@@ -126,17 +125,6 @@ func (a *App) dropItems() (items []string, current int) {
 			current = 1
 		}
 		return []string{i18n.T("自动"), i18n.T("手动")}, current
-	case dropOrder: // first the row identity, "默认"; then the columns
-		items = []string{i18n.T("默认")}
-		current = 0
-		for i, f := range d.tab.ordered() { // as the grid has them (F10.3)
-			name := d.tab.page.Cols[f].Name
-			items = append(items, name)
-			if len(d.tab.order) > 0 && name == d.tab.order[0].Col {
-				current = i + 1
-			}
-		}
-		return items, current
 	case dropExport:
 		return exportItems(), 0
 	case dropAuto:
@@ -192,9 +180,6 @@ func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 		if d.kind == dropQueryConn {
 			n += ui.Width(a.connIcon(i).Text) + 1
 		}
-		if d.kind == dropOrder { // the mark before it
-			n += ui.Width(orderMark(d.tab.order, "", 0)) + 1
-		}
 		w = max(w, n+4) // border and padding on both sides
 	}
 	var entry uv.Rectangle
@@ -208,8 +193,6 @@ func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 				entry, w = h.Rect, max(w, r.Max.X-h.Rect.Min.X)
 			}
 		}
-	case dropOrder:
-		entry = a.chipRect(d.pane, d.tab, "grid.order")
 	case dropLimit:
 		entry = a.chipRect(d.pane, d.tab, "grid.limit")
 	case dropTheme, dropLayout:
@@ -258,7 +241,7 @@ func (a *App) dropPick(i int) tea.Cmd {
 	}
 	at := ms[i].Index
 	item := items[at]
-	switch t := d.tab; d.kind {
+	switch d.kind {
 	case dropSchema: // the next run sets it (§8.6)
 		d.query.schema = item
 		return a.keepQuery(d.query)
@@ -273,38 +256,26 @@ func (a *App) dropPick(i int) tea.Cmd {
 	case dropExport:
 		return a.export(a.exportSource(d), at)
 	case dropAuto: // the ticking so far stops; this interval's starts
+		t := d.tab
 		if t.auto, t.autoGen = autoIntervals[at], t.autoGen+1; t.auto == 0 {
 			return nil
 		}
 		return autoTick(t)
-	case dropOrder, dropLimit: // below
-	}
-	switch t := d.tab; d.kind {
-	case dropOrder:
-		switch {
-		case at == 0: // 默认: by the row identity
-			t.order, t.desc = nil, a.newDesc
-		case t.sortsAlone(item): // the column the chip shows first, alone: the other way (§7.8)
-			return a.toggleOrder(t)
-		default: // only this column
-			t.order, t.desc = []db.OrderCol{{Col: item, Desc: a.newDesc}}, false
-		}
 	case dropLimit:
-		t.limit, _ = strconv.Atoi(item)
-	case dropSchema, dropQueryConn, dropTx, dropAuto, dropTheme, dropLayout, dropExport: // above
+		d.tab.limit, _ = strconv.Atoi(item)
 	}
 	d.tab.pageNo = 0
 	return a.fetch(d.tab, false)
 }
 
-// orderMark is what leads an item of the ORDER list: the place of the column
+// orderMark is what leads a column of the ORDER list: the place of the column
 // in the sorting and its way, "1↓", "2↑", blank for one that does not sort;
 // padded to the width of the longest, as the rows line up (F12.1).
-func orderMark(order []db.OrderCol, item string, at int) string {
+func orderMark(order []db.OrderCol, col string) string {
 	w := len(strconv.Itoa(len(order))) + 1
-	i := slices.IndexFunc(order, func(o db.OrderCol) bool { return o.Col == item })
+	i := slices.IndexFunc(order, func(o db.OrderCol) bool { return o.Col == col })
 	mark := ""
-	if at != 0 && i >= 0 { // 默认 is no column
+	if i >= 0 {
 		mark = strconv.Itoa(i+1) + arrow(order[i].Desc)
 	}
 	return mark + strings.Repeat(" ", max(w-ui.Width(mark), 0))
@@ -338,38 +309,24 @@ func (a *App) orderOnly(t *dataTab, col string, desc bool) tea.Cmd {
 	return a.fetch(t, false)
 }
 
-// orderCycle is space on a column of the ORDER list: in the sorting at the
-// end, the way `[grid] order` says; the other way; out of it. The dropdown
-// stays open to go on (F12.1).
-func (a *App) orderCycle(t *dataTab, col string) tea.Cmd {
+// orderToggle is space on a column of the ORDER list, gS and Shift-click on a
+// head: the column joins the sorting at the end, the way `[grid] order` says,
+// or if it is in it goes the other way; out of it is a, not this (F12.9).
+func (a *App) orderToggle(t *dataTab, col string) tea.Cmd {
 	order := slices.Clone(t.order)
-	switch i := slices.IndexFunc(order, func(o db.OrderCol) bool { return o.Col == col }); {
-	case i < 0:
+	if i := slices.IndexFunc(order, func(o db.OrderCol) bool { return o.Col == col }); i < 0 {
 		order = append(order, db.OrderCol{Col: col, Desc: a.newDesc})
-	case order[i].Desc == a.newDesc:
-		order[i].Desc = !a.newDesc
-	default:
-		order = slices.Delete(order, i, i+1)
+	} else {
+		order[i].Desc = !order[i].Desc
 	}
-	t.order, t.desc = order, len(order) == 0 && a.newDesc
-	t.pageNo = 0
-	return a.fetch(t, false)
+	return a.setOrder(t, order)
 }
 
-// dropToggle is space in a dropdown: the column under the cursor goes through
-// ORDER's cycle while the filter is empty; else it is a character of the
-// filter, as in any other.
-func (a *App) dropToggle() tea.Cmd {
-	d := a.drop
-	if d.kind != dropOrder || d.input.Text != "" {
-		a.dropKey("<Space>")
-		return nil
-	}
-	if ms := a.dropMatches(); d.sel < len(ms) && ms[d.sel].Index > 0 { // 默认 is no column
-		items, _ := a.dropItems()
-		return a.orderCycle(d.tab, items[ms[d.sel].Index])
-	}
-	return nil
+// setOrder sorts t by order, from the first page; none is the default, by the
+// row identity.
+func (a *App) setOrder(t *dataTab, order []db.OrderCol) tea.Cmd {
+	t.order, t.desc, t.pageNo = order, len(order) == 0 && a.newDesc, 0
+	return a.fetch(t, false)
 }
 
 // toggleOrder turns t's ORDER the other way, from the first page (§7.8):
@@ -416,9 +373,6 @@ func (a *App) dropView() ui.Dropdown {
 			v.Mark = i
 		}
 		v.Items, v.Pos = append(v.Items, items[m.Index]), append(v.Pos, m.Pos)
-		if a.drop.kind == dropOrder {
-			v.Icons = append(v.Icons, ui.Icon{Text: orderMark(a.drop.tab.order, items[m.Index], m.Index)})
-		}
 		if a.drop.kind == dropQueryConn {
 			v.Notes, v.Icons = append(v.Notes, a.dropNote(m.Index)), append(v.Icons, a.connIcon(m.Index))
 		}

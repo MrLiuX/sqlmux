@@ -189,31 +189,35 @@ func TestPaging(t *testing.T) {
 	}
 }
 
-// ORDER and LIMIT pick from a dropdown under their chip (§7.8).
+// ORDER is a list under its chip, LIMIT a dropdown (§7.8).
 func TestOrderAndLimit(t *testing.T) {
 	a, tab, _ := withRecorder(t)
 	tab.pageNo = 4
 	feed(t, a, "go")
-	if a.drop == nil || a.drop.kind != dropOrder || a.dropView().Items[a.drop.sel] != "默认" {
-		t.Fatalf("go: %+v", a.drop)
+	if a.cols == nil || !a.cols.order || a.cols.sel != 0 || a.mode() != keymap.Command {
+		t.Fatalf("go: %+v", a.cols)
 	}
 	chip := a.chipRect(a.focused(), tab, "grid.order")
-	if box, _ := a.dropBox(a.dropView(), a.hits); chip.Empty() || box.Min.X != chip.Min.X || box.Min.Y != chip.Max.Y {
-		t.Errorf("the dropdown opens under its chip: %v, chip %v", box, chip)
+	if box, _ := a.colsBox(a.colsView()); chip.Empty() || box.Min.X != chip.Min.X || box.Min.Y != chip.Max.Y {
+		t.Errorf("the list opens under its chip: %v, chip %v", box, chip)
 	}
-	feed(t, a, "stat<CR>")
+	feed(t, a, "j<CR>") // status, the second column: keys, not characters
 	answer(a, tab)
-	if !slices.Equal(tab.order, orderOf("status")) || tab.pageNo != 0 || a.drop != nil {
+	if !slices.Equal(tab.order, orderOf("status")) || tab.pageNo != 0 || a.cols != nil {
 		t.Fatalf("status: order %v page %d", tab.order, tab.pageNo)
 	}
-	feed(t, a, "gostat<CR>")
+	feed(t, a, "go")
+	if a.cols.sel != 1 {
+		t.Errorf("it opens on the column sorted by: %d", a.cols.sel)
+	}
+	feed(t, a, "<CR>")
 	answer(a, tab)
 	if !slices.Equal(tab.order, orderOf("status-")) || !strings.Contains(a.render().String(), " ORDER status "+ui.NerdIcons.SortDesc.Text+" ") {
 		t.Errorf("status again: %v", tab.order)
 	}
-	feed(t, a, "go默认<CR>")
+	feed(t, a, "goA<Esc>")
 	answer(a, tab)
-	if len(tab.order) != 0 || !strings.Contains(a.render().String(), " ORDER id "+ui.NerdIcons.SortAsc.Text+" ") {
+	if len(tab.order) != 0 || a.cols != nil || !strings.Contains(a.render().String(), " ORDER id "+ui.NerdIcons.SortAsc.Text+" ") {
 		t.Errorf("default: order %v", tab.order)
 	}
 	feed(t, a, "gl<C-n><CR>")
@@ -224,21 +228,6 @@ func TestOrderAndLimit(t *testing.T) {
 	click(a, a.chipRect(a.focused(), tab, "grid.limit").Min)
 	if a.drop == nil || a.drop.kind != dropLimit {
 		t.Error("clicking the LIMIT chip opens its dropdown")
-	}
-}
-
-// A column named 默认 sorts by itself, not by the row identity: the first
-// item is the default by its place, not its text.
-func TestOrderByAColumnNamedDefault(t *testing.T) {
-	a, tab, _ := withRecorder(t)
-	tab.page.Cols[1].Name = "默认"
-	feed(t, a, "go<C-n><C-n><CR>") // past the default and id
-	if !slices.Equal(tab.order, orderOf("默认")) {
-		t.Fatalf("order %v", tab.order)
-	}
-	feed(t, a, "go")
-	if a.drop.sel != 2 {
-		t.Errorf("the current one is that column: sel %d", a.drop.sel)
 	}
 }
 
@@ -313,10 +302,10 @@ func TestOrderToggle(t *testing.T) {
 		}
 	}
 	click(a, chip.Min)
-	if a.drop == nil || a.drop.kind != dropOrder {
-		t.Error("the chip's label opens the dropdown")
+	if a.cols == nil || !a.cols.order {
+		t.Error("the chip's label opens the list")
 	}
-	a.drop = nil
+	a.cols = nil
 	tab.cols = db.Columns{PK: []string{"occurred_at", "id"}, Cols: tab.cols.Cols}
 	tab.order, tab.desc = nil, false
 	if sql := lastSQL(t, rec, a.run("grid.order.toggle", 0)); !slices.Equal(tab.order, orderOf("occurred_at-")) || !strings.Contains(sql, `order by "occurred_at" desc, "id" limit`) {
@@ -324,9 +313,9 @@ func TestOrderToggle(t *testing.T) {
 	}
 	tab.cols = db.Columns{PK: []string{"note", "id"}, Cols: tab.cols.Cols}
 	tab.order, tab.desc = nil, false
-	feed(t, a, "gonote<CR>") // the dropdown: the key's first column is the chip's, so it turns (§7.8)
+	feed(t, a, "gojjjjj<CR>") // the list: the key's first column is the chip's, so it turns (§7.8)
 	if !slices.Equal(tab.order, orderOf("note-")) {
-		t.Errorf("dropdown on a composite key's first column: %v", tab.order)
+		t.Errorf("list on a composite key's first column: %v", tab.order)
 	}
 	tab.cols = db.Columns{Cols: tab.cols.Cols}
 	tab.order = nil
@@ -482,7 +471,11 @@ func TestColsOrderRepeated(t *testing.T) {
 		t.Errorf("shown: %s", got)
 	}
 	feed(t, a, "go")
-	if items, _ := a.dropItems(); strings.Join(items, " ") != "默认 id amount status paid meta note created_at" {
+	var items []string
+	for _, m := range a.colsMatches() {
+		items = append(items, tab.page.Cols[m.Index].Name)
+	}
+	if strings.Join(items, " ") != "id amount status paid meta note created_at" {
 		t.Errorf("the ORDER list: %v", items)
 	}
 }
@@ -763,12 +756,12 @@ func TestNewTableDefaults(t *testing.T) {
 	}
 	answer(a, tab)
 	a.run("grid.order", 0)
-	feed(t, a, "status<CR>")
+	feed(t, a, "j<CR>")
 	if !slices.Equal(tab.order, orderOf("status-")) {
 		t.Errorf("a column picked: %v", tab.order)
 	}
 	a.run("grid.order", 0)
-	feed(t, a, "默认<CR>") // the default order
+	feed(t, a, "A<Esc>") // the default order
 	if len(tab.order) != 0 || !tab.desc || !strings.Contains(rec.sqls[len(rec.sqls)-1], `order by "id" desc limit`) {
 		t.Errorf("the default picked: order %v desc %v, %s", tab.order, tab.desc, rec.sqls[len(rec.sqls)-1])
 	}
@@ -804,53 +797,75 @@ func TestReopenKeepsTranspose(t *testing.T) {
 	}
 }
 
-// space in the ORDER list takes the column under the cursor through the
-// sorting, the dropdown staying: in at the end, the other way, out; the SQL
-// has them in that order with the row identity after (F12.1).
-func TestOrderCycle(t *testing.T) {
+// space in the ORDER list takes the column under the cursor into the sorting
+// at the end, or turns it, and never out; a takes it out, A all of them; the
+// list stays, and the SQL has them in that order with the row identity after
+// (F12.9).
+func TestOrderToggleKeys(t *testing.T) {
 	a, tab, rec := withRecorder(t)
 	tab.pageNo = 3
-	feed(t, a, "go<Space>") // on 默认: nothing
-	if len(tab.order) != 0 || a.drop == nil || a.drop.input.Text != "" {
-		t.Fatalf("space on 默认: %v, drop %v", tab.order, a.drop)
-	}
-	feed(t, a, "<C-n><C-n>") // status
-	_, cmd := a.Update(teaKey("<Space>"))
-	if !slices.Equal(tab.order, orderOf("status")) || a.drop == nil || tab.pageNo != 0 {
+	feed(t, a, "goj") // status
+	cmd := a.run("order.toggle", 0)
+	if !slices.Equal(tab.order, orderOf("status")) || a.cols == nil || tab.pageNo != 0 {
 		t.Fatalf("status in: %v", tab.order)
 	}
 	if sql := lastSQL(t, rec, cmd); !strings.Contains(sql, `order by "status" asc, "id" limit`) {
 		t.Errorf("sql %s", sql)
 	}
-	feed(t, a, "<Space><C-n>")
+	feed(t, a, "<Space>j")
 	if !slices.Equal(tab.order, orderOf("status-")) {
 		t.Fatalf("status turned: %v", tab.order)
 	}
-	_, cmd = a.Update(teaKey("<Space>")) // amount
+	cmd = a.run("order.toggle", 0) // amount
 	if !slices.Equal(tab.order, orderOf("status-", "amount")) {
 		t.Fatalf("amount in: %v", tab.order)
 	}
 	if sql := lastSQL(t, rec, cmd); !strings.Contains(sql, `order by "status" desc, "amount" asc, "id" limit`) {
 		t.Errorf("sql %s", sql)
 	}
-	if got := a.dropView().Icons; len(got) != 8 || got[0].Text != "  " || got[1].Text != "  " || got[2].Text != "1↓" || got[3].Text != "2↑" {
+	if got := a.colsView().Icons; len(got) != 7 || got[0].Text != "  " || got[1].Text != "1↓" || got[2].Text != "2↑" {
 		t.Errorf("the marks: %+v", got)
 	}
 	answer(a, tab)
 	if got := a.render().String(); !strings.Contains(got, " ORDER status ↓, amount ↑ ") {
 		t.Errorf("the chip: %s", got)
 	}
-	feed(t, a, "<Space><Space>") // amount: turned, out
+	feed(t, a, "<Space><Space>") // amount: turned, turned back
+	if !slices.Equal(tab.order, orderOf("status-", "amount")) {
+		t.Errorf("space twice: %v", tab.order)
+	}
+	feed(t, a, "a") // amount out
 	if !slices.Equal(tab.order, orderOf("status-")) {
 		t.Errorf("amount out: %v", tab.order)
 	}
-	feed(t, a, "<C-p><Space>") // status: out of its turned way
-	if len(tab.order) != 0 || tab.desc {
-		t.Errorf("all out: %v %v", tab.order, tab.desc)
+	feed(t, a, "a") // not in it: nothing
+	if !slices.Equal(tab.order, orderOf("status-")) {
+		t.Errorf("a on a column that is not in: %v", tab.order)
 	}
-	feed(t, a, "st<Space>") // a character of the filter once it has any
-	if a.drop == nil || a.drop.input.Text != "st " || len(tab.order) != 0 {
-		t.Errorf("space in the filter: %q %v", a.drop.input.Text, tab.order)
+	feed(t, a, "kA")
+	if len(tab.order) != 0 || tab.desc || a.cols == nil {
+		t.Errorf("A: %v %v, the list open %v", tab.order, tab.desc, a.cols != nil)
+	}
+	sent := len(rec.sqls)
+	feed(t, a, "A")
+	if len(rec.sqls) != sent {
+		t.Error("A on the default fetches")
+	}
+	feed(t, a, "/st<Space>") // the filter: its characters, space too
+	if a.cols == nil || a.cols.filter.Text != "st " || len(tab.order) != 0 {
+		t.Errorf("space in the filter: %q %v", a.cols.filter.Text, tab.order)
+	}
+	feed(t, a, "<Esc>") // the list has the keys again, the filter kept; esc clears it, then closes
+	if a.cols == nil || a.cols.typing || a.cols.filter.Text != "st " {
+		t.Fatalf("esc in the filter: %+v", a.cols)
+	}
+	feed(t, a, "<Esc>")
+	if a.cols == nil || a.cols.filter.Text != "" {
+		t.Fatalf("esc: %+v", a.cols)
+	}
+	feed(t, a, "<Esc>")
+	if a.cols != nil {
+		t.Error("esc closes")
 	}
 }
 
@@ -860,11 +875,11 @@ func TestOrderCycle(t *testing.T) {
 func TestOrderPickAndToggle(t *testing.T) {
 	a, tab, rec := withRecorder(t)
 	tab.order = orderOf("status-", "amount")
-	feed(t, a, "gostat<CR>")
+	feed(t, a, "go<CR>") // opens on status
 	if !slices.Equal(tab.order, orderOf("status")) {
 		t.Errorf("↵ on a column of several: %v", tab.order)
 	}
-	feed(t, a, "gostat<CR>")
+	feed(t, a, "go<CR>")
 	if !slices.Equal(tab.order, orderOf("status-")) {
 		t.Errorf("↵ on the only one: %v", tab.order)
 	}
@@ -874,7 +889,7 @@ func TestOrderPickAndToggle(t *testing.T) {
 	}
 	a.newDesc = true
 	tab.order = nil
-	feed(t, a, "go<C-n><C-n><Space>")
+	feed(t, a, "goj<Space>")
 	if !slices.Equal(tab.order, orderOf("status-")) {
 		t.Errorf("in the way [grid] order says: %v", tab.order)
 	}
@@ -882,17 +897,17 @@ func TestOrderPickAndToggle(t *testing.T) {
 	if !slices.Equal(tab.order, orderOf("status")) {
 		t.Errorf("turned: %v", tab.order)
 	}
-	feed(t, a, "<Space>")
+	feed(t, a, "a")
 	if len(tab.order) != 0 || !tab.desc {
 		t.Errorf("out: %v, default desc %v", tab.order, tab.desc)
 	}
 }
 
-// The ORDER chip with two columns, and the dropdown with their marks (F12.1).
+// The ORDER chip with two columns, and the list with their marks and keys (F12.9).
 func TestGoldenOrderMulti(t *testing.T) {
 	a, tab, _ := withRecorder(t)
 	tab.order, tab.shown.order = orderOf("status-", "amount"), orderOf("status-", "amount")
-	feed(t, a, "go<C-n><C-n>")
+	feed(t, a, "goj")
 	golden.RequireEqual(t, a.render().String())
 }
 
@@ -926,13 +941,13 @@ func TestOrderMarkWidth(t *testing.T) {
 	for i := range 10 {
 		order = append(order, db.OrderCol{Col: "c" + strconv.Itoa(i), Desc: i%2 == 0})
 	}
-	w := ui.Width(orderMark(order, "c9", 1))
+	w := ui.Width(orderMark(order, "c9"))
 	for i := range 10 {
-		if got := ui.Width(orderMark(order, "c"+strconv.Itoa(i), 1)); got != w {
+		if got := ui.Width(orderMark(order, "c"+strconv.Itoa(i))); got != w {
 			t.Errorf("c%d: %d wide, want %d", i, got, w)
 		}
 	}
-	if got := ui.Width(orderMark(order, "x", 1)); got != w {
+	if got := ui.Width(orderMark(order, "x")); got != w {
 		t.Errorf("not in it: %d wide", got)
 	}
 }
@@ -969,8 +984,8 @@ func TestOrderChangesDoNotShare(t *testing.T) {
 // columns (§7.8): the SQL has "id" once, with the way it was given.
 func TestOrderKeyOnceInSQL(t *testing.T) {
 	a, tab, rec := withRecorder(t)
-	feed(t, a, "go<C-n><C-n><Space><Space><C-p>") // status in and turned, on id
-	_, cmd := a.Update(teaKey("<Space>"))
+	feed(t, a, "goj<Space><Space>k") // status in and turned, on id
+	cmd := a.run("order.toggle", 0)
 	if sql := lastSQL(t, rec, cmd); !strings.Contains(sql, `order by "status" desc, "id" asc limit`) || strings.Contains(sql, `"id" asc, "id"`) {
 		t.Errorf("sql %s, order %v", sql, tab.order)
 	}

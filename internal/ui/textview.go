@@ -63,12 +63,17 @@ func (v TextView) Draw(f *Frame, area uv.Rectangle, bg uv.Style) {
 type TextBox struct {
 	Title string
 	View  TextView
+	Hints []Hint // a row above the bottom border; the last give way when it is too narrow (F12.8)
 }
 
 // Inner is where the text goes in a box: inside the border and a column of
-// padding.
-func (TextBox) Inner(box uv.Rectangle) uv.Rectangle {
-	return uv.Rect(box.Min.X+2, box.Min.Y+1, max(box.Dx()-4, 0), max(box.Dy()-2, 0))
+// padding, and over the hints' row.
+func (b TextBox) Inner(box uv.Rectangle) uv.Rectangle {
+	rows := box.Dy() - 2
+	if len(b.Hints) > 0 && rows > 1 {
+		rows--
+	}
+	return uv.Rect(box.Min.X+2, box.Min.Y+1, max(box.Dx()-4, 0), max(rows, 0))
 }
 
 func (b TextBox) Draw(f *Frame, box uv.Rectangle) {
@@ -90,6 +95,13 @@ func (b TextBox) Frame(f *Frame, box uv.Rectangle) bool {
 	border.Draw(f.Buf, box)
 	if b.Title != "" {
 		f.Text(box.Min.X+2, box.Min.Y, box.Max.X-1, " "+b.Title+" ", uv.Style{Fg: th.Focus, Bg: th.PaneBg, Attrs: uv.AttrBold})
+	}
+	if hs := b.Hints; len(hs) > 0 && box.Dy() > 3 {
+		x0, x1 := box.Min.X+2, box.Max.X-2
+		for len(hs) > 1 && hintRowWidth(hs) > x1-x0 {
+			hs = hs[:len(hs)-1]
+		}
+		hintRow(f, x0, box.Max.Y-2, x1, hs, uv.Style{Fg: th.Dim, Bg: th.PaneBg}, Target{Kind: KindButton})
 	}
 	return true
 }

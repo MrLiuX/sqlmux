@@ -17,6 +17,8 @@ type GridCol struct {
 	Name string
 	PK   bool // header gets the key icon
 	Type ColType
+	Sort Icon // the way it is sorted by: after the name, in warn; none when its Text is empty (F12.7)
+	Rank int  // its place among several columns sorted by, 1 on; 0 for no number
 }
 
 // ColType is the class of a column's values: it picks their color, and
@@ -68,6 +70,9 @@ type Grid struct {
 	// Selected are the records selected: their numbers on the visual
 	// background; FlashNums those whose numbers a yank of them flashes (F10.7)
 	Selected, FlashNums map[int]bool
+	// Ranged are the records the range being selected covers, in VISUAL or
+	// UNSET: on the visual background over the selected ones (F12.12)
+	Ranged map[int]bool
 
 	// Widest keeps the widest value of each column of the page between frames
 	// (F11.4); nil measures every frame.
@@ -182,7 +187,11 @@ func (v view) head(c int) string {
 	if v.g.Transpose {
 		return v.g.number(c)
 	}
-	return v.g.header(v.g.Cols[c])
+	h := v.g.header(v.g.Cols[c])
+	if m := v.g.sortMark(v.g.Cols[c]); m != "" {
+		h += " " + m
+	}
+	return h
 }
 
 // label is what leads screen row r: a record's number, or a field's name.
@@ -219,6 +228,17 @@ func (g Grid) header(col GridCol) string {
 		return g.Key.Text + " " + col.Name
 	}
 	return col.Name
+}
+
+// sortMark is what shows how col is sorted by: "↓", or "2↑" when several are.
+func (g Grid) sortMark(col GridCol) string {
+	if col.Sort.Text == "" {
+		return ""
+	}
+	if col.Rank > 0 {
+		return strconv.Itoa(col.Rank) + col.Sort.Text
+	}
+	return col.Sort.Text
 }
 
 // labelWidth is the width of the column that leads each row.
@@ -437,6 +457,13 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 	for i, c := range cols {
 		right := min(cellX(i)+ws[c], area.Max.X)
 		h := Truncate(v.head(c), ws[c])
+		var mark string
+		if !g.Transpose {
+			// the mark outlives the name's tail when they do not both fit (F12.7)
+			if mark = g.sortMark(g.Cols[c]); mark != "" {
+				h = Truncate(g.header(g.Cols[c]), max(ws[c]-Width(mark)-1, 0))
+			}
+		}
 		switch {
 		case g.Transpose:
 			rowNo(uv.Rect(cellX(i)-1, y, ws[c]+2, 1), c)
@@ -449,6 +476,9 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 				f.Region(uv.Rect(cellX(i)-1, y, ws[c]+2, 1).Intersect(area), Target{Kind: KindHead, Pane: g.Pane, I: c})
 			}
 			f.Text(cellX(i), y, right, h, name)
+			if mark != "" {
+				f.Text(min(cellX(i)+Width(h)+1, right), y, right, mark, g.Cols[c].Sort.On(uv.Style{Fg: th.Warn, Bg: th.PaneBg}))
+			}
 			if g.Cols[c].PK && g.Key.Fg != nil { // the key icon keeps its own color (§7.7)
 				f.Text(cellX(i), y, right, g.Key.Text, g.Key.On(name))
 			}
@@ -608,14 +638,20 @@ func drawCell(f *Frame, x, y, right int, s string, st, mark uv.Style) {
 }
 
 // markNumber paints the cell of record rec's number, whose text is drawn in
-// st: on the visual background when the record is selected, in the yank's
-// colors while its yank flashes (F10.7).
+// st: on the visual background when it is in the range being selected, the
+// selected one when it is selected, in the yank's colors while its yank
+// flashes (F10.7, F12.12).
 func (g Grid) markNumber(f *Frame, st *uv.Style, cell uv.Rectangle, rec int) {
 	switch {
 	case g.FlashNums[rec]:
 		st.Fg, st.Bg = f.Theme.Bg, f.Theme.Yank
-	case g.Selected[rec]:
+	case g.Ranged[rec]:
 		st.Bg = f.Theme.Visual
+	case g.Selected[rec]:
+		st.Bg = f.Theme.Selected
+		if st.Fg == f.Theme.Dim { // the dim number would not read on it
+			st.Fg = f.Theme.Fg
+		}
 	default:
 		return
 	}
