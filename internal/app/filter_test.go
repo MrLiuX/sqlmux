@@ -402,3 +402,34 @@ func TestGridMenuResult(t *testing.T) {
 		}
 	}
 }
+
+// O opens the value editor as e does; fv filters by the cell as * does, fe
+// exports as ge does; fc hides the column under the cursor as COLS does, the
+// cursor on the one next to it (F12.11).
+func TestGridFGroup(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	feed(t, a, "llO") // amount
+	if a.value == nil {
+		t.Fatal("O: no value editor")
+	}
+	feed(t, a, ":q!<CR>")
+	feed(t, a, "fv")
+	if !strings.Contains(tab.where.Text, "amount") {
+		t.Errorf("fv: WHERE %q", tab.where.Text)
+	}
+	feed(t, a, "fe")
+	if a.drop == nil || a.drop.kind != dropExport {
+		t.Fatal("fe: no export list")
+	}
+	feed(t, a, "<Esc>")
+	before := len(tab.shownCols())
+	feed(t, a, "fc")
+	if got := len(tab.shownCols()); got != before-1 || !tab.hidden["amount"] || tab.page.Cols[tab.fieldAt(tab.col)].Name != "paid" {
+		t.Errorf("fc: %d shown, hidden %v, cursor on %q", got, tab.hidden, tab.page.Cols[tab.fieldAt(tab.col)].Name)
+	}
+	feed(t, a, "T")
+	feed(t, a, "fc") // turned: the field under the cursor
+	if !tab.hidden["paid"] {
+		t.Errorf("fc turned: hidden %v", tab.hidden)
+	}
+}
