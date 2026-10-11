@@ -446,7 +446,7 @@ func TestValueMouse(t *testing.T) {
 	a.View()
 	at := func(line, col int) uv.Position {
 		ed := a.value.ed
-		text := ui.Query{Lines: ed.Lines()}.TextArea(ui.TextBox{}.Inner(a.popupBox()))
+		text := ui.Query{Lines: ed.Lines()}.TextArea(a.valueText())
 		return uv.Pos(text.Min.X+col, text.Min.Y+line)
 	}
 	p := at(3, 5) // the first "a" of tags
@@ -499,5 +499,60 @@ func TestValuePlainSelectionFirst(t *testing.T) {
 		if feed(t, a, k); a.value != nil {
 			t.Errorf("%s again does not close", k)
 		}
+	}
+}
+
+// The box is under the cell, from its left edge and the row after it, half the
+// pane wide; with fewer than 8 rows below and more above it is over the cell,
+// its bottom border on the row above; a pane of 20 columns or less is all of it
+// (F12.8).
+func TestValueBoxPlacement(t *testing.T) {
+	cellOf := func(a *App) (cell, pane uv.Rectangle) {
+		p := a.focused()
+		_, g, area, _ := a.gridOf(p)
+		return g.CellRect(area), bodyRect(a.layout()[p.ID])
+	}
+	a, _ := valueTab(t)
+	cell, pane := cellOf(a)
+	box := a.valueBox()
+	if box.Min.X != cell.Min.X || box.Min.Y != cell.Max.Y || box.Max.Y != pane.Max.Y || box.Dx() != pane.Dx()/2 {
+		t.Errorf("room below: box %v, cell %v, pane %v", box, cell, pane)
+	}
+	b := wide(160, 22)
+	loadOrders(t, b, 60)
+	feed(t, b, "9j4le")
+	cell, pane = cellOf(b)
+	box = b.valueBox()
+	if cell.Max.Y+valueMinRows <= pane.Max.Y || box.Max.Y != cell.Min.Y || box.Min.Y != pane.Min.Y {
+		t.Errorf("no room below: box %v, cell %v, pane %v", box, cell, pane)
+	}
+	golden.RequireEqual(t, b.render().String())
+	// the right edge of the pane: moved left to stay in it
+	feed(t, a, "<Esc>")
+	feed(t, a, "$e")
+	cell, pane = cellOf(a)
+	if box = a.valueBox(); box.Max.X > pane.Max.X || box.Min.X > cell.Min.X {
+		t.Errorf("the last column: box %v, cell %v, pane %v", box, cell, pane)
+	}
+}
+
+// The keys under the text are the keymap's, the last ones given up when the
+// box is narrow, and a value that is read only has two (F12.8).
+func TestValueHints(t *testing.T) {
+	a, tab := valueTab(t)
+	if s := a.render().String(); !strings.Contains(s, "esc 关闭 · C-s 写回并关闭 · :w 写回 · gqq 格式化 JSON") {
+		t.Errorf("hints:\n%s", s)
+	}
+	feed(t, a, "<Esc>")
+	tab.conn.readOnly = true
+	feed(t, a, "e")
+	if s := a.render().String(); !strings.Contains(s, "esc 关闭 · y 复制") || strings.Contains(s, "gqq") {
+		t.Errorf("read only:\n%s", s)
+	}
+	n := wide(60, 30) // a box of 40: the last of them does not fit
+	loadOrders(t, n, 3)
+	feed(t, n, "4le")
+	if s := n.render().String(); !strings.Contains(s, "esc 关闭 ·") || strings.Contains(s, "gqq") {
+		t.Errorf("narrow:\n%s", s)
 	}
 }

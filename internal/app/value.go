@@ -89,11 +89,62 @@ func (a *App) valueActive() bool { return a.value != nil && a.confirm == nil }
 // text is what the editor holds.
 func (v *valueEditor) text() string { return strings.Join(v.ed.Lines(), "\n") }
 
+// valueBox is where the editor is: left at the cursor's cell and from the row
+// under it down to the foot of the pane, half the pane wide (40 at least, the
+// pane at most); over the cell, its bottom border on the row above it, when
+// the rows below are fewer than 8 and fewer than those above (F12.8).
+func (a *App) valueBox() uv.Rectangle {
+	p := a.focused()
+	pane := bodyRect(a.layout()[p.ID])
+	cell := uv.Rect(pane.Min.X, pane.Min.Y, 0, 1) // a cell scrolled out of sight: from the pane's top
+	// ponytail: the grid is made again on every call; a page of thousands of rows wants the cell kept
+	if _, g, area, ok := a.gridOf(p); ok {
+		if r := g.CellRect(area); !r.Empty() {
+			cell = r
+		}
+	}
+	w := min(max(pane.Dx()/2, 40), pane.Dx())
+	x := max(min(cell.Min.X, pane.Max.X-w), pane.Min.X)
+	below, above := pane.Max.Y-cell.Max.Y, cell.Min.Y-pane.Min.Y
+	if below < valueMinRows && above > below {
+		return uv.Rect(x, pane.Min.Y, w, above)
+	}
+	return uv.Rect(x, cell.Max.Y, w, below)
+}
+
+// valueMinRows is the fewest rows the value editor's box has when there is
+// room for them.
+const valueMinRows = 8
+
+// valueText is where the editor's text goes in its box.
+func (a *App) valueText() uv.Rectangle { return a.valueTextBox().Inner(a.valueBox()) }
+
+// valueTextBox is the editor's box: the column and the type for a title, the
+// keys under the text, from the keymap where there is a key (F12.8).
+func (a *App) valueTextBox() ui.TextBox {
+	v := a.value
+	hs := []ui.Hint{{Key: a.keys.Hint("value.leave", "value"), Label: i18n.T("关闭"), Action: "value.leave"}}
+	switch {
+	case a.plain: // no : commands, no gq
+		if !v.readOnly {
+			hs = append(hs, ui.Hint{Key: a.keys.Hint("value.save", "value"), Label: i18n.T("写回并关闭"), Action: "value.save"})
+		}
+	case v.readOnly:
+		hs = append(hs, ui.Hint{Key: "y", Label: i18n.T("复制")})
+	default:
+		hs = append(hs,
+			ui.Hint{Key: a.keys.Hint("value.save", "value"), Label: i18n.T("写回并关闭"), Action: "value.save"},
+			ui.Hint{Key: ":w", Label: i18n.T("写回")},
+			ui.Hint{Key: "gqq", Label: i18n.T("格式化 JSON")})
+	}
+	return ui.TextBox{Title: v.title, Hints: bound(hs...)}
+}
+
 // valueSize gives the editor the size of its box, which H M L, C-d and the
 // scrolling go by.
 func (a *App) valueSize() {
 	ed := a.value.ed
-	text := ui.Query{Lines: ed.Lines()}.TextArea(ui.TextBox{}.Inner(a.popupBox()))
+	text := ui.Query{Lines: ed.Lines()}.TextArea(a.valueText())
 	ed.TabWidth, ed.AutoPairs = a.tabWidth, a.autoPairs
 	ed.SetHeight(text.Dy())
 	ed.SetWidth(text.Dx())
@@ -103,7 +154,7 @@ func (a *App) valueSize() {
 func (a *App) valueAt(p uv.Position) (int, int) {
 	a.valueSize()
 	ed := a.value.ed
-	text := ui.Query{Lines: ed.Lines()}.TextArea(ui.TextBox{}.Inner(a.popupBox()))
+	text := ui.Query{Lines: ed.Lines()}.TextArea(a.valueText())
 	return ed.Top() + p.Y - text.Min.Y, max(ed.Left()+p.X-text.Min.X, 0)
 }
 
@@ -133,14 +184,12 @@ func (a *App) valueView() ui.Query {
 
 // drawValue paints the box over the frame.
 func (a *App) drawValue(f *ui.Frame) {
-	box := a.popupBox()
-	tb := ui.TextBox{Title: a.value.title}
+	box, tb := a.valueBox(), a.valueTextBox()
 	if !tb.Frame(f, box) {
 		return
 	}
-	inner := tb.Inner(box)
 	a.valueSize()
-	if cur := a.valueView().Draw(f, inner); cur.X >= 0 {
+	if cur := a.valueView().Draw(f, tb.Inner(box)); cur.X >= 0 {
 		f.Cursor = &cur
 	}
 }
