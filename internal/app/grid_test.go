@@ -585,7 +585,9 @@ func TestGridWidthsFollowTheData(t *testing.T) {
 	tab := loadOrders(t, a, 3)
 	a.View()
 	const long = "a note longer than the others"
-	tab.page.Rows[1][5] = db.Val{S: long} // a new page, as a refresh brings it
+	_, cols, page := ordersTable(3) // a new page, as a refresh brings it
+	page.Rows[1][5] = db.Val{S: long}
+	a.Update(pageMsg{tab: tab, seq: tab.seq, cols: cols, page: page})
 	if !strings.Contains(a.render().String(), long) {
 		t.Error("the new page's longest value is cut")
 	}
@@ -597,4 +599,42 @@ func TestGridWidthsFollowTheData(t *testing.T) {
 	if !strings.Contains(a.render().String(), long[:20]) {
 		t.Error("the turned table")
 	}
+}
+
+// The same page is measured once however many keys are pressed and frames
+// drawn: a table's, whose grid is made again each frame, and a result's
+// (F11.4).
+func TestGridMeasuresAPageOnce(t *testing.T) {
+	a, tab := scrollTable(t)
+	if !strings.Contains(a.render().String(), "任务") {
+		t.Fatal("the table has no heavy rows")
+	}
+	r := scrollResult(t)
+	for name, c := range map[string]struct {
+		a *App
+		w *ui.Widest
+	}{"table": {a, tab.widest}, "result": {r, resultOf(r.focused()).widest}} {
+		if c.w == nil || c.w.Passes != 1 {
+			t.Fatalf("%s: measured %+v", name, c.w)
+		}
+		feed(t, c.a, "jjjkj")
+		c.a.View()
+		if c.w.Passes != 1 {
+			t.Errorf("%s: measured %d times", name, c.w.Passes)
+		}
+	}
+}
+
+// A column hidden, a page with no rows (a WHERE nothing matches), the column
+// shown again: the page of no values is of three columns now (F11.4).
+func TestGridColumnShownOverAnEmptyPage(t *testing.T) {
+	a := wide(160, 45)
+	tab := loadOrders(t, a, 3)
+	tab.hidden["status"] = true
+	a.render()
+	_, cols, page := ordersTable(0)
+	a.Update(pageMsg{tab: tab, seq: tab.seq, cols: cols, page: page})
+	a.render()
+	delete(tab.hidden, "status")
+	a.render()
 }

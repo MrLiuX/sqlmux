@@ -79,15 +79,17 @@ type Grid struct {
 // times (F11.4). A page whose values are not the same ones, or turned, is
 // measured again, so nothing has to say that the data changed.
 type Widest struct {
+	Passes    int      // how many times a page was measured: a test or a benchmark reads it
 	vals      []db.Val // the page, record by record
 	rows      int
+	cols      int // of the grid, so a page with no rows is of its columns too
 	transpose bool
 	w         []int
 }
 
 // same is whether the page of g, turned or not, is the one w measured.
 func (w *Widest) same(g Grid) bool {
-	if w.w == nil || w.rows != len(g.Rows) || w.transpose != g.Transpose {
+	if w.w == nil || w.rows != len(g.Rows) || w.cols != len(g.Cols) || w.transpose != g.Transpose {
 		return false
 	}
 	i := 0
@@ -102,7 +104,7 @@ func (w *Widest) same(g Grid) bool {
 			i++
 		}
 	}
-	return i == len(w.vals)
+	return true
 }
 
 // maxColWidth caps a column's wish (§7.6).
@@ -242,7 +244,8 @@ func (v view) widest() []int {
 		}
 	}
 	if w != nil {
-		w.vals, w.rows, w.transpose, w.w = w.vals[:0], len(v.g.Rows), v.g.Transpose, out
+		w.Passes++
+		w.vals, w.rows, w.cols, w.transpose, w.w = w.vals[:0], len(v.g.Rows), len(v.g.Cols), v.g.Transpose, out
 		for _, row := range v.g.Rows {
 			w.vals = append(w.vals, row...)
 		}
