@@ -276,6 +276,7 @@ func (e *Editor) Replace(from, to Pos, text string) Effect {
 	e.insertLines(from.Line+1, ls[1:]...)
 	n := from.Line + last
 	e.cur, e.want = Pos{n, firstNonBlank(e.lines[n])}, wantUnset
+	e.left = 0 // the lines are others, laid out anew: the view of the old ones is no view of them, and sidescroll would keep what the cursor's few columns left of it do not need to move (F14.8)
 	e.settle()
 	if e.plain { // INSERT has no step to end it
 		e.endChange()

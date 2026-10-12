@@ -103,3 +103,21 @@ func TestFormatPrg(t *testing.T) {
 		t.Errorf("%q, toast %q", text(c), a.toast)
 	}
 }
+
+// A line long enough to scroll the view sideways, gqq'd into lines that need no
+// scroll: the text shows from its first column (F14.8).
+func TestFormatViewFromTheLeft(t *testing.T) {
+	a, c := inQuery(t, "", "")
+	long := "select id, name, email, created_at, deleted_at from t_user where id = 1 and name = 'a' order by id"
+	a.queryDid(c, c.ed.Load(long))
+	feed(t, a, "$")
+	a.render()
+	if c.ed.Left() == 0 {
+		t.Fatalf("the long line did not scroll the view: cursor %v, left %d", c.ed.Cursor(), c.ed.Left())
+	}
+	gqIn(t, a, "gqq")
+	a.render()
+	if c.ed.Left() != 0 || strings.Contains(text(c), long) {
+		t.Errorf("after gqq: left %d, text %q", c.ed.Left(), text(c))
+	}
+}
