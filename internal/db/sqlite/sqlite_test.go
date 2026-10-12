@@ -618,6 +618,15 @@ func TestCatalogSQLiteWays(t *testing.T) {
 	if cs := cols("t_ck"); strings.Join(cs.PK, ",") != "a,b" || cs.Cols[0].Name != "b" {
 		t.Errorf("t_ck: the key in its own order: %+v", cs.PK)
 	}
+	// a rowid table's primary key that may be NULL finds no row by =: the rowid is the identity
+	q(t, c, "create table t_nullpk (a text, b text not null, primary key (a, b))")
+	q(t, c, "create table t_nullpk1 (a text primary key, b text)")
+	q(t, c, "create table t_nullpk_wr (a text primary key, b text) without rowid")
+	for table, want := range map[string]string{"t_nullpk": "rowid", "t_nullpk1": "rowid", "t_nullpk_wr": "a", "t_user": "id"} {
+		if cs := cols(table); strings.Join(cs.Key(), ",") != want {
+			t.Errorf("%s: the key is %v, not %s", table, cs.Key(), want)
+		}
+	}
 	for table, alias := range map[string]bool{"t_user": true, "t_misc": true, "t_int": false, "t_desc": false, "t_kv": false, "t_free": false} {
 		cs := cols(table)
 		got := false

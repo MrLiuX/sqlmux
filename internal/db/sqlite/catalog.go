@@ -111,8 +111,17 @@ func (Engine) TableColumns(ctx context.Context, c db.Conn, _, table string) (db.
 			out.Unique = append(out.Unique, names)
 		}
 	}
+	alias := false // INTEGER PRIMARY KEY, the rowid's name: never NULL, though not declared NOT NULL
 	if i := slices.IndexFunc(out.Cols, func(col db.Column) bool { return len(out.PK) == 1 && col.Name == out.PK[0] }); i >= 0 && rowid && aliased && strings.EqualFold(out.Cols[i].Type, "integer") {
 		out.Cols[i].Default = "rowid"
+		alias = true
+	}
+	// a primary key of a rowid table may hold NULLs unless declared NOT NULL, and
+	// = finds no row by one: it is no identity, a unique index or the rowid is
+	if rowid && !alias && slices.ContainsFunc(out.PK, func(n string) bool {
+		return !out.Cols[slices.IndexFunc(out.Cols, func(col db.Column) bool { return col.Name == n })].NotNull
+	}) {
+		out.PK = nil
 	}
 	for _, k := range out.Key() { // a blob's bytes are no text to find a row by (MySQL's too)
 		for _, col := range out.Cols {

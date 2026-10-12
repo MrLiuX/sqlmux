@@ -132,7 +132,7 @@ tester 2026-10-12 在 F14.1 e2e 时发现，6472fcd 上就有、引擎无关：q
 - **涉及**：`internal/app`（query）或 `internal/editor`
 
 **开发**
-- [ ] 找根因（格式化替换缓冲区后没按新光标重算横向偏移），改在共用的那一处；不加「格式化后把视口归零」的特判。
+- [ ] 照 nvim 的 `formatprg` 路径（ex_cmds.c `do_filter`：过滤后光标放到第 0 列、leftcol 重算）在 `Editor.Replace` 里把横向偏移归零，注释引用它；nvim 0.12.4 实测走 formatexpr 时 leftcol 也停在 2，走 formatprg 时归零，五个用例和后者一致（审查时定；原来写的「不加归零特判」撤回）。
 
 **验收**
 - [ ] 单测：`gqq` 后视口左边是 0。
