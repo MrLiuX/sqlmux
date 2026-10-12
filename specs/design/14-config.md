@@ -35,7 +35,7 @@
   - 做法照 gettext：中文原文就是 key，`en` 是一张「中文 → 英文」的表，找不到就显示原文。这样现有代码只需要把字符串包一层，不用先给每条文案起名字。带参数的文案用占位符（如「已保存 %d 行」）。
   - 命令面板按当前语言的标题搜索，action id 照旧可以搜。
   - 键位文字不属于文案，照旧从 keymap 读（§6.7）。
-  - 读到 config.toml 之前显示的文字一律是英文（F7.6）：`sqlmux` 命令行的用法说明、flag 说明和错误、解析 config.toml / keymaps.toml 的错误（语言就是正在读的内容之一），直接用英文写，不走 `T`；`i18n` 没 `Set` 之前就是英文，所以主题文件的错误照旧走 `T`，启动时读到的也是英文，运行中 `theme.switch` 读坏文件时跟着语言；config 读完之后的启动错误、`sqlmux keys` 的输出（含 `--format toml` 里的注释）跟着语言（F6.4 定）。config.toml 和 connections.toml 里不认识的键（拼错的 `readonly`、放错层的 `max_rows`）不再静默忽略：启动后 toast 警告列出键名和所在连接，不阻止启动（M13 F13.5；主题文件照旧是错误）。
+  - 读到 config.toml 之前显示的文字一律是英文（F7.6）：`sqlmux` 命令行的用法说明、flag 说明和错误、解析 config.toml / keymaps.toml 的错误（语言就是正在读的内容之一），直接用英文写，不走 `T`；`i18n` 没 `Set` 之前就是英文，所以主题文件的错误照旧走 `T`，启动时读到的也是英文，运行中 `theme.switch` 读坏文件时跟着语言；config 读完之后的启动错误、`sqlmux keys` 的输出（含 `--format toml` 里的注释）跟着语言（F6.4 定）。config.toml 和 connections.toml 里不认识的键（拼错的 `readonly`、放错层的 `max_rows`）不再静默忽略：启动后 toast 警告列出键名和所在连接，不阻止启动（M13 F13.5；主题文件 M14 F14.7 起同样，§7.7）。
   - key 仍是中文原文（F7.6 时定）：改成英文 key 要动 300 多处文案且不改任何行为，不值；代价是读代码的人看到的是中文 key，`en` 表就是对照。
   - 测试：单测扫一遍所有包，找出没走翻译的中文字面量；`en` 表里缺的条目也由单测报出来。单测和 golden 照旧按 `zh` 断言（各包的 TestMain 里 `Set("zh")`），`en` 的几张 golden 照旧，默认是英文这件事由 i18n / config / cmd 的单测直接盖；e2e 的 `lib.sh` 在每个脚本的 config.toml 里补 `language = "zh"`（脚本自己写了就不补，同 `confirm_dangerous`），已有的中文断言不动，默认英文和 `language = "zh"` 各由一个脚本验证。
 - **布局文件**（M6 F6.5，用户 2026-09-30 提出，细节 2026-10-05 按 worker 的提议定）：
