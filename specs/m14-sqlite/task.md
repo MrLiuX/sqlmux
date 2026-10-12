@@ -4,11 +4,11 @@
 - **目标**：SQLite（无 cgo）和命令行直接给 DSN / 文件，查询历史，树上的索引 / 键 / 函数 / 序列，结构修改的模板 SQL，表格的 JSON 视图，MySQL 取消的兜底。
 - **范围**：tech-design §4（`internal/db/sqlite`、modernc）、§5、§7.6（JSON 视图）、§7.8（树）、§8（SQLite 的 catalog、行标识 rowid；MySQL 取消的截止时间）、§9（SQLite 方言）、§11（历史）、§14（`history.jsonl`、`[query] history_max`、命令行 DSN）、§15。
 - **依赖**：M13 passed（用户 2026-10-12 定：不等验收，直接开工；验收意见进后续迭代）。
-- **完成标准**：F14.1–F14.6 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m14`。
+- **完成标准**：F14.1–F14.7 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m14`。
 - **审查节点**（小的、不依赖 SQLite 的先做，worker 提议、决策者同意）：
   1. F14.2 之后：F14.6、F14.2 一批（MySQL 取消兜底、查询历史）；
   2. F14.1 之后：F14.1 单独一批（SQLite）；
-  3. F14.5 之后：F14.3–F14.5 一批（树上的对象、结构模板、JSON 视图）。
+  3. F14.7 之后：F14.3–F14.5、F14.7 一批（树上的对象、结构模板、JSON 视图、主题未知键降级为警告）。
 
 **驱动已定**（2026-10-12，worker 量数：Go 1.26.3 darwin/arm64，CGO_ENABLED=0 -trimpath -s -w；现在 22.9 MB、冷编译 6.6s）：`modernc.org/sqlite` v1.60.1，二进制 +3.8 MB、冷编译 8.0s、7 个它自己的依赖；`ncruces/go-sqlite3` v0.35.6 是 +5.6 MB、9.5s、wasm 运行时，速度没有优势（20 万行插入 370ms 对 330ms，读 130ms 对 120ms）。F14.1 里要验证四个 goreleaser 目标交叉编译都过。
 
@@ -106,3 +106,18 @@ M13 F13.6 审查时发现：MySQL 的 Query 用 WithoutCancel 发语句，取消
 - [ ] 单测：JSON 文字与 `Y` 一致；转置时切 JSON 关掉转置。
 - [ ] golden：JSON 视图。
 - [ ] e2e：`grid.view.json` 后内容区是 JSON、`]` 翻页内容变、`esc` 回表格。
+
+## F14.7 主题文件的未知键降级为警告 · 状态：todo
+
+用户 2026-10-12：brew 装的 v0.2.1 读到新版才有的 `selected` 色键直接退出（`There is no token called selected`），配置文件带着新键就不能用旧版本。config.toml、connections.toml 的未知键 M13 F13.5 已经是 toast 警告，主题文件还是启动错误，不一致。
+
+- **依赖**：F13.5
+- **涉及**：`internal/ui`（theme）、`internal/config`
+
+**开发**（§7.7、§14）
+- [ ] 主题文件里不认识的色键和 `[icon]` 名字同 F13.5：忽略它、启动后 toast「<主题文件>: 不认识的键 selected」，不阻止启动；颜色值格式错仍是启动错误。
+- [ ] 细节（已定）：错误文案里不再出现 BurntSushi 的 `There is no token called`，用 F13.5 的那句。
+
+**验收**
+- [ ] 单测：主题多一个未知键能加载、警告列出键名；坏的颜色值仍报错。
+- [ ] e2e：带未知键的主题启动后有 toast。
