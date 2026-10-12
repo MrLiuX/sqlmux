@@ -37,6 +37,9 @@ func UnknownKeys(c *Config) (lines []string) {
 	if len(c.Unknown) > 0 {
 		lines = append(lines, i18n.T("config.toml: 不认识的键 %s", strings.Join(c.Unknown, ", ")))
 	}
+	if c.ThemeNote != "" {
+		lines = append(lines, c.ThemeNote)
+	}
 	data, err := os.ReadFile(connectionsPath())
 	if err != nil {
 		return lines

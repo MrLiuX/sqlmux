@@ -23,7 +23,7 @@ func TestThemeFileNamesEverything(t *testing.T) {
 }
 
 func TestParseTheme(t *testing.T) {
-	th, ic, err := ParseTheme(`
+	th, ic, _, err := ParseTheme(`
 row = "#6c6a6d"
 string = "#FFD866"
 match = "#00ff00"
@@ -59,24 +59,44 @@ func TestThemeZoomDefaultsToWarn(t *testing.T) {
 		{`warn = "#112233"`, "#112233"},
 		{`warn = "#112233"` + "\n" + `zoom = "#445566"`, "#445566"},
 	} {
-		th, _, err := ParseTheme(tc.file, ASCIIIcons)
+		th, _, _, err := ParseTheme(tc.file, ASCIIIcons)
 		if err != nil || th.Zoom != c(tc.want) {
 			t.Errorf("%q: zoom %v, want %s (%v)", tc.file, th.Zoom, tc.want, err)
 		}
 	}
 }
 
+// A color that is no #rrggbb is an error, naming the key.
 func TestParseThemeErrors(t *testing.T) {
 	for data, want := range map[string]string{
-		`rwo = "#000000"`:                      "rwo",
-		`row = "red"`:                          "row",
-		`row = 1`:                              "row",
-		"[icon]\nconsol = { text = \"C\" }":    "consol",
-		"[icon]\nquery = { fg = \"#f00\" }":    "icon.query.fg",
-		"[icon]\nquery = { bg = \"#ff0000\" }": "icon.query.bg",
+		`row = "red"`:                       "row",
+		`row = 1`:                           "row",
+		"[icon]\nquery = { fg = \"#f00\" }": "icon.query.fg",
 	} {
-		if _, _, err := ParseTheme(data, NerdIcons); err == nil || !strings.Contains(err.Error(), want) {
+		if _, _, _, err := ParseTheme(data, NerdIcons); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%q: error %v should name %s", data, err, want)
 		}
+	}
+}
+
+// A key it does not know, a token or an icon or a field of one that a later
+// version has, loads and is told, sorted; the rest of the file is read (F14.7).
+func TestParseThemeUnknown(t *testing.T) {
+	th, ic, unknown, err := ParseTheme(`
+selectd = "#ffffff"
+row = "#6c6a6d"
+rwo = "#000000"
+[icon]
+consol = { text = "C" }
+query = { text = "Q", bg = "#ff0000" }
+`, NerdIcons)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "icon.consol icon.query.bg rwo selectd"; strings.Join(unknown, " ") != want {
+		t.Errorf("unknown %q, want %q", unknown, want)
+	}
+	if th.Row != c("#6c6a6d") || ic.Query.Text != "Q" {
+		t.Errorf("the rest is read: row %v, query %v", th.Row, ic.Query)
 	}
 }

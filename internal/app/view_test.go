@@ -269,7 +269,7 @@ func TestStatusNarrowing(t *testing.T) {
 
 // A theme file changes only what it names; icons with a color keep it (§7.3, §7.7).
 func TestThemeColors(t *testing.T) {
-	th, ic, err := ui.ParseTheme(`
+	th, ic, _, err := ui.ParseTheme(`
 row = "#6c6a6d"
 [icon]
 query = { text = "C", fg = "#ff0000" }

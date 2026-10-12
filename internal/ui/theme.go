@@ -70,13 +70,16 @@ var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 // ParseTheme reads a theme file over tokyonight-storm and the icon set that
 // `icons` chose: top-level keys are color tokens (§7.3), [icon] entries change
 // a glyph, its color or both (§7.7). Anything the file doesn't name stays.
-func ParseTheme(data string, icons *Icons) (*Theme, *Icons, error) {
+// A key it doesn't know, a token or an icon of a later version, is left out and
+// told in unknown, not an error (F14.7); a color that is no #rrggbb is.
+func ParseTheme(data string, icons *Icons) (th *Theme, ic *Icons, unknown []string, err error) {
 	var raw map[string]toml.Primitive
 	md, err := toml.Decode(data, &raw)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	th, ic := *TokyonightStorm, *icons
+	t, i := *TokyonightStorm, *icons
+	th, ic = &t, &i
 	colors, glyphs := th.tokens(), ic.byName()
 	for _, key := range slices.Sorted(maps.Keys(raw)) { // the same first error every run
 		if key == "icon" {
@@ -85,12 +88,13 @@ func ParseTheme(data string, icons *Icons) (*Theme, *Icons, error) {
 				Fg   *string `toml:"fg"`
 			}
 			if err := md.PrimitiveDecode(raw[key], &specs); err != nil {
-				return nil, nil, fmt.Errorf("[icon]: %w", err)
+				return nil, nil, nil, fmt.Errorf("[icon]: %w", err)
 			}
 			for _, name := range slices.Sorted(maps.Keys(specs)) {
 				icon, ok := glyphs[name]
 				if !ok {
-					return nil, nil, fmt.Errorf(i18n.T("[icon]：没有叫 %s 的图标"), name)
+					unknown = append(unknown, "icon."+name)
+					continue
 				}
 				s := specs[name]
 				if s.Text != nil {
@@ -98,7 +102,7 @@ func ParseTheme(data string, icons *Icons) (*Theme, *Icons, error) {
 				}
 				if s.Fg != nil {
 					if icon.Fg, err = hex("icon."+name+".fg", *s.Fg); err != nil {
-						return nil, nil, err
+						return nil, nil, nil, err
 					}
 				}
 			}
@@ -106,14 +110,15 @@ func ParseTheme(data string, icons *Icons) (*Theme, *Icons, error) {
 		}
 		field, ok := colors[key]
 		if !ok {
-			return nil, nil, fmt.Errorf(i18n.T("没有叫 %s 的 token"), key)
+			unknown = append(unknown, key)
+			continue
 		}
 		var v string
 		if err := md.PrimitiveDecode(raw[key], &v); err != nil {
-			return nil, nil, fmt.Errorf(i18n.T("%s：颜色要写成字符串 \"#rrggbb\""), key)
+			return nil, nil, nil, fmt.Errorf(i18n.T("%s：颜色要写成字符串 \"#rrggbb\""), key)
 		}
 		if *field, err = hex(key, v); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 	if _, ok := raw["selected"]; !ok {
@@ -122,10 +127,11 @@ func ParseTheme(data string, icons *Icons) (*Theme, *Icons, error) {
 	if _, ok := raw["zoom"]; !ok {
 		th.Zoom = th.Warn // as the theme has it, not as tokyonight-storm's
 	}
-	if u := md.Undecoded(); len(u) > 0 { // e.g. `bg` inside an [icon] entry
-		return nil, nil, fmt.Errorf(i18n.T("不认识 %s"), u[0])
+	for _, k := range md.Undecoded() { // e.g. `bg` inside an [icon] entry
+		unknown = append(unknown, k.String())
 	}
-	return &th, &ic, nil
+	slices.Sort(unknown)
+	return th, ic, unknown, nil
 }
 
 func hex(key, v string) (color.Color, error) {

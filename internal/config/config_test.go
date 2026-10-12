@@ -178,10 +178,19 @@ func TestThemeFile(t *testing.T) {
 	if c, err := load(`theme = "tokyonight-storm"`); err != nil || c.Theme != ui.TokyonightStorm {
 		t.Errorf("built-in: %v", err)
 	}
-	for name, want := range map[string]string{"nope": "nope.toml", "typo": "rwo"} {
-		if _, err := load(`theme = "` + name + `"`); err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("theme %s: error %v should name %s", name, err, want)
-		}
+	if _, err := load(`theme = "nope"`); err == nil || !strings.Contains(err.Error(), "nope.toml") {
+		t.Errorf("a theme there is not: %v", err)
+	}
+	// a key the theme file has of a later version is a word at the start, not an error (F14.7)
+	c, err = load(`theme = "typo"`)
+	if err != nil || c.Theme.PaneBg != ui.TokyonightStorm.PaneBg {
+		t.Fatalf("unknown key: %v", err)
+	}
+	if want := "themes/typo.toml: 不认识的键 rwo"; c.ThemeNote != want || !slices.Contains(UnknownKeys(c), want) {
+		t.Errorf("note %q, start says %q", c.ThemeNote, UnknownKeys(c))
+	}
+	if _, th, note, err := LoadTheme("ristretto", ui.NerdIcons); err != nil || note != "" || th == nil {
+		t.Errorf("a theme with no unknown key says nothing: %q %v", note, err)
 	}
 	if c, err := Parse(`theme = "nope"`); err != nil || c.Theme != ui.TokyonightStorm {
 		t.Errorf("Parse reads no theme file: %v", err)

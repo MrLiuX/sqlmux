@@ -493,11 +493,11 @@ func TestSelectColors(t *testing.T) {
 		t.Error("the count is not warn")
 	}
 	// a theme with no selected: the visual
-	th, _, err := ui.ParseTheme("pane_bg = \"#101010\"\nvisual = \"#102030\"", ui.NerdIcons)
+	th, _, _, err := ui.ParseTheme("pane_bg = \"#101010\"\nvisual = \"#102030\"", ui.NerdIcons)
 	if err != nil || th.Selected != th.Visual || th.Selected == ui.TokyonightStorm.Selected {
 		t.Errorf("a theme without selected: %v, %v", th.Selected, err)
 	}
-	th, _, err = ui.ParseTheme("selected = \"#102030\"", ui.NerdIcons)
+	th, _, _, err = ui.ParseTheme("selected = \"#102030\"", ui.NerdIcons)
 	if err != nil || th.Selected == th.Visual {
 		t.Errorf("a theme with selected: %v, %v", th.Selected, err)
 	}

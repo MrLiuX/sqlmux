@@ -487,3 +487,23 @@ func TestPlainWhere(t *testing.T) {
 		t.Errorf("the first esc closes the list only: %v %q", tab.comp, tab.typing)
 	}
 }
+
+// A theme with a key of a later version switches, and the toast says the key
+// in place of "written to config.toml" (F14.7).
+func TestThemeSwitchUnknownKey(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	themes := filepath.Join(dir, "sqlmux", "themes")
+	if err := os.MkdirAll(themes, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(themes, "later.toml"), []byte("bg = \"#202020\"\nfuture_token = \"#ffffff\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a := sized(160, 45, "ascii")
+	a.run("theme.switch", 0)
+	feed(t, a, "later<CR>")
+	if a.themeName != "later" || ansiHex(a.theme.Bg) != "#202020" || !strings.Contains(a.toast, "themes/later.toml") || !strings.Contains(a.toast, "future_token") {
+		t.Errorf("theme %q bg %v toast %q", a.themeName, a.theme.Bg, a.toast)
+	}
+}
