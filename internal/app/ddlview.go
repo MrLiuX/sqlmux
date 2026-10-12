@@ -24,6 +24,9 @@ type ddlPopup struct {
 	col   string      // the column's name; "" for the table's
 	at    uv.Position // the column's cell
 	top   int
+	// text is what an index's popup says in place of the table's DDL, label
+	// the title (F14.3).
+	text, label string
 }
 
 // ddlColumnRows is the most rows the column's box has; what is more is cut.
@@ -69,7 +72,7 @@ func (a *App) askDDL(c *Conn, t db.Table) tea.Cmd {
 // wantPopupDDL asks again for the DDL of an open popup whose cache is gone (R
 // drops it, a fetch out of time is not kept), as often as that happens (F9.8).
 func (a *App) wantPopupDDL() tea.Cmd {
-	if d := a.ddl; d != nil {
+	if d := a.ddl; d != nil && d.text == "" {
 		return a.askDDL(d.conn, d.table)
 	}
 	return nil
@@ -81,6 +84,9 @@ func (a *App) wantPopupDDL() tea.Cmd {
 func (a *App) ddlContent() (ui.TextView, string) {
 	d := a.ddl
 	c, t := d.conn, d.table
+	if d.text != "" {
+		return ui.TextView{Text: d.text, Colors: ui.SQLColors(a.theme, d.text, c.eng.Dialect(), a.ddlNames(c, t, d.text))}, d.label
+	}
 	title := t.Schema + "." + t.Name
 	got := c.ddl[idOf(t)]
 	switch {

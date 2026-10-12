@@ -134,6 +134,14 @@ type Engine interface {
 	TableColumns(ctx context.Context, c Conn, schema, table string) (Columns, error)
 	// DDL is a table's or a view's definition (§12「预览」).
 	DDL(ctx context.Context, c Conn, schema, name string) (string, error)
+	// Indexes and Keys are a table's, Functions and Sequences every
+	// schema's, FunctionDef a function's definition as a statement that
+	// makes it; nil for what the engine has none of (§8.4, F14.3).
+	Indexes(ctx context.Context, c Conn, schema, table string) ([]Index, error)
+	Keys(ctx context.Context, c Conn, schema, table string) ([]Key, error)
+	Functions(ctx context.Context, c Conn) ([]Function, error)
+	Sequences(ctx context.Context, c Conn) ([]Sequence, error)
+	FunctionDef(ctx context.Context, c Conn, f Function) (string, error)
 	// Quick runs one statement that reads, in a read-only transaction on
 	// w, schema first, keeping maxRows rows (§12).
 	Quick(ctx context.Context, w *Worker, sql, schema string, maxRows int) (Result, error)

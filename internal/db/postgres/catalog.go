@@ -240,3 +240,117 @@ order by 3`, rel)
 	}
 	return b.String(), nil
 }
+
+// Indexes lists a table's indexes by name, the primary key's too; Def is
+// pg_get_indexdef's statement (F14.3). A key column is its name or, for an
+// expression, the expression, as pg_get_indexdef writes it; INCLUDE columns
+// are not key columns.
+func (Engine) Indexes(ctx context.Context, c db.Conn, schema, table string) ([]db.Index, error) {
+	r, err := c.Query(ctx, `
+select ic.relname, ix.indisunique, pg_get_indexdef(ix.indexrelid),
+       (select json_agg(pg_get_indexdef(ix.indexrelid, k, true) order by k) from generate_series(1, ix.indnkeyatts) k)
+from pg_index ix
+join pg_class ic on ic.oid = ix.indexrelid
+join pg_class c on c.oid = ix.indrelid
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = $1 and c.relname = $2
+order by ic.relname`, db.Val{S: schema}, db.Val{S: table})
+	if err != nil {
+		return nil, err
+	}
+	var out []db.Index
+	for _, row := range r.Rows {
+		ix := db.Index{Name: row[0].S, Unique: row[1].S == "t", Def: row[2].S + ";"}
+		if err := json.Unmarshal([]byte(row[3].S), &ix.Cols); err != nil {
+			return nil, err
+		}
+		out = append(out, ix)
+	}
+	return out, nil
+}
+
+// Keys lists a table's primary key, then its foreign keys by name, each with
+// the table and columns it points at (F14.3).
+func (Engine) Keys(ctx context.Context, c db.Conn, schema, table string) ([]db.Key, error) {
+	r, err := c.Query(ctx, `
+select con.conname, con.contype, rn.nspname, rc.relname,
+       (select json_agg(a.attname order by k.n)
+        from unnest(con.conkey) with ordinality k(attnum, n)
+        join pg_attribute a on a.attrelid = con.conrelid and a.attnum = k.attnum),
+       (select json_agg(a.attname order by k.n)
+        from unnest(con.confkey) with ordinality k(attnum, n)
+        join pg_attribute a on a.attrelid = con.confrelid and a.attnum = k.attnum)
+from pg_constraint con
+join pg_class c on c.oid = con.conrelid
+join pg_namespace n on n.oid = c.relnamespace
+left join pg_class rc on rc.oid = con.confrelid
+left join pg_namespace rn on rn.oid = rc.relnamespace
+where n.nspname = $1 and c.relname = $2 and con.contype in ('p', 'f')
+order by con.contype <> 'p', con.conname`, db.Val{S: schema}, db.Val{S: table})
+	if err != nil {
+		return nil, err
+	}
+	var out []db.Key
+	for _, row := range r.Rows {
+		k := db.Key{Name: row[0].S}
+		if err := json.Unmarshal([]byte(row[4].S), &k.Cols); err != nil {
+			return nil, err
+		}
+		if row[1].S == "f" {
+			k.Ref = &db.Ref{Schema: row[2].S, Table: row[3].S}
+			if err := json.Unmarshal([]byte(row[5].S), &k.Ref.Cols); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, k)
+	}
+	return out, nil
+}
+
+// Functions lists every schema's functions, by schema, name and arguments,
+// but those an extension brings and aggregates, procedures and window
+// functions (prokind f); the ID is the OID, which pg_get_functiondef takes
+// (F14.3). Args are pg_get_function_identity_arguments's.
+func (Engine) Functions(ctx context.Context, c db.Conn) ([]db.Function, error) {
+	r, err := c.Query(ctx, `
+select n.nspname, p.proname, pg_get_function_identity_arguments(p.oid), p.oid::text
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where p.prokind = 'f' and `+userSchema+`
+  and not exists (select from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')
+order by 1, 2, 3`)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]db.Function, len(r.Rows))
+	for i, row := range r.Rows {
+		out[i] = db.Function{Schema: row[0].S, Name: row[1].S, Args: row[2].S, ID: row[3].S}
+	}
+	return out, nil
+}
+
+// Sequences lists every schema's sequences, those a serial or identity
+// column owns too.
+func (Engine) Sequences(ctx context.Context, c db.Conn) ([]db.Sequence, error) {
+	r, err := c.Query(ctx, `
+select n.nspname, cl.relname
+from pg_class cl join pg_namespace n on n.oid = cl.relnamespace
+where cl.relkind = 'S' and `+userSchema+`
+order by 1, 2`)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]db.Sequence, len(r.Rows))
+	for i, row := range r.Rows {
+		out[i] = db.Sequence{Schema: row[0].S, Name: row[1].S}
+	}
+	return out, nil
+}
+
+// FunctionDef is f's CREATE FUNCTION as pg_get_functiondef writes it.
+func (Engine) FunctionDef(ctx context.Context, c db.Conn, f db.Function) (string, error) {
+	r, err := c.Query(ctx, "select pg_get_functiondef($1::oid)", db.Val{S: f.ID})
+	if err != nil || len(r.Rows) == 0 {
+		return "", err
+	}
+	return r.Rows[0][0].S + ";", nil
+}

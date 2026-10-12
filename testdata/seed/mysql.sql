@@ -8,6 +8,8 @@ create database agentable;
 grant all on agentable.* to 'sqlmux'@'%';
 -- the tests' and e2e's databases of their own, sqlmux_<who>_<pid> (AGENTS.md)
 grant all on `sqlmux\_%`.* to 'sqlmux'@'%';
+-- the definitions of the functions, which a grant on a database does not show (F14.3)
+grant show_routine on *.* to 'sqlmux'@'%';
 
 -- the inserts below count to 6000
 set session cte_max_recursion_depth = 10000;
@@ -151,6 +153,15 @@ insert into agentable.agent_version (agent_id, version, released) values
     (1, 1, true), (1, 2, false), (2, 1, true), (3, 1, false);
 insert into agentable.goal (agent_id, title) values
     (1, 'ship m1'), (2, 'write tests'), (null, 'unassigned');
+
+-- M14 F14.3: a plain index and functions, one in the second database
+create index t_order_user_created on t_order (user_id, created_at);
+create function fn_order_total(order_id bigint) returns decimal(10, 2) deterministic reads sql data
+    return (select amount from t_order where id = order_id);
+create function fn_greet(who varchar(64)) returns varchar(80) deterministic no sql
+    return concat('hello ', who);
+create function agentable.fn_agent_count() returns bigint reads sql data
+    return (select count(*) from agentable.agent);
 
 analyze table t_user, t_order, t_order_item, t_sku, t_log, t_event,
     agentable.agent, agentable.agent_version, agentable.goal;

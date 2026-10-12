@@ -143,5 +143,18 @@ insert into agentable.agent_version (agent_id, version, released) values
 insert into agentable.goal (agent_id, title) values
     (1, 'ship m1'), (2, 'write tests'), (null, 'unassigned');
 
+-- M14 F14.3: a plain index, sequences of their own, functions (one overloaded,
+-- one in agentable)
+create index t_order_user_created on t_order (user_id, created_at desc);
+create sequence invoice_no start 1000;
+create sequence agentable.run_no;
+create function fn_order_total(order_id bigint) returns numeric language sql as
+    $$ select amount from t_order where id = order_id $$;
+create function fn_greet(who text) returns text language sql as $$ select 'hello ' || who $$;
+create function fn_greet(who text, times int) returns text language sql as
+    $$ select repeat('hello ' || who, times) $$;
+create function agentable.fn_agent_count() returns bigint language sql as
+    $$ select count(*) from agentable.agent $$;
+
 refresh materialized view mv_order_by_status;
 analyze;

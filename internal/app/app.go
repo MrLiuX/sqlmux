@@ -275,6 +275,10 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.gotQuickRerun(msg)
 	case colsMsg:
 		return a, a.gotCols(msg)
+	case objectsMsg:
+		return a, a.gotObjects(msg)
+	case funcMsg:
+		return a, a.gotFunction(msg)
 	case saveMsg:
 		return a, a.gotSave(msg)
 	case exportDone:

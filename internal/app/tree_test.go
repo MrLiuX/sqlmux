@@ -301,8 +301,17 @@ func TestTreeExpand(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("R: the open planner's columns are not fetched again")
 	}
-	if m, ok := cmd().(colsMsg); !ok || m.table != planner {
-		t.Fatalf("R: no fetch of the open planner's columns")
+	var fetched []string // what comes of it: the columns, and the indexes and keys (F14.3)
+	for _, m := range batchMsgs(cmd) {
+		switch m := m.(type) {
+		case colsMsg:
+			fetched = append(fetched, "cols "+m.table.Name)
+		case objectsMsg:
+			fetched = append(fetched, "objects "+m.table.Name)
+		}
+	}
+	if strings.Join(fetched, ",") != "cols planner,objects planner" {
+		t.Fatalf("R: fetched %v for the open planner", fetched)
 	}
 	a.Update(colsMsg{a.sess.Conns[0], planner, db.Columns{PK: []string{"id"}, Cols: []db.Column{{Name: "id", Type: "integer"}, {Name: "name", Type: "text"}}}, nil})
 	for _, c := range []struct{ keys, want string }{
@@ -669,9 +678,27 @@ func TestTreeSQLiteFlat(t *testing.T) {
 	c.Tables = []db.Table{{Schema: "main", Name: "t_user", Rows: -1, Kind: "r"}, {Schema: "main", Name: "v_user", Rows: -1, Kind: "v"}}
 	c.cols[idOf(c.Tables[0])] = db.Columns{Cols: []db.Column{{Name: "id", Type: "integer"}}, PK: []string{"id"}}
 	a.sess.open[tableNode(c, c.Tables[0])] = true
+	c.idx[idOf(c.Tables[0])] = []db.Index{{Name: "i", Cols: []string{"id"}}}
+	c.keys[idOf(c.Tables[0])] = []db.Key{{Name: "PRIMARY", Cols: []string{"id"}}, {Cols: []string{"u"}, Ref: &db.Ref{Schema: "main", Table: "t_x", Cols: []string{"id"}}}}
+	a.sess.open[tableNode(c, c.Tables[0])+"/keys"] = true
 	got := strings.Split(treeTexts(a), "\n")
-	want := []string{"▾ doraemon", "  ▾ Tables (1)", "    ▾ t_user", "        id", "  ▸ Views (1)"}
+	want := []string{"▾ doraemon", "  ▾ Tables (1)", "    ▾ t_user", "        id", "      ▸ Indexes (1)", "      ▾ Keys (2)", "          PRIMARY (id)", "          FOREIGN KEY (u) → t_x (id)", "  ▸ Views (1)"}
 	if len(got) < len(want) || strings.Join(got[:len(want)], "|") != strings.Join(want, "|") {
 		t.Fatalf("tree:\n%s", strings.Join(got, "\n"))
 	}
+}
+
+// batchMsgs is what the Cmd, a tea.Batch of Cmds perhaps, brings.
+func batchMsgs(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	if b, ok := cmd().(tea.BatchMsg); ok {
+		var out []tea.Msg
+		for _, c := range b {
+			out = append(out, batchMsgs(c)...)
+		}
+		return out
+	}
+	return []tea.Msg{cmd()}
 }

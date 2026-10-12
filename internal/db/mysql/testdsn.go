@@ -25,7 +25,7 @@ func IntegrationDSN(t *testing.T) string {
 }
 
 // OwnDB is a database of the test's own on the test server, seeded as the
-// shared one is but for agentable, and dropped when the test ends: for
+// shared one is but for agentable and the functions, and dropped when the test ends: for
 // tests that write (AGENTS.md「集成测试环境」). It returns its DSN.
 func OwnDB(t *testing.T) string {
 	t.Helper()
@@ -58,7 +58,7 @@ func OwnDB(t *testing.T) string {
 	}
 	defer c.Close()
 	for _, s := range strings.Split(string(seed), ";\n") {
-		if strings.TrimSpace(s) == "" || strings.Contains(s, "agentable") || strings.Contains(s, "grant ") {
+		if strings.TrimSpace(s) == "" || strings.Contains(s, "agentable") || strings.Contains(s, "grant ") || strings.Contains(s, "create function") { // a function takes SUPER, which the shared database got from root
 			continue
 		}
 		if _, err := c.Exec(ctx, s, 0); err != nil {

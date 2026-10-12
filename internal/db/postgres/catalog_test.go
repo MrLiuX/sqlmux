@@ -150,7 +150,8 @@ func TestDDL(t *testing.T) {
   deleted_at timestamp with time zone,
   constraint t_order_pkey PRIMARY KEY (id),
   constraint t_order_user_id_fkey FOREIGN KEY (user_id) REFERENCES t_user(id)
-);`,
+);
+CREATE INDEX t_order_user_created ON public.t_order USING btree (user_id, created_at DESC);`,
 		"t_sku": `create table public.t_sku (
   code text not null,
   barcode text,
@@ -227,5 +228,100 @@ CREATE UNIQUE INDEX t_sku_title_priced ON public.t_sku USING btree (title) WHERE
 	}
 	if got, err := pg.DDL(ctx, own, "public", "noted_m"); err != nil || !strings.HasSuffix(got, "\ncomment on materialized view public.noted_m is 'a matview';") {
 		t.Errorf("a materialized view's: %v\n%s", err, got)
+	}
+}
+
+// A table's indexes, the primary key's too, and its keys: the primary key,
+// then the foreign keys with what they point at, across schemas too (F14.3).
+func TestIndexesAndKeys(t *testing.T) {
+	c, _, err := Connect(context.Background(), OwnDB(t), "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	ctx := context.Background()
+	ixs, err := pg.Indexes(ctx, c, "public", "t_order")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, ix := range ixs {
+		got = append(got, ix.Name+"("+strings.Join(ix.Cols, ",")+")"+map[bool]string{true: "U"}[ix.Unique])
+	}
+	if want := "t_order_pkey(id)U t_order_user_created(user_id,created_at)"; strings.Join(got, " ") != want {
+		t.Errorf("indexes %q, want %q", got, want)
+	}
+	if want := "CREATE INDEX t_order_user_created ON public.t_order USING btree (user_id, created_at DESC);"; ixs[1].Def != want {
+		t.Errorf("def %q", ixs[1].Def)
+	}
+	sku, _ := pg.Indexes(ctx, c, "public", "t_sku")
+	var exprs []string
+	for _, ix := range sku {
+		if ix.Name == "t_sku_lower_title" || ix.Name == "t_sku_title" {
+			exprs = append(exprs, ix.Name+"("+strings.Join(ix.Cols, ",")+")")
+		}
+	}
+	if want := "t_sku_lower_title(lower(title)) t_sku_title(title)"; strings.Join(exprs, " ") != want { // an expression is its text, INCLUDE columns are no key
+		t.Errorf("expression and INCLUDE: %q, want %q", exprs, want)
+	}
+	text := func(ks []db.Key, err error) (out []string) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, k := range ks {
+			s := k.Name + "(" + strings.Join(k.Cols, ",") + ")"
+			if k.Ref != nil {
+				s += "->" + k.Ref.Schema + "." + k.Ref.Table + "(" + strings.Join(k.Ref.Cols, ",") + ")"
+			}
+			out = append(out, s)
+		}
+		return out
+	}
+	if got, want := text(pg.Keys(ctx, c, "public", "t_order_item")), "t_order_item_pkey(order_id,line_no) t_order_item_order_id_fkey(order_id)->public.t_order(id)"; strings.Join(got, " ") != want {
+		t.Errorf("keys %q, want %q", got, want)
+	}
+	if got, want := text(pg.Keys(ctx, c, "agentable", "goal")), "goal_pkey(id) goal_agent_id_fkey(agent_id)->agentable.agent(id)"; strings.Join(got, " ") != want {
+		t.Errorf("keys %q, want %q", got, want)
+	}
+	if got := text(pg.Keys(ctx, c, "public", "t_log")); len(got) != 0 {
+		t.Errorf("no keys: %q", got)
+	}
+}
+
+// Functions: the user's, with their arguments, an overload each, none an
+// extension brings; sequences, those of serial columns too; a definition by
+// pg_get_functiondef (F14.3).
+func TestFunctionsAndSequences(t *testing.T) {
+	c, _, err := Connect(context.Background(), OwnDB(t), "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	ctx := context.Background()
+	fs, err := pg.Functions(ctx, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, f := range fs {
+		got = append(got, f.Schema+"."+f.Name+"("+f.Args+")")
+	}
+	if want := "agentable.fn_agent_count() public.fn_greet(who text) public.fn_greet(who text, times integer) public.fn_order_total(order_id bigint)"; strings.Join(got, " ") != want {
+		t.Fatalf("functions %q, want %q", got, want)
+	}
+	def, err := pg.FunctionDef(ctx, c, fs[2])
+	if err != nil || !strings.HasPrefix(def, "CREATE OR REPLACE FUNCTION public.fn_greet(who text, times integer)") || !strings.HasSuffix(def, ";") {
+		t.Errorf("def %q %v", def, err)
+	}
+	ss, err := pg.Sequences(ctx, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = nil
+	for _, s := range ss {
+		got = append(got, s.Schema+"."+s.Name)
+	}
+	if joined := strings.Join(got, " "); !strings.Contains(joined, "agentable.run_no") || !strings.Contains(joined, "public.invoice_no") || !strings.Contains(joined, "public.t_order_id_seq") {
+		t.Errorf("sequences %q", got)
 	}
 }

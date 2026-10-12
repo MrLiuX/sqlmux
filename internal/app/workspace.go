@@ -229,8 +229,12 @@ type Conn struct {
 	home      string   // current_schema(), whose Tables the tree opens with
 	Tables    []db.Table
 	cols      map[tableID]db.Columns
-	colsAsked map[tableID]bool    // for names' colors (§7.3): asked once, till cols is dropped
-	ddl       map[tableID]ddlText // the palette's previews (F4.2), dropped with cols
+	colsAsked map[tableID]bool       // for names' colors (§7.3): asked once, till cols is dropped
+	ddl       map[tableID]ddlText    // the palette's previews (F4.2), dropped with cols
+	idx       map[tableID][]db.Index // a table's indexes and keys, read when it opens in the tree (F14.3), dropped with cols
+	keys      map[tableID][]db.Key
+	funcs     []db.Function // every schema's, with the catalog
+	seqs      []db.Sequence
 
 	// DB is the database, on query titles, "" for MySQL, whose schemas
 	// are its databases; startedPath Main's search_path as it connected;
@@ -242,7 +246,7 @@ type Conn struct {
 }
 
 func newConn(spec config.Connection) *Conn {
-	c := &Conn{cols: map[tableID]db.Columns{}, colsAsked: map[tableID]bool{}, ddl: map[tableID]ddlText{}}
+	c := &Conn{cols: map[tableID]db.Columns{}, colsAsked: map[tableID]bool{}, ddl: map[tableID]ddlText{}, idx: map[tableID][]db.Index{}, keys: map[tableID][]db.Key{}}
 	c.setSpec(spec)
 	return c
 }
@@ -319,6 +323,8 @@ func (c *Conn) dropCols() {
 	clear(c.cols)
 	clear(c.colsAsked)
 	clear(c.ddl)
+	clear(c.idx)
+	clear(c.keys)
 }
 
 // newSession is a session's default workspace (§5) over conns, start the

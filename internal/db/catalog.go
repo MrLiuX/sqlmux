@@ -49,3 +49,36 @@ func (c Columns) Key() []string {
 	}
 	return nil
 }
+
+// Index is one index of a table (§8.4, F14.3): its key columns (an expression
+// as its text), whether it is unique, and the statement that makes it.
+type Index struct {
+	Name   string
+	Cols   []string
+	Unique bool
+	Def    string
+}
+
+// Key is a table's primary key, or one of its foreign keys, which has Ref:
+// the columns it points at (§8.4, F14.3). A name is "" for a foreign key SQLite
+// does not name.
+type Key struct {
+	Name string
+	Cols []string
+	Ref  *Ref
+}
+
+// Ref is the table and columns a foreign key points at.
+type Ref struct {
+	Schema, Table string
+	Cols          []string
+}
+
+// Function is one function of a schema, Args its arguments as the engine
+// writes them in a signature; ID is what FunctionDef asks by (F14.3).
+type Function struct {
+	Schema, Name, Args, ID string
+}
+
+// Sequence is one sequence of a schema (§8.4).
+type Sequence struct{ Schema, Name string }

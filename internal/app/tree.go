@@ -95,6 +95,8 @@ type catalogMsg struct {
 	schemas []string
 	current string
 	tables  []db.Table
+	funcs   []db.Function
+	seqs    []db.Sequence
 	err     error
 }
 
@@ -109,7 +111,11 @@ func (a *App) loadCatalog(c *Conn) tea.Cmd {
 			return catalogMsg{conn: c, err: err}
 		}
 		tables, err := eng.Tables(ctx, meta)
-		return catalogMsg{conn: c, schemas: schemas, current: current, tables: tables, err: err}
+		// ponytail: functions and sequences are no reason to lose the tables: a
+		// read of them that fails shows none
+		funcs, _ := eng.Functions(ctx, meta)
+		seqs, _ := eng.Sequences(ctx, meta)
+		return catalogMsg{conn: c, schemas: schemas, current: current, tables: tables, funcs: funcs, seqs: seqs, err: err}
 	}
 }
 
@@ -122,7 +128,7 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 		return a.showToast(i18n.T("%s：%s", m.conn.Spec.Name, m.err))
 	}
 	c := m.conn
-	c.Schemas, c.Tables = m.schemas, m.tables
+	c.Schemas, c.Tables, c.funcs, c.seqs = m.schemas, m.tables, m.funcs, m.seqs
 	// home stays once set, while there: what Meta's current one is moves
 	// with MySQL's USE in a quick SQL, and the tree keeps what is open (§7.8)
 	if !slices.Contains(c.Schemas, c.home) {
@@ -145,6 +151,9 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	for _, t := range c.Tables { // R dropped the columns; an open table keeps showing them (§7.8)
 		if _, ok := c.cols[idOf(t)]; !ok && a.sessionOf(c).opened(tableNode(c, t), false) {
 			cmds = append(cmds, a.fetchCols(c, t))
+		}
+		if _, ok := c.idx[idOf(t)]; !ok && a.sessionOf(c).opened(tableNode(c, t), false) {
+			cmds = append(cmds, a.fetchObjects(c, t))
 		}
 	}
 	return tea.Batch(cmds...)
@@ -208,6 +217,11 @@ const (
 	nodeGroup // Tables or Views
 	nodeTable // a table or a view
 	nodeColumn
+	nodeObjects // a table's Indexes or Keys, a schema's Functions or Sequences (F14.3)
+	nodeIndex
+	nodeKey
+	nodeFunc
+	nodeSequence
 	nodeWorkspace
 	nodeWindow
 	nodeTab
@@ -225,7 +239,10 @@ type node struct {
 	schema string   // the schema it is under; "" outside them
 	table  db.Table // a table's, or a column's table
 	column string
-	query  string // a query file's name
+	index  db.Index    // an index leaf's
+	key    db.Key      // a key leaf's
+	fn     db.Function // a function leaf's
+	query  string      // a query file's name
 	win    int
 	pane   *Pane
 	tab    int
@@ -365,6 +382,50 @@ func (a *App) treeNodes() (ns []node, matches int) {
 						}
 						add(coln)
 					}
+					if filtering { // only tables and views take part (F14.3)
+						continue
+					}
+					if ixs, ok := c.idx[idOf(t)]; ok {
+						xid := tid + "/indexes"
+						if add(node{id: xid, kind: nodeObjects, conn: c, schema: sc, table: t, TreeNode: ui.TreeNode{Depth: depth(4), Branch: len(ixs) > 0, Open: a.sess.opened(xid, false), Icon: ic.Index, IconFg: th.Func, Text: fmt.Sprintf("Indexes (%d)", len(ixs))}}) {
+							for _, ix := range ixs {
+								add(node{id: xid + "/" + ix.Name, kind: nodeIndex, conn: c, schema: sc, table: t, index: ix, TreeNode: ui.TreeNode{Depth: depth(5), Icon: ic.Index, IconFg: th.Dim, Text: indexText(ix)}})
+							}
+						}
+					}
+					if keys, ok := c.keys[idOf(t)]; ok {
+						kid := tid + "/keys"
+						if add(node{id: kid, kind: nodeObjects, conn: c, schema: sc, table: t, TreeNode: ui.TreeNode{Depth: depth(4), Branch: len(keys) > 0, Open: a.sess.opened(kid, false), Icon: ic.Key, IconFg: th.PK, Text: fmt.Sprintf("Keys (%d)", len(keys))}}) {
+							for i, k := range keys {
+								add(node{id: fmt.Sprintf("%s/%d", kid, i), kind: nodeKey, conn: c, schema: sc, table: t, key: k, TreeNode: ui.TreeNode{Depth: depth(5), Icon: ic.Key, IconFg: th.Dim, Text: keyText(c, k)}})
+							}
+						}
+					}
+				}
+			}
+			if filtering {
+				continue
+			}
+			var fns []db.Function // what a schema has besides tables and views: a group each when it has any (F14.3)
+			for _, f := range c.funcs {
+				if f.Schema == sc {
+					fns = append(fns, f)
+				}
+			}
+			if fid := schemaNode(c, sc) + "/functions"; len(fns) > 0 && add(node{id: fid, kind: nodeObjects, conn: c, schema: sc, TreeNode: ui.TreeNode{Depth: depth(2), Branch: true, Open: a.sess.opened(fid, false), Icon: ic.Func, IconFg: th.Func, Text: fmt.Sprintf("Functions (%d)", len(fns))}}) {
+				for _, f := range fns {
+					add(node{id: fid + "/" + functionText(f), kind: nodeFunc, conn: c, schema: sc, fn: f, TreeNode: ui.TreeNode{Depth: depth(3), Icon: ic.Func, IconFg: th.Dim, Text: functionText(f)}})
+				}
+			}
+			var seqs []db.Sequence
+			for _, q := range c.seqs {
+				if q.Schema == sc {
+					seqs = append(seqs, q)
+				}
+			}
+			if qid := schemaNode(c, sc) + "/sequences"; len(seqs) > 0 && add(node{id: qid, kind: nodeObjects, conn: c, schema: sc, TreeNode: ui.TreeNode{Depth: depth(2), Branch: true, Open: a.sess.opened(qid, false), Icon: ic.Sequence, IconFg: th.Func, Text: fmt.Sprintf("Sequences (%d)", len(seqs))}}) {
+				for _, q := range seqs {
+					add(node{id: qid + "/" + q.Name, kind: nodeSequence, conn: c, schema: sc, TreeNode: ui.TreeNode{Depth: depth(3), Icon: ic.Sequence, IconFg: th.Dim, Text: q.Name}})
 				}
 			}
 		}
@@ -533,9 +594,14 @@ func (a *App) treeFold(n node, open bool) tea.Cmd {
 	case open && n.kind == nodeConn:
 		return a.connect(n.conn)
 	case open && n.kind == nodeTable:
+		var cmds []tea.Cmd
 		if _, ok := n.conn.cols[idOf(n.table)]; !ok {
-			return a.fetchCols(n.conn, n.table)
+			cmds = append(cmds, a.fetchCols(n.conn, n.table))
 		}
+		if _, ok := n.conn.idx[idOf(n.table)]; !ok {
+			cmds = append(cmds, a.fetchObjects(n.conn, n.table))
+		}
+		return tea.Batch(cmds...)
 	}
 	return nil
 }
@@ -613,6 +679,15 @@ func (a *App) treeOpen(tablesOnly bool) tea.Cmd {
 		cmd := a.openTable(n.conn, n.table)
 		a.gotoColumn(n.conn, n.table, n.column)
 		return cmd
+	case n.kind == nodeIndex:
+		a.openIndexDDL(n.conn, n.table, n.index)
+	case n.kind == nodeKey:
+		if n.key.Ref != nil {
+			return a.openRef(n.conn, n.key.Ref)
+		}
+	case n.kind == nodeFunc:
+		return a.openFunction(n.conn, n.fn)
+	case n.kind == nodeSequence:
 	case n.kind == nodeTab: // another window's: that window first (F5.2)
 		a.selectWindow(n.win)
 		a.showTab(n.pane, n.tab)

@@ -117,3 +117,82 @@ func (Engine) DDL(ctx context.Context, c db.Conn, _, name string) (string, error
 	}
 	return r.Rows[0][0].S + ";", nil
 }
+
+// Indexes lists a table's indexes by name, but those SQLite makes of a
+// PRIMARY KEY or UNIQUE of the table (sqlite_autoindex_…), which no statement
+// made; Def is the statement sqlite_schema keeps (F14.3). An expression in a
+// key is "expr".
+func (Engine) Indexes(ctx context.Context, c db.Conn, _, table string) ([]db.Index, error) {
+	r, err := c.Query(ctx, `
+select l.name, l."unique", coalesce(s.sql, '')
+from pragma_index_list(?) l left join sqlite_schema s on s.type = 'index' and s.name = l.name
+where l.name not like 'sqlite\_autoindex\_%' escape '\'
+order by l.name`, db.Val{S: table})
+	if err != nil {
+		return nil, err
+	}
+	var out []db.Index
+	for _, row := range r.Rows {
+		ix := db.Index{Name: row[0].S, Unique: row[1].S == "1", Def: row[2].S + ";"}
+		cols, err := c.Query(ctx, `select coalesce(name, 'expr') from pragma_index_info(?) order by seqno`, row[0])
+		if err != nil {
+			return nil, err
+		}
+		for _, cr := range cols.Rows {
+			ix.Cols = append(ix.Cols, cr[0].S)
+		}
+		out = append(out, ix)
+	}
+	return out, nil
+}
+
+// Keys lists a table's primary key, then its foreign keys, which SQLite does
+// not name, by the order it lists them in (F14.3). A foreign key with no
+// column written points at the parent's primary key.
+func (Engine) Keys(ctx context.Context, c db.Conn, _, table string) ([]db.Key, error) {
+	var out []db.Key
+	pk, err := c.Query(ctx, `select name from pragma_table_info(?) where pk > 0 order by pk`, db.Val{S: table})
+	if err != nil {
+		return nil, err
+	}
+	if len(pk.Rows) > 0 {
+		k := db.Key{Name: "PRIMARY"}
+		for _, row := range pk.Rows {
+			k.Cols = append(k.Cols, row[0].S)
+		}
+		out = append(out, k)
+	}
+	fk, err := c.Query(ctx, `select id, "table", "from", "to" from pragma_foreign_key_list(?) order by id, seq`, db.Val{S: table})
+	if err != nil {
+		return nil, err
+	}
+	id := "" // the foreign key the rows are of
+	for _, row := range fk.Rows {
+		if row[0].S != id {
+			id = row[0].S
+			out = append(out, db.Key{Ref: &db.Ref{Schema: schema, Table: row[1].S}})
+		}
+		k := &out[len(out)-1]
+		k.Cols = append(k.Cols, row[2].S)
+		if !row[3].Null {
+			k.Ref.Cols = append(k.Ref.Cols, row[3].S)
+		}
+	}
+	for i := range out {
+		if k := out[i]; k.Ref != nil && len(k.Ref.Cols) == 0 { // the parent's primary key
+			parent, err := c.Query(ctx, `select name from pragma_table_info(?) where pk > 0 order by pk`, db.Val{S: k.Ref.Table})
+			if err != nil {
+				return nil, err
+			}
+			for _, row := range parent.Rows {
+				out[i].Ref.Cols = append(out[i].Ref.Cols, row[0].S)
+			}
+		}
+	}
+	return out, nil
+}
+
+// Functions, Sequences and FunctionDef are none: SQLite has no stored functions or sequences.
+func (Engine) Functions(context.Context, db.Conn) ([]db.Function, error)         { return nil, nil }
+func (Engine) Sequences(context.Context, db.Conn) ([]db.Sequence, error)         { return nil, nil }
+func (Engine) FunctionDef(context.Context, db.Conn, db.Function) (string, error) { return "", nil }

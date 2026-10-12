@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 
@@ -174,4 +175,119 @@ func (e Engine) DDL(ctx context.Context, c db.Conn, schema, name string) (string
 func generatedExtra(extra string) bool {
 	e := strings.ToUpper(extra)
 	return strings.Contains(e, "VIRTUAL GENERATED") || strings.Contains(e, "STORED GENERATED")
+}
+
+// Indexes lists a table's indexes by name, PRIMARY first; an expression is
+// its text in parentheses. MySQL keeps no statement of an index: Def is built
+// from its columns, as CREATE INDEX writes it, a primary key as the ALTER that
+// adds it (F14.3).
+func (e Engine) Indexes(ctx context.Context, c db.Conn, schema, table string) ([]db.Index, error) {
+	r, err := c.Query(ctx, `
+select index_name, non_unique, coalesce(column_name, concat('(', expression, ')'))
+from information_schema.statistics
+where table_schema = ? and table_name = ?
+order by index_name <> 'PRIMARY', index_name, seq_in_index`, db.Val{S: schema}, db.Val{S: table})
+	if err != nil {
+		return nil, err
+	}
+	var out []db.Index
+	for _, row := range r.Rows {
+		if n := len(out); n == 0 || out[n-1].Name != row[0].S {
+			out = append(out, db.Index{Name: row[0].S, Unique: row[1].S == "0"})
+		}
+		ix := &out[len(out)-1]
+		ix.Cols = append(ix.Cols, row[2].S)
+	}
+	for i := range out {
+		ix := &out[i]
+		cols := make([]string, len(ix.Cols))
+		for j, col := range ix.Cols {
+			cols[j] = col
+			if !strings.HasPrefix(col, "(") { // a column, not an expression
+				cols[j] = e.Quote(col)
+			}
+		}
+		list := " (" + strings.Join(cols, ", ") + ");"
+		switch {
+		case ix.Name == "PRIMARY":
+			ix.Def = "ALTER TABLE " + e.Quote(schema, table) + " ADD PRIMARY KEY" + list
+		case ix.Unique:
+			ix.Def = "CREATE UNIQUE INDEX " + e.Quote(ix.Name) + " ON " + e.Quote(schema, table) + list
+		default:
+			ix.Def = "CREATE INDEX " + e.Quote(ix.Name) + " ON " + e.Quote(schema, table) + list
+		}
+	}
+	return out, nil
+}
+
+// Keys lists a table's primary key, then its foreign keys by name, each with
+// the table and columns it points at (F14.3).
+func (Engine) Keys(ctx context.Context, c db.Conn, schema, table string) ([]db.Key, error) {
+	var out []db.Key
+	r, err := c.Query(ctx, `
+select column_name from information_schema.statistics
+where table_schema = ? and table_name = ? and index_name = 'PRIMARY' order by seq_in_index`, db.Val{S: schema}, db.Val{S: table})
+	if err != nil {
+		return nil, err
+	}
+	if len(r.Rows) > 0 {
+		k := db.Key{Name: "PRIMARY"}
+		for _, row := range r.Rows {
+			k.Cols = append(k.Cols, row[0].S)
+		}
+		out = append(out, k)
+	}
+	r, err = c.Query(ctx, `
+select constraint_name, column_name, referenced_table_schema, referenced_table_name, referenced_column_name
+from information_schema.key_column_usage
+where table_schema = ? and table_name = ? and referenced_table_name is not null
+order by constraint_name, ordinal_position`, db.Val{S: schema}, db.Val{S: table})
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range r.Rows {
+		if n := len(out); n == 0 || out[n-1].Ref == nil || out[n-1].Name != row[0].S {
+			out = append(out, db.Key{Name: row[0].S, Ref: &db.Ref{Schema: row[2].S, Table: row[3].S}})
+		}
+		k := &out[len(out)-1]
+		k.Cols, k.Ref.Cols = append(k.Cols, row[1].S), append(k.Ref.Cols, row[4].S)
+	}
+	return out, nil
+}
+
+// Functions lists every database's functions by database and name, with the
+// parameters as `name type, …`; not the procedures (F14.3). A function is
+// its database and name, the ID is its name.
+func (Engine) Functions(ctx context.Context, c db.Conn) ([]db.Function, error) {
+	r, err := c.Query(ctx, `
+select r.routine_schema, r.routine_name,
+       coalesce((select group_concat(concat(p.parameter_name, ' ', p.dtd_identifier) order by p.ordinal_position separator ', ')
+                 from information_schema.parameters p
+                 where p.specific_schema = r.routine_schema and p.specific_name = r.specific_name and p.ordinal_position > 0), '')
+from information_schema.routines r
+where r.routine_type = 'FUNCTION' and r.routine_schema `+userSchema+`
+order by 1, 2`)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]db.Function, len(r.Rows))
+	for i, row := range r.Rows {
+		out[i] = db.Function{Schema: row[0].S, Name: row[1].S, Args: row[2].S, ID: row[1].S}
+	}
+	return out, nil
+}
+
+// Sequences is none: MySQL has no sequences.
+func (Engine) Sequences(context.Context, db.Conn) ([]db.Sequence, error) { return nil, nil }
+
+// FunctionDef is f's CREATE FUNCTION as SHOW CREATE FUNCTION gives it.
+func (e Engine) FunctionDef(ctx context.Context, c db.Conn, f db.Function) (string, error) {
+	r, err := c.Query(ctx, "show create function "+e.Quote(f.Schema, f.ID))
+	if err != nil || len(r.Rows) == 0 {
+		return "", err
+	}
+	if r.Rows[0][2].Null { // the server shows the statement to the definer and to SHOW_ROUTINE, not to ALL on a database
+		return "", errors.New(i18n.T("没有读函数定义的权限：要 SHOW_ROUTINE，或是它的 DEFINER"))
+	}
+	return r.Rows[0][2].S + ";", nil
 }

@@ -51,7 +51,7 @@ func (a *App) menuItems(n node) []menuItem {
 			{i18n.T("在新 tab 打开"), func() tea.Cmd { return a.treeOpen(true) }},
 			{drop, a.dropTable},
 		}
-	case nodeConn, nodeSchema, nodeGroup, nodeColumn, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeSep: // no menu
+	case nodeConn, nodeSchema, nodeGroup, nodeColumn, nodeObjects, nodeIndex, nodeKey, nodeFunc, nodeSequence, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeSep: // no menu
 	}
 	return nil
 }

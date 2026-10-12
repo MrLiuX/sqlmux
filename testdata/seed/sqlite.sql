@@ -31,6 +31,8 @@ select 1 + i % 3, case i % 5 when 0 then 'pending' when 1 then 'queued' when 2 t
 from n;
 update t_order set raw = x'DEADBEEF00FF' where id = 1;
 
+create index t_order_user_status on t_order (user_id, status);
+
 -- composite primary key
 create table t_order_item (
     order_id integer not null references t_order (id),
@@ -82,3 +84,9 @@ insert into t_misc (w, h, free, data) values (2, 3, 7, x'00FF'), (4, 5, 'text', 
 
 create view v_order_total as
 select user_id, count(*) as n, sum(amount) as total from t_order group by user_id;
+
+-- a foreign key with no column written: it points at the parent's primary key
+create table t_note (
+    id      integer primary key,
+    user_id integer references t_user
+);

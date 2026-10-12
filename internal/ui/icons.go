@@ -43,6 +43,7 @@ type Icons struct {
 	AutoRefresh, Stop        Icon // and its query group
 	SortAsc, SortDesc        Icon
 	View, Column             Icon // the tree's (F1.12)
+	Index, Func, Sequence    Icon // and a table's indexes, a schema's functions and sequences (F14.3)
 	Lock                     Icon // a read-only connection's (§13)
 	Result, Pin, Export, Log Icon // the result area's (§11)
 	Close                    Icon
@@ -101,6 +102,9 @@ var NerdIcons = &Icons{
 	Advanced:    Icon{Text: "\uf013"}, // nf-fa-cog
 	Group:       Icon{Text: "\uf02c"}, // nf-fa-tags
 	Link:        Icon{Text: "\uf0c1"}, // nf-fa-link
+	Index:       Icon{Text: "\uf0dc"}, // nf-fa-sort
+	Func:        Icon{Text: "\uf121"}, // nf-fa-code
+	Sequence:    Icon{Text: "\uf162"}, // nf-fa-sort_numeric_asc
 }
 
 var ASCIIIcons = &Icons{
@@ -143,6 +147,9 @@ var ASCIIIcons = &Icons{
 	Advanced:    Icon{Text: "+"},
 	Group:       Icon{Text: "%"},
 	Link:        Icon{Text: "&"},
+	Index:       Icon{Text: "i"},
+	Func:        Icon{Text: "f"},
+	Sequence:    Icon{Text: "n"},
 	Labeled:     true,
 }
 
@@ -191,5 +198,6 @@ func (ic *Icons) byName() map[string]*Icon {
 		"pane": &ic.Pane, "log": &ic.Log, "star": &ic.Star, "history": &ic.History, "zoom": &ic.Zoom,
 		"tag": &ic.Tag, "host": &ic.Host, "port": &ic.Port, "user": &ic.User, "database": &ic.Database,
 		"advanced": &ic.Advanced, "link": &ic.Link, "group": &ic.Group,
+		"index": &ic.Index, "func": &ic.Func, "sequence": &ic.Sequence,
 	}
 }

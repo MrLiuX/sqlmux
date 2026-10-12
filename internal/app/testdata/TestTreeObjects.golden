@@ -1,0 +1,45 @@
+┌─ ⓪  doraemon ─────────── « ─┐ ┌─ ① ─────────────────────────────────────────────────────────┐ ┌─ ②  q…  Tx: 自动 ▾ doraemon · doraemon.public ▾  ▶ run  ↵ ─┐
+│  15 tables                 │ │                                                             │ │   1                                                         │
+│──────────────────────────────│ │                                                             │ │                                                             │
+│ ▾  doraemon                 │ │                                                             │ │                                                             │
+│   ▸  agentable              │ │                                                             │ │                                                             │
+│   ▾  public                 │ │                                                             │ │                                                             │
+│     ▾  Tables (14)          │ │                                                             │ │                                                             │
+│       ▸  agent          124 │ │                                                             │ │                                                             │
+│       ▸  agent_version  530 │ │                                                             │ │                                                             │
+│       ▸  goal            57 │ │                                                             │ │                                                             │
+│       ▸  mt_task        812 │ │                                                             │ │                                                             │
+│       ▸  mt_task_log    96k │ │                                                             │ │                                                             │
+│       ▸  schema_migrations  │ │                                                             │ │                                                             │
+│       ▾  t_order       1.2m │ │                                                             │ │                                                             │
+│            id        bigint │ │                                                             │ │                                                             │
+│            user_id   bigint │ │                                                             │ │                                                             │
+│         ▾  Indexes (2)      │ │                                                             │ │                                                             │
+│              t_order_pkey … │ │                                                             │ │                                                             │
+│              t_order_user … │ │                                                             │ │                                                             │
+│         ▾  Keys (3)         │ │                                                             │ │                                                             │
+│              t_order_pkey … │ │                        打开表 t                            │ │                                                             │
+│              t_order_user_… │ │                        新建 query c                        │ │                                                             │
+│              t_order_agent… │ │                                                             │ │                                                             │
+│       ▸  t_order_item  3.4m │ │                                                             │ │                                                             │
+│       ▸  t_payment     410k │ │                                                             │ │                                                             │
+│       ▸  t_refund       12k │ │                                                             │ │                                                             │
+│       ▸  t_sku         8.1k │ │                                                             │ │                                                             │
+│       ▸  t_user         38k │ │                                                             │ │                                                             │
+│       ▸  t_user_address 52k │ │                                                             │ │                                                             │
+│       ▸  t_user_profile 38k │ │                                                             │ │                                                             │
+│        Views (0)            │ │                                                             │ │                                                             │
+│     ▾  Functions (2)        │ │                                                             │ │                                                             │
+│          fn_total(order_id… │ │                                                             │ │                                                             │
+│          fn_greet(who text… │ │                                                             │ │                                                             │
+│     ▾  Sequences (1)        │ │                                                             │ │                                                             │
+│          invoice_no         │ │                                                             │ │                                                             │
+│ ▾  工作区                   │ │                                                             │ │                                                             │
+│   ▾  data                   │ │                                                             │ │                                                             │
+│       ②  query_1            │ │                                                             │ │                                                             │
+│ ▾  Queries                  │ │                                                             │ │                                                             │
+│      query_1                │ │                                                             │ │                                                             │
+│──────────────────────────────│ │                                                             │ │                                                             │
+│ j/k move · ↵ open            │ │ +                                                           │ │ 1: query_1* │ +                                      gt/gT │
+└──────────────────────────────┘ └─────────────────────────────────────────────────────────────┘ └─────────────────────────────────────────────────────────────┘
+ doraemon ▾  0: data*                                                                                             ·     doraemon · pg@localhost:5432  NORMAL 

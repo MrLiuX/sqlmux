@@ -119,7 +119,7 @@ func TestCatalog(t *testing.T) {
 	for _, tb := range ts {
 		got = append(got, tb.Kind+":"+tb.Name)
 	}
-	if want := "r:t_kv r:t_log r:t_misc r:t_order r:t_order_item r:t_seq r:t_sku r:t_user v:v_order_total"; strings.Join(got, " ") != want {
+	if want := "r:t_kv r:t_log r:t_misc r:t_note r:t_order r:t_order_item r:t_seq r:t_sku r:t_user v:v_order_total"; strings.Join(got, " ") != want {
 		t.Fatalf("tables %v", got)
 	}
 	for _, tc := range []struct {
@@ -388,5 +388,61 @@ func TestQuick(t *testing.T) {
 	}
 	if _, err := (Engine{}).Quick(context.Background(), w, "delete from t_log", "main", 20); err == nil {
 		t.Error("quick SQL does not write")
+	}
+}
+
+// A table's indexes (those of a PRIMARY KEY or UNIQUE of the table left out) and
+// keys: the primary key, then the foreign keys, a column left out of one
+// being the parent's primary key (F14.3).
+func TestObjects(t *testing.T) {
+	c, _ := seeded(t)
+	ctx, e := context.Background(), Engine{}
+	text := func(ixs []db.Index) (out []string) {
+		for _, ix := range ixs {
+			out = append(out, ix.Name+"("+strings.Join(ix.Cols, ",")+")"+map[bool]string{true: "U"}[ix.Unique])
+		}
+		return out
+	}
+	for table, want := range map[string]string{
+		"t_sku":        "t_sku_barcode(barcode)U t_sku_code(code)U t_sku_lower_title(expr)U",
+		"t_order":      "t_order_user_status(user_id,status)",
+		"t_order_item": "", // its primary key is an autoindex
+		"t_kv":         "",
+	} {
+		ixs, err := e.Indexes(ctx, c, "main", table)
+		if err != nil || strings.Join(text(ixs), " ") != want {
+			t.Errorf("%s: %v %v, want %s", table, text(ixs), err, want)
+		}
+	}
+	ixs, _ := e.Indexes(ctx, c, "main", "t_order")
+	if ixs[0].Def != "CREATE INDEX t_order_user_status on t_order (user_id, status);" {
+		t.Errorf("def %q", ixs[0].Def)
+	}
+	keys := func(table string) (out []string) {
+		ks, err := e.Keys(ctx, c, "main", table)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, k := range ks {
+			s := k.Name + "(" + strings.Join(k.Cols, ",") + ")"
+			if k.Ref != nil {
+				s += "->" + k.Ref.Schema + "." + k.Ref.Table + "(" + strings.Join(k.Ref.Cols, ",") + ")"
+			}
+			out = append(out, s)
+		}
+		return out
+	}
+	for table, want := range map[string]string{
+		"t_order_item": "PRIMARY(order_id,line_no) (order_id)->main.t_order(id)",
+		"t_note":       "PRIMARY(id) (user_id)->main.t_user(id)",
+		"t_log":        "",
+		"t_kv":         "PRIMARY(k)",
+	} {
+		if got := strings.Join(keys(table), " "); got != want {
+			t.Errorf("%s: %q, want %q", table, got, want)
+		}
+	}
+	if fs, err := e.Functions(ctx, c); err != nil || fs != nil {
+		t.Errorf("functions %v %v", fs, err)
 	}
 }
