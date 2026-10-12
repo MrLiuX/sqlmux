@@ -38,6 +38,7 @@ type Result struct {
   - 建连时通过 RuntimeParams（startup 消息）设置 `DateStyle = ISO, YMD`，保证时间文本的格式可以解析（§10.2）。每条连接都会带上，不会漏设，也不需要额外的往返。
   - 连接参数交给 `pgconn.ParseConfig(dsn)` 解析，环境变量（`PGHOST` 等）和 `~/.pgpass` 都由它处理，不自己实现。没写 `application_name` 时补成 `sqlmux`，没写连接超时时补成 10s。
 - **MySQL**：DSN 加上 `interpolateParams=true`，全程走文本协议；列类型从 `ColumnTypes()` 获取。go-sql-driver 钉在 v1.7.1（M5 F5.4 审查时定）：v1.8 起文本协议下也把整数、浮点数解析成 Go 数值，database/sql 再转回字符串，和服务端原文不一样（double 1500000 变成 `1.5e+06`，float(10,2) 的 1.50 变成 `1.5`，zerofill 的 007 变成 `7`），显示不对、保存永远报「行数据已变化」，v1.10 也没有关掉的开关。驱动加了开关或者改用原始字节读时再升级，go.mod 旁用 `ponytail:` 注释写明。
+- **SQLite**（M14 F14.1，`modernc.org/sqlite`，无 cgo）：DSN 是文件路径（`~` 展开，相对路径按启动目录；`?mode=ro` 等 URI 参数照传给驱动）；路径不存在时报错、不新建空文件（打错路径不该生出一个库；要新建写成 `file:x.db?mode=rwc`，决策者定）。类型是动态的，`Col.Type` 用声明类型（可能为空），值走文本：REAL 按驱动的文本，blob 是 `<binary N bytes>`。行标识：主键，没有就可用的唯一索引，再没有就 `rowid`——这时表格最前面多一列只读的 `rowid`（`Columns.Lead` / `Query.Lead`，取数写 `select rowid, *`）；视图和 WITHOUT ROWID 的表（必有主键）不走这条。INSERT 里 `DEFAULT` 的列直接从列清单去掉（三种引擎等价，SQLite 的 VALUES 里没有 DEFAULT 关键字）；UPDATE 里 SQLite 没有 DEFAULT，单元格选项里不提供（`Column.AddOnly`）。取消把 ctx 传给驱动，没有服务端可 KILL。树：文件 → Tables / Views → 列，没有 schema 层；表的行数不显示（没有估计值）。
 - **已知上限**：MySQL 中非 UTF-8 的 blob 显示为 `<binary n bytes>`；PG 的 bytea 按服务端返回的 `\x…` 文本显示。MySQL 的 BIT 列文本协议返回原始字节（bit(1) 的 0 / 1 是 `\x00` / `\x01`），按大端字节解码成数字显示，不能编辑（F5.4）。
 
 ### 8.2 连接模型

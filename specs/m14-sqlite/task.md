@@ -51,16 +51,16 @@ M13 F13.6 审查时发现：MySQL 的 Query 用 WithoutCancel 发语句，取消
 
 **开发**（§4、§8、§9、§14）
 - [ ] `internal/db/sqlite`：`Engine`（同 postgres / mysql 的形状，`workspace.go` 的 `engines` 加一项）、`Conn`（Exec / Query / Stream）、catalog（`sqlite_schema`、`pragma table_info`）；行标识用主键，没有就 rowid，WITHOUT ROWID 的表必有主键；取消把 ctx 传给驱动，没有服务端可 KILL。
-- [ ] `config`：engine 允许 `sqlite`，DSN 是文件路径（`~` 展开，相对路径按启动目录；`?mode=ro` 等查询参数照传给驱动）；连接表单的 engine 段加 sqlite，只有一个文件字段。
+- [ ] `config`：engine 允许 `sqlite`，DSN 是文件路径（`~` 展开，相对路径按启动目录；`?mode=ro` 等查询参数照传给驱动）；路径不存在时报错、不新建空文件（决策者定，§8.1）；连接表单的 engine 段加 sqlite，只剩 name / group / engine / file / read_only，测试用 `sqlite_version()`。
 - [ ] 树：文件 → Tables / Views → 列，没有 schema 层。
 - [ ] 方言：`sqlkit.Dialect` 加 SQLite，标识符引号 `"`，格式化用 sql-formatter 的 `sqlite`，补全的关键字表共用 PG 的（决策者定）。
 - [ ] 类型：SQLite 的类型是动态的，`Col.Type` 用声明类型（可能为空）；值的文本格式以集成测试为准，blob 走 §8.1 的 `<binary N bytes>`。只读文件（权限、`mode=ro`）上编辑的报错走现有错误栏，不另加提示。
-- [ ] 命令行：位置参数是 DSN 或文件路径（`sqlmux ./x.db`、`sqlmux postgres://…`、`sqlmux mysql://…`），开一个临时连接：名字用文件名（不带扩展名）或 `<host>/<db>`，不写 connections.toml、密码不存钥匙串、退出不存布局；认 `DATABASE_URL`，和位置参数同时给时以参数为准；现有 flag 和 `sqlmux <连接名>` 照旧（连接名和路径 / URL 靠「含 `/`、`.`、`://`」区分）。
+- [ ] 命令行：位置参数是 DSN 或文件路径（`sqlmux ./x.db`、`sqlmux postgres://…`、`sqlmux mysql://…`），开一个临时连接：名字用文件名（不带扩展名）或 `<库>@<主机>`（连接名里不能有 `/`，worker 开工时定），不写 connections.toml、密码不存钥匙串、退出不存布局；`DATABASE_URL` 只在没有配置的连接、也没给位置参数和 `--layout` 时才认（决策者定，§14）；现有 flag 和 `sqlmux <连接名>` 照旧（连接名和路径 / URL 靠「含 `/` 或 `.`、且不是已有连接名」区分）。
 - [ ] 构建：goreleaser 四个目标 CGO_ENABLED=0 都编过；二进制和编译时间的增量写进 commit 说明。
 
 **验收**
 - [ ] 集成（测试里建临时文件，不起容器，seed 用 `testdata/seed/sqlite.sql`）：连接、浏览表 / 视图 / 列、翻页、排序、WHERE、编辑（有主键 / 无主键用 rowid / WITHOUT ROWID）、事务回滚、取消长查询、导出。
-- [ ] 单测：DSN 路径的 `~` 展开；`DATABASE_URL` 与参数同时给时以参数为准；临时连接的名字。
+- [ ] 单测：DSN 路径的 `~` 展开；路径不存在时报错；`DATABASE_URL` 只在零连接且无参数时生效；临时连接的名字（`shop@db.example`、文件名去扩展名）；rowid 表多一列只读 rowid。
 - [ ] e2e：`sqlmux x.db` 起来能看表、改一格存回、退出后 connections.toml 没有它；`sqlmux postgres://…` 同样。
 - [ ] 四个目标交叉编译通过（`goreleaser build --snapshot` 或等价）。
 
