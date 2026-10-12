@@ -22,6 +22,8 @@ e2e_type x; sleep 0.4
 check "确认框开着时按 x：WHERE 还是 id（不是 idx）" eval '[[ $(where_in) == id ]] && screen_has "将删除"' || where_in
 paste "Z"
 check "确认框开着时粘贴 Z：WHERE 还是 id（不是 idxZ）" eval '[[ $(where_in) == id ]]' || where_in
+key C-p; sleep 0.4
+check "确认框开着时 C-p：不开命令面板（§6.4 confirm 只放行 confirm.* 和取消）" eval '! palette_open && screen_has "将删除" && [[ $(where_in) == id ]]'
 e2e_type "jl"; sleep 0.3
 check "确认框还在（x、粘贴、别的键都没有把它关掉）" eval 'screen_has "将删除"'
 key Escape; sleep 0.6
