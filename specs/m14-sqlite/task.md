@@ -57,10 +57,11 @@ M13 F13.6 审查时发现：MySQL 的 Query 用 WithoutCancel 发语句，取消
 - [ ] 类型：SQLite 的类型是动态的，`Col.Type` 用声明类型（可能为空）；值的文本格式以集成测试为准，blob 走 §8.1 的 `<binary N bytes>`。只读文件（权限、`mode=ro`）上编辑的报错走现有错误栏，不另加提示。
 - [ ] 命令行：位置参数是 DSN 或文件路径（`sqlmux ./x.db`、`sqlmux postgres://…`、`sqlmux mysql://…`），开一个临时连接：名字用文件名（不带扩展名）或 `<库>@<主机>`（连接名里不能有 `/`，worker 开工时定），不写 connections.toml、密码不存钥匙串、退出不存布局；`DATABASE_URL` 只在没有配置的连接、也没给位置参数和 `--layout` 时才认（决策者定，§14）；现有 flag 和 `sqlmux <连接名>` 照旧（连接名和路径 / URL 靠「含 `/` 或 `.`、且不是已有连接名」区分）。
 - [ ] 构建：goreleaser 四个目标 CGO_ENABLED=0 都编过；二进制和编译时间的增量写进 commit 说明。
+- [ ] 审查时定（§8.1、§9、§14）：CREATE TRIGGER 的 BEGIN … END 不切；手动模式下 pragma / attach / detach 不补 BEGIN；DATE / DATETIME / TIMESTAMP 列按 SQLite 标准文本显示、julianday 比较；REAL 最短往返显示、按数值比；blob 行标识整表只读；临时连接同名保留扩展名、不合规则用引擎名、管理器不列、session 用新编号的 query。
 
 **验收**
 - [ ] 集成（测试里建临时文件，不起容器，seed 用 `testdata/seed/sqlite.sql`）：连接、浏览表 / 视图 / 列、翻页、排序、WHERE、编辑（有主键 / 无主键用 rowid / WITHOUT ROWID）、事务回滚、取消长查询、导出。
-- [ ] 单测：DSN 路径的 `~` 展开；路径不存在时报错；`DATABASE_URL` 只在零连接且无参数时生效；临时连接的名字（`shop@db.example`、文件名去扩展名）；rowid 表多一列只读 rowid。
+- [ ] 单测：DSN 路径的 `~` 展开；路径不存在时报错；`DATABASE_URL` 只在零连接且无参数时生效；临时连接的名字（`shop@db.example`、文件名去扩展名、同名保留 `.db`、空名用引擎名）；rowid 表多一列只读 rowid；trigger 不被切开；DATETIME 列保存不报「行已变」；REAL `1/7` 保存不报「行已变」。
 - [ ] e2e：`sqlmux x.db` 起来能看表、改一格存回、退出后 connections.toml 没有它；`sqlmux postgres://…` 同样。
 - [ ] 四个目标交叉编译通过（`goreleaser build --snapshot` 或等价）。
 
