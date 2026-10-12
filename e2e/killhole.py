@@ -1,7 +1,7 @@
-# killhole.py LISTEN-PORT HOST PORT BLOCKFILE — a TCP proxy to a database that, while BLOCKFILE exists, takes new connections and never answers them
-# (the KILL QUERY's temporary connection of a MySQL cancel cannot get through, e2e F14.6); connections made before keep flowing.
+# killhole.py LISTEN-PORT HOST PORT BLOCKFILE LOGFILE — a TCP proxy to a database that, while BLOCKFILE exists, takes new connections and never answers them
+# (the KILL QUERY's temporary connection of a MySQL cancel cannot get through, e2e F14.6); connections made before keep flowing; LOGFILE gets a line for each connection taken, held or not.
 import os, socket, sys, threading
-lp, host, port, block = int(sys.argv[1]), sys.argv[2], int(sys.argv[3]), sys.argv[4]
+lp, host, port, block, log = int(sys.argv[1]), sys.argv[2], int(sys.argv[3]), sys.argv[4], sys.argv[5]
 srv = socket.socket(); srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); srv.bind(("127.0.0.1", lp)); srv.listen(16)
 held = []
 def pipe(a, b):
@@ -16,6 +16,7 @@ def pipe(a, b):
         except OSError: pass
 while True:
     c, _ = srv.accept()
+    with open(log, "a") as f: f.write("conn\n")
     if os.path.exists(block):
         held.append(c)                                 # silence: no handshake, nothing forwarded
         continue

@@ -57,6 +57,12 @@ check "↵：下拉关了，原文放到光标处（xx 后面），还在 INSERT
 key Escape; key g g; key d G; key i; key C-r; sleep 0.5; e2e_type "< 5"; sleep 0.4; key Enter; sleep 0.5
 check "多行那条原文放进来：四行，缩进和换行都在" eval 'qhas "1 select id," && qhas "2   v" && qhas "3 from t_h" && qhas "4 where id < 5"'
 check "没有别的连接的语句出现在文件之外：history.jsonl 还是 9 行（C-r 只读，不写）" eval '[[ $(hn) == 9 ]]'
+key Escape; key g g; key d G; key i; e2e_type "select * from t_"; sleep 1.2
+check "（准备）补全列表开着，列出 t_ 开头的表" eval 'qhas "t_order"'
+key C-r; sleep 0.6
+check "补全开着按 C-r：开的是历史（列出语句），补全列表收起了" eval 'qhas "select pg_sleep(30)" && ! qhas "t_order"'
+e2e_type "nope"; sleep 0.3; key Enter; sleep 0.6
+check "↵：原文放到光标处，补全没有再冒出来" eval 'qhas "t_select * from nope_t" && ! qhas "t_order" && mode_is INSERT' || e2e_plain | sed -n 1,10p
 
 # ---- 3. NORMAL 下 C-r 仍是 redo（不开历史）；命令面板里有「查询历史…」
 key Escape; key g g; key d G; key i; e2e_type "hello"; key Escape; key u; key C-r; sleep 0.5
@@ -100,4 +106,28 @@ check "70 KB 的语句：记了一行，sql 是前 65536 字节，truncated 为 
 import sys, json
 h = json.loads(open(sys.argv[1]).read())
 sys.exit(0 if h.get(\"truncated\") is True and len(h[\"sql\"].encode()) == 65536 and h.get(\"tag\") == \"SELECT 1\" else 1)" "$H2"' || { wc -c "$H2"; head -c 300 "$H2"; }
+# ---- 7. 两个 sqlmux 进程同时跑语句：两边的行都在，没有半行（history.jsonl 共用，queries 各用各的）
+mkdir -p "$D/data4/sqlmux" "$D/data5/sqlmux" "$D/cfg5/sqlmux" "$D/st5"
+H4=$D/data4/sqlmux/history.jsonl; ln -s "$H4" "$D/data5/sqlmux/history.jsonl"
+cp "$D/own/connections.toml" "$D/cfg5/sqlmux/"; printf 'language = "zh"\nconfirm_dangerous = false\n' >"$D/cfg5/sqlmux/config.toml"
+SOCK5=$E2E_SOCK-5; t5() { tmux -L "$SOCK5" "$@"; }
+start -C "$D/own" -D "$D/data4"; key C-l
+t5 -f /dev/null new-session -d -s t -x 160 -y 45 -e XDG_CONFIG_HOME="$D/cfg5" -e XDG_STATE_HOME="$D/st5" -e XDG_DATA_HOME="$D/data5" -e COLORTERM=truecolor \
+  "env TERM=xterm-256color $E2E_BIN"; sleep 2; t5 send-keys -t t C-l
+stmts() { python3 -c "import sys; print('; '.join('select %s%02d' % (sys.argv[1], i) for i in range(1, 21)))" "$1"; }
+setsql "$(stmts 1)"; key g g; key V G
+t5 send-keys -t t Escape; sleep 0.3; t5 send-keys -t t g g d G i; sleep 0.3; t5 load-buffer -b e2e5 <(stmts 2); t5 paste-buffer -r -p -b e2e5 -t t; sleep 0.5
+t5 send-keys -t t Escape; sleep 0.3; t5 send-keys -t t g g; sleep 0.3; t5 send-keys -t t V G; sleep 0.3
+t5 send-keys -t t Enter; key Enter; sleep 8
+check "两个进程各跑 20 条（选区执行，同时按 ↵）：文件里 40 行，每行都是完整的 JSON" eval '[[ $(grep -c . "$H4") == 40 ]] && python3 -c "
+import sys, json
+[json.loads(l) for l in open(sys.argv[1])]" "$H4"' || wc -l "$H4"
+check "两边的语句都在（1xx 20 条、2xx 20 条，各一条，没有丢也没有重）" eval '[[ $(python3 -c "
+import sys, json
+ss = sorted(json.loads(l)[\"sql\"] for l in open(sys.argv[1]))
+print(len(ss), len(set(ss)), sum(s.startswith(\"select 1\") for s in ss), sum(s.startswith(\"select 2\") for s in ss))" "$H4") == "40 40 20 20" ]]' || python3 -c "
+import sys, json
+print(*sorted(json.loads(l)['sql'] for l in open(sys.argv[1])))" "$H4"
+t5 kill-server 2>/dev/null; rm -f "$(tmux -L "$SOCK5" display -p '#{socket_path}' 2>/dev/null)"
+_e2e_kill
 e2e_done
