@@ -124,7 +124,7 @@ e2e_own_db() {
 # MySQL (F5.4): SQLMUX_TEST_MYSQL is the driver's DSN, user:pass@tcp(host:port)/db. e2e_mysql [DB] runs the mysql client on
 # that server (no ~/.my.cnf, the password from the environment), the stdin's SQL in DB (default the shared one, read-only like
 # sqlmux on PG); e2e_own_mydb makes sqlmux_e2e_<pid> from mysql.sql without its second database and grants (root's, done once)
-# and sets E2E_MYDB, its connections.toml dsn (mysql://…); e2e_stop drops it.
+# (and without its functions: the test user has no SUPER to make one with binary logging on, F14.3) and sets E2E_MYDB, its connections.toml dsn (mysql://…); e2e_stop drops it.
 e2e_mysql() {
   [[ $SQLMUX_TEST_MYSQL =~ ^([^:]*):([^@]*)@tcp\(([^:]*):([0-9]+)\)/(.*)$ ]] || { echo "e2e: SQLMUX_TEST_MYSQL is not set" >&2; return 1; }
   MYSQL_PWD=${BASH_REMATCH[2]} mysql --no-defaults --protocol=TCP -h "${BASH_REMATCH[3]}" -P "${BASH_REMATCH[4]}" -u "${BASH_REMATCH[1]}" -N -B "${1:-${BASH_REMATCH[5]}}"; }
@@ -132,7 +132,7 @@ e2e_own_mydb() {
   [[ $SQLMUX_TEST_MYSQL =~ ^([^:]*):([^@]*)@tcp\(([^:]*):([0-9]+)\)/ ]] || { echo "e2e: SQLMUX_TEST_MYSQL is not set" >&2; return 1; }
   E2E_MYDB=mysql://${BASH_REMATCH[1]}:${BASH_REMATCH[2]}@${BASH_REMATCH[3]}:${BASH_REMATCH[4]}/sqlmux_e2e_$$
   echo "drop database if exists sqlmux_e2e_$$; create database sqlmux_e2e_$$" | e2e_mysql &&
-    python3 -c 'import sys; print(";\n".join(s for s in open(sys.argv[1]).read().split(";\n") if s.strip() and "agentable" not in s and "grant " not in s))' "$E2E_ROOT/testdata/seed/mysql.sql" | e2e_mysql "sqlmux_e2e_$$"
+    python3 -c 'import sys; print(";\n".join(s for s in open(sys.argv[1]).read().split(";\n") if s.strip() and "agentable" not in s and "grant " not in s and "create function" not in s))' "$E2E_ROOT/testdata/seed/mysql.sql" | e2e_mysql "sqlmux_e2e_$$"
 }
 
 e2e_keys() { t send-keys -t t "$@"; }          # tmux key names: C-c Escape Enter Space ...
