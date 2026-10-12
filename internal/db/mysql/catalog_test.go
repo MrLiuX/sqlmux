@@ -90,7 +90,7 @@ func TestIndexDefsRoundTrip(t *testing.T) {
 	for _, q := range []string{
 		"create table rt (id int primary key, title varchar(100), note varchar(100), body text, `(x)` int, a int, b int, " +
 			"key k_prefix (title(10), note(20)), unique key k_uniq (a), fulltext key k_ft (body), key k_desc (a desc, b), " +
-			"key k_inv (b) invisible, key k_expr ((lower(title))), key k_weird (`(x)`))",
+			"key k_inv (b) invisible, key k_expr ((lower(title))), key k_weird (`(x)`), g geometry not null srid 0, spatial key ix_sp (g))",
 		"create table ord_p (x int, y int, primary key (y, x))",
 		"create table ord_c (a int, b int, foreign key (b, a) references ord_p (y, x))",
 	} {
@@ -109,7 +109,7 @@ func TestIndexDefsRoundTrip(t *testing.T) {
 	}
 	want := lines()
 	ixs, err := my.Indexes(ctx, c, name, "rt")
-	if err != nil || len(ixs) != 8 {
+	if err != nil || len(ixs) != 9 {
 		t.Fatalf("indexes %+v %v", ixs, err)
 	}
 	for _, ix := range ixs {

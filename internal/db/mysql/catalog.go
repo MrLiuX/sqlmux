@@ -229,7 +229,7 @@ order by index_name <> 'PRIMARY', index_name, seq_in_index`, db.Val{S: schema}, 
 		} else {
 			ix.Cols = append(ix.Cols, row[2].S)
 			part = e.Quote(row[2].S)
-			if !row[5].Null { // a prefix length
+			if !row[5].Null && kind == "" { // a prefix length; a spatial index reports 32 for one and takes none
 				part += "(" + row[5].S + ")"
 			}
 		}
