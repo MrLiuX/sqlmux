@@ -79,6 +79,17 @@ func TestParseThemeErrors(t *testing.T) {
 	}
 }
 
+// An unknown icon is told whatever its value is.
+func TestParseThemeUnknownIconOfAnotherShape(t *testing.T) {
+	_, _, unknown, err := ParseTheme("[icon]\nnosuchicon = \"x\"\n", NerdIcons)
+	if err != nil || strings.Join(unknown, " ") != "icon.nosuchicon" {
+		t.Errorf("unknown %q %v", unknown, err)
+	}
+	if _, _, _, err := ParseTheme("[icon]\nquery = \"x\"\n", NerdIcons); err == nil {
+		t.Error("a known icon of the wrong shape is an error")
+	}
+}
+
 // A section it does not know is told once, not with each key in it.
 func TestParseThemeUnknownSection(t *testing.T) {
 	_, _, unknown, err := ParseTheme("rwo = \"#000000\"\n[later]\nfoo = 1\n[later.deeper]\nbar = 2\n", NerdIcons)

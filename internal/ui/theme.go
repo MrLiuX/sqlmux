@@ -83,10 +83,7 @@ func ParseTheme(data string, icons *Icons) (th *Theme, ic *Icons, unknown []stri
 	colors, glyphs := th.tokens(), ic.byName()
 	for _, key := range slices.Sorted(maps.Keys(raw)) { // the same first error every run
 		if key == "icon" {
-			var specs map[string]struct {
-				Text *string `toml:"text"`
-				Fg   *string `toml:"fg"`
-			}
+			var specs map[string]toml.Primitive // not decoded till the name is one: a later version's entry may be of another shape
 			if err := md.PrimitiveDecode(raw[key], &specs); err != nil {
 				return nil, nil, nil, fmt.Errorf("[icon]: %w", err)
 			}
@@ -96,7 +93,13 @@ func ParseTheme(data string, icons *Icons) (th *Theme, ic *Icons, unknown []stri
 					unknown = append(unknown, "icon."+name)
 					continue
 				}
-				s := specs[name]
+				var s struct {
+					Text *string `toml:"text"`
+					Fg   *string `toml:"fg"`
+				}
+				if err := md.PrimitiveDecode(specs[name], &s); err != nil {
+					return nil, nil, nil, fmt.Errorf("[icon] %s: %w", name, err)
+				}
 				if s.Text != nil {
 					icon.Text = *s.Text
 				}
@@ -128,7 +131,8 @@ func ParseTheme(data string, icons *Icons) (th *Theme, ic *Icons, unknown []stri
 		th.Zoom = th.Warn // as the theme has it, not as tokyonight-storm's
 	}
 	for _, k := range md.Undecoded() { // e.g. `bg` inside an [icon] entry
-		if !slices.Contains(unknown, k[0]) { // not `section.key` of a section that is told already
+		told := slices.Contains(unknown, k[0]) || len(k) > 2 && k[0] == "icon" && slices.Contains(unknown, "icon."+k[1])
+		if !told { // not `section.key` of a section, nor `icon.name.key` of an icon, that is told already
 			unknown = append(unknown, k.String())
 		}
 	}
