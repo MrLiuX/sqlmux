@@ -1163,3 +1163,21 @@ func TestEditMySQLLimits(t *testing.T) {
 		t.Errorf("auto_increment in a row added: %+v", tab.cell)
 	}
 }
+
+// DEFAULT in an UPDATE: a column with one offers it, but MySQL's
+// auto_increment and SQLite's, whose UPDATE has no DEFAULT; a row added all do.
+func TestHasDefault(t *testing.T) {
+	for _, tc := range []struct {
+		col          db.Column
+		added, other bool
+	}{
+		{db.Column{Default: "now()"}, true, true},
+		{db.Column{Default: "auto_increment"}, true, false},
+		{db.Column{Default: "'none'", AddOnly: true}, true, false},
+		{db.Column{}, false, false},
+	} {
+		if got := hasDefault(tc.col, true) == tc.added && hasDefault(tc.col, false) == tc.other; !got {
+			t.Errorf("%+v: added %v, update %v", tc.col, hasDefault(tc.col, true), hasDefault(tc.col, false))
+		}
+	}
+}

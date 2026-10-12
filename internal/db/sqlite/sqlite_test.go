@@ -1,0 +1,370 @@
+package sqlite
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/kackerx/sqlmux/internal/db"
+)
+
+// seeded is a file of testdata/seed/sqlite.sql's tables, and a connection to
+// it; no server to start, so these tests need no environment.
+func seeded(t testing.TB) (*Conn, string) {
+	t.Helper()
+	script, err := os.ReadFile("../../../testdata/seed/sqlite.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "seed.db")
+	d, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(string(script)); err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+	c, _, err := Connect(context.Background(), path, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.Close() })
+	return c, path
+}
+
+func q(t testing.TB, c db.Conn, sql string) db.Result {
+	t.Helper()
+	r, err := c.Query(context.Background(), sql)
+	if err != nil {
+		t.Fatalf("%s: %v", sql, err)
+	}
+	return r
+}
+
+func cells(r db.Result) []string {
+	var out []string
+	for _, row := range r.Rows {
+		for _, v := range row {
+			if v.Null {
+				v.S = "NULL"
+			}
+			out = append(out, v.S)
+		}
+	}
+	return out
+}
+
+// A path is the file: ~ is home, a relative one the start directory's; the
+// driver's parameters go on, and a busy timeout when none says another.
+func TestDSN(t *testing.T) {
+	t.Setenv("HOME", "/home/u")
+	wd, _ := os.Getwd()
+	for spec, want := range map[string]string{
+		"~/x.db":             "file:///home/u/x.db?_pragma=busy_timeout%285000%29",
+		"x.db?mode=ro":       "file://" + wd + "/x.db?_pragma=busy_timeout%285000%29&mode=ro",
+		"/a b/c#d.db":        "file:///a%20b/c%23d.db?_pragma=busy_timeout%285000%29",
+		"/t.db?_pragma=a(1)": "file:///t.db?_pragma=a%281%29",
+		"~other/x.db":        "file://" + wd + "/~other/x.db?_pragma=busy_timeout%285000%29", // not a home
+	} {
+		if _, got, err := DSN(spec); err != nil || got != want {
+			t.Errorf("%q: %q %v, want %q", spec, got, err, want)
+		}
+	}
+}
+
+// The catalog: tables and views by name, none of SQLite's own; every table's
+// key and what stands in for it.
+func TestCatalog(t *testing.T) {
+	c, _ := seeded(t)
+	ctx, e := context.Background(), Engine{}
+	q(t, c, "create table t_seq (id integer primary key autoincrement, x)") // makes sqlite_sequence
+	ss, cur, err := e.Schemas(ctx, c)
+	if err != nil || !slices.Equal(ss, []string{"main"}) || cur != "main" {
+		t.Fatalf("schemas %v %q %v", ss, cur, err)
+	}
+	ts, err := e.Tables(ctx, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, tb := range ts {
+		got = append(got, tb.Kind+":"+tb.Name)
+	}
+	if want := "r:t_kv r:t_log r:t_misc r:t_order r:t_order_item r:t_seq r:t_sku r:t_user v:v_order_total"; strings.Join(got, " ") != want {
+		t.Fatalf("tables %v", got)
+	}
+	for _, tc := range []struct {
+		table, key, unique, lead string
+	}{
+		{"t_user", "id", "", ""},
+		{"t_order_item", "order_id,line_no", "", ""},
+		{"t_sku", "code", "code|", ""}, // the nullable and the expression indexes can't identify a row
+		{"t_log", "rowid", "", "rowid, "},
+		{"t_kv", "k", "", ""},
+		{"t_misc", "id", "", ""},
+		{"v_order_total", "", "", ""},
+	} {
+		cols, err := e.TableColumns(ctx, c, "main", tc.table)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.table, err)
+		}
+		if got := strings.Join(cols.Key(), ","); got != tc.key || cols.Lead != tc.lead {
+			t.Errorf("%s: key %q lead %q, want %q %q (%+v)", tc.table, got, cols.Lead, tc.key, tc.lead, cols)
+		}
+	}
+	cols, _ := e.TableColumns(ctx, c, "main", "t_sku")
+	if len(cols.PK) != 0 || len(cols.Unique) != 1 || !slices.Equal(cols.Unique[0], []string{"code"}) {
+		t.Errorf("t_sku: pk %v unique %v", cols.PK, cols.Unique)
+	}
+	cols, _ = e.TableColumns(ctx, c, "main", "t_log")
+	if cols.Cols[0].Name != "rowid" || !cols.Cols[0].Generated || cols.Cols[1].Name != "at" || len(cols.Cols) != 3 {
+		t.Errorf("t_log: the rowid first, nothing to set: %+v", cols.Cols)
+	}
+	cols, _ = e.TableColumns(ctx, c, "main", "t_misc")
+	byName := map[string]db.Column{}
+	for _, col := range cols.Cols {
+		byName[col.Name] = col
+	}
+	if !byName["area"].Generated || byName["w"].Generated || byName["label"].Default != "'none'" || !byName["label"].AddOnly || byName["free"].Type != "" || byName["id"].Default != "rowid" {
+		t.Errorf("t_misc: %+v", byName)
+	}
+	if ddl, err := e.DDL(ctx, c, "main", "v_order_total"); err != nil || !strings.HasPrefix(ddl, "CREATE VIEW v_order_total") || !strings.HasSuffix(ddl, ";") {
+		t.Errorf("ddl %q %v", ddl, err)
+	}
+}
+
+// What a statement gives is text, a REAL as SQLite writes it, a blob by its
+// size, a NULL a NULL; the column types are the declared ones; a write has its
+// rows hit.
+func TestValues(t *testing.T) {
+	c, _ := seeded(t)
+	r := q(t, c, "select id, active, name, email, created_at from t_user where id = 2")
+	if got := strings.Join(cells(r), "|"); got != "2|1|bob|NULL|2026-01-01 00:00:00" {
+		t.Errorf("row %q", got)
+	}
+	if got := []db.Col{{Name: "id", Type: "integer"}, {Name: "active", Type: "integer"}, {Name: "name", Type: "text"}, {Name: "email", Type: "text"}, {Name: "created_at", Type: "text"}}; !slices.Equal(r.Cols, got) {
+		t.Errorf("cols %v", r.Cols)
+	}
+	if r := q(t, c, "select 1 + 1 as two, 'x' || 'y'"); r.Cols[0].Type != "" || cells(r)[0] != "2" {
+		t.Errorf("an expression: %+v", r)
+	}
+	if got := cells(q(t, c, "select raw from t_order where id = 1")); got[0] != db.BinaryShown(6) {
+		t.Errorf("a blob: %q", got)
+	}
+	if got := cells(q(t, c, "select data from t_misc order by id")); got[0] != db.BinaryShown(2) || got[1] != "plain text" {
+		t.Errorf("a blob, a blob that is text: %q", got)
+	}
+	// every REAL as SQLite writes it, by its own cast
+	for _, f := range []string{"3.0", "0.1", "0.30000000000000004", "1e15", "1e14", "123456789012345.0", "1e22", "-2.5", "1e-5", "1.5e300", "0.0001", "100.0", "9007199254740993.0", "2.5e-10"} {
+		got := cells(q(t, c, "select "+f+", cast("+f+" as text)"))
+		if got[0] != got[1] {
+			t.Errorf("%s: %s, SQLite's cast: %s", f, got[0], got[1])
+		}
+	}
+	rs, err := c.Exec(context.Background(), "update t_user set active = 0 where id < 3", 0)
+	if err != nil || rs[0].Affected != 2 || rs[0].Tag != "UPDATE 2" || rs[0].Cols != nil {
+		t.Errorf("update: %+v %v", rs, err)
+	}
+	if r, err := c.Exec(context.Background(), "select * from t_order", 10); err != nil || len(r[0].Rows) != 10 || !r[0].Truncated || r[0].Tag != "SELECT 10" {
+		t.Errorf("max rows: %d rows, truncated %v, %q %v", len(r[0].Rows), r[0].Truncated, r[0].Tag, err)
+	}
+	if r := q(t, c, "insert into t_log values ('x', 'y') returning rowid, line"); strings.Join(cells(r), "|") != "4|y" {
+		t.Errorf("returning: %+v", r)
+	}
+	if r := q(t, c, "pragma table_info(t_log)"); len(r.Rows) != 2 {
+		t.Errorf("pragma: %+v", r)
+	}
+}
+
+// A page of a table by its key, the rowid one with the rowid; the count.
+func TestPage(t *testing.T) {
+	c, _ := seeded(t)
+	ctx, e := context.Background(), Engine{}
+	r, next, err := db.Page(ctx, c, e, db.Query{Schema: "main", Table: "t_order", Key: []string{"id"}, Limit: 500, Offset: 700, Where: "status = 'done'"})
+	if err != nil || len(r.Rows) != 500 || next || r.Rows[0][0].S == "" {
+		t.Fatalf("page: %d rows, next %v, %v", len(r.Rows), next, err)
+	}
+	if n, err := db.Count(ctx, c, e, db.Query{Schema: "main", Table: "t_order", Where: "status = 'done'"}); err != nil || n != 1200 {
+		t.Errorf("count %d %v", n, err)
+	}
+	cols, _ := e.TableColumns(ctx, c, "main", "t_log")
+	r, _, err = db.Page(ctx, c, e, db.Query{Schema: "main", Table: "t_log", Key: cols.Key(), Lead: cols.Lead, Limit: 10, Desc: true})
+	if err != nil || r.Cols[0].Name != "rowid" || strings.Join(cells(r)[:3], "|") != "3|2026-01-01 00:00:03|stopped" {
+		t.Fatalf("t_log: %v %v", r.Cols, err)
+	}
+	if _, _, err := db.Page(ctx, c, e, db.Query{Schema: "main", Table: "t_order", Key: []string{"id"}, Limit: 5, Where: "nope = 1"}); err == nil {
+		t.Error("a WHERE that does not hold is an error")
+	}
+}
+
+// Saves: an UPDATE only of a row that still holds what was read, by key or by
+// rowid, an INSERT that leaves a DEFAULT out, a DELETE; a failure takes the
+// whole save back.
+func TestSave(t *testing.T) {
+	c, _ := seeded(t)
+	ctx, e, w := context.Background(), Engine{}, db.NewWorker(c)
+	save := func(table string, key []string, ch db.Changes) (int, error) {
+		failed, _, err := db.Save(ctx, w, e, "main", table, key, ch, false)
+		return failed, err
+	}
+	up := db.Changes{Updates: []db.Row{{Key: []string{"2"}, Cols: []db.Change{{Name: "email", Val: db.Val{S: "bob@example.com"}, Old: db.Val{Null: true}}}}}}
+	if _, err := save("t_user", []string{"id"}, up); err != nil {
+		t.Fatal(err)
+	}
+	if got := cells(q(t, c, "select email from t_user where id = 2")); got[0] != "bob@example.com" {
+		t.Errorf("updated: %v", got)
+	}
+	if failed, err := save("t_user", []string{"id"}, up); !errors.Is(err, db.ErrStale) || failed != 0 { // it holds another now
+		t.Errorf("again: %d %v", failed, err)
+	}
+	// a REAL as it was read is what it still is
+	f := db.Changes{Updates: []db.Row{{Key: []string{"7"}, Cols: []db.Change{{Name: "amount", Val: db.Val{S: "1"}, Old: db.Val{S: "10.5"}}}}}}
+	if _, err := save("t_order", []string{"id"}, f); err != nil {
+		t.Errorf("a real: %v", err)
+	}
+	// the rowid: a table with nothing else to find a row by
+	cols, _ := e.TableColumns(ctx, c, "main", "t_log")
+	r := db.Changes{Updates: []db.Row{{Key: []string{"2"}, Cols: []db.Change{{Name: "line", Val: db.Val{S: "restarted"}, Old: db.Val{S: "started"}}}}}, Deletes: [][]string{{"3"}}}
+	if _, err := save("t_log", cols.Key(), r); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(cells(q(t, c, "select rowid, line from t_log order by rowid")), "|"); got != "1|started|2|restarted" {
+		t.Errorf("t_log: %s", got)
+	}
+	// WITHOUT ROWID, by its primary key; an INSERT with a column left to its DEFAULT
+	if _, err := save("t_kv", []string{"k"}, db.Changes{Updates: []db.Row{{Key: []string{"b"}, Cols: []db.Change{{Name: "v", Val: db.Val{S: "2"}, Old: db.Val{Null: true}}}}}}); err != nil {
+		t.Fatal(err)
+	}
+	ins := db.Changes{Inserts: [][]db.Change{{{Name: "w", Val: db.Val{S: "6"}}, {Name: "h", Val: db.Val{S: "7"}}, {Name: "label", Default: true}}, {{Name: "label", Default: true}, {Name: "w", Val: db.Val{S: "1"}}, {Name: "h", Val: db.Val{S: "1"}}}}}
+	if _, err := save("t_misc", []string{"id"}, ins); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(cells(q(t, c, "select id, area, label from t_misc where id > 2")), "|"); got != "3|42|none|4|1|none" {
+		t.Errorf("inserted: %s", got)
+	}
+	// all DEFAULT
+	if _, err := save("t_log", cols.Key(), db.Changes{Inserts: [][]db.Change{{}}}); err == nil {
+		t.Error("a log line is NOT NULL: DEFAULT VALUES is no row of it")
+	}
+	// a failure takes back the whole save
+	bad := db.Changes{Updates: []db.Row{
+		{Key: []string{"1"}, Cols: []db.Change{{Name: "name", Val: db.Val{S: "ALICE"}, Old: db.Val{S: "alice"}}}},
+		{Key: []string{"2"}, Cols: []db.Change{{Name: "name", Val: db.Val{Null: true}, Old: db.Val{S: "bob"}}}}, // NOT NULL
+	}}
+	if failed, err := save("t_user", []string{"id"}, bad); err == nil || failed != 1 {
+		t.Fatalf("not null: %d %v", failed, err)
+	}
+	if got := cells(q(t, c, "select name from t_user where id = 1")); got[0] != "alice" || c.TxStatus() != 'I' {
+		t.Errorf("rolled back: %v, tx %c", got, c.TxStatus())
+	}
+}
+
+// BEGIN, COMMIT, END and ROLLBACK are seen; a Meta connection is read only.
+func TestTransactionAndReadOnly(t *testing.T) {
+	c, path := seeded(t)
+	for _, s := range []struct {
+		sql  string
+		want byte
+	}{{"begin", 'T'}, {"insert into t_log values ('a','b')", 'T'}, {"end", 'I'}, {"begin immediate", 'T'}, {"rollback", 'I'}, {"begin transaction", 'T'}, {"commit transaction", 'I'}} {
+		q(t, c, s.sql)
+		if got := c.TxStatus(); got != s.want {
+			t.Fatalf("after %q: %c, want %c", s.sql, got, s.want)
+		}
+	}
+	m, _, err := Connect(context.Background(), path, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	if _, err := m.Query(context.Background(), "insert into t_log values ('a','b')"); err == nil || !strings.Contains(err.Error(), "readonly") {
+		t.Errorf("a write on a read-only connection: %v", err)
+	}
+	if r := q(t, m, "select count(*) from t_log"); r.Rows[0][0].S != "4" { // the one committed above, seen from the other connection
+		t.Errorf("count %v", r.Rows)
+	}
+	ro, _, err := Connect(context.Background(), path+"?mode=ro", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ro.Close()
+	_, err = ro.Query(context.Background(), "delete from t_log")
+	if err == nil {
+		t.Fatal("mode=ro takes no write")
+	}
+	if se := (Engine{}).ErrorOf(err); se.Severity != "ERROR" || se.Message == "" || se.Code == "" {
+		t.Errorf("error %+v", se)
+	}
+}
+
+// A statement cancelled stops, and the connection goes on; one cancelled before it ran does not.
+func TestCancel(t *testing.T) {
+	c, _ := seeded(t)
+	w := db.NewWorker(c)
+	time.AfterFunc(200*time.Millisecond, w.Cancel)
+	start := time.Now()
+	_, err := w.Query(context.Background(), "with recursive n (i) as (select 1 union all select i + 1 from n) select count(*) from n")
+	if !errors.Is(err, context.Canceled) || time.Since(start) > 3*time.Second {
+		t.Fatalf("cancelled: %v after %v", err, time.Since(start))
+	}
+	if r, err := w.Query(context.Background(), "select count(*) from t_user"); err != nil || r.Rows[0][0].S != "3" {
+		t.Errorf("after: %v %v", r.Rows, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := c.Query(ctx, "insert into t_log values ('a', 'b')"); !errors.Is(err, context.Canceled) {
+		t.Errorf("before: %v", err)
+	}
+	if r := q(t, c, "select count(*) from t_log"); r.Rows[0][0].S != "3" {
+		t.Errorf("it did not run: %v", r.Rows)
+	}
+}
+
+// The rows come as they are read, a blob as a file has it; a stop leaves the rest.
+func TestStream(t *testing.T) {
+	c, _ := seeded(t)
+	var cols []db.Col
+	var rows []string
+	err := c.Stream(context.Background(), "select id, raw from t_order where id <= 2", func(c []db.Col) error { cols = c; return nil }, func(v []db.Val) error {
+		rows = append(rows, v[0].S+":"+v[1].S+map[bool]string{true: "NULL"}[v[1].Null])
+		return nil
+	})
+	if err != nil || len(cols) != 2 || strings.Join(rows, " ") != "1:X'DEADBEEF00FF' 2:NULL" {
+		t.Errorf("stream: %v %q %v", cols, rows, err)
+	}
+	stop := errors.New("enough")
+	n := 0
+	if err := c.Stream(context.Background(), "select id from t_order", func([]db.Col) error { return nil }, func([]db.Val) error {
+		if n++; n == 3 {
+			return stop
+		}
+		return nil
+	}); !errors.Is(err, stop) || n != 3 {
+		t.Errorf("stop: %v after %d", err, n)
+	}
+}
+
+// Quick SQL reads in a transaction it takes back, limited to what comes back.
+func TestQuick(t *testing.T) {
+	c, path := seeded(t)
+	m, _, err := Connect(context.Background(), path, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := db.NewWorker(m)
+	defer w.Close()
+	_ = c
+	r, err := Engine{}.Quick(context.Background(), w, "select id from t_order order by id", "main", 20)
+	if err != nil || len(r.Rows) != 20 || !r.Truncated || m.TxStatus() != 'I' {
+		t.Fatalf("quick: %d rows, truncated %v, tx %c, %v", len(r.Rows), r.Truncated, m.TxStatus(), err)
+	}
+	if _, err := (Engine{}).Quick(context.Background(), w, "delete from t_log", "main", 20); err == nil {
+		t.Error("quick SQL does not write")
+	}
+}

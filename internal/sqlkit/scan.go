@@ -15,6 +15,7 @@ type Dialect int
 const (
 	PG Dialect = iota
 	MySQL
+	SQLite // read as PG, but for its $tag$ strings, E'…' and nested comments, and with `…` identifiers too (F14.1)
 )
 
 // Kind is what a token is.
@@ -70,7 +71,7 @@ func Scan(s string, d Dialect) []Token {
 			kind, i, exec = Comment, i+2, false
 		case d == MySQL && strings.HasPrefix(s[i:], "/*!"):
 			kind, i, exec = Comment, i+3+version(s[i+3:]), true
-		case strings.HasPrefix(s[i:], "--") && (d == PG || i+2 >= len(s) || s[i+2] <= ' '),
+		case strings.HasPrefix(s[i:], "--") && (d != MySQL || i+2 >= len(s) || s[i+2] <= ' '),
 			d == MySQL && r == '#':
 			line, _, _ := strings.Cut(s[i:], "\n")
 			kind, i = Comment, i+len(line)
@@ -78,7 +79,7 @@ func Scan(s string, d Dialect) []Token {
 			kind, i = Comment, blockComment(s, i, d == PG)
 		case r == '\'':
 			kind, i = String, quoted(s, i, d == MySQL)
-		case r == '"' && d == PG, r == '`' && d == MySQL:
+		case r == '"' && d != MySQL, r == '`' && d != PG:
 			kind, i = Quoted, quoted(s, i, false)
 		case r == '"':
 			kind, i = String, quoted(s, i, true)
@@ -106,7 +107,7 @@ func Scan(s string, d Dialect) []Token {
 		default:
 			kind = Op
 			for i < len(s) && strings.IndexByte("=<>!~+-*/%|&^#@:?", s[i]) >= 0 &&
-				!strings.HasPrefix(s[i:], "--") && !strings.HasPrefix(s[i:], "/*") && (d == PG || s[i] != '#') &&
+				!strings.HasPrefix(s[i:], "--") && !strings.HasPrefix(s[i:], "/*") && (d != MySQL || s[i] != '#') &&
 				!(exec && strings.HasPrefix(s[i:], "*/")) {
 				i++
 			}

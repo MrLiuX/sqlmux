@@ -50,6 +50,10 @@ func TestScan(t *testing.T) {
 		{MySQL, "/*!0804001*/", "cnc", []string{"/*!08040", "01", "*/"}},
 		{MySQL, "/*! a /*! b */ 2**/", "c_i_c_i_c_no", nil}, // one in it is code too, the first */ ending both
 		{PG, "/*! a */", "c", nil},
+		// SQLite: PG's "…" names and -- comments, MySQL's `…` names; no $tag$ or E'…' strings, no nested comments
+		{SQLite, "a=\"q\"\"q\" `b` -- x\nc", "ioq_q_c_i", nil},
+		{SQLite, "$1 $a$b$a$ E'x'", "on_oi_is", nil},
+		{SQLite, "/* a /* b */ c */", "c_i_o", nil},
 	} {
 		if got := kinds(c.in, c.d); got != c.kinds {
 			t.Errorf("%q: %s, want %s", c.in, got, c.kinds)

@@ -33,12 +33,13 @@ func TestGoldenFormat(t *testing.T) {
 		{PG, "/* two */ update t set a = 1 where b in (select b from u); delete from t"},
 		{MySQL, "select `a b`, c from `t` # a comment\nwhere d = 'x' limit 5, 10"},
 		{MySQL, "insert into t (a) values (1), (2) on duplicate key update a = values(a)"},
+		{SQLite, "select \"a b\", `c`, x -> 'k' from t where d = ?1 order by 1 limit 5 offset 10"},
 	} {
 		out, err := Format(c.sql, c.d, Options{KeywordCase: "lower", TabWidth: 2})
 		if err != nil {
 			t.Fatalf("%s: %v", c.sql, err)
 		}
-		b.WriteString("-- " + map[Dialect]string{PG: "pg", MySQL: "mysql"}[c.d] + ": " + c.sql + "\n" + out + "\n\n")
+		b.WriteString("-- " + map[Dialect]string{PG: "pg", MySQL: "mysql", SQLite: "sqlite"}[c.d] + ": " + c.sql + "\n" + out + "\n\n")
 	}
 	up, _ := Format("select a, now() from t; create table t (a int)", PG, Options{KeywordCase: "upper", TabWidth: 4})
 	b.WriteString("-- upper, types too, not functions; tab_width 4\n" + up + "\n")

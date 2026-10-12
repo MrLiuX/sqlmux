@@ -305,6 +305,8 @@ func (a *App) treeNodes() (ns []node, matches int) {
 		if !add(cn) {
 			continue
 		}
+		flat := c.Spec.Engine == "sqlite" // the file is the schema: Tables and Views hang from it (F14.1)
+		depth := func(d int) int { return d - b2i(flat) }
 		for _, sc := range c.Schemas {
 			var groups [2][]db.Table // Tables, Views
 			for _, t := range c.Tables {
@@ -324,7 +326,7 @@ func (a *App) treeNodes() (ns []node, matches int) {
 				continue
 			}
 			id := schemaNode(c, sc)
-			if !add(node{id: id, kind: nodeSchema, conn: c, schema: sc, TreeNode: ui.TreeNode{Depth: 1, Branch: true, Open: open(id, sc == c.home), Icon: ic.Schema, IconFg: th.PK, Text: sc}}) {
+			if !flat && !add(node{id: id, kind: nodeSchema, conn: c, schema: sc, TreeNode: ui.TreeNode{Depth: 1, Branch: true, Open: open(id, sc == c.home), Icon: ic.Schema, IconFg: th.PK, Text: sc}}) {
 				continue
 			}
 			for g, ts := range groups {
@@ -336,18 +338,18 @@ func (a *App) treeNodes() (ns []node, matches int) {
 				if filtering && len(shown) == 0 {
 					continue
 				}
-				gn := node{id: gid, kind: nodeGroup, conn: c, schema: sc, TreeNode: ui.TreeNode{Depth: 2, Branch: len(ts) > 0, Open: open(gid, sc == c.home && g == 0), Icon: icon, IconFg: th.Func, Text: fmt.Sprintf("%s (%d)", label, len(ts))}}
+				gn := node{id: gid, kind: nodeGroup, conn: c, schema: sc, TreeNode: ui.TreeNode{Depth: depth(2), Branch: len(ts) > 0, Open: open(gid, sc == c.home && g == 0), Icon: icon, IconFg: th.Func, Text: fmt.Sprintf("%s (%d)", label, len(ts))}}
 				if !add(gn) {
 					continue
 				}
 				for _, t := range shown {
 					tid := tableNode(c, t)
 					rows := ui.Magnitude(t.Rows)
-					if t.Kind == "v" { // a plain view has no rows to count
+					if t.Kind == "v" || flat { // a plain view has no rows to count, a file keeps no estimate
 						rows = ""
 					}
 					tn := node{id: tid, kind: nodeTable, conn: c, schema: sc, table: t, TreeNode: ui.TreeNode{
-						Depth: 3, Branch: true, Open: !filtering && a.sess.opened(tid, false), Icon: icon, IconFg: th.Func, Text: t.Name, Pos: pos[tid],
+						Depth: depth(3), Branch: true, Open: !filtering && a.sess.opened(tid, false), Icon: icon, IconFg: th.Func, Text: t.Name, Pos: pos[tid],
 						Note: rows, NoteFg: th.Border, Current: tid == current,
 					}}
 					if !add(tn) {
@@ -356,7 +358,7 @@ func (a *App) treeNodes() (ns []node, matches int) {
 					cols := c.cols[idOf(t)] // none until fetched: no children, no "loading" (§7.8)
 					for _, col := range cols.Cols {
 						coln := node{id: tid + "/" + col.Name, kind: nodeColumn, conn: c, schema: sc, table: t, column: col.Name, TreeNode: ui.TreeNode{
-							Depth: 4, Icon: ic.Column, IconFg: th.Dim, Text: col.Name, Note: col.Type, NoteFg: th.Dim,
+							Depth: depth(4), Icon: ic.Column, IconFg: th.Dim, Text: col.Name, Note: col.Type, NoteFg: th.Dim,
 						}}
 						if slices.Contains(cols.PK, col.Name) {
 							coln.Icon, coln.IconFg = ic.Key, th.PK

@@ -66,11 +66,11 @@ var connFields = []string{fieldName: "name", fieldGroup: "group", fieldEngine: "
 	fieldPassword: "password", fieldDatabase: "database", fieldReadOnly: "read_only", fieldAdvanced: "", fieldDSN: "dsn", fieldPasswordCmd: "password_cmd"}
 
 // defaultPort is the port of an engine's server.
-var defaultPort = map[string]string{"postgres": "5432", "mysql": "3306"}
+var defaultPort = map[string]string{"postgres": "5432", "mysql": "3306"} // none for SQLite
 
 // dsnExample is what an empty dsn field shows of each engine, the URL form
 // of both (§8): the driver's own form of MySQL is read as well, not shown.
-var dsnExample = map[string]string{"postgres": "postgres://user:pass@host:5432/db?sslmode=prefer", "mysql": "mysql://user:pass@host:3306/db"}
+var dsnExample = map[string]string{"postgres": "postgres://user:pass@host:5432/db?sslmode=prefer", "mysql": "mysql://user:pass@host:3306/db", "sqlite": "~/data.db?mode=ro"}
 
 // specs are the connections the session has, as connections.toml says them.
 func (a *App) specs() []config.Connection {
@@ -88,7 +88,7 @@ func blankFields() []ui.FormField {
 		fs[i].Label = name
 	}
 	fs[fieldAdvanced].Label = i18n.T("高级")
-	fs[fieldEngine].Kind, fs[fieldEngine].Choices = ui.FormSegments, []string{"postgres", "mysql"}
+	fs[fieldEngine].Kind, fs[fieldEngine].Choices = ui.FormSegments, []string{"postgres", "mysql", "sqlite"}
 	fs[fieldReadOnly].Kind = ui.FormCheck
 	fs[fieldAdvanced].Kind = ui.FormFold
 	fs[fieldPassword].Mask = true
@@ -155,6 +155,9 @@ var mysqlDSN = regexp.MustCompile(`^(?:([^:@/]*)(?::[^@]*)?@)?tcp\(([^)]*)\)/([^
 // says them in a form it knows: a URL, which is what the form writes for
 // both engines, or the go-sql-driver's; "" for what it cannot read.
 func splitDSN(engine, dsn string) (host, port, user, database string) {
+	if engine == "sqlite" { // the file is all there is
+		return "", "", "", dsn
+	}
 	if engine == "mysql" && !strings.Contains(dsn, "://") {
 		if m := mysqlDSN.FindStringSubmatch(dsn); m != nil {
 			host, port, err := net.SplitHostPort(m[2])
@@ -184,10 +187,21 @@ func (f *connForm) skipped(i int) bool {
 	switch i {
 	case fieldDSN, fieldPasswordCmd:
 		return !f.advanced()
-	case fieldHost, fieldPort, fieldUser, fieldDatabase:
+	case fieldHost, fieldPort, fieldUser:
+		return f.dsnGiven() || f.sqlite()
+	case fieldPassword:
+		return f.sqlite()
+	case fieldDatabase:
 		return f.dsnGiven()
 	}
 	return false
+}
+
+// sqlite is whether the engine on is SQLite, whose form is a file, its
+// database field, and no more (F14.1).
+func (f *connForm) sqlite() bool {
+	e := f.fields[fieldEngine]
+	return e.Choices[e.On] == "sqlite"
 }
 
 // clearErr forgets why ↵ did not save, as the form is touched.
@@ -416,6 +430,14 @@ func (a *App) formConn() (config.Connection, bool) {
 		c.DSN = text(fieldDSN)
 		return c, true
 	}
+	if f.sqlite() { // the file is the dsn
+		if text(fieldDatabase) == "" {
+			a.fail(fieldDatabase, i18n.T("缺少 %s", "file"))
+			return c, false
+		}
+		c.DSN = text(fieldDatabase)
+		return c, true
+	}
 	for _, i := range []int{fieldHost, fieldUser, fieldDatabase} {
 		if text(i) == "" {
 			a.fail(i, i18n.T("缺少 %s", connFields[i]))
@@ -487,7 +509,11 @@ func testConn(spec config.Connection, password string) (string, error) {
 		return "", err
 	}
 	defer conn.Close()
-	r, err := conn.Query(ctx, "select version()")
+	version := "select version()"
+	if spec.Engine == "sqlite" {
+		version = "select sqlite_version()"
+	}
+	r, err := conn.Query(ctx, version)
 	if err != nil {
 		return "", err
 	}
@@ -498,8 +524,11 @@ func testConn(spec config.Connection, password string) (string, error) {
 // `PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2) on aarch64…` is PostgreSQL
 // 17.11; MySQL's is the number, with its name before it.
 func versionText(engine, v string) string {
-	if engine == "mysql" {
+	switch engine {
+	case "mysql":
 		return "MySQL " + v
+	case "sqlite":
+		return "SQLite " + v
 	}
 	v, _, _ = strings.Cut(v, " on ")
 	v, _, _ = strings.Cut(v, " (")
@@ -719,8 +748,11 @@ func (a *App) formView() ui.Form {
 		fieldAdvanced: ic.Advanced, fieldDSN: ic.Link, fieldPasswordCmd: ic.Query}
 	for i := range fields {
 		fields[i].Icon = icons[i]
-		fields[i].Hidden = (i == fieldDSN || i == fieldPasswordCmd) && !f.advanced()
+		fields[i].Hidden = (i == fieldDSN || i == fieldPasswordCmd) && !f.advanced() || f.sqlite() && f.skipped(i)
 		fields[i].Dim = f.skipped(i) && !fields[i].Hidden
+	}
+	if f.sqlite() {
+		fields[fieldDatabase].Label = "file"
 	}
 	hints := bound(
 		ui.Hint{Key: a.keys.Hint("form.next", "form"), Label: i18n.T("下一项"), Action: "form.next"},

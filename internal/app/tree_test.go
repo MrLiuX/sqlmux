@@ -658,3 +658,20 @@ func TestCatalogKeepsHome(t *testing.T) {
 		t.Errorf("public gone: %s", c.home)
 	}
 }
+
+// A SQLite file has no schema level: its Tables and Views hang from the
+// connection, a table's columns two levels under them (F14.1).
+func TestTreeSQLiteFlat(t *testing.T) {
+	a := sized(160, 40, "nerd")
+	c := a.sess.Conns[0]
+	c.Spec.Engine = "sqlite"
+	c.Schemas, c.home, c.Schema = []string{"main"}, "main", "main"
+	c.Tables = []db.Table{{Schema: "main", Name: "t_user", Rows: -1, Kind: "r"}, {Schema: "main", Name: "v_user", Rows: -1, Kind: "v"}}
+	c.cols[idOf(c.Tables[0])] = db.Columns{Cols: []db.Column{{Name: "id", Type: "integer"}}, PK: []string{"id"}}
+	a.sess.open[tableNode(c, c.Tables[0])] = true
+	got := strings.Split(treeTexts(a), "\n")
+	want := []string{"▾ doraemon", "  ▾ Tables (1)", "    ▾ t_user", "        id", "  ▸ Views (1)"}
+	if len(got) < len(want) || strings.Join(got[:len(want)], "|") != strings.Join(want, "|") {
+		t.Fatalf("tree:\n%s", strings.Join(got, "\n"))
+	}
+}

@@ -210,11 +210,12 @@ func insert(e Engine, schema, table string, cols []Change) (string, []Val) {
 	args, arg := argsOf(e)
 	var names, vals []string
 	for _, c := range cols {
-		v := "DEFAULT"
-		if !c.Default {
-			v = arg(c.Val)
+		if !c.Default { // left out, a column takes its DEFAULT: SQLite has no keyword for it in a VALUES
+			names, vals = append(names, e.Quote(c.Name)), append(vals, arg(c.Val))
 		}
-		names, vals = append(names, e.Quote(c.Name)), append(vals, v)
+	}
+	if len(names) == 0 {
+		return DefaultRow(e, schema, table, func(s string) string { return s }), nil
 	}
 	return "insert into " + e.Quote(schema, table) + " (" + strings.Join(names, ", ") + ") values (" + strings.Join(vals, ", ") + ")", *args
 }

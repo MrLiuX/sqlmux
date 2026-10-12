@@ -29,6 +29,7 @@ type Icons struct {
 	Filter        Icon
 	Postgres      Icon
 	MySQL         Icon
+	SQLite        Icon
 	Search, Keys  Icon // status bar: palette entry, pending keys
 	Conn          Icon
 	Key           Icon // primary key columns
@@ -65,6 +66,7 @@ var NerdIcons = &Icons{
 	Filter:      Icon{Text: "\uf0b0"}, // nf-fa-filter
 	Postgres:    Icon{Text: "\ue76e"}, // nf-dev-postgresql
 	MySQL:       Icon{Text: "\ue704"}, // nf-dev-mysql
+	SQLite:      Icon{Text: "\ue7c4"}, // nf-dev-sqllite
 	Search:      Icon{Text: "\uf002"}, // nf-fa-search
 	Keys:        Icon{Text: "\uf11c"}, // nf-fa-keyboard_o
 	Conn:        Icon{Text: "\uf1e6"}, // nf-fa-plug
@@ -106,6 +108,7 @@ var ASCIIIcons = &Icons{
 	Filter:      Icon{Text: "?"},
 	Postgres:    Icon{Text: "pg"},
 	MySQL:       Icon{Text: "my"},
+	SQLite:      Icon{Text: "sq"},
 	Search:      Icon{Text: "~"},
 	Keys:        Icon{Text: "kb"},
 	Conn:        Icon{Text: "@"},
@@ -154,8 +157,11 @@ func IconSet(name string) *Icons {
 // Engine is the icon of a connection to engine, as connections.toml
 // names it (§7.7).
 func (ic *Icons) Engine(engine string) Icon {
-	if engine == "mysql" {
+	switch engine {
+	case "mysql":
 		return ic.MySQL
+	case "sqlite":
+		return ic.SQLite
 	}
 	return ic.Postgres
 }
@@ -177,7 +183,7 @@ func (ic *Icons) byName() map[string]*Icon {
 	return map[string]*Icon{
 		"schema": &ic.Schema, "table": &ic.Table, "query": &ic.Query,
 		"filter": &ic.Filter, "search": &ic.Search, "keys": &ic.Keys, "conn": &ic.Conn,
-		"key": &ic.Key, "postgres": &ic.Postgres, "mysql": &ic.MySQL, "command": &ic.Command, "window": &ic.Window,
+		"key": &ic.Key, "postgres": &ic.Postgres, "mysql": &ic.MySQL, "sqlite": &ic.SQLite, "command": &ic.Command, "window": &ic.Window,
 		"save": &ic.Save, "refresh": &ic.Refresh, "transpose": &ic.Transpose,
 		"row_add": &ic.RowAdd, "row_delete": &ic.RowDelete, "auto_refresh": &ic.AutoRefresh, "stop": &ic.Stop,
 		"sort_asc": &ic.SortAsc, "sort_desc": &ic.SortDesc, "view": &ic.View, "column": &ic.Column, "lock": &ic.Lock,

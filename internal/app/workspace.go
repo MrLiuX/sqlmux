@@ -17,6 +17,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/db/mysql"
 	"github.com/kackerx/sqlmux/internal/db/postgres"
+	"github.com/kackerx/sqlmux/internal/db/sqlite"
 	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
@@ -269,7 +270,7 @@ func (c *Conn) liveSpec() config.Connection {
 }
 
 // engines are the engines connections.toml names (§8.1).
-var engines = map[string]db.Engine{"postgres": postgres.Engine{}, "mysql": mysql.Engine{}}
+var engines = map[string]db.Engine{"postgres": postgres.Engine{}, "mysql": mysql.Engine{}, "sqlite": sqlite.Engine{}}
 
 func (a *App) win() *Window { return a.sess.Windows[a.sess.Active] }
 

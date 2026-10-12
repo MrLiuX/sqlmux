@@ -21,6 +21,7 @@ type Query struct {
 	Order         []OrderCol // the columns to sort by, in order; none for Key alone
 	Desc          bool       // with no Order: Key turned
 	Key           []string   // the row identity: the order, or Order's tiebreaker
+	Lead          string     // listed before *, as Columns.Lead (F14.1)
 	Limit, Offset int
 }
 
@@ -71,7 +72,7 @@ func Select(e Engine, q Query) string {
 			order = append(order, e.Quote(k))
 		}
 	}
-	sql := "select *" + q.from(e)
+	sql := "select " + q.Lead + "*" + q.from(e)
 	if len(order) > 0 {
 		sql += " order by " + strings.Join(order, ", ")
 	}

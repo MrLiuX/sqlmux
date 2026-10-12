@@ -116,7 +116,7 @@ func (a *App) exportSource(d *dropdown) exportSrc {
 			w = t.conn.Main
 		}
 		s := t.shown // what the grid shows, not what is asked and not there yet
-		q := db.Query{Schema: t.table.Schema, Table: t.table.Name, Where: s.applied, Order: s.order, Desc: s.desc, Key: t.cols.Key()}
+		q := db.Query{Schema: t.table.Schema, Table: t.table.Name, Where: s.applied, Order: s.order, Desc: s.desc, Key: t.cols.Key(), Lead: t.cols.Lead}
 		// ponytail: select * reads the columns COLS hides too and drops them, so
 		// the wide ones travel for nothing; name the shown ones if that matters
 		src.all = &exportAll{base: t.table.Name, worker: w, sql: db.Select(t.conn.eng, q)}

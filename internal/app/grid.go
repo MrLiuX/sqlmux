@@ -207,7 +207,7 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 			}
 		}
 		q := q
-		q.Key = cols.Key()
+		q.Key, q.Lead = cols.Key(), cols.Lead
 		var r db.Result
 		var next bool
 		err := w.RunSafe(ctx, func(ctx context.Context, c db.Conn) error {

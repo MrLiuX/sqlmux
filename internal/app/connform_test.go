@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -724,5 +725,33 @@ func TestConnListClickHasTheKeys(t *testing.T) {
 	click(a, at.Min)
 	if !a.form.list {
 		t.Error("a click on a row of the list leaves the keys to the form")
+	}
+}
+
+// SQLite's form is its file and no more: host, port, user and password are
+// not there, Tab goes from the engine to the file, the dsn is the file (F14.1).
+func TestConnFormSQLite(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	a, _ := withSessions()
+	feed(t, a, "<C-p>conn.new<CR>lite<Tab><Tab><Right><Right>")
+	if view := a.render().String(); !strings.Contains(view, "file") || regexp.MustCompile(`\b(host|port|user|password)\b`).MatchString(view) {
+		t.Fatalf("the form of a file:\n%s", view)
+	}
+	feed(t, a, "<Tab>~/data.db?mode=ro<CR>")
+	if got := connections(); !strings.Contains(got, `engine = "sqlite"`) || !strings.Contains(got, `dsn = "~/data.db?mode=ro"`) {
+		t.Fatalf("connections.toml:\n%s", got)
+	}
+	// edited, the file is in its field
+	if _, _, _, db := splitDSN("sqlite", "/a/b.db?mode=ro"); db != "/a/b.db?mode=ro" {
+		t.Errorf("file %q", db)
+	}
+	if got := versionText("sqlite", "3.53.4"); got != "SQLite 3.53.4" {
+		t.Errorf("version %q", got)
+	}
+	// no file, no connection
+	b, _ := withSessions()
+	feed(t, b, "<C-p>conn.new<CR>nofile<Tab><Tab><Right><Right><CR>")
+	if b.form == nil || b.form.err == "" {
+		t.Errorf("a file asked for: %+v", b.form)
 	}
 }

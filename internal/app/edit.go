@@ -176,9 +176,10 @@ func (t *dataTab) whyNoEdit() string {
 }
 
 // hasDefault is whether column col offers DEFAULT in a row, added or not:
-// MySQL's auto_increment in a row added alone, an UPDATE to it writing 0.
+// MySQL's auto_increment in a row added alone, an UPDATE to it writing 0;
+// SQLite's in a row added only.
 func hasDefault(col db.Column, added bool) bool {
-	return col.Default != "" && (added || col.Default != "auto_increment")
+	return col.Default != "" && (added || col.Default != "auto_increment" && !col.AddOnly)
 }
 
 // cellSrc is the cell under the cursor as an editor of it, the cell's own

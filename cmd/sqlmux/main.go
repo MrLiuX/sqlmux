@@ -57,7 +57,7 @@ func main() {
 	}
 }
 
-// run is `sqlmux [--layout name-or-path] [connection]`. Whatever fails before
+// run is `sqlmux [--layout name-or-path] [connection | file | url]`. Whatever fails before
 // the UI is up ends the program with the error on the terminal (§14「启动时找不到连接」).
 func run(args []string) error {
 	flags := flag.NewFlagSet("sqlmux", flag.ContinueOnError)
@@ -77,7 +77,7 @@ func run(args []string) error {
 	case 1:
 		name = flags.Arg(0)
 	default:
-		return errors.New("usage: sqlmux [--version] [--layout name-or-path] [connection]")
+		return errors.New("usage: sqlmux [--version] [--layout name-or-path] [connection | file | url]")
 	}
 	if name != "" && *layout != "" {
 		return errors.New("give a connection name or --layout, not both")
@@ -88,13 +88,22 @@ func run(args []string) error {
 	}
 	i18n.Set(cfg.Language) // from here on, what is shown follows it (§14)
 	warning := startNotes(cfg)
-	l, err := startLayout(name, *layout, &warning)
+	temp, err := tempConnection(name, *layout, os.Getenv("DATABASE_URL"))
 	if err != nil {
 		return err
 	}
-	sess, restored, err := startSession(name, *layout, l)
-	if err != nil {
-		return err
+	var l *config.Layout
+	var sess *app.Session
+	var restored *app.Restored
+	if temp != nil { // a file or a URL: its own connection and its own session, kept nowhere
+		sess = app.Open([]config.Connection{*temp}, 0)
+	} else {
+		if l, err = startLayout(name, *layout, &warning); err != nil {
+			return err
+		}
+		if sess, restored, err = startSession(name, *layout, l); err != nil {
+			return err
+		}
 	}
 	st, err := config.LoadState()
 	if err != nil { // the broken file is kept aside; start empty (§14)
@@ -105,13 +114,40 @@ func run(args []string) error {
 	if restored != nil {
 		a.Adopt(restored)
 	}
-	a.SaveLayoutOnExit(config.LastPath())
+	if temp == nil {
+		a.SaveLayoutOnExit(config.LastPath())
+	}
 	a.KeyProblems(problems)
 	defer a.Close()
 	p := tea.NewProgram(a)
 	app.Send = p.Send
 	_, err = p.Run()
 	return err
+}
+
+// tempConnection is the connection to open that connections.toml has not
+// (F14.1): the file or URL name is, or with no name and no layout asked for,
+// DATABASE_URL; nil when there is none, or when name is a connection's.
+func tempConnection(name, layout, databaseURL string) (*config.Connection, error) {
+	target := name
+	switch {
+	case name != "":
+		conns, _, _ := config.LoadConnections("") // none to read: no name is known
+		var known []string
+		for _, c := range conns {
+			known = append(known, c.Name)
+		}
+		if !config.IsTarget(name, known) {
+			return nil, nil
+		}
+	case layout == "":
+		target = databaseURL
+	}
+	if target == "" {
+		return nil, nil
+	}
+	c, err := config.TempConnection(target)
+	return &c, err
 }
 
 // startSession is the session the program starts with: over the layout l, the

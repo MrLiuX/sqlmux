@@ -162,8 +162,8 @@ func (c Connection) Check(names []string) (field, problem string) {
 	if c.Group != "" && checkFileName(c.Group) != nil { // the characters of a name (F10.6)
 		return "group", fmt.Sprintf(i18n.T(`group = %q：不能含 / 或 \，也不能以 . 开头`), c.Group)
 	}
-	if c.Engine != "postgres" && c.Engine != "mysql" {
-		return "engine", fmt.Sprintf(i18n.T("engine = %q：只能是 postgres 或 mysql"), c.Engine)
+	if !slices.Contains([]string{"postgres", "mysql", "sqlite"}, c.Engine) {
+		return "engine", fmt.Sprintf(i18n.T("engine = %q：只能是 postgres、mysql 或 sqlite"), c.Engine)
 	}
 	return "", ""
 }

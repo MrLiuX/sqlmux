@@ -314,3 +314,35 @@ func TestOrderKeysReference(t *testing.T) {
 		}
 	}
 }
+
+// A file or a URL is a connection of its own, kept nowhere; a name is a
+// connection's. DATABASE_URL is taken with no name and no layout, the name
+// winning over it (F14.1).
+func TestTempConnection(t *testing.T) {
+	writeConfig(t, "connections.toml", "[[connection]]\nname = \"prod\"\nengine = \"postgres\"\ndsn = \"postgres://h/d\"\n\n[[connection]]\nname = \"prod.eu\"\nengine = \"postgres\"\ndsn = \"postgres://h/e\"\n")
+	for _, tc := range []struct {
+		name, layout, env string
+		want              string // the temporary connection's name; "" for none
+	}{
+		{"x.db", "", "", "x"},
+		{"./data/x.sqlite", "", "postgres://u@h/other", "x"}, // the argument wins
+		{"postgres://u@h/shop", "", "", "shop@h"},
+		{"prod", "", "mysql://u@h/db", ""},    // a connection's name
+		{"prod.eu", "", "mysql://u@h/db", ""}, // with a dot in it
+		{"", "", "mysql://u@h/db", "db@h"},
+		{"", "", "", ""},
+		{"", "lay", "mysql://u@h/db", ""}, // a layout asked for is the program's
+	} {
+		c, err := tempConnection(tc.name, tc.layout, tc.env)
+		got := ""
+		if c != nil {
+			got = c.Name
+		}
+		if err != nil || got != tc.want {
+			t.Errorf("%+v: %q %v", tc, got, err)
+		}
+	}
+	if _, err := tempConnection("oracle://h/d", "", ""); err == nil {
+		t.Error("no such engine")
+	}
+}
