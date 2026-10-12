@@ -3,7 +3,7 @@
 - **状态**：**todo**（2026-10-12 决策者按 worker 的草稿定清单；2026-10-11 用户规划时定方向）。
 - **目标**：SQLite（无 cgo）和命令行直接给 DSN / 文件，查询历史，树上的索引 / 键 / 函数 / 序列，结构修改的模板 SQL，表格的 JSON 视图，MySQL 取消的兜底。
 - **范围**：tech-design §4（`internal/db/sqlite`、modernc）、§5、§7.6（JSON 视图）、§7.8（树）、§8（SQLite 的 catalog、行标识 rowid；MySQL 取消的截止时间）、§9（SQLite 方言）、§11（历史）、§14（`history.jsonl`、`[query] history_max`、命令行 DSN）、§15。
-- **依赖**：M13 passed；用户验收 M12 / M13 通过（或用户定先开工）。
+- **依赖**：M13 passed（用户 2026-10-12 定：不等验收，直接开工；验收意见进后续迭代）。
 - **完成标准**：F14.1–F14.6 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m14`。
 - **审查节点**（小的、不依赖 SQLite 的先做，worker 提议、决策者同意）：
   1. F14.2 之后：F14.6、F14.2 一批（MySQL 取消兜底、查询历史）；
