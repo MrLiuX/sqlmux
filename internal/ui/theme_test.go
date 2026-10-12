@@ -79,6 +79,14 @@ func TestParseThemeErrors(t *testing.T) {
 	}
 }
 
+// A section it does not know is told once, not with each key in it.
+func TestParseThemeUnknownSection(t *testing.T) {
+	_, _, unknown, err := ParseTheme("rwo = \"#000000\"\n[later]\nfoo = 1\n[later.deeper]\nbar = 2\n", NerdIcons)
+	if err != nil || strings.Join(unknown, " ") != "later rwo" {
+		t.Errorf("unknown %q %v", unknown, err)
+	}
+}
+
 // A key it does not know, a token or an icon or a field of one that a later
 // version has, loads and is told, sorted; the rest of the file is read (F14.7).
 func TestParseThemeUnknown(t *testing.T) {

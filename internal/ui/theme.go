@@ -128,7 +128,9 @@ func ParseTheme(data string, icons *Icons) (th *Theme, ic *Icons, unknown []stri
 		th.Zoom = th.Warn // as the theme has it, not as tokyonight-storm's
 	}
 	for _, k := range md.Undecoded() { // e.g. `bg` inside an [icon] entry
-		unknown = append(unknown, k.String())
+		if !slices.Contains(unknown, k[0]) { // not `section.key` of a section that is told already
+			unknown = append(unknown, k.String())
+		}
 	}
 	slices.Sort(unknown)
 	return th, ic, unknown, nil

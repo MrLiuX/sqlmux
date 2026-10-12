@@ -1,7 +1,6 @@
 package app
 
 import (
-	"cmp"
 	"slices"
 	"strconv"
 	"strings"
@@ -85,12 +84,12 @@ func (a *App) openThemeDrop() {
 // setTheme puts theme name on the screen at once; it is this run's, nothing
 // is written: config.toml is the user's alone (§14).
 func (a *App) setTheme(name string) tea.Cmd {
-	th, ic, note, err := config.LoadTheme(name, a.baseIcons)
+	th, ic, unknown, err := config.LoadTheme(name, a.baseIcons)
 	if err != nil {
 		return a.showToast(err.Error())
 	}
 	a.theme, a.icons, a.themeName = th, ic, name
-	return a.showToast(cmp.Or(note, i18n.T("写进 config.toml 的 theme 才会保留")))
+	return a.showToast(JoinNotes(config.UnknownThemeKeys(name, unknown), i18n.T("写进 config.toml 的 theme 才会保留")))
 }
 
 // openQueryDrop opens the focused query's dropdown of kind k, schema

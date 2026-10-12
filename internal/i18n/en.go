@@ -52,13 +52,15 @@ var en = map[string]string{
 	"再按一次 %s 退出": "Press %s again to quit",
 	"切换 schema":  "Switch schema",
 	"不认识的 URL %s://：只有 postgres://、mysql:// 和 SQLite 的文件": "Unknown URL %s://: only postgres://, mysql:// and SQLite files",
-	"%s: 不认识的键 %s": "%s: unknown keys %s",
+	"%s: 不认识的键 %s": "%s: unknown key(s) %s",
 	"没有读函数定义的权限：要 SHOW_ROUTINE，或是它的 DEFINER": "No permission to read the function's definition: it takes SHOW_ROUTINE, or being its DEFINER",
 	"函数已不存在，按 R 刷新":                          "The function no longer exists: R reloads",
 	"%s 里没有表 %s":                             "%s has no table %s",
 	"加列…":                                    "Add column…",
 	"加索引…":                                   "Add index…",
 	"改名…":                                    "Rename…",
+	"翻页":                                     "Page",
+	"回表格":                                    "Table",
 	"改名表…":                                   "Rename table…",
 	"删除列…":                                   "Drop column…",
 	"删除索引…":                                  "Drop index…",
@@ -492,8 +494,6 @@ var en = map[string]string{
 	"；":      "; ",
 
 	// F13.5
-	"config.toml: 不认识的键 %s":                     "config.toml: unknown key(s) %s",
-	"connections.toml: 不认识的键 %s":                "connections.toml: unknown key(s) %s",
 	"connections.toml: 不认识的键 %s（connection %q）": "connections.toml: unknown key(s) %s (connection %q)",
 
 	// F13.1, F13.2

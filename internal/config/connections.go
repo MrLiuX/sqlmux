@@ -38,10 +38,10 @@ type Connection struct {
 // the program read; what does not read is its error's to say (F13.5).
 func UnknownKeys(c *Config) (lines []string) {
 	if len(c.Unknown) > 0 {
-		lines = append(lines, i18n.T("config.toml: 不认识的键 %s", strings.Join(c.Unknown, ", ")))
+		lines = append(lines, unknownKeys("config.toml", c.Unknown))
 	}
-	if c.ThemeNote != "" {
-		lines = append(lines, c.ThemeNote)
+	if note := UnknownThemeKeys(c.ThemeName, c.ThemeUnknown); note != "" {
+		lines = append(lines, note)
 	}
 	data, err := os.ReadFile(connectionsPath())
 	if err != nil {
@@ -61,7 +61,7 @@ func UnknownKeys(c *Config) (lines []string) {
 		}
 	}
 	if slices.Sort(outside); len(outside) > 0 {
-		lines = append(lines, i18n.T("connections.toml: 不认识的键 %s", strings.Join(outside, ", ")))
+		lines = append(lines, unknownKeys("connections.toml", outside))
 	}
 	known, t := map[string]bool{}, reflect.TypeFor[Connection]()
 	for i := range t.NumField() {

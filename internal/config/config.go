@@ -61,9 +61,9 @@ type Config struct {
 	Leader   string
 	Bindings []keymap.Line
 
-	// ThemeNote is what the theme file has that nothing reads, as UnknownKeys
-	// says it (F14.7).
-	ThemeNote string
+	// ThemeUnknown are the keys of the theme file nothing reads; UnknownKeys
+	// says them, when the language is known (F14.7).
+	ThemeUnknown []string
 
 	// Unknown are the keys of config.toml nothing reads, a misspelt one among
 	// them, as TOML names them (`query.max_rowz`); said at the start, not an
@@ -97,7 +97,7 @@ func Load() (*Config, error) {
 		return nil, err
 	default:
 		if c, err = Parse(string(data)); err == nil && c.theme != "" {
-			if c.Theme, c.Icons, c.ThemeNote, err = LoadTheme(c.theme, c.BaseIcons); err != nil {
+			if c.Theme, c.Icons, c.ThemeUnknown, err = LoadTheme(c.theme, c.BaseIcons); err != nil {
 				err = fmt.Errorf("theme = %q: %w", c.theme, err)
 			}
 			c.ThemeName = c.theme
@@ -268,25 +268,35 @@ func ThemeNames() []string {
 
 // LoadTheme finds a theme by name (§7.3): themes/<name>.toml first, then a
 // built-in theme; with the icons that `icons` chose, a theme's [icon] on
-// them.
-func LoadTheme(name string, icons *ui.Icons) (th *ui.Theme, ic *ui.Icons, note string, err error) {
+// them. unknown are the keys it has that nothing reads (F14.7).
+func LoadTheme(name string, icons *ui.Icons) (th *ui.Theme, ic *ui.Icons, unknown []string, err error) {
 	path := filepath.Join(Dir(), "themes", name+".toml")
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		if th, ok := ui.Themes[name]; ok {
-			return th, icons, "", nil
+			return th, icons, nil, nil
 		}
-		return nil, nil, "", fmt.Errorf(i18n.T("找不到 %s，也没有这个内置主题"), path)
+		return nil, nil, nil, fmt.Errorf(i18n.T("找不到 %s，也没有这个内置主题"), path)
 	}
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, nil, err
 	}
-	th, ic, unknown, err := ui.ParseTheme(string(data), icons)
+	th, ic, unknown, err = ui.ParseTheme(string(data), icons) // a key of a later version: the theme goes on without it (F14.7)
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("%s: %w", path, err)
+		return nil, nil, nil, fmt.Errorf("%s: %w", path, err)
 	}
-	if len(unknown) > 0 { // a key of a later version: the theme goes on without it (F14.7)
-		note = i18n.T("%s: 不认识的键 %s", "themes/"+name+".toml", strings.Join(unknown, ", "))
+	return th, ic, unknown, nil
+}
+
+// UnknownThemeKeys is what a toast says of the keys of theme name that nothing
+// reads, "" with none; the one sentence of config.toml's and connections.toml's.
+func UnknownThemeKeys(name string, unknown []string) string {
+	if len(unknown) == 0 {
+		return ""
 	}
-	return th, ic, note, nil
+	return unknownKeys("themes/"+name+".toml", unknown)
+}
+
+func unknownKeys(file string, keys []string) string {
+	return i18n.T("%s: 不认识的键 %s", file, strings.Join(keys, ", "))
 }

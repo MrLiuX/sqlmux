@@ -503,7 +503,7 @@ func TestThemeSwitchUnknownKey(t *testing.T) {
 	a := sized(160, 45, "ascii")
 	a.run("theme.switch", 0)
 	feed(t, a, "later<CR>")
-	if a.themeName != "later" || ansiHex(a.theme.Bg) != "#202020" || !strings.Contains(a.toast, "themes/later.toml") || !strings.Contains(a.toast, "future_token") {
+	if a.themeName != "later" || ansiHex(a.theme.Bg) != "#202020" || a.toast != "themes/later.toml: 不认识的键 future_token；写进 config.toml 的 theme 才会保留" {
 		t.Errorf("theme %q bg %v toast %q", a.themeName, a.theme.Bg, a.toast)
 	}
 }

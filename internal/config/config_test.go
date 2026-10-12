@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
@@ -186,11 +187,16 @@ func TestThemeFile(t *testing.T) {
 	if err != nil || c.Theme.PaneBg != ui.TokyonightStorm.PaneBg {
 		t.Fatalf("unknown key: %v", err)
 	}
-	if want := "themes/typo.toml: 不认识的键 rwo"; c.ThemeNote != want || !slices.Contains(UnknownKeys(c), want) {
-		t.Errorf("note %q, start says %q", c.ThemeNote, UnknownKeys(c))
+	if want := "themes/typo.toml: 不认识的键 rwo"; !slices.Equal(c.ThemeUnknown, []string{"rwo"}) || !slices.Contains(UnknownKeys(c), want) {
+		t.Errorf("unknown %q, start says %q", c.ThemeUnknown, UnknownKeys(c))
 	}
-	if _, th, note, err := LoadTheme("ristretto", ui.NerdIcons); err != nil || note != "" || th == nil {
-		t.Errorf("a theme with no unknown key says nothing: %q %v", note, err)
+	i18n.Set("en") // the sentence is made when the language is known, not when the file is read
+	if got := UnknownKeys(c); !slices.Contains(got, "themes/typo.toml: unknown key(s) rwo") {
+		t.Errorf("in English: %q", got)
+	}
+	i18n.Set("zh")
+	if th, _, unknown, err := LoadTheme("ristretto", ui.NerdIcons); err != nil || len(unknown) != 0 || th == nil {
+		t.Errorf("a theme with no unknown key says nothing: %q %v", unknown, err)
 	}
 	if c, err := Parse(`theme = "nope"`); err != nil || c.Theme != ui.TokyonightStorm {
 		t.Errorf("Parse reads no theme file: %v", err)
