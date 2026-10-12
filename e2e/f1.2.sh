@@ -44,6 +44,7 @@ def mag(n):
             return (f"{math.floor(v * 10) / 10:.1f}" if v < 10 else str(math.floor(v))) + s
 for name, kind, n in sorted(l.split() for l in sys.stdin if l.strip()): print(name if kind == "v" else f"{name} {mag(float(n))}")'
 }
+between_p() { tree | awk -v a="$1" -v b="$2" 'index($0, b) == 1 { f = 0 } f { print } $0 == a { f = 1 }'; }   # A B：同 between，B 是行的开头（Functions (n) 的 n 随库变）
 between() { tree | awk -v a="$1" -v b="$2" '$0 == b { f = 0 } f { print } $0 == a { f = 1 }'; }   # A B：树里 A 和 B 之间的行
 
 # ---- 树（§7.8、§8.4）：Tables 下按名字排，分区子表不列；行数量级；视图在 Views 下
@@ -54,7 +55,7 @@ ends_count() { [[ $(e2e_text 1 32 2 | noicon | sed 's/ *│ *$//; s/ *$//') == *
 check "第一行显示 $n tables（所有 schema 的表和视图，F1.12）" text_is 4 14 2 " $n tables "
 check "public 的 Tables：按名字排，行数量级按 §7.8（t_order 6.0k、t_order_item 400），分区子表不列" eval 'w=$(want r,p,f public); [[ $(between "Tables ($(grep -c . <<<"$w"))" "Views (2)") == "$w" && $w == *"t_order 6.0k"* && $w == *"t_order_item 400"* && $w != *t_event_20* ]] || { echo "  tree: $(tree | tr "\n" ",")"; echo "  want: $(tr "\n" "," <<<"$w")"; false; }'
 key C-h; for ((i = 0; i < 12; i++)); do [[ $(e2e_text 2 31 $(item_y "Views")) == *Views* ]] && cursor_on "Views (2)" >/dev/null && break; key j; done; key Enter; key C-l
-check "展开 Views (2)：物化视图有行数（名字太长时整个不显示），普通视图 v_paid_order 没有" eval '[[ $(between "Views (2)" "工作区") == "mv_order_by_status"*$'"'\n'"'"v_paid_order" ]] || { between "Views (2)" "工作区"; false; }'
+check "展开 Views (2)：物化视图有行数（名字太长时整个不显示），普通视图 v_paid_order 没有" eval '[[ $(between_p "Views (2)" "Functions (") == "mv_order_by_status"*$'"'\n'"'"v_paid_order" ]] || { between_p "Views (2)" "Functions ("; false; }'
 check "表项：图标 func 色" eval 'y=$(item_y t_log); c=$(e2e_find "$NF_TABLE" $y); style_has ${c%% *} $y fg=$FUNC'
 
 # ---- 光标（§7.8）：树聚焦时 select 底、失焦时 row 底；j/k 支持次数，gg / G；悬停 row 底、不动光标
@@ -123,9 +124,9 @@ check "往回滚：回到顶部" eval '[[ $(tree | head -1) == doraemon ]]'
 # ---- R 刷新（§7.8、§6.8）：Meta 连接重新执行表列表的查询
 APP=e2e-f12-$$
 printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s&application_name=%s"\n' "$SQLMUX_TEST_PG" "$APP" >"$D/connections.toml"; chmod 600 "$D/connections.toml"
-tables_q() { psql "$SQLMUX_TEST_PG" -At -c "select max(query_start) from pg_stat_activity where application_name = '$APP' and query like '%relispartition%'"; }
+tables_q() { psql "$SQLMUX_TEST_PG" -At -c "select max(query_start) from pg_stat_activity where application_name = '$APP' and (query like '%relispartition%' or query like '%relkind = ''S''%')"; }
 start -C "$D"
 t0=$(tree); q0=$(tables_q); key C-h; key R; sleep 0.5
-check "R：Meta 上重新查了表列表，树不变" eval '[[ -n $q0 && $(tables_q) > $q0 && $(tree) == "$t0" ]] || { echo "  query_start $q0 → $(tables_q)"; false; }'
+check "R：Meta 上重新查了表列表（F14.3 起 Meta 最后一条是函数 / 序列的查询，所以三种都算），树不变" eval '[[ -n $q0 && $(tables_q) > $q0 && $(tree) == "$t0" ]] || { echo "  query_start $q0 → $(tables_q)"; false; }'
 
 e2e_done

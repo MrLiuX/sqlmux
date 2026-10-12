@@ -40,7 +40,7 @@ check "（准备）自建库的 t_drop1、t_drop2、t_drop3 在树里" eval '[[ 
 
 # ---- 表节点上右键：菜单；esc / 点别处关；键盘选
 y=$(srow t_drop1); rclick 12 "$y"
-check "右键表 t_drop1：弹菜单「打开 / 在新 tab 打开 / 删除表…」，贴着指针" eval 'menu_is "打开|在新 tab 打开|删除表…|"'
+check "右键表 t_drop1：弹菜单「打开 / 在新 tab 打开 / 删除表…」，后面是 F14.4 的五个结构模板，贴着指针" eval 'menu_is "打开|在新 tab 打开|删除表…|加列…|加索引…|改名…|删除列…|删除索引…|"'
 key Escape; sleep 0.3
 check "esc：菜单关掉" no_menu
 rclick 12 "$y"; e2e_click 120 30; sleep 0.4

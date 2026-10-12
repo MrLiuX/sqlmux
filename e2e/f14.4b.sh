@@ -25,8 +25,8 @@ start -C "$D/own"; sleep 1
 Q='`'
 rclick 6 "$(srow cust)"
 check "表 cust 右键：打开 / 在新 tab 打开 / 删除表… 之后是五个模板项" eval '[[ $(mitems) == "打开|在新 tab 打开|删除表…|加列…|加索引…|改名…|删除列…|删除索引…|" ]]' || mitems
-for row in '加列…|alter table @ add column <name> <type>;' '加索引…|create index <name> on @ (<column>);' '改名…|rename table @ to <new_name>;' '删除列…|alter table @ drop column <column>;' '删除索引…|drop index <index> on @;'; do
-  want=${row#*|}; want=${want//@/$Q$DB$Q.${Q}cust$Q}
+for row in '加列…|alter table @ add column <name> <type>;' '加索引…|create index <name> on @ (<column>);' '改名…|rename table @ to #.<new_name>;' '删除列…|alter table @ drop column <column>;' '删除索引…|drop index <index> on @;'; do
+  want=${row#*|}; want=${want//@/$Q$DB$Q.${Q}cust$Q}; want=${want//#/$Q$DB$Q}
   [[ ${row%%|*} == 加列… ]] || rclick 6 "$(srow cust)"
   mclick "${row%%|*}"
   check "${row%%|*}：MySQL 用反引号 db.表，第一个占位符选中（VISUAL）" eval '[[ $(tmpl) == "$want" && $(bar) == *VISUAL* ]]' || newest

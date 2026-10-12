@@ -75,4 +75,32 @@ key C-j; sleep 0.5; key g J; sleep 1
 check "结果 tab 上 gJ：结果区变成 JSON 数组，对象只有 id、name 两个键（不是整张表）" eval 'e2e_plain | grep -qF "\"name\": \"alice\"" && ! e2e_plain | grep -qF "\"email\""' || e2e_plain | tail -20 | cut -c60-200
 key Escape; sleep 0.6
 check "esc 回结果表格：看得到 id │ name 的表头" eval '! e2e_plain | grep -qF "\"name\": \"alice\"" && e2e_plain | grep -qF " id │ name"'
+_e2e_kill
+
+# ---- 只读：粘贴、↵、x 都改不到看不见的表格；提示行；vim = false 下 ] [ R 照常
+paste() { t set-buffer -b e2e "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.5; }
+e2e_start "$E2E_BIN $DB"; wait_for 5 flag_is alternate_on 1; sleep 1; solo
+open_table t_user; wait_for 8 settled
+key g J; sleep 1
+check "JSON 视图的提示行是「]/[ 翻页 · esc 回表格」" eval 'e2e_plain | grep -qF "]/[ 翻页 · esc 回表格"' || e2e_plain | tail -3 | cut -c30-170
+paste "ZZZ"; key Enter; sleep 0.3; e2e_type x; e2e_keys C-v; sleep 0.3
+check "粘贴 ZZZ、↵、x：JSON 文字不变（没有 ZZZ）" eval 'in_json && ! e2e_plain | grep -qF "ZZZ" && [[ $(jfirst) == "\"id\":1" ]]'
+key Escape; sleep 0.6
+check "回表格：格子没被改（alice 还在、没有 ZZZ、没有待保存的标记）" eval '! e2e_plain | grep -qF "ZZZ" && e2e_plain | grep -qF "alice" && [[ $(e2e_plain | sed -n 3p | grep -c "│  1  *│") == 0 ]]'
+check "文件里也没变（t_user 的 name 还是 alice）" eval '[[ $(lite "select name from t_user where id = 1") == alice || $(lite "select name from t_user where id = 1") == zed ]]'
+_e2e_kill
+mkdir -p "$D/novim"; printf 'vim = false\n' >"$D/novim/config.toml"
+e2e_start -C "$D/novim" "$E2E_BIN $DB"; wait_for 5 flag_is alternate_on 1; sleep 1.5
+open_table t_order; wait_for 8 settled
+key g J; sleep 1; wait_for 5 settled
+check "vim = false：gJ 进 JSON 视图（g J 两个键，同 vim 的写法）：第一个对象 id 1" eval 'screen_has "\"id\": 1," && screen_has "JSON"' || e2e_plain | sed -n 1,6p | cut -c30-120
+key "]"; sleep 1; wait_for 5 settled
+check "vim = false：] 翻页（PAGE 2/60，第一个对象 id 101）" eval 'screen_has "PAGE 2/60" && screen_has "\"id\": 101,"'
+lite "update t_order set note = 'NOVIM' where id = 101"
+key R; sleep 1.2; wait_for 5 settled
+check "vim = false：R 刷新（101 的 note 变成 NOVIM）" eval 'screen_has "\"note\": \"NOVIM\""'
+key "["; sleep 1; wait_for 5 settled
+check "vim = false：[ 翻回第 1 页（PAGE 1/60，第一个对象 id 1）" eval 'screen_has "PAGE 1/60" && screen_has "\"id\": 1,"'
+key Escape; sleep 0.6
+check "vim = false：esc 回表格（JSON 没了，表头 id │ user_id 在）" eval '! screen_has "\"id\": 1," && screen_has " id │ user_id"'
 e2e_done
