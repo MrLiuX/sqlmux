@@ -66,16 +66,38 @@ func cells(r db.Result) []string {
 func TestDSN(t *testing.T) {
 	t.Setenv("HOME", "/home/u")
 	wd, _ := os.Getwd()
+	const busy = "_pragma=busy_timeout%285000%29"
 	for spec, want := range map[string]string{
-		"~/x.db":             "file:///home/u/x.db?_pragma=busy_timeout%285000%29",
-		"x.db?mode=ro":       "file://" + wd + "/x.db?_pragma=busy_timeout%285000%29&mode=ro",
-		"/a b/c#d.db":        "file:///a%20b/c%23d.db?_pragma=busy_timeout%285000%29",
-		"/t.db?_pragma=a(1)": "file:///t.db?_pragma=a%281%29",
-		"~other/x.db":        "file://" + wd + "/~other/x.db?_pragma=busy_timeout%285000%29", // not a home
+		"~/x.db":             "file:///home/u/x.db?" + busy + "&mode=rw",
+		"x.db?mode=ro":       "file://" + wd + "/x.db?" + busy + "&mode=ro",
+		"/t.db?mode=rwc":     "file:///t.db?" + busy + "&mode=rwc",
+		"/a b/c#d.db":        "file:///a%20b/c%23d.db?" + busy + "&mode=rw",
+		"/t.db?_pragma=a(1)": "file:///t.db?_pragma=a%281%29&mode=rw",
+		"~other/x.db":        "file://" + wd + "/~other/x.db?" + busy + "&mode=rw", // not a home
 	} {
 		if _, got, err := DSN(spec); err != nil || got != want {
 			t.Errorf("%q: %q %v, want %q", spec, got, err, want)
 		}
+	}
+}
+
+// A file there is not is an error, no new empty database; mode=rwc makes one.
+func TestConnectNeedsTheFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "new.db")
+	if _, _, err := Connect(context.Background(), path, "", false); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a path that is none: %v", err)
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Fatal("it made the file")
+	}
+	c, _, err := Connect(context.Background(), path+"?mode=rwc", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	q(t, c, "create table t (a)")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("mode=rwc makes it: %v", err)
 	}
 }
 

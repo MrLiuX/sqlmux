@@ -48,8 +48,9 @@ func Path(spec string) (path, query string, err error) {
 	return path, query, err
 }
 
-// DSN is spec as the driver takes it: the file with its parameters, and a
-// busy timeout, as Main writes while Meta reads the same file.
+// DSN is spec as the driver takes it: the file with its parameters, a busy
+// timeout, as Main writes while Meta reads the same file, and mode=rw unless
+// another mode is written.
 func DSN(spec string) (path, dsn string, err error) {
 	path, query, err := Path(spec)
 	if err != nil {
@@ -62,16 +63,23 @@ func DSN(spec string) (path, dsn string, err error) {
 	if !q.Has("_pragma") {
 		q.Add("_pragma", "busy_timeout(5000)")
 	}
+	if !q.Has("mode") { // a file there is not is no new database: a path mistyped; mode=rwc says it
+		q.Set("mode", "rw")
+	}
 	u := url.URL{Scheme: "file", Path: path, RawQuery: q.Encode()}
 	return path, u.String(), nil
 }
 
-// Connect opens the file spec names (a new one if there is none). readOnly
+// Connect opens the file spec names, which has to be there unless the mode is
+// rwc: SQLite would make an empty one. readOnly
 // makes every transaction read only, as the Meta connection is (§8.2). The
 // password is of no use here.
 func Connect(ctx context.Context, spec, _ string, readOnly bool) (*Conn, db.Info, error) {
 	path, dsn, err := DSN(spec)
 	if err != nil {
+		return nil, db.Info{}, err
+	}
+	if _, err := os.Stat(path); err != nil && !strings.Contains(dsn, "mode=rwc") {
 		return nil, db.Info{}, err
 	}
 	pool, err := sql.Open("sqlite", dsn)

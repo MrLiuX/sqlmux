@@ -126,13 +126,15 @@ func run(args []string) error {
 }
 
 // tempConnection is the connection to open that connections.toml has not
-// (F14.1): the file or URL name is, or with no name and no layout asked for,
-// DATABASE_URL; nil when there is none, or when name is a connection's.
+// (F14.1): the file or URL name is; with no name and no layout asked for,
+// DATABASE_URL, but only when connections.toml has no connection, as many keep
+// it exported all the time and a user with a config wants last.toml back; nil
+// when there is none, or when name is a connection's.
 func tempConnection(name, layout, databaseURL string) (*config.Connection, error) {
+	conns, _, err := config.LoadConnections("")
 	target := name
 	switch {
 	case name != "":
-		conns, _, _ := config.LoadConnections("") // none to read: no name is known
 		var known []string
 		for _, c := range conns {
 			known = append(known, c.Name)
@@ -140,7 +142,7 @@ func tempConnection(name, layout, databaseURL string) (*config.Connection, error
 		if !config.IsTarget(name, known) {
 			return nil, nil
 		}
-	case layout == "":
+	case layout == "" && config.NoConnections(err):
 		target = databaseURL
 	}
 	if target == "" {

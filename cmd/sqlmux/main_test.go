@@ -316,23 +316,25 @@ func TestOrderKeysReference(t *testing.T) {
 }
 
 // A file or a URL is a connection of its own, kept nowhere; a name is a
-// connection's. DATABASE_URL is taken with no name and no layout, the name
-// winning over it (F14.1).
+// connection's. DATABASE_URL is taken with no name, no layout and no
+// connection configured, the name winning over it (F14.1).
 func TestTempConnection(t *testing.T) {
-	writeConfig(t, "connections.toml", "[[connection]]\nname = \"prod\"\nengine = \"postgres\"\ndsn = \"postgres://h/d\"\n\n[[connection]]\nname = \"prod.eu\"\nengine = \"postgres\"\ndsn = \"postgres://h/e\"\n")
+	configured := "[[connection]]\nname = \"prod\"\nengine = \"postgres\"\ndsn = \"postgres://h/d\"\n\n[[connection]]\nname = \"prod.eu\"\nengine = \"postgres\"\ndsn = \"postgres://h/e\"\n"
 	for _, tc := range []struct {
-		name, layout, env string
-		want              string // the temporary connection's name; "" for none
+		conns, name, layout, env string
+		want                     string // the temporary connection's name; "" for none
 	}{
-		{"x.db", "", "", "x"},
-		{"./data/x.sqlite", "", "postgres://u@h/other", "x"}, // the argument wins
-		{"postgres://u@h/shop", "", "", "shop@h"},
-		{"prod", "", "mysql://u@h/db", ""},    // a connection's name
-		{"prod.eu", "", "mysql://u@h/db", ""}, // with a dot in it
-		{"", "", "mysql://u@h/db", "db@h"},
-		{"", "", "", ""},
-		{"", "lay", "mysql://u@h/db", ""}, // a layout asked for is the program's
+		{configured, "x.db", "", "", "x"},
+		{configured, "./data/x.sqlite", "", "postgres://u@h/other", "x"}, // the argument wins
+		{configured, "postgres://u@h/shop", "", "", "shop@h"},
+		{configured, "prod", "", "mysql://u@h/db", ""},    // a connection's name
+		{configured, "prod.eu", "", "mysql://u@h/db", ""}, // with a dot in it
+		{configured, "", "", "mysql://u@h/db", ""},        // a user with connections has last.toml back
+		{"", "", "", "mysql://u@h/db", "db@h"},            // none configured
+		{"", "", "", "", ""},
+		{"", "", "lay", "mysql://u@h/db", ""}, // a layout asked for is the program's
 	} {
+		writeConfig(t, "connections.toml", tc.conns)
 		c, err := tempConnection(tc.name, tc.layout, tc.env)
 		got := ""
 		if c != nil {
