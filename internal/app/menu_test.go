@@ -65,9 +65,9 @@ func TestMenuItemsByNode(t *testing.T) {
 		node string
 		want []string
 	}{
-		{"t_user", []string{"打开", "在新 tab 打开", "删除表…"}},
-		{"v_paid", []string{"打开", "在新 tab 打开", "删除视图…"}},
-		{"mv_sum", []string{"打开", "在新 tab 打开", "删除视图…"}},
+		{"t_user", []string{"打开", "在新 tab 打开", "删除表…", "加列…", "加索引…", "改名…", "删除列…", "删除索引…"}}, // and the structure changes' (F14.4)
+		{"v_paid", []string{"打开", "在新 tab 打开", "删除视图…", "改名…"}},
+		{"mv_sum", []string{"打开", "在新 tab 打开", "删除视图…", "改名…"}},
 		{"queries/query_1", []string{"打开", "重命名…", "删除…"}},
 		{"public", nil},
 		{"Tables (14)", nil},
@@ -94,9 +94,9 @@ func TestMenuKeysAndClicks(t *testing.T) {
 	data := a.win().Root.Leaves()[0]
 	a.View()
 	rightClickNode(t, a, "t_user")
-	feed(t, a, "j<Down><Down>k<CR>")
+	feed(t, a, "j<Down>k<CR>")
 	if a.menu != nil || tabNames(data) != "t_user" {
-		t.Fatalf("↵ on the item before the last (open in a new tab): menu %v, tabs %q", a.menu != nil, tabNames(data))
+		t.Fatalf("↵ on the second item (open in a new tab): menu %v, tabs %q", a.menu != nil, tabNames(data))
 	}
 	a.View()
 	rightClickNode(t, a, "t_order")
@@ -394,7 +394,7 @@ func TestMenuIsAlone(t *testing.T) {
 // The box starts on the row under the pointer, the node clicked in view; where it does not
 // fit below it ends on the row above (F8.23).
 func TestMenuPlacement(t *testing.T) {
-	for _, h := range []int{45, 15} {
+	for _, h := range []int{45, 22} {
 		a := menuApp()
 		a.Update(tea.WindowSizeMsg{Width: 160, Height: h})
 		a.View()
@@ -424,7 +424,7 @@ func TestMenuPlacement(t *testing.T) {
 			a.Update(tea.WindowSizeMsg{Width: 160, Height: h}) // closes it, for the next
 			a.View()
 		}
-		if h == 45 && !below || h == 15 && !(below && above) {
+		if h == 45 && !below || h == 22 && !(below && above) {
 			t.Errorf("h %d: below %v, above %v: the cases were not met", h, below, above)
 		}
 	}
@@ -438,7 +438,7 @@ func TestMenuRightClickWhileOpen(t *testing.T) {
 	rightClickNode(t, a, "t_user")
 	a.View()
 	rightClickNode(t, a, "t_order")
-	if n, _ := a.treeNode(); a.menu == nil || n.Text != "t_order" || !slices.Equal(menuLabels(a), []string{"打开", "在新 tab 打开", "删除表…"}) {
+	if n, _ := a.treeNode(); a.menu == nil || n.Text != "t_order" || !slices.Equal(menuLabels(a)[:3], []string{"打开", "在新 tab 打开", "删除表…"}) {
 		t.Fatalf("on another node: menu %v, cursor %q", a.menu != nil, n.Text)
 	}
 	a.View()

@@ -46,11 +46,12 @@ func (a *App) menuItems(n node) []menuItem {
 		if n.table.View() {
 			drop = i18n.T("删除视图…")
 		}
-		return []menuItem{
+		items := []menuItem{
 			{i18n.T("打开"), func() tea.Cmd { return a.treeOpen(false) }},
 			{i18n.T("在新 tab 打开"), func() tea.Cmd { return a.treeOpen(true) }},
 			{drop, a.dropTable},
 		}
+		return append(items, a.alterItems(n)...)
 	case nodeConn, nodeSchema, nodeGroup, nodeColumn, nodeObjects, nodeIndex, nodeKey, nodeFunc, nodeSequence, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeSep: // no menu
 	}
 	return nil
