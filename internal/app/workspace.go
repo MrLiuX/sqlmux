@@ -1256,6 +1256,10 @@ func (a *App) scrollPane(id, down, right int) {
 		a.queryView(p, c)
 		c.ed.Scroll(down * wheelStep)
 		c.comp = nil
+	case p != nil && jsonViewOf(p) != nil: // a JSON view scrolls as a text, not sideways (F14.5)
+		jv := a.jsonSync(p)
+		a.jsonSize(p, jv)
+		jv.ed.Scroll(down * wheelStep)
 	case p != nil:
 		a.scrollGrid(p, down*wheelStep, right)
 	}

@@ -306,21 +306,21 @@ func TestGridMenu(t *testing.T) {
 	if tab.row != 2 || tab.col != 1 {
 		t.Errorf("the cursor: %d, %d", tab.row, tab.col)
 	}
-	want := []string{"在值编辑器中打开", "按这个值过滤", "按这一列排序 ↑", "按这一列排序 ↓", "加入排序", "隐藏这一列", "复制这一格", "复制行为 JSON", "导出…"}
+	want := []string{"在值编辑器中打开", "按这个值过滤", "按这一列排序 ↑", "按这一列排序 ↓", "加入排序", "隐藏这一列", "复制这一格", "复制行为 JSON", "以 JSON 查看", "导出…"}
 	if got := menuLabels(a); strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("the cell's menu: %v", got)
 	}
 	golden.RequireEqual(t, a.render().String())
 	// the last item, the ninth, is drawn and takes the selection with 8 j
-	feed(t, a, "jjjjjjjj")
-	if row := strings.Split(a.render().String(), "\n"); !slices.ContainsFunc(row, func(l string) bool { return strings.Contains(l, "导出…") }) || a.menu.sel != 8 {
-		t.Errorf("the ninth item is not drawn: sel %d", a.menu.sel)
+	feed(t, a, "jjjjjjjjj")
+	if row := strings.Split(a.render().String(), "\n"); !slices.ContainsFunc(row, func(l string) bool { return strings.Contains(l, "导出…") }) || a.menu.sel != 9 {
+		t.Errorf("the last item is not drawn: sel %d", a.menu.sel)
 	}
 	feed(t, a, "<Esc>")
 	// a window with room for five rows: the list scrolls with the selection, the ninth is seen with its highlight
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 12})
 	rightClick(a, find(t, a, ui.Target{Kind: ui.KindCell, Pane: 1, Action: "grid.goto 0 1"}).Min.Add(uv.Pos(1, 0)))
-	feed(t, a, "jjjjjjjj")
+	feed(t, a, "jjjjjjjjj")
 	f := a.render()
 	hit := -1
 	for y, l := range strings.Split(f.String(), "\n") {
@@ -328,7 +328,7 @@ func TestGridMenu(t *testing.T) {
 			hit = y
 		}
 	}
-	if hit < 0 || a.menu.sel != 8 || strings.Contains(f.String(), "在值编辑器中打开") {
+	if hit < 0 || a.menu.sel != 9 || strings.Contains(f.String(), "在值编辑器中打开") {
 		t.Errorf("short window: ninth item at row %d, sel %d", hit, a.menu.sel)
 	} else if x := strings.Index(strings.Split(f.String(), "\n")[hit], "导出…"); f.Buf.CellAt(ui.Width(strings.Split(f.String(), "\n")[hit][:x])-1, hit).Style.Bg != a.theme.Select {
 		t.Error("the ninth item is not highlighted")

@@ -63,6 +63,7 @@ func (a *App) columnItems(t *dataTab, cell bool) []menuItem {
 	return append(items,
 		menuItem{i18n.T("复制这一格"), func() tea.Cmd { return a.yankGrid(false) }},
 		menuItem{i18n.T("复制行为 JSON"), func() tea.Cmd { return a.yankJSON() }},
+		menuItem{i18n.T("以 JSON 查看"), func() tea.Cmd { return a.viewJSON() }},
 		menuItem{i18n.T("导出…"), a.exportOpen},
 	)
 }

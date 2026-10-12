@@ -341,6 +341,8 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 		f.Cursor = &c
 	}
 	switch {
+	case t.page.Cols != nil && t.jv != nil: // the page as JSON, in the table's place (F14.5)
+		a.drawJSON(f, p)
 	case t.page.Cols != nil:
 		if c := a.grid(p, t).Draw(f, gridRect(r, t)); c.X >= 0 {
 			f.Cursor = &c
@@ -479,6 +481,8 @@ func (a *App) drawResult(f *ui.Frame, p *Pane, rt *resultTab, r uv.Rectangle) {
 			s += " · " + i18n.T("%s 取消", k)
 		}
 		f.Text(r.Min.X+1, r.Min.Y, r.Max.X-1, s, uv.Style{Fg: th.Dim, Bg: th.PaneBg})
+	case rt.jv != nil:
+		a.drawJSON(f, p)
 	default:
 		if c := a.resultGrid(p, rt).Draw(f, r); c.X >= 0 {
 			f.Cursor = &c

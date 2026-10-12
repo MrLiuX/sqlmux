@@ -38,6 +38,7 @@ type gridState struct {
 	row, col  int       // the cursor
 	top, left int       // the first record and field shown
 	transpose bool
+	jv        *jsonView // the JSON view, when it is in the table's place (F14.5)
 	// the records marked with m, or by VISUAL from anchor to the cursor, by
 	// position among the rows shown (F10.7); a new page or row puts them back.
 	// unset: the range takes records out of the marked ones (F12.12)
@@ -617,16 +618,20 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 	if n := len(t.selected()); n > 0 {
 		selected = i18n.T("已选 %d", n)
 	}
+	chips := []ui.Chip{
+		order,
+		{Label: "LIMIT", Value: strconv.Itoa(t.shown.limit), Action: "grid.limit", Stay: stayLimit},
+		page,
+		{Label: "COLS", Value: fmt.Sprintf("%d/%d", len(t.shownCols()), len(t.page.Cols)), Action: "grid.cols", Stay: stayCols},
+	}
+	if t.jv != nil { // the view says so, and a click takes the table back (F14.5)
+		chips = append(chips, ui.Chip{Label: "JSON", Action: "grid.view.json", Stay: stayOrder})
+	}
 	return ui.QueryBar{
 		Selected: selected, SelectedStay: staySelected,
 		Where: where, Typing: t.typing == "where", Pane: p.ID, Right: right, Note: t.note, Names: names, Dialect: t.conn.eng.Dialect(),
 		History: ic.History, HistKey: a.keys.Hint("where.history", "input"),
-		Chips: []ui.Chip{
-			order,
-			{Label: "LIMIT", Value: strconv.Itoa(t.shown.limit), Action: "grid.limit", Stay: stayLimit},
-			page,
-			{Label: "COLS", Value: fmt.Sprintf("%d/%d", len(t.shownCols()), len(t.page.Cols)), Action: "grid.cols", Stay: stayCols},
-		},
+		Chips:   chips,
 		Buttons: a.toolButtons(t),
 	}
 }
@@ -823,7 +828,7 @@ func (a *App) gridGoto(arg string) {
 
 func (a *App) gridTranspose() {
 	if s, _, _, ok := a.gridOf(a.focused()); ok {
-		s.transpose = !s.transpose
+		s.transpose, s.jv = !s.transpose, nil // the JSON view and the turned table are two views of it, one at a time (F14.5)
 		a.gridMove(func(r, c, _, _ int) (int, int) { return r, c })
 	}
 }

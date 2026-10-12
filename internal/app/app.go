@@ -751,6 +751,8 @@ func (a *App) typeInto(k keymap.Key) tea.Cmd {
 		return a.typeKey(t, k)
 	case a.focusedQuery() != nil: // what the query's keymap leaves goes to its vim (§6.4)
 		return a.queryKey(a.focused(), a.focusedQuery(), k)
+	case jsonViewOf(a.focused()) != nil: // and a grid's JSON view's (F14.5)
+		return a.jsonKey(a.focused(), k)
 	}
 	return nil
 }
@@ -816,6 +818,9 @@ func (a *App) context() keymap.Context {
 		return c
 	case a.win().tree.filtering, typing != nil:
 		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Insert}
+	}
+	if jv := jsonViewOf(a.focused()); jv != nil && a.focused() != a.win().Tree { // a grid's JSON view: its vim, and the few keys that are its own (F14.5)
+		return keymap.Context{Focus: []string{"jsonview"}, Mode: vimMode(jv.ed.Mode()), Plain: a.plain}
 	}
 	scope := a.paneScope()
 	var firm string
