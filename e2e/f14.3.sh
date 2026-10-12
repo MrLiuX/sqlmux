@@ -19,6 +19,9 @@ create table ord2 (id int primary key, rid int, constraint f2 foreign key (rid) 
 create function fnx(a int) returns int language sql as $$ select a + 1 $$;
 create function fnx(a int, b text) returns text language sql as $$ select b || a $$;
 create sequence sq1;
+create view vw as select id from cust;
+create materialized view mv as select id, nm from cust;
+create unique index mv_i on mv (id);
 SQL
 mkdir -p "$D/own"; printf '[tree]\nwidth = 70\n' >"$D/own/config.toml"; printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s"\n' "$E2E_DB" >"$D/own/connections.toml"; chmod 600 "$D/own/connections.toml"
 tree() { e2e_plain | python3 -c "import sys; [print(l[:72].rstrip()) for l in list(sys.stdin)[:${1:-40}]]"; }
@@ -68,4 +71,20 @@ tclick "ord  "; sleep 0.4
 check "（准备）重新展开 ord：Indexes (3) 还是旧的（惰性取过了，库里已经有第 4 个）" eval 'thas "Indexes (3)"'
 key R; sleep 1.5; wait_for 5 settled; sleep 0.3
 check "R 刷新：库里新建的 ix_new 出现在 Indexes 里（(4)）" eval 'thas "Indexes (4)" && thas "ix_new (code)"' || tree 30
+
+# ---- 普通视图不画索引和键分组，物化视图只有 Indexes
+kids() { e2e_plain | python3 -c "
+import sys
+rows = [l[1:72].rstrip() for l in sys.stdin]
+for i, l in enumerate(rows):
+    if sys.argv[1] in l and ('▾' in l or '▸' in l):
+        ind = len(l) - len(l.lstrip(' '))
+        for m in rows[i + 1:]:
+            if not m.strip() or len(m) - len(m.lstrip(' ')) <= ind: break
+            print(m.strip())
+        break" "$1"; }
+tclick "ord2"; tclick "ord  "
+tclick "Views (4)"; sleep 0.4; tclick "vw  "; sleep 0.4; tclick " mv  "; sleep 0.4
+check "普通视图 vw：展开只有列，没有 Indexes / Keys 分组" eval '[[ -n $(kids "vw ") ]] && ! kids "vw " | grep -qE "Indexes|Keys"' || { kids "vw "; tree 40; }
+check "物化视图 mv：列之后只有 Indexes (1)（没有 Keys）" eval 'kids "mv " | grep -qF "Indexes (1)" && ! kids "mv " | grep -qF "Keys"' || { kids "mv "; tree 44; }
 e2e_done

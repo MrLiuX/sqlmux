@@ -168,4 +168,15 @@ key C-t; sleep 2
 check "测试：已连接 · SQLite 版本（sqlite_version()）" eval 'e2e_plain | grep -qE "已连接 · SQLite [0-9]"' || e2e_plain | grep -a '连接\|SQLite' | head -5
 key Enter; sleep 1
 check "保存：connections.toml 里写了 name = litef、engine = sqlite、dsn = 文件路径" eval 'grep -q "name = \"litef\"" "$(conns_file)" && grep -q "engine = \"sqlite\"" "$(conns_file)" && grep -qF "$DB" "$(conns_file)"' || cat "$(conns_file)"
+
+# ---- 9. 临时连接和用户自己的东西：同名保留扩展名、用新编号的 query（不动用户的 query_1）、不进连接管理器
+mkdir -p "$D/c9" "$D/data9/sqlmux/queries"
+printf '[[connection]]\nname = "shop"\nengine = "postgres"\ndsn = "%s"\n' "$SQLMUX_TEST_PG" >"$D/c9/connections.toml"; chmod 600 "$D/c9/connections.toml"
+echo "select 'mine'" >"$D/data9/sqlmux/queries/query_1.sql"
+e2e_start -C "$D/c9" -D "$D/data9" "$E2E_BIN $DB"; wait_for 5 flag_is alternate_on 1; sleep 1.5
+check "配置里已有连接 shop：临时连接的名字保留扩展名，叫 shop.db（不是 shop）" eval 'e2e_plain | grep -qE "▾ .*shop\.db" && ! e2e_plain | grep -qE "[▾▸] +shop +│"'
+key C-l; key i; e2e_type "select 42"; key Escape; sleep 1.5
+check "用户自己的 query_1.sql 没被动（还是 select 'mine'），临时连接的 query 是新编号的 query_2" eval '[[ $(cat "$D/data9/sqlmux/queries/query_1.sql") == "select '"'"'mine'"'"'" && $(cat "$D/data9/sqlmux/queries/query_2.sql") == "select 42" ]]' || ls "$D/data9/sqlmux/queries"
+pal ">管理连接"; sleep 0.4; key Enter; sleep 0.6
+check "连接管理器里没有临时连接（shop.db / shop 都不在，只有「新建」）" eval 'e2e_plain | grep -qF "新建" && ! e2e_plain | grep -E "连接 ─" -A6 | grep -qE "shop"'
 e2e_done

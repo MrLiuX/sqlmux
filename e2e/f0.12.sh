@@ -41,7 +41,7 @@ e2e_keys C-c; sleep 0.3
 check "toast keeps bar #292e42" toast_is "再按一次 C-c 退出"
 
 # ---- theme errors: exit 1 and name the item
-conf 'theme = "x"\n' 'pane_bgg = "#101010"\n'; check "misspelt token → error names it" fails "pane_bgg"
+conf 'theme = "x"\n' 'pane_bgg = "#101010"\n'; start -C "$D"; sleep 1; check "misspelt token → F14.7: a start-up note names it, the start goes on" eval 'running && screen_has "themes/x.toml: 不认识的键 pane_bgg"' || e2e_plain | tail -3 | cut -c1-200
 conf 'theme = "x"\n' 'pane_bg = "#12345"\n';  check "bad color → error names it" fails 'pane_bg = "#12345"'
 conf 'theme = "nope"\n';                        check "theme not found → error names it" fails 'theme = "nope"'
 
@@ -58,8 +58,8 @@ conf 'theme = "x"\nicons = "ascii"\n' '[icon]\nquery = { text = "C", fg = "#ff00
 check "[icon] still applies with icons = ascii" eval 'text_is $ICON_ASCII $ICON_ASCII 1 C && style_has $ICON_ASCII 1 fg=#ff0000'
 conf 'theme = "x"\n' '[icon]\nconn = { fg = "#ff00ff" }\n'; start -C "$D"
 check "[icon] conn: the status bar connection icon changes color" eval 'c=$(e2e_find "doraemon · sqlmux@localhost" 45); style_has $((c - 2)) 45 fg=#ff00ff && style_has $c 45 fg=#7dcfff'
-conf 'theme = "x"\n' '[icon]\nfoo = { text = "F" }\n';            check "[icon] unknown name → error" fails "foo"
-conf 'theme = "x"\n' '[icon]\nquery = { bg = "#ff0000" }\n';    check "[icon] unknown sub-key (bg) → error" fails "bg"
+conf 'theme = "x"\n' '[icon]\nfoo = { text = "F" }\n';            start -C "$D"; sleep 1; check "[icon] unknown name → F14.7: a note names it, the start goes on" eval 'running && screen_has "themes/x.toml: 不认识的键" && screen_has "foo"' || e2e_plain | tail -3 | cut -c1-200
+conf 'theme = "x"\n' '[icon]\nquery = { bg = "#ff0000" }\n';    start -C "$D"; sleep 1; check "[icon] unknown sub-key (bg) → F14.7: a note, the start goes on" eval 'running && screen_has "themes/x.toml: 不认识的键"' || e2e_plain | tail -3 | cut -c1-200
 conf 'theme = "x"\n' '[icon]\nquery = { fg = "red" }\n';        check "[icon] bad color → error" fails '"red"'
 
 e2e_done
