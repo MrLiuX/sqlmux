@@ -2,6 +2,7 @@ package editor
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -122,3 +123,25 @@ func TestReadOnlyPasteCommandLine(t *testing.T) {
 		t.Error("the buffer takes a paste")
 	}
 }
+
+// Load into a read only editor keeps no undo step: pages of a viewer would
+// stay in memory, two copies each, and nothing could undo them (F14.5).
+func TestReadOnlyLoadKeepsNoStep(t *testing.T) {
+	e := New("")
+	e.ReadOnly = true
+	for _, text := range []string{"one\ntwo", "three", "three\nfour"} {
+		if eff := e.Load(text); !eff.Changed || !slices.Equal(e.Lines(), splitLines(text)) {
+			t.Fatalf("Load %q: %v %q", text, eff.Changed, e.Lines())
+		}
+	}
+	if len(e.done) != 0 || len(e.undone) != 0 {
+		t.Errorf("steps kept: %d", len(e.done))
+	}
+	w := New("")
+	w.Load("one")
+	if len(w.done) != 1 {
+		t.Errorf("a writable editor keeps its step: %d", len(w.done))
+	}
+}
+
+func splitLines(s string) []string { return strings.Split(s, "\n") }

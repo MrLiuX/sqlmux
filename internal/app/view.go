@@ -299,6 +299,12 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 			ui.Hint{Key: a.hints("normal", "/", "tab.next", "tab.prev")},
 		)
 	}
+	if jsonViewOf(p) != nil { // the keys of the view, not the table's (F14.5)
+		tabHints = bound(
+			ui.Hint{Key: a.hints("jsonview", "/", "json.page.next", "json.page.prev"), Label: i18n.T("翻页"), Action: "json.page.next"},
+			ui.Hint{Key: a.keys.Hint("json.leave", "jsonview"), Label: i18n.T("回表格"), Action: "json.leave"},
+		)
+	}
 	paneRegions(f, p.ID, r)
 	in := b.Draw(f, r)
 	if in.Empty() {

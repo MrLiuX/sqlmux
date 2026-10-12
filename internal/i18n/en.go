@@ -59,6 +59,7 @@ var en = map[string]string{
 	"加列…":                                    "Add column…",
 	"加索引…":                                   "Add index…",
 	"改名…":                                    "Rename…",
+	"改名表…":                                   "Rename table…",
 	"删除列…":                                   "Drop column…",
 	"删除索引…":                                  "Drop index…",
 	"先选一张表":                                  "Pick a table first",

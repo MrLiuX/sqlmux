@@ -37,6 +37,9 @@ type Context struct {
 	// Plain is the modeless editor (§6.9): typed keys are text, so of the
 	// pane's and NORMAL's bindings only the Ctrl ones apply, as C-h and C-e.
 	Plain bool
+	// ReadOnly names a Focus scope of a read only editor: typed keys are no
+	// text there, so all its bindings apply even when Plain.
+	ReadOnly string
 }
 
 // scopes lists the tables for c, highest priority first: overlay → user maps
@@ -101,7 +104,7 @@ func (m *Map) trie(c Context, maps bool) *node {
 	root := &node{}
 	for _, t := range m.scopes(c, maps) {
 		bs := m.tables[t]
-		if c.Plain && t != "keys."+c.Overlay && t != "keys."+c.Under && t != "keys.global" && t != "leader" && t != "keys.input" {
+		if c.Plain && t != "keys."+c.Overlay && t != "keys."+c.Under && t != "keys."+c.ReadOnly && t != "keys.global" && t != "leader" && t != "keys.input" {
 			bs = ctrlOnly(m, bs) // not the keys that are text
 		}
 		if t == "leader" {

@@ -156,11 +156,11 @@ func (a *App) vim() *editor.Editor {
 	if c := queryOf(a.focused()); c != nil {
 		return c.ed
 	}
-	if jv := jsonViewOf(a.focused()); jv != nil { // a grid's JSON view (F14.5)
-		return jv.ed
-	}
 	if t := dataOf(a.focused()); t != nil && t.typing == "where" && t.hist == nil {
 		return t.ed
+	}
+	if jv := jsonViewOf(a.focused()); jv != nil { // a grid's JSON view, under the WHERE typed over it (F14.5)
+		return jv.ed
 	}
 	return nil
 }

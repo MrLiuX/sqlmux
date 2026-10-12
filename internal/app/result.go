@@ -446,7 +446,11 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 		a.log(r, stmt, resultText(res, 0), false)
 		recordHistory(r, stmt, res, "")
 		if res.Cols != nil {
-			tabs = append(tabs, Tab{Name: r.label(len(tabs) + 1), Result: &resultTab{gridState: gridState{page: res}, run: r, part: len(tabs) + 1, stmt: i, pageable: r.pageable[i]}})
+			gs := gridState{page: res}
+			if j := slices.IndexFunc(r.prev, func(tb Tab) bool { return tb.Result != nil && tb.Result.stmt == i }); j >= 0 { // the tab it replaces, turned or in JSON, stays so
+				gs.transpose, gs.jv = r.prev[j].Result.transpose, r.prev[j].Result.jv
+			}
+			tabs = append(tabs, Tab{Name: r.label(len(tabs) + 1), Result: &resultTab{gridState: gs, run: r, part: len(tabs) + 1, stmt: i, pageable: r.pageable[i]}})
 		}
 		switch sqlkit.FirstWord(stmt, r.conn.eng.Dialect()) {
 		case "create", "alter", "drop", "rename": // MySQL's RENAME TABLE

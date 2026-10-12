@@ -165,18 +165,7 @@ func (a *App) valueWheel(notches int) {
 // ponytail: the colors of the whole text are made every frame; a value of
 // some MB wants them kept by the text's version, or made for the lines in view.
 func (a *App) valueView() ui.Query {
-	v := a.value
-	ed := v.ed
-	q := ui.Query{
-		Lines: ed.Lines(), TabWidth: ed.TabWidth, Top: ed.Top(), Left: ed.Left(), Pane: ui.ValuePane,
-		Cursor: ui.TextPos(ed.Cursor()), CursorCol: ed.CursorCol(), Sel: vimSel(ed),
-		Colors: ui.ValueColors(a.theme, v.text(), v.json),
-	}
-	if f := a.flash; f != nil {
-		q.Yank = f.text
-	}
-	q.Prompt, q.Text, q.Pos, _ = ed.CmdLine()
-	return q
+	return a.textView(a.value.ed, ui.ValuePane, a.value.json)
 }
 
 // drawValue paints the box over the frame.
@@ -196,36 +185,23 @@ func (a *App) drawValue(f *ui.Frame) {
 func (a *App) valueKey(k keymap.Key) tea.Cmd {
 	v := a.value
 	a.valueSize()
-	if k == keymap.Esc && v.ed.Plain() && v.ed.HasSelection() { // as in a plain query: the selection first (§6.9)
-		v.ed.ClearSelection()
-		return nil
-	}
-	if (v.ed.Mode() == editor.Normal || v.ed.Plain()) && v.ed.Pending() == "" && (k == keymap.Esc || k == "q" && v.readOnly) {
-		return a.valueClose(false)
-	}
-	return a.valueDid(v.ed.Feed(string(k)))
+	return a.roKey(v.ed, k, v.readOnly, func() tea.Cmd { return a.valueClose(false) }, a.valueDid)
 }
 
 // valueDid acts on what the editor did: the clipboard, the toasts, a : command
 // it leaves, gq.
 func (a *App) valueDid(eff editor.Effect) tea.Cmd {
 	v := a.value
-	cmds := a.vimCmds(eff, func(text string, p editor.ClipPut) tea.Cmd {
+	cmd := a.roDid(eff, func(text string, p editor.ClipPut) tea.Cmd {
 		if a.value != v {
 			return nil
 		}
 		return a.valueDid(v.ed.PutClip(text, p))
-	})
-	if eff.ReadOnly {
-		cmds = append(cmds, a.showToast(i18n.T("只读")))
-	}
-	if eff.Ex != "" {
-		cmds = append(cmds, a.valueEx(eff.Ex))
-	}
+	}, a.valueEx)
 	if eff.Format != nil {
-		cmds = append(cmds, a.valueFormat())
+		return tea.Batch(cmd, a.valueFormat())
 	}
-	return tea.Batch(cmds...)
+	return cmd
 }
 
 // valueEx runs a : command of the editor: :w writes back and stays, :wq and

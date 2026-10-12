@@ -86,7 +86,7 @@ func (a *App) gotResultPage(m pageDone) tea.Cmd {
 	}
 	res := m.m.rs[0]
 	a.log(r, stmt, resultText(res, m.offset), false)
-	rt.gridState = gridState{page: res, transpose: rt.transpose}
+	rt.gridState = gridState{page: res, transpose: rt.transpose, jv: rt.jv}
 	rt.offset, rt.arrived = m.offset, time.Now()
 	return nil
 }

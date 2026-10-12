@@ -33,6 +33,7 @@ func (a *App) gridMenu(t ui.Target, p uv.Position) {
 		items = []menuItem{
 			{i18n.T("在值编辑器中打开"), func() tea.Cmd { return a.valueOpen() }},
 			{i18n.T("复制这一格"), func() tea.Cmd { return a.yankGrid(false) }},
+			{i18n.T("以 JSON 查看"), func() tea.Cmd { return a.viewJSON() }},
 			{i18n.T("导出…"), a.exportOpen},
 		}
 	}

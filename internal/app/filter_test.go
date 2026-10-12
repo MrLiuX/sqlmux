@@ -387,7 +387,7 @@ func TestGridMenuResult(t *testing.T) {
 	id := a.win().Result.ID
 	cell := find(t, a, ui.Target{Kind: ui.KindCell, Pane: id, Action: "grid.goto 1 0"}).Min.Add(uv.Pos(1, 0))
 	rightClick(a, cell) // the second row's: the cursor goes there, not the menu of the first
-	if got := menuLabels(a); strings.Join(got, "|") != "在值编辑器中打开|复制这一格|导出…" || a.win().Result.tab().Result.row != 1 {
+	if got := menuLabels(a); strings.Join(got, "|") != "在值编辑器中打开|复制这一格|以 JSON 查看|导出…" || a.win().Result.tab().Result.row != 1 {
 		t.Fatalf("the result cell's menu: %v, row %d", got, a.win().Result.tab().Result.row)
 	}
 	feed(t, a, "<CR>")

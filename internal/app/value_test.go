@@ -605,3 +605,20 @@ func TestValueHints(t *testing.T) {
 		t.Errorf("vim = false, read only: %q", r)
 	}
 }
+
+// A yank in the value editor's box flashes, as it does in a query and in the
+// JSON view (F12.2).
+func TestValueYankFlashes(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	tab := loadOrders(t, a, 3)
+	tab.col = noteField(tab)
+	a.run("grid.value", 0)
+	if a.value == nil {
+		t.Fatal("no value editor")
+	}
+	feed(t, a, "yy")
+	text := ui.Query{Lines: a.value.ed.Lines()}.TextArea(a.valueText())
+	if a.flash == nil || a.render().Buf.CellAt(text.Min.X, text.Min.Y).Style.Bg != a.theme.Yank {
+		t.Errorf("the yank does not flash: %+v", a.flash)
+	}
+}

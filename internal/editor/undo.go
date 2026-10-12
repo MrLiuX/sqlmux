@@ -217,7 +217,8 @@ func (e *Editor) undoLine() {
 
 // Load puts text in place of the whole text, as reading the file again
 // after another editor changed it: one undo step, in NORMAL, the cursor
-// where it was as far as the new text allows. The modeless editor has no
+// where it was as far as the new text allows; a read only editor keeps no step.
+// The modeless editor has no
 // NORMAL: it ends its step and its selection, and goes on typing.
 func (e *Editor) Load(text string) Effect {
 	e.eff = Effect{}
@@ -235,11 +236,16 @@ func (e *Editor) Load(text string) Effect {
 	}
 	e.keys = nil
 	if ls := strings.Split(strings.TrimSuffix(text, "\n"), "\n"); !slices.Equal(ls, e.lines) {
-		e.beginChange()
 		e.eff.Changed = true
-		e.lines, e.uLine = ls, -1
-		e.clampCursor()
-		e.endChange()
+		if e.ReadOnly { // nothing to undo in what no key changes, and a step is two copies of the text
+			e.lines, e.uLine = ls, -1
+			e.clampCursor()
+		} else {
+			e.beginChange()
+			e.lines, e.uLine = ls, -1
+			e.clampCursor()
+			e.endChange()
+		}
 	}
 	if e.plain {
 		e.ins = &insertion{cmd: "i", count: 1, start: e.cur}

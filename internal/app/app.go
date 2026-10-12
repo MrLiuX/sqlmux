@@ -342,6 +342,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case a.dragText > 0:
 			if t, n, v := a.queryAt(a.dragText, a.mouse); t != nil {
 				t.ed.Drag(n, v)
+			} else if jv, n, v := a.jsonAt(a.dragText, a.mouse); jv != nil {
+				jv.ed.Drag(n, v)
 			}
 		}
 		if a.dragWhere != 0 {
@@ -556,6 +558,9 @@ func (a *App) click(p uv.Position) tea.Cmd {
 		if c, n, v := a.queryAt(t.Pane, p); c != nil {
 			c.ed.Click(n, v)
 			a.dragText, c.comp = t.Pane, nil
+		} else if jv, n, v := a.jsonAt(t.Pane, p); jv != nil {
+			jv.ed.Click(n, v)
+			a.dragText = t.Pane
 		}
 	case ui.KindHead:
 		return a.headClick(t.Pane, t.I, a.shiftClick)
@@ -672,6 +677,9 @@ func (a *App) paste(s string) tea.Cmd {
 	s = strings.NewReplacer("\r\n", " ", "\r", " ", "\n", " ").Replace(s)
 	if t := dataOf(a.focused()); t != nil && t.typing == "where" && !a.overlaid() { // text in any mode, as a query takes it (F3.39)
 		return a.whereDid(t, t.ed.Paste(s))
+	}
+	if jv := a.jsonSync(a.focused()); jv != nil && !a.overlaid() { // a read only text says so; no cell changes behind it (F14.5)
+		return a.jsonDid(a.focused(), jv, jv.ed.Paste(s))
 	}
 	if a.mode() == keymap.Normal {
 		return a.editCell(&s)
@@ -819,8 +827,8 @@ func (a *App) context() keymap.Context {
 	case a.win().tree.filtering, typing != nil:
 		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Insert}
 	}
-	if jv := jsonViewOf(a.focused()); jv != nil && a.focused() != a.win().Tree { // a grid's JSON view: its vim, and the few keys that are its own (F14.5)
-		return keymap.Context{Focus: []string{"jsonview"}, Mode: vimMode(jv.ed.Mode()), Plain: a.plain}
+	if jv := jsonViewOf(a.focused()); jv != nil { // a grid's JSON view: its vim, and the few keys that are its own (F14.5)
+		return keymap.Context{Focus: []string{"jsonview"}, Mode: vimMode(jv.ed.Mode()), Plain: a.plain, ReadOnly: "jsonview"}
 	}
 	scope := a.paneScope()
 	var firm string

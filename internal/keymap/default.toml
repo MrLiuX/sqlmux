@@ -129,11 +129,11 @@ leader = "<Space>"
 
 [keys.jsonview] # a grid's JSON view: a vim over the text, and a few keys of the grid's (F14.5)
 "<Esc>" = "json.leave" # NORMAL's brings the table back; the editor has it otherwise
+"q" = "json.leave"
 "gJ" = "grid.view.json"
 "]" = "json.page.next"
 "[" = "json.page.prev"
 "R" = "json.refresh"
-"T" = "grid.transpose"
 
 [keys.queryinsert] # a query in INSERT, where vim has C-r for a register (F14.2)
 "<C-r>" = "query.history"

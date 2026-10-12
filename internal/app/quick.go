@@ -220,7 +220,7 @@ func (a *App) gotQuickRerun(m quickRerun) tea.Cmd {
 		selectTab(r.win.Result, 0) // the log's, made if need be
 		return nil
 	}
-	rt.gridState, rt.arrived = gridState{page: m.res, transpose: rt.transpose}, time.Now()
+	rt.gridState, rt.arrived = gridState{page: m.res, transpose: rt.transpose, jv: rt.jv}, time.Now()
 	a.log(r, r.sql, resultText(m.res, 0), false)
 	return nil
 }

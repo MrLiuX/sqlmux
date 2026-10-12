@@ -232,7 +232,7 @@ func (t *dataTab) cellAtCursor() (cellSrc, bool) {
 // whyNoEdit names.
 func (a *App) editCell(pasted *string) tea.Cmd {
 	t, ok := a.focusedGrid()
-	if !ok {
+	if !ok || jsonViewOf(a.focused()) != nil { // the table is not in sight (F14.5)
 		return nil
 	}
 	s, ok := t.cellAtCursor()

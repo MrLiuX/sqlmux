@@ -17,8 +17,9 @@ import (
 // a read only editor, in the place of the table. It is the tab's, not the
 // layout's.
 type jsonView struct {
-	ed  *editor.Editor
-	sig string // what the text was made of: it is made again when that changes
+	ed   *editor.Editor
+	sig  string // what the text was made of: it is made again when that changes
+	text string // what it was made as: the editor is loaded when that is another
 }
 
 // jsonViewOf is the JSON view of the grid pane p's current tab shows, nil when
@@ -61,10 +62,16 @@ func jsonText(tab *Tab) string {
 }
 
 // jsonSig is what jsonText depends on: the rows, as the page's slice and its
-// length, the columns as they are shown, the changes in a table.
+// length, the columns as they are shown, the changes of a table, each by what
+// it holds.
 func jsonSig(tab *Tab) string {
 	if t := tab.Data; t != nil {
-		return fmt.Sprintf("%p %d %v %d %d %d %d", t.page.Rows, len(t.page.Rows), t.ordered(), len(t.edits), len(t.added), len(t.deleted), t.seq)
+		var b strings.Builder
+		fmt.Fprintf(&b, "%p %d %v %v %v", t.page.Rows, len(t.page.Rows), t.ordered(), t.edits, t.deleted)
+		for _, r := range t.added {
+			fmt.Fprintf(&b, " %d %d %v", r.page, r.after, r.cells)
+		}
+		return b.String()
 	}
 	rt := tab.Result
 	return fmt.Sprintf("%p %d %d", rt.page.Rows, len(rt.page.Rows), len(rt.page.Cols))
@@ -78,9 +85,12 @@ func (a *App) jsonSync(p *Pane) *jsonView {
 	if jv == nil {
 		return nil
 	}
-	if sig := jsonSig(p.tab()); sig != jv.sig {
+	if sig := jsonSig(p.tab()); sig != jv.sig { // a refresh that brings the same rows leaves the search and the selection as they are
 		jv.sig = sig
-		jv.ed.Load(jsonText(p.tab()))
+		if text := jsonText(p.tab()); text != jv.text {
+			jv.text = text
+			jv.ed.Load(text)
+		}
 	}
 	jv.ed.SetPlain(a.plain)
 	return jv
@@ -112,34 +122,45 @@ func (a *App) viewJSON() tea.Cmd {
 }
 
 // jsonKey gives key k, which no binding of the view took, to its editor: esc
-// in NORMAL, and q, bring the table back (§6.8).
+// in NORMAL brings the table back, as the binding of esc does (§6.8).
 func (a *App) jsonKey(p *Pane, k keymap.Key) tea.Cmd {
 	jv := a.jsonSync(p)
 	if jv == nil { // an action run with no JSON view (the palette's run of everything)
 		return nil
 	}
 	a.jsonSize(p, jv)
-	if (jv.ed.Mode() == editor.Normal || jv.ed.Plain()) && jv.ed.Pending() == "" && (k == keymap.Esc || k == "q") {
-		return a.viewJSON()
-	}
-	return a.jsonDid(p, jv, jv.ed.Feed(string(k)))
+	return a.roKey(jv.ed, k, false, a.viewJSON, func(eff editor.Effect) tea.Cmd { return a.jsonDid(p, jv, eff) })
 }
 
-// jsonDid acts on what the editor did: the clipboard, the toasts.
+// jsonDid acts on what the editor did: the clipboard, the toasts, :q.
 func (a *App) jsonDid(p *Pane, jv *jsonView, eff editor.Effect) tea.Cmd {
-	cmds := a.vimCmds(eff, func(text string, pt editor.ClipPut) tea.Cmd {
+	return a.roDid(eff, func(text string, pt editor.ClipPut) tea.Cmd {
 		if jsonViewOf(p) != jv {
 			return nil
 		}
 		return a.jsonDid(p, jv, jv.ed.PutClip(text, pt))
+	}, func(c string) tea.Cmd {
+		if c = strings.TrimSpace(c); c == "q" || c == "q!" {
+			return a.viewJSON()
+		}
+		return a.showToast(i18n.T("不支持的命令：%s", c))
 	})
-	if eff.ReadOnly {
-		cmds = append(cmds, a.showToast(i18n.T("只读")))
+}
+
+// jsonAt is the JSON view of pane id, and the line and display column of its
+// text under p; nil when the pane shows none.
+func (a *App) jsonAt(id int, p uv.Position) (*jsonView, int, int) {
+	pane := a.win().pane(id)
+	if pane == nil {
+		return nil, 0, 0
 	}
-	if eff.Ex != "" {
-		cmds = append(cmds, a.showToast(i18n.T("不支持的命令：%s", eff.Ex)))
+	jv := a.jsonSync(pane)
+	if jv == nil {
+		return nil, 0, 0
 	}
-	return tea.Batch(cmds...)
+	a.jsonSize(pane, jv)
+	text := ui.Query{Lines: jv.ed.Lines()}.TextArea(a.jsonArea(pane))
+	return jv, jv.ed.Top() + p.Y - text.Min.Y, max(jv.ed.Left()+p.X-text.Min.X, 0)
 }
 
 // drawJSON paints pane p's JSON view in its grid's place.
@@ -149,17 +170,7 @@ func (a *App) drawJSON(f *ui.Frame, p *Pane) {
 		return
 	}
 	a.jsonSize(p, jv)
-	ed := jv.ed
-	q := ui.Query{
-		Lines: ed.Lines(), TabWidth: ed.TabWidth, Top: ed.Top(), Left: ed.Left(), Pane: ui.ValuePane,
-		Cursor: ui.TextPos(ed.Cursor()), CursorCol: ed.CursorCol(), Sel: vimSel(ed),
-		Colors: ui.ValueColors(a.theme, strings.Join(ed.Lines(), "\n"), true),
-	}
-	if fl := a.flash; fl != nil && fl.pane == p.ID {
-		q.Yank = fl.text
-	}
-	q.Prompt, q.Text, q.Pos, _ = ed.CmdLine()
-	if cur := q.Draw(f, a.jsonArea(p)); cur.X >= 0 && a.win().Focus == p.ID {
+	if cur := a.textView(jv.ed, p.ID, true).Draw(f, a.jsonArea(p)); cur.X >= 0 && a.win().Focus == p.ID {
 		f.Cursor = &cur
 	}
 }
