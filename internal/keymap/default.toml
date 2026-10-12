@@ -126,6 +126,9 @@ leader = "<Space>"
 ":" = "palette.open"
 ";" = "palette.sql"
 
+[keys.queryinsert] # a query in INSERT, where vim has C-r for a register (F14.2)
+"<C-r>" = "query.history"
+
 [keys.query] # NORMAL / VISUAL; everything else goes to the vim engine
 "<CR>" = "query.run"
 "s" = "jump.start" # over vim's s in NORMAL; in VISUAL it is the vim's still (F10.8)

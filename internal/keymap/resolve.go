@@ -58,8 +58,9 @@ func (m *Map) scopes(c Context, maps bool) []string {
 	}
 	for _, f := range c.Focus {
 		// grid/tree/query/result keys are NORMAL/VISUAL keys: in INSERT only
-		// the input being typed into has bindings (↵ in query inserts a newline).
-		if !c.Mode.typing() || f == "cell" || f == "input" || c.Plain {
+		// the input being typed into has bindings (↵ in query inserts a newline),
+		// and the query's own INSERT scope.
+		if !c.Mode.typing() || f == "cell" || f == "input" || f == "queryinsert" || c.Plain {
 			ts = append(ts, "keys."+f)
 		}
 	}

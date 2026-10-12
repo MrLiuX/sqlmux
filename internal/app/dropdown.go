@@ -24,10 +24,11 @@ const (
 	dropSchema
 	dropQueryConn
 	dropTx
-	dropAuto   // auto refresh's interval (§7.8「自动刷新」)
-	dropTheme  // the theme in use (F6.2)
-	dropLayout // layout.open: the layouts there are (F6.5)
-	dropExport // what to export, of a table or a result (F12.4)
+	dropAuto    // auto refresh's interval (§7.8「自动刷新」)
+	dropTheme   // the theme in use (F6.2)
+	dropLayout  // layout.open: the layouts there are (F6.5)
+	dropExport  // what to export, of a table or a result (F12.4)
+	dropHistory // the statements the query's connection ran, one to put at the cursor (F14.2)
 )
 
 // dropdown is the open one-pick dropdown; tab or query, in pane, is what
@@ -37,6 +38,7 @@ type dropdown struct {
 	tab      *dataTab
 	result   *resultTab // dropExport's, when it is of a result
 	query    *queryTab
+	hist     []config.History // dropHistory's, the newest first
 	pane     *Pane
 	input    ui.Input
 	sel, top int
@@ -91,12 +93,15 @@ func (a *App) setTheme(name string) tea.Cmd {
 }
 
 // openQueryDrop opens the focused query's dropdown of kind k, schema
-// (gs, §8.6), connection or transaction mode, its selection on the one it
-// has.
+// (gs, §8.6), connection or transaction mode, or the history; its selection
+// on the one it has.
 func (a *App) openQueryDrop(k dropKind) {
 	p := a.focused()
 	if c := queryOf(p); c != nil && (k != dropSchema || len(c.conn.Schemas) > 0) {
 		a.drop = &dropdown{kind: k, query: c, pane: p}
+		if k == dropHistory {
+			a.drop.hist = historyOf(c.conn)
+		}
 		_, a.drop.sel = a.dropItems()
 		a.dropMove(0)
 	}
@@ -126,6 +131,11 @@ func (a *App) dropItems() (items []string, current int) {
 		return []string{i18n.T("自动"), i18n.T("手动")}, current
 	case dropExport:
 		return exportItems(), 0
+	case dropHistory:
+		for _, h := range d.hist {
+			items = append(items, historyLine(h.SQL))
+		}
+		return items, -1
 	case dropAuto:
 		for _, i := range autoIntervals {
 			items = append(items, autoLabel(i))
@@ -197,6 +207,10 @@ func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 	case dropTheme, dropLayout:
 		r := a.layout()[d.pane.ID]
 		entry = uv.Rect(r.Min.X+2, r.Min.Y, w, 1)
+	case dropHistory: // as wide as the pane lets it be
+		r := a.layout()[d.pane.ID]
+		w = min(w, max(r.Dx()-4, 16))
+		entry = uv.Rect(r.Min.X+2, r.Min.Y, w, 1)
 	case dropAuto:
 		r := a.layout()[d.pane.ID]
 		if entry = a.queryBar(d.pane, d.tab).ButtonRect(bodyRect(r), "grid.refresh.auto"); entry.Empty() {
@@ -253,6 +267,8 @@ func (a *App) dropPick(i int) tea.Cmd {
 		return a.pickLayout(item)
 	case dropExport:
 		return a.export(a.exportSource(d), at)
+	case dropHistory: // the statement as it was, lines and all
+		return a.queryDid(d.query, d.query.ed.Paste(d.hist[at].SQL))
 	case dropAuto: // the ticking so far stops; this interval's starts
 		t := d.tab
 		if t.auto, t.autoGen = autoIntervals[at], t.autoGen+1; t.auto == 0 {
@@ -273,10 +289,13 @@ func (a *App) dropKey(k keymap.Key) {
 }
 
 // dropNote is what the dropdown notes on item i: a read-only connection's
-// lock (§7.8「query 标题」).
+// lock (§7.8「query 标题」), a statement's time and outcome (F14.2).
 func (a *App) dropNote(i int) string {
-	if a.drop.kind == dropQueryConn && a.sess.Conns[i].readOnly {
+	switch {
+	case a.drop.kind == dropQueryConn && a.sess.Conns[i].readOnly:
 		return a.icons.Lock.Text
+	case a.drop.kind == dropHistory:
+		return historyNote(a.drop.hist[i])
 	}
 	return ""
 }
@@ -293,8 +312,11 @@ func (a *App) dropView() ui.Dropdown {
 			v.Mark = i
 		}
 		v.Items, v.Pos = append(v.Items, items[m.Index]), append(v.Pos, m.Pos)
+		if k := a.drop.kind; k == dropQueryConn || k == dropHistory {
+			v.Notes = append(v.Notes, a.dropNote(m.Index))
+		}
 		if a.drop.kind == dropQueryConn {
-			v.Notes, v.Icons = append(v.Notes, a.dropNote(m.Index)), append(v.Icons, a.connIcon(m.Index))
+			v.Icons = append(v.Icons, a.connIcon(m.Index))
 		}
 	}
 	return v

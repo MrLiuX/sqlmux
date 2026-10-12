@@ -787,7 +787,7 @@ func (a *App) context() keymap.Context {
 	case typing != nil && typing.comp != nil:
 		return keymap.Context{Overlay: "complete", Focus: []string{"input"}, Mode: keymap.Insert, Plain: typing.typing == "where" && a.plain}
 	case a.focusedQuery() != nil && a.focusedQuery().comp != nil: // ↵ and esc are its vim's, as a WHERE's
-		return keymap.Context{Overlay: "complete", Focus: []string{"query"}, Mode: keymap.Insert, Plain: a.plain}
+		return keymap.Context{Overlay: "complete", Focus: []string{"query", "queryinsert"}, Mode: keymap.Insert, Plain: a.plain}
 	case typing != nil && typing.cell != nil:
 		c := keymap.Context{Focus: []string{"cell"}, Mode: keymap.Insert}
 		if !typing.cell.folded && len(typing.options()) > 0 {
@@ -825,6 +825,9 @@ func (a *App) context() keymap.Context {
 	}
 	if scope == "result" { // over grid's keys, which its tables move by (§6.4)
 		return keymap.Context{Focus: append(over, "result", "grid"), Pane: "grid", Mode: mode, Firm: firm}
+	}
+	if scope == "query" && mode == keymap.Insert {
+		over = append(over, "queryinsert")
 	}
 	return keymap.Context{Focus: append(over, scope), Pane: scope, Mode: mode, Plain: a.plain && scope == "query", Firm: firm}
 }

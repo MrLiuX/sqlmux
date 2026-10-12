@@ -34,6 +34,9 @@ type Config struct {
 	// MaxRows the rows a query's run keeps of each result (§11).
 	ResultHeight float64
 	MaxRows      int
+	// HistoryMax is how many statements history.jsonl keeps, the oldest cut
+	// at the start (`[query] history_max`, §11).
+	HistoryMax int
 	// KeywordCase and FormatPrg are gq's (§9.5): sql-formatter's keywordCase,
 	// or a command to format with instead of it.
 	KeywordCase string
@@ -65,7 +68,7 @@ type Config struct {
 }
 
 func Default() *Config {
-	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "en", Border: uv.NormalBorder(), Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 500, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true, GridFullWidth: 22, TreeWidth: 32}
+	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "en", Border: uv.NormalBorder(), Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 500, HistoryMax: 1000, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true, GridFullWidth: 22, TreeWidth: 32}
 }
 
 // Dir is $XDG_CONFIG_HOME/sqlmux, falling back to ~/.config/sqlmux on every
@@ -131,7 +134,8 @@ func Parse(data string) (*Config, error) {
 		AutoPairs  *bool    `toml:"autopairs"`
 		Dangerous  *bool    `toml:"confirm_dangerous"`
 		Query      struct {
-			MaxRows *int `toml:"max_rows"`
+			MaxRows    *int `toml:"max_rows"`
+			HistoryMax *int `toml:"history_max"`
 		} `toml:"query"`
 		Tree struct {
 			Width *int `toml:"width"`
@@ -218,6 +222,12 @@ func Parse(data string) (*Config, error) {
 			return nil, fmt.Errorf("[query] max_rows = %d: must be greater than 0", *n)
 		}
 		c.MaxRows = *n
+	}
+	if n := raw.Query.HistoryMax; n != nil {
+		if *n <= 0 {
+			return nil, fmt.Errorf("[query] history_max = %d: must be greater than 0", *n)
+		}
+		c.HistoryMax = *n
 	}
 	if n := raw.Tree.Width; n != nil { // held to 16 and half the window where it is used, whatever it is
 		c.TreeWidth = *n

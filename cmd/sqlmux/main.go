@@ -144,8 +144,10 @@ func startSession(name, layout string, l *config.Layout) (*app.Session, *app.Res
 // misspelt key (F13.5), the queries that were consoles before F10.11 not moved.
 func startNotes(cfg *config.Config) string {
 	warning := app.JoinNotes(config.UnknownKeys(cfg)...)
-	if err := config.MigrateConsoles(); err != nil {
-		warning = app.JoinNotes(warning, err.Error())
+	for _, err := range []error{config.MigrateConsoles(), config.TrimHistory(cfg.HistoryMax)} {
+		if err != nil {
+			warning = app.JoinNotes(warning, err.Error())
+		}
 	}
 	return warning
 }

@@ -56,6 +56,7 @@ var tables = []table{
 	{"keys.result", i18n.N("结果区，叠在 grid 之上（M3）")},
 	{"keys.grid", i18n.N("焦点在表格（NORMAL）")},
 	{"keys.tree", i18n.N("焦点在 schema 树（NORMAL）")},
+	{"keys.queryinsert", i18n.N("query 在 INSERT 下（F14.2）")},
 	{"keys.query", i18n.N("query 的 NORMAL / VISUAL（M3）")},
 	{"keys.landing", i18n.N("引导页：新 tab、没有 tab 的 pane（M3）")},
 	{"keys.normal", i18n.N("NORMAL 模式，焦点在任何 pane")},

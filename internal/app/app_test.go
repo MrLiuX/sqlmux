@@ -777,7 +777,7 @@ func TestWhichKeyKeys(t *testing.T) {
 // the palette must not list (§12).
 func TestEveryDefaultActionHasATitle(t *testing.T) {
 	keys, _ := newDefaultKeys()
-	anywhere := []string{"global", "normal", "grid", "tree", "query", "landing", "result"}
+	anywhere := []string{"global", "normal", "grid", "tree", "query", "queryinsert", "landing", "result"}
 	for _, id := range keys.Actions() {
 		listed := slices.ContainsFunc(anywhere, func(s string) bool { return keys.Hint(id, s) != "" })
 		if actions[id].Title == "" || listed == actions[id].Local {

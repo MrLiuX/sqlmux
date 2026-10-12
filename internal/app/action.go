@@ -164,10 +164,11 @@ func init() {
 			return cmd
 		}},
 		// "query.run <line>" is a click on a ▶ (§11「执行」).
-		"query.run":    {Title: i18n.N("执行"), Run: func(a *App, args Args) tea.Cmd { return a.queryRun(args.Arg) }},
-		"query.schema": {Title: i18n.N("切换 schema"), Run: do(func(a *App, _ Args) { a.openQueryDrop(dropSchema) })},
-		"query.conn":   {Title: i18n.N("切换连接…"), Run: do(func(a *App, _ Args) { a.openQueryDrop(dropQueryConn) })},
-		"query.tx":     {Run: do(func(a *App, _ Args) { a.openQueryDrop(dropTx) })}, // a click on Tx: 自动 ▾; the palette has tx.mode (§7.8)
+		"query.run":     {Title: i18n.N("执行"), Run: func(a *App, args Args) tea.Cmd { return a.queryRun(args.Arg) }},
+		"query.schema":  {Title: i18n.N("切换 schema"), Run: do(func(a *App, _ Args) { a.openQueryDrop(dropSchema) })},
+		"query.history": {Title: i18n.N("查询历史…"), Run: do(func(a *App, _ Args) { a.openQueryDrop(dropHistory) })},
+		"query.conn":    {Title: i18n.N("切换连接…"), Run: do(func(a *App, _ Args) { a.openQueryDrop(dropQueryConn) })},
+		"query.tx":      {Run: do(func(a *App, _ Args) { a.openQueryDrop(dropTx) })}, // a click on Tx: 自动 ▾; the palette has tx.mode (§7.8)
 		// The current connection's transaction (§5, F5.3).
 		"tx.mode": {Title: i18n.N("手动提交事务"), Run: func(a *App, _ Args) tea.Cmd {
 			c := a.conn()

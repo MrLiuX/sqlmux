@@ -444,6 +444,7 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 	for i, res := range m.rs {
 		stmt := r.sql[r.stmts[i].Start:r.stmts[i].End]
 		a.log(r, stmt, resultText(res, 0), false)
+		recordHistory(r, stmt, res, "")
 		if res.Cols != nil {
 			tabs = append(tabs, Tab{Name: r.label(len(tabs) + 1), Result: &resultTab{gridState: gridState{page: res}, run: r, part: len(tabs) + 1, stmt: i, pageable: r.pageable[i]}})
 		}
@@ -460,9 +461,15 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 		}
 		if errors.Is(m.err, context.Canceled) {
 			a.log(r, stmt, i18n.T("已取消"), false)
+			if m.set == "" {
+				recordHistory(r, stmt, db.Result{}, "canceled")
+			}
 			cmds = append(cmds, a.showToast(i18n.T("查询已取消")))
 		} else {
 			e, text := a.logError(r, stmt, m.err), strings.Join(r.from.ed.Lines(), "\n")
+			if m.set == "" {
+				recordHistory(r, stmt, db.Result{}, e.Message)
+			}
 			var at []string
 			if r.from.ver == r.ver && m.set == "" { // the text is still what ran
 				r.from.failed = strings.Count(text[:r.base+s.Start], "\n")

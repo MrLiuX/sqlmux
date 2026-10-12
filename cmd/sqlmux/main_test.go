@@ -275,6 +275,26 @@ func TestStartNotes(t *testing.T) {
 	}
 }
 
+// The start cuts history.jsonl to [query] history_max, the newest kept (F14.2).
+func TestStartTrimsHistory(t *testing.T) {
+	writeConfig(t, "config.toml", "[query]\nhistory_max = 2\n")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sql := range []string{"select 1", "select 2", "select 3"} {
+		if err := config.AppendHistory(config.History{Conn: "c", SQL: sql}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := startNotes(cfg); got != "" {
+		t.Fatalf("notes %q", got)
+	}
+	if hs, _ := config.LoadHistory(); len(hs) != 2 || hs[0].SQL != "select 2" {
+		t.Fatalf("history %+v", hs)
+	}
+}
+
 // The keys the ORDER list has are its own actions, in the reference as in the
 // keymap: none of COLS's (F12.9).
 func TestOrderKeysReference(t *testing.T) {
