@@ -57,6 +57,7 @@ M13 F13.6 审查时发现：MySQL 的 Query 用 WithoutCancel 发语句，取消
 - [ ] 类型：SQLite 的类型是动态的，`Col.Type` 用声明类型（可能为空）；值的文本格式以集成测试为准，blob 走 §8.1 的 `<binary N bytes>`。只读文件（权限、`mode=ro`）上编辑的报错走现有错误栏，不另加提示。
 - [ ] 命令行：位置参数是 DSN 或文件路径（`sqlmux ./x.db`、`sqlmux postgres://…`、`sqlmux mysql://…`），开一个临时连接：名字用文件名（不带扩展名）或 `<库>@<主机>`（连接名里不能有 `/`，worker 开工时定），不写 connections.toml、密码不存钥匙串、退出不存布局；`DATABASE_URL` 只在没有配置的连接、也没给位置参数和 `--layout` 时才认（决策者定，§14）；现有 flag 和 `sqlmux <连接名>` 照旧（连接名和路径 / URL 靠「含 `/` 或 `.`、且不是已有连接名」区分）。
 - [ ] 构建：goreleaser 四个目标 CGO_ENABLED=0 都编过；二进制和编译时间的增量写进 commit 说明。
+- [ ] 复审时定：rowid 表里可空的主键（不是 `INTEGER PRIMARY KEY`、没声明 NOT NULL）不作行标识，退回唯一索引或 rowid（§8.1），随本批复审。
 - [ ] 审查时定（§8.1、§9、§14）：CREATE TRIGGER 的 BEGIN … END 不切；手动模式下 pragma / attach / detach 不补 BEGIN；DATE / DATETIME / TIMESTAMP 列按 SQLite 标准文本显示、julianday 比较；REAL 最短往返显示、按数值比；blob 行标识整表只读；临时连接同名保留扩展名、不合规则用引擎名、管理器不列、session 用新编号的 query。
 
 **验收**

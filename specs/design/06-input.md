@@ -57,6 +57,7 @@ type Action struct {                // 注册表是 map[id]Action，id 如 "pane
 | `result` | result pane 获得焦点时生效，优先级在 `grid` 之上（如 `P`、`q`）；其余按键落到 `grid` |
 | `select` | 表格有选中的记录、或在 VISUAL 扩选时生效，叠在 `grid` / `result` 之上（M10 F10.7，§7.6「选择」）：`d` / `y` 对选中的记录生效、`esc` 清空；它们是完整绑定，上层优先，不因为下层的 `dd` / `yy` 等 `timeoutlen`：解析器合并 trie 时，`select` 是「完整绑定优先」的作用域，挂在它已绑节点下面的下层更长序列不并进来（Context 里指定，只对 `select` 生效；别的作用域照旧先到先得、更长序列仍挂在下面）。表格的 VISUAL 仍是 NORMAL 上下文，`normal` 层和用户映射照常叠在下面（`C-h` / `C-j` / `C-k` / `C-l`、`gt` / `gT`、`?`、leader 都能用）；「VISUAL 下不叠 `normal`」只是 query 的 vim VISUAL |
 | `jump` | flash 式跳转进行中（M10 F10.8，§6.10）：`esc`、`backspace`、`↵`；其余可打印字符进模式，不经过别的作用域 |
+| `jsonview` | 表格的 JSON 视图开着时（M14 F14.5，§7.6）：`]` / `[` = `json.page.next` / `json.page.prev`，`R` = `json.refresh`，`esc` / `q` = `json.leave`；其余键交给只读编辑器 |
 | `queryinsert` | query 在 INSERT 下（M14 F14.2）：默认只绑 `C-r` = `query.history`「查询历史…」；vim NORMAL 的 `C-r` 仍是 redo，INSERT 里 vim 的 `C-r` 是插寄存器、这里让给历史；`vim = false` 时同样 |
 | `grid` / `tree` / `query` / `landing` | 对应控件获得焦点：按 pane 当前 tab 的类型，表格 → grid，query → query，引导页和没有 tab 的 pane → landing（M3 F3.7）。`query` 只含应用层的键（如 ↵ 执行），其余按键交给 vim 引擎；`gq` 是编辑器的操作符（§9.5） |
 | `normal` | 所有 NORMAL 上下文共用：pane 焦点、leader、gt/gT。`:`、`;` M3 起在 grid / tree / landing 里（§6.8） |
@@ -222,6 +223,7 @@ query 里的 `x` 是 vim 的删除字符，所以 query 的 tab 用 `:q` 关闭�
 | session 列表（`sessions`） | `j` / `k` · `l` / `h` · `↵` · `n` · `x` · `$` · `esc` | 移动 · 展开 / 收起（session 下面是它的 window）· attach（停在 window 上时还切到这个 window）· 新建 session（M10 F10.2 起先要名字）· 关闭 · 重命名 · 关闭列表。`n` 原为新建连接：M5 起 session 是工作区，新建连接改为命令 `conn.new`（§18） | S-03 |
 | 命令面板（`palette`） | `↑` / `↓` 或 `C-n` / `C-p` · `Tab` / `S-Tab` · `↵` · `C-t` · `C-y` · `C-e` · `C-f` / `C-b` · `esc` | 移动 · 切换范围 · 执行 · 打开表（同 `↵`）/ 把结果送到结果区 · 复制 CSV · 在 query 中打开 · DDL 预览翻半页（M9 F9.7；`C-u` 仍是输入框的清行）· 关闭 | K-01~K-04、F-04 |
 | 通用下拉（`dropdown`）：schema、LIMIT 等（ORDER M12 F12.9 起不是） | `C-n` / `C-p` / `↑` / `↓` · `↵` · `esc` | 移动 · 选中 · 关闭。输入直接进过滤框，所以不用 j/k。Action 为 `dropdown.up/down/select/close` | §8.6 |
+| JSON 视图（`jsonview`，M14 F14.5） | `]` / `[` · `R` · `esc` / `q` | 翻页 · 刷新 · 回表格。Action 为 `json.page.next/prev`、`json.refresh`、`json.leave`；进入是表格的 `gJ`（`grid.view.json`） | §7.6 |
 | ORDER 浮层（`order`，M12 F12.9） | `/` · `j` / `k` · `space` · `a` · `A` · `↵` · `esc` | 聚焦过滤框 · 移动 · 加入或翻转方向 · 移出 · 清空 · 只按这一列并关闭 · 先清空过滤，再按一次关闭。Action 为 `order.filter/down/up/toggle/remove/clear/only/close` | §7.6 |
 | 补全列表（`complete`） | `Tab` / `C-n` / `↓` · `S-Tab` / `C-p` / `↑` | 下一项 · 上一项，到头绕回；弹出时第一项已选中；列表滚动照 nvim 的补全弹窗，选中项在视图里就不动、出了视图才滚（M13 F13.10，原来有的列表把选中项钉在最底行）。`↵`（接受，文字不变时照常执行）和 `esc`（第一次关列表）由输入框处理，不在这个作用域里 | §9.7 |
 | 确认框（`confirm`） | `y` / `↵` · `n` / `esc` | 确认 · 取消；`C-c` 等同 `esc`；两个按钮都能点击 | §10.5 |
