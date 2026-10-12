@@ -27,7 +27,7 @@ M13 F13.6 审查时发现：MySQL 的 Query 用 WithoutCancel 发语句，取消
 - [ ] 给驱动一个带截止时间的 ctx：KILL 发出 5 秒后取消，驱动关掉连接，Worker 按 §8.2 断线重连；§8.3 的已知上限随之去掉。
 
 **验收**
-- [ ] 集成：reviewer 的 MySQL quickrollback 探针 2 秒内返回；一个 KILL 不回应的集成测试（testproxy.go 吞掉 KILL 那条连接），取消后 5 秒内 Worker 空闲、连接已重拨。
+- [ ] 集成：KILL 被拒的连接，取消后 5–7 秒内 Worker 释放、下一个请求重拨（run 和 stream 各一；reviewer 的探针只有 PG 版，MySQL 没有，worker 开工时改）。
 
 ## F14.2 查询历史 · 状态：todo
 
@@ -37,7 +37,7 @@ M13 F13.6 审查时发现：MySQL 的 Query 用 WithoutCancel 发语句，取消
 **开发**（§11、§14）
 - [ ] 每次执行（成功和失败都记；表格取数的 SQL 不记）追加到 `$XDG_DATA_HOME/sqlmux/history.jsonl`：一行 JSON：时间、连接名、schema、语句、摘要（行数或受影响行数、耗时、错误第一行）；`O_APPEND` 一次 write、不加锁（多进程安全，行小于 PIPE_BUF 的靠 O_APPEND，超长语句截到 64 KB 并记 `truncated = true`，决策者定）。
 - [ ] `[query] history_max = 1000`：启动时超过就截掉最旧的，临时文件加 rename 一次重写；不按天数。
-- [ ] 打开：INSERT 下 `C-r`（`query.history`「查询历史…」；vim NORMAL 的 `C-r` 仍是 redo，不让给历史，决策者定），命令面板里也有；和 WHERE 历史同一个下拉，fzf 模糊匹配，每行语句一行化加 `dim` 的时间和摘要，`↵` 插到光标处；只列当前连接的，不做「全部连接」（决策者定，先这样）。
+- [ ] 打开：INSERT 下 `C-r`（`query.history`「查询历史…」，新作用域 `[keys.queryinsert]`，§6.4；vim NORMAL 的 `C-r` 仍是 redo，不让给历史，决策者定），命令面板里也有；和 WHERE 历史同一个下拉，fzf 模糊匹配，每行语句一行化加 `dim` 的时间和摘要，`↵` 插到光标处；只列当前连接的，不做「全部连接」（决策者定，先这样）。
 - [ ] 细节（已定）：`vim = false` 时 `C-r` 同样是历史。
 
 **验收**

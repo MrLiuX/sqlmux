@@ -44,6 +44,7 @@
   - **保存**：`last.toml` 只在正常退出时写（`:qa`、两次 `C-c`、关掉最后一个 session），不是每次改动都写；进程被杀掉就丢掉这次的布局改动（`ponytail:` 标出）。不管这次是怎么启动的，退出都覆盖 `last`，同 DataGrip。
   - **命令**：`layout.save`「保存布局为…」在状态栏的单行输入里要名字（同 `window.rename`，提示和输入框只占左边、右边照常画模式块，M8 F8.11 起三处统一；面板的输入行是搜索框兼快速 SQL，不再给它加一种模式），`↵` 写 `layouts/<名字>.toml`，同名覆盖，`esc` 放弃；名字含 `/`、以 `.` 开头、或是保留名 `last` 时 toast 拒绝（`last` 指 last.toml，F6.5 审查时定）。`layout.open`「打开布局」是下拉框（同 `theme.switch`），列出 `layouts/*.toml` 和 `last`，选中后替换正在跑的全部 session，有未保存的修改或没提交的事务先按 §10.5 确认（动词「打开」）；确认后在 Update 里同步读布局、建好 session，所有启动连接都在后台连，没有「拨号期间旧 session 还能操作」的窗口（审查时发现那时打的字会丢、还会把旧内容写进新 query 的文件）；第一个 session 的连接连不上也是 toast、tab 留着显示错误页，和别的连接一样；`--layout` 和它共用读布局、建 session 的代码，但启动时连不上照上面「恢复」的规则，M12 F12.5 起也不退出：进界面、节点标失败、toast 错误，`sqlmux <连接名>` 一样（原来在终端里报出来退出，F6.5 复审时定）。启动错误只剩配置本身的问题：TOML 读不了、连接名不存在或重复、主题坏了。
   - **启动**：`sqlmux` 不带参数时有 `last.toml` 就恢复，没有照默认布局；`sqlmux <连接名>` 用这个连接开默认布局、不恢复 `last`；`sqlmux --layout <名字或路径>` 打开这个布局；连接名和 `--layout` 同时给时报错退出「连接名和 --layout 只能给一个」。`last.toml` 读不了：toast、默认布局，坏文件改名为 `last.toml.broken`。
+- **history.jsonl**（M14 F14.2）：路径 `$XDG_DATA_HOME/sqlmux/history.jsonl`，格式和截尾见 §11「查询历史」。
 - **state.json**（M1 F1.5 起）：路径 `$XDG_STATE_HOME/sqlmux/state.json`，读写都在 `config` 包里。
   - 内容：`recent` 是面板的最近使用，记成 `{"kind": "table", "id": "play/public.t_order"}`，kind 为 window / pane / table / command，M5 起表的 id 带连接名，旧的不带连接名的条目读到时丢掉；`queries` 记每个 query 文件最后用的连接和 schema，如 `{"query_1": {"conn": "play", "schema": "public"}}`，换连接或 schema 时写入（M5 F5.11）；`tables` 的键是 `"<连接名>/<schema>.<表>"`（不同连接可能有同名表），每张表下存 history 和 favorites。
   - 启动时读一次；每次改动（执行 WHERE、收藏、面板运行）都写一次。写入：在 Update 里序列化，在 Cmd 里写临时文件再 rename，权限 0600；用互斥锁和版本号，丢掉比已写入版本更旧的快照，避免两个 Cmd 并发时旧内容覆盖新内容。多个进程各写一份时写前先读盘按 key 合并（Tables / SQL / Queries 按键，Recent 去重；M13 F13.3，审计：原来启动读一次之后整份写，后写者赢，另一个窗口的历史和收藏丢）。
@@ -74,6 +75,7 @@ transpose    = false             # 新打开的表是否转置（关掉再重开
 
 [query]
 max_rows = 500                   # M10 F10.4
+history_max = 1000               # M14 F14.2：history.jsonl 保留的条数，启动时截掉最旧的；必须大于 0
 ```
 
 ```toml

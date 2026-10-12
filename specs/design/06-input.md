@@ -57,6 +57,7 @@ type Action struct {                // 注册表是 map[id]Action，id 如 "pane
 | `result` | result pane 获得焦点时生效，优先级在 `grid` 之上（如 `P`、`q`）；其余按键落到 `grid` |
 | `select` | 表格有选中的记录、或在 VISUAL 扩选时生效，叠在 `grid` / `result` 之上（M10 F10.7，§7.6「选择」）：`d` / `y` 对选中的记录生效、`esc` 清空；它们是完整绑定，上层优先，不因为下层的 `dd` / `yy` 等 `timeoutlen`：解析器合并 trie 时，`select` 是「完整绑定优先」的作用域，挂在它已绑节点下面的下层更长序列不并进来（Context 里指定，只对 `select` 生效；别的作用域照旧先到先得、更长序列仍挂在下面）。表格的 VISUAL 仍是 NORMAL 上下文，`normal` 层和用户映射照常叠在下面（`C-h` / `C-j` / `C-k` / `C-l`、`gt` / `gT`、`?`、leader 都能用）；「VISUAL 下不叠 `normal`」只是 query 的 vim VISUAL |
 | `jump` | flash 式跳转进行中（M10 F10.8，§6.10）：`esc`、`backspace`、`↵`；其余可打印字符进模式，不经过别的作用域 |
+| `queryinsert` | query 在 INSERT 下（M14 F14.2）：默认只绑 `C-r` = `query.history`「查询历史…」；vim NORMAL 的 `C-r` 仍是 redo，INSERT 里 vim 的 `C-r` 是插寄存器、这里让给历史；`vim = false` 时同样 |
 | `grid` / `tree` / `query` / `landing` | 对应控件获得焦点：按 pane 当前 tab 的类型，表格 → grid，query → query，引导页和没有 tab 的 pane → landing（M3 F3.7）。`query` 只含应用层的键（如 ↵ 执行），其余按键交给 vim 引擎；`gq` 是编辑器的操作符（§9.5） |
 | `normal` | 所有 NORMAL 上下文共用：pane 焦点、leader、gt/gT。`:`、`;` M3 起在 grid / tree / landing 里（§6.8） |
 | `global` | 始终生效，只有少数 Ctrl 组合：C-p、C-s、C-c |
