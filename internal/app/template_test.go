@@ -154,7 +154,8 @@ func TestAlterTemplateSelection(t *testing.T) {
 			if loc == nil {
 				t.Fatalf("plain %v %s: no placeholder in %q", plain, kind, sql)
 			}
-			from, to, ok := editor.Pos{}, editor.Pos{}, false
+			var from, to editor.Pos
+			var ok bool
 			if plain {
 				from, to, ok = q.ed.SelectionSpan()
 			} else if from, to, ok = q.ed.Selection(); ok {
