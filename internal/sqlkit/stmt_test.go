@@ -1,6 +1,7 @@
 package sqlkit
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -352,5 +353,86 @@ func TestEndsTx(t *testing.T) {
 		if got := EndsTx(tc.sql, tc.d); got != tc.want {
 			t.Errorf("%q: %q, want %q", tc.sql, got, tc.want)
 		}
+	}
+}
+
+// A SQLite trigger is one statement to its END; its body's ;s do not cut it,
+// a CASE's END is no end of it, a ; after the END does (F14.1).
+func TestSQLiteTriggerNotSplit(t *testing.T) {
+	sql := "create table t (a);\n" +
+		"create temp trigger if not exists tr after insert on t begin\n" +
+		"  update t set a = case when new.a > 1 then 1 else 0 end where rowid = new.rowid;\n" +
+		"  insert into log values (new.a);\n" +
+		"end;\n" +
+		"select 1; select 2"
+	var got []string
+	for _, st := range Statements(sql, SQLite) {
+		got = append(got, strings.SplitN(sql[st.Start:st.End], "\n", 2)[0])
+	}
+	if want := []string{"create table t (a)", "create temp trigger if not exists tr after insert on t begin", "select 1", "select 2"}; strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("statements %q, want %q", got, want)
+	}
+	trig := Statements("create trigger x before delete on t begin delete from u; end; drop table v", SQLite)
+	if len(trig) != 2 {
+		t.Errorf("end after a ;: %d statements", len(trig))
+	}
+	if n := len(Statements("create trigger x before delete on t begin delete from u; end; drop table v", PG)); n != 3 { // PG has no such body
+		t.Errorf("PG's: %d statements", n)
+	}
+	if n := len(Statements("begin; select 1; end; select 2", SQLite)); n != 4 { // a transaction's BEGIN is no trigger's
+		t.Errorf("begin; end: %d statements", n)
+	}
+}
+
+// SQLite's PRAGMA, ATTACH and DETACH go without the BEGIN a manual mode puts
+// before a statement: in a transaction foreign_keys is no use and journal_mode
+// is an error (F14.1); PG has none such.
+func TestNoBeginSQLite(t *testing.T) {
+	for s, want := range map[string]bool{
+		"pragma foreign_keys = on": true, "PRAGMA main.journal_mode = wal": true, "attach 'x.db' as x": true, "detach x": true,
+		"begin immediate": true, "end": true, "vacuum": true,
+		"update t set a = 1": false, "select 1": false, "create index i on t (a)": false,
+	} {
+		if got := NoBegin(s, SQLite); got != want {
+			t.Errorf("NoBegin(%q) = %v", s, got)
+		}
+	}
+	if NoBegin("pragma foreign_keys = on", PG) {
+		t.Error("PG has no PRAGMA")
+	}
+}
+
+// SQLite's PRAGMA query_only with a value turns the read only standing off or
+// on again: a break of it; reading it, or any other pragma, is none (F14.1).
+func TestBreaksReadOnlySQLite(t *testing.T) {
+	for s, want := range map[string]bool{
+		"pragma query_only = off": true, "PRAGMA main.query_only(0)": true, `pragma "query_only" = 0`: true,
+		"pragma query_only": false, "pragma foreign_keys = on": false, "pragma table_info(t)": false, "select 1": false,
+	} {
+		if got := BreaksReadOnly(s, SQLite); got != want {
+			t.Errorf("BreaksReadOnly(%q) = %v", s, got)
+		}
+	}
+}
+
+func TestAutoLimitSQLiteValues(t *testing.T) {
+	if got, page := AutoLimit("values (1), (2)", SQLite, 5, 0); got != "values (1), (2)" || page {
+		t.Errorf("SQLite's VALUES: %q %v", got, page)
+	}
+	if got, _ := AutoLimit("values (1), (2)", PG, 5, 0); got != "values (1), (2)\nLIMIT 5" {
+		t.Errorf("PG's: %q", got)
+	}
+	if got, _ := AutoLimit("select 1", SQLite, 5, 0); got != "select 1\nLIMIT 5" {
+		t.Errorf("SQLite's select: %q", got)
+	}
+}
+
+// SQLite completes with PG's keywords (F14.1).
+func TestCommonKeywordsSQLite(t *testing.T) {
+	if got, want := Common(SQLite), Common(PG); !slices.Equal(got, want) {
+		t.Errorf("SQLite's: %v, want PG's %v", got, want)
+	}
+	if slices.Contains(Common(SQLite), "ifnull") && !slices.Contains(Common(PG), "ifnull") {
+		t.Error("MySQL's keywords are not SQLite's")
 	}
 }

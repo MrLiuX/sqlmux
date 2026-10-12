@@ -734,8 +734,13 @@ func TestConnFormSQLite(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	a, _ := withSessions()
 	feed(t, a, "<C-p>conn.new<CR>lite<Tab><Tab><Right><Right>")
-	if view := a.render().String(); !strings.Contains(view, "file") || regexp.MustCompile(`\b(host|port|user|password)\b`).MatchString(view) {
-		t.Fatalf("the form of a file:\n%s", view)
+	v := a.formView()
+	hidden := func(i int) bool { return v.Fields[i].Hidden }
+	if !hidden(fieldHost) || !hidden(fieldPort) || !hidden(fieldUser) || !hidden(fieldPassword) || hidden(fieldDatabase) || v.Fields[fieldDatabase].Label != "file" {
+		t.Fatalf("the form of a file: host %v port %v user %v password %v, file %v %q", hidden(fieldHost), hidden(fieldPort), hidden(fieldUser), hidden(fieldPassword), hidden(fieldDatabase), v.Fields[fieldDatabase].Label)
+	}
+	if view := a.render().String(); regexp.MustCompile(`\b(host|port|user|password)\b`).MatchString(view) {
+		t.Fatalf("the form of a file has the others' rows:\n%s", view)
 	}
 	feed(t, a, "<Tab>~/data.db?mode=ro<CR>")
 	if got := connections(); !strings.Contains(got, `engine = "sqlite"`) || !strings.Contains(got, `dsn = "~/data.db?mode=ro"`) {
@@ -753,5 +758,55 @@ func TestConnFormSQLite(t *testing.T) {
 	feed(t, b, "<C-p>conn.new<CR>nofile<Tab><Tab><Right><Right><CR>")
 	if b.form == nil || b.form.err == "" {
 		t.Errorf("a file asked for: %+v", b.form)
+	}
+}
+
+// The password a form kept from another engine is no password of a file: SQLite's
+// form saves none, to the keychain or to the file (F14.1).
+func TestConnFormSQLiteKeepsNoPassword(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	keychain(t, "ok")
+	a, _ := withSessions()
+	feed(t, a, "<C-p>conn.new<CR>")
+	set := func(field int, text string) { a.form.fields[field].Input = ui.Input{Text: text, Pos: len(text)} }
+	set(fieldName, "lite")
+	set(fieldPassword, "secret") // typed under postgres
+	a.formSegment(fieldEngine, 2)
+	set(fieldDatabase, "/tmp/x.db")
+	a.saveConnForm()
+	got := connections()
+	if !strings.Contains(got, `engine = "sqlite"`) || strings.Contains(got, "password") || strings.Contains(got, "secret") {
+		t.Errorf("connections.toml:\n%s", got)
+	}
+	if _, ok := kcItem("lite"); ok || len(kcLog()) > 1 {
+		t.Errorf("the keychain: %v", kcLog())
+	}
+}
+
+// A connection of the command line is no row of the manager, to edit or delete
+// or open as; the connections of the file are, from the first (F14.1).
+func TestManagerHidesTempConnection(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	a, _ := withSessions()
+	temp := newConn(config.Connection{Name: "x", Engine: "sqlite", DSN: "/tmp/x.db", Temp: true})
+	a.sess.Conns = append([]*Conn{temp}, a.sess.Conns...)
+	a.openConnManager()
+	m := a.managerView()
+	for _, r := range m.Rows {
+		if r.Name == "x" {
+			t.Fatalf("the manager lists the temporary connection: %+v", m.Rows)
+		}
+	}
+	if len(m.Rows) != len(a.sess.Conns) { // the ones of the file and the row that makes a new one
+		t.Errorf("rows %d for %d connections", len(m.Rows), len(a.sess.Conns))
+	}
+	if a.form.cur != 0 || a.form.was == nil || a.form.was.Name == "x" {
+		t.Errorf("the form is on %+v", a.form.was)
+	}
+	for range 5 {
+		a.connsMove(1)
+	}
+	if a.form.cur != len(a.managed()) {
+		t.Errorf("the last row is %d, not past the temporary one", a.form.cur)
 	}
 }

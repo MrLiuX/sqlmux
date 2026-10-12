@@ -20,6 +20,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/db/mysql"
 	"github.com/kackerx/sqlmux/internal/db/postgres"
+	"github.com/kackerx/sqlmux/internal/db/sqlite"
 	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
@@ -43,17 +44,15 @@ func settle(a *App, cmd tea.Cmd) {
 }
 
 // engineDSNs is each engine's seeded database the tests run against, as
-// SQLMUX_TEST_PG and SQLMUX_TEST_MYSQL name them; the test skips with none.
+// SQLMUX_TEST_PG and SQLMUX_TEST_MYSQL name them, and a file SQLite's, which
+// needs no server; a test with only that one runs on it alone.
 func engineDSNs(t *testing.T) map[string]string {
-	dsns := map[string]string{}
+	dsns := map[string]string{"sqlite": sqlite.OwnDB(t)}
 	if os.Getenv("SQLMUX_TEST_PG") != "" {
 		dsns["postgres"] = postgres.IntegrationDSN(t) // the user's PG* variables out of the way
 	}
 	if os.Getenv("SQLMUX_TEST_MYSQL") != "" {
 		dsns["mysql"] = mysql.IntegrationDSN(t)
-	}
-	if len(dsns) == 0 {
-		t.Skip("neither SQLMUX_TEST_PG nor SQLMUX_TEST_MYSQL is set")
 	}
 	return dsns
 }
@@ -65,11 +64,25 @@ func eachEngine(t *testing.T, test func(t *testing.T, eng, dsn string)) {
 	}
 }
 
+// eachServer is eachEngine but for SQLite, which is a file: no server to lose,
+// no other database, no session of another's.
+func eachServer(t *testing.T, test func(t *testing.T, eng, dsn string)) {
+	eachEngine(t, func(t *testing.T, eng, dsn string) {
+		if eng == "sqlite" {
+			t.Skip("a file has no server")
+		}
+		test(t, eng, dsn)
+	})
+}
+
 // ownDB is a database of the test's own on eng's server, for tests that
 // write (AGENTS.md「集成测试环境」).
 func ownDB(t *testing.T, eng string) string {
-	if eng == "mysql" {
+	switch eng {
+	case "mysql":
 		return mysql.OwnDB(t)
+	case "sqlite":
+		return sqlite.OwnDB(t)
 	}
 	return postgres.OwnDB(t)
 }
@@ -107,7 +120,7 @@ func connectOnOpen(t *testing.T, eng, dsn string) {
 	}
 	ns, _ := a.treeNodes()
 	home := slices.IndexFunc(ns, func(n node) bool { return n.id == schemaNode(seed, seed.home) })
-	if seed.State != connReady || len(seed.Tables) == 0 || home < 0 || !ns[home].Open {
+	if seed.State != connReady || len(seed.Tables) == 0 || eng != "sqlite" && (home < 0 || !ns[home].Open) { // a file has no schema node
 		t.Errorf("seed: %v, %d tables, %s at %d\n%s", seed.State, len(seed.Tables), seed.home, home, treeTexts(a))
 	}
 	if play.State != connReady || a.conn() != seed {
@@ -328,7 +341,11 @@ func readOnlyMain(t *testing.T, eng, dsn string) {
 		_, err := conn.Query(ctx, "update t_user set name = name where id = 1")
 		return err
 	})
-	if e := c.conn.eng.ErrorOf(err); e.Code != "25006" { // read_only_sql_transaction, MySQL's 1792 too
+	want := map[string]string{"sqlite": "8"}[eng] // SQLITE_READONLY
+	if want == "" {
+		want = "25006"
+	}
+	if e := c.conn.eng.ErrorOf(err); e.Code != want { // read_only_sql_transaction, MySQL's 1792 too
 		t.Errorf("a write on Main: %+v", e)
 	}
 	c.ed.Load("start transaction read write")
@@ -340,7 +357,7 @@ func readOnlyMain(t *testing.T, eng, dsn string) {
 // A run that sets where unqualified names go, PG's SET or MySQL's USE,
 // leaves the query's schema to be set again before the next (§8.6);
 // MySQL's /*! … */ runs as code, its statements split around it (F5.4).
-func TestRunSetsSchemaAgain(t *testing.T) { eachEngine(t, runSetsSchemaAgain) }
+func TestRunSetsSchemaAgain(t *testing.T) { eachServer(t, runSetsSchemaAgain) }
 
 func runSetsSchemaAgain(t *testing.T, eng, dsn string) {
 	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: dsn})
@@ -512,7 +529,7 @@ func killBackends(t *testing.T, eng, dsn string, c *Conn) {
 // run after finds its schema as the query set it. A transaction is lost
 // with the connection: a write in it is not run, a commit says it is not
 // known to have taken; the manual mode stays (§8.2「断线重连」, F8.19).
-func TestReconnect(t *testing.T) { eachEngine(t, reconnect) }
+func TestReconnect(t *testing.T) { eachServer(t, reconnect) }
 
 func reconnect(t *testing.T, eng, _ string) {
 	dsn := ownDB(t, eng)
@@ -600,7 +617,7 @@ func writeCode(c *Conn, w *db.Worker) string {
 
 // What was dialed read only is read only after the redial too: a read-only
 // connection's Main, and every connection's Meta (F8.19).
-func TestReconnectReadOnly(t *testing.T) { eachEngine(t, reconnectReadOnly) }
+func TestReconnectReadOnly(t *testing.T) { eachServer(t, reconnectReadOnly) }
 
 func reconnectReadOnly(t *testing.T, eng, _ string) {
 	dsn := ownDB(t, eng) // a write that gets through must not reach the shared one
@@ -620,7 +637,7 @@ func reconnectReadOnly(t *testing.T, eng, _ string) {
 
 // A table's page and the palette's DDL preview come back after the drop
 // with no error (F8.19).
-func TestReconnectTable(t *testing.T) { eachEngine(t, reconnectTable) }
+func TestReconnectTable(t *testing.T) { eachServer(t, reconnectTable) }
 
 func reconnectTable(t *testing.T, eng, dsn string) {
 	a := opened(t, config.Connection{Name: "play", Engine: eng, DSN: dsn})

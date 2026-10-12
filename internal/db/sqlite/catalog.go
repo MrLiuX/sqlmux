@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
 // Catalog queries (§8.4), over sqlite_schema and the pragma table functions.
@@ -20,11 +21,13 @@ func (Engine) Schemas(context.Context, db.Conn) (schemas []string, current strin
 }
 
 // Tables lists the file's tables and views by name, but SQLite's own
-// (sqlite_sequence, sqlite_stat1…); SQLite keeps no row counts.
+// (sqlite_sequence, sqlite_stat1…) and the shadow tables of a virtual one, an
+// FTS5's; SQLite keeps no row counts.
 func (Engine) Tables(ctx context.Context, c db.Conn) ([]db.Table, error) {
 	r, err := c.Query(ctx, `
 select name, type from sqlite_schema
 where type in ('table', 'view') and name not like 'sqlite\_%' escape '\'
+  and name not in (select name from pragma_table_list where type = 'shadow')
 order by name`)
 	if err != nil {
 		return nil, err
@@ -64,6 +67,9 @@ func (Engine) TableColumns(ctx context.Context, c db.Conn, _, table string) (db.
 			continue
 		}
 		col := db.Column{Name: row[0].S, Type: row[1].S, NotNull: row[2].S == "1", Default: row[3].S, AddOnly: true, Generated: row[5].S == "2" || row[5].S == "3"}
+		if col.Generated {
+			col.ReadOnly = i18n.T("%s 是生成列，只读", col.Name)
+		}
 		if n, _ := strconv.Atoi(row[4].S); n > 0 {
 			pk = append(pk, key{n, col.Name})
 		}
@@ -78,15 +84,18 @@ func (Engine) TableColumns(ctx context.Context, c db.Conn, _, table string) (db.
 		return out, err
 	}
 	rowid := len(tbl.Rows) > 0 && tbl.Rows[0][0].S == "table" && tbl.Rows[0][1].S == "0"
-	if i := slices.IndexFunc(out.Cols, func(col db.Column) bool { return len(out.PK) == 1 && col.Name == out.PK[0] }); i >= 0 && rowid && strings.EqualFold(out.Cols[i].Type, "integer") {
-		out.Cols[i].Default = "rowid"
-	}
-	// the unique indexes over not-null columns, none an expression
-	idx, err := c.Query(ctx, `select name from pragma_index_list(?) where "unique" = 1 and origin <> 'pk' order by seq`, name)
+	// the unique indexes over not-null columns, none an expression, none partial; an
+	// index of origin pk is a primary key that is no alias of the rowid
+	idx, err := c.Query(ctx, `select name, origin from pragma_index_list(?) where "unique" = 1 and partial = 0 order by seq`, name)
 	if err != nil {
 		return out, err
 	}
+	aliased := true // the primary key is the rowid's own name: an INTEGER one, with no index of its own (not DESC, not WITHOUT ROWID)
 	for _, row := range idx.Rows {
+		if row[1].S == "pk" {
+			aliased = false
+			continue
+		}
 		cols, err := c.Query(ctx, `select name from pragma_index_info(?) order by seqno`, row[0])
 		if err != nil {
 			return out, err
@@ -102,9 +111,19 @@ func (Engine) TableColumns(ctx context.Context, c db.Conn, _, table string) (db.
 			out.Unique = append(out.Unique, names)
 		}
 	}
+	if i := slices.IndexFunc(out.Cols, func(col db.Column) bool { return len(out.PK) == 1 && col.Name == out.PK[0] }); i >= 0 && rowid && aliased && strings.EqualFold(out.Cols[i].Type, "integer") {
+		out.Cols[i].Default = "rowid"
+	}
+	for _, k := range out.Key() { // a blob's bytes are no text to find a row by (MySQL's too)
+		for _, col := range out.Cols {
+			if col.Name == k && strings.Contains(strings.ToLower(col.Type), "blob") {
+				out.ReadOnly = i18n.T("行标识列 %s 是 %s", k, col.Type)
+			}
+		}
+	}
 	if out.Key() == nil && rowid && !slices.ContainsFunc(out.Cols, func(col db.Column) bool { return strings.EqualFold(col.Name, "rowid") }) {
 		out.Lead, out.PK = "rowid, ", []string{"rowid"}
-		out.Cols = slices.Insert(out.Cols, 0, db.Column{Name: "rowid", Type: "integer", NotNull: true, Generated: true})
+		out.Cols = slices.Insert(out.Cols, 0, db.Column{Name: "rowid", Type: "integer", NotNull: true, Generated: true, ReadOnly: i18n.T("rowid 是行号，只读")})
 	}
 	return out, nil
 }

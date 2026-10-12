@@ -95,7 +95,7 @@ func Guarded(ctx context.Context, c Conn, name string, f func() error) error {
 // Reference: lazysql drivers/utils.go queriesInTransaction and its
 // ExecutePendingChanges, which run the changes as listed and check
 // neither the rows hit nor the loaded values; its INSERT leaves a DEFAULT
-// column out, where ours writes DEFAULT.
+// column out, as ours does since F14.1.
 func Save(ctx context.Context, w *Worker, e Engine, schema, table string, keyCols []string, ch Changes, manual bool) (failed int, tx byte, err error) {
 	type stmt struct {
 		sql  string
@@ -170,7 +170,7 @@ func Save(ctx context.Context, w *Worker, e Engine, schema, table string, keyCol
 func keyWhere(e Engine, keyCols, key []string, arg func(Val) string) []string {
 	var where []string
 	for i, k := range keyCols {
-		where = append(where, e.Quote(k)+" = "+arg(Val{S: key[i]}))
+		where = append(where, e.Eq(e.Quote(k), arg(Val{S: key[i]})))
 	}
 	return where
 }
@@ -204,9 +204,6 @@ func DefaultRow(e Engine, schema, table string, kw func(string) string) string {
 // insert is the INSERT of a row with cols set, and its arguments; with
 // none set, every column's DEFAULT (§10.6).
 func insert(e Engine, schema, table string, cols []Change) (string, []Val) {
-	if len(cols) == 0 {
-		return DefaultRow(e, schema, table, func(s string) string { return s }), nil
-	}
 	args, arg := argsOf(e)
 	var names, vals []string
 	for _, c := range cols {

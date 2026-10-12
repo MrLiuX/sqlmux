@@ -221,6 +221,8 @@ func (t *dataTab) cellAtCursor() (cellSrc, bool) {
 	}
 	if s.why = t.whyNoEdit(); s.why == "" && s.col.Fixed {
 		s.why = i18n.T("%s 是 %s，只读", s.col.Name, s.col.Type)
+	} else if s.why == "" {
+		s.why = s.col.ReadOnly
 	}
 	return s, true
 }
@@ -352,7 +354,7 @@ func (a *App) setSpecial(def bool) {
 	sr, key, ok := t.cursor()
 	field := t.fieldAt(t.col)
 	name := t.page.Cols[field].Name
-	if col := t.column(name); !ok || !t.editable(sr, key) || col.Fixed || def && !hasDefault(col, sr.add != nil) || !def && col.NotNull {
+	if col := t.column(name); !ok || !t.editable(sr, key) || col.Fixed || col.ReadOnly != "" || def && !hasDefault(col, sr.add != nil) || !def && col.NotNull {
 		return
 	}
 	if t.cell != nil {

@@ -25,9 +25,9 @@ create table t_order (
     created_at text not null default '2026-01-01 00:00:00'
 );
 with recursive n (i) as (select 1 union all select i + 1 from n where i < 6000)
-insert into t_order (user_id, status, amount, paid, note)
+insert into t_order (user_id, status, amount, paid)
 select 1 + i % 3, case i % 5 when 0 then 'pending' when 1 then 'queued' when 2 then 'running' when 3 then 'done' else 'failed' end,
-       i * 1.5, i % 2, 'order ' || i
+       i * 1.5, i % 2
 from n;
 update t_order set raw = x'DEADBEEF00FF' where id = 1;
 
@@ -90,3 +90,43 @@ create table t_note (
     id      integer primary key,
     user_id integer references t_user
 );
+
+-- F14.1 review: what SQLite does its own way
+
+-- a partial unique index is no key; a blob is no key to find a row by
+create table t_part (a text not null, b text not null);
+create unique index t_part_a on t_part (a) where b = 'x';
+insert into t_part values ('1', 'x'), ('1', 'y');
+create table t_bk (id blob(16) primary key, name text);
+insert into t_bk values (x'00112233445566778899aabbccddeeff', 'uuid');
+
+-- a primary key in another order than the columns; a key with no declared type,
+-- which may hold an integer or a text; INT and DESC are no alias of the rowid
+create table t_ck (b text, a integer, primary key (a, b));
+create table t_free (k primary key, v text);
+insert into t_free values (1, 'one'), ('two', 'two'), (0, 'zero');
+create table t_free_wr (k primary key, v text) without rowid;
+insert into t_free_wr values (1, 'one'), ('two', 'two'), (0, 'zero');
+create table t_int (id int primary key, v text);
+create table t_desc (id integer primary key desc, v text);
+
+-- the columns SQLite reads as times, one written another way
+create table t_dt (id integer primary key, at datetime, d date, ts timestamp, label text);
+insert into t_dt values (1, '2026-01-02 03:04:05', '2026-01-02', '2026-01-02 03:04:05.250', 'standard'),
+                        (2, '2026-01-02T03:04:05Z', null, null, 'T and Z');
+
+-- reals that need all their digits, and the ends of how they are written
+create table t_real (id integer primary key, x real);
+insert into t_real values (1, 1.0 / 7), (2, 0.1 + 0.2), (3, 1e16), (4, 1e17), (5, 123456789.123456789), (6, 1e-5), (7, 100.0);
+
+-- generated columns, stored and virtual; a column called rowid
+create table t_gen (a integer, b integer generated always as (a * 2) stored, c integer as (a + 1));
+create table t_rowid (rowid text, v text);
+
+-- a trigger: its body is one statement, ;s and all; a virtual table with its shadow tables
+create table t_aud (n integer);
+create trigger t_aud_ins after insert on t_aud begin
+    insert into t_log values ('aud', 'row ' || new.n);
+    insert into t_log values ('aud', 'again');
+end;
+create virtual table ft using fts5 (body);

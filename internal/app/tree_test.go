@@ -681,6 +681,9 @@ func TestTreeSQLiteFlat(t *testing.T) {
 	c.idx[idOf(c.Tables[0])] = []db.Index{{Name: "i", Cols: []string{"id"}}}
 	c.keys[idOf(c.Tables[0])] = []db.Key{{Name: "PRIMARY", Cols: []string{"id"}}, {Cols: []string{"u"}, Ref: &db.Ref{Schema: "main", Table: "t_x", Cols: []string{"id"}}}}
 	a.sess.open[tableNode(c, c.Tables[0])+"/keys"] = true
+	if ns, _ := a.treeNodes(); slices.ContainsFunc(ns, func(n node) bool { return n.kind == nodeTable && n.Note != "" }) {
+		t.Error("a file has no row count to show")
+	}
 	got := strings.Split(treeTexts(a), "\n")
 	want := []string{"▾ doraemon", "  ▾ Tables (1)", "    ▾ t_user", "        id", "      ▸ Indexes (1)", "      ▾ Keys (2)", "          PRIMARY (id)", "          FOREIGN KEY (u) → t_x (id)", "  ▸ Views (1)"}
 	if len(got) < len(want) || strings.Join(got[:len(want)], "|") != strings.Join(want, "|") {

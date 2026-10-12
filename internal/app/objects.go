@@ -125,16 +125,22 @@ func (a *App) gotFunction(m funcMsg) tea.Cmd {
 	if m.err != nil {
 		return a.showToast(i18n.T("%s：%s", m.conn.Spec.Name, m.err))
 	}
-	return a.queryWith(m.conn, m.fn.Schema, m.text)
+	return a.queryWith(m.conn, m.fn.Schema, m.text, false)
 }
 
-// queryWith opens a new query on c, in schema, holding text.
-func (a *App) queryWith(c *Conn, schema, text string) tea.Cmd {
+// queryWith opens a new query on c, in schema, holding text; with place, the
+// first placeholder in it selected (F14.4).
+func (a *App) queryWith(c *Conn, schema, text string, place bool) tea.Cmd {
 	kept, ok := a.newQuery(c)
 	if !ok {
 		return kept
 	}
 	t := queryOf(a.focused())
 	t.schema = cmp.Or(schema, t.schema)
-	return tea.Batch(kept, a.queryDid(t, t.ed.Load(text)), a.keepQuery(t))
+	a.plainQueries() // made now, not yet gone through
+	cmd := a.queryDid(t, t.ed.Load(text))
+	if place {
+		selectPlaceholder(t)
+	}
+	return tea.Batch(kept, cmd, a.keepQuery(t))
 }

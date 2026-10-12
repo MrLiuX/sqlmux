@@ -72,11 +72,17 @@ var defaultPort = map[string]string{"postgres": "5432", "mysql": "3306"} // none
 // of both (§8): the driver's own form of MySQL is read as well, not shown.
 var dsnExample = map[string]string{"postgres": "postgres://user:pass@host:5432/db?sslmode=prefer", "mysql": "mysql://user:pass@host:3306/db", "sqlite": "~/data.db?mode=ro"}
 
-// specs are the connections the session has, as connections.toml says them.
+// managed are the connections the manager lists: those of connections.toml,
+// not one of the command line, which is nowhere to find, edit or delete (F14.1).
+func (a *App) managed() []*Conn {
+	return slices.DeleteFunc(slices.Clone(a.sess.Conns), func(c *Conn) bool { return c.Spec.Temp })
+}
+
+// specs are the connections the manager lists, as connections.toml says them.
 func (a *App) specs() []config.Connection {
-	out := make([]config.Connection, len(a.sess.Conns))
-	for i, c := range a.sess.Conns {
-		out[i] = c.Spec
+	var out []config.Connection
+	for _, c := range a.managed() {
+		out = append(out, c.Spec)
 	}
 	return out
 }
@@ -99,7 +105,7 @@ func blankFields() []ui.FormField {
 // openConnForm is conn.new: the manager on its last row, a new connection,
 // the form having the keys on name.
 func (a *App) openConnForm() {
-	a.form = &connForm{fields: blankFields(), cur: len(a.sess.Conns), direct: true, groupSel: -1}
+	a.form = &connForm{fields: blankFields(), cur: len(a.managed()), direct: true, groupSel: -1}
 	a.keepConnInSight()
 }
 
@@ -107,7 +113,7 @@ func (a *App) openConnForm() {
 // list having the keys (F8.16).
 func (a *App) openConnManager() {
 	a.form = &connForm{list: true, groupSel: -1}
-	cur := slices.Index(a.sess.Conns, a.conn())
+	cur := slices.Index(a.managed(), a.conn())
 	a.selectConn(max(cur, 0))
 }
 
@@ -195,6 +201,15 @@ func (f *connForm) skipped(i int) bool {
 		return f.dsnGiven()
 	}
 	return false
+}
+
+// password is the password typed, "" with SQLite on, whose password field is
+// hidden: what it held when the engine was another's is no password of a file.
+func (f *connForm) password() string {
+	if f.skipped(fieldPassword) {
+		return ""
+	}
+	return f.fields[fieldPassword].Input.Text
 }
 
 // sqlite is whether the engine on is SQLite, whose form is a file, its
@@ -320,7 +335,7 @@ func (a *App) formCancel() {
 // connsMove moves the list's selection by d, the form following; it stops at
 // the ends.
 func (a *App) connsMove(d int) {
-	if i := a.form.cur + d; i >= 0 && i <= len(a.sess.Conns) {
+	if i := a.form.cur + d; i >= 0 && i <= len(a.managed()) {
 		a.selectConn(i)
 	}
 }
@@ -383,7 +398,7 @@ func (a *App) deleteConn() tea.Cmd {
 		}
 		a.regroup() // the first of a group gone: the next one is where the group begins
 		if a.form != nil {
-			a.selectConn(min(a.form.cur, len(a.sess.Conns)))
+			a.selectConn(min(a.form.cur, len(a.managed())))
 			a.form.list = true
 		}
 		return toast
@@ -481,7 +496,7 @@ func (a *App) testConnForm() tea.Cmd {
 		return nil
 	}
 	a.formTests++
-	seq, pw := a.formTests, f.fields[fieldPassword].Input.Text
+	seq, pw := a.formTests, f.password()
 	f.testing = seq
 	return func() tea.Msg {
 		note, err := testConn(c, pw)
@@ -558,12 +573,12 @@ func (a *App) gotConnTested(m connTested) {
 // the file reads back, those connected when they connect again (F8.16).
 func (a *App) saveEditedConn() tea.Cmd {
 	f := a.form
-	fs, was := f.fields, *f.was
+	was := *f.was
 	c, ok := a.formConn()
 	if !ok {
 		return nil
 	}
-	pw, typed := fs[fieldPassword].Input.Text, true
+	pw, typed := f.password(), true
 	if pw == "" && c.Name != was.Name && c.PasswordCmd == was.PasswordCmd && config.OwnPassword(was.PasswordCmd) {
 		// its item is named after it: the password goes to one under the new name
 		var err error
@@ -634,7 +649,7 @@ func (a *App) saveEditedConn() tea.Cmd {
 		toast = tea.Batch(toast, a.showToast(i18n.T("下次连接时生效")))
 	}
 	a.regroup()
-	a.selectConn(slices.IndexFunc(a.sess.Conns, func(c *Conn) bool { return c.Spec.Name == saved.Name }))
+	a.selectConn(slices.IndexFunc(a.managed(), func(c *Conn) bool { return c.Spec.Name == saved.Name }))
 	return toast
 }
 
@@ -648,7 +663,6 @@ func (a *App) saveConnForm() tea.Cmd {
 	if f.was != nil {
 		return a.saveEditedConn()
 	}
-	fs := f.fields
 	c, ok := a.formConn()
 	if !ok {
 		return nil
@@ -658,7 +672,7 @@ func (a *App) saveConnForm() tea.Cmd {
 		return nil
 	}
 	var toast tea.Cmd
-	if pw := fs[fieldPassword].Input.Text; pw != "" {
+	if pw := f.password(); pw != "" {
 		if c.PasswordCmd != "" { // two sources: which one is wanted is not for us to say
 			return a.fail(fieldPassword, i18n.T("password 和 password_cmd 填一个就够了"))
 		}
@@ -718,7 +732,7 @@ func (a *App) managerView() ui.ConnManager {
 	ic, f := a.icons, a.form
 	m := ui.ConnManager{Title: i18n.T("连接"), Sel: f.cur, Top: f.top, ListFocus: f.list, Form: a.formView()}
 	group := ""
-	for _, c := range a.sess.Conns {
+	for _, c := range a.managed() {
 		row := ui.ConnRow{Icon: ic.Engine(c.Spec.Engine), Name: c.Spec.Name}
 		if g := c.Spec.Group; g != group { // a rule where a group begins, as in the tree (F10.6)
 			group, row.Rule, row.Group = g, true, g
@@ -748,7 +762,7 @@ func (a *App) formView() ui.Form {
 		fieldAdvanced: ic.Advanced, fieldDSN: ic.Link, fieldPasswordCmd: ic.Query}
 	for i := range fields {
 		fields[i].Icon = icons[i]
-		fields[i].Hidden = (i == fieldDSN || i == fieldPasswordCmd) && !f.advanced() || f.sqlite() && f.skipped(i)
+		fields[i].Hidden = (i == fieldDSN || i == fieldPasswordCmd) && !f.advanced() || f.sqlite() && (i == fieldHost || i == fieldPort || i == fieldUser || i == fieldPassword)
 		fields[i].Dim = f.skipped(i) && !fields[i].Hidden
 	}
 	if f.sqlite() {

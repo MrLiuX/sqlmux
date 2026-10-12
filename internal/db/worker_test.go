@@ -613,6 +613,7 @@ func (saveEngine) Dialect() sqlkit.Dialect      { return sqlkit.PG }
 func (saveEngine) Quote(names ...string) string { return strings.Join(names, ".") }
 func (saveEngine) Arg(n int) string             { return "$" + strconv.Itoa(n) }
 func (saveEngine) Same(col, arg string) string  { return col + " = " + arg }
+func (saveEngine) Eq(col, arg string) string    { return col + " = " + arg }
 
 // A save in a transaction of its own that loses the connection before its
 // COMMIT is the statement's own error, which the app shows as rolled back,

@@ -139,13 +139,7 @@ func (c *Conn) Exec(ctx context.Context, sql string, maxRows int) ([]db.Result, 
 }
 
 func (c *Conn) Query(ctx context.Context, sql string, args ...db.Val) (db.Result, error) {
-	vals := make([]any, len(args))
-	for i, a := range args {
-		if !a.Null {
-			vals[i] = a.S
-		}
-	}
-	return c.run(ctx, sql, vals, 0)
+	return c.run(ctx, sql, db.SQLArgs(args), 0)
 }
 
 // rowWords start the statements that answer with rows, a WITH one when it
@@ -190,53 +184,13 @@ func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (
 		return r, err
 	}
 	defer rows.Close()
-	err = each(rows, shown, func(cols []db.Col) error { r.Cols = cols; return nil },
-		func() bool {
-			if maxRows > 0 && len(r.Rows) == maxRows {
-				r.Truncated = true
-				return false
-			}
-			return true
-		},
+	err = db.EachRow(rows, cellOf(shown), func(cols []db.Col) error { r.Cols = cols; return nil }, db.Capped(&r, maxRows),
 		func(vals []db.Val) error { r.Rows = append(r.Rows, vals); return nil })
 	r.Tag, r.Took = fmt.Sprintf("%s %d", strings.ToUpper(word), len(r.Rows)), time.Since(start)
 	if err := ctx.Err(); err != nil { // killed, SLEEP() answers 1 as if done; a read, it did nothing else
 		return r, err
 	}
 	return r, err
-}
-
-// each reads the result in rows: head with its columns, then row with each of
-// the rows want says to keep, the others read and dropped; text tells a
-// value that is no UTF-8 (the grid's and the file's differ, F12.4).
-func each(rows *sql.Rows, text func([]byte, string) string, head func([]db.Col) error, want func() bool, row func([]db.Val) error) error {
-	types, err := rows.ColumnTypes()
-	if err != nil {
-		return err
-	}
-	raw, dest, cols := make([]sql.RawBytes, len(types)), make([]any, len(types)), make([]db.Col, len(types))
-	for i, t := range types {
-		cols[i], dest[i] = db.Col{Name: t.Name(), Type: strings.ToLower(t.DatabaseTypeName())}, &raw[i]
-	}
-	if err := head(cols); err != nil {
-		return err
-	}
-	for rows.Next() {
-		if !want() {
-			continue
-		}
-		if err := rows.Scan(dest...); err != nil {
-			return err
-		}
-		vals := make([]db.Val, len(raw))
-		for i, v := range raw {
-			vals[i] = cell(v, cols[i].Type, text)
-		}
-		if err := row(vals); err != nil {
-			return err
-		}
-	}
-	return rows.Err()
 }
 
 // noted is what a statement's outcome does to c: the transaction it is in, or
@@ -275,7 +229,7 @@ func (c *Conn) Stream(ctx context.Context, query string, head func([]db.Col) err
 	// Close reads the rest of the result: a stop kills the statement first
 	// (the cancel is the watch's KILL), as Postgres' does
 	defer rows.Close()
-	err = each(rows, hexed, head, func() bool { return true }, row)
+	err = db.EachRow(rows, cellOf(hexed), head, func() bool { return true }, row)
 	if cerr := ctx.Err(); cerr != nil { // killed: the rows so far were all of it
 		return cerr
 	}
@@ -285,16 +239,19 @@ func (c *Conn) Stream(ctx context.Context, query string, head func([]db.Col) err
 	return err
 }
 
-// cell is the value v of a column of type typ, a non-UTF-8 one told by text;
-// a BIT is its number (§8.1).
-func cell(v []byte, typ string, text func(v []byte, typ string) string) db.Val {
-	switch {
-	case v == nil:
-		return db.Val{Null: true}
-	case typ == "bit":
-		return db.Val{S: bits(v)}
+// cellOf is the value of a column of type typ, which the driver's text protocol
+// gives as bytes, a non-UTF-8 one told by text; a BIT is its number (§8.1).
+func cellOf(text func(v []byte, typ string) string) func(v any, typ string) db.Val {
+	return func(v any, typ string) db.Val {
+		b, _ := v.([]byte)
+		switch {
+		case v == nil:
+			return db.Val{Null: true}
+		case typ == "bit":
+			return db.Val{S: bits(b)}
+		}
+		return db.Val{S: text(b, typ)}
 	}
-	return db.Val{S: text(v, typ)}
 }
 
 // shown is a value as the grid shows it: a blob that is no UTF-8 by its size (§8.1).
@@ -388,6 +345,8 @@ func (Engine) Connect(ctx context.Context, dsn, password string, readOnly bool) 
 	}
 	return c, info, nil
 }
+
+func (Engine) Eq(col, arg string) string { return col + " = " + arg }
 
 func (Engine) Dialect() sqlkit.Dialect { return sqlkit.MySQL }
 func (Engine) Arg(int) string          { return "?" }

@@ -1,5 +1,8 @@
 // Package sqlite is the SQLite engine (§8.1, F14.1): a file, one connection
 // of modernc.org/sqlite, which is Go all through (CGO_ENABLED=0).
+// Reference: lazysql drivers/sqlite.go, which reads the columns and the
+// primary key with pragma table_info; SQLite's own complete.c, which the
+// statements of a trigger follow (sqlkit).
 package sqlite
 
 import (
@@ -12,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -49,8 +53,8 @@ func Path(spec string) (path, query string, err error) {
 }
 
 // DSN is spec as the driver takes it: the file with its parameters, a busy
-// timeout, as Main writes while Meta reads the same file, and mode=rw unless
-// another mode is written.
+// timeout, as Main writes while Meta reads the same file, unless a _pragma
+// sets one, and mode=rw unless another mode is written.
 func DSN(spec string) (path, dsn string, err error) {
 	path, query, err := Path(spec)
 	if err != nil {
@@ -60,7 +64,7 @@ func DSN(spec string) (path, dsn string, err error) {
 	if err != nil {
 		return "", "", err
 	}
-	if !q.Has("_pragma") {
+	if !slices.ContainsFunc(q["_pragma"], func(p string) bool { return strings.HasPrefix(strings.ToLower(p), "busy_timeout") }) {
 		q.Add("_pragma", "busy_timeout(5000)")
 	}
 	if !q.Has("mode") { // a file there is not is no new database: a path mistyped; mode=rwc says it
@@ -93,7 +97,19 @@ func Connect(ctx context.Context, spec, _ string, readOnly bool) (*Conn, db.Info
 		return nil, db.Info{}, err
 	}
 	c := &Conn{pool: pool, c: conn, tx: 'I'}
-	if _, err = c.Query(ctx, "select 1"); err == nil && readOnly { // the file is opened and read here: one that is no database fails now
+	// SQLite takes a transaction back by itself, on an error of ON CONFLICT
+	// ROLLBACK, a RAISE(ROLLBACK) in a trigger, a statement interrupted: the
+	// statement fails, and txAfter does not run
+	err = conn.Raw(func(dc any) error {
+		if hr, ok := dc.(sqlite.HookRegisterer); ok {
+			hr.RegisterRollbackHook(func() { c.tx = 'I' })
+		}
+		return nil
+	})
+	if err == nil {
+		_, err = c.Query(ctx, "select 1") // the file is opened and read here: one that is no database fails now
+	}
+	if err == nil && readOnly { // the file is opened and read here: one that is no database fails now
 		_, err = c.Query(ctx, "pragma query_only = on")
 	}
 	if err != nil {
@@ -123,24 +139,15 @@ func (c *Conn) Exec(ctx context.Context, sql string, maxRows int) ([]db.Result, 
 }
 
 func (c *Conn) Query(ctx context.Context, sql string, args ...db.Val) (db.Result, error) {
-	vals := make([]any, len(args))
-	for i, a := range args {
-		if !a.Null {
-			vals[i] = a.S
-		}
-	}
-	return c.run(ctx, sql, vals, 0)
+	return c.run(ctx, sql, db.SQLArgs(args), 0)
 }
 
 // run runs query, keeping at most maxRows rows (0: all), the rest read and
 // dropped. Every statement goes through Query, whether it answers with rows
-// or not (a RETURNING one does): one with no columns has changes() asked
-// afterwards.
+// or not (a RETURNING one does): one that writes and has no columns has
+// changes() asked afterwards.
 func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (r db.Result, err error) {
 	start := time.Now()
-	if err := ctx.Err(); err != nil {
-		return r, err
-	}
 	defer func() {
 		if err == nil {
 			c.tx = txAfter(query, c.tx)
@@ -151,37 +158,40 @@ func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (
 		return r, err
 	}
 	defer rows.Close()
-	err = each(rows, shown, func(cols []db.Col) error {
+	err = db.EachRow(rows, cellOf(shown), func(cols []db.Col) error {
 		if len(cols) > 0 { // none for a statement that answers with none
 			r.Cols = cols
 		}
 		return nil
-	},
-		func() bool {
-			if maxRows > 0 && len(r.Rows) == maxRows {
-				r.Truncated = true
-				return false
-			}
-			return true
-		},
-		func(vals []db.Val) error { r.Rows = append(r.Rows, vals); return nil })
+	}, db.Capped(&r, maxRows), func(vals []db.Val) error { r.Rows = append(r.Rows, vals); return nil })
 	if err != nil {
 		return r, err
 	}
 	rows.Close()
 	word := sqlkit.FirstWord(query, sqlkit.SQLite)
-	if len(r.Cols) == 0 {
-		r.Affected, err = c.changes(ctx)
-		r.Tag = strings.ToUpper(word)
-		switch word {
-		case "insert", "update", "delete", "replace":
+	r.Tag = strings.ToUpper(word)
+	switch {
+	case len(r.Cols) > 0:
+		r.Tag += fmt.Sprintf(" %d", len(r.Rows))
+	case writes(word, query):
+		if r.Affected, err = c.changes(ctx); err == nil {
 			r.Tag += fmt.Sprintf(" %d", r.Affected)
 		}
-	} else {
-		r.Tag = fmt.Sprintf("%s %d", strings.ToUpper(word), len(r.Rows))
 	}
 	r.Took = time.Since(start)
 	return r, err
+}
+
+// writes is whether statement query, which starts with word, is one that hits
+// rows: an INSERT, UPDATE, DELETE or REPLACE, a WITH that has one in it.
+func writes(word, query string) bool {
+	switch word {
+	case "insert", "update", "delete", "replace":
+		return true
+	case "with":
+		return !sqlkit.IsRead(query, sqlkit.SQLite)
+	}
+	return false
 }
 
 // changes is the rows the last INSERT, UPDATE or DELETE hit, as found,
@@ -205,67 +215,48 @@ func txAfter(s string, tx byte) byte {
 // Stream reads the rows of a statement as they come, one at a time (F12.4),
 // a stop of either callback leaving the rest unread.
 func (c *Conn) Stream(ctx context.Context, query string, head func([]db.Col) error, row func([]db.Val) error) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
 	rows, err := c.c.QueryContext(ctx, query)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
-	return each(rows, hexed, head, func() bool { return true }, row)
+	return db.EachRow(rows, cellOf(hexed), head, func() bool { return true }, row)
 }
 
-// each reads the result in rows: head with its columns, then row with each of
-// the rows want says to keep, the others read and dropped; text tells a
-// blob (the grid's and the file's differ, F12.4). Columns are typed as the
-// table declared them, "" for none, an expression's.
-func each(rows *sql.Rows, text func([]byte) string, head func([]db.Col) error, want func() bool, row func([]db.Val) error) error {
-	types, err := rows.ColumnTypes()
-	if err != nil {
-		return err
-	}
-	raw, dest, cols := make([]any, len(types)), make([]any, len(types)), make([]db.Col, len(types))
-	for i, t := range types {
-		cols[i], dest[i] = db.Col{Name: t.Name(), Type: strings.ToLower(t.DatabaseTypeName())}, &raw[i]
-	}
-	if err := head(cols); err != nil {
-		return err
-	}
-	for rows.Next() {
-		if !want() {
-			continue
+// cellOf is the text of the value the driver read, in a form: an integer, a
+// REAL (realText), a time as SQLite writes one, a text or a blob as text tells,
+// told by whether the driver read it as TEXT or as a BLOB.
+func cellOf(text func(v []byte, blob bool) string) func(v any, typ string) db.Val {
+	return func(v any, _ string) db.Val {
+		switch v := v.(type) {
+		case nil:
+			return db.Val{Null: true}
+		case int64:
+			return db.Val{S: strconv.FormatInt(v, 10)}
+		case float64:
+			return db.Val{S: realText(v)}
+		case string:
+			return db.Val{S: text([]byte(v), false)}
+		case []byte:
+			return db.Val{S: text(v, true)}
+		case time.Time:
+			return db.Val{S: timeText(v)}
 		}
-		if err := rows.Scan(dest...); err != nil {
-			return err
-		}
-		vals := make([]db.Val, len(raw))
-		for i, v := range raw {
-			vals[i] = cell(v, text)
-		}
-		if err := row(vals); err != nil {
-			return err
-		}
+		return db.Val{S: fmt.Sprint(v)} // none the driver gives
 	}
-	return rows.Err()
 }
 
-// cell is the text of value v the driver read: an integer, a real as SQLite
-// writes it, a string, a blob as text tells.
-func cell(v any, text func([]byte) string) db.Val {
-	switch v := v.(type) {
-	case nil:
-		return db.Val{Null: true}
-	case int64:
-		return db.Val{S: strconv.FormatInt(v, 10)}
-	case float64:
-		return db.Val{S: realText(v)}
-	case string:
-		return db.Val{S: text([]byte(v))}
-	case []byte:
-		return db.Val{S: text(v)}
+// timeText is a time the driver parsed, of a DATE, DATETIME or TIMESTAMP column,
+// as SQLite's own text has it: YYYY-MM-DD HH:MM:SS, and .SSS when there is a
+// fraction, in UTC, no zone.
+// ponytail: the text it was parsed from is not kept: a date alone, a T between,
+// a .000 come back as the standard; modernc has no switch for it (§8.1)
+func timeText(t time.Time) string {
+	layout := "2006-01-02 15:04:05"
+	if t.Nanosecond() != 0 {
+		layout += ".000"
 	}
-	return db.Val{S: fmt.Sprint(v)} // none the driver gives with its defaults
+	return t.UTC().Format(layout)
 }
 
 // realText is f as SQLite writes a REAL as text: the digits that read back as
@@ -292,19 +283,19 @@ func realText(f float64) string {
 	return mantissa + exp
 }
 
-// shown is a value as the grid shows it: a text or blob that is no UTF-8 by
+// shown is a value as the grid shows it: a blob, or a text that is no UTF-8, by
 // its size (§8.1).
-func shown(v []byte) string {
-	if !utf8.Valid(v) {
+func shown(v []byte, blob bool) string {
+	if blob || !utf8.Valid(v) {
 		return db.BinaryShown(len(v))
 	}
 	return string(v)
 }
 
-// hexed is a value as a file has it: a text or blob that is no UTF-8 as the
+// hexed is a value as a file has it: a blob, or a text that is no UTF-8, as the
 // blob literal X'…', not the grid's placeholder, which is no data (F12.4).
-func hexed(v []byte) string {
-	if !utf8.Valid(v) {
+func hexed(v []byte, blob bool) string {
+	if blob || !utf8.Valid(v) {
 		return "X'" + strings.ToUpper(hex.EncodeToString(v)) + "'"
 	}
 	return string(v)
@@ -322,7 +313,7 @@ func (Engine) Connect(ctx context.Context, dsn, password string, readOnly bool) 
 }
 
 func (Engine) Dialect() sqlkit.Dialect { return sqlkit.SQLite }
-func (Engine) Arg(int) string          { return "?" }
+func (Engine) Arg(n int) string        { return "?" + strconv.Itoa(n) } // numbered, so a statement can use one twice (Same, Eq)
 
 func (Engine) Quote(names ...string) string {
 	quoted := make([]string, len(names))
@@ -332,10 +323,23 @@ func (Engine) Quote(names ...string) string {
 	return strings.Join(quoted, ".")
 }
 
-// Same compares the column's text, which is what was read.
-// ponytail: a REAL SQLite writes with other digits than realText does is a row
-// changed, to a save
-func (Engine) Same(col, arg string) string { return "cast(" + col + " as text) = " + arg }
+// Same is whether the column still holds what was read, arg its text, and is
+// ?N: as text, which holds for an integer, a text, a blob's; a REAL by number,
+// which the text it was shown as, the shortest that reads back, is not always
+// the digits SQLite casts it to; a DATE, DATETIME or TIMESTAMP, which the
+// driver reads as a time and so shows as the standard text, by julianday, which
+// is NULL, never equal, for the text of anything else.
+func (Engine) Same(col, arg string) string {
+	return "(cast(" + col + " as text) = " + arg + " or typeof(" + col + ") = 'real' and " + col + " = cast(" + arg + " as real) or julianday(" + col + ") = julianday(" + arg + "))"
+}
+
+// Eq is whether the column of a row's identity holds arg, ?N, as the key it
+// was read as: = is no match of an integer to the text '1' where the column has
+// no declared type, so the integer the text is is one the column may hold, if
+// the text is the integer's own, not 'abc', which casts to 0 (F14.1).
+func (Engine) Eq(col, arg string) string {
+	return "(" + col + " = " + arg + " or " + col + " = cast(" + arg + " as integer) and cast(cast(" + arg + " as integer) as text) = " + arg + ")"
+}
 
 // UseSchema does nothing: the file is the one schema, main.
 func (Engine) UseSchema(context.Context, db.Conn, string, string) error { return nil }

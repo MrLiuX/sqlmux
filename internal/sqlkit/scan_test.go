@@ -54,6 +54,7 @@ func TestScan(t *testing.T) {
 		{SQLite, "a=\"q\"\"q\" `b` -- x\nc", "ioq_q_c_i", nil},
 		{SQLite, "$1 $a$b$a$ E'x'", "on_oi_is", nil},
 		{SQLite, "/* a /* b */ c */", "c_i_o", nil},
+		{SQLite, "a--b\nc # d", "ic_i_o_i", nil}, // -- needs no blank after it, # is no comment
 	} {
 		if got := kinds(c.in, c.d); got != c.kinds {
 			t.Errorf("%q: %s, want %s", c.in, got, c.kinds)

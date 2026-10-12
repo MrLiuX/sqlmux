@@ -598,6 +598,13 @@ func Open(specs []config.Connection, start int) *Session {
 	return newSession(specs[start].Name, conns, first, config.QueryName(1))
 }
 
+// OpenTemp is the session over a connection of the command line, spec (F14.1):
+// its query is a new one, not query_1, which is the user's.
+func OpenTemp(spec config.Connection) *Session {
+	c := newConn(spec)
+	return newSession(spec.Name, []*Conn{c}, c, freeQueryName(func(string) bool { return false }))
+}
+
 // dialed is a connection's Main and Meta as dial connected them, where
 // Main landed, and the spec they were dialed from: an edit of the
 // connection meanwhile is for the next dial (F8.16), and a redial is of

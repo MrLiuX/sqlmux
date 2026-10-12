@@ -18,6 +18,12 @@ const (
 	SQLite // read as PG, but for its $tag$ strings, E'…' and nested comments, and with `…` identifiers too (F14.1)
 )
 
+// CaseInsensitive is whether names go by any case, `quoted` ones too: MySQL's
+// and SQLite's; PG folds an unquoted name's to lower case and takes a quoted one
+// as it is.
+// ponytail: MySQL's tables on Linux go by case; SQLite's ASCII letters only
+func (d Dialect) CaseInsensitive() bool { return d != PG }
+
 // Kind is what a token is.
 type Kind int
 

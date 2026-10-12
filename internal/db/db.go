@@ -122,8 +122,10 @@ type Engine interface {
 	Quote(names ...string) string // a name, or schema and name, quoted
 	Arg(n int) string             // the nth argument, from 1
 	// Same is the condition that column col still holds what was read,
-	// arg its text (§10.3).
+	// arg its text (§10.3); Eq that a column of a row's identity holds arg,
+	// the key as it was read (§10.1).
 	Same(col, arg string) string
+	Eq(col, arg string) string
 	// Schemas lists the user's schemas (MySQL's databases), and the one
 	// unqualified names go to first, "" for none.
 	Schemas(ctx context.Context, c Conn) (schemas []string, current string, err error)

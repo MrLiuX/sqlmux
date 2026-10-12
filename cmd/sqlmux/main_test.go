@@ -347,4 +347,14 @@ func TestTempConnection(t *testing.T) {
 	if _, err := tempConnection("oracle://h/d", "", ""); err == nil {
 		t.Error("no such engine")
 	}
+	// a connections.toml that does not read is its error, not a reason to take a name for a file
+	writeConfig(t, "connections.toml", configured+"\n[[connection]]\nname = \"prod\"\nengine = \"postgres\"\ndsn = \"postgres://h/d\"\n")
+	if _, err := tempConnection("prod.eu", "", ""); err == nil || !strings.Contains(err.Error(), "prod") {
+		t.Errorf("a name twice: %v", err)
+	}
+	// a name a connection has is taken: the temporary one keeps its extension
+	writeConfig(t, "connections.toml", "[[connection]]\nname = \"app\"\nengine = \"postgres\"\ndsn = \"postgres://h/d\"\n")
+	if c, err := tempConnection("./app.db", "", ""); err != nil || c.Name != "app.db" || !c.Temp {
+		t.Errorf("a name taken: %+v %v", c, err)
+	}
 }

@@ -27,6 +27,9 @@ type Connection struct {
 	PasswordEnv string `toml:"password_env,omitempty"`
 	Password    string `toml:"password,omitempty"`
 	ReadOnly    bool   `toml:"read_only,omitempty"` // §13, from F5.3
+	// Temp is a connection of the command line, a file or a URL: written nowhere,
+	// not in the manager (F14.1).
+	Temp bool `toml:"-"`
 }
 
 // UnknownKeys are the lines that say which keys of config.toml, and of each
