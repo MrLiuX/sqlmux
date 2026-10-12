@@ -1,6 +1,6 @@
 # M14 SQLite 与历史 · 任务清单
 
-- **状态**：**todo**（2026-10-12 决策者按 worker 的草稿定清单；2026-10-11 用户规划时定方向）。
+- **状态**：**todo**（节点 1 F14.6、F14.2 passed 2026-10-12，646750f，全量 170 个脚本 3548 过、4 败是 f11.2 的 docker 环境问题；2026-10-12 决策者按 worker 的草稿定清单；2026-10-11 用户规划时定方向）。
 - **目标**：SQLite（无 cgo）和命令行直接给 DSN / 文件，查询历史，树上的索引 / 键 / 函数 / 序列，结构修改的模板 SQL，表格的 JSON 视图，MySQL 取消的兜底。
 - **范围**：tech-design §4（`internal/db/sqlite`、modernc）、§5、§7.6（JSON 视图）、§7.8（树）、§8（SQLite 的 catalog、行标识 rowid；MySQL 取消的截止时间）、§9（SQLite 方言）、§11（历史）、§14（`history.jsonl`、`[query] history_max`、命令行 DSN）、§15。
 - **依赖**：M13 passed（用户 2026-10-12 定：不等验收，直接开工；验收意见进后续迭代）。
@@ -16,7 +16,7 @@
 
 ---
 
-## F14.6 MySQL 取消的兜底 · 状态：todo
+## F14.6 MySQL 取消的兜底 · 状态：passed（646750f；e2e 01e0c93）
 
 M13 F13.6 审查时发现：MySQL 的 Query 用 WithoutCancel 发语句，取消只能另开连接 KILL QUERY，服务端或网络不回应时 KILL 发不出去，Worker 一直锁到语句自己结束，快速 SQL 取消后 25 秒还占着 Meta。
 
@@ -24,25 +24,25 @@ M13 F13.6 审查时发现：MySQL 的 Query 用 WithoutCancel 发语句，取消
 - **涉及**：`internal/db/mysql`、`internal/db`（Worker）
 
 **开发**（§8.3）
-- [ ] 给驱动一个带截止时间的 ctx：KILL 发出 5 秒后取消，驱动关掉连接，Worker 按 §8.2 断线重连；§8.3 的已知上限随之去掉。
+- [x] 给驱动一个带截止时间的 ctx：KILL 发出 5 秒后取消，驱动关掉连接，Worker 按 §8.2 断线重连；§8.3 的已知上限随之去掉。
 
 **验收**
-- [ ] 集成：KILL 被拒的连接，取消后 5–7 秒内 Worker 释放、下一个请求重拨（run 和 stream 各一；reviewer 的探针只有 PG 版，MySQL 没有，worker 开工时改）。
+- [x] 集成：KILL 被拒的连接，取消后 5–7 秒内 Worker 释放、下一个请求重拨（run 和 stream 各一；reviewer 的探针只有 PG 版，MySQL 没有，worker 开工时改）。
 
-## F14.2 查询历史 · 状态：todo
+## F14.2 查询历史 · 状态：passed（646750f；e2e 01e0c93）
 
 - **依赖**：F8.21（query 文件）、F1.x（WHERE 历史下拉）
 - **涉及**：`internal/config`（history.jsonl）、`internal/app`（query、下拉）
 
 **开发**（§11、§14）
-- [ ] 每次执行（成功和失败都记；表格取数的 SQL 不记）追加到 `$XDG_DATA_HOME/sqlmux/history.jsonl`：一行 JSON：时间、连接名、schema、语句、摘要（行数或受影响行数、耗时、错误第一行）；`O_APPEND` 一次 write、不加锁（多进程安全，行小于 PIPE_BUF 的靠 O_APPEND，超长语句截到 64 KB 并记 `truncated = true`，决策者定）。
-- [ ] `[query] history_max = 1000`：启动时超过就截掉最旧的，临时文件加 rename 一次重写；不按天数。
-- [ ] 打开：INSERT 下 `C-r`（`query.history`「查询历史…」，新作用域 `[keys.queryinsert]`，§6.4；vim NORMAL 的 `C-r` 仍是 redo，不让给历史，决策者定），命令面板里也有；和 WHERE 历史同一个下拉，fzf 模糊匹配，每行语句一行化加 `dim` 的时间和摘要，`↵` 插到光标处；只列当前连接的，不做「全部连接」（决策者定，先这样）。
-- [ ] 细节（已定）：`vim = false` 时 `C-r` 同样是历史。
+- [x] 每次执行（成功和失败都记；表格取数的 SQL 不记）追加到 `$XDG_DATA_HOME/sqlmux/history.jsonl`：一行 JSON：时间、连接名、schema、语句、摘要（行数或受影响行数、耗时、错误第一行）；`O_APPEND` 一次 write、不加锁（多进程安全，行小于 PIPE_BUF 的靠 O_APPEND，超长语句截到 64 KB 并记 `truncated = true`，决策者定）。
+- [x] `[query] history_max = 1000`：启动时超过就截掉最旧的，临时文件加 rename 一次重写；不按天数。
+- [x] 打开：INSERT 下 `C-r`（`query.history`「查询历史…」，新作用域 `[keys.queryinsert]`，§6.4；vim NORMAL 的 `C-r` 仍是 redo，不让给历史，决策者定），命令面板里也有；和 WHERE 历史同一个下拉，fzf 模糊匹配，每行语句一行化加 `dim` 的时间和摘要，`↵` 插到光标处；只列当前连接的，不做「全部连接」（决策者定，先这样）。
+- [x] 细节（已定）：`vim = false` 时 `C-r` 同样是历史。
 
 **验收**
-- [ ] 单测：追加一行的格式；截尾到 `history_max`；两个进程并发追加都在；超长截断带 `truncated`。
-- [ ] e2e：执行成功 / 失败各一条后 `C-r` 能模糊找到、`↵` 插到光标处；另一个连接的不列。
+- [x] 单测：追加一行的格式；截尾到 `history_max`；两个进程并发追加都在；超长截断带 `truncated`。
+- [x] e2e：执行成功 / 失败各一条后 `C-r` 能模糊找到、`↵` 插到光标处；另一个连接的不列。
 
 ## F14.1 SQLite 与命令行 DSN · 状态：todo
 
