@@ -680,7 +680,7 @@ func TestTreeSQLiteFlat(t *testing.T) {
 	a.sess.open[tableNode(c, c.Tables[0])] = true
 	c.idx[idOf(c.Tables[0])] = []db.Index{{Name: "i", Cols: []string{"id"}}}
 	c.keys[idOf(c.Tables[0])] = []db.Key{{Name: "PRIMARY", Cols: []string{"id"}}, {Cols: []string{"u"}, Ref: &db.Ref{Schema: "main", Table: "t_x", Cols: []string{"id"}}}}
-	a.sess.open[tableNode(c, c.Tables[0])+"/keys"] = true
+	a.sess.open["keys:"+tableNode(c, c.Tables[0])] = true
 	if ns, _ := a.treeNodes(); slices.ContainsFunc(ns, func(n node) bool { return n.kind == nodeTable && n.Note != "" }) {
 		t.Error("a file has no row count to show")
 	}

@@ -111,6 +111,9 @@ func (a *App) loadCatalog(c *Conn) tea.Cmd {
 			return catalogMsg{conn: c, err: err}
 		}
 		tables, err := eng.Tables(ctx, meta)
+		if err != nil {
+			return catalogMsg{conn: c, err: err}
+		}
 		// ponytail: functions and sequences are no reason to lose the tables: a
 		// read of them that fails shows none
 		funcs, _ := eng.Functions(ctx, meta)
@@ -162,6 +165,10 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 // connNode is connection c's node ID; schemaNode, groupNode and tableNode
 // those under it, windowNode and paneNode the workspace's: a tab's ID has
 // its pane's in it.
+// flat is whether c has no schema level in the tree: a SQLite file is the
+// schema, Tables and Views hang from it (F14.1).
+func (c *Conn) flat() bool { return c.Spec.Engine == "sqlite" }
+
 func connNode(c *Conn) string { return "conn:" + c.Spec.Name }
 
 func tableNode(c *Conn, t db.Table) string {
@@ -322,7 +329,7 @@ func (a *App) treeNodes() (ns []node, matches int) {
 		if !add(cn) {
 			continue
 		}
-		flat := c.Spec.Engine == "sqlite" // the file is the schema: Tables and Views hang from it (F14.1)
+		flat := c.flat() // the file is the schema: Tables and Views hang from it (F14.1)
 		depth := func(d int) int { return d - b2i(flat) }
 		for _, sc := range c.Schemas {
 			var groups [2][]db.Table // Tables, Views
@@ -385,16 +392,16 @@ func (a *App) treeNodes() (ns []node, matches int) {
 					if filtering { // only tables and views take part (F14.3)
 						continue
 					}
-					if ixs, ok := c.idx[idOf(t)]; ok {
-						xid := tid + "/indexes"
+					if ixs, ok := c.idx[idOf(t)]; ok && hasIndexes(t) {
+						xid := "indexes:" + tid // not tid + "/…": a column may be named so
 						if add(node{id: xid, kind: nodeObjects, conn: c, schema: sc, table: t, TreeNode: ui.TreeNode{Depth: depth(4), Branch: len(ixs) > 0, Open: a.sess.opened(xid, false), Icon: ic.Index, IconFg: th.Func, Text: fmt.Sprintf("Indexes (%d)", len(ixs))}}) {
 							for _, ix := range ixs {
 								add(node{id: xid + "/" + ix.Name, kind: nodeIndex, conn: c, schema: sc, table: t, index: ix, TreeNode: ui.TreeNode{Depth: depth(5), Icon: ic.Index, IconFg: th.Dim, Text: indexText(ix)}})
 							}
 						}
 					}
-					if keys, ok := c.keys[idOf(t)]; ok {
-						kid := tid + "/keys"
+					if keys, ok := c.keys[idOf(t)]; ok && hasKeys(t) {
+						kid := "keys:" + tid
 						if add(node{id: kid, kind: nodeObjects, conn: c, schema: sc, table: t, TreeNode: ui.TreeNode{Depth: depth(4), Branch: len(keys) > 0, Open: a.sess.opened(kid, false), Icon: ic.Key, IconFg: th.PK, Text: fmt.Sprintf("Keys (%d)", len(keys))}}) {
 							for i, k := range keys {
 								add(node{id: fmt.Sprintf("%s/%d", kid, i), kind: nodeKey, conn: c, schema: sc, table: t, key: k, TreeNode: ui.TreeNode{Depth: depth(5), Icon: ic.Key, IconFg: th.Dim, Text: keyText(c, k)}})

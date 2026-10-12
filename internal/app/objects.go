@@ -24,14 +24,22 @@ type objectsMsg struct {
 	err   error
 }
 
+// hasIndexes and hasKeys are whether the tree lists t's Indexes and Keys: a
+// plain view has neither, a materialized one indexes only (§7.8).
+func hasIndexes(t db.Table) bool { return t.Kind != "v" }
+func hasKeys(t db.Table) bool    { return t.Kind != "v" && t.Kind != "m" }
+
 // fetchObjects reads t's indexes and keys on its connection's Meta.
 func (a *App) fetchObjects(c *Conn, t db.Table) tea.Cmd {
+	if !hasIndexes(t) {
+		return nil
+	}
 	meta, eng := c.Meta, c.eng
 	return func() tea.Msg {
 		ctx := context.Background()
 		idx, err := eng.Indexes(ctx, meta, t.Schema, t.Name)
-		if err != nil {
-			return objectsMsg{conn: c, table: t, err: err}
+		if err != nil || !hasKeys(t) {
+			return objectsMsg{conn: c, table: t, idx: idx, err: err}
 		}
 		keys, err := eng.Keys(ctx, meta, t.Schema, t.Name)
 		return objectsMsg{conn: c, table: t, idx: idx, keys: keys, err: err}
@@ -70,7 +78,7 @@ func keyText(c *Conn, k db.Key) string {
 		return s
 	}
 	target := k.Ref.Table
-	if c.Spec.Engine != "sqlite" {
+	if !c.flat() {
 		target = k.Ref.Schema + "." + target
 	}
 	return s + " → " + target + " (" + strings.Join(k.Ref.Cols, ", ") + ")"
@@ -85,19 +93,17 @@ func (a *App) openIndexDDL(c *Conn, t db.Table, ix db.Index) {
 	a.ddl = &ddlPopup{conn: c, table: t, text: ix.Def, label: ix.Name}
 }
 
-// openRef is ↵ on a foreign key: the table it points at opens, its schema and
-// Tables opened in the tree first when it is another one's; one that is not
-// in the catalog says so (F14.3).
+// openRef is ↵ on a foreign key: the table it points at opens, found as a
+// query finds one (SQLite's T_USER is t_user), its schema and Tables opened in
+// the tree; one that is not in the catalog says so (F14.3).
 func (a *App) openRef(c *Conn, ref *db.Ref) tea.Cmd {
-	for _, t := range c.Tables {
-		if idOf(t) == (tableID{ref.Schema, ref.Table}) {
-			for _, id := range []string{connNode(c), schemaNode(c, t.Schema), groupNode(c, t.Schema, t.View())} {
-				a.sess.open[id] = true
-			}
-			return a.openTable(c, t)
-		}
+	t, ok := c.table(ref.Schema, ref.Table)
+	if !ok {
+		return a.showToast(i18n.T("%s 里没有表 %s", c.Spec.Name, ref.Schema+"."+ref.Table))
 	}
-	return a.showToast(i18n.T("%s 里没有表 %s", c.Spec.Name, ref.Schema+"."+ref.Table))
+	cmd := a.openTable(c, t)
+	a.revealTab(a.focused())
+	return cmd
 }
 
 // funcMsg is the definition of a function, as FunctionDef read it.

@@ -3,12 +3,14 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
 // Catalog queries (§8.4), checked against lazysql's and pgtui's: pg_catalog
@@ -349,8 +351,11 @@ order by 1, 2`)
 // FunctionDef is f's CREATE FUNCTION as pg_get_functiondef writes it.
 func (Engine) FunctionDef(ctx context.Context, c db.Conn, f db.Function) (string, error) {
 	r, err := c.Query(ctx, "select pg_get_functiondef($1::oid)", db.Val{S: f.ID})
-	if err != nil || len(r.Rows) == 0 {
+	if err != nil {
 		return "", err
+	}
+	if len(r.Rows) == 0 || r.Rows[0][0].Null { // a function dropped since the catalog was read
+		return "", errors.New(i18n.T("函数已不存在，按 R 刷新"))
 	}
 	return r.Rows[0][0].S + ";", nil
 }

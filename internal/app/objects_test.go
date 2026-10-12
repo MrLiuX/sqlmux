@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -152,5 +153,90 @@ func TestObjectsFetchedWithTheTable(t *testing.T) {
 	a.Update(teaKey("R"))
 	if len(c.idx) != 0 || len(c.keys) != 0 {
 		t.Errorf("R drops them: %v %v", c.idx, c.keys)
+	}
+}
+
+// A plain view lists no Indexes or Keys and asks for none, a materialized one
+// its Indexes only (§7.8).
+func TestObjectsOfViews(t *testing.T) {
+	a := inTree(60)
+	c := a.sess.Conns[0]
+	c.Tables = append(c.Tables, db.Table{Schema: "public", Name: "v_paid", Kind: "v", Rows: -1}, db.Table{Schema: "public", Name: "mv_sum", Kind: "m", Rows: -1})
+	for _, name := range []string{"v_paid", "mv_sum"} {
+		v := tableNamed(a, name)
+		c.cols[idOf(v)] = db.Columns{Cols: []db.Column{{Name: "id", Type: "bigint"}}}
+		c.idx[idOf(v)], c.keys[idOf(v)] = []db.Index{{Name: "i", Cols: []string{"id"}}}, []db.Key{{Name: "k", Cols: []string{"id"}}}
+		a.sess.open[tableNode(c, v)] = true
+	}
+	a.sess.open[groupNode(c, "public", true)] = true
+	got := treeTexts(a)
+	v, m := strings.Index(got, "v_paid"), strings.Index(got, "mv_sum")
+	if v < 0 || m < v || strings.Contains(got[v:m], "Indexes") || strings.Contains(got[v:m], "Keys") {
+		t.Errorf("a plain view has neither:\n%s", got)
+	}
+	if rest := got[m:]; !strings.Contains(rest, "Indexes (1)") || strings.Contains(rest, "Keys") {
+		t.Errorf("a materialized view has Indexes only:\n%s", got)
+	}
+	if a.fetchObjects(c, tableNamed(a, "v_paid")) != nil {
+		t.Error("a plain view asks for nothing")
+	}
+	var asked []string
+	switch msg := a.fetchObjects(c, tableNamed(a, "mv_sum"))().(type) {
+	case objectsMsg:
+		asked = append(asked, "objects")
+		if msg.keys != nil {
+			t.Errorf("a materialized view's keys are not read: %v", msg.keys)
+		}
+	}
+	if len(asked) != 1 {
+		t.Error("a materialized view asks for its indexes")
+	}
+}
+
+// A column named like a group does not take its node's id: the ids of the
+// nodes showing are all different, so the cursor stays where j puts it.
+func TestObjectsIDsApartFromColumns(t *testing.T) {
+	a := inObjects(t)
+	c := a.sess.Conns[0]
+	order := tableNamed(a, "t_order")
+	c.cols[idOf(order)] = db.Columns{Cols: []db.Column{{Name: "keys", Type: "text"}, {Name: "indexes", Type: "text"}}}
+	seen := map[string]string{}
+	for _, n := range func() []node { ns, _ := a.treeNodes(); return ns }() {
+		if was, ok := seen[n.id]; ok {
+			t.Errorf("%q is the id of %q and of %q", n.id, was, n.Text)
+		}
+		seen[n.id] = n.Text
+	}
+}
+
+// ↵ on a foreign key finds its table as a query does, by any case; one that is
+// not there says so; a failed read of a table's objects, and a function in
+// another schema, are told and kept (F14.3).
+func TestObjectsToastsAndRefs(t *testing.T) {
+	a := inObjects(t)
+	c := a.sess.Conns[0]
+	a.win().focus(0)
+	a.openRef(c, &db.Ref{Schema: "PUBLIC", Table: "T_USER", Cols: []string{"id"}})
+	if d := dataOf(a.focused()); d == nil || d.table.Name != "t_user" {
+		t.Errorf("T_USER is t_user: %v", dataOf(a.focused()))
+	}
+	a.openRef(c, &db.Ref{Schema: "public", Table: "nope"})
+	if !strings.Contains(a.toast, "nope") {
+		t.Errorf("a table that is not there: toast %q", a.toast)
+	}
+	a.toast = ""
+	a.Update(objectsMsg{conn: c, table: tableNamed(a, "t_user"), err: errors.New("boom")})
+	if !strings.Contains(a.toast, "boom") || len(c.idx[idOf(tableNamed(a, "t_user"))]) != 0 {
+		t.Errorf("a failed read: toast %q", a.toast)
+	}
+	a.win().focus(0)
+	a.Update(funcMsg{c, db.Function{Schema: "agentable", Name: "fn_agent_count", ID: "1"}, "CREATE FUNCTION agentable.fn_agent_count();", nil})
+	if q := a.focusedQuery(); q == nil || q.schema != "agentable" {
+		t.Errorf("a function's query is in its schema: %v", q)
+	}
+	a.toast = ""
+	a.Update(funcMsg{c, db.Function{Schema: "public", Name: "gone", ID: "2"}, "", errors.New("gone")})
+	if !strings.Contains(a.toast, "gone") {
+		t.Errorf("a failed definition: toast %q", a.toast)
 	}
 }

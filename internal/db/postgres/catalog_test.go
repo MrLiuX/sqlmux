@@ -325,3 +325,54 @@ func TestFunctionsAndSequences(t *testing.T) {
 		t.Errorf("sequences %q", got)
 	}
 }
+
+// A foreign key's columns come in the order of the key, not of the table's
+// columns; the functions an extension brings are not listed; a function dropped
+// since the catalog was read has no definition to open (F14.3).
+func TestObjectsOwnWays(t *testing.T) {
+	ctx := context.Background()
+	c, _, err := Connect(ctx, OwnDB(t), "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	for _, q := range []string{
+		"create table ord_p (x int, y int, primary key (y, x))",
+		"create table ord_c (a int, b int, foreign key (b, a) references ord_p (y, x))",
+		"create extension citext",
+		"create function own_fn() returns int language sql as 'select 1'",
+	} {
+		if _, err := c.Query(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	ks, err := pg.Keys(ctx, c, "public", "ord_c")
+	if err != nil || len(ks) != 1 || strings.Join(ks[0].Cols, ",") != "b,a" || strings.Join(ks[0].Ref.Cols, ",") != "y,x" {
+		t.Errorf("keys %+v %v", ks, err)
+	}
+	if ks, err = pg.Keys(ctx, c, "public", "ord_p"); err != nil || len(ks) != 1 || strings.Join(ks[0].Cols, ",") != "y,x" {
+		t.Errorf("primary key %+v %v", ks, err)
+	}
+	fs, err := pg.Functions(ctx, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var own db.Function
+	for _, f := range fs {
+		if strings.Contains(f.Name, "citext") || strings.Contains(f.Name, "regexp") {
+			t.Errorf("an extension's function: %s", f.Name)
+		}
+		if f.Name == "own_fn" {
+			own = f
+		}
+	}
+	if own.Name == "" {
+		t.Fatal("own_fn is not listed")
+	}
+	if _, err := c.Query(ctx, "drop function own_fn()"); err != nil {
+		t.Fatal(err)
+	}
+	if def, err := pg.FunctionDef(ctx, c, own); err == nil {
+		t.Errorf("a dropped function has a definition: %q", def)
+	}
+}

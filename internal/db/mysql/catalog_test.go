@@ -4,6 +4,7 @@ package mysql
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -57,7 +58,7 @@ func TestIndexesAndKeys(t *testing.T) {
 	for _, ix := range sku {
 		got = append(got, ix.Name+"("+strings.Join(ix.Cols, ",")+")")
 	}
-	if want := "t_sku_barcode(barcode) t_sku_code(code) t_sku_lower_title((lower(`title`))) t_sku_title_code(title,code)"; strings.Join(got, " ") != want {
+	if want := "t_sku_barcode(barcode) t_sku_code(code) t_sku_lower_title(lower(`title`)) t_sku_title_code(title,code)"; strings.Join(got, " ") != want {
 		t.Errorf("t_sku: %q, want %q", got, want)
 	}
 	for _, ix := range sku {
@@ -70,6 +71,63 @@ func TestIndexesAndKeys(t *testing.T) {
 	}
 	if got := keyTexts(t)(my.Keys(ctx, c, name, "t_log")); len(got) != 0 {
 		t.Errorf("no keys: %q", got)
+	}
+}
+
+// An index made again by the statement the tree shows is the index it was: a
+// prefix length, DESC, FULLTEXT, INVISIBLE, an expression, a column named
+// like one, UNIQUE, the primary key; a foreign key's columns come in the
+// key's order (F14.3).
+func TestIndexDefsRoundTrip(t *testing.T) {
+	dsn := OwnDB(t)
+	c, _, err := Connect(context.Background(), dsn, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	cfg, _ := Config(dsn, "")
+	ctx, name := context.Background(), cfg.DBName
+	for _, q := range []string{
+		"create table rt (id int primary key, title varchar(100), note varchar(100), body text, `(x)` int, a int, b int, " +
+			"key k_prefix (title(10), note(20)), unique key k_uniq (a), fulltext key k_ft (body), key k_desc (a desc, b), " +
+			"key k_inv (b) invisible, key k_expr ((lower(title))), key k_weird (`(x)`))",
+		"create table ord_p (x int, y int, primary key (y, x))",
+		"create table ord_c (a int, b int, foreign key (b, a) references ord_p (y, x))",
+	} {
+		if _, err := c.Query(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	lines := func() string { // the table as the server writes it, a line each, in any order
+		r, err := c.Query(ctx, "show create table rt")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ls := strings.Split(r.Rows[0][1].S, "\n")
+		slices.Sort(ls)
+		return strings.Join(ls, "\n")
+	}
+	want := lines()
+	ixs, err := my.Indexes(ctx, c, name, "rt")
+	if err != nil || len(ixs) != 8 {
+		t.Fatalf("indexes %+v %v", ixs, err)
+	}
+	for _, ix := range ixs {
+		drop := "alter table rt drop index " + my.Quote(ix.Name)
+		if ix.Name == "PRIMARY" {
+			drop = "alter table rt drop primary key"
+		}
+		if _, err := c.Query(ctx, drop); err != nil {
+			t.Fatalf("%s: %v", drop, err)
+		}
+		if _, err := c.Query(ctx, ix.Def); err != nil {
+			t.Errorf("%s: %v", ix.Def, err)
+		} else if got := lines(); got != want {
+			t.Errorf("%s makes another table:\n%s\nwas\n%s", ix.Def, got, want)
+		}
+	}
+	if ks, err := my.Keys(ctx, c, name, "ord_c"); err != nil || len(ks) != 1 || strings.Join(ks[0].Cols, ",") != "b,a" || strings.Join(ks[0].Ref.Cols, ",") != "y,x" {
+		t.Errorf("keys %+v %v", ks, err)
 	}
 }
 

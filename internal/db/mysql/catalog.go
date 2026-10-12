@@ -178,12 +178,13 @@ func generatedExtra(extra string) bool {
 }
 
 // Indexes lists a table's indexes by name, PRIMARY first; an expression is
-// its text in parentheses. MySQL keeps no statement of an index: Def is built
-// from its columns, as CREATE INDEX writes it, a primary key as the ALTER that
-// adds it (F14.3).
+// its text. MySQL keeps no statement of an index: Def is built from what
+// information_schema.statistics says, as CREATE INDEX writes it (a prefix
+// length, DESC, an expression in double parentheses, FULLTEXT, SPATIAL,
+// INVISIBLE), a primary key as the ALTER that adds it (F14.3).
 func (e Engine) Indexes(ctx context.Context, c db.Conn, schema, table string) ([]db.Index, error) {
 	r, err := c.Query(ctx, `
-select index_name, non_unique, coalesce(column_name, concat('(', expression, ')'))
+select index_name, non_unique, column_name, expression, collation, sub_part, index_type, is_visible
 from information_schema.statistics
 where table_schema = ? and table_name = ?
 order by index_name <> 'PRIMARY', index_name, seq_in_index`, db.Val{S: schema}, db.Val{S: table})
@@ -191,32 +192,53 @@ order by index_name <> 'PRIMARY', index_name, seq_in_index`, db.Val{S: schema}, 
 		return nil, err
 	}
 	var out []db.Index
-	for _, row := range r.Rows {
-		if n := len(out); n == 0 || out[n-1].Name != row[0].S {
-			out = append(out, db.Index{Name: row[0].S, Unique: row[1].S == "0"})
+	var parts []string         // the index's key parts, as written
+	var kind, invisible string // its FULLTEXT / SPATIAL, its INVISIBLE
+	finish := func() {
+		if len(out) == 0 {
+			return
 		}
 		ix := &out[len(out)-1]
-		ix.Cols = append(ix.Cols, row[2].S)
-	}
-	for i := range out {
-		ix := &out[i]
-		cols := make([]string, len(ix.Cols))
-		for j, col := range ix.Cols {
-			cols[j] = col
-			if !strings.HasPrefix(col, "(") { // a column, not an expression
-				cols[j] = e.Quote(col)
-			}
-		}
-		list := " (" + strings.Join(cols, ", ") + ");"
+		list := " (" + strings.Join(parts, ", ") + ")" + invisible + ";"
 		switch {
 		case ix.Name == "PRIMARY":
 			ix.Def = "ALTER TABLE " + e.Quote(schema, table) + " ADD PRIMARY KEY" + list
 		case ix.Unique:
 			ix.Def = "CREATE UNIQUE INDEX " + e.Quote(ix.Name) + " ON " + e.Quote(schema, table) + list
-		default:
-			ix.Def = "CREATE INDEX " + e.Quote(ix.Name) + " ON " + e.Quote(schema, table) + list
+		default: // a FULLTEXT or SPATIAL one is never unique
+			ix.Def = "CREATE " + kind + "INDEX " + e.Quote(ix.Name) + " ON " + e.Quote(schema, table) + list
 		}
 	}
+	for _, row := range r.Rows {
+		if n := len(out); n == 0 || out[n-1].Name != row[0].S {
+			finish()
+			out = append(out, db.Index{Name: row[0].S, Unique: row[1].S == "0"})
+			parts, kind, invisible = nil, "", ""
+			if t := row[6].S; t == "FULLTEXT" || t == "SPATIAL" {
+				kind = t + " "
+			}
+			if row[7].S == "NO" {
+				invisible = " INVISIBLE"
+			}
+		}
+		ix := &out[len(out)-1]
+		var part string
+		if row[2].Null { // an expression has no column
+			ix.Cols = append(ix.Cols, row[3].S)
+			part = "((" + row[3].S + "))"
+		} else {
+			ix.Cols = append(ix.Cols, row[2].S)
+			part = e.Quote(row[2].S)
+			if !row[5].Null { // a prefix length
+				part += "(" + row[5].S + ")"
+			}
+		}
+		if row[4].S == "D" {
+			part += " DESC"
+		}
+		parts = append(parts, part)
+	}
+	finish()
 	return out, nil
 }
 

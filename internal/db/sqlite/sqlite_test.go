@@ -734,3 +734,24 @@ func TestEqUsesTheIndex(t *testing.T) {
 		}
 	}
 }
+
+// A foreign key of two columns is one key, its columns in the key's order, not
+// the table's; the primary key in its own order (F14.3).
+func TestKeysOrder(t *testing.T) {
+	c, _ := seeded(t)
+	e := Engine{}
+	q(t, c, "create table ord_p (x, y, primary key (y, x))")
+	q(t, c, "create table ord_c (a, b, foreign key (b, a) references ord_p (y, x), foreign key (a) references ord_p)")
+	ks, err := e.Keys(context.Background(), c, "main", "ord_c")
+	if err != nil || len(ks) != 2 {
+		t.Fatalf("keys %+v %v", ks, err)
+	}
+	for _, k := range ks {
+		if strings.Join(k.Cols, ",") == "b,a" && strings.Join(k.Ref.Cols, ",") != "y,x" || k.Cols[0] == "a" && len(k.Cols) != 1 {
+			t.Errorf("a key: %+v %+v", k, k.Ref)
+		}
+	}
+	if ks, err = e.Keys(context.Background(), c, "main", "ord_p"); err != nil || len(ks) != 1 || strings.Join(ks[0].Cols, ",") != "y,x" {
+		t.Errorf("primary key %+v %v", ks, err)
+	}
+}
