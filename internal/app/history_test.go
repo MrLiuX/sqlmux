@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -39,6 +40,25 @@ func TestRunRecordsHistory(t *testing.T) {
 		if got := hs[i]; got.Conn != want.Conn || got.Schema != want.Schema || got.SQL != want.SQL || got.Tag != want.Tag || got.Error != want.Error || got.At.IsZero() {
 			t.Errorf("entry %d: %+v, want %+v", i, got, want)
 		}
+	}
+}
+
+// A run that never ran, its schema not set, is no statement in the history:
+// what failed is the SET, a failure or a cancel (§11).
+func TestSetupFailureNotRecorded(t *testing.T) {
+	set := `search_path "agentable" "$user", public`
+	d := &execDB{res: map[string]db.Result{"select 1": rows(1)}, fail: map[string]error{set: errors.New("no such schema")}}
+	a, c := inRun(t, d, "select 1")
+	a.sess.Conns[0].startedPath = `"$user", public`
+	c.schema = "agentable"
+	press(t, a, "<CR>")
+	d.fail[set] = context.Canceled
+	press(t, a, "<CR>")
+	if len(d.ran) != 2 || d.ran[0] != set {
+		t.Fatalf("ran %q: the SET did not run twice", d.ran)
+	}
+	if hs, err := config.LoadHistory(); err != nil || len(hs) != 0 {
+		t.Fatalf("history %v %v", hs, err)
 	}
 }
 
@@ -84,6 +104,20 @@ func TestHistoryList(t *testing.T) {
 	feed(t, a, "<C-r><Esc>")
 	if a.drop != nil || text(c) != "foo select a,\n       b\n  from two" {
 		t.Fatalf("esc closes it: %q", text(c))
+	}
+	// a candidate list up (typing a keyword brings it): C-r is the history's still
+	c.ed.Load("")
+	feed(t, a, "isel")
+	if c.comp == nil {
+		t.Fatal("typing sel brings no candidate list")
+	}
+	feed(t, a, "<C-r>")
+	if a.drop == nil || a.drop.kind != dropHistory {
+		t.Fatalf("C-r over the candidate list: %v", a.drop)
+	}
+	feed(t, a, "<CR>")
+	if text(c) != "selupdate three set x = 1" || c.comp != nil {
+		t.Fatalf("↵: %q, list %v", text(c), c.comp)
 	}
 }
 

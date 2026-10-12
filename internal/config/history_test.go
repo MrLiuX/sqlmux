@@ -24,14 +24,14 @@ func TestAppendHistoryFormat(t *testing.T) {
 	if err := AppendHistory(History{At: at, Conn: "play", SQL: "selec", Error: "syntax error"}); err != nil {
 		t.Fatal(err)
 	}
-	data, _ := os.ReadFile(HistoryPath())
+	data, _ := os.ReadFile(historyPath())
 	want := `{"at":"2026-10-12T09:30:00Z","conn":"play","schema":"public","sql":"select 1\nfrom t","tag":"SELECT 1","took_ms":3}
 {"at":"2026-10-12T09:30:00Z","conn":"play","sql":"selec","took_ms":0,"error":"syntax error"}
 `
 	if string(data) != want {
 		t.Fatalf("history.jsonl:\n%s\nwant:\n%s", data, want)
 	}
-	if fi, _ := os.Stat(HistoryPath()); fi.Mode().Perm() != 0o600 {
+	if fi, _ := os.Stat(historyPath()); fi.Mode().Perm() != 0o600 {
 		t.Fatalf("mode %v: the history is the user's alone (§13)", fi.Mode())
 	}
 }
@@ -39,7 +39,7 @@ func TestAppendHistoryFormat(t *testing.T) {
 // A statement past 64 KB is cut there, at a character, and says so.
 func TestAppendHistoryTruncates(t *testing.T) {
 	historyFile(t)
-	long := strings.Repeat("a", HistorySQLMax-1) + "é" + "tail" // é straddles the limit
+	long := strings.Repeat("a", historySQLMax-1) + "é" + "tail" // é straddles the limit
 	if err := AppendHistory(History{Conn: "c", SQL: long}); err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestAppendHistoryTruncates(t *testing.T) {
 	if err != nil || len(hs) != 1 {
 		t.Fatalf("%v %v", hs, err)
 	}
-	if !hs[0].Truncated || hs[0].SQL != long[:HistorySQLMax-1] {
+	if !hs[0].Truncated || hs[0].SQL != long[:historySQLMax-1] {
 		t.Fatalf("truncated %v, %d bytes", hs[0].Truncated, len(hs[0].SQL))
 	}
 	if err := AppendHistory(History{Conn: "c", SQL: "short"}); err != nil {
@@ -119,7 +119,7 @@ func TestTrimHistory(t *testing.T) {
 func TestLoadHistorySkipsBadLines(t *testing.T) {
 	historyFile(t)
 	_ = AppendHistory(History{Conn: "c", SQL: "select 1"})
-	f, _ := os.OpenFile(HistoryPath(), os.O_APPEND|os.O_WRONLY, 0)
+	f, _ := os.OpenFile(historyPath(), os.O_APPEND|os.O_WRONLY, 0)
 	_, _ = f.WriteString("not json\n")
 	f.Close()
 	_ = AppendHistory(History{Conn: "c", SQL: "select 2"})
