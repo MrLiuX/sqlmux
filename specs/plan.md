@@ -18,7 +18,7 @@
 | M11 分发 | [m11-distribution/task.md](m11-distribution/task.md) | GoReleaser 与 release workflow、`--version`、Homebrew tap（源码编译的 formula）、npm / npx（壳包加平台子包） | todo（2026-10-10 用户定；2026-10-11 M10 passed 后开工） |
 | M12 表格日常 | [m12-grid/task.md](m12-grid/task.md) | 用户 2026-10-11 对照 DataGrip 规划：多列排序、值编辑器（JSON 格式化和高亮、vim）、按单元值过滤 / 表头排序 / 表格右键菜单、导出 CSV 和 JSON | 完成（F12.1–F12.12 passed，6472fcd，2026-10-12；F12.7–F12.12 是用户 10-11 验收时的意见；tag `m12` 在 6472fcd；用户 10-12 定：照 M9 的办法先打 tag、验收意见进后续迭代） |
 | M13 工程质量审计 | [m13-quality/task.md](m13-quality/task.md) | 用户 2026-10-11 让 reviewer 做的全仓审计，20 条：COMMIT 后断线报成已回滚、多进程写同一文件、确认框漏键、配置未知键静默、浮层优先级散在 12 处、扫描器平方、列表绘制和可见性重复、`C-h`、布局文件、依赖链、小拷贝 | 完成（F13.1–F13.19 passed，6472fcd，完整回归 170 个脚本 3455 过、4 败是 f11.2 的 docker 环境问题，2026-10-12；tag `m13` 在 6472fcd，同 M12） |
-| M14 SQLite 与历史 | [m14-sqlite/task.md](m14-sqlite/task.md) | SQLite（无 cgo）和命令行 DSN、查询历史、树上的索引 / 键 / 函数 / 序列、结构修改的模板 SQL、表格的 JSON 视图、MySQL 取消的兜底 | todo（2026-10-12 开工，用户定不等验收；按 worker 的草稿定清单；驱动 modernc；节点 1 = F14.6 + F14.2，2 = F14.1，3 = F14.3–F14.5） |
+| M14 SQLite 与历史 | [m14-sqlite/task.md](m14-sqlite/task.md) | SQLite（无 cgo）和命令行 DSN、查询历史、树上的索引 / 键 / 函数 / 序列、结构修改的模板 SQL、表格的 JSON 视图、MySQL 取消的兜底 | 完成（F14.1–F14.8 passed，55f6d85，2026-10-12；完整回归 186 个脚本 3717 过、4 败是 f11.2 的 docker 环境问题；F14.7、F14.8 是开发中用户和 tester 发现的；等用户验收后打 tag `m14`；驱动 modernc，二进制 +3.8 MB） |
 | M15 PG 数据库层级 | [m15-pg-databases/task.md](m15-pg-databases/task.md) | PG 的树加数据库一层（每库一对连接）、SSH 隧道、query 的签名提示与值补全（INSERT VALUES、UPDATE SET、WHERE 的值；用户后续的编辑体验需求也归这里）、状态栏随机轮播的特性提示 | draft |
 | M16 Redis 初版 | [m16-redis/task.md](m16-redis/task.md) | 用户 2026-10-11 定：go-redis、按命名空间分的树（类型只做图标）、六种类型加 RedisJSON 的键 tab、一行一条命令的控制台、来自 `COMMAND DOCS` 的补全和签名提示；表格 tab 和数据源之间加接口缝；用户体验初版后再定第二轮（候选 M17：Pub/Sub、MONITOR、Cluster） | draft |
 
