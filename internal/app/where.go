@@ -254,11 +254,10 @@ func (c *Conn) table(schema, name string) (db.Table, bool) {
 // colored as one, as is a column; a table's name wins over a column's
 func (a *App) sqlNames(c *Conn, text, schema string, cols *db.Columns) (names ui.SQLNames, missing []db.Table) {
 	// PG folds a name's ASCII letters unless it is "quoted"
-	// (downcase_identifier), its catalog's as they are; MySQL's go by any
-	// case on both sides, `quoted` too
-	// ponytail: but its tables on Linux, which go by case
+	// (downcase_identifier), its catalog's as they are; MySQL's and SQLite's go
+	// by any case on both sides, quoted too
 	fold := func(s string) string { return s }
-	if c.eng.Dialect() == sqlkit.MySQL {
+	if c.eng.Dialect().CaseInsensitive() {
 		fold = strings.ToLower
 	}
 	tables := map[string]bool{}

@@ -63,6 +63,8 @@ var en = map[string]string{
 	"先选一张表":          "Pick a table first",
 	"%s 是视图":         "%s is a view",
 	"SQLite 不能给视图改名": "SQLite cannot rename a view",
+	"%s 是生成列，只读":     "%s is a generated column: read only",
+	"rowid 是行号，只读":   "rowid is the row number: read only",
 	"查询历史…":          "Query history…",
 	"失败":             "Failed",
 	"切换主题…":          "Switch theme…",

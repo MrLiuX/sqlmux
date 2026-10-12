@@ -25,6 +25,8 @@ func resultPagingOnServer(t *testing.T, eng, _ string) {
 		run("set session cte_max_recursion_depth = 5000") // the default 1000 is short of the rows
 		run("create table paged (id int primary key)")
 		run("insert into paged with recursive s(n) as (select 1 union all select n + 1 from s where n < 1203) select n from s")
+	} else if eng == "sqlite" {
+		run("create table paged as with recursive s(n) as (select 1 union all select n + 1 from s where n < 1203) select n as id from s")
 	} else {
 		run("create table paged as select g as id from generate_series(1, 1203) g")
 	}

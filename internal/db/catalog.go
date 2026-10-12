@@ -22,6 +22,7 @@ type Column struct {
 	Generated bool     // the server makes the value: an identity column that is always generated, a generated column; INSERT may not name it
 	Fixed     bool     // not to edit: MySQL's BIT, shown as a number it does not take back (§8.1)
 	AddOnly   bool     // DEFAULT is for a row added: SQLite has none in an UPDATE (F14.1)
+	ReadOnly  string   // why the column takes no edit, "" when it does: SQLite's rowid, a generated column
 }
 
 // Columns is what the catalog knows of one table's columns.

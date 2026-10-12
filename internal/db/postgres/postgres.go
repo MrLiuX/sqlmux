@@ -143,14 +143,7 @@ var types = pgtype.NewMap()
 // rolling back a write with RETURNING and skipping Exec's next statements.
 func read(rr *pgconn.ResultReader, maxRows int, start time.Time) (db.Result, error) {
 	var r db.Result
-	tag, err := each(rr, nil, func(cols []db.Col) error { r.Cols = cols; return nil },
-		func() bool {
-			if maxRows > 0 && len(r.Rows) == maxRows {
-				r.Truncated = true
-				return false
-			}
-			return true
-		},
+	tag, err := each(rr, nil, func(cols []db.Col) error { r.Cols = cols; return nil }, db.Capped(&r, maxRows),
 		func(vals []db.Val) error { r.Rows = append(r.Rows, vals); return nil })
 	r.Tag, r.Affected, r.Took = tag.String(), tag.RowsAffected(), time.Since(start)
 	return r, err
@@ -206,6 +199,8 @@ func (Engine) Connect(ctx context.Context, dsn, password string, readOnly bool) 
 	}
 	return c, info, nil
 }
+
+func (Engine) Eq(col, arg string) string { return col + " = " + arg }
 
 func (Engine) Dialect() sqlkit.Dialect      { return sqlkit.PG }
 func (Engine) Quote(names ...string) string { return pgx.Identifier(names).Sanitize() }

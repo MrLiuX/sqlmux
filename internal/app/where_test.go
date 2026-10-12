@@ -16,6 +16,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/db/mysql"
 	"github.com/kackerx/sqlmux/internal/db/postgres"
+	"github.com/kackerx/sqlmux/internal/db/sqlite"
 	"github.com/kackerx/sqlmux/internal/editor"
 	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
@@ -500,6 +501,12 @@ func TestSQLNames(t *testing.T) {
 	names, _ = a.sqlNames(a.sess.Conns[0], text, "public", nil)
 	if names(7, "`Status`") != ui.ColumnName || names(strings.Index(text, "`T"), "`T_ORDER`") != ui.TableName || names(0, "état") != ui.TableName {
 		t.Error("MySQL's names")
+	}
+	a.sess.Conns[0].eng = sqlite.Engine{} // SQLite's go by any case as well, `quoted` too (F14.1)
+	text = `select "Status", AMOUNT from "T_ORDER"`
+	names, _ = a.sqlNames(a.sess.Conns[0], text, "public", nil)
+	if names(7, `"Status"`) != ui.ColumnName || names(strings.Index(text, `"T`), `"T_ORDER"`) != ui.TableName || names(strings.Index(text, "AMOUNT"), "AMOUNT") != ui.ColumnName {
+		t.Error("SQLite's names")
 	}
 	a.sess.Conns[0].eng = postgres.Engine{}
 	if n := a.queryBar(a.focused(), tab).Names; n(0, "note") != ui.ColumnName || n(0, "t_user") != ui.TableName {

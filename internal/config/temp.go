@@ -1,12 +1,12 @@
 package config
 
 import (
-	"cmp"
 	"errors"
 	"fmt"
 	"net/url"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/kackerx/sqlmux/internal/i18n"
@@ -23,14 +23,18 @@ func IsTarget(arg string, known []string) bool {
 // DATABASE_URL, stands for (F14.1): postgres:// or mysql://, else a SQLite
 // file. It is nowhere written, not connections.toml, not the keychain: the
 // password a URL holds stays in it. Its name is the file's without its
-// extension, or <database>@<host>; there is no / in it, which the names that
-// state.json and the palette's ids go by cannot have.
-func TempConnection(target string) (Connection, error) {
+// extension, or <database>@<host>, as a connection's name has to be (no /);
+// one that is taken by a connection of taken, by what the state, the history and
+// the queries go by, keeps the extension, then gets a number; none that is
+// valid is the engine's. Temp says it is not for the manager to list.
+func TempConnection(target string, taken []string) (Connection, error) {
 	scheme, _, isURL := strings.Cut(target, "://")
+	c := Connection{Temp: true}
 	if !isURL {
 		path, _, _ := strings.Cut(target, "?")
 		base := filepath.Base(path)
-		return Connection{Name: strings.TrimSuffix(base, filepath.Ext(base)), Engine: "sqlite", DSN: target}, nil
+		c.Engine, c.DSN = "sqlite", target
+		return named(c, strings.TrimSuffix(base, filepath.Ext(base)), base, taken), nil
 	}
 	engine, ok := map[string]string{"postgres": "postgres", "postgresql": "postgres", "mysql": "mysql"}[scheme]
 	if !ok {
@@ -40,7 +44,30 @@ func TempConnection(target string) (Connection, error) {
 	if ue := (*url.Error)(nil); errors.As(err, &ue) {
 		return Connection{}, fmt.Errorf("%s: %w", scheme, ue.Err) // not the URL: it holds the password
 	}
+	c.Engine, c.DSN = engine, target
 	database, host := strings.TrimPrefix(u.Path, "/"), u.Hostname()
 	name := strings.Join(slices.DeleteFunc([]string{database, host}, func(s string) bool { return s == "" }), "@")
-	return Connection{Name: strings.ReplaceAll(cmp.Or(name, engine), "/", "_"), Engine: engine, DSN: target}, nil
+	return named(c, name, name, taken), nil
+}
+
+// named is c with the first of name, full, and numbered ones that is a name
+// of a connection and not taken; the engine's when none is.
+func named(c Connection, name, full string, taken []string) Connection {
+	valid := func(n string) bool { return n != "" && checkFileName(n) == nil }
+	base := full
+	if !valid(base) {
+		base = c.Engine
+	}
+	for _, n := range []string{name, full, base} {
+		if valid(n) && !slices.Contains(taken, n) {
+			c.Name = n
+			return c
+		}
+	}
+	for i := 2; ; i++ {
+		if n := base + "-" + strconv.Itoa(i); !slices.Contains(taken, n) {
+			c.Name = n
+			return c
+		}
+	}
 }

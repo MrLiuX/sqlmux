@@ -4,9 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"math"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -72,8 +76,9 @@ func TestDSN(t *testing.T) {
 		"x.db?mode=ro":       "file://" + wd + "/x.db?" + busy + "&mode=ro",
 		"/t.db?mode=rwc":     "file:///t.db?" + busy + "&mode=rwc",
 		"/a b/c#d.db":        "file:///a%20b/c%23d.db?" + busy + "&mode=rw",
-		"/t.db?_pragma=a(1)": "file:///t.db?_pragma=a%281%29&mode=rw",
-		"~other/x.db":        "file://" + wd + "/~other/x.db?" + busy + "&mode=rw", // not a home
+		"/t.db?_pragma=a(1)": "file:///t.db?_pragma=a%281%29&" + busy + "&mode=rw", // a pragma of the user's keeps the timeout
+		"/t.db?_pragma=busy_timeout(1)&_pragma=foreign_keys(1)": "file:///t.db?_pragma=busy_timeout%281%29&_pragma=foreign_keys%281%29&mode=rw",
+		"~other/x.db": "file://" + wd + "/~other/x.db?" + busy + "&mode=rw", // not a home
 	} {
 		if _, got, err := DSN(spec); err != nil || got != want {
 			t.Errorf("%q: %q %v, want %q", spec, got, err, want)
@@ -119,7 +124,7 @@ func TestCatalog(t *testing.T) {
 	for _, tb := range ts {
 		got = append(got, tb.Kind+":"+tb.Name)
 	}
-	if want := "r:t_kv r:t_log r:t_misc r:t_note r:t_order r:t_order_item r:t_seq r:t_sku r:t_user v:v_order_total"; strings.Join(got, " ") != want {
+	if want := "r:ft r:t_aud r:t_bk r:t_ck r:t_desc r:t_dt r:t_free r:t_free_wr r:t_gen r:t_int r:t_kv r:t_log r:t_misc r:t_note r:t_order r:t_order_item r:t_part r:t_real r:t_rowid r:t_seq r:t_sku r:t_user v:v_order_total"; strings.Join(got, " ") != want {
 		t.Fatalf("tables %v", got)
 	}
 	for _, tc := range []struct {
@@ -444,5 +449,256 @@ func TestObjects(t *testing.T) {
 	}
 	if fs, err := e.Functions(ctx, c); err != nil || fs != nil {
 		t.Errorf("functions %v %v", fs, err)
+	}
+}
+
+// A REAL is shown as the shortest digits that read back, a point always, an
+// exponent from 1e17 and under 1e-4, Inf and a zero as SQLite writes them.
+func TestRealText(t *testing.T) {
+	tenth := 0.1 // not a constant sum, which is exactly 0.3
+	for f, want := range map[float64]string{
+		1.0 / 7: "0.14285714285714285", tenth + 0.2: "0.30000000000000004", 3: "3.0", 100: "100.0", -2.5: "-2.5",
+		1e15: "1000000000000000.0", 1e16: "10000000000000000.0", 9.99e16: "99900000000000000.0", 1e17: "1.0e+17", 1.5e300: "1.5e+300",
+		1e-4: "0.0001", 1e-5: "1.0e-05", 2.5e-10: "2.5e-10", 123456789.123456789: "123456789.12345679",
+		0: "0.0", math.Copysign(0, -1): "0.0", math.Inf(1): "Inf", math.Inf(-1): "-Inf",
+	} {
+		if got := realText(f); got != want {
+			t.Errorf("%v: %s, want %s", f, got, want)
+		}
+	}
+}
+
+// What the driver reads is what the grid shows: a time as the standard text, a
+// blob by its size whatever its bytes, a text that is no UTF-8 too, a REAL in
+// all its digits; and the file has them as literals (F14.1).
+func TestValueKinds(t *testing.T) {
+	c, _ := seeded(t)
+	got := cells(q(t, c, "select at, d, ts from t_dt order by id"))
+	if want := []string{"2026-01-02 03:04:05", "2026-01-02 00:00:00", "2026-01-02 03:04:05.250", "2026-01-02 03:04:05", "NULL", "NULL"}; !slices.Equal(got, want) {
+		t.Errorf("times %q, want %q", got, want)
+	}
+	if got := cells(q(t, c, "select cast('hi' as blob), x'0001', cast(x'ff' as text), 'ok', x'', typeof(cast('hi' as blob))")); !slices.Equal(got, []string{db.BinaryShown(2), db.BinaryShown(2), db.BinaryShown(1), "ok", db.BinaryShown(0), "blob"}) {
+		t.Errorf("blobs %q", got)
+	}
+	if got := cells(q(t, c, "select x from t_real order by id")); !slices.Equal(got, []string{"0.14285714285714285", "0.30000000000000004", "10000000000000000.0", "1.0e+17", "123456789.12345679", "1.0e-05", "100.0"}) {
+		t.Errorf("reals %q", got)
+	}
+	var rows []string
+	if err := c.Stream(context.Background(), "select cast('hi' as blob), cast(x'ff' as text), 'ok'", func([]db.Col) error { return nil }, func(v []db.Val) error {
+		rows = append(rows, v[0].S, v[1].S, v[2].S)
+		return nil
+	}); err != nil || !slices.Equal(rows, []string{"X'6869'", "X'FF'", "ok"}) {
+		t.Errorf("a file's: %q %v", rows, err)
+	}
+}
+
+// Statements that write say how many rows, those that do not do not ask: a DDL
+// hits none, though the INSERT before it hit some; a WITH that writes counts.
+func TestAffected(t *testing.T) {
+	c, _ := seeded(t)
+	q(t, c, "insert into t_log values ('a', 'b'), ('c', 'd')")
+	for _, tc := range []struct{ sql, want string }{
+		{"create table t_x (a)", "CREATE|0"},
+		{"insert into t_x values (1), (2), (3)", "INSERT 3|3"},
+		{"with n as (select 1) insert into t_x select * from n", "WITH 1|1"},
+		{"with n as (select 1) select * from n", "WITH 1|0"},
+		{"update t_x set a = a", "UPDATE 4|4"},
+		{"drop table t_x", "DROP|0"},
+		{"pragma foreign_keys", "PRAGMA 1|0"},
+	} {
+		r := q(t, c, tc.sql)
+		if got := fmt.Sprintf("%s|%d", r.Tag, r.Affected); got != tc.want {
+			t.Errorf("%s: %s, want %s", tc.sql, got, tc.want)
+		}
+	}
+}
+
+// The rows are found by the key as it was read: a key with no declared type
+// holds an integer the text '1' is, a text, and 'abc' does not match the 0; the
+// same in a WITHOUT ROWID table; a row of a REAL, a time, a changed value is
+// the row it was, by number or by julianday, and a change under it is stale (F14.1).
+func TestSaveKeysAndSame(t *testing.T) {
+	c, _ := seeded(t)
+	ctx, e, w := context.Background(), Engine{}, db.NewWorker(c)
+	set := func(table, key, col, old, val string) error {
+		_, _, err := db.Save(ctx, w, e, "main", table, []string{keyOf(table)}, db.Changes{Updates: []db.Row{{Key: []string{key}, Cols: []db.Change{{Name: col, Val: db.Val{S: val}, Old: db.Val{S: old}}}}}}, false)
+		return err
+	}
+	for _, table := range []string{"t_free", "t_free_wr"} {
+		if err := set(table, "1", "v", "one", "ONE"); err != nil {
+			t.Errorf("%s: an integer key, as text: %v", table, err)
+		}
+		if err := set(table, "two", "v", "two", "TWO"); err != nil {
+			t.Errorf("%s: a text key: %v", table, err)
+		}
+		if err := set(table, "0", "v", "zero", "ZERO"); err != nil {
+			t.Errorf("%s: the key 0: %v", table, err)
+		}
+		if err := set(table, "abc", "v", "zero", "x"); !errors.Is(err, db.ErrStale) {
+			t.Errorf("%s: 'abc' is no 0: %v", table, err)
+		}
+		if got := strings.Join(cells(q(t, c, "select v from "+table+" order by v")), " "); got != "ONE TWO ZERO" {
+			t.Errorf("%s: %s", table, got)
+		}
+	}
+	for id, x := range map[string]string{"1": "0.14285714285714285", "2": "0.30000000000000004", "3": "10000000000000000.0", "5": "123456789.12345679", "6": "1.0e-05"} {
+		if err := set("t_real", id, "x", x, "2"); err != nil {
+			t.Errorf("a real %s as shown: %v", x, err)
+		}
+	}
+	if err := set("t_real", "4", "x", "1.0e+16", "2"); !errors.Is(err, db.ErrStale) {
+		t.Errorf("a real that is another: %v", err)
+	}
+	for id, at := range map[string]string{"1": "2026-01-02 03:04:05", "2": "2026-01-02 03:04:05"} { // one written with a T and a Z
+		if err := set("t_dt", id, "at", at, "2027-01-01 00:00:00"); err != nil {
+			t.Errorf("a time %s as shown: %v", id, err)
+		}
+	}
+	if err := set("t_dt", "1", "ts", "2026-01-02 03:04:05", "x"); !errors.Is(err, db.ErrStale) {
+		t.Errorf("a time that is another: %v", err)
+	}
+}
+
+// A REAL is the same row by number: of random ones, some the text SQLite casts
+// to is not the shortest digits the grid shows, and all of them are found by
+// their shown text (F14.1).
+func TestSameRealsByNumber(t *testing.T) {
+	c, _ := seeded(t)
+	ctx, e, w := context.Background(), Engine{}, db.NewWorker(c)
+	rng := rand.New(rand.NewPCG(1, 2))
+	q(t, c, "create table t_rnd (id integer primary key, x real)")
+	for i := range 300 {
+		if _, err := c.Query(ctx, "insert into t_rnd (id, x) values (?1, ?2)", db.Val{S: strconv.Itoa(i)}, db.Val{S: strconv.FormatFloat(rng.Float64()*math.Pow(10, float64(rng.IntN(20))), 'g', -1, 64)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	differs := 0
+	for i := range 300 {
+		r := q(t, c, "select x, cast(x as text) from t_rnd where id = "+strconv.Itoa(i))
+		shown, cast := r.Rows[0][0].S, r.Rows[0][1].S
+		if shown != cast {
+			differs++
+		}
+		_, _, err := db.Save(ctx, w, e, "main", "t_rnd", []string{"id"}, db.Changes{Updates: []db.Row{{Key: []string{strconv.Itoa(i)}, Cols: []db.Change{{Name: "x", Val: db.Val{S: "1"}, Old: db.Val{S: shown}}}}}}, false)
+		if err != nil {
+			t.Fatalf("%s as shown (SQLite's text %s): %v", shown, cast, err)
+		}
+	}
+	if differs == 0 {
+		t.Error("no value of which SQLite's text is not the shown one: the test has no teeth")
+	}
+}
+
+func keyOf(table string) string {
+	return map[string]string{"t_free": "k", "t_free_wr": "k", "t_real": "id", "t_dt": "id"}[table]
+}
+
+// The catalog of what SQLite does its own way: a partial unique index is no
+// key; a blob key makes the table read only; a primary key by its place in the
+// declaration; the rowid's alias only an INTEGER key with an index of none; a
+// virtual table has no hidden columns and no shadow tables; generated columns
+// and the rowid are not to edit (F14.1).
+func TestCatalogSQLiteWays(t *testing.T) {
+	c, _ := seeded(t)
+	ctx, e := context.Background(), Engine{}
+	cols := func(table string) db.Columns {
+		t.Helper()
+		cs, err := e.TableColumns(ctx, c, "main", table)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cs
+	}
+	if cs := cols("t_part"); len(cs.Unique) != 0 || cs.Lead != "rowid, " {
+		t.Errorf("t_part: a partial index is no key: %+v", cs)
+	}
+	if cs := cols("t_bk"); strings.Join(cs.Key(), ",") != "id" || !strings.Contains(cs.ReadOnly, "id") || cs.Cols[0].Default != "" {
+		t.Errorf("t_bk: %+v", cs)
+	}
+	if cs := cols("t_ck"); strings.Join(cs.PK, ",") != "a,b" || cs.Cols[0].Name != "b" {
+		t.Errorf("t_ck: the key in its own order: %+v", cs.PK)
+	}
+	for table, alias := range map[string]bool{"t_user": true, "t_misc": true, "t_int": false, "t_desc": false, "t_kv": false, "t_free": false} {
+		cs := cols(table)
+		got := false
+		for _, col := range cs.Cols {
+			got = got || col.Default == "rowid"
+		}
+		if got != alias {
+			t.Errorf("%s: an alias of the rowid: %v", table, got)
+		}
+	}
+	if cs := cols("ft"); len(cs.Cols) != 1 || cs.Cols[0].Name != "body" { // no ft or rank, which are hidden
+		t.Errorf("ft: %+v", cs.Cols)
+	}
+	gen := cols("t_gen")
+	byName := map[string]db.Column{}
+	for _, col := range gen.Cols {
+		byName[col.Name] = col
+	}
+	if byName["b"].ReadOnly == "" || byName["c"].ReadOnly == "" || byName["a"].ReadOnly != "" || !byName["b"].Generated {
+		t.Errorf("t_gen: %+v", byName)
+	}
+	if cs := cols("t_log"); cs.Cols[0].Name != "rowid" || cs.Cols[0].ReadOnly == "" {
+		t.Errorf("the rowid is not to edit: %+v", cs.Cols[0])
+	}
+	if cs := cols("t_rowid"); cs.Lead != "" || cs.Key() != nil { // a column of that name hides the rowid
+		t.Errorf("t_rowid: %+v", cs)
+	}
+}
+
+// SQLite takes a transaction back by itself on some errors: TxStatus says so
+// when it does, and not when a statement fails and the transaction goes on
+// (F14.1).
+func TestTxStatusFollowsSQLite(t *testing.T) {
+	c, _ := seeded(t)
+	ctx := context.Background()
+	q(t, c, "begin")
+	if _, err := c.Query(ctx, "insert into t_user (id, name) values (1, 'dup')"); err == nil || c.TxStatus() != 'T' {
+		t.Fatalf("a constraint: %v, tx %c: the transaction goes on", err, c.TxStatus())
+	}
+	if _, err := c.Query(ctx, "insert or rollback into t_user (id, name) values (1, 'dup')"); err == nil || c.TxStatus() != 'I' {
+		t.Errorf("or rollback: %v, tx %c", err, c.TxStatus())
+	}
+	q(t, c, "begin")
+	q(t, c, "create trigger t_raise before insert on t_log begin select raise(rollback, 'no'); end")
+	if _, err := c.Query(ctx, "insert into t_log values ('a', 'b')"); err == nil || c.TxStatus() != 'I' {
+		t.Errorf("raise(rollback): %v, tx %c", err, c.TxStatus())
+	}
+	q(t, c, "begin")
+	cctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	q(t, c, "insert into t_user (id, name) values (100, 'x')")
+	if _, err := c.Query(cctx, "with recursive n (i) as (select 1 union all select i + 1 from n) insert into t_log select 'a', i from n"); err == nil {
+		t.Fatal("an endless insert ends")
+	}
+	if c.TxStatus() != 'I' { // an INSERT interrupted takes the whole transaction back
+		t.Errorf("interrupted: tx %c", c.TxStatus())
+	}
+}
+
+// A trigger's statement is one statement, executed whole; the VALUES of quick
+// SQL is read as it is, with no LIMIT after it; the shadow tables of a virtual
+// one are not listed (F14.1).
+func TestTriggerValuesAndShadows(t *testing.T) {
+	c, path := seeded(t)
+	q(t, c, "insert into t_aud values (7)")
+	if r := q(t, c, "select line from t_log where line like 'row %'"); strings.Join(cells(r), "") != "row 7" {
+		t.Errorf("the trigger ran: %v", cells(r))
+	}
+	m, _, err := Connect(context.Background(), path, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	w := db.NewWorker(m)
+	if r, err := (Engine{}).Quick(context.Background(), w, "values (1), (2), (3)", "main", 2); err != nil || len(r.Rows) != 2 || !r.Truncated { // read whole, no LIMIT to syntax-error, and cut at the end
+		t.Errorf("values: %d rows %v %v", len(r.Rows), r.Truncated, err)
+	}
+	ts, _ := (Engine{}).Tables(context.Background(), c)
+	for _, tb := range ts {
+		if strings.HasPrefix(tb.Name, "ft_") {
+			t.Errorf("a shadow table: %s", tb.Name)
+		}
 	}
 }

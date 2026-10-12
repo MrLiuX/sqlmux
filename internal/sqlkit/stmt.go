@@ -13,6 +13,9 @@ type Stmt struct{ Start, End, Lead int }
 
 // Statements splits s at each ; outside parentheses (§9.2), the way usql's
 // stmt and psql's lexer do; empty statements are dropped.
+// A SQLite trigger's body is one statement, its ;s not cutting it: CREATE
+// [TEMP] TRIGGER … BEGIN, the statements, each ended by a ;, and END, as
+// SQLite's own tokenizer, complete.c's sqlite3_complete, tracks it (F14.1).
 // ponytail: PG 14's BEGIN ATOMIC … END is cut at the ; in its body, as
 // psql tracks and this does not; split such a function by hand. So is a
 // MySQL procedure's, trigger's or event's BEGIN … END, and DELIMITER, the
@@ -22,8 +25,26 @@ func Statements(s string, d Dialect) []Stmt {
 	ts, depth := meaningful(s, all)
 	var out []Stmt
 	start := -1
+	var words []string // the first words of the statement being read, and what a trigger's body is
+	body, prev := false, ""
 	for i, t := range ts {
-		if t.Kind == Punct && s[t.Start] == ';' && depth[i] == 0 {
+		w := strings.ToLower(s[t.Start:t.End])
+		if start < 0 {
+			words, body = words[:0], false
+		}
+		if len(words) < 3 && (t.Kind == Keyword || t.Kind == Ident) {
+			words = append(words, w)
+		}
+		if d == SQLite && depth[i] == 0 {
+			switch {
+			case w == "begin" && isTrigger(words):
+				body = true
+			case w == "end" && body && prev == ";":
+				body = false
+			}
+		}
+		prev = w
+		if t.Kind == Punct && s[t.Start] == ';' && depth[i] == 0 && !body {
 			if start >= 0 {
 				out = append(out, Stmt{Start: start, End: ts[i-1].End})
 			}
@@ -67,6 +88,15 @@ func Statements(s string, d Dialect) []Stmt {
 		}
 	}
 	return out
+}
+
+// isTrigger is whether the first words of a statement say it makes a trigger:
+// CREATE TRIGGER, CREATE TEMP TRIGGER, CREATE TEMPORARY TRIGGER.
+func isTrigger(words []string) bool {
+	if len(words) < 2 || words[0] != "create" {
+		return false
+	}
+	return words[1] == "trigger" || len(words) == 3 && (words[1] == "temp" || words[1] == "temporary") && words[2] == "trigger"
 }
 
 // execMarks widens stmts over the /*! before them and the */ after them,
@@ -204,6 +234,14 @@ var scopes = map[string]bool{"session": true, "local": true, "global": true, "pe
 func BreaksReadOnly(s string, d Dialect) bool {
 	ts, depth := words(s, d)
 	i := first(s, ts)
+	if d == SQLite && lower(s, ts, i) == "pragma" { // one that gives query_only a value, the read only standing (F14.1)
+		for j := i + 1; j+1 < len(ts); j++ {
+			if next := lower(s, ts, j+1); unquote(lower(s, ts, j)) == "query_only" && (next == "=" || next == "(") {
+				return true
+			}
+		}
+		return false
+	}
 	if i >= len(ts) || ts[i].Kind != Keyword || isRead(s, ts, depth) {
 		return false
 	}
@@ -338,7 +376,7 @@ func AutoLimit(s string, d Dialect, n, offset int) (out string, pageable bool) {
 	if !isRead(s, ts, depth) {
 		return s, false
 	}
-	if !queryWords[lower(s, ts, first(s, ts))] {
+	if w := lower(s, ts, first(s, ts)); !queryWords[w] || d == SQLite && w == "values" { // SQLite's takes no LIMIT after VALUES
 		return s, false
 	}
 	out = s
@@ -379,7 +417,8 @@ func AutoLimit(s string, d Dialect, n, offset int) (out string, pageable bool) {
 // command_no_begin (src/bin/psql/common.c, PG 17) has it: transaction
 // control but savepoints, and what PG runs in no transaction block,
 // VACUUM, CLUSTER alone, CREATE / DROP DATABASE and TABLESPACE, the
-// CONCURRENTLY ones, ALTER SYSTEM, DISCARD ALL. MySQL's (§8.2):
+// CONCURRENTLY ones, ALTER SYSTEM, DISCARD ALL; SQLite's, PRAGMA, ATTACH and
+// DETACH besides. MySQL's (§8.2):
 // transaction control, what commits the transaction (commitsMySQL), and
 // SET TRANSACTION with no scope, which a transaction refuses (1568).
 func NoBegin(s string, d Dialect) bool {
@@ -391,6 +430,9 @@ func NoBegin(s string, d Dialect) bool {
 			return true
 		}
 		return w(0) == "set" && w(1) == "transaction" || commitsMySQL(s, ts)
+	}
+	if d == SQLite && (w(0) == "pragma" || w(0) == "attach" || w(0) == "detach") { // none works in a transaction, or means what it says there (foreign_keys, journal_mode)
+		return true
 	}
 	switch w(0) {
 	case "abort", "begin", "start", "commit", "end", "rollback", "vacuum":

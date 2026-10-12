@@ -96,7 +96,7 @@ func run(args []string) error {
 	var sess *app.Session
 	var restored *app.Restored
 	if temp != nil { // a file or a URL: its own connection and its own session, kept nowhere
-		sess = app.Open([]config.Connection{*temp}, 0)
+		sess = app.OpenTemp(*temp)
 	} else {
 		if l, err = startLayout(name, *layout, &warning); err != nil {
 			return err
@@ -129,16 +129,20 @@ func run(args []string) error {
 // (F14.1): the file or URL name is; with no name and no layout asked for,
 // DATABASE_URL, but only when connections.toml has no connection, as many keep
 // it exported all the time and a user with a config wants last.toml back; nil
-// when there is none, or when name is a connection's.
+// when there is none, or when name is a connection's. A connections.toml that
+// does not read is the error, not a reason to take name for a file.
 func tempConnection(name, layout, databaseURL string) (*config.Connection, error) {
 	conns, _, err := config.LoadConnections("")
+	if err != nil && !config.NoConnections(err) {
+		return nil, err
+	}
+	var known []string
+	for _, c := range conns {
+		known = append(known, c.Name)
+	}
 	target := name
 	switch {
 	case name != "":
-		var known []string
-		for _, c := range conns {
-			known = append(known, c.Name)
-		}
 		if !config.IsTarget(name, known) {
 			return nil, nil
 		}
@@ -148,7 +152,7 @@ func tempConnection(name, layout, databaseURL string) (*config.Connection, error
 	if target == "" {
 		return nil, nil
 	}
-	c, err := config.TempConnection(target)
+	c, err := config.TempConnection(target, known)
 	return &c, err
 }
 
