@@ -385,3 +385,36 @@ func TestReconnectCancelledThenLostInTransaction(t *testing.T) {
 		t.Fatalf("rows: %v %v", r.Rows, err)
 	}
 }
+
+// A statement cancelled whose KILL cannot get through no longer holds the
+// Worker till it ends: cancelGrace after the cancel the connection is closed
+// and the next request dials (§8.3, F14.6).
+func TestCancelWithoutKillClosesConnection(t *testing.T) {
+	for name, run := range map[string]func(context.Context, db.Conn) error{
+		"run": func(ctx context.Context, c db.Conn) error { _, err := c.Query(ctx, "select sleep(30)"); return err },
+		"stream": func(ctx context.Context, c db.Conn) error {
+			return c.(db.Streamer).Stream(ctx, "select sleep(30)", func([]db.Col) error { return nil }, func([]db.Val) error { return nil })
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			dsn := OwnDB(t)
+			p, via := proxied(t, dsn)
+			w, events := redialingTo(t, via, dsn, false)
+			p.Refuse(true) // KILL QUERY's connection cannot get through
+			cctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+			defer cancel()
+			start := time.Now()
+			if err := w.RunSafe(cctx, func(ctx context.Context, c db.Conn) error { return run(ctx, c) }); !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("cancelled: %v", err)
+			}
+			if took := time.Since(start); took < cancelGrace || took > cancelGrace+2*time.Second {
+				t.Fatalf("the cancelled statement held the Worker %v, want about %v", took, cancelGrace)
+			}
+			p.Refuse(false)
+			if r, err := w.Query(ctx, "select 1"); err != nil || r.Rows[0][0].S != "1" || !slices.Equal(*events, []db.Event{{Rerun: true}}) {
+				t.Fatalf("the next request: %v %v, events %v", r.Rows, err, *events)
+			}
+		})
+	}
+}

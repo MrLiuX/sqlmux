@@ -166,9 +166,10 @@ func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (
 	if err := ctx.Err(); err != nil { // a KILL QUERY finds nothing running yet
 		return r, err
 	}
-	defer c.watch(ctx)()
+	run, stop := c.watch(ctx)
+	defer stop()
 	defer func() { err = c.noted(query, err) }()
-	run, start := context.WithoutCancel(ctx), time.Now()
+	start := time.Now()
 	word := sqlkit.FirstWord(query, sqlkit.MySQL)
 	if !rowWords[word] || word == "with" && !sqlkit.IsRead(query, sqlkit.MySQL) {
 		res, err := c.c.ExecContext(run, query, args...)
@@ -264,9 +265,10 @@ func (c *Conn) Stream(ctx context.Context, query string, head func([]db.Col) err
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	defer c.watch(ctx)()
+	run, stop := c.watch(ctx)
+	defer stop()
 	defer func() { err = c.noted(query, err) }()
-	rows, err := c.c.QueryContext(context.WithoutCancel(ctx), query)
+	rows, err := c.c.QueryContext(run, query)
 	if err != nil {
 		return err
 	}
@@ -332,31 +334,48 @@ func errno(err error) uint16 {
 	return 0
 }
 
+// cancelGrace is how long after a cancel the statement may run on before its
+// connection is closed, as Postgres' is (§8.3).
+const cancelGrace = 5 * time.Second
+
 // watch kills what runs on c once ctx is cancelled, over a connection of
 // its own (§8.3): cancelling the driver's ctx would close c, the statement
-// running on in the server. The stop it returns waits for a kill under
-// way, so none lands on the next statement.
-// ponytail: a KILL that cannot connect (too many connections, the network
-// gone) kills nothing, Main held till the statement ends; PG's drops its
-// connection 5s on (§8.3)
-func (c *Conn) watch(ctx context.Context) (stop func()) {
+// running on in the server. A statement that runs on cancelGrace after the
+// cancel, its KILL not come through (too many connections, the network
+// gone), is cut off: run, the ctx the driver takes, is cancelled,
+// the driver closes the connection, and the next request finds it lost and
+// the Worker dials (§8.2). The stop it returns waits for a kill under way,
+// so none lands on the next statement.
+func (c *Conn) watch(ctx context.Context) (run context.Context, stop func()) {
 	if ctx.Done() == nil {
-		return func() {}
+		return ctx, func() {}
 	}
+	run, abort := context.WithCancel(context.WithoutCancel(ctx))
 	done, over := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(over)
 		select {
 		case <-ctx.Done():
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			grace := time.NewTimer(cancelGrace)
+			defer grace.Stop()
+			kctx, cancel := context.WithTimeout(context.Background(), cancelGrace)
 			defer cancel()
 			pool := sql.OpenDB(c.kill)
 			defer pool.Close()
-			_, _ = pool.ExecContext(ctx, "kill query "+c.id)
+			_, _ = pool.ExecContext(kctx, "kill query "+c.id)
+			select {
+			case <-done:
+			case <-grace.C:
+				abort()
+			}
 		case <-done:
 		}
 	}()
-	return func() { close(done); <-over }
+	return run, func() {
+		close(done)
+		<-over
+		abort()
+	}
 }
 
 // Engine is MySQL's way with the catalog, SQL and errors (§8.1).
