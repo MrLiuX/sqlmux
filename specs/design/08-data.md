@@ -92,6 +92,7 @@ PG 的几处细节（M1 核对时对照 lazysql、pgtui 确认，两者各有问
 - **列属性**：不用 `information_schema.columns`，它会漏掉没有权限的列，数组和枚举的类型也只显示成 `ARRAY`、`USER-DEFINED`。
 - **主键**：列按 `unnest(conkey) WITH ORDINALITY` 的顺序排列。
 - **可用于定位行的唯一索引**：`indisunique AND indisvalid AND indpred IS NULL AND 0 <> ALL(indkey)`；只看前 `indnkeyatts` 个键列（INCLUDE 列不算），并要求这些列都是 `attnotnull`。
+- **索引、键、函数、序列**（M14 F14.3）：引擎接口加 `Indexes` / `Keys`（按表）和 `Functions` / `Sequences` / `FunctionDef`（整库）五个方法，不支持的返回 nil；PG 走 `pg_indexes` / `pg_constraint` / `pg_proc` / `information_schema.sequences`，MySQL 走 `information_schema.statistics` / `key_column_usage` / `routines`，SQLite 走 `pragma index_list` / `index_info` / `foreign_key_list`。树上的画法见 §7.8「对象节点」。
 - **枚举值**：`array_agg(enumlabel ORDER BY enumsortorder)`，按列的 `atttypid` 关联。
 
 catalog 按连接缓存（每个 session 的每个 `Conn` 一份，M5 起；原来按 session）。query 执行 DDL 后（由 §9.3 的判定得知）或用户执行刷新命令时，重新加载。

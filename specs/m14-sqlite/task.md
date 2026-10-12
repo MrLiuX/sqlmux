@@ -74,6 +74,7 @@ M13 F13.6 审查时发现：MySQL 的 Query 用 WithoutCancel 发语句，取消
 - [ ] schema 下面 `Functions`（名加参数签名，`↵` 把定义开进当前连接的新 query：PG `pg_get_functiondef`，MySQL `SHOW CREATE FUNCTION`）和 `Sequences`（叶子，`↵` 无事）。只做函数，聚合、过程、触发器不做（决策者定）；MySQL 没有 Sequences，SQLite 没有 Functions、Sequences，这些节点不画。
 - [ ] catalog 查询：PG `pg_indexes` / `pg_constraint` / `pg_proc` / `information_schema.sequences`；MySQL `information_schema.statistics` / `key_column_usage` / `routines`；SQLite `pragma index_list` / `index_info` / `foreign_key_list`。按 §8.4 的方式惰性取、`R` 刷新。
 - [ ] seed：三种 seed 里加索引、外键、函数、序列（PG）；改完通知 reviewer 和 tester（AGENTS.md）。
+- [ ] 细节（worker 2026-10-12 开工时定，决策者同意，写在 §7.8「对象节点」和 §8.4）：分组默认收起、和列一起取；树过滤时不显示；Indexes 含主键那条（SQLite 的 autoindex 不含）；SQLite 外键没名字写 `FOREIGN KEY (a) → table (b)`；只做函数，PG 排除扩展自带的和系统 schema；引擎接口五个方法、不支持返回 nil。
 
 **验收**
 - [ ] 集成（PG、MySQL、SQLite）：每种对象的列表和定义。
