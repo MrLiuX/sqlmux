@@ -47,11 +47,7 @@ func (a *App) alterTarget() (c *Conn, t db.Table, col, index string, ok bool) {
 	if d == nil {
 		return nil, t, "", "", false
 	}
-	if gs, _, _, found := a.gridOf(a.focused()); found {
-		if shown := d.shownCols(); gs.col >= 0 && gs.col < len(shown) {
-			col = d.page.Cols[shown[gs.col]].Name
-		}
-	}
+	_, col, _ = a.cursorColumn()
 	return d.conn, d.table, col, "", true
 }
 
@@ -83,7 +79,7 @@ func alterSQL(c *Conn, kind alterKind, t db.Table, col, index string) (sql, why 
 	case renameTbl:
 		switch {
 		case d == sqlkit.MySQL:
-			return "rename table " + table + " to <new_name>;", ""
+			return "rename table " + table + " to " + q(t.Schema) + ".<new_name>;", "" // in its own database, not the query's
 		case d == sqlkit.SQLite && t.View():
 			return "", i18n.T("SQLite 不能给视图改名")
 		}
@@ -135,33 +131,33 @@ func (a *App) alter(kind alterKind) tea.Cmd {
 
 var placeholder = regexp.MustCompile(`<[a-z_]+>`)
 
-// selectPlaceholder puts the cursor of query t on its first placeholder, and,
-// in VISUAL, over it, so that c writes the name in its place; the modeless
-// editor has no selection to put, the cursor goes to its start.
+// selectPlaceholder puts the cursor of query t on its first placeholder, and
+// over it, so that what is typed, c in VISUAL, takes its place.
 func selectPlaceholder(t *queryTab) {
 	lines := t.ed.Lines()
 	for i, l := range lines {
 		if loc := placeholder.FindStringIndex(l); loc != nil {
 			t.ed.Goto(editor.Pos{Line: i, Col: loc[0]})
-			if !t.ed.Plain() {
-				t.ed.Feed("v")
-				for range utf8.RuneCountInString(l[loc[0]:loc[1]]) - 1 {
-					t.ed.Feed("l")
+			n := utf8.RuneCountInString(l[loc[0]:loc[1]])
+			if t.ed.Plain() {
+				for range n {
+					t.ed.Feed("<S-Right>")
 				}
+				return
+			}
+			t.ed.Feed("v")
+			for range n - 1 {
+				t.ed.Feed("l")
 			}
 			return
 		}
 	}
 }
 
-// alterItems are the table node's menu items for the templates; a view's is
-// only the rename (F14.4).
+// alterItems are the table node's menu items for the templates; those alterSQL
+// says no to are left out, so a view's is only the rename (F14.4).
 func (a *App) alterItems(n node) (items []menuItem) {
-	kinds := []alterKind{addColumn, addIndex, renameTbl, dropColumn, dropIndex}
-	if n.table.View() {
-		kinds = []alterKind{renameTbl}
-	}
-	for _, k := range kinds {
+	for _, k := range []alterKind{addColumn, addIndex, renameTbl, dropColumn, dropIndex} {
 		if _, why := alterSQL(n.conn, k, n.table, "", ""); why == "" {
 			items = append(items, menuItem{i18n.T(alterTitles[k]), func() tea.Cmd { return a.alter(k) }})
 		}

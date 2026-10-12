@@ -1,6 +1,7 @@
 package app
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -33,8 +34,8 @@ func TestAlterSQL(t *testing.T) {
 		{pg, renameTbl, table, "", "", `alter table "s"."t" rename to <new_name>;`},
 		{pg, renameTbl, view, "", "", `alter view "s"."v" rename to <new_name>;`},
 		{pg, renameTbl, matview, "", "", `alter materialized view "s"."m" rename to <new_name>;`},
-		{my, renameTbl, table, "", "", "rename table `s`.`t` to <new_name>;"},
-		{my, renameTbl, view, "", "", "rename table `s`.`v` to <new_name>;"},
+		{my, renameTbl, table, "", "", "rename table `s`.`t` to `s`.<new_name>;"},
+		{my, renameTbl, view, "", "", "rename table `s`.`v` to `s`.<new_name>;"},
 		{lite, renameTbl, table, "", "", `alter table "s"."t" rename to <new_name>;`},
 		{lite, renameTbl, view, "", "", ""},
 		{pg, dropColumn, table, "", "", `alter table "s"."t" drop column <column>;`},
@@ -87,6 +88,12 @@ func TestAlterTemplates(t *testing.T) {
 	if q = a.focusedQuery(); q == nil || text(q) != `create index <name> on "public"."t_order" (<column>);` {
 		t.Errorf("by the palette: %v", q)
 	}
+	a.win().focus(0)
+	treeTo(t, a, "t_order")
+	feed(t, a, "<C-p>改名表<CR>") // the palette says 改名表…, apart from a query's and a session's renames
+	if q = a.focusedQuery(); q == nil || text(q) != `alter table "public"."t_order" rename to <new_name>;` {
+		t.Errorf("rename by the palette: %v", q)
+	}
 	// from the table tab: the column under the cursor
 	order := tableNamed(a, "t_order")
 	a.openTable(a.sess.Conns[0], order)
@@ -105,7 +112,7 @@ func TestAlterTemplates(t *testing.T) {
 	}
 }
 
-// The modeless editor has no selection: the cursor goes to the placeholder (F14.4).
+// The modeless editor selects the placeholder too: what is typed takes its place (F14.4).
 func TestAlterTemplatePlain(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	a := sizedWith(160, 45, userConfig(t, "vim = false", ""))
@@ -113,8 +120,74 @@ func TestAlterTemplatePlain(t *testing.T) {
 	treeTo(t, a, "t_order")
 	a.run("table.alter.rename", 0)
 	q := a.focusedQuery()
-	if q == nil || text(q) != `alter table "public"."t_order" rename to <new_name>;` || q.ed.Cursor() != (editor.Pos{Line: 0, Col: 41}) {
-		t.Fatalf("%q at %v", text(q), q.ed.Cursor())
+	if q == nil || text(q) != `alter table "public"."t_order" rename to <new_name>;` {
+		t.Fatalf("%q", text(q))
+	}
+	if from, to, ok := q.ed.SelectionSpan(); !ok || from != (editor.Pos{Line: 0, Col: 41}) || to != (editor.Pos{Line: 0, Col: 51}) {
+		t.Fatalf("selection %v..%v %v", from, to, ok)
+	}
+	feed(t, a, "t_orders")
+	if want := `alter table "public"."t_order" rename to t_orders;`; text(q) != want {
+		t.Errorf("typing writes over it: %q", text(q))
+	}
+}
+
+// Each template selects its first placeholder, in the vim and in the editor
+// without modes, and the ones with a column or an index of the cursor's written
+// in have none; on an index node or a column node the name is written in; on a
+// node that is no table the template says to select one (F14.4).
+func TestAlterTemplateSelection(t *testing.T) {
+	for _, plain := range []bool{false, true} {
+		cfg := ""
+		if plain {
+			cfg = "vim = false"
+		}
+		t.Setenv("XDG_DATA_HOME", t.TempDir())
+		a := sizedWith(160, 45, userConfig(t, cfg, ""))
+		for _, kind := range []alterKind{addColumn, addIndex, renameTbl, dropColumn, dropIndex} {
+			a.win().focus(0)
+			treeTo(t, a, "t_order")
+			a.run("table.alter."+string(kind), 0)
+			q := a.focusedQuery()
+			sql := text(q)
+			loc := placeholder.FindStringIndex(sql)
+			if loc == nil {
+				t.Fatalf("plain %v %s: no placeholder in %q", plain, kind, sql)
+			}
+			from, to, ok := editor.Pos{}, editor.Pos{}, false
+			if plain {
+				from, to, ok = q.ed.SelectionSpan()
+			} else if from, to, ok = q.ed.Selection(); ok {
+				to.Col++ // the last character in
+			}
+			if !ok || from != (editor.Pos{Col: loc[0]}) || to != (editor.Pos{Col: loc[1]}) {
+				t.Errorf("plain %v %s: %q selects %v..%v %v, want %v", plain, kind, sql, from, to, ok, loc)
+			}
+		}
+	}
+	a := inObjects(t)
+	treeTo(t, a, "Indexes (2)")
+	feed(t, a, "l")
+	treeTo(t, a, "t_order_user (user_id, created_at)")
+	a.run("table.alter.drop_index", 0)
+	if q := a.focusedQuery(); q == nil || text(q) != `drop index "public"."t_order_user";` {
+		t.Errorf("on an index: %v", text(q))
+	}
+	a.win().focus(0)
+	ns, _ := a.treeNodes()
+	for _, kind := range []nodeKind{nodeConn, nodeSchema, nodeGroup} {
+		i := slices.IndexFunc(ns, func(n node) bool { return n.kind == kind })
+		a.treeGo(i)
+		a.toast = ""
+		if cmd := a.alter(addColumn); cmd == nil || !strings.Contains(a.toast, "先选一张表") {
+			t.Errorf("node kind %v: toast %q", kind, a.toast)
+		}
+	}
+	a.openTable(a.sess.Conns[0], tableNamed(a, "t_order")) // a table tab, the connection lost after
+	a.sess.Conns[0].State = connFailed
+	a.toast = ""
+	if a.alter(addColumn); !strings.Contains(a.toast, "连接还没连上") {
+		t.Errorf("not connected: toast %q", a.toast)
 	}
 }
 

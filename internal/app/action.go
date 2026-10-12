@@ -548,6 +548,9 @@ func init() {
 		"pane.resize.right": {Title: i18n.N("向右调整大小"), Run: do(func(a *App, args Args) { a.resizePane(Horiz, 1, args.Count) })},
 	}
 	for kind, title := range alterTitles { // the structure changes' templates (F14.4)
+		if kind == renameTbl { // apart from the renames of a query and a session in the palette; the menu says 改名…
+			title = i18n.N("改名表…")
+		}
 		actions["table.alter."+string(kind)] = Action{Title: title, Run: func(a *App, _ Args) tea.Cmd { return a.alter(kind) }}
 	}
 	actions["quicksql.edit"] = Action{Title: i18n.N("在 query 里编辑"), Local: true, Run: when(inPalette, func(a *App) tea.Cmd { return a.quickEdit() })}

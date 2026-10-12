@@ -575,3 +575,20 @@ func TestPasteGoesToPaletteOverWhere(t *testing.T) {
 		t.Errorf("the paste went under the palette: WHERE %q, palette %q", tab.where.Text, a.palette.input.Text)
 	}
 }
+
+// j and k stop at the ends of the menu, however many keys come (a table's has
+// eight items since the structure templates).
+func TestMenuMoveStopsAtTheEnds(t *testing.T) {
+	a := menuApp()
+	a.View()
+	rightClickNode(t, a, "t_order")
+	last := len(a.menu.items) - 1
+	feed(t, a, strings.Repeat("j", last+5))
+	if a.menu.sel != last {
+		t.Errorf("j past the end: %d, want %d", a.menu.sel, last)
+	}
+	feed(t, a, strings.Repeat("k", last+5))
+	if a.menu.sel != 0 {
+		t.Errorf("k past the start: %d", a.menu.sel)
+	}
+}
