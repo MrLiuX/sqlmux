@@ -702,3 +702,26 @@ func TestTriggerValuesAndShadows(t *testing.T) {
 		}
 	}
 }
+
+// A row is found by its key through an index, not a scan of the table: on a
+// TEXT key, an untyped unique key and the INTEGER PRIMARY KEY (F14.1).
+func TestEqUsesTheIndex(t *testing.T) {
+	c, _ := seeded(t)
+	for _, ddl := range []string{
+		"create table eq_text (k text primary key, v) without rowid",
+		"create table eq_free (id integer primary key, k unique, v)",
+		"create table eq_int (id integer primary key, v)",
+	} {
+		q(t, c, ddl)
+	}
+	for table, key := range map[string]string{"eq_text": "k", "eq_free": "k", "eq_int": "id"} {
+		r, err := c.Query(context.Background(), "explain query plan select * from "+table+" where "+Engine{}.Eq(key, "?1"), db.Val{S: "7"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan := strings.Join(cells(r), " ")
+		if !strings.Contains(plan, "SEARCH") || strings.Contains(plan, "SCAN") {
+			t.Errorf("%s: %s", table, plan)
+		}
+	}
+}

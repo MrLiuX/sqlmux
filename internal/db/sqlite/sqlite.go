@@ -83,7 +83,8 @@ func Connect(ctx context.Context, spec, _ string, readOnly bool) (*Conn, db.Info
 	if err != nil {
 		return nil, db.Info{}, err
 	}
-	if _, err := os.Stat(path); err != nil && !strings.Contains(dsn, "mode=rwc") {
+	u, _ := url.Parse(dsn) // DSN built it
+	if _, err := os.Stat(path); err != nil && u.Query().Get("mode") != "rwc" {
 		return nil, db.Info{}, err
 	}
 	pool, err := sql.Open("sqlite", dsn)
@@ -109,7 +110,7 @@ func Connect(ctx context.Context, spec, _ string, readOnly bool) (*Conn, db.Info
 	if err == nil {
 		_, err = c.Query(ctx, "select 1") // the file is opened and read here: one that is no database fails now
 	}
-	if err == nil && readOnly { // the file is opened and read here: one that is no database fails now
+	if err == nil && readOnly {
 		_, err = c.Query(ctx, "pragma query_only = on")
 	}
 	if err != nil {
@@ -336,9 +337,11 @@ func (Engine) Same(col, arg string) string {
 // Eq is whether the column of a row's identity holds arg, ?N, as the key it
 // was read as: = is no match of an integer to the text '1' where the column has
 // no declared type, so the integer the text is is one the column may hold, if
-// the text is the integer's own, not 'abc', which casts to 0 (F14.1).
+// the text is the integer's own, not 'abc', which casts to 0 (F14.1). The
+// second term is one expression of arg alone, NULL for any other text, so each
+// term searches an index; an AND on the column would make a scan.
 func (Engine) Eq(col, arg string) string {
-	return "(" + col + " = " + arg + " or " + col + " = cast(" + arg + " as integer) and cast(cast(" + arg + " as integer) as text) = " + arg + ")"
+	return "(" + col + " = " + arg + " or " + col + " = iif(cast(cast(" + arg + " as integer) as text) = " + arg + ", cast(" + arg + " as integer), null))"
 }
 
 // UseSchema does nothing: the file is the one schema, main.
