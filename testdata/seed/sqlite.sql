@@ -97,12 +97,13 @@ create table t_note (
 create table t_part (a text not null, b text not null);
 create unique index t_part_a on t_part (a) where b = 'x';
 insert into t_part values ('1', 'x'), ('1', 'y');
-create table t_bk (id blob(16) primary key, name text);
+create table t_bk (id blob(16) primary key not null, name text);
 insert into t_bk values (x'00112233445566778899aabbccddeeff', 'uuid');
 
--- a primary key in another order than the columns; a key with no declared type,
+-- a primary key in another order than the columns (NOT NULL: a rowid table's
+-- primary key that may hold NULLs is no row identity); a key with no declared type,
 -- which may hold an integer or a text; INT and DESC are no alias of the rowid
-create table t_ck (b text, a integer, primary key (a, b));
+create table t_ck (b text not null, a integer not null, primary key (a, b));
 create table t_free (k primary key, v text);
 insert into t_free values (1, 'one'), ('two', 'two'), (0, 'zero');
 create table t_free_wr (k primary key, v text) without rowid;
