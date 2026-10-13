@@ -67,7 +67,7 @@ check "逗号之后：只剩 msg" names_are "msg|"
 
 # ---- 不该弹的位置
 fresh; e2e_type "insert into t_log values ("; sleep 0.8
-check "values ( 之后不弹" none
+check "values ( 之后不弹列名：弹的是第一列 logged_at（时间）的值候选（M15 F15.10，原来不弹）" names_are "now()|current_timestamp|"
 fresh; e2e_type "insert into nosuch("; sleep 0.8
 check "catalog 里没有的表不弹" none
 fresh; e2e_type "insert into t_log select ("; sleep 0.8
@@ -75,7 +75,7 @@ check "insert … select ( 不弹" none
 fresh; e2e_type "select * from t_log where ("; sleep 0.8
 check "普通语句里的括号不弹" none
 fresh; e2e_type "insert into t_log(logged_at) values (1) , ("; sleep 0.8
-check "values 列表后的括号不弹（只认 insert into 表 后面的第一个括号）" none
+check "values 列表后的括号不弹列名（只认 insert into 表 后面的第一个括号）：弹的是新一行第一个值的候选（M15 F15.10，原来不弹）" names_are "now()|current_timestamp|"
 
 # ---- generated always 的列不出现（PG：identity always、stored 生成列；by default 的 identity 可以写）
 fresh; e2e_type "insert into t_gen("; sleep 1
