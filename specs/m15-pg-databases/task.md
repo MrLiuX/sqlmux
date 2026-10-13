@@ -1,6 +1,6 @@
 # M15 PG 数据库层级 · 任务清单
 
-- **状态**：**进行中**（第一批 F15.5–F15.9 passed 2026-10-13，0b4a268；第二批 F15.1 passed 2026-10-13，e056ebf，全量 197 个脚本 3848 条、红的只有 f11.2 的 4 条 brew 环境问题，reviewer 退回过一次（面板条目的 id 不带库、在别的库时开错同名表，e25ca90 修）；第三批 F15.3 / F15.10 / F15.11 passed 2026-10-14，1ae0694，全量 199 个脚本 3964 条、红的只有 f11.2 的 brew 和共用 PG 上残留的 sqlmux_e2e_* 库撑长了树；F15.2、F15.4 已提交（节点 4）待审；2026-10-11 用户规划时定方向，排在 M14 之后）。
+- **状态**：**进行中**（第一批 F15.5–F15.9 passed 2026-10-13，0b4a268；第二批 F15.1 passed 2026-10-13，e056ebf，全量 197 个脚本 3848 条、红的只有 f11.2 的 4 条 brew 环境问题，reviewer 退回过一次（面板条目的 id 不带库、在别的库时开错同名表，e25ca90 修）；第三批 F15.3 / F15.10 / F15.11 passed 2026-10-14，1ae0694，全量 199 个脚本 3964 条、红的只有 f11.2 的 brew 和共用 PG 上残留的 sqlmux_e2e_* 库撑长了树；第四批 F15.2 / F15.4 passed 2026-10-14，3e4318b，全量 204 个脚本 4060 条、红的只有 f11.2 的 4 条 brew；四个节点都过，等用户验收；2026-10-11 用户规划时定方向，排在 M14 之后）。
 - **目标**：PG 的树从 连接 → schema 改成 连接 → 数据库 → schema，同 DataGrip；SSH 隧道；query 的上下文提示与值补全（用户后续补充的编辑体验需求也归到这里）；状态栏的随机提示；用户 2026-10-13 验收 M14 时的五条（F15.5–F15.9：值编辑器宽度、ORDER 框宽度、flash 无匹配即退出、snippet 式占位符、`gj` 与搜索高亮）。
 - **范围**：tech-design §5（`Conn` 按数据库分 Meta / Main）、§7.8（数据库节点、特性提示）、§8.4（`Databases`、SSH 隧道）、§11（签名提示与值补全）、§14（connections.toml 的 ssh 字段、layout / state 的 `db`）。
 - **完成标准**：F15.1–F15.11 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m15`。
@@ -23,20 +23,20 @@
 - [x] 单测：展开才拨号（假引擎计 Connect 次数）；layout 里存了非默认库的 query 重启后回到那个库。
 - [x] e2e：树里展开第二个库、打开其中一张表、query 里 `select current_database()` 是它；query 的下拉里切库。
 
-## F15.2 SSH 隧道 · 状态：todo
+## F15.2 SSH 隧道 · 状态：passed（3e4318b；e2e 5259415）
 
 用户 2026-10-11 定方向；做法（worker 起草、决策者同意，§8.4「SSH 隧道」）：本机 `ssh -W` 子进程当 `net.Conn`，不用 `x/crypto/ssh`，不支持交互式口令（文档写「先 `ssh-add`」）。
 
 - **涉及**：`internal/db`（拨号）、`internal/db/postgres`、`internal/db/mysql`、`internal/config`（`ssh` 字段）、`internal/app`（表单）
 
 **开发**（§8.4、§14）
-- [ ] connections.toml `ssh = "user@host"`（端口、密钥、ProxyJump 走 `~/.ssh/config`）；每次拨号起 `ssh -W host:port -o BatchMode=yes -o ExitOnForwardFailure=yes user@host`，stdin / stdout 接 pgx 的 `DialFunc` 和 mysql 的 `RegisterDialContext`；连接关了进程退；ssh 失败时 stderr 原文进连接错误。命令行的临时连接不支持；SQLite 忽略。
-- [ ] 连接表单加 `ssh` 一项（高级里）。
+- [x] connections.toml `ssh = "user@host"`（端口、密钥、ProxyJump 走 `~/.ssh/config`）；每次拨号起 `ssh -W host:port -o BatchMode=yes -o ExitOnForwardFailure=yes user@host`，stdin / stdout 接 pgx 的 `DialFunc` 和 mysql 的 `RegisterDialContext`；连接关了进程退；ssh 失败时 stderr 原文进连接错误。命令行的临时连接不支持；SQLite 忽略。
+- [x] 连接表单加 `ssh` 一项（高级里）。
 
 **验收**
-- [ ] 单测：拨号函数用 PATH 里的假 `ssh` 脚本（回显、断开、退出码非零时的错误原文）。
-- [ ] 集成：假 ssh 脚本把 stdin / stdout 接到 docker 里的 PG 端口（`nc`），`SELECT 1` 通；连接 spec 往返；表单里能写能读。
-- [ ] 真实 ssh 只在用户机器上手动验收一条，CI 不测。
+- [x] 单测：拨号函数用 PATH 里的假 `ssh` 脚本（回显、断开、退出码非零时的错误原文）。
+- [x] 集成：假 ssh 脚本把 stdin / stdout 接到 docker 里的 PG 端口（`nc`），`SELECT 1` 通；连接 spec 往返；表单里能写能读。
+- [x] 真实 ssh 只在用户机器上手动验收一条，CI 不测。
 
 ## F15.3 签名提示 · 状态：passed（1ae0694；e2e 83bfd24）
 
@@ -53,18 +53,18 @@
 - [x] golden：一个 INSERT 的、一个放不下的。
 - [x] e2e：打 INSERT 到第二个值时提示行高亮第二列；`hints = false` 没有。
 
-## F15.4 状态栏的随机提示 · 状态：todo
+## F15.4 状态栏的随机提示 · 状态：passed（3e4318b；e2e 5259415）
 
 用户 2026-10-11 定；细节在 §7.8「特性提示」。
 
 - **涉及**：`internal/ui`（状态栏）、`internal/app`（清单、`tips.next` / `tips.show`）、`internal/i18n`、`internal/config`（`[ui] tips`）
 
 **开发**（§7.8、§14）
-- [ ] 清单在代码里（Action ID + 一句话 i18n，`{key}` 从 keymap 读，解绑的跳过）；启动随机、5 分钟一条（`tea.Tick`）、不重复到轮完、单击换下一条；`tips.next`、`tips.show`（列表浮层复用命令面板的列表，`↵` 执行）；`[ui] tips = false`。
+- [x] 清单在代码里（Action ID + 一句话 i18n，`{key}` 从 keymap 读，解绑的跳过）；启动随机、5 分钟一条（`tea.Tick`）、不重复到轮完、单击换下一条；`tips.next`、`tips.show`（列表浮层复用命令面板的列表，`↵` 执行）；`[ui] tips = false`。
 
 **验收**
-- [ ] 单测：轮转不重复、轮完重来、解绑跳过、改键跟着变；每条提示的 Action 存在（遍历清单对 Action 表）；i18n 中英文齐全（现有 i18n 测试扫）。
-- [ ] golden：状态栏带提示、窄到让位。
+- [x] 单测：轮转不重复、轮完重来、解绑跳过、改键跟着变；每条提示的 Action 存在（遍历清单对 Action 表）；i18n 中英文齐全（现有 i18n 测试扫）。
+- [x] golden：状态栏带提示、窄到让位。
 
 ## F15.10 值补全 · 状态：passed（1ae0694；e2e 83bfd24）
 
