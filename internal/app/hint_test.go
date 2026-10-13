@@ -115,6 +115,8 @@ func TestSignatureOtherPlaces(t *testing.T) {
 		{"select add_tax(1, 2, ", ""}, // an argument it has none for
 		{"insert into t_order (id, status) values (1, lower(", "id bigint, status order_status #1"},
 		{"insert into t_order (id, status) values (1, add_tax(1, ", "price numeric(10,2), rate numeric(4,2) #1"},
+		{"insert into t_order (id, status) values (array[1, 2], ", "id bigint, status order_status #1"}, // an array's commas are its own
+		{"select add_tax(array[1, 2], ", "price numeric(10,2), rate numeric(4,2) #1"},
 		{"select now(", ""},
 		{"update t_order set paid = true where ", ""},
 	} {

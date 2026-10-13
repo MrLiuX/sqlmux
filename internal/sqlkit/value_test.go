@@ -51,6 +51,12 @@ func TestValueContext(t *testing.T) {
 		{"insert into t (a, b) values (1, -- 2, 3,\n |", PG, []string{"insert a,b #1"}},
 		{"insert into t (a, b) values (1, /* |", PG, nil}, // in a comment
 		{"insert into t (a, b) values (1, f(2, 3), |", PG, []string{"insert a,b #2"}},
+		{"insert into t (a, b, c) values (array[1, 2], |", PG, []string{"insert a,b,c #1"}}, // the commas of an ARRAY[…] are its own
+		{"insert into t (a, b, c) values (1], 2, |", PG, []string{"insert a,b,c #2"}},       // a ] too many is none
+		{"insert into t (a, b, c) values (array[[1, 2], [3, 4]], 5, |", PG, []string{"insert a,b,c #2"}},
+		{"insert into t (a, b) values (array[1, |", PG, []string{"insert a,b #0"}},
+		{"select f(array[1, 2], |", PG, []string{"call .f #1"}},
+		{"insert into t as x (a, b) values (1, |", PG, []string{"insert a,b #1"}},
 		{"insert into t (a, b) values (1, f(2, |", PG, []string{"call .f #1", "insert a,b #1"}},              // the call first, what it is an argument of after
 		{"insert into t (a, b) values (1, g(f(|", PG, []string{"call .f #0", "call .g #0", "insert a,b #1"}}, // the innermost first
 		{"insert ignore into t (a) values (|", MySQL, []string{"insert a #0"}},

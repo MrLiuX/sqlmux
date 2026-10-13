@@ -52,9 +52,6 @@ func ValueContext(text string, pos int, d Dialect) Value {
 		n++
 	}
 	w := func(i int) string { return lower(text, ts, i) }
-	name := func(i int) bool {
-		return i >= 0 && i < len(ts) && (ts[i].Kind == Ident || ts[i].Kind == Quoted || ts[i].Kind == Keyword)
-	}
 	var open []int // the ( the cursor is in, outermost first
 	for i := range n {
 		switch w(i) {
@@ -66,9 +63,14 @@ func ValueContext(text string, pos int, d Dialect) Value {
 			}
 		}
 	}
-	commas := func(p int) (n2 int) { // the commas of the parentheses opening at p
-		for j := p + 1; j < n; j++ {
-			if depth[j] == depth[p]+1 && w(j) == "," {
+	commas := func(p int) (n2 int) { // the commas of the parentheses opening at p, not those of an ARRAY[…] in them
+		for j, in := p+1, 0; j < n; j++ {
+			switch {
+			case w(j) == "[":
+				in++
+			case w(j) == "]":
+				in = max(in-1, 0)
+			case in == 0 && depth[j] == depth[p]+1 && w(j) == ",":
 				n2++
 			}
 		}
@@ -97,10 +99,10 @@ func ValueContext(text string, pos int, d Dialect) Value {
 			continue
 		}
 		f, from := TableRef{Name: unquote(text[ts[p-1].Start:ts[p-1].End])}, p-1
-		if w(p-2) == "." && name(p-3) {
+		if w(p-2) == "." && isName(ts, p-3) {
 			f.Schema, from = unquote(text[ts[p-3].Start:ts[p-3].End]), p-3
 		}
-		if w(from-1) != "into" && w(from-1) != "table" { // INSERT INTO t (a, b): the columns, not a call
+		if w(from-1) != "into" { // INSERT INTO t (a, b): the columns, not a call
 			chain = append(chain, Value{Kind: ValueCall, Func: f, Index: commas(p)})
 		}
 	}
@@ -129,9 +131,6 @@ func ValueContext(text string, pos int, d Dialect) Value {
 // parentheses name, none when they are not there. INSERT … SELECT is not it.
 func insertValues(text string, ts []Token, depth []int) (at int, cols []string, ok bool) {
 	w := func(i int) string { return lower(text, ts, i) }
-	name := func(i int) bool {
-		return i < len(ts) && (ts[i].Kind == Ident || ts[i].Kind == Quoted || ts[i].Kind == Keyword)
-	}
 	if w(0) != "insert" && w(0) != "replace" {
 		return 0, nil, false
 	}
@@ -139,20 +138,14 @@ func insertValues(text string, ts []Token, depth []int) (at int, cols []string, 
 	if w(i) == "ignore" {
 		i++
 	}
-	if w(i) != "into" || !name(i+1) {
+	_, i, ok = intoAt(text, ts, i)
+	if !ok {
 		return 0, nil, false
-	}
-	i += 2
-	if w(i) == "." && name(i+1) {
-		i += 2
-	}
-	if w(i) == "as" && name(i+1) {
-		i += 2
 	}
 	if w(i) == "(" {
 		k := i
 		for i++; i < len(ts) && depth[i] > depth[k]; i++ {
-			if depth[i] == depth[k]+1 && name(i) {
+			if depth[i] == depth[k]+1 && isName(ts, i) {
 				cols = append(cols, unquote(text[ts[i].Start:ts[i].End]))
 			}
 		}
@@ -166,9 +159,7 @@ func insertValues(text string, ts []Token, depth []int) (at int, cols []string, 
 // typed.
 func setColumn(text string, ts []Token, depth []int, n int) (col, qual string, ok bool) {
 	w := func(i int) string { return lower(text, ts, i) }
-	name := func(i int) bool {
-		return i >= 0 && i < n && (ts[i].Kind == Ident || ts[i].Kind == Quoted || ts[i].Kind == Keyword)
-	}
+	name := func(i int) bool { return isName(ts[:n], i) }
 	if !isUpdate(text, ts, 0) {
 		return "", "", false
 	}

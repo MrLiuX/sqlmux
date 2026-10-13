@@ -52,7 +52,7 @@ func (c *Conn) fields(schema string, v sqlkit.Value) ui.Signature {
 		}
 		return s
 	case sqlkit.ValueUpdate, sqlkit.ValueWhere:
-		if col, ok := c.setColumn(schema, v); ok {
+		if col, ok := c.namedColumn(schema, v); ok {
 			return ui.Signature{Fields: []string{field(col.Name, []db.Column{col})}}
 		}
 	case sqlkit.ValueCall:
@@ -83,10 +83,10 @@ func (c *Conn) insertNames(schema string, v sqlkit.Value) (names []string, have 
 	return names, have
 }
 
-// setColumn is the column an UPDATE's SET or a condition's value is for: the
+// namedColumn is the column an UPDATE's SET or a condition's value is for: the
 // one among the tables the statement names that the qualifier, when there is
 // one, names.
-func (c *Conn) setColumn(schema string, v sqlkit.Value) (db.Column, bool) {
+func (c *Conn) namedColumn(schema string, v sqlkit.Value) (db.Column, bool) {
 	for _, r := range v.Tables {
 		if v.Qualifier != "" && !strings.EqualFold(v.Qualifier, cmp.Or(r.Alias, r.Name)) && !strings.EqualFold(v.Qualifier, r.Name) {
 			continue
@@ -114,7 +114,7 @@ func (c *Conn) valueColumn(schema string, v sqlkit.Value) (db.Column, bool) {
 			}
 		}
 	case sqlkit.ValueUpdate, sqlkit.ValueWhere:
-		return c.setColumn(schema, v)
+		return c.namedColumn(schema, v)
 	case sqlkit.ValueCall: // an argument has no column
 	}
 	return db.Column{}, false

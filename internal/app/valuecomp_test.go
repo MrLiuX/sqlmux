@@ -100,7 +100,7 @@ func TestValueCompletion(t *testing.T) {
 }
 
 // An UPDATE's SET and a condition offer the column's values too, the SET its
-// DEFAULT, the condition none; a time column its now.
+// DEFAULT, the condition neither that nor NULL; a time column its now.
 func TestValueCompletionPlaces(t *testing.T) {
 	a, c := hinted(t, "")
 	table, cols, _ := ordersTable(0)
@@ -112,9 +112,11 @@ func TestValueCompletionPlaces(t *testing.T) {
 		{"update t_order set id = ", "default"},
 		{"update t_order set status = ", "pending running done failed null"},
 		{"update t_order set status = (", "-"},
-		{"select * from t_order where created_at = ", "now() current_timestamp null"}, // no DEFAULT in a condition
-		{"select * from t_order o where o.status = ", "pending running done failed null"},
-		{"select * from t_order where status in ('done', ", "pending running done failed null"},
+		{"select * from t_order where created_at = ", "now() current_timestamp"}, // no DEFAULT nor NULL in a condition: = null is never true
+		{"select * from t_order o where o.status = ", "pending running done failed"},
+		{"select * from t_order where status in ('done', ", "pending running done failed"},
+		{"select * from t_order where status in (", "pending running done failed"},
+		{"select * from t_order where status <> ", "pending running done failed"},
 		{"insert into t_order (created_at) values (", "now() current_timestamp null default"},
 		{"insert into t_order (id) values (", "default"},
 		{"update t_order set status = 'done', note = 'x', ", "id status amount paid meta note created_at"}, // a column, which is not a value's place

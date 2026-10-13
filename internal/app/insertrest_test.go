@@ -97,8 +97,9 @@ func TestInsertSkeletonInTheInput(t *testing.T) {
 	}
 }
 
-// An UPDATE's SET lists the columns of its table and nothing else, typed or
-// not, with another table in a FROM or a CTE before it (F15.11).
+// An UPDATE's SET lists the columns of the tables it names before the SET and
+// nothing else, typed or not, a table in a FROM after it or a CTE before it
+// not among them (F15.11).
 func TestUpdateSetColumns(t *testing.T) {
 	a, _ := hinted(t, "")
 	conn := a.sess.Conns[0]
@@ -117,6 +118,11 @@ func TestUpdateSetColumns(t *testing.T) {
 		"insert into t_order (id) values (1) on conflict (id) do update set ": own,
 		"update t_order set status = ":                                        "pending running done failed null",
 		"update t_order set status = 'x' where ":                              "id status amount paid meta note created_at",
+		"update t_order join t_user on t_user.id = t_order.id set ":           own + " email", // MySQL's, both tables, in turn
+		"update t_order o, t_user u set u.email = 'x', ":                      own + " email",
+		"update t_order join t_user on 1 set st":                              "status",
+		"update t_order join (select * from t_user) u on 1 set ":              own,  // a derived table's FROM is another level
+		"update t_order join t_order x on 1 set id":                           "id", // a table once
 	} {
 		if got := after(a, conn, sql); got != want {
 			t.Errorf("%q: %q, want %q", sql, got, want)

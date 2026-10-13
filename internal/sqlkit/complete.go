@@ -40,6 +40,9 @@ type Completion struct {
 	// InSet: an assignment's column goes here, after the SET of an UPDATE or
 	// the comma of its list, typed or not (F15.11)
 	InSet bool
+	// Updated are the tables the UPDATE names before its SET: Tables less the
+	// FROM that PG writes after it (F15.11)
+	Updated []TableRef
 }
 
 // CompletionContext tells what the cursor at pos in text is at (§9.7):
@@ -151,10 +154,18 @@ func isUpdate(text string, ts []Token, i int) bool {
 
 // readNames reads the tables and the WITH's names of the statement ts.
 func (c *Completion) readNames(text string, ts []Token, depth []int) {
+	updating := false // between UPDATE and its SET
 	for i := 0; i < len(ts); i++ {
 		switch w := lower(text, ts, i); {
+		case w == "set":
+			updating = false
 		case w == "from" || w == "join" || isUpdate(text, ts, i) || w == "into":
+			updating = updating || isUpdate(text, ts, i)
+			n := len(c.Tables)
 			i = c.readTables(text, ts, depth, i+1) - 1
+			if updating {
+				c.Updated = append(c.Updated, c.Tables[n:]...)
+			}
 		case w == "with" && depth[i] == 0: // the names; the FROMs in them are read on
 			c.readCTEs(text, ts, i+1)
 		}
@@ -168,16 +179,10 @@ func (c *Completion) readNames(text string, ts []Token, depth []int) {
 // list is none.
 func (c *Completion) readInsert(text string, ts []Token, depth []int, before int) {
 	w := func(i int) string { return lower(text, ts, i) }
-	name := func(i int) bool {
-		return i < len(ts) && (ts[i].Kind == Ident || ts[i].Kind == Quoted || ts[i].Kind == Keyword)
-	} // comment, key: names too
 	for i := 1; i < before; i++ {
-		if w(i) != "into" || w(i-1) != "insert" && w(i-1) != "replace" && w(i-1) != "ignore" || !name(i+1) {
+		into, k, ok := intoAt(text, ts, i)
+		if !ok {
 			continue
-		}
-		into, k := TableRef{Name: unquote(text[ts[i+1].Start:ts[i+1].End])}, i+2
-		if w(k) == "." && name(k+1) {
-			into.Schema, into.Name, k = into.Name, unquote(text[ts[k+1].Start:ts[k+1].End]), k+2
 		}
 		if w(k) != "(" || k >= before || w(before-1) != "(" && w(before-1) != "," {
 			continue
@@ -187,7 +192,7 @@ func (c *Completion) readInsert(text string, ts []Token, depth []int, before int
 		}
 		var listed []string
 		for j := k + 1; j < len(ts) && depth[j] > depth[k]; j++ {
-			if depth[j] == depth[k]+1 && (w(j-1) == "(" || w(j-1) == ",") && (name(j) || ts[j].Kind == Keyword) && !(j == before && c.Prefix != "") {
+			if depth[j] == depth[k]+1 && (w(j-1) == "(" || w(j-1) == ",") && isName(ts, j) && !(j == before && c.Prefix != "") {
 				listed = append(listed, unquote(text[ts[j].Start:ts[j].End]))
 			}
 		}
@@ -196,21 +201,38 @@ func (c *Completion) readInsert(text string, ts []Token, depth []int, before int
 	}
 }
 
+// isName is whether ts[i] can be a name: a word, a quoted one, or a keyword
+// (comment, key: names too).
+func isName(ts []Token, i int) bool {
+	return i >= 0 && i < len(ts) && (ts[i].Kind == Ident || ts[i].Kind == Quoted || ts[i].Kind == Keyword)
+}
+
+// intoAt reads "INTO [schema.]name [AS alias]" with INTO at ts[i], after the
+// INSERT, REPLACE or IGNORE before it: the table, and where the token after
+// it is.
+func intoAt(text string, ts []Token, i int) (into TableRef, next int, ok bool) {
+	w := func(i int) string { return lower(text, ts, i) }
+	if w(i) != "into" || w(i-1) != "insert" && w(i-1) != "replace" && w(i-1) != "ignore" || !isName(ts, i+1) {
+		return TableRef{}, 0, false
+	}
+	into, next = TableRef{Name: unquote(text[ts[i+1].Start:ts[i+1].End])}, i+2
+	if w(next) == "." && isName(ts, next+1) {
+		into.Schema, into.Name, next = into.Name, unquote(text[ts[next+1].Start:ts[next+1].End]), next+2
+	}
+	if w(next) == "as" && isName(ts, next+1) {
+		into.Alias, next = unquote(text[ts[next+1].Start:ts[next+1].End]), next+2
+	}
+	return into, next, true
+}
+
 // readInsertRest makes c a CompInsertRest when the cursor, with ts[:before]
 // ahead of it and nothing after it, is right after "INSERT | REPLACE [IGNORE]
 // INTO [schema.]name": a ( or VALUES is what comes next.
 func (c *Completion) readInsertRest(text string, ts []Token, before int) {
-	w := func(i int) string { return lower(text, ts, i) }
-	name := func(i int) bool {
-		return i < len(ts) && (ts[i].Kind == Ident || ts[i].Kind == Quoted || ts[i].Kind == Keyword)
-	}
 	for i := 1; i < before; i++ {
-		if w(i) != "into" || w(i-1) != "insert" && w(i-1) != "replace" && w(i-1) != "ignore" || !name(i+1) {
+		into, k, ok := intoAt(text, ts, i)
+		if !ok {
 			continue
-		}
-		into, k := TableRef{Name: unquote(text[ts[i+1].Start:ts[i+1].End])}, i+2
-		if w(k) == "." && name(k+1) {
-			into.Schema, into.Name, k = into.Name, unquote(text[ts[k+1].Start:ts[k+1].End]), k+2
 		}
 		if k == before && before == len(ts) {
 			c.Kind, c.Into = CompInsertRest, into
