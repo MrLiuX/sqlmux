@@ -272,7 +272,7 @@ func (s *Session) restoreTab(lt config.LayoutTab, used map[string]bool) (tb Tab,
 		}
 		d.transpose = lt.Transpose
 		d.colOrder = slices.Clone(lt.OrderCols)
-		return Tab{Name: lt.Table, Data: d}, ""
+		return Tab{Name: c.tabName(d.table), Data: d}, ""
 	}
 	cname := lt.QueryName()
 	if cname == "" || used[strings.ToLower(cname)] || config.CheckQueryName(cname) != nil { // none, taken or not a file's: the next free one, with its own file
@@ -354,10 +354,11 @@ func (a *App) resolvePending(c *Conn) []tea.Cmd {
 				d.table.Schema = home(d.table)
 				if j := slices.IndexFunc(c.Tables, func(t db.Table) bool { return idOf(t) == idOf(d.table) }); j >= 0 {
 					d.table = c.Tables[j]
+					p.Tabs[i].Name = c.tabName(d.table) // restored with no schema, it had none in its name
 					cmds = append(cmds, a.fetch(d, true))
 					continue
 				}
-				cmds = append(cmds, a.showToast(i18n.T("%s 里没有表 %s，跳过", c.Spec.Name, d.table.Schema+"."+d.table.Name)))
+				cmds = append(cmds, a.showToast(i18n.T("%s 里没有表 %s，跳过", c.label(), d.table.Schema+"."+d.table.Name)))
 				dropTab(p, i)
 			}
 		}

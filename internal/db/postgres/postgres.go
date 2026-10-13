@@ -71,15 +71,18 @@ func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, d
 }
 
 // WithDatabase is dsn naming database name instead of the one it names: a
-// URL's path, or, for the keywords form, a dbname the later of the two wins
-// with (M15 F15.1).
+// URL's path, its query's dbname and database dropped, or, for the keywords
+// form, a dbname the later of the two wins with (M15 F15.1).
 func WithDatabase(dsn, name string) (string, error) {
 	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
 		u, err := url.Parse(dsn)
 		if err != nil {
 			return "", err
 		}
-		u.Path, u.RawPath = "/"+name, ""
+		q := u.Query()
+		q.Del("dbname") // the query's are read after the path, and win
+		q.Del("database")
+		u.Path, u.RawQuery = "/"+name, q.Encode()
 		return u.String(), nil
 	}
 	return dsn + " dbname='" + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(name) + "'", nil

@@ -1,7 +1,10 @@
 package app
 
 import (
+	"cmp"
 	"context"
+	"errors"
+	"fmt"
 	"net/url"
 	"slices"
 	"strings"
@@ -355,5 +358,251 @@ func TestRevealTabInDatabase(t *testing.T) {
 		if n, ok := a.treeNode(); !ok || n.kind != nodeTable || n.conn != conn || n.table.Name != tb.Name {
 			t.Errorf("on %s the cursor is on %+v\n%s", conn.label(), n.TreeNode, treeTexts(a))
 		}
+	}
+}
+
+// The palette lists the tables of every database connected, the DSN's and the
+// others, each entry saying whose it is; its id is the table's key, and picking
+// it opens the table in that database, not the one of the same name in the
+// connection's own (F15.1).
+func TestPaletteTablesOfDatabases(t *testing.T) {
+	a, c, _ := withDatabases(t)
+	treeTo(t, a, "alpha")
+	_, cmd := a.Update(teaKey("l"))
+	answered(a, cmd)
+	alpha := c.inDB("alpha")
+	c.Tables = append(c.Tables, db.Table{Schema: "public", Name: "t_x"})
+	for _, cur := range []*Conn{c, alpha} {
+		a.palette = &palette{conn: cur}
+		var ids, notes []string
+		first := true
+		for _, it := range a.paletteItems() {
+			if it.kind == itemTable && it.name == "t_x" {
+				ids, notes = append(ids, it.id), append(notes, it.where)
+			}
+			if it.kind == itemTable && first { // the current connection's, first
+				first = false
+				if want := cur.label() + "."; !strings.HasPrefix(it.where, want) {
+					t.Errorf("first entry %q of %s", it.where, cur.label())
+				}
+			}
+		}
+		if cur == c && (!slices.Equal(ids, []string{"doraemon/public.t_x", "doraemon/alpha/public.t_x"}) || !slices.Equal(notes, []string{"doraemon.public", "doraemon/alpha.public"})) {
+			t.Errorf("entries %q %q", ids, notes)
+		}
+	}
+	data := a.win().Root.A.Pane
+	data.Tabs, data.Cur = nil, 0
+	for _, id := range []string{"doraemon/alpha/public.t_x", "doraemon/public.t_x"} {
+		got, tb, ok := a.tableByID(id)
+		if !ok || tb.Name != "t_x" || (got == alpha) != strings.Contains(id, "alpha") {
+			t.Errorf("%s is %v %v", id, got.label(), ok)
+		}
+	}
+	a.palette = &palette{conn: c}
+	for _, it := range a.paletteItems() {
+		if it.id == "doraemon/alpha/public.t_x" {
+			a.paletteDo(it)
+		}
+	}
+	if d := dataOf(a.openTarget()); d == nil || d.conn != alpha {
+		t.Errorf("opened %+v", d)
+	}
+}
+
+// withAlpha is a with database alpha connected from the tree, and alpha.
+func withAlpha(t *testing.T) (*App, *Conn, *Conn) {
+	t.Helper()
+	a, c, _ := withDatabases(t)
+	treeTo(t, a, "alpha")
+	_, cmd := a.Update(teaKey("l"))
+	answered(a, cmd)
+	return a, c, c.inDB("alpha")
+}
+
+// Two databases have a schema public and a table t_x each: the tree's nodes for
+// them are two, what one has open or is under the cursor is not the other's
+// (F15.1).
+func TestDatabaseNodesAreApart(t *testing.T) {
+	a, c, alpha := withAlpha(t)
+	c.Tables = append(c.Tables, db.Table{Schema: "public", Name: "t_x"})
+	ids := map[string]bool{}
+	ns, _ := a.treeNodes()
+	for _, n := range ns {
+		if ids[n.id] {
+			t.Errorf("two nodes of id %s", n.id)
+		}
+		ids[n.id] = true
+	}
+	a.sess.open[schemaNode(c, "public")] = false
+	if got := treeTexts(a); !strings.Contains(got, "  ▾ alpha\n    ▾ public\n") || strings.Contains(got, "▾ Tables (15)") {
+		t.Errorf("the DSN's public closed, alpha's with it:\n%s", got)
+	}
+	a.sess.open[schemaNode(c, "public")] = true
+	a.sess.open[schemaNode(alpha, "public")] = false
+	if got := treeTexts(a); !strings.Contains(got, "▾ Tables (15)") || strings.Contains(got, "▸ t_x\n") && !strings.Contains(got, "  ▾ alpha\n    ▸ public") {
+		t.Errorf("alpha's public closed, the DSN's with it:\n%s", got)
+	}
+}
+
+// A database that a query went to, dialed from its dropdown, is not open in the
+// tree for that: only the DSN's is by itself (F15.1).
+func TestDatabaseNodeStaysClosed(t *testing.T) {
+	a, c, _ := withDatabases(t)
+	a.win().focus(2)
+	q := queryOf(a.focused())
+	a.run("query.schema", 0)
+	feed(t, a, "alpha")
+	_, cmd := a.Update(teaKey("<CR>"))
+	answered(a, cmd)
+	if q.conn != c.inDB("alpha") || q.conn.State != connReady {
+		t.Fatalf("on %s (%v)", q.conn.label(), q.conn.State)
+	}
+	if got := treeTexts(a); !strings.Contains(got, "  ▸ alpha\n") || !strings.Contains(got, "  ▾ base\n") {
+		t.Errorf("tree:\n%s", got)
+	}
+}
+
+// The sidebar counts the tables of the databases opened too (F15.1).
+func TestDatabaseTablesCounted(t *testing.T) {
+	a, c, alpha := withAlpha(t)
+	want := len(c.Tables) + len(alpha.Tables)
+	if len(alpha.Tables) == 0 || !strings.Contains(a.render().String(), fmt.Sprintf("%d tables", want)) {
+		t.Errorf("%d tables expected on\n%s", want, strings.Join(strings.Split(a.render().String(), "\n")[:3], "\n"))
+	}
+}
+
+// A database in a title or a question: the tab of its table, the question that
+// drops it, the toast that says it is, say schema.table with the database before
+// them; the DSN's say what they said (F15.1).
+func TestDatabaseInTitles(t *testing.T) {
+	a, c, alpha := withAlpha(t)
+	x := alpha.Tables[0]
+	a.openTable(alpha, x)
+	a.openTable(c, c.Tables[1])
+	var names []string
+	for _, tb := range a.win().Root.A.Pane.Tabs {
+		names = append(names, tb.Name)
+	}
+	if !slices.Contains(names, "alpha.public.t_x") || !slices.Contains(names, c.Tables[1].Name) {
+		t.Errorf("tabs %q", names)
+	}
+	treeTo(t, a, "t_x")
+	a.dropTable()
+	if a.confirm == nil || !strings.Contains(a.confirm.text, "删除表 alpha.public.t_x，") {
+		t.Fatalf("question %+v", a.confirm)
+	}
+	a.confirm = nil
+	a.Update(dropped{alpha, x, nil})
+	if a.toast != "已删除 alpha.public.t_x" {
+		t.Errorf("toast %q", a.toast)
+	}
+	a.Update(dropped{c, c.Tables[1], nil})
+	if a.toast != "已删除 "+c.Tables[1].Schema+"."+c.Tables[1].Name {
+		t.Errorf("toast %q", a.toast)
+	}
+}
+
+// What names a database that is not the DSN's says which: a transaction left
+// open at quit, a dial or a catalog that failed, a connection lost, a table a
+// layout's tab has that the database no longer has, a tab whose connection is
+// not to be had, a reference to a table that is not there (F15.1).
+func TestDatabaseLabeled(t *testing.T) {
+	a, c, alpha := withAlpha(t)
+	boom := errors.New("boom")
+	alpha.tx, c.tx = 'T', 'T' // the connection and its database both: each is asked of
+	a.quit()
+	if a.confirm == nil || !strings.Contains(a.confirm.text, "doraemon、doraemon/alpha 有未提交的事务") {
+		t.Errorf("question %+v", a.confirm)
+	}
+	a.confirm, alpha.tx, c.tx = nil, 'I', 'I'
+	for name, msg := range map[string]tea.Msg{
+		"dial":    connected{conn: alpha, err: boom},
+		"catalog": catalogMsg{conn: alpha, err: boom},
+		"event":   connEvent{conn: alpha, Event: db.Event{Err: boom}},
+	} {
+		a.toast = ""
+		a.Update(msg)
+		if a.toast != "doraemon/alpha：boom" {
+			t.Errorf("%s: toast %q", name, a.toast)
+		}
+	}
+	x := alpha.Tables[0]
+	sent := newDataTab(alpha, x)
+	sent.out = 1
+	for name, msg := range map[string]tea.Msg{
+		"objects": objectsMsg{conn: alpha, table: x, err: boom},
+		"func":    funcMsg{conn: alpha, err: boom},
+		"commit":  saveMsg{tab: sent, err: db.ErrCommitUnknown, failed: -1},
+	} {
+		a.toast = ""
+		a.Update(msg)
+		if want := map[string]string{"commit": "doraemon/alpha：连接断开，提交结果未知：已刷新，请核对"}[name]; a.toast != cmp.Or(want, "doraemon/alpha：boom") {
+			t.Errorf("%s: toast %q", name, a.toast)
+		}
+	}
+	a.toast = ""
+	a.openRef(alpha, &db.Ref{Schema: "public", Table: "nope"})
+	if a.toast != "doraemon/alpha 里没有表 public.nope" {
+		t.Errorf("reference: toast %q", a.toast)
+	}
+	data := a.win().Root.A.Pane
+	gone := newDataTab(alpha, db.Table{Schema: "public", Name: "gone"})
+	gone.pending = true
+	data.Tabs, data.Cur = []Tab{{Name: "gone", Data: gone}}, 0
+	a.Update(catalogMsg{conn: alpha, schemas: []string{"public"}, current: "public"})
+	if a.toast != "doraemon/alpha 里没有表 public.gone，跳过" {
+		t.Errorf("layout: toast %q", a.toast)
+	}
+	stuck := newDataTab(alpha, db.Table{Schema: "public", Name: "stuck"})
+	stuck.pending, alpha.State, alpha.err = true, connFailed, boom
+	data.Tabs, data.Cur = []Tab{{Name: "stuck", Data: stuck}}, 0
+	a.win().focus(data.ID)
+	a.toast = "" // it would name the connection too
+	if screen := a.render().String(); !strings.Contains(screen, "doraemon/alpha") {
+		t.Errorf("error page:\n%s", screen)
+	}
+}
+
+// The connection dropdown marks the connection a query is on, whichever of its
+// databases: ↵ on it does nothing, the query stays where it is (F15.1).
+func TestQueryConnDropOnItsConnection(t *testing.T) {
+	a, c, alpha := withAlpha(t)
+	a.win().focus(2)
+	q := queryOf(a.focused())
+	q.conn = alpha
+	a.run("query.conn", 0)
+	if items, current := a.dropItems(); current != 0 || items[0] != c.Spec.Name {
+		t.Fatalf("current %d of %v", current, items)
+	}
+	feed(t, a, "<CR>")
+	if q.conn != alpha || q.want != nil {
+		t.Errorf("on %s, waiting for %v", q.conn.label(), q.want)
+	}
+}
+
+// A table tab restored in a database is named db.schema.table, a layout that
+// leaves the schema out of it too once the catalog says it (F15.1).
+func TestRestoredTabNamesTheDatabase(t *testing.T) {
+	a, _, alpha := withAlpha(t)
+	data := a.win().Root.A.Pane
+	data.Tabs, data.Cur = nil, 0
+	for _, lt := range []config.LayoutTab{
+		{Kind: "table", Connection: "doraemon", DB: "alpha", Schema: "public", Table: "t_x"},
+		{Kind: "table", Connection: "doraemon", DB: "alpha", Table: "t_y"},
+	} {
+		tb, warn := a.sess.restoreTab(lt, map[string]bool{})
+		if warn != "" {
+			t.Fatal(warn)
+		}
+		data.Tabs = append(data.Tabs, tb)
+	}
+	if data.Tabs[0].Name != "alpha.public.t_x" {
+		t.Errorf("restored as %q", data.Tabs[0].Name)
+	}
+	alpha.Tables = append(alpha.Tables, db.Table{Schema: "public", Name: "t_y"})
+	a.Update(catalogMsg{conn: alpha, schemas: []string{"public"}, current: "public", tables: alpha.Tables})
+	if got := data.Tabs[0].Name + " " + data.Tabs[1].Name; got != "alpha.public.t_x alpha.public.t_y" {
+		t.Errorf("tabs %q", got)
 	}
 }

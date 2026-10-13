@@ -276,6 +276,9 @@ func (a *App) dropPick(i int) tea.Cmd {
 		}
 		return a.pickConn(d.query, d.query.conn.root().inDB(item))
 	case dropQueryConn:
+		if a.sess.Conns[at] == d.query.conn.root() { // the one it is on, whichever of its databases
+			return nil
+		}
 		return a.pickConn(d.query, a.sess.Conns[at])
 	case dropTx:
 		return a.setTxMode(d.query.conn, at == 1)

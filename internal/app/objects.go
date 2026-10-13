@@ -53,7 +53,7 @@ func (a *App) gotObjects(m objectsMsg) tea.Cmd {
 		return nil
 	}
 	if m.err != nil {
-		return a.showToast(i18n.T("%s：%s", m.conn.Spec.Name, m.err))
+		return a.showToast(i18n.T("%s：%s", m.conn.label(), m.err))
 	}
 	m.conn.idx[idOf(m.table)], m.conn.keys[idOf(m.table)] = m.idx, m.keys
 	a.clampTree()
@@ -99,7 +99,7 @@ func (a *App) openIndexDDL(c *Conn, t db.Table, ix db.Index) {
 func (a *App) openRef(c *Conn, ref *db.Ref) tea.Cmd {
 	t, ok := c.table(ref.Schema, ref.Table)
 	if !ok {
-		return a.showToast(i18n.T("%s 里没有表 %s", c.Spec.Name, ref.Schema+"."+ref.Table))
+		return a.showToast(i18n.T("%s 里没有表 %s", c.label(), ref.Schema+"."+ref.Table))
 	}
 	cmd := a.openTable(c, t)
 	a.revealTab(a.focused())
@@ -129,7 +129,7 @@ func (a *App) gotFunction(m funcMsg) tea.Cmd {
 		return nil
 	}
 	if m.err != nil {
-		return a.showToast(i18n.T("%s：%s", m.conn.Spec.Name, m.err))
+		return a.showToast(i18n.T("%s：%s", m.conn.label(), m.err))
 	}
 	return a.queryWith(m.conn, m.fn.Schema, m.text, false)
 }

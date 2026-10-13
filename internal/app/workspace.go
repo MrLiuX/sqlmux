@@ -279,6 +279,38 @@ func (c *Conn) root() *Conn {
 	return c
 }
 
+// tableKey is table t of c as the palette's ids and state.json's table keys
+// have it, <connection>/[<database>/]<schema>.<table>: one place for both
+// (F15.1).
+func (c *Conn) tableKey(t db.Table) string { return c.keyPrefix() + t.Schema + "." + t.Name }
+
+// keyPrefix is what tableKey starts with.
+func (c *Conn) keyPrefix() string {
+	if c.Spec.Database == "" {
+		return c.Spec.Name + "/"
+	}
+	return c.Spec.Name + "/" + c.Spec.Database + "/"
+}
+
+// qualified is table t of c as a title or a question names it: schema.table,
+// the database before them when it is not the DSN's, or it would read as the
+// DSN's table of the name.
+func (c *Conn) qualified(t db.Table) string {
+	if c.Spec.Database == "" {
+		return t.Schema + "." + t.Name
+	}
+	return c.Spec.Database + "." + t.Schema + "." + t.Name
+}
+
+// tabName is the name of table t's tab: the table's, the database's too when
+// it is not the DSN's.
+func (c *Conn) tabName(t db.Table) string {
+	if c.Spec.Database == "" {
+		return t.Name
+	}
+	return c.qualified(t)
+}
+
 // label is c as a toast or a question names it: the connection, and the
 // database when it is not the DSN's.
 func (c *Conn) label() string {
@@ -791,7 +823,7 @@ func (a *App) openTableAs(p *Pane, c *Conn, t db.Table, r *request, turned bool)
 	// ponytail: named by the table alone; two connections' t_order tabs read
 	// the same, the status bar telling the focused one's (§7.8). Add the
 	// connection, t_order [seed], if that confuses.
-	tab := Tab{Name: t.Name, Data: newDataTab(c, t)}
+	tab := Tab{Name: c.tabName(t), Data: newDataTab(c, t)}
 	tab.Data.transpose = turned
 	if r == nil {
 		first := tab.Data.request

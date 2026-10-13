@@ -177,9 +177,9 @@ func (a *App) dropTable() tea.Cmd {
 		return a.showToast(i18n.T("事务中不能删表：先提交或回滚"))
 	}
 	sql := dropSQL(c.eng, t)
-	title := i18n.T("删除表 %s，不能撤销：", t.Schema+"."+t.Name)
+	title := i18n.T("删除表 %s，不能撤销：", c.qualified(t))
 	if t.View() {
-		title = i18n.T("删除视图 %s，不能撤销：", t.Schema+"."+t.Name)
+		title = i18n.T("删除视图 %s，不能撤销：", c.qualified(t))
 	}
 	a.confirm = &confirmBox{text: title + "\n  " + sql, yes: i18n.T("删除"), danger: true, then: func() tea.Cmd {
 		main := c.Main
@@ -216,7 +216,7 @@ func (a *App) gotDropped(m dropped) tea.Cmd {
 		}
 		return tea.Batch(a.showToast(msg), a.loadCatalog(c))
 	}
-	cmds := []tea.Cmd{a.showToast(i18n.T("已删除 %s", m.table.Schema+"."+m.table.Name))}
+	cmds := []tea.Cmd{a.showToast(i18n.T("已删除 %s", c.qualified(m.table)))}
 	for _, s := range a.sessions { // a session has its own Conn of a connection's name
 		for _, o := range s.conns() {
 			if o.Spec.Name != c.Spec.Name || o.Spec.Database != c.Spec.Database {

@@ -206,13 +206,13 @@ id = 2
 // queries that run on it with it; another's stay (F8.16).
 func TestStateRenameConnection(t *testing.T) {
 	s := &State{
-		Recent:  []Recent{{"table", "play/public.t"}, {"table", "playground/public.t"}, {"command", "play/x"}},
+		Recent:  []Recent{{"table", "play/public.t"}, {"table", "playground/public.t"}, {"command", "play/x"}, {"table", "play/alpha/public.t"}},
 		Tables:  map[string]*TableState{"play/public.t": {}, "playground/public.t": {}, "play/alpha/public.t": {}},
 		SQL:     map[string][]string{"play": {"select 1"}, "other": {"select 2"}},
 		Queries: map[string]QueryState{"query_1": {Conn: "play"}, "query_2": {Conn: "other"}},
 	}
 	s.RenameConnection("play", "dev")
-	if s.Recent[0].ID != "dev/public.t" || s.Recent[1].ID != "playground/public.t" || s.Recent[2].ID != "play/x" {
+	if s.Recent[0].ID != "dev/public.t" || s.Recent[1].ID != "playground/public.t" || s.Recent[2].ID != "play/x" || s.Recent[3].ID != "dev/alpha/public.t" { // a database's table with its connection (F15.1)
 		t.Errorf("recent %+v", s.Recent)
 	}
 	if s.Tables["dev/alpha/public.t"] == nil || s.Tables["play/alpha/public.t"] != nil { // a database's table with its connection (F15.1)
