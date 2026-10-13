@@ -13,7 +13,7 @@
     - 浮层作用域里的，比如面板自己的 `palette.up` / `palette.down` / `palette.run` / `palette.close`，以及以后的 `where.*`、`cols.*`；
     - `cell`、`input` 作用域里的，比如 `cell.accept`「确定」、`cell.up`「加一」。
   - 判断方法是「只在这些作用域里有绑定」。
-- **范围与前缀**：按 PRD K-02，范围标签为 所有 / 会话 / 窗口·Pane / 窗口 / Tab / 表 / 命令 / SQL，M0 先有 所有、窗口·Pane、表、命令，M5 F5.1 加上会话，F5.19 加上窗口和 Tab。`Tab` / `S-Tab` 切换范围标签；输入前缀直接限定范围：`>` 命令、`@` 表、`%` 窗口·Pane、`&` 窗口、`#` Tab、`$` 会话、`;` SQL。
+- **范围与前缀**：按 PRD K-02，范围标签为 所有 / 会话 / 窗口·Pane / 窗口 / Tab / 表 / 命令 / SQL，M0 先有 所有、窗口·Pane、表、命令，M5 F5.1 加上会话，F5.19 加上窗口和 Tab。`Tab` / `S-Tab` 切换范围标签；输入前缀直接限定范围：`>` 命令、`@` 表、`%` 窗口·Pane、`&` 窗口、`#` Tab、`$` 会话、`;` SQL；`?` 特性提示（M15 F15.4，`tips.show` 预填它，不是范围标签，`Tab` / `S-Tab` 跳过，`↵` 执行那条提示的 Action、不记进最近）。
   - **窗口 `&`** 和 **Tab `#`**（M5 F5.19，用户要照 nvim 的习惯用 `SPC j` 切 window、`SPC k` 在最近用过的 tab 之间切）：「窗口」只列当前 session 的 window，按编号排；「Tab」列当前 session 所有 window 里打开着的表、query、结果 tab，按最近聚焦的时间从新到旧，当前 tab 排最后，这样打开就 `↵` 等于回到上一个 tab（同 telescope `buffers` 的 `sort_mru` + `ignore_current_buffer`）。tab 的「最近聚焦」是它最后一次成为焦点 pane 的当前 tab 的时刻，记在 session 上、不持久化。`palette.window`「命令面板：窗口」、`palette.tab`「命令面板：Tab」分别预填 `&`、`#`，同 `palette.command`，都不带默认键。「窗口·Pane」照旧，三者混在一起、按编号。前缀不用 `^`、`!`：fzf 扩展语法里它们是前缀锚点和排除。
   - 范围只由输入里的前缀决定，不另存状态：`Tab` / `S-Tab` 就是改写前缀（「命令」→ `>`、「表」→ `@`、「窗口·Pane」→ `%`，「所有」去掉前缀），输入的其余内容保留；范围标签按当前前缀高亮。`palette.command` 相当于输入了 `>`，也是同一套机制；F5.8 起 `:` 默认绑 `palette.open`，打开「所有」。
 - **每一行**（K-03）：图标、名称、所在位置（`dim` 色）、右侧的键位或 ON / OFF、类型标签（命令 / 表 / Pane / 窗口）。图标都放在最左列对齐。
