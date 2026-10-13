@@ -237,10 +237,25 @@ func init() {
 		// Keys inside the dropdowns and the COLS list (§6.8): untitled, like the palette's.
 		"grid.ddl.column": {Title: i18n.N("列的定义"), Run: func(a *App, _ Args) tea.Cmd { return a.openDDL(true) }},
 		"grid.value":      {Title: i18n.N("在值编辑器中打开"), Run: func(a *App, _ Args) tea.Cmd { return a.valueOpen() }},
-		"value.leave":     {Title: i18n.N("值编辑器：退出"), Local: true, Run: when(inValue, func(a *App) tea.Cmd { return a.valueKey(keymap.Esc) })},
-		"value.save":      {Title: i18n.N("写回并关闭"), Local: true, Run: when(inValue, func(a *App) tea.Cmd { return a.valueSave() })},
-		"grid.view.json":  {Title: i18n.N("以 JSON 查看"), Run: func(a *App, _ Args) tea.Cmd { return a.viewJSON() }},
-		"json.leave": {Title: i18n.N("回到表格"), Local: true, Run: func(a *App, args Args) tea.Cmd { // "json.leave q" is q's: it leaves with the matches of a search lit too
+		"value.leave": {Title: i18n.N("值编辑器：退出"), Local: true, Run: func(a *App, args Args) tea.Cmd { // "value.leave close" is the button's: it closes with the matches of a search lit too
+			switch {
+			case !a.valueActive():
+			case args.Arg == "close":
+				return a.valueClose(false)
+			default:
+				return a.valueKey(keymap.Esc)
+			}
+			return nil
+		}},
+		"value.save":     {Title: i18n.N("写回并关闭"), Local: true, Run: when(inValue, func(a *App) tea.Cmd { return a.valueSave() })},
+		"grid.view.json": {Title: i18n.N("以 JSON 查看"), Run: func(a *App, _ Args) tea.Cmd { return a.viewJSON() }},
+		"json.leave": {Title: i18n.N("回到表格"), Local: true, Run: func(a *App, args Args) tea.Cmd { // "json.leave q" is q's, "json.leave close" the button's: they leave with the matches of a search lit too
+			if args.Arg == "close" {
+				if jsonViewOf(a.focused()) == nil {
+					return nil
+				}
+				return a.viewJSON()
+			}
 			return a.jsonKey(a.focused(), cmp.Or(keymap.Key(args.Arg), keymap.Esc))
 		}},
 		"grid.ddl.table":  {Title: i18n.N("表的 DDL"), Run: func(a *App, _ Args) tea.Cmd { return a.openDDL(false) }},

@@ -306,7 +306,7 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 		}
 		tabHints = bound(
 			ui.Hint{Key: a.hints(scope, "/", scope+".page.next", scope+".page.prev"), Label: i18n.T("翻页"), Action: scope + ".page.next"},
-			ui.Hint{Key: a.keys.Hint("json.leave", "jsonview"), Label: i18n.T("回表格"), Action: "json.leave"},
+			ui.Hint{Key: a.keys.Hint("json.leave", "jsonview"), Label: i18n.T("回表格"), Action: "json.leave close"},
 		)
 	}
 	paneRegions(f, p.ID, r)

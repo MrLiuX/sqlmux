@@ -84,12 +84,12 @@ func (e *Editor) SnippetStops() []Hit {
 }
 
 // snipAlive is the snippet, brought up to date with the text, nil when it has
-// ended: in INSERT or SELECT the cursor is out of every tabstop (o, or A and
+// ended: in INSERT or SELECT (the modeless editor is in INSERT) the cursor is out of every tabstop (o, or A and
 // typing after the text, are), as nvim's CursorMovedI has it; moving in NORMAL
 // does not end it.
 func (e *Editor) snipAlive() *snippet {
 	e.snipSync()
-	if s := e.snip; s != nil && (e.plain || e.mode == Insert || e.mode == Replace || e.mode == Select) {
+	if s := e.snip; s != nil && (e.mode == Insert || e.mode == Replace || e.mode == Select) {
 		off := e.offset(e.cur)
 		if !slices.ContainsFunc(s.stops, func(st [2]int) bool { return st[0] <= off && off <= st[1] }) {
 			e.snip = nil

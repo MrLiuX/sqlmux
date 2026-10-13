@@ -187,3 +187,32 @@ func TestEscClearsTheSearchFirst(t *testing.T) {
 		t.Error("esc after a search that found nothing leaves")
 	}
 }
+
+// The buttons of the hint row, 回表格 and 关闭, close with the matches of a search
+// lit: only the esc key puts them out first (F15.9).
+func TestHintButtonsCloseWithTheSearchLit(t *testing.T) {
+	press := func(a *App, action string) {
+		t.Helper()
+		a.View()
+		for _, h := range a.hits {
+			if h.Target.Action == action {
+				click(a, h.Rect.Min)
+				return
+			}
+		}
+		t.Fatalf("no button %q", action)
+	}
+	a, _ := valueTab(t)
+	feed(t, a, "/n<CR>")
+	press(a, "value.leave close")
+	if a.value != nil {
+		t.Error("the value editor's 关闭 does not close")
+	}
+	b := sized(160, 45, "nerd")
+	loadOrders(t, b, 3)
+	feed(t, b, "gj/status<CR>")
+	press(b, "json.leave close")
+	if jsonViewOf(b.focused()) != nil {
+		t.Error("the JSON view's 回表格 does not leave")
+	}
+}

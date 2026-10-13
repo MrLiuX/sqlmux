@@ -126,7 +126,7 @@ func (a *App) valueText() uv.Rectangle { return a.valueTextBox().Inner(a.valueBo
 // keys under the text, from the keymap where there is a key (F12.8).
 func (a *App) valueTextBox() ui.TextBox {
 	v := a.value
-	hs := []ui.Hint{{Key: a.keys.Hint("value.leave", "value"), Label: i18n.T("关闭"), Action: "value.leave"}}
+	hs := []ui.Hint{{Key: a.keys.Hint("value.leave", "value"), Label: i18n.T("关闭"), Action: "value.leave close"}}
 	switch {
 	case a.plain: // no : commands, no gq
 		if !v.readOnly {

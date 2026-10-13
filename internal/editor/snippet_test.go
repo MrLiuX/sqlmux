@@ -372,3 +372,17 @@ func TestChangeOf(t *testing.T) {
 		}
 	}
 }
+
+// Without modes the snippet ends too when the cursor is out of every tabstop
+// (the end of the line is), and a Tab is then a tab stop (F15.8).
+func TestSnippetPlainEndsWithTheCursorOut(t *testing.T) {
+	e := snippetOf(alterText, true)
+	typed(e, "<C-e>")
+	if e.snipAlive() != nil {
+		t.Error("the cursor at the end of the line, out of every tabstop")
+	}
+	typed(e, "<Tab>")
+	if !strings.HasSuffix(e.Lines()[0], ";  ") && !strings.HasSuffix(e.Lines()[0], "; ") || e.HasSelection() {
+		t.Errorf("Tab with no snippet: %q", e.Lines()[0])
+	}
+}
