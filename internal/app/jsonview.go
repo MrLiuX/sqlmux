@@ -175,16 +175,14 @@ func (a *App) drawJSON(f *ui.Frame, p *Pane) {
 	}
 }
 
-// jsonAs is what the JSON view's ] [ and R do: what the table's and the
-// result's do, by the name of each (F14.5).
-func (a *App) jsonAs(what string) tea.Cmd {
-	prefix := "grid."
+// jsonContext is where a key lands in a JSON view: its own scope, and of the
+// table's or the result's only the keys that page and refresh, whatever they
+// are bound to (F15.9).
+func (a *App) jsonContext(jv *jsonView) keymap.Context {
+	c := keymap.Context{Focus: []string{"jsonview", "grid"}, Mode: vimMode(jv.ed.Mode()), Plain: a.plain, ReadOnly: "jsonview",
+		Only: []string{"grid.page.next", "grid.page.prev", "grid.refresh"}}
 	if resultOf(a.focused()) != nil {
-		prefix = "result."
+		c.Focus, c.Only = []string{"jsonview", "result", "grid"}, append(c.Only, "result.page.next", "result.page.prev", "result.rerun")
 	}
-	if what == "refresh" {
-		what = map[string]string{"grid.": "grid.refresh", "result.": "result.rerun"}[prefix]
-		return a.run(what, 0)
-	}
-	return a.run(prefix+what, 0)
+	return c
 }

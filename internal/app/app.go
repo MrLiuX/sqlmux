@@ -827,7 +827,7 @@ func (a *App) context() keymap.Context {
 		return keymap.Context{Focus: []string{"input"}, Mode: keymap.Insert}
 	}
 	if jv := jsonViewOf(a.focused()); jv != nil { // a grid's JSON view: its vim, and the few keys that are its own (F14.5)
-		return keymap.Context{Focus: []string{"jsonview"}, Mode: vimMode(jv.ed.Mode()), Plain: a.plain, ReadOnly: "jsonview"}
+		return a.jsonContext(jv)
 	}
 	scope := a.paneScope()
 	var firm string

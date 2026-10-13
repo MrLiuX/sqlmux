@@ -299,9 +299,13 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 			ui.Hint{Key: a.hints("normal", "/", "tab.next", "tab.prev")},
 		)
 	}
-	if jsonViewOf(p) != nil { // the keys of the view, not the table's (F14.5)
+	if jsonViewOf(p) != nil { // the keys of the view, not the table's; the paging is the table's or the result's (F14.5, F15.9)
+		scope := "grid"
+		if resultOf(p) != nil {
+			scope = "result"
+		}
 		tabHints = bound(
-			ui.Hint{Key: a.hints("jsonview", "/", "json.page.next", "json.page.prev"), Label: i18n.T("翻页"), Action: "json.page.next"},
+			ui.Hint{Key: a.hints(scope, "/", scope+".page.next", scope+".page.prev"), Label: i18n.T("翻页"), Action: scope + ".page.next"},
 			ui.Hint{Key: a.keys.Hint("json.leave", "jsonview"), Label: i18n.T("回表格"), Action: "json.leave"},
 		)
 	}

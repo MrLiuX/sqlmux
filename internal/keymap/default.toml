@@ -69,7 +69,7 @@ leader = "<Space>"
 "ge" = "grid.export" # CSV or JSON, the page or all of it (F12.4)
 "gs" = "grid.order.cycle" # this column alone, the other way, the default (F12.3)
 "gS" = "grid.order.add" # joins the ORDER, or turns: space of its list
-"gJ" = "grid.view.json" # the page as JSON, read only (F14.5)
+"gj" = "grid.view.json" # the page as JSON, read only (F14.5)
 "*" = "grid.filter.cell" # the cell as a condition of the WHERE
 "e" = "grid.value" # the cell in the value editor (F12.2)
 "O" = "grid.value" # the same
@@ -127,13 +127,10 @@ leader = "<Space>"
 ":" = "palette.open"
 ";" = "palette.sql"
 
-[keys.jsonview] # a grid's JSON view: a vim over the text, and a few keys of the grid's (F14.5)
+[keys.jsonview] # a grid's JSON view: a vim over the text; paging and refresh are the grid's and the result's keys (F14.5, F15.9)
 "<Esc>" = "json.leave" # NORMAL's brings the table back; the editor has it otherwise
 "q" = "json.leave"
-"gJ" = "grid.view.json"
-"]" = "json.page.next"
-"[" = "json.page.prev"
-"R" = "json.refresh"
+"gj" = "grid.view.json"
 
 [keys.queryinsert] # a query in INSERT, where vim has C-r for a register (F14.2)
 "<C-r>" = "query.history"

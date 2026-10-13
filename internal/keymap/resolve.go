@@ -2,6 +2,7 @@ package keymap
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -40,6 +41,10 @@ type Context struct {
 	// ReadOnly names a Focus scope of a read only editor: typed keys are no
 	// text there, so all its bindings apply even when Plain.
 	ReadOnly string
+	// Only limits the other Focus scopes of a read only editor to these
+	// actions, whatever the keys: the JSON view takes the grid's paging and
+	// refresh keys, as the user has them, and no other of the grid's (F15.9).
+	Only []string
 }
 
 // scopes lists the tables for c, highest priority first: overlay → user maps
@@ -104,7 +109,9 @@ func (m *Map) trie(c Context, maps bool) *node {
 	root := &node{}
 	for _, t := range m.scopes(c, maps) {
 		bs := m.tables[t]
-		if c.Plain && t != "keys."+c.Overlay && t != "keys."+c.Under && t != "keys."+c.ReadOnly && t != "keys.global" && t != "leader" && t != "keys.input" {
+		if lent := strings.TrimPrefix(t, "keys."); c.Only != nil && t != "keys."+c.ReadOnly && slices.Contains(c.Focus, lent) {
+			bs = slices.DeleteFunc(slices.Clone(bs), func(b Binding) bool { return !slices.Contains(c.Only, b.Action) })
+		} else if c.Plain && t != "keys."+c.Overlay && t != "keys."+c.Under && t != "keys."+c.ReadOnly && t != "keys.global" && t != "leader" && t != "keys.input" {
 			bs = ctrlOnly(m, bs) // not the keys that are text
 		}
 		if t == "leader" {

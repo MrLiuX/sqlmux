@@ -234,7 +234,7 @@ func TestAmbiguousNodeTimesOut(t *testing.T) {
 	if out, _ := press(t, r, grid, "gt"); !reflect.DeepEqual(actions(out), []string{"tab.next"}) {
 		t.Fatalf("gt before the timeout: %v", actions(out))
 	}
-	if out, _ := press(t, r, grid, "gj"); !reflect.DeepEqual(actions(out), []string{"my.g", "grid.down"}) {
+	if out, _ := press(t, r, grid, "gk"); !reflect.DeepEqual(actions(out), []string{"my.g", "grid.up"}) {
 		t.Fatalf("g then an unrelated key: %v", actions(out))
 	}
 }
@@ -617,7 +617,7 @@ func TestMapNext(t *testing.T) {
 	for _, n := range m.Next(grid, []Key{"g"}) {
 		got = append(got, string(n.Key)+" "+n.Table)
 	}
-	if want := []string{"g keys.grid", "o keys.grid", "l keys.grid", "p keys.grid", "c keys.grid", "e keys.grid", "s keys.grid", "S keys.grid", "J keys.grid", "t keys.normal", "T keys.normal", "z keys.normal"}; !reflect.DeepEqual(got, want) {
+	if want := []string{"g keys.grid", "o keys.grid", "l keys.grid", "p keys.grid", "c keys.grid", "e keys.grid", "s keys.grid", "S keys.grid", "j keys.grid", "t keys.normal", "T keys.normal", "z keys.normal"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("g: %v", got)
 	}
 	if m.Next(grid, []Key{"x", "y"}) != nil {
@@ -737,5 +737,20 @@ func TestLeaderHint(t *testing.T) {
 	}
 	if got := m.LeaderHint("grid.edit", "grid"); got != "" {
 		t.Errorf("no key with the leader: %q", got)
+	}
+}
+
+// Only limits the other Focus scopes of a read only editor to some actions,
+// whatever their keys are, in the modeless editor too: the user's own paging
+// key works, and the table's other keys are not bound (F15.9).
+func TestContextOnly(t *testing.T) {
+	m := mustLoad(t, "[keys.grid]\n\">\" = \"grid.page.next\"\n")
+	for _, plain := range []bool{false, true} {
+		c := Context{Focus: []string{"jsonview", "grid"}, ReadOnly: "jsonview", Plain: plain, Only: []string{"grid.page.next", "grid.page.prev", "grid.refresh"}}
+		for keys, want := range map[string]string{">": "grid.page.next", "]": "grid.page.next", "R": "grid.refresh", "x": "keys x", "G": "keys G"} { // "keys x": no binding took it, the editor does
+			if out, _ := press(t, NewResolver(m), c, keys); !reflect.DeepEqual(actions(out), []string{want}) {
+				t.Errorf("plain %v, %s: %v, want %v", plain, keys, actions(out), want)
+			}
+		}
 	}
 }

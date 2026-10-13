@@ -39,7 +39,7 @@ func expectedJSON(t *testing.T, a *App, rows int) string {
 	return "[\n" + strings.Join(objects, ",\n") + "\n]"
 }
 
-// gJ puts the page of the table as a JSON array in its place: each record as Y
+// gj puts the page of the table as a JSON array in its place: each record as Y
 // has it, a chip JSON on the query bar, a vim over the text that takes no
 // change; esc brings the table back; the text follows the page; it is the tab's
 // and no layout's (F14.5).
@@ -47,10 +47,10 @@ func TestJSONView(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	tab := loadOrders(t, a, 3)
 	p := a.focused()
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	jv := jsonViewOf(p)
 	if jv == nil {
-		t.Fatal("gJ opens no JSON view")
+		t.Fatal("gj opens no JSON view")
 	}
 	a.jsonSync(p)
 	want := expectedJSON(t, a, 3)
@@ -77,7 +77,7 @@ func TestJSONView(t *testing.T) {
 		t.Error("esc brings the table back")
 	}
 	// the page changes under it: the text follows
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	jv = jsonViewOf(p)
 	a.jsonSync(p)
 	_, cols, page := ordersTable(2)
@@ -91,9 +91,9 @@ func TestJSONView(t *testing.T) {
 	if jsonViewOf(p) != nil || !tab.transpose {
 		t.Errorf("transpose from the JSON view: jv %v, transpose %v", jsonViewOf(p), tab.transpose)
 	}
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	if jsonViewOf(p) == nil || tab.transpose {
-		t.Errorf("gJ from the turned table: jv %v, transpose %v", jsonViewOf(p), tab.transpose)
+		t.Errorf("gj from the turned table: jv %v, transpose %v", jsonViewOf(p), tab.transpose)
 	}
 	// a pending command is the editor's first: esc after y is the y's, q is a key of the view
 	feed(t, a, "y")
@@ -105,19 +105,19 @@ func TestJSONView(t *testing.T) {
 		t.Error("T is the editor's")
 	}
 	feed(t, a, "<Esc>")
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	if jsonViewOf(p) != nil {
-		t.Error("gJ again brings the table back")
+		t.Error("gj again brings the table back")
 	}
-	feed(t, a, "gJq")
+	feed(t, a, "gjq")
 	if jsonViewOf(p) != nil {
 		t.Error("q brings the table back")
 	}
-	feed(t, a, "gJ:q<CR>") // as the read only value editor's :q
+	feed(t, a, "gj:q<CR>") // as the read only value editor's :q
 	if jsonViewOf(p) != nil {
 		t.Error(":q brings the table back")
 	}
-	feed(t, a, "gJ:w<CR>")
+	feed(t, a, "gj:w<CR>")
 	if jsonViewOf(p) == nil || !strings.Contains(a.toast, "不支持的命令") {
 		t.Errorf(":w is none of its: toast %q", a.toast)
 	}
@@ -133,7 +133,7 @@ func TestJSONViewOfResult(t *testing.T) {
 	if resultOf(res) == nil || resultOf(res).run == nil {
 		t.Fatalf("no result tab: %v", tabNames(res))
 	}
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	jv := jsonViewOf(res)
 	if jv == nil {
 		t.Fatal("no JSON view on a result")
@@ -145,6 +145,15 @@ func TestJSONViewOfResult(t *testing.T) {
 	if view := a.render().String(); !strings.Contains(view, `"n"`) {
 		t.Errorf("not in the screen:\n%s", view)
 	}
+	tabs := len(res.Tabs)
+	feed(t, a, "x") // the result's x closes the tab: not a key of the view
+	if len(res.Tabs) != tabs || jsonViewOf(res) == nil {
+		t.Errorf("x: %d tabs, view %v", len(res.Tabs), jsonViewOf(res) != nil)
+	}
+	if _, cmd := a.Update(teaKey("R")); cmd == nil || a.sess.Conns[0].busy != 1 { // result.rerun, the result's refresh (F15.9)
+		t.Errorf("R reruns the statement: busy %d", a.sess.Conns[0].busy)
+	}
+	a.sess.Conns[0].busy = 0
 	feed(t, a, "<Esc>")
 	if jsonViewOf(res) != nil {
 		t.Error("esc brings the result's table back")
@@ -157,7 +166,7 @@ func TestJSONViewHasChanges(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	tab := loadOrders(t, a, 3)
 	p := a.focused()
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	jv := a.jsonSync(p)
 	before := strings.Join(jv.ed.Lines(), "\n")
 	tab.edits = map[editKey]edit{{tab.rowKey(0), "note"}: {val: db.Val{S: "changed here"}, orig: tab.page.Rows[0][noteField(tab)]}}
@@ -176,17 +185,30 @@ func noteField(t *dataTab) int {
 	return 0
 }
 
-// ] and [ and R are the table's, or the result's, in the JSON view; the cursor's
-// keys are the vim's (F14.5).
+// The JSON view has gj and esc of its own, and pages and refreshes by the keys
+// the table's scope has for it, as the user has them; no other key of the
+// table's gets in, and the cursor's keys are the vim's (F14.5, F15.9).
 func TestJSONViewKeys(t *testing.T) {
-	a := sized(160, 45, "nerd")
-	loadOrders(t, a, 3)
+	a := sizedWith(160, 45, userConfig(t, "", "[keys.grid]\n\"<\" = \"grid.page.prev\"\n\">\" = \"grid.page.next\"\n\"U\" = \"grid.refresh\"\n"))
+	tab := loadOrders(t, a, 3)
 	p := a.focused()
-	feed(t, a, "gJ")
-	for key, want := range map[string]string{"]": "json.page.next", "[": "json.page.prev", "R": "json.refresh", "gJ": "grid.view.json", "esc": "json.leave"} {
+	feed(t, a, "gj")
+	for key, want := range map[string]string{"gj": "grid.view.json", "esc": "json.leave"} {
 		if got := a.keys.Hint(want, "jsonview"); got != key {
 			t.Errorf("%s is bound to %q", want, got)
 		}
+	}
+	for _, c := range []struct{ keys, what string }{{"]", "the default next page"}, {"[", "the default previous page"}, {"R", "the default refresh"}, {">", "the user's next page"}, {"<", "the user's previous page"}, {"U", "the user's refresh"}} {
+		seq := tab.seq
+		feed(t, a, c.keys)
+		if tab.seq == seq || jsonViewOf(p) == nil {
+			t.Errorf("%s (%s) does not reload, or leaves the view", c.keys, c.what)
+		}
+	}
+	tabs := len(p.Tabs)
+	feed(t, a, "x") // the table's x closes the tab; here it is the editor's, which is read only
+	if len(p.Tabs) != tabs || jsonViewOf(p) == nil || a.toast != "只读" {
+		t.Errorf("x: %d tabs, view %v, toast %q", len(p.Tabs), jsonViewOf(p) != nil, a.toast)
 	}
 	if a.mode() != 0 || a.vim() != jsonViewOf(p).ed {
 		t.Errorf("the mode and the editor that has the keys: %v", a.mode())
@@ -199,7 +221,7 @@ func TestJSONViewKeys(t *testing.T) {
 func TestGoldenJSONView160x45(t *testing.T) {
 	a := wide(160, 45)
 	loadOrders(t, a, 3)
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	golden.RequireEqual(t, a.render().String())
 }
 
@@ -212,7 +234,7 @@ func TestJSONViewFollowsChanges(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	tab := loadOrders(t, a, 3)
 	p := a.focused()
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	a.render()
 	k := editKey{tab.rowKey(0), "note"}
 	tab.edits = map[editKey]edit{}
@@ -251,7 +273,7 @@ func TestJSONViewRefreshKeepsEditorState(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	tab := loadOrders(t, a, 3)
 	p := a.focused()
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	a.render()
 	jv := jsonViewOf(p)
 	again := func(n int) {
@@ -287,7 +309,7 @@ func TestJSONViewEditsNothing(t *testing.T) {
 	tab := loadOrders(t, a, 3)
 	p := a.focused()
 	tab.col = noteField(tab)
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	a.render()
 	a.Update(tea.PasteMsg{Content: "PASTED"})
 	if tab.cell != nil || a.toast != "只读" {
@@ -314,7 +336,7 @@ func TestJSONViewClickAndWheel(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	loadOrders(t, a, 30)
 	p := a.focused()
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	a.render()
 	area := a.jsonArea(p)
 	jv := jsonViewOf(p)
@@ -345,7 +367,7 @@ func TestJSONViewUnderTheWhere(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	tab := loadOrders(t, a, 3)
 	p := a.focused()
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	click(a, find(t, a, ui.Target{Kind: ui.KindHint, Pane: p.ID, Action: "grid.where"}).Min)
 	feed(t, a, "id = 1 and x")
 	if a.mode() != keymap.Insert || a.vim() != tab.ed {
@@ -357,15 +379,15 @@ func TestJSONViewUnderTheWhere(t *testing.T) {
 	}
 }
 
-// ] [ R, gJ, esc and q work without modes too: the editor is read only, no key
+// ] [ R, gj, esc and q work without modes too: the editor is read only, no key
 // of it is text; esc takes a selection off first; :q leaves (F14.5).
 func TestJSONViewPlain(t *testing.T) {
 	a := sizedWith(160, 45, userConfig(t, "vim = false", ""))
 	tab := loadOrders(t, a, 3)
 	p := a.focused()
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	if jsonViewOf(p) == nil {
-		t.Fatal("gJ opens it")
+		t.Fatal("gj opens it")
 	}
 	seq := tab.seq
 	feed(t, a, "]")
@@ -394,7 +416,7 @@ func TestJSONViewPlain(t *testing.T) {
 	if jsonViewOf(p) != nil {
 		t.Error("esc at rest leaves")
 	}
-	feed(t, a, "gJq")
+	feed(t, a, "gjq")
 	if jsonViewOf(p) != nil {
 		t.Error("q leaves")
 	}
@@ -416,7 +438,7 @@ func TestJSONViewOfResultPagesAndReruns(t *testing.T) {
 	p := a.win().Result
 	a.win().focus(p.ID)
 	selectTab(p, 1)
-	press(t, a, "gJ")
+	press(t, a, "gj")
 	press(t, a, "]")
 	if rt := resultOf(p); rt.offset != 3 || jsonViewOf(p) == nil || !strings.Contains(jvText(jsonViewOf(p)), `"n"`) {
 		t.Errorf("a page: offset %d, view %v", rt.offset, jsonViewOf(p) != nil)
@@ -425,7 +447,7 @@ func TestJSONViewOfResultPagesAndReruns(t *testing.T) {
 	if jsonViewOf(a.win().Result) == nil {
 		t.Error("R: the new result tab is in JSON as the one it replaced was")
 	}
-	press(t, a, "gJ")
+	press(t, a, "gj")
 	a.run("grid.transpose", 0)
 	press(t, a, "R")
 	if rt := resultOf(a.win().Result); rt == nil || !rt.transpose {
@@ -464,7 +486,7 @@ func TestJSONViewDraws(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	loadOrders(t, a, 3)
 	p := a.focused()
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	view := a.render()
 	if view.Cursor == nil {
 		t.Error("the focused view has the cursor")
@@ -496,7 +518,7 @@ func TestJSONViewDraws(t *testing.T) {
 func TestJSONViewPagesAndRefreshes(t *testing.T) {
 	a := sized(160, 45, "nerd")
 	tab := loadOrders(t, a, 3)
-	feed(t, a, "gJ")
+	feed(t, a, "gj")
 	seq := tab.seq
 	feed(t, a, "R")
 	if tab.seq == seq || jsonViewOf(a.focused()) == nil {

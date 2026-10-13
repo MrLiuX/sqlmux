@@ -406,7 +406,7 @@ func TestQuickSQLToResult(t *testing.T) {
 	if cmd().(tea.BatchMsg)[0](); !slices.Contains(rec.args, `"public"`) {
 		t.Errorf("R's search_path: %v", rec.args)
 	}
-	feed(t, a, "gJ") // the JSON view stays, the rows in it are the new ones (F14.5)
+	feed(t, a, "gj") // the JSON view stays, the rows in it are the new ones (F14.5)
 	a.Update(quickRerun{resultOf(res), quickResult(5), nil})
 	if rt := resultOf(res); a.sess.Conns[0].busy != 0 || len(rt.page.Rows) != 5 || !rt.run.done || rt.jv == nil {
 		t.Errorf("rerun: %d rows, JSON view %v", len(rt.page.Rows), rt.jv != nil)
