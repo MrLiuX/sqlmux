@@ -57,6 +57,10 @@ func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, d
 	cfg.BuildContextWatcherHandler = func(pg *pgconn.PgConn) ctxwatch.Handler {
 		return &pgconn.CancelRequestContextWatcherHandler{Conn: pg, DeadlineDelay: cancelGrace}
 	}
+	if d, ok := db.DialerOf(ctx); ok { // through ssh: the name is the other end's to look up (F15.2)
+		cfg.DialFunc = pgconn.DialFunc(d.Dial)
+		cfg.LookupFunc = func(_ context.Context, host string) ([]string, error) { return []string{host}, nil }
+	}
 	pg, err := pgconn.ConnectConfig(ctx, cfg)
 	if err != nil {
 		return nil, db.Info{}, err

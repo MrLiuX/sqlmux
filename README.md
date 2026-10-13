@@ -54,6 +54,8 @@ Where the password comes from, first one set wins:
 
 `${VAR}` inside `dsn` or `password` is replaced from the environment, so `dsn = "${DATABASE_URL}"` works too; each connection names its own variables.
 
+`ssh = "user@host"` reaches the server through that machine: each connection runs `ssh -W host:port user@host` (port, key and `ProxyJump` come from `~/.ssh/config`), no local port is opened. ssh cannot ask for a password or a passphrase here, so `ssh-add` the key first; when ssh fails, its own message is the connection's error. It does not apply to SQLite files or to connections given on the command line.
+
 `bin/sqlmux <name>` opens that connection; without a name it restores the layout you quit from. Press `C-c` twice to quit.
 
 ## Keys

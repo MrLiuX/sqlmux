@@ -192,3 +192,14 @@ func TestCheckAppendUnwritable(t *testing.T) {
 		t.Error("a directory no file can be made in")
 	}
 }
+
+// An ssh is a destination for the local ssh: one it would take for an option
+// or for two words is no connection (F15.2).
+func TestCheckSSH(t *testing.T) {
+	for ssh, bad := range map[string]bool{"me@jump": false, "jump": false, "": false, "-oProxyCommand=x": true, "-J x": true, "me@jump x": true, "me@jump\tx": true} {
+		c := Connection{Name: "a", Engine: "postgres", DSN: "postgres://h/d", SSH: ssh}
+		if field, _ := c.Check(nil); (field == "ssh") != bad || field != "" && field != "ssh" {
+			t.Errorf("%q: field %q", ssh, field)
+		}
+	}
+}

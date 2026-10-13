@@ -508,4 +508,5 @@ var en = map[string]string{
 	"把 tab 移到下一个 pane": "Move tab to the next pane",
 	"把 tab 移到上一个 pane": "Move tab to the previous pane",
 	"目标 pane 里已有这张表":   "The target pane already has this table",
+	"ssh = %q：写成 user@host，不能以 - 开头，也不能含空格": "ssh = %q: write user@host, with no leading - and no blanks",
 }

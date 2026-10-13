@@ -44,7 +44,7 @@ type connForm struct {
 	resultOK bool
 }
 
-// The form's fields, in order; the last two are in the 高级 fold.
+// The form's fields, in order; the last three are in the 高级 fold.
 const (
 	fieldName = iota
 	fieldGroup
@@ -58,12 +58,13 @@ const (
 	fieldAdvanced
 	fieldDSN
 	fieldPasswordCmd
+	fieldSSH
 )
 
 // connFields are the form's rows by the names they carry, which are the
 // toml keys they write (§14).
 var connFields = []string{fieldName: "name", fieldGroup: "group", fieldEngine: "engine", fieldHost: "host", fieldPort: "port", fieldUser: "user",
-	fieldPassword: "password", fieldDatabase: "database", fieldReadOnly: "read_only", fieldAdvanced: "", fieldDSN: "dsn", fieldPasswordCmd: "password_cmd"}
+	fieldPassword: "password", fieldDatabase: "database", fieldReadOnly: "read_only", fieldAdvanced: "", fieldDSN: "dsn", fieldPasswordCmd: "password_cmd", fieldSSH: "ssh"}
 
 // defaultPort is the port of an engine's server.
 var defaultPort = map[string]string{"postgres": "5432", "mysql": "3306"} // none for SQLite
@@ -152,6 +153,7 @@ func (a *App) selectConn(i int) {
 	f.fields[fieldAdvanced].On = 1
 	text(fieldDSN, c.DSN)
 	text(fieldPasswordCmd, c.PasswordCmd)
+	text(fieldSSH, c.SSH)
 }
 
 // mysqlDSN is the go-sql-driver's `user:password@tcp(host:port)/database?…`.
@@ -193,6 +195,8 @@ func (f *connForm) skipped(i int) bool {
 	switch i {
 	case fieldDSN, fieldPasswordCmd:
 		return !f.advanced()
+	case fieldSSH: // a file has no network to go through (F15.2)
+		return !f.advanced() || f.sqlite()
 	case fieldHost, fieldPort, fieldUser:
 		return f.dsnGiven() || f.sqlite()
 	case fieldPassword:
@@ -419,7 +423,7 @@ func (a *App) formConn() (config.Connection, bool) {
 	if f.was != nil {
 		c = *f.was
 		c.Name, c.Group, c.Engine, c.DSN = text(fieldName), text(fieldGroup), fs[fieldEngine].Choices[fs[fieldEngine].On], text(fieldDSN)
-		c.PasswordCmd, c.ReadOnly = text(fieldPasswordCmd), fs[fieldReadOnly].On == 1
+		c.PasswordCmd, c.ReadOnly, c.SSH = text(fieldPasswordCmd), fs[fieldReadOnly].On == 1, text(fieldSSH)
 		for _, s := range a.specs() {
 			if s.Name != f.was.Name {
 				names = append(names, s.Name)
@@ -428,7 +432,7 @@ func (a *App) formConn() (config.Connection, bool) {
 	} else {
 		c = config.Connection{Name: text(fieldName), Group: text(fieldGroup), Engine: fs[fieldEngine].Choices[fs[fieldEngine].On], DSN: "-", ReadOnly: fs[fieldReadOnly].On == 1}
 		if f.advanced() {
-			c.PasswordCmd = text(fieldPasswordCmd)
+			c.PasswordCmd, c.SSH = text(fieldPasswordCmd), text(fieldSSH)
 		}
 		for _, conn := range a.sess.Conns {
 			names = append(names, conn.Spec.Name)
@@ -519,7 +523,7 @@ func testConn(spec config.Connection, password string) (string, error) {
 			return "", err
 		}
 	}
-	conn, _, err := engines[spec.Engine].Connect(ctx, spec.DSN, password, true)
+	conn, _, err := engines[spec.Engine].Connect(tunneled(ctx, spec), spec.DSN, password, true)
 	if err != nil {
 		return "", err
 	}
@@ -761,10 +765,10 @@ func (a *App) formView() ui.Form {
 	}
 	icons := []ui.Icon{fieldName: ic.Tag, fieldGroup: ic.Group, fieldEngine: ic.Engine(fields[fieldEngine].Choices[fields[fieldEngine].On]), fieldHost: ic.Host,
 		fieldPort: ic.Port, fieldUser: ic.User, fieldPassword: ic.Key, fieldDatabase: ic.Database, fieldReadOnly: ic.Lock,
-		fieldAdvanced: ic.Advanced, fieldDSN: ic.Link, fieldPasswordCmd: ic.Query}
+		fieldAdvanced: ic.Advanced, fieldDSN: ic.Link, fieldPasswordCmd: ic.Query, fieldSSH: ic.Link}
 	for i := range fields {
 		fields[i].Icon = icons[i]
-		fields[i].Hidden = (i == fieldDSN || i == fieldPasswordCmd) && !f.advanced() || f.sqlite() && (i == fieldHost || i == fieldPort || i == fieldUser || i == fieldPassword)
+		fields[i].Hidden = (i == fieldDSN || i == fieldPasswordCmd || i == fieldSSH) && !f.advanced() || f.sqlite() && (i == fieldHost || i == fieldPort || i == fieldUser || i == fieldPassword || i == fieldSSH)
 		fields[i].Dim = f.skipped(i) && !fields[i].Hidden
 	}
 	if f.sqlite() {

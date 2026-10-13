@@ -529,3 +529,48 @@ func TestChecksLeaveNothing(t *testing.T) {
 		t.Errorf("left in the directory: %v", es)
 	}
 }
+
+// ssh is a line of the block like the others: read, added after the last,
+// rewritten, taken out when cleared, appended with a new connection; and a
+// key of connections.toml that is known (F15.2).
+func TestConnectionSSH(t *testing.T) {
+	connectionsFile(t, oneConn+"ssh = \"me@jump\"\n")
+	conns, _, err := LoadConnections("")
+	if err != nil || conns[0].SSH != "me@jump" {
+		t.Fatalf("read: %+v %v", conns, err)
+	}
+	if lines := UnknownKeys(&Config{}); len(lines) != 0 {
+		t.Fatalf("ssh is known: %v", lines)
+	}
+	was := connA("postgres://h/a", false)
+	was.SSH = "me@jump"
+	to := was
+	to.SSH = "you@other"
+	if _, err := UpdateConnection("a", was, to); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, connectionsPath()); got != oneConn+"ssh = \"you@other\"\n" {
+		t.Fatalf("rewritten:\n%s", got)
+	}
+	was, to.SSH = to, ""
+	if _, err := UpdateConnection("a", was, to); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, connectionsPath()); got != oneConn {
+		t.Fatalf("cleared:\n%s", got)
+	}
+	was, to.SSH = to, "me@jump"
+	if _, err := UpdateConnection("a", was, to); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, connectionsPath()); got != oneConn+"ssh = \"me@jump\"\n" {
+		t.Fatalf("added:\n%s", got)
+	}
+	connectionsFile(t, "")
+	if err := AppendConnection(Connection{Name: "n", Engine: "postgres", DSN: "postgres://h/n", SSH: "me@jump"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, connectionsPath()); !strings.Contains(got, "ssh = \"me@jump\"\n") {
+		t.Fatalf("appended:\n%s", got)
+	}
+}
