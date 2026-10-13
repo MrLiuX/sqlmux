@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -79,5 +80,41 @@ func TestListTextEdge(t *testing.T) {
 		if r := row(f, y); !strings.Contains(r, "id") || strings.Contains(r, "bigint") {
 			t.Errorf("%s: a column short: %q", what, r)
 		}
+	}
+}
+
+// The hints do not widen the box: they go in two rows when the box is too
+// narrow for one, and the last whole ones are left out when two are not
+// enough; the box has a row for each (F15.6).
+func TestDropdownHintRows(t *testing.T) {
+	hs := []Hint{{Key: "j/k", Label: "move"}, {Key: "space", Label: "direction"}, {Key: "a", Label: "out"}, {Key: "A", Label: "clear"}, {Key: "↵", Label: "this one only"}}
+	d := Dropdown{Items: []string{"id"}, Pos: [][]int{nil}, Hints: hs, Mark: -1}
+	anchor := uv.Rect(2, 0, 10, 1)
+	screen := uv.Rect(0, 0, 100, 30)
+	for _, c := range []struct {
+		w    int
+		rows []int // how many hints in each row
+	}{
+		{100, []int{5}},
+		{50, []int{4, 1}}, // inner 46: four take 44
+		{34, []int{2, 2}},
+		{20, []int{1, 1}}, // two rows at most: the rest is left out
+	} {
+		var got []int
+		for _, r := range d.hintRows(c.w) {
+			got = append(got, len(r))
+		}
+		box, _ := d.Box(screen, anchor, c.w)
+		if fmt.Sprint(got) != fmt.Sprint(c.rows) || box.Dx() != c.w || box.Dy() != 4+1+len(got)+1 {
+			t.Errorf("w %d: hints in rows %v, want %v; box %v", c.w, got, c.rows, box)
+		}
+	}
+	f := NewFrame(100, 30, TokyonightStorm)
+	box, rows := d.Box(screen, anchor, 34)
+	d.Draw(f, box, rows)
+	out := f.String()
+	rows3 := strings.Split(out, "\n")[6:8] // under the rule
+	if !strings.Contains(rows3[0], "space direction") || !strings.Contains(rows3[1], "A clear") || strings.Contains(out, "this one") {
+		t.Errorf("two rows, the last hint left out:\n%s", out)
 	}
 }

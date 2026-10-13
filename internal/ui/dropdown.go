@@ -26,15 +26,30 @@ type Dropdown struct {
 
 const dropdownRows = 10
 
-// Box is where d opens: under anchor and left aligned with it, w wide or as
-// wide as its hints, moved left to stay on screen; rows is how many of its
-// items show.
+// hintRows is the hints in the rows of a box w wide: each row as many whole
+// ones as fit, the ones that do not fit in two rows left out, the last first
+// (F15.6).
+func (d Dropdown) hintRows(w int) (rows [][]Hint) {
+	hs := d.Hints
+	for len(hs) > 0 && len(rows) < 2 {
+		n := 1 // one is always shown, cut by the box's edge if it must
+		for n < len(hs) && hintRowWidth(hs[:n+1]) <= w-4 {
+			n++
+		}
+		rows, hs = append(rows, hs[:n]), hs[n:]
+	}
+	return rows
+}
+
+// Box is where d opens: under anchor and left aligned with it, w wide, moved
+// left to stay on screen; its hints are wrapped in it, not it widened to them
+// (F15.6); rows is how many of its items show.
 func (d Dropdown) Box(screen, anchor uv.Rectangle, w int) (box uv.Rectangle, rows int) {
-	w = min(max(w, hintRowWidth(d.Hints)+4), screen.Dx())
+	w = min(w, screen.Dx())
 	x := min(anchor.Min.X, screen.Max.X-w)
 	chrome := 4 // border, input, rule | items | border
-	if len(d.Hints) > 0 {
-		chrome += 2 // rule, hints
+	if hr := d.hintRows(w); len(hr) > 0 {
+		chrome += 1 + len(hr) // rule, hints
 	}
 	rows = max(min(len(d.Items), dropdownRows, screen.Max.Y-anchor.Max.Y-chrome), 0)
 	return uv.Rect(x, anchor.Max.Y, w, rows+chrome), rows
@@ -96,9 +111,11 @@ func (d Dropdown) Draw(f *Frame, box uv.Rectangle, rows int) uv.Position {
 		}
 		listText(f, x, line.Min.Y, x1, d.Items[i], d.Pos[i], note, st, uv.Style{Fg: th.Dim, Bg: st.Bg})
 	}
-	if len(d.Hints) > 0 && box.Dy() >= 6 {
-		rule(box.Max.Y - 3)
-		hintRow(f, x0, box.Max.Y-2, x1, d.Hints, dim, Target{Kind: KindHint, Pane: d.Pane})
+	if hr := d.hintRows(box.Dx()); len(hr) > 0 && box.Dy() >= 5+len(hr) {
+		rule(box.Max.Y - 2 - len(hr))
+		for i, hs := range hr {
+			hintRow(f, x0, box.Max.Y-1-len(hr)+i, x1, hs, dim, Target{Kind: KindHint, Pane: d.Pane})
+		}
 	}
 	return cursor
 }

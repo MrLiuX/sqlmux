@@ -79,7 +79,7 @@ func (a *App) colsBox(v ui.Dropdown) (uv.Rectangle, int) {
 	if m.order {
 		chip, w = "grid.order", w+ui.Width(orderMark(m.tab.order, ""))+1
 	}
-	return v.Box(a.window(), a.chipRect(m.pane, m.tab, chip), w)
+	return v.Box(a.window(), a.chipRect(m.pane, m.tab, chip), min(w, a.layout()[m.pane.ID].Dx())) // the pane's width at most (F15.6)
 }
 
 func (a *App) colsMove(d int) {

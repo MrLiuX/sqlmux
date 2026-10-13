@@ -911,6 +911,41 @@ func TestGoldenOrderMulti(t *testing.T) {
 	golden.RequireEqual(t, a.render().String())
 }
 
+// The ORDER box is as wide as its columns, not the six hints under them: they
+// wrap in two rows; the COLS box is the same box, as wide as its columns less
+// the mark (F15.6).
+func TestOrderBoxWidthByColumns(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	pane := a.layout()[a.focused().ID]
+	longest := 0
+	for _, c := range tab.page.Cols {
+		longest = max(longest, ui.Width(c.Name+"  "+tab.typeOf(c.Name)))
+	}
+	feed(t, a, "go")
+	box, _ := a.colsBox(a.colsView())
+	if want := longest + 10 + ui.Width(orderMark(tab.order, "")) + 1; box.Dx() != want {
+		t.Errorf("ORDER: %d wide, want %d (pane %d)", box.Dx(), want, pane.Dx())
+	}
+	rows := strings.Split(a.render().String(), "\n")
+	hint := 0
+	for _, r := range rows {
+		if strings.Contains(r, "只按这一列") || strings.Contains(r, "SPC 方向") {
+			hint++
+		}
+	}
+	if hint != 2 {
+		t.Errorf("the hints are in %d rows, want 2:\n%s", hint, strings.Join(rows[:20], "\n"))
+	}
+	feed(t, a, "<Esc>gc")
+	if cols, _ := a.colsBox(a.colsView()); cols.Dx() != longest+10 {
+		t.Errorf("COLS: %d wide, want %d", cols.Dx(), longest+10)
+	}
+	tab.page.Cols[0].Name = strings.Repeat("c", 90) // wider than the pane: the pane's width at most
+	if cols, _ := a.colsBox(a.colsView()); cols.Dx() != pane.Dx() {
+		t.Errorf("a long name: %d wide, the pane %d", cols.Dx(), pane.Dx())
+	}
+}
+
 // With several columns the chip's icon is the first one's and a click turns
 // it; too many to leave room for LIMIT, PAGE and COLS, it shows two and … (F12.1).
 func TestOrderChipMulti(t *testing.T) {

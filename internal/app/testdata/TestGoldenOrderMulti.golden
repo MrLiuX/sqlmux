@@ -1,20 +1,20 @@
 ┌─ ⓪  doraemon ─────────── « ─┐ ┌─ ①  t_order ───────────────────────────────────────────────┐ ┌─ ②  q…  Tx: 自动 ▾ doraemon · doraemon.public ▾  ▶ run  ↵ ─┐
 │  15 tables                 │ │ WHERE                                                C-r ▾ │ │   1                                                         │
 │──────────────────────────────│ │  ORDER status ↓, amount ↑    LIMIT 100                   │ │                                                             │
-│ ▾  doraemon                 │ │ ┌───────────────────────────────────────────────────────────────┐                                                           │
-│   ▸  agentable              │ │─│                                                          7/7 │                                                           │
-│   ▾  public                 │ │ │───────────────────────────────────────────────────────────────│                                                           │
-│     ▾  Tables (14)          │ │ │    id                                                bigint  │                                                           │
-│       ▸  agent          124 │ │ │ 1↓ status                                        order_status │                                                           │
-│       ▸  agent_version  530 │ │ │ 2↑ amount                                       numeric(10,2) │                                                           │
-│       ▸  goal            57 │ │ │    paid                                               boolean │                                                           │
-│       ▸  mt_task        812 │ │ │    meta                                                 jsonb │                                                           │
-│       ▸  mt_task_log    96k │ │ │    note                                                  text │                                                           │
-│       ▸  schema_migrations  │ │ │    created_at                        timestamp with time zone │                                                           │
-│       ▸  t_order       1.2m │ │ │───────────────────────────────────────────────────────────────│                                                           │
-│       ▸  t_order_item  3.4m │ │ │ j/k 移动 · SPC 方向 · a 移出 · A 清空 · ↵ 只按这一列 · / 搜索 │                                                           │
-│       ▸  t_payment     410k │ │ └───────────────────────────────────────────────────────────────┘                                                           │
-│       ▸  t_refund       12k │ │  12 │   12 │ pending   │     12.99 │ t    │ {"n": 12, "tags"│ │                                                             │
+│ ▾  doraemon                 │ │ ┌───────────────────────────────────────────────┐           │ │                                                             │
+│   ▸  agentable              │ │─│                                          7/7 │───────────│ │                                                             │
+│   ▾  public                 │ │ │───────────────────────────────────────────────│ 1, "tags":│ │                                                             │
+│     ▾  Tables (14)          │ │ │    id                                bigint  │ 2, "tags":│ │                                                             │
+│       ▸  agent          124 │ │ │ 1↓ status                        order_status │ 3, "tags":│ │                                                             │
+│       ▸  agent_version  530 │ │ │ 2↑ amount                       numeric(10,2) │ 4, "tags":│ │                                                             │
+│       ▸  goal            57 │ │ │    paid                               boolean │ 5, "tags":│ │                                                             │
+│       ▸  mt_task        812 │ │ │    meta                                 jsonb │ 6, "tags":│ │                                                             │
+│       ▸  mt_task_log    96k │ │ │    note                                  text │ 7, "tags":│ │                                                             │
+│       ▸  schema_migrations  │ │ │    created_at        timestamp with time zone │ 8, "tags":│ │                                                             │
+│       ▸  t_order       1.2m │ │ │───────────────────────────────────────────────│ 9, "tags":│ │                                                             │
+│       ▸  t_order_item  3.4m │ │ │ j/k 移动 · SPC 方向 · a 移出 · A 清空         │ 10, "tags"│ │                                                             │
+│       ▸  t_payment     410k │ │ │ ↵ 只按这一列 · / 搜索                         │ 11, "tags"│ │                                                             │
+│       ▸  t_refund       12k │ │ └───────────────────────────────────────────────┘ 12, "tags"│ │                                                             │
 │       ▸  t_sku         8.1k │ │  13 │   13 │ running   │     13.99 │ t    │ {"n": 13, "tags"│ │                                                             │
 │       ▸  t_user         38k │ │  14 │   14 │ done      │     14.99 │ t    │ {"n": 14, "tags"│ │                                                             │
 │       ▸  t_user_address 52k │ │  15 │   15 │ failed    │     15.99 │ t    │ {"n": 15, "tags"│ │                                                             │
