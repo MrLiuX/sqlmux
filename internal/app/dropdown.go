@@ -22,6 +22,7 @@ type dropKind int
 const (
 	dropLimit dropKind = iota
 	dropSchema
+	dropDatabase // a PG query's databases, before its schemas (F15.1)
 	dropQueryConn
 	dropTx
 	dropAuto    // auto refresh's interval (§7.8「自动刷新」)
@@ -98,13 +99,21 @@ func (a *App) setTheme(name string) tea.Cmd {
 func (a *App) openQueryDrop(k dropKind) {
 	p := a.focused()
 	if c := queryOf(p); c != nil && (k != dropSchema || len(c.conn.Schemas) > 0) {
-		a.drop = &dropdown{kind: k, query: c, pane: p}
-		if k == dropHistory {
-			a.drop.hist = historyOf(c.conn)
+		if k == dropSchema && len(c.conn.root().Databases) > 1 { // the server's databases first, then the one picked's schemas
+			k = dropDatabase
 		}
-		_, a.drop.sel = a.dropItems()
-		a.dropMove(0)
+		a.showDrop(k, c, p)
 	}
+}
+
+// showDrop opens query c's dropdown of kind k in pane p.
+func (a *App) showDrop(k dropKind, c *queryTab, p *Pane) {
+	a.drop = &dropdown{kind: k, query: c, pane: p}
+	if k == dropHistory {
+		a.drop.hist = historyOf(c.conn)
+	}
+	_, a.drop.sel = a.dropItems()
+	a.dropMove(0)
 }
 
 // dropItems is what the dropdown offers, and which of them is current.
@@ -113,6 +122,9 @@ func (a *App) dropItems() (items []string, current int) {
 	switch d.kind {
 	case dropSchema:
 		return d.query.conn.Schemas, slices.Index(d.query.conn.Schemas, d.query.schema)
+	case dropDatabase:
+		names := d.query.conn.root().databaseNames()
+		return names, slices.Index(names, d.query.conn.DB)
 	case dropTheme:
 		names := config.ThemeNames()
 		return names, slices.Index(names, a.themeName)
@@ -122,7 +134,7 @@ func (a *App) dropItems() (items []string, current int) {
 		for _, c := range a.sess.Conns {
 			items = append(items, c.Spec.Name)
 		}
-		return items, slices.Index(a.sess.Conns, d.query.conn)
+		return items, slices.Index(a.sess.Conns, d.query.conn.root())
 	case dropTx:
 		current = 0
 		if d.query.conn.Manual {
@@ -193,10 +205,10 @@ func (a *App) dropBox(v ui.Dropdown, hits []ui.Hit) (uv.Rectangle, int) {
 	}
 	var entry uv.Rectangle
 	switch d.kind {
-	case dropSchema, dropQueryConn, dropTx:
+	case dropSchema, dropDatabase, dropQueryConn, dropTx:
 		r := a.layout()[d.pane.ID]
 		entry = uv.Rect(r.Max.X-w, r.Min.Y, w, 1)
-		action := map[dropKind]string{dropSchema: "query.schema", dropQueryConn: "query.conn", dropTx: "query.tx"}[d.kind]
+		action := map[dropKind]string{dropSchema: "query.schema", dropDatabase: "query.schema", dropQueryConn: "query.conn", dropTx: "query.tx"}[d.kind]
 		for _, h := range hits {
 			if h.Target == (ui.Target{Kind: ui.KindHint, Pane: d.pane.ID, Action: action}) {
 				entry, w = h.Rect, max(w, r.Max.X-h.Rect.Min.X)
@@ -257,6 +269,12 @@ func (a *App) dropPick(i int) tea.Cmd {
 	case dropSchema: // the next run sets it (§8.6)
 		d.query.schema = item
 		return a.keepQuery(d.query)
+	case dropDatabase: // the one it is in goes on to its schemas, another is where the query goes
+		if item == d.query.conn.DB {
+			a.showDrop(dropSchema, d.query, d.pane)
+			return nil
+		}
+		return a.pickConn(d.query, d.query.conn.root().inDB(item))
 	case dropQueryConn:
 		return a.pickConn(d.query, a.sess.Conns[at])
 	case dropTx:

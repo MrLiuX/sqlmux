@@ -67,7 +67,7 @@ func (a *App) gotConnEvent(m connEvent) tea.Cmd {
 		err = &c.downMeta
 	}
 	*err = m.Err
-	name := c.Spec.Name
+	name := c.label()
 	switch {
 	case m.Err != nil:
 		return a.showToast(i18n.T("%s：%s", name, m.Err))

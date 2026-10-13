@@ -75,7 +75,7 @@ func (a *App) gotConnected(m connected) tea.Cmd {
 	}
 	if m.err != nil {
 		c.State, c.err = connFailed, m.err // the tabs waiting on it stay, saying why (F12.5)
-		return a.showToast(i18n.T("%s：%s", c.Spec.Name, m.err))
+		return a.showToast(i18n.T("%s：%s", c.label(), m.err))
 	}
 	c.take(m.d)
 	cmds := []tea.Cmd{a.loadCatalog(c)}
@@ -133,7 +133,7 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	}
 	if m.err != nil {
 		a.dropPending(m.conn)
-		return a.showToast(i18n.T("%s：%s", m.conn.Spec.Name, m.err))
+		return a.showToast(i18n.T("%s：%s", m.conn.label(), m.err))
 	}
 	c := m.conn
 	c.Schemas, c.Tables, c.funcs, c.seqs, c.Databases = m.schemas, m.tables, m.funcs, m.seqs, m.dbs
@@ -174,7 +174,25 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 // schema, Tables and Views hang from it (F14.1).
 func (c *Conn) flat() bool { return c.Spec.Engine == "sqlite" }
 
-func connNode(c *Conn) string { return "conn:" + c.Spec.Name }
+// connNode is c's node ID, a database's below its connection's; the DSN's
+// database has none of its own, dbNode is the node that stands for it.
+func connNode(c *Conn) string {
+	if c.Spec.Database != "" {
+		return dbNode(c.root(), c.Spec.Database)
+	}
+	return "conn:" + c.Spec.Name
+}
+
+func dbNode(c *Conn, name string) string { return "conn:" + c.Spec.Name + "/db:" + name }
+
+// treeAbove are the nodes above c's schemas, which a table's tab opens to
+// show it (revealTab).
+func treeAbove(c *Conn) []string {
+	if r := c.root(); len(r.Databases) > 0 {
+		return []string{"conn:" + r.Spec.Name, dbNode(r, c.DB)}
+	}
+	return []string{connNode(c)}
+}
 
 func tableNode(c *Conn, t db.Table) string {
 	return connNode(c) + "/table:" + t.Schema + "." + t.Name
@@ -205,7 +223,7 @@ func (a *App) revealTab(p *Pane) {
 	path := []string{"workspace", windowNode(a.win())}
 	is := func(n node) bool { return n.kind == nodeTab && n.pane == p && n.tab == p.Cur && n.win == a.sess.Active }
 	if t := tab.Data; t != nil {
-		path = []string{connNode(t.conn), schemaNode(t.conn, t.table.Schema), groupNode(t.conn, t.table.Schema, t.table.View())}
+		path = append(treeAbove(t.conn), schemaNode(t.conn, t.table.Schema), groupNode(t.conn, t.table.Schema, t.table.View()))
 		is = func(n node) bool { return n.kind == nodeTable && n.conn == t.conn && idOf(n.table) == idOf(t.table) }
 	}
 	was := maps.Clone(a.sess.open)
@@ -224,7 +242,8 @@ func (a *App) revealTab(p *Pane) {
 type nodeKind int
 
 const (
-	nodeConn nodeKind = iota
+	nodeConn     nodeKind = iota
+	nodeDatabase          // a PG connection's database, the DSN's or one of its others (F15.1)
 	nodeSchema
 	nodeGroup // Tables or Views
 	nodeTable // a table or a view
@@ -287,7 +306,7 @@ func (a *App) treeNodes() (ns []node, matches int) {
 	filter := a.win().tree.filter.Text
 	filtering := filter != ""
 	pos := map[string][]int{} // what the filter kept, by table node ID
-	for _, c := range s.Conns {
+	for _, c := range s.conns() {
 		names := make([]string, len(c.Tables))
 		for i, t := range c.Tables {
 			names[i] = t.Name
@@ -307,35 +326,11 @@ func (a *App) treeNodes() (ns []node, matches int) {
 		return n.Branch && n.Open
 	}
 
-	group := "" // the one the connections so far are in: a rule marks where another begins (F10.6)
-	for _, c := range s.Conns {
-		if g := c.Spec.Group; g != group && !filtering {
-			group = g
-			add(node{id: "sep:" + g, kind: nodeSep, TreeNode: ui.TreeNode{Sep: true, Text: g}})
-		}
-		cid := connNode(c)
-		cn := node{id: cid, kind: nodeConn, conn: c, TreeNode: ui.TreeNode{Branch: true, Open: c.State == connReady && open(cid, true), Icon: ic.Engine(c.Spec.Engine), IconFg: th.Info, Text: c.Spec.Name}}
-		if c.readOnly { // dim after the name, as … (§7.8)
-			cn.Aside = ic.Lock.Text
-		}
-		switch c.State {
-		case connConnecting:
-			cn.Aside = strings.TrimSpace(cn.Aside + " …")
-		case connFailed:
-			cn.TextFg = th.Error
-		case connIdle, connReady: // the name as it is
-		}
-		if c.down() != nil { // a redial failed: its next request tries again (F8.19)
-			cn.TextFg = th.Error
-		}
-		if filtering && !slices.ContainsFunc(c.Tables, func(t db.Table) bool { _, ok := pos[tableNode(c, t)]; return ok }) {
-			continue
-		}
-		if !add(cn) {
-			continue
-		}
+	// schemas adds c's schemas and what hangs from them, off levels deeper than a
+	// connection's: its database's are one (F15.1).
+	schemas := func(c *Conn, off int) {
 		flat := c.flat() // the file is the schema: Tables and Views hang from it (F14.1)
-		depth := func(d int) int { return d - b2i(flat) }
+		depth := func(d int) int { return d - b2i(flat) + off }
 		for _, sc := range c.Schemas {
 			var groups [2][]db.Table // Tables, Views
 			for _, t := range c.Tables {
@@ -355,7 +350,7 @@ func (a *App) treeNodes() (ns []node, matches int) {
 				continue
 			}
 			id := schemaNode(c, sc)
-			if !flat && !add(node{id: id, kind: nodeSchema, conn: c, schema: sc, TreeNode: ui.TreeNode{Depth: 1, Branch: true, Open: open(id, sc == c.home), Icon: ic.Schema, IconFg: th.PK, Text: sc}}) {
+			if !flat && !add(node{id: id, kind: nodeSchema, conn: c, schema: sc, TreeNode: ui.TreeNode{Depth: 1 + off, Branch: true, Open: open(id, sc == c.home), Icon: ic.Schema, IconFg: th.PK, Text: sc}}) {
 				continue
 			}
 			for g, ts := range groups {
@@ -439,6 +434,58 @@ func (a *App) treeNodes() (ns []node, matches int) {
 				for _, q := range seqs {
 					add(node{id: qid + "/" + q.Name, kind: nodeSequence, conn: c, schema: sc, TreeNode: ui.TreeNode{Depth: depth(3), Icon: ic.Sequence, IconFg: th.Dim, Text: q.Name}})
 				}
+			}
+		}
+	}
+
+	group := "" // the one the connections so far are in: a rule marks where another begins (F10.6)
+	for _, c := range s.Conns {
+		if g := c.Spec.Group; g != group && !filtering {
+			group = g
+			add(node{id: "sep:" + g, kind: nodeSep, TreeNode: ui.TreeNode{Sep: true, Text: g}})
+		}
+		cid := connNode(c)
+		cn := node{id: cid, kind: nodeConn, conn: c, TreeNode: ui.TreeNode{Branch: true, Open: c.State == connReady && open(cid, true), Icon: ic.Engine(c.Spec.Engine), IconFg: th.Info, Text: c.Spec.Name}}
+		if c.readOnly { // dim after the name, as … (§7.8)
+			cn.Aside = ic.Lock.Text
+		}
+		switch c.State {
+		case connConnecting:
+			cn.Aside = strings.TrimSpace(cn.Aside + " …")
+		case connFailed:
+			cn.TextFg = th.Error
+		case connIdle, connReady: // the name as it is
+		}
+		if c.down() != nil { // a redial failed: its next request tries again (F8.19)
+			cn.TextFg = th.Error
+		}
+		if filtering && !slices.ContainsFunc(append([]*Conn{c}, slices.Collect(maps.Values(c.dbs))...), func(d *Conn) bool {
+			return slices.ContainsFunc(d.Tables, func(t db.Table) bool { _, ok := pos[tableNode(d, t)]; return ok })
+		}) {
+			continue
+		}
+		if !add(cn) {
+			continue
+		}
+		if len(c.Databases) == 0 {
+			schemas(c, 0)
+			continue
+		}
+		for _, name := range c.databaseNames() {
+			dc := c.inDB(name)
+			if filtering && !slices.ContainsFunc(dc.Tables, func(t db.Table) bool { _, ok := pos[tableNode(dc, t)]; return ok }) {
+				continue
+			}
+			dn := node{id: dbNode(c, name), kind: nodeDatabase, conn: dc, TreeNode: ui.TreeNode{Depth: 1, Branch: true, Open: dc.State == connReady && open(dbNode(c, name), dc == c), Icon: ic.Database, IconFg: th.Info, Text: name}}
+			switch dc.State {
+			case connConnecting:
+				dn.Aside = "…"
+			case connFailed:
+				dn.TextFg = th.Error
+			case connIdle, connReady:
+			}
+			if add(dn) {
+				schemas(dc, 1)
 			}
 		}
 	}
@@ -603,7 +650,7 @@ func (a *App) treeFold(n node, open bool) tea.Cmd {
 	a.sess.open[n.id] = open
 	a.clampTree()
 	switch {
-	case open && n.kind == nodeConn:
+	case open && (n.kind == nodeConn || n.kind == nodeDatabase):
 		return a.connect(n.conn)
 	case open && n.kind == nodeTable:
 		var cmds []tea.Cmd
@@ -622,7 +669,7 @@ func (a *App) treeFold(n node, open bool) tea.Cmd {
 // its columns dropped; on a connection not connected, or failed, the tree
 // cursor's, it connects instead, as opening it does.
 func (a *App) refreshTree() tea.Cmd {
-	if n, ok := a.treeNode(); ok && a.focused() == a.win().Tree && n.kind == nodeConn && n.conn.State != connReady {
+	if n, ok := a.treeNode(); ok && a.focused() == a.win().Tree && (n.kind == nodeConn || n.kind == nodeDatabase) && n.conn.State != connReady {
 		return a.treeFold(n, true)
 	}
 	c := a.conn()

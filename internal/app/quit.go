@@ -54,8 +54,8 @@ func (a *App) unlessLost(n int, what string, conns []*Conn, verb lostVerb, then 
 	}
 	var names []string
 	for _, c := range conns {
-		if !slices.Contains(names, c.Spec.Name) { // sessions' connections of one name
-			names = append(names, c.Spec.Name)
+		if !slices.Contains(names, c.label()) { // sessions' connections of one name
+			names = append(names, c.label())
 		}
 	}
 	if len(names) > 0 {
@@ -73,7 +73,7 @@ func (a *App) unlessLost(n int, what string, conns []*Conn, verb lostVerb, then 
 func txConns(sessions ...*Session) []*Conn {
 	var out []*Conn
 	for _, s := range sessions {
-		for _, c := range s.Conns {
+		for _, c := range s.conns() {
 			if c.inTx() {
 				out = append(out, c)
 			}

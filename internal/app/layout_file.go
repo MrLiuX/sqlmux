@@ -79,7 +79,7 @@ func paneLayout(p *Pane) config.LayoutPane {
 		switch {
 		case tb.Data != nil:
 			d := tb.Data
-			lt = config.LayoutTab{Kind: "table", Connection: d.conn.Spec.Name, Schema: d.table.Schema, Table: d.table.Name,
+			lt = config.LayoutTab{Kind: "table", Connection: d.conn.Spec.Name, DB: d.conn.Spec.Database, Schema: d.table.Schema, Table: d.table.Name,
 				Where: d.applied, Order: config.LayoutOrder(d.order), Desc: d.desc && len(d.order) == 0, Limit: d.limit, Page: d.pageNo, Transpose: d.transpose}
 			for name, hidden := range d.hidden {
 				if hidden {
@@ -94,7 +94,7 @@ func paneLayout(p *Pane) config.LayoutPane {
 			if t.want != nil { // not there yet: it is where it is going that is kept
 				c, schema = t.want, t.wantSchema
 			}
-			lt = config.LayoutTab{Kind: "query", Connection: c.Spec.Name, Schema: schema, Name: t.name}
+			lt = config.LayoutTab{Kind: "query", Connection: c.Spec.Name, DB: c.Spec.Database, Schema: schema, Name: t.name}
 		default: // a landing tab
 			continue
 		}
@@ -257,7 +257,7 @@ func (s *Session) restoreTab(lt config.LayoutTab, used map[string]bool) (tb Tab,
 	if i < 0 {
 		return tb, i18n.T("没有名为 %s 的连接，跳过 %s", name, cmp.Or(lt.Table, lt.QueryName()))
 	}
-	c := s.Conns[i]
+	c := s.Conns[i].inDB(lt.DB)
 	if lt.Kind == "table" { // a schema it does not name is the connection's home, known with the catalog
 		d := newDataTab(c, db.Table{Schema: lt.Schema, Name: lt.Table})
 		r := d.request

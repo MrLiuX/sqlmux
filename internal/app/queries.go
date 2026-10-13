@@ -59,7 +59,7 @@ func (a *App) queryList() []string {
 func (a *App) queryPlace(name string, cur *Conn) (c *Conn, schema string) {
 	last, kept := a.state.Queries[name]
 	if i := slices.IndexFunc(a.sess.Conns, func(cn *Conn) bool { return cn.Spec.Name == last.Conn }); kept && i >= 0 {
-		return a.sess.Conns[i], last.Schema
+		return a.sess.Conns[i].inDB(last.DB), last.Schema
 	}
 	if cur == nil {
 		return nil, ""

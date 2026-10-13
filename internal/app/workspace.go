@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"maps"
 	"os"
 	"slices"
 	"strconv"
@@ -239,6 +240,7 @@ type Conn struct {
 	// tree opens one, by name.
 	Databases []string
 	dbs       map[string]*Conn
+	parent    *Conn // the connection a database's is of, nil for one of connections.toml
 	seqs      []db.Sequence
 
 	// DB is the database, on query titles, "" for MySQL, whose schemas
@@ -264,8 +266,50 @@ func (c *Conn) inDB(name string) *Conn {
 		spec := c.Spec
 		spec.Database = name
 		c.dbs[name] = newConn(spec)
+		c.dbs[name].parent = c
 	}
 	return c.dbs[name]
+}
+
+// root is the connection of connections.toml that c is, or is a database of.
+func (c *Conn) root() *Conn {
+	if c.parent != nil {
+		return c.parent
+	}
+	return c
+}
+
+// label is c as a toast or a question names it: the connection, and the
+// database when it is not the DSN's.
+func (c *Conn) label() string {
+	if c.Spec.Database == "" {
+		return c.Spec.Name
+	}
+	return c.Spec.Name + "/" + c.Spec.Database
+}
+
+// databaseNames are the databases of c's server as the tree lists them: the
+// one it is dialed to first, the rest by name (F15.1); none for an engine
+// that has none.
+func (c *Conn) databaseNames() []string {
+	if len(c.Databases) == 0 {
+		return nil
+	}
+	return append([]string{c.DB}, slices.DeleteFunc(slices.Clone(c.Databases), func(n string) bool { return n == c.DB })...)
+}
+
+// conns is the session's connections and the databases of them made so far,
+// each connection before its databases: what holds a session's workers, its
+// transactions and its answers (F15.1).
+func (s *Session) conns() []*Conn {
+	var out []*Conn
+	for _, c := range s.Conns {
+		out = append(out, c)
+		for _, name := range slices.Sorted(maps.Keys(c.dbs)) {
+			out = append(out, c.dbs[name])
+		}
+	}
+	return out
 }
 
 func newConn(spec config.Connection) *Conn {
@@ -695,6 +739,9 @@ func connectTo(ctx context.Context, spec config.Connection, readOnly bool) (db.C
 func (c *Conn) take(d dialed) {
 	c.State, c.Main, c.Meta = connReady, c.worker(d.main, d.spec, false), c.worker(d.meta, d.spec, true)
 	c.Addr, c.DB, c.startedPath = d.info.Addr, d.info.Database, d.info.Path
+	if c.Spec.Database != "" { // two of the server's databases differ by the address alone in the status bar
+		c.Addr += "/" + c.DB
+	}
 }
 
 // Close closes the session's connections.
@@ -707,7 +754,7 @@ func (s *Session) Close() {
 // workers is the session's connections connected, Main and Meta.
 func (s *Session) workers() []*db.Worker {
 	var ws []*db.Worker
-	for _, c := range s.Conns {
+	for _, c := range s.conns() {
 		if c.State == connReady {
 			ws = append(ws, c.Main, c.Meta)
 		}
@@ -819,14 +866,16 @@ func (a *App) newQuery(conn *Conn) (cmd tea.Cmd, ok bool) {
 func (a *App) restoreQuery(t *queryTab) tea.Cmd {
 	st, ok := a.state.Queries[t.name]
 	i := slices.IndexFunc(a.sess.Conns, func(c *Conn) bool { return c.Spec.Name == st.Conn })
-	switch {
-	case !ok || i < 0:
-		return nil
-	case a.sess.Conns[i].State == connReady, a.sess.Conns[i] == t.conn: // the one it is on is the start, connecting: a failed dial must not lose the schema (F12.5)
-		t.conn, t.schema = a.sess.Conns[i], cmp.Or(st.Schema, a.sess.Conns[i].Schema)
+	if !ok || i < 0 {
 		return nil
 	}
-	t.want, t.wantSchema = a.sess.Conns[i], st.Schema
+	c := a.sess.Conns[i].inDB(st.DB)
+	switch {
+	case c.State == connReady, c == t.conn: // the one it is on is the start, connecting: a failed dial must not lose the schema (F12.5)
+		t.conn, t.schema = c, cmp.Or(st.Schema, c.Schema)
+		return nil
+	}
+	t.want, t.wantSchema = c, st.Schema
 	return a.connect(t.want)
 }
 
@@ -874,7 +923,7 @@ func (a *App) keepQuery(t *queryTab) tea.Cmd {
 	if a.state.Queries == nil {
 		a.state.Queries = map[string]config.QueryState{}
 	}
-	a.state.Queries[t.name] = config.QueryState{Conn: t.conn.Spec.Name, Schema: t.schema}
+	a.state.Queries[t.name] = config.QueryState{Conn: t.conn.Spec.Name, DB: t.conn.Spec.Database, Schema: t.schema}
 	return a.saveState()
 }
 
@@ -890,7 +939,7 @@ func (a *App) queryOpen(name string, except *queryTab) bool {
 // not attached, or one closed, nil then (F5.1).
 func (a *App) sessionOf(c *Conn) *Session {
 	for _, s := range a.sessions {
-		if slices.Contains(s.Conns, c) {
+		if slices.Contains(s.conns(), c) {
 			return s
 		}
 	}

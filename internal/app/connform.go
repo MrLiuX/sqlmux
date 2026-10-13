@@ -629,14 +629,16 @@ func (a *App) saveEditedConn() tea.Cmd {
 	rest.Name, rest.Group = was.Name, was.Group
 	changed, told := rest != was, false
 	for _, s := range a.sessions {
-		for _, conn := range s.Conns {
+		for _, conn := range s.conns() {
 			if conn.Spec.Name != was.Name {
 				continue
 			}
+			edited := saved
+			edited.Database = conn.Spec.Database // a database of the connection stays the one
 			if conn.State == connIdle || conn.State == connFailed {
-				conn.setSpec(saved)
+				conn.setSpec(edited)
 			} else { // dialed, or being: its engine and lock are the dial's
-				conn.setConfig(saved)
+				conn.setConfig(edited)
 				told = changed
 			}
 		}

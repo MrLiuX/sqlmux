@@ -66,6 +66,7 @@ type LayoutPane struct {
 type LayoutTab struct {
 	Kind       string `toml:"kind"` // "table" | "query"
 	Connection string `toml:"connection,omitempty"`
+	DB         string `toml:"db,omitempty"` // not the DSN's database (F15.1)
 	Schema     string `toml:"schema,omitempty"`
 	// a table's
 	Table     string      `toml:"table,omitempty"`

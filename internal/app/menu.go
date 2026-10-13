@@ -52,7 +52,7 @@ func (a *App) menuItems(n node) []menuItem {
 			{drop, a.dropTable},
 		}
 		return append(items, a.alterItems(n)...)
-	case nodeConn, nodeSchema, nodeGroup, nodeColumn, nodeObjects, nodeIndex, nodeKey, nodeFunc, nodeSequence, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeSep: // no menu
+	case nodeConn, nodeDatabase, nodeSchema, nodeGroup, nodeColumn, nodeObjects, nodeIndex, nodeKey, nodeFunc, nodeSequence, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeSep: // no menu
 	}
 	return nil
 }
@@ -218,8 +218,8 @@ func (a *App) gotDropped(m dropped) tea.Cmd {
 	}
 	cmds := []tea.Cmd{a.showToast(i18n.T("已删除 %s", m.table.Schema+"."+m.table.Name))}
 	for _, s := range a.sessions { // a session has its own Conn of a connection's name
-		for _, o := range s.Conns {
-			if o.Spec.Name != c.Spec.Name {
+		for _, o := range s.conns() {
+			if o.Spec.Name != c.Spec.Name || o.Spec.Database != c.Spec.Database {
 				continue
 			}
 			for _, p := range s.panes() {

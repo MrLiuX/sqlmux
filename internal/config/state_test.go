@@ -28,7 +28,7 @@ func TestState(t *testing.T) {
 	want := &State{
 		Recent:  []Recent{{Kind: "table", ID: "doraemon/public.t_order"}, {Kind: "table", ID: "public.t_order"}, {Kind: "command", ID: "quit"}},
 		SQL:     map[string][]string{"doraemon": {"select 2", "select 1"}},
-		Queries: map[string]QueryState{"query_1": {Conn: "doraemon", Schema: "agentable"}, "query_2": {Conn: "play"}},
+		Queries: map[string]QueryState{"query_1": {Conn: "doraemon", Schema: "agentable"}, "query_2": {Conn: "play", DB: "alpha"}}, // a query's database when not the DSN's (F15.1)
 		Tables: map[string]*TableState{"doraemon/public.t_order": {
 			History:   []Query{{Where: "id > 5", At: at}},
 			Favorites: []Query{{Where: "status = 'done'", Order: []db.OrderCol{{Col: "amount", Desc: true}}, Limit: 500, At: at}},
@@ -118,6 +118,7 @@ func TestLayoutFile(t *testing.T) {
 				{ID: 1, Current: 1, Tabs: []LayoutTab{
 					{Kind: "table", Connection: "doraemon", Schema: "public", Table: "t_order", Where: "id > 5", Order: LayoutOrder{{Col: "amount", Desc: true}}, Limit: 500, Page: 2, Cols: []string{"meta", "note"}, Transpose: true},
 					{Kind: "query", Name: "query_1", Connection: "doraemon", Schema: "agentable"},
+					{Kind: "table", Connection: "doraemon", DB: "alpha", Schema: "public", Table: "t_x"}, // not the DSN's database (F15.1)
 				}},
 				{ID: 2}, {ID: 3},
 			},
@@ -206,13 +207,16 @@ id = 2
 func TestStateRenameConnection(t *testing.T) {
 	s := &State{
 		Recent:  []Recent{{"table", "play/public.t"}, {"table", "playground/public.t"}, {"command", "play/x"}},
-		Tables:  map[string]*TableState{"play/public.t": {}, "playground/public.t": {}},
+		Tables:  map[string]*TableState{"play/public.t": {}, "playground/public.t": {}, "play/alpha/public.t": {}},
 		SQL:     map[string][]string{"play": {"select 1"}, "other": {"select 2"}},
 		Queries: map[string]QueryState{"query_1": {Conn: "play"}, "query_2": {Conn: "other"}},
 	}
 	s.RenameConnection("play", "dev")
 	if s.Recent[0].ID != "dev/public.t" || s.Recent[1].ID != "playground/public.t" || s.Recent[2].ID != "play/x" {
 		t.Errorf("recent %+v", s.Recent)
+	}
+	if s.Tables["dev/alpha/public.t"] == nil || s.Tables["play/alpha/public.t"] != nil { // a database's table with its connection (F15.1)
+		t.Errorf("tables of a database %v", s.Tables)
 	}
 	if _, ok := s.Tables["dev/public.t"]; !ok || s.Tables["play/public.t"] != nil || s.Tables["playground/public.t"] == nil {
 		t.Errorf("tables %v", s.Tables)

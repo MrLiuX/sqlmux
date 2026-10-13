@@ -392,7 +392,7 @@ func (a *App) drawSidebar(f *ui.Frame, r uv.Rectangle) {
 	in := b.Draw(f, r)
 	ns, matches := a.treeNodes()
 	total := 0 // the connections connected (§7.8)
-	for _, c := range a.sess.Conns {
+	for _, c := range a.sess.conns() {
 		total += len(c.Tables)
 	}
 	t := ui.Tree{

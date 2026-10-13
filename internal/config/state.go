@@ -22,7 +22,7 @@ import (
 // query file last ran on.
 type State struct {
 	Recent  []Recent               `json:"recent,omitempty"`
-	Tables  map[string]*TableState `json:"tables,omitempty"`  // by "<connection>/<schema>.<table>"
+	Tables  map[string]*TableState `json:"tables,omitempty"`  // by "<connection>/<schema>.<table>", "<connection>/<database>/<schema>.<table>" in a database that is not the DSN's (F15.1)
 	SQL     map[string][]string    `json:"sql,omitempty"`     // by connection, newest first (§12)
 	Queries map[string]QueryState  `json:"queries,omitempty"` // by file name: "query_1" (§11)
 }
@@ -64,6 +64,7 @@ func (s *State) RenameConnection(old, to string) {
 // schema (§8.6).
 type QueryState struct {
 	Conn   string `json:"conn"`
+	DB     string `json:"db,omitempty"` // not the DSN's database (F15.1)
 	Schema string `json:"schema,omitempty"`
 }
 
