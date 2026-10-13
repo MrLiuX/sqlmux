@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -185,5 +186,16 @@ func TestDialerInContext(t *testing.T) {
 	d := Dialer{Name: "x"}
 	if got, ok := DialerOf(WithDialer(context.Background(), d)); !ok || got.Name != "x" {
 		t.Fatalf("%+v %v", got, ok)
+	}
+}
+
+// What ssh said is kept to its last 4 KB: a long complaint is the error with its
+// end, which is the part that says why.
+func TestSSHDialerFailureTail(t *testing.T) {
+	FakeSSH(t, `i=0; while [ $i -lt 300 ]; do echo "line $i of what ssh has to say about it"; i=$((i+1)); done >&2; echo "the last line" >&2; exit 255`)
+	c := dialSSH(t)
+	_, err := c.Read(make([]byte, 1))
+	if err == nil || !strings.HasSuffix(err.Error(), "the last line") || strings.Contains(err.Error(), "line 0 ") || len(err.Error()) > 4200 {
+		t.Fatalf("%d bytes, ending %q", len(fmt.Sprint(err)), fmt.Sprint(err)[max(len(fmt.Sprint(err))-40, 0):])
 	}
 }

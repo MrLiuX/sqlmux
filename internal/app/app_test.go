@@ -125,8 +125,9 @@ func sized(w, h int, icons string) *App {
 	return sizedWith(w, h, c)
 }
 
-// tipsInTests has the status bar's tip on, as the defaults have it: off, so the
-// frames that are not about it are the same whichever tip comes up (F15.4).
+// tipsInTests is off in tests, though the default is on, so that the frames that
+// are not about the tip are the same whichever one comes up; withTips turns it on
+// (F15.4).
 var tipsInTests = false
 
 // newApp is New with the tips off unless tipsInTests has them on.

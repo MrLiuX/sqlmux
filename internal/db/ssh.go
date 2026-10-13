@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -104,11 +105,15 @@ type sshConn struct {
 	stderr  *tail
 	done    chan struct{} // closed when the process has ended, exit its status
 	exit    error
+	killed  atomic.Bool // Close ended it: that is no failure of ssh's
 }
 
 // failure is what ssh said when it failed, nil when it has not, or it ended
-// well.
+// well, or Close ended it.
 func (c *sshConn) failure() error {
+	if c.killed.Load() {
+		return nil
+	}
 	select {
 	case <-c.done:
 	case <-time.After(2 * time.Second): // it is on its way out, or it is not out
@@ -151,6 +156,11 @@ func (c *sshConn) Write(p []byte) (int, error) {
 
 // Close ends the process: nothing of the connection is worth waiting for.
 func (c *sshConn) Close() error {
+	select {
+	case <-c.done: // it has ended by itself: what it said is the error
+	default:
+		c.killed.Store(true)
+	}
 	c.in.Close()
 	c.out.Close()
 	_ = c.cmd.Process.Kill() // gone already is what it is for
