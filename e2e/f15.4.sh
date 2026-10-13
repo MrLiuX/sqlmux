@@ -57,6 +57,9 @@ pal '?'; sleep 0.4; e2e_type "侧栏"; sleep 0.5
 check "? 后再打「侧栏」：过滤到「{key} 显示或隐藏侧栏」" eval 'list | head -3 | grep -q "显示或隐藏侧栏"' || list
 key Enter; sleep 0.6
 check "↵：执行 tree.toggle，侧栏收起来了（树里的 Tables 没有了）" eval '! screen_has "Tables (" && closed' || e2e_cap | head -8
+pal; sleep 0.5
+check "执行过的提示不进「最近」：面板刚打开时的列表里没有「提示」类的行" eval '! list | grep -qE "  提示\|"' || list
+key Escape; sleep 0.3
 key Space; sleep 0.2; key e; sleep 0.5
 
 # ---- tips.next / tips.show
@@ -72,9 +75,19 @@ check "↵：面板以 ? 作用域重新打开，列的是提示" eval 'is_open 
 key Escape; sleep 0.3
 
 # ---- 窄屏：提示最先让位，别的段还在
-w=$(e2e_flag pane_width)
-e2e_resize 110 45; sleep 1
-check "窗口变窄到 110 列：提示没有了，左边的 0: data 和右边的连接地址还在" eval '[[ -z $(tip) && $(bar) == *"0: data"* && $(bar) == *"sqlmux@"* ]]' || bar
+# 模式附加信息（-- editing WHERE --）比提示重要：宽的时候两个都在，窄一点提示先让位、信息一个字不少
+open_table t_user; wait_for 8 settled; key /; sleep 0.5
+check "表格里 / 写 WHERE：状态栏有「-- editing WHERE --」，提示也在" eval '[[ $(bar) == *"-- editing WHERE --"* && -n $(tip) ]]' || bar
+e2e_resize 135 45; sleep 0.8
+check "收窄到 135 列：提示让位，「-- editing WHERE --」一个字不少" eval '[[ $(bar) == *"-- editing WHERE --"* && -z $(tip) ]]' || bar
+e2e_resize 160 45; sleep 0.8; key Escape; sleep 0.3; key Escape; sleep 0.3
+# 一点一点收窄：提示（长短不一）在某个宽度让位，那时左边的 0: data 和右边的连接地址还在；让位之前它是整条的（不被截断）
+gone=0; for w in 140 130 120 110 100 95 90 85; do
+  e2e_resize $w 45; sleep 0.8
+  t=$(tip); [[ -n $t ]] && { [[ $(bar) == *"Tip: $t  "* ]] || { echo "  $w 列：提示被截断了：$(bar)"; break; }; }
+  if [[ -z $t ]]; then gone=$w; break; fi
+done
+check "窗口收窄：提示在某个宽度（$gone 列）整条让位，此时 0: data 和连接地址还在；让位之前是整条的" eval '(( gone > 0 )) && [[ $(bar) == *"0: data"* && $(bar) == *"sqlmux@"* ]]' || bar
 e2e_resize 160 45; sleep 1
 check "回到 160 列：提示又出来了" eval '[[ -n $(tip) ]]' || bar
 
