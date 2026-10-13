@@ -36,3 +36,23 @@ func TestReplaceViewFollowsTheCursor(t *testing.T) {
 		t.Errorf("cursor %v, left %d", e.Cursor(), e.Left())
 	}
 }
+
+// FitView shows the text from its start when every line fits the view with the
+// column past its end, and leaves the view alone when one does not (F15.5).
+func TestFitView(t *testing.T) {
+	for _, c := range []struct{ line, width, left, want int }{
+		{50, 52, 3, 0},  // fits with room
+		{51, 52, 3, 0},  // fits with the cursor's column
+		{52, 52, 3, 3},  // the cursor's column would not
+		{200, 52, 3, 3}, // far too long
+		{50, 52, 0, 0},
+	} {
+		e := New(strings.Repeat("x", c.line))
+		e.SetWidth(c.width)
+		e.left = c.left
+		e.FitView()
+		if e.Left() != c.want {
+			t.Errorf("%d columns of text in %d, left %d: %d, want %d", c.line, c.width, c.left, e.Left(), c.want)
+		}
+	}
+}

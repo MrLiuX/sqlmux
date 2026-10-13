@@ -279,3 +279,16 @@ func TestSnippetInTheView(t *testing.T) {
 		t.Errorf("Tab with no candidates: %v %v %v", from, to, ok)
 	}
 }
+
+// A key the query's scope binds (↵ runs) is text over a selected
+// tabstop: SELECT has INSERT's keys, not NORMAL's and VISUAL's (F15.8).
+func TestSnippetTypesWhatTheQueryScopeBinds(t *testing.T) {
+	a := inObjects(t)
+	treeTo(t, a, "t_order")
+	a.run("table.alter.add_column", 0)
+	q := a.focusedQuery()
+	feed(t, a, "<CR>") // query.run in NORMAL and VISUAL: here a line break
+	if lines := q.ed.Lines(); len(lines) != 2 || lines[1] != "<type>;" || q.ed.Mode() != editor.Insert {
+		t.Errorf("↵ over the tabstop: %q, mode %v", lines, q.ed.Mode())
+	}
+}

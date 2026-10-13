@@ -287,3 +287,18 @@ func (e *Editor) scrollSideways() {
 	}
 	e.left = max(e.left, 0)
 }
+
+// FitView puts the view at the left when no line is too wide for it, the
+// column past the end of a line, where INSERT's cursor is, counted: a view
+// that was made wider to show the text whole shows it from its start.
+func (e *Editor) FitView() {
+	if e.left == 0 || e.width <= 0 {
+		return
+	}
+	for _, l := range e.lines {
+		if vcol(l, len(l), e.TabWidth) >= e.width {
+			return
+		}
+	}
+	e.left = 0
+}

@@ -17,15 +17,15 @@ import (
 // leave.
 
 // roKey gives key k, which no binding of the scope took, to ed: without modes
-// esc ends a selection first; esc at rest, in NORMAL or without modes, leaves,
-// and q does where leaveOnQ; the rest is the editor's, did acting on what it did
-// (§6.8).
+// esc ends a selection first, and in NORMAL it puts out the lit matches of a
+// search first (§11); esc at rest, in NORMAL or without modes, leaves, and q
+// does where leaveOnQ; the rest is the editor's, did acting on what it did (§6.8).
 func (a *App) roKey(ed *editor.Editor, k keymap.Key, leaveOnQ bool, leave func() tea.Cmd, did func(editor.Effect) tea.Cmd) tea.Cmd {
 	if k == keymap.Esc && ed.Plain() && ed.HasSelection() { // as in a plain query: the selection first (§6.9)
 		ed.ClearSelection()
 		return nil
 	}
-	if (ed.Mode() == editor.Normal || ed.Plain()) && ed.Pending() == "" && (k == keymap.Esc || k == "q" && leaveOnQ) {
+	if (ed.Mode() == editor.Normal || ed.Plain()) && ed.Pending() == "" && (k == keymap.Esc && !ed.Lit() || k == "q" && leaveOnQ) {
 		return leave()
 	}
 	return did(ed.Feed(string(k)))

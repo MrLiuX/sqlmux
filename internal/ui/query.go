@@ -83,26 +83,31 @@ const (
 // gutter is ▶, the line numbers at 3 columns at least, a blank.
 func (c Query) gutter() int { return 1 + max(3, len(strconv.Itoa(len(c.Lines)))) + 1 }
 
-// Width is the columns the text takes whole, the gutter in: the longest line
-// as drawn, a tab to its tabstop (F15.5).
+// Width is the columns the text takes whole, the gutter in: the longest line as
+// drawn (F15.5).
+// ponytail: every line is walked glyph by glyph, as drawLine does; a value of
+// some MB wants the width kept by the text's version.
 func (c Query) Width() int {
 	w := 0
 	for _, l := range c.Lines {
-		if !strings.Contains(l, "\t") {
-			w = max(w, Width(l))
-			continue
-		}
 		v := 0
 		for i := 0; i < len(l); {
-			gr, gw := ansi.FirstGraphemeCluster(l[i:], ansi.GraphemeWidth)
-			if gw = max(gw, 1); l[i] == '\t' {
-				gw = c.TabWidth - v%c.TabWidth
-			}
+			gr, gw := c.glyph(l, i, v)
 			v, i = v+gw, i+len(gr)
 		}
 		w = max(w, v)
 	}
 	return c.gutter() + w
+}
+
+// glyph is the grapheme at byte i of l, which starts at display column v, and
+// the cells it takes: one at least, a tab up to the next tabstop (§11).
+func (c Query) glyph(l string, i, v int) (string, int) {
+	gr, w := ansi.FirstGraphemeCluster(l[i:], ansi.GraphemeWidth)
+	if l[i] == '\t' {
+		return gr, c.TabWidth - v%c.TabWidth
+	}
+	return gr, max(w, 1)
 }
 
 // TextArea is where the text goes in r: right of the gutter.
@@ -188,24 +193,14 @@ func (c Query) drawStat(f *Frame, r uv.Rectangle) {
 	}
 }
 
-// hitAt is the match at byte col of line n, nil for none.
-func (c Query) hitAt(n, col int) *Span {
-	for i, h := range c.Hits {
+// spanAt is the one of spans that has byte col of line n, nil for none.
+func spanAt(spans []Span, n, col int) *Span {
+	for i, h := range spans {
 		if h.Line == n && col >= h.From && col < h.To {
-			return &c.Hits[i]
+			return &spans[i]
 		}
 	}
 	return nil
-}
-
-// stopAt is whether byte col of line n is in a tabstop to come.
-func (c Query) stopAt(n, col int) bool {
-	for _, h := range c.Stops {
-		if h.Line == n && col >= h.From && col < h.To {
-			return true
-		}
-	}
-	return false
 }
 
 // drawLine draws line n on row, from display column Left; fg are its
@@ -219,11 +214,7 @@ func (c Query) drawLine(f *Frame, ta uv.Rectangle, row, n int, fg []color.Color,
 	}
 	v := 0
 	for i := 0; i < len(l); {
-		gr, w := ansi.FirstGraphemeCluster(l[i:], ansi.GraphemeWidth)
-		w = max(w, 1)
-		if l[i] == '\t' { // the editor's tabstops (§11)
-			w = c.TabWidth - v%c.TabWidth
-		}
+		gr, w := c.glyph(l, i, v)
 		st := uv.Style{Fg: fg[i], Bg: bg}
 		switch {
 		case c.Yank.has(n, i, v, w):
@@ -231,9 +222,9 @@ func (c Query) drawLine(f *Frame, ta uv.Rectangle, row, n int, fg []color.Color,
 		case c.Sel.has(n, i, v, w):
 			st.Bg = th.Visual
 		default:
-			if h := c.hitAt(n, i); h != nil {
+			if h := spanAt(c.Hits, n, i); h != nil {
 				st = th.hit(h.Current, st)
-			} else if c.stopAt(n, i) {
+			} else if spanAt(c.Stops, n, i) != nil {
 				st.Bg = th.Visual
 			}
 		}

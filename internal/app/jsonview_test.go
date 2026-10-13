@@ -534,3 +534,21 @@ func TestJSONViewPagesAndRefreshes(t *testing.T) {
 		t.Errorf("[: page %d", tab.pageNo)
 	}
 }
+
+// The hint row of a result's JSON view has the paging keys of the result's
+// scope, not the table's: with the table's rebound, they are the result's still (F15.9).
+func TestJSONViewOfResultHintsItsOwnKeys(t *testing.T) {
+	d := &execDB{res: map[string]db.Result{"select 1": rows(3)}}
+	a, c := inQuery(t, "", "[keys.grid]\n\"]\" = \"grid.down\"\n\"[\" = \"grid.up\"\n")
+	a.sess.Conns[0].Main = db.NewWorker(d)
+	a.confirmDangerous = false
+	c.ed.Load("select 1")
+	c.schema = ""
+	press(t, a, "<CR>")
+	res := a.win().Result
+	a.win().focus(res.ID)
+	feed(t, a, "gj")
+	if view := a.render().String(); !strings.Contains(view, "]/[ 翻页") {
+		t.Errorf("the hints:\n%s", view)
+	}
+}

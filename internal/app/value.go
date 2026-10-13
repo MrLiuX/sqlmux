@@ -106,7 +106,7 @@ func (a *App) valueBox() uv.Rectangle {
 	}
 	ed := a.value.ed
 	half := min(max(pane.Dx()/2, 40), pane.Dx())
-	w := min(max(half, ui.Query{Lines: ed.Lines(), TabWidth: ed.TabWidth}.Width()+4), pane.Dx()) // the border and a column each side
+	w := min(max(half, ui.Query{Lines: ed.Lines(), TabWidth: ed.TabWidth}.Width()+5), pane.Dx()) // the border and a column each side, and one for the cursor past the longest line's end
 	x := min(cell.Min.X, pane.Max.X-w)                                                           // the cell is in the pane, which w does not outgrow
 	below, above := pane.Max.Y-cell.Max.Y, cell.Min.Y-pane.Min.Y
 	if below < valueMinRows && above > below {
@@ -148,6 +148,7 @@ func (a *App) valueTextBox() ui.TextBox {
 func (a *App) valueSize() {
 	ed := a.value.ed
 	a.sizeEditor(ed, ui.Query{Lines: ed.Lines()}.TextArea(a.valueText()))
+	ed.FitView() // the box follows the text: what scrolled it sideways when it was narrower is gone
 }
 
 // valueAt is the line and display column of the value's text under p.
@@ -188,7 +189,11 @@ func (a *App) drawValue(f *ui.Frame) {
 func (a *App) valueKey(k keymap.Key) tea.Cmd {
 	v := a.value
 	a.valueSize()
-	return a.roKey(v.ed, k, v.readOnly, func() tea.Cmd { return a.valueClose(false) }, a.valueDid)
+	cmd := a.roKey(v.ed, k, v.readOnly, func() tea.Cmd { return a.valueClose(false) }, a.valueDid)
+	if a.value != nil { // the box is as wide as the text now
+		a.valueSize()
+	}
+	return cmd
 }
 
 // valueDid acts on what the editor did: the clipboard, the toasts, a : command

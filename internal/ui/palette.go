@@ -212,10 +212,7 @@ func (p Palette) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 			y++
 		}
 		f.Text(x0, y, x1, r.Title, dim)
-		hs := r.Hints
-		for len(hs) > 0 && Width(r.Title)+2+hintRowWidth(hs) > x1-x0 { // whole ones, the last going first
-			hs = hs[:len(hs)-1]
-		}
+		hs := r.Hints[:leadingHints(r.Hints, x1-x0-Width(r.Title)-2)]
 		hintRow(f, x1-hintRowWidth(hs), y, x1, hs, dim, Target{Kind: KindButton})
 		if r.Err != "" { // in place of the table, as a data pane shows it (§7.6)
 			fg := th.Error

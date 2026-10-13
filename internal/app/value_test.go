@@ -568,7 +568,7 @@ func TestValueBoxPlacement(t *testing.T) {
 }
 
 // The box is as wide as the longest line of the text, a tab at its tabstop, the
-// border and the gutter in: half the pane for a short text (40 at least), more
+// border, the gutter and the cursor's column past the line's end in: half the pane for a short text (40 at least), more
 // for a long line, the pane at most; it stays at the cell's left and moves left
 // when it would go over the pane's right edge (F15.5).
 func TestValueBoxWidth(t *testing.T) {
@@ -582,10 +582,10 @@ func TestValueBoxWidth(t *testing.T) {
 		want       int
 	}{
 		{"short", "{}", half},
-		{"just under the half", strings.Repeat("x", half-gutter-4), half},
-		{"a long line", "{\n" + strings.Repeat("y", 70) + "\n}", 70 + gutter + 4},
-		{"a tab is its tabstop", "\t" + strings.Repeat("z", 60), ed.TabWidth + 60 + gutter + 4},
-		{"wide characters are two cells", strings.Repeat("宽", 40), 80 + gutter + 4},
+		{"just under the half", strings.Repeat("x", half-gutter-5), half},
+		{"a long line", "{\n" + strings.Repeat("y", 70) + "\n}", 70 + gutter + 5},
+		{"a tab is its tabstop", "\t" + strings.Repeat("z", 60), ed.TabWidth + 60 + gutter + 5},
+		{"wide characters are two cells", strings.Repeat("宽", 40), 80 + gutter + 5},
 		{"longer than the pane", strings.Repeat("w", 400), pane.Dx()},
 	} {
 		ed.Load(c.text)
@@ -593,14 +593,14 @@ func TestValueBoxWidth(t *testing.T) {
 			t.Errorf("%s: %d wide, want %d (pane %d)", c.name, box.Dx(), c.want, pane.Dx())
 		}
 	}
-	ed.Load(strings.Repeat("v", half-gutter-4+3)) // wider than the half by a little: the cell's left stays
+	ed.Load(strings.Repeat("v", half-gutter-5+3)) // wider than the half by a little: the cell's left stays
 	cell := func() uv.Rectangle { _, g, area, _ := a.gridOf(a.focused()); return g.CellRect(area) }()
 	if box := a.valueBox(); box.Min.X != cell.Min.X || box.Dx() != half+3 {
 		t.Errorf("left at the cell: box %v, cell %v", box, cell)
 	}
 	feed(t, a, "<Esc>$e")
 	a.value.ed.Load(strings.Repeat("v", 90))
-	if box := a.valueBox(); box.Max.X != pane.Max.X || box.Dx() != 90+gutter+4 {
+	if box := a.valueBox(); box.Max.X != pane.Max.X || box.Dx() != 90+gutter+5 {
 		t.Errorf("the last column: box %v, pane %v", box, pane)
 	}
 	b, _ := valueTab(t) // a long JSON line shows whole
@@ -665,5 +665,29 @@ func TestValueYankFlashes(t *testing.T) {
 	text := ui.Query{Lines: a.value.ed.Lines()}.TextArea(a.valueText())
 	if a.flash == nil || a.render().Buf.CellAt(text.Min.X, text.Min.Y).Style.Bg != a.theme.Yank {
 		t.Errorf("the yank does not flash: %+v", a.flash)
+	}
+}
+
+// Typing at the end of the longest line widens the box as the text grows, and
+// the text is shown from its start again: no column is scrolled out of sight
+// and none left empty on the right (F15.5).
+func TestValueTypingAtTheEndOfTheLongestLine(t *testing.T) {
+	a, _ := valueTab(t)
+	a.value.ed.Load(strings.Repeat("x", 60))
+	a.valueSize()
+	feed(t, a, "A")
+	if l := a.value.ed.Left(); l != 0 {
+		t.Fatalf("A at the end: left %d", l)
+	}
+	feed(t, a, "yyyyyy")
+	if l := a.value.ed.Left(); l != 0 {
+		t.Errorf("after typing: left %d", l)
+	}
+	feed(t, a, "<Esc>")
+	if l := a.value.ed.Left(); l != 0 {
+		t.Errorf("after esc: left %d", l)
+	}
+	if box, text := a.valueBox(), a.valueText(); text.Dx()-5 < 66 || box.Dx() != 66+5+5 {
+		t.Errorf("box %v, text %v", box, text)
 	}
 }

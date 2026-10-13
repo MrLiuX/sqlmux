@@ -180,11 +180,15 @@ func TestSnippetEnds(t *testing.T) {
 	e := New("select 1;\n" + alterText)
 	e.SetHeight(10)
 	e.Snippet(Pos{1, 0}, Pos{1, len(alterText)}, []Range{{Pos{1, 26}, Pos{1, 32}}, {Pos{1, 33}, Pos{1, 39}}})
-	typed(e, "<Esc>", "k") // out of it, on the line above
-	if e.snipAlive() != nil {
-		t.Error("the cursor left it")
+	typed(e, "<Esc>", "k") // out of it, on the line above: in NORMAL that is no end
+	if e.snipAlive() == nil {
+		t.Error("moving in NORMAL ended it")
 	}
-	typed(e, "i", "<Tab>")
+	typed(e, "i") // INSERT with the cursor in no tabstop
+	if e.snipAlive() != nil {
+		t.Error("the cursor is in no tabstop in INSERT")
+	}
+	typed(e, "<Tab>")
 	if !strings.Contains(e.Lines()[0], "  ") {
 		t.Errorf("Tab with no snippet: %q", e.Lines()[0])
 	}
@@ -284,14 +288,87 @@ func TestSnippetUndo(t *testing.T) {
 }
 
 // An edit inside a tabstop that is not the one being filled in makes it longer
-// (the whole of it is selected when it comes), and one right after its end
-// leaves it as it was (F15.8).
+// (the whole of it is selected when it comes) (F15.8).
 func TestSnippetEditsOfOtherTabstops(t *testing.T) {
 	e := snippetOf("select <a>, <b> from t")
-	typed(e, "<Tab>", "<Esc>", "0", "f", "a", "i", "Q", "<Esc>") // <b> is the one filled in; Q goes into <a>
-	typed(e, "f", ",", "i", "W", "<Esc>")                        // W goes right after <Qa>
-	typed(e, "a", "<S-Tab>")
-	if got := tabstopText(e); got != "<Qa>" || e.Lines()[0] != "select <Qa>W, <b> from t" {
+	typed(e, "<Tab>", "<Esc>", "0", "f", "a", "i", "Q", "<Esc>", "a", "<S-Tab>") // <b> is the one filled in; Q goes into <a>
+	if got := tabstopText(e); got != "<Qa>" {
 		t.Errorf("S-Tab: %q in %q", got, e.Lines()[0])
+	}
+}
+
+// What the text's change does to the places, when it is made to the text
+// without a key of the editor's: one right after a tabstop leaves it, one that
+// cuts across the ends of two makes each a point where it began, one that takes
+// the snippet's text whole ends it unless it is the tabstop being typed over (F15.8).
+func TestSnippetPlacesOfAChange(t *testing.T) {
+	e := New("a <x> b <y>")
+	e.Snippet(Pos{}, Pos{0, 11}, []Range{{Pos{0, 2}, Pos{0, 5}}, {Pos{0, 8}, Pos{0, 11}}})
+	typed(e, "<Tab>") // <y> is the one filled in
+	e.lines = []string{"a <x>Z b <y>"}
+	e.cur = Pos{0, 6}
+	e.snipSync()
+	if got := e.snip.stops; got[0] != [2]int{2, 5} || got[1] != [2]int{9, 12} {
+		t.Errorf("one right after <x>: %v", got)
+	}
+	e.lines = []string{"a <y>"} // from inside <x> to inside <y>
+	e.cur = Pos{0, 3}
+	e.snipSync()
+	if got := e.snip; got == nil || got.stops[0] != [2]int{3, 3} || got.stops[1] != [2]int{3, 3} {
+		t.Errorf("one across: %+v", got)
+	}
+	w := New("<x>")
+	w.SetHeight(5)
+	w.Snippet(Pos{}, Pos{0, 3}, []Range{{Pos{0, 0}, Pos{0, 3}}})
+	typed(w, "a") // the snippet is just its tabstop, and what is typed over it is not the text taken whole
+	if w.snipAlive() == nil {
+		t.Error("typing over a snippet's only tabstop ended it")
+	}
+}
+
+// In INSERT or SELECT the snippet ends with the cursor out of every tabstop:
+// o, and A and typing after the text; in NORMAL moving is no end, and a Tab
+// after it is a tab (nvim 0.12.4, F15.8).
+func TestSnippetEndsWithTheCursorOutOfTabstops(t *testing.T) {
+	e := snippetOf(alterText)
+	typed(e, "i", "d", "<Esc>", "o", "<Tab>", "x")
+	if e.snip != nil || e.Lines()[0] != "alter table t add column id <type>;" || e.Lines()[1] != "  x" {
+		t.Errorf("o: snippet %v, %q", e.snip != nil, e.Lines())
+	}
+	e = snippetOf(alterText)
+	typed(e, "<Esc>", "A", "<Tab>", "x")
+	if e.snip != nil || !strings.HasPrefix(e.Lines()[0], "alter table t add column <name> <type>;") || !strings.HasSuffix(e.Lines()[0], "x") {
+		t.Errorf("A: snippet %v, %q", e.snip != nil, e.Lines())
+	}
+	e = snippetOf(alterText)
+	typed(e, "<Esc>", "$", "0", "w")
+	if e.snip == nil {
+		t.Error("moving in NORMAL ended it")
+	}
+	typed(e, "f", "<", "a", "<Tab>") // `a` puts the cursor after the < of <type>... inside it
+	if e.snip == nil || tabstopText(e) != "<type>" {
+		t.Errorf("Tab from inside the next tabstop: %v %q", e.snip != nil, tabstopText(e))
+	}
+}
+
+// Where a change is put when the same text comes of several: at the cursor
+// after it, not before the first byte of the run, nor past where it can be.
+func TestChangeOf(t *testing.T) {
+	for _, c := range []struct {
+		old, now string
+		at       int
+		a, b     int
+	}{
+		{"a\nb", "a\n\nb", 3, 2, 2},      // a line break typed after the first: cursor on the new line
+		{"a\nb", "a\n\nb", 2, 1, 1},      // before the cursor's line break
+		{"a\nb", "a\n\nb", 0, 1, 1},      // a cursor elsewhere: the earliest place it can be
+		{"xxx", "xxxx", 2, 1, 1},         // x typed in a run of them
+		{"xxxx", "xxx", 1, 1, 2},         // one taken out of it
+		{"abc", "aXc", 2, 1, 2},          // a replacement is not slid
+		{"alter <a>", "alter ", 6, 6, 9}, // the end cut off
+	} {
+		if a, b := changeOf(c.old, c.now, c.at); a != c.a || b != c.b {
+			t.Errorf("%q -> %q at %d: [%d,%d), want [%d,%d)", c.old, c.now, c.at, a, b, c.a, c.b)
+		}
 	}
 }

@@ -153,3 +153,37 @@ func TestValueAndJSONSearchLit(t *testing.T) {
 	}
 	golden.RequireEqual(t, f.String())
 }
+
+// With the matches of a search lit, the first esc of the value editor and the
+// JSON view only puts them out, the second leaves; q leaves at once (F15.9).
+func TestEscClearsTheSearchFirst(t *testing.T) {
+	a, _ := valueTab(t)
+	feed(t, a, "/tags<CR>")
+	feed(t, a, "<Esc>")
+	if a.value == nil || a.value.ed.Lit() {
+		t.Fatalf("value editor, first esc: open %v", a.value != nil)
+	}
+	feed(t, a, "<Esc>")
+	if a.value != nil {
+		t.Error("value editor, second esc leaves")
+	}
+	b := sized(160, 45, "nerd")
+	loadOrders(t, b, 3)
+	p := b.focused()
+	feed(t, b, "gj/status<CR><Esc>")
+	if jv := jsonViewOf(p); jv == nil || jv.ed.Lit() {
+		t.Fatalf("JSON view, first esc: view %v", jv != nil)
+	}
+	feed(t, b, "<Esc>")
+	if jsonViewOf(p) != nil {
+		t.Error("JSON view, second esc brings the table back")
+	}
+	feed(t, b, "gj/status<CR>q")
+	if jsonViewOf(p) != nil {
+		t.Error("q leaves with the matches lit")
+	}
+	feed(t, b, "gj/zzzz<CR><Esc>") // nothing found: nothing was lit, esc leaves at once
+	if jsonViewOf(p) != nil {
+		t.Error("esc after a search that found nothing leaves")
+	}
+}

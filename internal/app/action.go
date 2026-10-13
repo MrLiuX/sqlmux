@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
@@ -239,7 +240,9 @@ func init() {
 		"value.leave":     {Title: i18n.N("值编辑器：退出"), Local: true, Run: when(inValue, func(a *App) tea.Cmd { return a.valueKey(keymap.Esc) })},
 		"value.save":      {Title: i18n.N("写回并关闭"), Local: true, Run: when(inValue, func(a *App) tea.Cmd { return a.valueSave() })},
 		"grid.view.json":  {Title: i18n.N("以 JSON 查看"), Run: func(a *App, _ Args) tea.Cmd { return a.viewJSON() }},
-		"json.leave":      {Title: i18n.N("回到表格"), Local: true, Run: func(a *App, _ Args) tea.Cmd { return a.jsonKey(a.focused(), keymap.Esc) }},
+		"json.leave": {Title: i18n.N("回到表格"), Local: true, Run: func(a *App, args Args) tea.Cmd { // "json.leave q" is q's: it leaves with the matches of a search lit too
+			return a.jsonKey(a.focused(), cmp.Or(keymap.Key(args.Arg), keymap.Esc))
+		}},
 		"grid.ddl.table":  {Title: i18n.N("表的 DDL"), Run: func(a *App, _ Args) tea.Cmd { return a.openDDL(false) }},
 		"ddl.down":        {Title: i18n.N("下移"), Local: true, Run: when(inDDL, func(a *App) tea.Cmd { a.scrollDDL(1, false); return nil })},
 		"ddl.up":          {Title: i18n.N("上移"), Local: true, Run: when(inDDL, func(a *App) tea.Cmd { a.scrollDDL(-1, false); return nil })},
