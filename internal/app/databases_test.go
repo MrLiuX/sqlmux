@@ -508,14 +508,14 @@ func TestDatabaseInTitles(t *testing.T) {
 // layout's tab has that the database no longer has, a tab whose connection is
 // not to be had, a reference to a table that is not there (F15.1).
 func TestDatabaseLabeled(t *testing.T) {
-	a, _, alpha := withAlpha(t)
+	a, c, alpha := withAlpha(t)
 	boom := errors.New("boom")
-	alpha.tx = 'T'
+	alpha.tx, c.tx = 'T', 'T' // the connection and its database both: each is asked of
 	a.quit()
-	if a.confirm == nil || !strings.Contains(a.confirm.text, "doraemon/alpha 有未提交的事务") {
+	if a.confirm == nil || !strings.Contains(a.confirm.text, "doraemon、doraemon/alpha 有未提交的事务") {
 		t.Errorf("question %+v", a.confirm)
 	}
-	a.confirm, alpha.tx = nil, 'I'
+	a.confirm, alpha.tx, c.tx = nil, 'I', 'I'
 	for name, msg := range map[string]tea.Msg{
 		"dial":    connected{conn: alpha, err: boom},
 		"catalog": catalogMsg{conn: alpha, err: boom},
@@ -578,5 +578,31 @@ func TestQueryConnDropOnItsConnection(t *testing.T) {
 	feed(t, a, "<CR>")
 	if q.conn != alpha || q.want != nil {
 		t.Errorf("on %s, waiting for %v", q.conn.label(), q.want)
+	}
+}
+
+// A table tab restored in a database is named db.schema.table, a layout that
+// leaves the schema out of it too once the catalog says it (F15.1).
+func TestRestoredTabNamesTheDatabase(t *testing.T) {
+	a, _, alpha := withAlpha(t)
+	data := a.win().Root.A.Pane
+	data.Tabs, data.Cur = nil, 0
+	for _, lt := range []config.LayoutTab{
+		{Kind: "table", Connection: "doraemon", DB: "alpha", Schema: "public", Table: "t_x"},
+		{Kind: "table", Connection: "doraemon", DB: "alpha", Table: "t_y"},
+	} {
+		tb, warn := a.sess.restoreTab(lt, map[string]bool{})
+		if warn != "" {
+			t.Fatal(warn)
+		}
+		data.Tabs = append(data.Tabs, tb)
+	}
+	if data.Tabs[0].Name != "alpha.public.t_x" {
+		t.Errorf("restored as %q", data.Tabs[0].Name)
+	}
+	alpha.Tables = append(alpha.Tables, db.Table{Schema: "public", Name: "t_y"})
+	a.Update(catalogMsg{conn: alpha, schemas: []string{"public"}, current: "public", tables: alpha.Tables})
+	if got := data.Tabs[0].Name + " " + data.Tabs[1].Name; got != "alpha.public.t_x alpha.public.t_y" {
+		t.Errorf("tabs %q", got)
 	}
 }
