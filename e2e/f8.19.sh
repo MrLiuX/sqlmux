@@ -65,7 +65,7 @@ run
 check "再按一次执行：成功，id 1 的 name 是 zz819" eval '[[ $(psql_n "select name from t_user where id = 1") == zz819 && -z $(errbar 2 | head -1) ]]'
 
 # ---- 重连后 query 选过的 schema 还在（search_path 重放）
-key g s; e2e_type agen; sleep 0.4; key Enter; sleep 1.2
+key g s; sleep 0.4; key Enter; sleep 0.4; e2e_type agen; sleep 0.4; key Enter; sleep 1.2
 setsql "show search_path"; run
 check "（准备）query 选了 agentable：search_path 是 agentable" eval '[[ $(rval) == \"agentable\"* ]] || { echo "  got: $(rval)"; false; }'
 kill_all; run; run

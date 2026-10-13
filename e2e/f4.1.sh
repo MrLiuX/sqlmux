@@ -124,7 +124,7 @@ g=($(geom $RP)); e2e_click $((g[0] + g[2] - 9)) "${g[1]}"; sleep 0.8; e2e_keys E
 check "导出：当前目录的 quick-2.csv，内容是重跑之后的" eval '[[ $(cat "$E2E_TMP/quick-2.csv" 2>/dev/null) == "$(printf "count\n%s" $((n0 + 1)))" ]] || { ls "$E2E_TMP"; false; }'
 pal; sql "select current_schema()"; e2e_keys C-t; sleep 0.5; e2e_keys Escape; sleep 0.3
 check "树在 public：quick #7 里是 public" eval '[[ $(rval) == public ]] || { rrow 3; false; }'
-TREE_AGENTABLE="12 5"; e2e_click $TREE_AGENTABLE; sleep 0.3                  # 点树上的 agentable：焦点和光标都到那里
+TREE_AGENTABLE="12 6"; e2e_click $TREE_AGENTABLE; sleep 0.3                  # 点树上的 agentable：焦点和光标都到那里
 click_tab $RP "7:"; key R; done_run
 check "树的光标移到 agentable 后在 quick #7 上 R：用 quick #7 记下的 schema（F5.10 起），还是 public" eval '[[ $(rval) == public ]] || { rrow 3; false; }'
 pal; sql "select e2e_f()"; e2e_keys C-t; sleep 0.5; e2e_keys Escape; sleep 0.3

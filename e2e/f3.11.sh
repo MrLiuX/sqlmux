@@ -28,7 +28,8 @@ key C-l; key g; key s
 check "gs：打开下拉框，输入直接进过滤框（COMMAND）" eval '[[ -n $(pop) && $(bar) == *" COMMAND " ]]'
 g=($(pop)); x=$(e2e_find "$DB.public" 1 | cut -d" " -f1)
 check "下拉框在按钮下方、与按钮左对齐，右边框和 ② 的右边框对齐" eval '[[ ${g[0]} == $x && ${g[1]} == 2 && $(( g[0] + g[2] - 1 )) == 160 ]] || { echo "  box ${g[*]}, button x $x"; false; }'
-check "当前的 public 用 pk 色标出；系统 schema 不列" eval 'y=$(for y in $(seq 3 12); do [[ $(e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $y) == *" public "* ]] && echo $y; done | head -1); [[ -n $y ]] && c=$(e2e_find public $y | tr " " "\n" | awk -v l=${g[0]} "\$1 > l { print; exit }") && style_has $c $y fg=$PK && ! screen_has pg_catalog && ! screen_has information_schema'
+key Enter; sleep 0.5; g=($(pop))   # M15 F15.1: gs lists the databases first; the current one goes on to its schemas
+check "当前库 ↵ 之后列 schema：当前的 public 用 pk 色标出；系统 schema 不列" eval 'y=$(for y in $(seq 3 12); do [[ $(e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) $y) == *" public "* ]] && echo $y; done | head -1); [[ -n $y ]] && c=$(e2e_find public $y | tr " " "\n" | awk -v l=${g[0]} "\$1 > l { print; exit }") && style_has $c $y fg=$PK && ! screen_has pg_catalog && ! screen_has information_schema'
 e2e_type agen; sleep 0.3; key Enter
 check "过滤出 agentable、↵：标题变成 $DB.agentable ▾" eval '[[ -z $(pop) && $(title 2) == *" d · $DB.agentable ▾  ▶ run"* ]]'
 setsql "select count(*) as n from agent"
@@ -75,7 +76,7 @@ check "之后照常按下拉框 SET：读 agentable.agent" eval '[[ $(rrow 3) ==
 
 # ---- 选的 schema 被删掉：catalog 重新加载后，query 退回树当前的 schema（§8.6）
 setsql "create schema gone"; run                                               # 在 query 里建：DDL 成功后重新加载 catalog
-key g; key s; e2e_type gone; sleep 0.3; key Enter
+key g; key s; sleep 0.4; key Enter; sleep 0.4; e2e_type gone; sleep 0.3; key Enter
 check "选了新建的 schema gone" eval '[[ $(title 2) == *" $DB.gone ▾"* ]] || { echo "  $(title 2)"; false; }'
 setsql "drop schema gone"; run                                                 # DDL 成功后重新加载 catalog
 check "drop schema gone 之后：query 退回树当前的 public，不弹提示" eval '[[ $(title 2) == *" $DB.public ▾"* ]] || { echo "  $(title 2)"; false; }'

@@ -55,7 +55,7 @@ ends_count() { [[ $(e2e_text 1 32 2 | noicon | sed 's/ *│ *$//; s/ *$//') == *
 check "第一行显示 $n tables（所有 schema 的表和视图，F1.12）" text_is 4 14 2 " $n tables "
 check "public 的 Tables：按名字排，行数量级按 §7.8（t_order 6.0k、t_order_item 400），分区子表不列" eval 'w=$(want r,p,f public); [[ $(between "Tables ($(grep -c . <<<"$w"))" "Views (2)") == "$w" && $w == *"t_order 6.0k"* && $w == *"t_order_item 400"* && $w != *t_event_20* ]] || { echo "  tree: $(tree | tr "\n" ",")"; echo "  want: $(tr "\n" "," <<<"$w")"; false; }'
 key C-h; for ((i = 0; i < 12; i++)); do [[ $(e2e_text 2 31 $(item_y "Views")) == *Views* ]] && cursor_on "Views (2)" >/dev/null && break; key j; done; key Enter; key C-l
-check "展开 Views (2)：物化视图有行数（名字太长时整个不显示），普通视图 v_paid_order 没有" eval '[[ $(between_p "Views (2)" "Functions (") == "mv_order_by_status"*$'"'\n'"'"v_paid_order" ]] || { between_p "Views (2)" "Functions ("; false; }'
+check "展开 Views (2)：物化视图有行数（名字太长时整个不显示），普通视图 v_paid_order 没有" eval '[[ $(between_p "Views (2)" "Functions (") == "mv_order_by_sta…"*$'"'\n'"'"v_paid_order" ]] || { between_p "Views (2)" "Functions ("; false; }'
 check "表项：图标 func 色" eval 'y=$(item_y t_log); c=$(e2e_find "$NF_TABLE" $y); style_has ${c%% *} $y fg=$FUNC'
 
 # ---- 光标（§7.8）：树聚焦时 select 底、失焦时 row 底；j/k 支持次数，gg / G；悬停 row 底、不动光标
@@ -63,7 +63,7 @@ key C-h; key g g; key C-l
 check "失焦：光标行（第一个节点 doraemon）为 row 底" eval 'cursor_on doraemon && style_has 30 4 bg=$ROW'
 key C-h
 check "C-h 聚焦树：光标行为 select 底" eval 'cursor_on doraemon && style_has 30 4 bg=$SELECT'
-key 3 j; check "3j：下移 3 个节点（Tables (6)）" cursor_on "Tables (6)"
+key 4 j; check "4j：下移 4 个节点（doraemon → 库 → agentable → public → Tables (6)，M15 起树多一层数据库）" cursor_on "Tables (6)"
 key k;   check "k：上移 1 个（public）" cursor_on public
 key G;   check "G：最后一个节点（Queries，F8.21：工作区下面多了 Queries 节点；没有 query 时它下面是空的）" cursor_on Queries
 key g g; check "gg：第一个节点" cursor_on doraemon
@@ -76,7 +76,7 @@ key 5 j; typ /
 check "/：进入 INSERT" mode_is INSERT
 typ ord
 check "输入 ord：过滤行显示 <图标> ord 和 dim 色的 4/${n}，终端光标在文字后面" eval 'text_is 3 7 2 "$(e2e_text 3 3 2) ord" && ends_count "4/$n" && at_c=$(e2e_find 4/$n 2) && style_has $at_c 2 fg=$DIM && flag_is cursor_flag 1 && [[ $(e2e_flag cursor_x) == 7 && $(e2e_flag cursor_y) == 1 ]]'
-check "只剩匹配的表和视图及其上级，按树的顺序（不按分数），工作区隐藏" eval '[[ $(tree | tr "\n" ",") == "doraemon,public,Tables (6),t_order 6.0k,t_order_item 400,Views (2),mv_order_by_status,v_paid_order," ]] || { echo "  $(tree | tr "\n" ",")"; false; }'
+check "只剩匹配的表和视图及其上级，按树的顺序（不按分数），工作区隐藏" eval '[[ $(tree | tr "\n" ",") == "doraemon,sqlmux,public,Tables (6),t_order 6.0k,t_order_item 400,Views (2),mv_order_by_sta…,v_paid_order," ]] || { echo "  $(tree | tr "\n" ",")"; false; }'
 key Enter
 check "↵：回到 NORMAL，保留过滤，光标在第一个匹配 t_order 上" eval 'mode_is NORMAL && ends_count "4/$n" && cursor_on t_order'
 key j; typ /; key Escape
@@ -103,7 +103,7 @@ key C-h; key C-h
 check "焦点在树上：↵ 打开到最近聚焦过的 data pane ①（从 ② 经过 ① 回来），高亮 t_user" lit t_user
 
 # ---- 面板 @ 的顺序跟着「树当前的 schema」（光标所在节点所属的 schema，F1.12）
-key g g; key j                                                                   # 光标到 agentable
+key g g; key j; key j                                                               # 光标到 agentable（doraemon 下先是库）
 pal "@"
 check "光标在 agentable 上，面板 @：agentable 的表在前，其余按 schema、表名；所在位置是 doraemon.<schema>" eval 'o=$(list | cut -d"|" -f1 | head -5 | tr -s " " | tr "\n" ","); [[ $o == "agent doraemon.agentable 表,agent_version doraemon.agentable 表,goal doraemon.agentable 表,mv_order_by_status doraemon.public 表,t_event doraemon.public 表," ]] || { echo "  $o"; false; }'
 key Escape; key j                                                                 # 光标到 public
@@ -115,7 +115,7 @@ key Escape
 start -y 12
 key C-h
 e2e_wheel 10 6 down; sleep 0.3
-check "滚一格：视图下移 3 个节点（Tables (6) 起）；光标被夹到 Tables (6)" eval '[[ $(tree | head -1) == "Tables (6)" ]] && cursor_on "Tables (6)"'
+check "滚一格：视图下移 3 个节点（public 起）；光标被夹到 public" eval '[[ $(tree | head -1) == "public" ]] && cursor_on public'
 for i in 1 2 3 4; do e2e_wheel 10 6 down; sleep 0.2; done
 check "滚到底：最后一个节点 Queries 贴着底边，不再往下" eval '[[ $(tree | tail -1) == Queries && $(e2e_text 2 31 $(last_y)) == *Queries* ]]'
 for i in 1 2 3 4 5 6; do e2e_wheel 10 6 up; sleep 0.2; done
@@ -124,9 +124,9 @@ check "往回滚：回到顶部" eval '[[ $(tree | head -1) == doraemon ]]'
 # ---- R 刷新（§7.8、§6.8）：Meta 连接重新执行表列表的查询
 APP=e2e-f12-$$
 printf '[[connection]]\nname = "doraemon"\nengine = "postgres"\ndsn = "%s&application_name=%s"\n' "$SQLMUX_TEST_PG" "$APP" >"$D/connections.toml"; chmod 600 "$D/connections.toml"
-tables_q() { psql "$SQLMUX_TEST_PG" -At -c "select max(query_start) from pg_stat_activity where application_name = '$APP' and (query like '%relispartition%' or query like '%relkind = ''S''%')"; }
+tables_q() { psql "$SQLMUX_TEST_PG" -At -c "select max(query_start) from pg_stat_activity where application_name = '$APP' and (query like '%relispartition%' or query like '%relkind = ''S''%' or query like '%from pg_database%')"; }
 start -C "$D"
 t0=$(tree); q0=$(tables_q); key C-h; key R; sleep 0.5
-check "R：Meta 上重新查了表列表（F14.3 起 Meta 最后一条是函数 / 序列的查询，所以三种都算），树不变" eval '[[ -n $q0 && $(tables_q) > $q0 && $(tree) == "$t0" ]] || { echo "  query_start $q0 → $(tables_q)"; false; }'
+check "R：Meta 上重新查了表列表（F14.3 起 Meta 最后一条是函数 / 序列的查询、M15 F15.1 起是库列表的查询，所以三种都算），树不变" eval '[[ -n $q0 && $(tables_q) > $q0 && $(tree) == "$t0" ]] || { echo "  query_start $q0 → $(tables_q)"; false; }'
 
 e2e_done

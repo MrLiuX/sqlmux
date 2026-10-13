@@ -24,7 +24,7 @@ start; key C-h
 check "聚焦树：光标在 session 节点 doraemon" cur_is doraemon
 
 # ---- l / h：展开、移到第一个子节点、移到父节点、折叠
-key j
+key j; key j   # M15 F15.1: the database node comes first
 check "j：agentable（折叠着，下面的表不显示）" eval 'cur_is agentable && ! open_mark agentable && ! shown agent'
 key l
 check "l：展开 agentable，出现 Tables (3)、Views (0)，光标不动" eval 'cur_is agentable && open_mark agentable && shown "Tables \(3\)" && shown "Views \(0\)"'

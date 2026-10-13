@@ -86,7 +86,7 @@ check "s 的 Main 在事务里：不让换，toast「当前连接有未提交的
 setsql "rollback"; run; sleep 3
 
 # ---- DDL 之后刷新的是 query 所在的连接（s），d 的 catalog 不动
-key g s; e2e_type agen; sleep 0.3; key Enter
+key g s; sleep 0.4; key Enter; sleep 0.4; e2e_type agen; sleep 0.3; key Enter
 check "gs 选 agentable：s · <库>.agentable ▾" on s agentable
 setsql "create table t_f511 (i int)"; run; sleep 0.5
 pal "@t_f511"
@@ -114,10 +114,10 @@ check "之后 s 的 Main 已关，不算在事务里：能换到 d" eval 'wait_f
 # ---- 换回 s、选 agentable，重启后恢复（state.json 记 query_1 的连接和 schema）
 pal ">切换连接"; e2e_keys Enter; sleep 0.4
 check "命令「切换连接…」：打开 ② 的连接下拉" eval '[[ $(dd_rows | noicon | tr "\n" " ") == "d s t bad " ]]'
-e2e_type s; sleep 0.3; key Enter; wait_for 3 eval "on s public >/dev/null"; key g s; e2e_type agen; sleep 0.3; key Enter; sleep 1.5
+e2e_type s; sleep 0.3; key Enter; wait_for 3 eval "on s public >/dev/null"; key g s; sleep 0.4; key Enter; sleep 0.4; e2e_type agen; sleep 0.3; key Enter; sleep 1.5
 check "query_1 换回 s、agentable" on s agentable
 check "query 文件在 queries/query_1.sql（不再按连接分目录）" eval '[[ -f $D/data/sqlmux/queries/query_1.sql && ! -d $D/data/sqlmux/queries/d ]]'
-e2e_click 60 20; sleep 0.3; key c; sleep 0.5; key g s; e2e_type agen; sleep 0.3; key Enter; sleep 1.5   # ① 新建 query_2，选 agentable：state 记下它
+e2e_click 60 20; sleep 0.3; key c; sleep 0.5; key g s; sleep 0.4; key Enter; sleep 0.4; e2e_type agen; sleep 0.3; key Enter; sleep 1.5   # ① 新建 query_2，选 agentable：state 记下它
 check "① 的 query_2 选了 agentable，state.json 记下 query_2 的连接和 schema" eval '[[ $(python3 -c "import json,sys; c=json.load(open(sys.argv[1]))[\"queries\"][\"query_2\"]; print(c[\"schema\"])" "$ST/sqlmux/state.json") == agentable ]]'
 key :; e2e_type qa; key Enter; wait_for 3 screen_has "[e2e-exit 0]"
 rm -f "$ST/sqlmux/last.toml"   # F6.5: a start without arguments restores last.toml; this one checks the default layout

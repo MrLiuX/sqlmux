@@ -80,7 +80,7 @@ e2e_keys Enter; wait_for 8 eval '[[ -n $(title) ]]'
 check "再 ↵：执行（输入不变，结果区是数据库的报错）" eval '[[ $(input) == ";select st from t_order where status = '"'done'"' and paid" && $(line1) == ERROR:* ]] || { echo "  $(input) / $(line1)"; false; }'
 
 # ---- 树停在 agentable（F1.12：光标所在节点的 schema）：同一事务里 SET LOCAL search_path，agent 能直接找到，补全也换成 agentable 的表
-e2e_keys Escape; sleep 0.3; key C-h; key g g; key j; sleep 0.3                   # 光标移到 agentable 节点
+e2e_keys Escape; sleep 0.3; key C-h; key g g; key j; key j; sleep 0.3                   # 光标移到 agentable 节点
 pal; sql "select count(*) from agent"
 check "树在 agentable：;select count(*) from agent 能找到表，结果和 psql 一致" eval '[[ $(grid) == $(psql_n "select count(*) from agentable.agent") ]] || { echo "  $(line1)"; false; }'
 clear_all; e2e_type ";select * from agent_v"; sleep 0.5
