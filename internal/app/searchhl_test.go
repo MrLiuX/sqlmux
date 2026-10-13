@@ -208,6 +208,16 @@ func TestHintButtonsCloseWithTheSearchLit(t *testing.T) {
 	if a.value != nil {
 		t.Error("the value editor's 关闭 does not close")
 	}
+	feed(t, a, "e")
+	feed(t, a, "ggx") // a change not written back: the button asks first, and no is no
+	press(a, "value.leave close")
+	if a.value == nil || a.confirm == nil || !strings.Contains(a.confirm.text, "放弃") {
+		t.Fatalf("关闭 with a change: box %v, question %v", a.value != nil, a.confirm != nil)
+	}
+	feed(t, a, "n")
+	if a.value == nil || a.confirm != nil {
+		t.Errorf("no to the question: box %v, question %v", a.value != nil, a.confirm != nil)
+	}
 	b := sized(160, 45, "nerd")
 	loadOrders(t, b, 3)
 	feed(t, b, "gj/status<CR>")
