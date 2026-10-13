@@ -34,6 +34,7 @@ type Theme struct {
 
 	SQLTable, SQLColumn, SQLOperator color.Color // SQL's names the catalog knows, and its operators (§7.3)
 	Yank                             color.Color // a yank's flash, bg text on it (§7.3)
+	Search, SearchCurrent            color.Color // the matches of an editor's search, and the one the cursor is in, bg text on them (F15.9); a theme that has none gets its visual and its yank
 	Zoom                             color.Color // the border of the pane zoomed (F9.6); a theme that has none gets its warn
 }
 
@@ -56,7 +57,8 @@ var TokyonightStorm = &Theme{
 	Match: c("#ff9e64"),
 
 	SQLTable: c("#2ac3de"), SQLColumn: c("#73daca"), SQLOperator: c("#89ddff"),
-	Yank: c("#e0af68"),
+	Yank:   c("#e0af68"),
+	Search: c("#c8793a"), SearchCurrent: c("#e0af68"),
 	Zoom: c("#e0af68"),
 }
 
@@ -127,6 +129,12 @@ func ParseTheme(data string, icons *Icons) (th *Theme, ic *Icons, unknown []stri
 	if _, ok := raw["selected"]; !ok {
 		th.Selected = th.Visual // an older theme file: the selection as it was drawn
 	}
+	if _, ok := raw["search"]; !ok {
+		th.Search = th.Visual
+	}
+	if _, ok := raw["search_current"]; !ok {
+		th.SearchCurrent = th.Yank
+	}
 	if _, ok := raw["zoom"]; !ok {
 		th.Zoom = th.Warn // as the theme has it, not as tokyonight-storm's
 	}
@@ -169,5 +177,6 @@ func (th *Theme) tokens() map[string]*color.Color {
 
 		"sql_table": &th.SQLTable, "sql_column": &th.SQLColumn, "sql_operator": &th.SQLOperator,
 		"yank": &th.Yank, "zoom": &th.Zoom,
+		"search": &th.Search, "search_current": &th.SearchCurrent,
 	}
 }

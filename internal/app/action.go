@@ -387,6 +387,7 @@ func init() {
 				dataOf(p).bar = nil
 			case queryOf(p) != nil:
 				queryOf(p).bar = nil
+				queryOf(p).ed.Feed(string(keymap.Esc)) // NORMAL's esc, which puts out the search's matches (F15.9)
 			}
 			return nil
 		}},

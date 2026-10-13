@@ -115,6 +115,8 @@ type Editor struct {
 
 	cl         *cmdline // the / ? or : line being typed
 	lastSearch search
+	hl         bool        // the last search's matches are lit, until esc in NORMAL (hlsearch, F15.9)
+	stat       *searchStat // what a search or n N left for the line under the text, until the next key
 
 	done, undone []step
 	snap         []string // the text before the change being made; nil when none is
@@ -164,7 +166,7 @@ func (e *Editor) SetWidth(n int) {
 
 // Feed takes one key.
 func (e *Editor) Feed(k string) Effect {
-	e.eff = Effect{}
+	e.eff, e.stat = Effect{}, nil
 	switch {
 	case e.plain:
 		e.plainKey(k)
@@ -181,6 +183,12 @@ func (e *Editor) Feed(k string) Effect {
 		e.normal()
 	}
 	e.scrollToCursor()
+	if e.stat != nil && e.height > 1 { // the line of it is the text's last: the cursor is not on it
+		h := e.height
+		e.height--
+		e.scrollToCursor()
+		e.height = h
+	}
 	return e.eff
 }
 
@@ -520,7 +528,7 @@ func init() {
 		"zt":    func(e *Editor, c cmd) { e.zet(c, e.scrollTop) },
 		"zz":    func(e *Editor, c cmd) { e.zet(c, func() { e.halfway(true, false) }) },
 		"zb":    func(e *Editor, c cmd) { e.zet(c, e.scrollBottom) },
-		"<Esc>": func(*Editor, cmd) {},
+		"<Esc>": func(e *Editor, _ cmd) { e.hl = false }, // :noh, which LazyVim has on esc (F15.9)
 	}
 }
 

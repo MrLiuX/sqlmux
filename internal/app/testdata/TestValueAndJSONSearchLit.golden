@@ -1,0 +1,45 @@
+┌─ ⓪  doraemon ─────────── « ─┐ ┌─ ①  t_order ───────────────────────────────────────────────┐ ┌─ ②  q…  Tx: 自动 ▾ doraemon · doraemon.public ▾  ▶ run  ↵ ─┐
+│  15 tables                 │ │ WHERE                                                C-r ▾ │ │   1                                                         │
+│──────────────────────────────│ │  ORDER id    LIMIT 100   PAGE 1/?   COLS 7/7   JSON        │ │                                                             │
+│ ▾  doraemon                 │ │   1 [                                                       │ │                                                             │
+│   ▸  agentable              │ │   2   {                                                     │ │                                                             │
+│   ▾  public                 │ │   3     "id": 1,                                            │ │                                                             │
+│     ▾  Tables (14)          │ │   4     "status": "running",                                │ │                                                             │
+│       ▸  agent          124 │ │   5     "amount": 1.99,                                     │ │                                                             │
+│       ▸  agent_version  530 │ │   6     "paid": true,                                       │ │                                                             │
+│       ▸  goal            57 │ │   7     "meta": {                                           │ │                                                             │
+│       ▸  mt_task        812 │ │   8       "n": 1,                                           │ │                                                             │
+│       ▸  mt_task_log    96k │ │   9       "tags": [                                         │ │                                                             │
+│       ▸  schema_migrations  │ │  10         "a",                                            │ │                                                             │
+│       ▸  t_order       1.2m │ │  11         "b"                                             │ │                                                             │
+│       ▸  t_order_item  3.4m │ │  12       ]                                                 │ │                                                             │
+│       ▸  t_payment     410k │ │  13     },                                                  │ │                                                             │
+│       ▸  t_refund       12k │ │  14     "note": "note 1",                                   │ │                                                             │
+│       ▸  t_sku         8.1k │ │  15     "created_at": "2026-09-01 00:01:00+00"              │ │                                                             │
+│       ▸  t_user         38k │ │  16   },                                                    │ │                                                             │
+│       ▸  t_user_address 52k │ │  17   {                                                     │ │                                                             │
+│       ▸  t_user_profile 38k │ │  18     "id": 2,                                            │ │                                                             │
+│        Views (0)            │ │  19     "status": "done",                                   │ │                                                             │
+│ ▾  工作区                   │ │  20     "amount": 2.99,                                     │ │                                                             │
+│   ▾  data                   │ │  21     "paid": true,                                       │ │                                                             │
+│       ①  t_order            │ │  22     "meta": {                                           │ │                                                             │
+│       ②  query_1            │ │  23       "n": 2,                                           │ │                                                             │
+│ ▾  Queries                  │ │  24       "tags": [                                         │ │                                                             │
+│      query_1                │ │  25         "a",                                            │ │                                                             │
+│                              │ │  26         "b"                                             │ │                                                             │
+│                              │ │  27       ]                                                 │ │                                                             │
+│                              │ │  28     },                                                  │ │                                                             │
+│                              │ │  29     "note": "line one\nline two\tafter tab \u001b[31mred│ │                                                             │
+│                              │ │  30     "created_at": "2026-09-01 00:02:00+00"              │ │                                                             │
+│                              │ │  31   },                                                    │ │                                                             │
+│                              │ │  32   {                                                     │ │                                                             │
+│                              │ │  33     "id": 3,                                            │ │                                                             │
+│                              │ │  34     "status": "failed",                                 │ │                                                             │
+│                              │ │  35     "amount": 3.99,                                     │ │                                                             │
+│                              │ │  36     "paid": true,                                       │ │                                                             │
+│                              │ │  37     "meta": {                                           │ │                                                             │
+│                              │ │  38       "n": 3,                                           │ │                                                             │
+│──────────────────────────────│ │/"n"                                                   [1/3] │ │                                                             │
+│ j/k move · ↵ open            │ │ 1: t_order* │ +                      ]/[ 翻页 · esc 回表格 │ │ 1: query_1* │ +                                      gt/gT │
+└──────────────────────────────┘ └─────────────────────────────────────────────────────────────┘ └─────────────────────────────────────────────────────────────┘
+ doraemon ▾  0: data*                                                                                        ·    1,1   doraemon · pg@localhost:5432  NORMAL 

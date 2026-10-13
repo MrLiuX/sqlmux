@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	uv "github.com/charmbracelet/ultraviolet"
 )
 
 // Every icon and color token can be set from a theme file (§7.3, §7.7).
@@ -66,6 +68,22 @@ func TestThemeZoomDefaultsToWarn(t *testing.T) {
 	}
 }
 
+// The search colors of an editor are the theme's own, and a theme file that
+// has none gets its visual and its yank, as it has had its selection (F15.9).
+func TestThemeSearchFallsBack(t *testing.T) {
+	th, _, _, err := ParseTheme(`visual = "#111111"`+"\n"+`yank = "#222222"`, ASCIIIcons)
+	if err != nil || th.Search != c("#111111") || th.SearchCurrent != c("#222222") {
+		t.Errorf("none written: %v %v (%v)", th.Search, th.SearchCurrent, err)
+	}
+	th, _, unknown, err := ParseTheme(`search = "#333333"`+"\n"+`search_current = "#444444"`, ASCIIIcons)
+	if err != nil || th.Search != c("#333333") || th.SearchCurrent != c("#444444") || len(unknown) != 0 {
+		t.Errorf("written: %v %v, unknown %v (%v)", th.Search, th.SearchCurrent, unknown, err)
+	}
+	if TokyonightStorm.Search == TokyonightStorm.Visual || TokyonightStorm.SearchCurrent != TokyonightStorm.Yank {
+		t.Error("the built-in theme has its own search colors")
+	}
+}
+
 // A color that is no #rrggbb is an error, naming the key.
 func TestParseThemeErrors(t *testing.T) {
 	for data, want := range map[string]string{
@@ -117,5 +135,22 @@ query = { text = "Q", bg = "#ff0000" }
 	}
 	if th.Row != c("#6c6a6d") || ic.Query.Text != "Q" {
 		t.Errorf("the rest is read: row %v, query %v", th.Row, ic.Query)
+	}
+}
+
+// A match is drawn in bg on its color; a theme with none (its visual in the
+// place) keeps the text's own color, which bg would hide (F15.9).
+func TestThemeHit(t *testing.T) {
+	st := uv.Style{Fg: c("#aaaaaa"), Bg: c("#bbbbbb")}
+	th := *TokyonightStorm
+	if got := th.hit(false, st); got.Bg != th.Search || got.Fg != th.Bg {
+		t.Errorf("a match: %v on %v", got.Fg, got.Bg)
+	}
+	if got := th.hit(true, st); got.Bg != th.SearchCurrent || got.Fg != th.Bg {
+		t.Errorf("the current match: %v on %v", got.Fg, got.Bg)
+	}
+	th.Search = th.Visual
+	if got := th.hit(false, st); got.Bg != th.Visual || got.Fg != st.Fg {
+		t.Errorf("a theme with no search color: %v on %v", got.Fg, got.Bg)
 	}
 }

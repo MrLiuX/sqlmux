@@ -58,5 +58,15 @@ func (a *App) textView(ed *editor.Editor, pane int, json bool) ui.Query {
 		q.Yank = f.text
 	}
 	q.Prompt, q.Text, q.Pos, _ = ed.CmdLine()
+	searchView(ed, &q)
 	return q
+}
+
+// searchView puts in q the matches of ed's last search that are lit, and the
+// line the search left under the text (F15.9).
+func searchView(ed *editor.Editor, q *ui.Query) {
+	for _, h := range ed.Hits() {
+		q.Hits = append(q.Hits, ui.Span(h))
+	}
+	q.Stat, q.StatRight, _ = ed.Stat()
 }

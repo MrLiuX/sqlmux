@@ -33,15 +33,26 @@ type Query struct {
 	// Pos of Text; Prompt is "" when there is none.
 	Prompt, Text string
 	Pos          int
-	Failed       int // the first line of the statement whose last run failed: its ▶ in error; -1 for none
-	Pane         int
-	Names        SQLNames       // the tables and columns among the text's names, for their colors; nil for none
-	Dialect      sqlkit.Dialect // its connection's SQL
-	Yank         Sel            // what a yank took, flashing (F3.32)
+	// Hits are the matches of the last search on the lines in view, lit, and
+	// Stat and StatRight the line a search left under the text (F15.9).
+	Hits            []Span
+	Stat, StatRight string
+	Failed          int // the first line of the statement whose last run failed: its ▶ in error; -1 for none
+	Pane            int
+	Names           SQLNames       // the tables and columns among the text's names, for their colors; nil for none
+	Dialect         sqlkit.Dialect // its connection's SQL
+	Yank            Sel            // what a yank took, flashing (F3.32)
 	// Colors are the text's own colors by byte, a value editor's (F12.2):
 	// with them there are no statements and no ▶; Pane is ValuePane, so a click
 	// on the text is the box's, not that of a query under it.
 	Colors []color.Color
+}
+
+// Span is a match to light: bytes [From, To) of line Line, Current for the one
+// the cursor is in.
+type Span struct {
+	Line, From, To int
+	Current        bool
 }
 
 // ValuePane is the Pane of the value editor's text: no pane has it.
@@ -155,11 +166,35 @@ func (c Query) Draw(f *Frame, r uv.Rectangle) uv.Position {
 	if c.Prompt != "" && r.Dy() > 0 {
 		return drawCmdline(f, uv.Rect(r.Min.X, r.Max.Y-1, r.Dx(), 1), c.Prompt+c.Text, len(c.Prompt)+c.Pos)
 	}
+	if c.Stat != "" && r.Dy() > 0 {
+		c.drawStat(f, uv.Rect(r.Min.X, r.Max.Y-1, r.Dx(), 1))
+	}
 	x, y := ta.Min.X+c.CursorCol-c.Left, r.Min.Y+cur.Line-c.Top
 	if x < ta.Min.X || x >= ta.Max.X || y >= r.Max.Y {
 		return uv.Pos(-1, -1)
 	}
 	return uv.Pos(x, y)
+}
+
+// drawStat draws the line a search left on the last row: the pattern, the
+// count at the right end when there is room for both.
+func (c Query) drawStat(f *Frame, r uv.Rectangle) {
+	st := uv.Style{Fg: f.Theme.Fg, Bg: f.Theme.PaneBg}
+	f.Fill(r, st)
+	f.Text(r.Min.X, r.Min.Y, r.Max.X, c.Stat, st)
+	if x := r.Max.X - Width(c.StatRight) - 1; x > r.Min.X+Width(c.Stat) {
+		f.Text(x, r.Min.Y, r.Max.X, c.StatRight, st)
+	}
+}
+
+// hitAt is the match at byte col of line n, nil for none.
+func (c Query) hitAt(n, col int) *Span {
+	for i, h := range c.Hits {
+		if h.Line == n && col >= h.From && col < h.To {
+			return &c.Hits[i]
+		}
+	}
+	return nil
 }
 
 // drawLine draws line n on row, from display column Left; fg are its
@@ -184,6 +219,10 @@ func (c Query) drawLine(f *Frame, ta uv.Rectangle, row, n int, fg []color.Color,
 			st = uv.Style{Fg: th.Bg, Bg: th.Yank}
 		case c.Sel.has(n, i, v, w):
 			st.Bg = th.Visual
+		default:
+			if h := c.hitAt(n, i); h != nil {
+				st = th.hit(h.Current, st)
+			}
 		}
 		switch {
 		case l[i] == '\t' || v < c.Left && v+w > c.Left: // a tab, or a character cut by the left edge: blanks
@@ -325,4 +364,19 @@ func drawCmdline(f *Frame, r uv.Rectangle, s string, pos int) uv.Position {
 	}
 	f.Text(r.Min.X, r.Min.Y, r.Max.X, s, uv.Style{Fg: f.Theme.Fg, Bg: f.Theme.PaneBg})
 	return uv.Pos(r.Min.X+Width(s[:pos]), r.Min.Y)
+}
+
+// hit is st, a character of a search's match, as it is drawn: the match color
+// for its background, bg for its text, which a theme that has no search color
+// (its visual in its place) keeps its own (F15.9).
+func (th *Theme) hit(current bool, st uv.Style) uv.Style {
+	bg := th.Search
+	if current {
+		bg = th.SearchCurrent
+	}
+	if bg != th.Visual {
+		st.Fg = th.Bg
+	}
+	st.Bg = bg
+	return st
 }

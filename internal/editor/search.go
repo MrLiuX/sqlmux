@@ -220,6 +220,7 @@ func (e *Editor) findNext(c cmd, reverse bool) target {
 func (e *Editor) searchNext(p Pos, count int, back bool) target {
 	s := e.lastSearch
 	fail := target{to: e.cur}
+	e.hl = true
 	if s.pattern == "" {
 		e.eff.Error = i18n.T(noPattern)
 		return fail
@@ -229,14 +230,101 @@ func (e *Editor) searchNext(p Pos, count int, back bool) target {
 		e.eff.Error = i18n.T("正则有误：%s", err)
 		return fail
 	}
+	wrapped := false
 	for ; count > 0; count-- {
-		var ok bool
-		if p, ok = e.searchFrom(m, p, back); !ok {
+		q, ok := e.searchFrom(m, p, back)
+		if !ok {
 			e.eff.Error = i18n.T("找不到：%s", s.pattern)
 			return fail
 		}
+		wrapped = wrapped || back && !q.less(p) || !back && !p.less(q)
+		p = q
 	}
+	e.stat = e.statOf(m, p, back, wrapped)
 	return target{to: p, ok: true}
+}
+
+// searchStat is the line a search leaves under the text: the pattern as it
+// was searched, and the count at its right end (F15.9).
+type searchStat struct{ left, right string }
+
+// searchMaxCount is how far the count goes: beyond it ">99" (search.c
+// SEARCH_STAT_DEF_MAX_COUNT).
+const searchMaxCount = 99
+
+// statOf is the line for a match at p: [cur/total], W before it when the
+// search wrapped around the end of the text (search.c update_search_stat,
+// cmdline_search_stat). The count is of the matches RE2 finds in each line,
+// one that overlaps the one before not among them.
+func (e *Editor) statOf(m matcher, p Pos, back, wrapped bool) *searchStat {
+	cur, total := 0, 0
+count:
+	for n, l := range e.lines {
+		for _, x := range m.find(l) {
+			col := x[0]
+			if col >= len(l) {
+				col = last(l)
+			}
+			if total++; !p.less(Pos{n, col}) { // the matches up to p
+				cur = total
+			}
+			if total > searchMaxCount {
+				break count
+			}
+		}
+	}
+	over := func(n int) string {
+		if n > searchMaxCount {
+			return ">" + strconv.Itoa(searchMaxCount)
+		}
+		return strconv.Itoa(n)
+	}
+	st := &searchStat{left: "/" + e.lastSearch.pattern, right: "[" + over(cur) + "/" + over(total) + "]"}
+	if back {
+		st.left = "?" + e.lastSearch.pattern
+	}
+	if wrapped {
+		st.right = "W " + st.right
+	}
+	return st
+}
+
+// Stat is the line left under the text by a search, n or N, until the next
+// key: the pattern as / or ? would show it, and the count at its end; ok is
+// false when there is none (F15.9).
+func (e *Editor) Stat() (left, right string, ok bool) {
+	if e.stat == nil {
+		return "", "", false
+	}
+	return e.stat.left, e.stat.right, true
+}
+
+// Hit is a match of the last search to light, bytes [From, To) of Line;
+// Current is the one the cursor is in (F15.9).
+type Hit struct {
+	Line, From, To int
+	Current        bool
+}
+
+// Hits are the matches of the last search on the lines in view, while they
+// are lit: from a search until esc in NORMAL.
+func (e *Editor) Hits() []Hit {
+	if !e.hl || e.lastSearch.pattern == "" || e.height <= 0 {
+		return nil
+	}
+	m, err := compile(e.lastSearch.pattern, e.lastSearch.ignore)
+	if err != nil {
+		return nil
+	}
+	var hits []Hit
+	for n := e.top; n < min(e.top+e.height, len(e.lines)); n++ {
+		for _, x := range m.find(e.lines[n]) {
+			if x[1] > x[0] {
+				hits = append(hits, Hit{n, x[0], x[1], e.cur.Line == n && e.cur.Col >= x[0] && e.cur.Col < x[1]})
+			}
+		}
+	}
+	return hits
 }
 
 // searchFrom finds the next match of m after p (before it, back),
@@ -450,7 +538,7 @@ func (e *Editor) substitute(from, to int, arg string) {
 		}
 		pattern, ignore = e.lastSearch.pattern, e.lastSearch.ignore
 	}
-	e.lastSearch = search{pattern: pattern, ignore: ignore, backwards: e.lastSearch.backwards}
+	e.lastSearch, e.hl = search{pattern: pattern, ignore: ignore, backwards: e.lastSearch.backwards}, true
 	m, err := compile(pattern, ignore || strings.Contains(flags, "i"))
 	if err != nil {
 		e.eff.Error = i18n.T("正则有误：%s", err)

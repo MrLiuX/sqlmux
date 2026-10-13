@@ -201,6 +201,7 @@ func (a *App) queryView(p *Pane, t *queryTab) (ui.Query, uv.Rectangle) {
 	}
 	c.Prompt, c.Text, c.Pos, _ = ed.CmdLine()
 	c.Sel = vimSel(ed)
+	searchView(ed, &c)
 	return c, body
 }
 
