@@ -71,7 +71,7 @@ time    = "#fc9867"
 | `select` / `row` | #364a82 / #292e42 | 选中项 / 当前行 |
 | `visual` | #2d3f76 | query 的 VISUAL / V-LINE / V-BLOCK 选区，以及单元格编辑、输入框的「全选」（M2/M3 验收时从 `select` 拆出，用户觉得选区不明显）；表格里正在选的范围（§7.6「选择」） |
 | `selected` | 黄色系（worker 定，和 `warn` 同色相、压暗） | 表格里已确认选中的记录的序号格（M12 F12.12）；主题没写时退回 `visual` |
-| `search` | 橙色系底、`bg` 字（worker 定，照 nvim 默认配色的 `Search`） | 编辑器里搜索的其他匹配（M15 F15.9，§11「搜索」）；主题没写时退回 `visual` |
+| `search` | 橙色系底、`bg` 字（worker 定，照 nvim 默认配色的 `Search`） | 编辑器里搜索的其他匹配（M15 F15.9，§11「搜索」）；主题没写时退回 `visual` 底、命中文字保留原前景（深底深字看不清），退回规则同 `selected`；内置主题自带 |
 | `search_current` | 同 `yank`（`warn` 底、`bg` 字，照 nvim 的 `CurSearch`） | 编辑器里搜索的当前匹配（M15 F15.9）；主题没写时退回 `yank` |
 | `error_bg` | #3b2230 | 错误栏的底色（§7.8「错误栏」） |
 | `row_alt` | #1f2335 | 表格斑马纹的偶数行（比 pane 底色深） |
