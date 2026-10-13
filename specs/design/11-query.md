@@ -12,7 +12,8 @@
 |---|---|
 | 模式 | NORMAL、INSERT、REPLACE（`R`）、VISUAL（`v`）、VISUAL LINE（`V`）、VISUAL BLOCK（`C-v`） |
 | 移动 | `h j k l`、`w b e ge`、`W B E gE`、`0 ^ $`、`gg G {n}G`、`f F t T ; ,`、`%`、`{ }`、`H M L`、`C-d C-u C-f C-b`、`zz zt zb`、`* #` |
-| 搜索 | `/ ?` 回车，`n N` 跳转。正则用 Go 的 RE2 语法（接近 vim 的 `\v`），smartcase |
+| 搜索 | `/ ?` 回车，`n N` 跳转。正则用 Go 的 RE2 语法（接近 vim 的 `\v`），smartcase。**高亮与计数**（M15 F15.9，用户验收：query 和 JSON 视图里搜索都没有匹配高亮，要和 nvim 一样）：回车后所有匹配用 `search` 底、当前匹配用 `search_current` 底（§7.7；nvim 的 `Search` / `CurSearch`，hlsearch），`n` / `N` 跟着换当前匹配；高亮一直留着，NORMAL 下 `esc` 清掉（同 LazyVim 把 `esc` 映成 `:noh`，nvim 本身要 `:noh`），下一次搜索或 `n` / `N` 再亮。回车和 `n` / `N` 之后命令行那一行留着显示模式，右端是匹配序号 `[1/2]`，绕回去了前面加 `W`（nvim `shortmess` 没有 `S` 时的 search count，search.c `update_search_stat`，上限 99 的写法照它），下一个不是 `n` / `N` 的键按下时这一行消失。值编辑器和 JSON 视图是同一个编辑器，一样 |
+| snippet 与 Select 模式 | M15 F15.8（用户验收：结构模板的占位符要像 nvim 的 snippet：选中着就能直接打字替换，`Tab` / `S-Tab` 跳上下一个占位符）。照 nvim 的 `vim.snippet`（runtime/lua/vim/snippet.lua）做最小的一份：插入带 tabstop 的文字时第一个 tabstop 在 **Select 模式**下选中（模式块显示 SELECT；`:help Select-mode`：可打印字符、粘贴、退格替换选区并进 INSERT，`esc` 回 NORMAL，其余照 nvim，拿不准的以 nvim 实测为准，不做 `gh` / `C-o` 这些进出 Select 的键），剩下的 tabstop 用 `visual` 底标出（nvim 的 `SnippetTabstop` 默认就链到 `Visual`）；snippet 活着时 INSERT 和 SELECT 下 `Tab` 跳到下一个、`S-Tab` 回上一个（跳到的那个进 Select 模式；补全列表开着时 `Tab` 先归补全）；最后一个上按 `Tab` 结束 snippet、光标不动，第一个上 `S-Tab` 无事；光标移出模板文字的范围、或文字被整个替换时 snippet 结束，`esc` 不结束。tabstop 的来源：结构模板的 `<name>` 这些占位符（§7.8）、F15.3 的 `(全部列) VALUES ()` 骨架；补全里别的项不带 tabstop。`vim = false` 时同样选中、打字替换、`Tab` 跳 |
 | 进入 INSERT | `i a I A o O`、`s S` |
 | 操作符 | `d c y`、`> <`、`gu gU g~`（大小写）、`gc`（切换 `--` 注释，同 nvim 0.10 起内置的行为）。操作符可以接任意移动或文本对象，例如 `dw`、`c$`、`y2j`、`gUiw` |
 | 简写 | `dd cc yy`、`D C Y`（`Y` 等同 `y$`，与 nvim 默认一致）、`x X`、`r{字符}`、`~`、`J`、`p P`、`>> <<`、`gcc` |
@@ -26,7 +27,7 @@
 
 **寄存器**：除了无名寄存器，只做系统剪贴板 `"+` / `"*`（F3.38，用户要复制到系统剪贴板），读写方式和表格的复制相同；复制时被复制的范围闪一下 `yank` 色（F3.32）。
 
-**不做**：宏（`q` `@`）、`.` 重复、具名寄存器（`"a`–`"z`）、标记与跳转列表、折叠、句子与标签类文本对象（`is` `as` `it` `at`）、`:g` 等其他 ex 命令；也不做 `gJ`、`{count}%`、VISUAL 下的 `p`、`i<` / `a<`、hlsearch / incsearch，以及 nvim 0.10 起的默认映射 `v*` / `v#`（在 VISUAL 下搜索选中的文字）。不折行（nowrap），横向跟着光标滚动，`H M L`、`C-d` 等按可见行数计算，scrolloff 为 0。
+**不做**：宏（`q` `@`）、`.` 重复、具名寄存器（`"a`–`"z`）、标记与跳转列表、折叠、句子与标签类文本对象（`is` `as` `it` `at`）、`:g` 等其他 ex 命令；也不做 `gJ`、`{count}%`、VISUAL 下的 `p`、`i<` / `a<`、incsearch（hlsearch M15 F15.9 起做了），以及 nvim 0.10 起的默认映射 `v*` / `v#`（在 VISUAL 下搜索选中的文字）。不折行（nowrap），横向跟着光标滚动，`H M L`、`C-d` 等按可见行数计算，scrolloff 为 0。
 
 **块选择的补充说明**：
 
