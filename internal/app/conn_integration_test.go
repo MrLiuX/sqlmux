@@ -837,3 +837,57 @@ func TestDialPasswordSources(t *testing.T) {
 		})
 	}
 }
+
+// A PG connection has the server's databases with its catalog, the one it
+// is dialed to among them; one that dials another has none of its own, and
+// MySQL and SQLite no databases at all: theirs are schemas, or the file
+// (F15.1).
+func TestDatabasesWithCatalog(t *testing.T) { eachEngine(t, databasesWithCatalog) }
+
+func databasesWithCatalog(t *testing.T, eng, dsn string) {
+	sess := openUp(t, []config.Connection{{Name: "play", Engine: eng, DSN: dsn}})
+	defer sess.Close()
+	cfg := config.Default()
+	keys, _ := keymap.New(cfg.Leader, cfg.Vim, cfg.Timeoutlen, cfg.Bindings)
+	a := New(cfg, keys, sess, &config.State{}, "")
+	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
+	play := sess.Conns[0]
+	settle(a, a.loadCatalog(play))
+	if eng != "postgres" {
+		if play.Databases != nil {
+			t.Fatalf("databases %v", play.Databases)
+		}
+		return
+	}
+	if !slices.Contains(play.Databases, play.DB) || slices.Contains(play.Databases, "template0") {
+		t.Fatalf("databases %v of %s", play.Databases, play.DB)
+	}
+	other := "sqlmux_f151_" + strconv.Itoa(os.Getpid())
+	admin, _, err := postgres.Connect(context.Background(), dsn, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer admin.Close()
+	_, _ = admin.Query(context.Background(), "drop database if exists "+other)
+	if _, err := admin.Query(context.Background(), "create database "+other); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _, _ = admin.Query(context.Background(), "drop database if exists "+other+" with (force)") }()
+	child := play.inDB(other)
+	if child.Spec.Database != other || child.Spec.Name != "play" || child == play || play.inDB(other) != child {
+		t.Fatalf("child %+v", child.Spec)
+	}
+	d, err := dial(context.Background(), child.Spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	child.take(d)
+	defer d.discard()()
+	m := a.loadCatalog(child)().(catalogMsg)
+	if child.DB != other || m.err != nil || m.dbs != nil || len(m.schemas) == 0 {
+		t.Fatalf("child in %q: catalog %v, databases %v, error %v", child.DB, m.schemas, m.dbs, m.err)
+	}
+	if play.inDB(play.DB) != play || play.inDB("") != play {
+		t.Error("the DSN's database is the connection itself")
+	}
+}

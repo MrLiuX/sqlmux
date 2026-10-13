@@ -5,6 +5,8 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -66,6 +68,21 @@ func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, d
 		return nil, db.Info{}, err
 	}
 	return c, db.Info{Addr: fmt.Sprintf("%s@%s:%d", cfg.User, cfg.Host, cfg.Port), Database: r.Rows[0][1].S, Path: r.Rows[0][0].S}, nil
+}
+
+// WithDatabase is dsn naming database name instead of the one it names: a
+// URL's path, or, for the keywords form, a dbname the later of the two wins
+// with (M15 F15.1).
+func WithDatabase(dsn, name string) (string, error) {
+	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+		u, err := url.Parse(dsn)
+		if err != nil {
+			return "", err
+		}
+		u.Path, u.RawPath = "/"+name, ""
+		return u.String(), nil
+	}
+	return dsn + " dbname='" + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(name) + "'", nil
 }
 
 // UseSchema puts schema first on c's search_path, then started, the path

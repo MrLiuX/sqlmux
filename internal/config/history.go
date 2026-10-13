@@ -20,6 +20,7 @@ const historySQLMax = 64 << 10
 type History struct {
 	At        time.Time `json:"at"`
 	Conn      string    `json:"conn"`
+	DB        string    `json:"db,omitempty"` // not the DSN's database (F15.1)
 	Schema    string    `json:"schema,omitempty"`
 	SQL       string    `json:"sql"`
 	Truncated bool      `json:"truncated,omitempty"` // SQL is its first historySQLMax bytes

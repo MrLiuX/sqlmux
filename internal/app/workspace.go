@@ -234,6 +234,11 @@ type Conn struct {
 	idx       map[tableID][]db.Index // a table's indexes and keys, read when it opens in the tree (F14.3), dropped with cols
 	keys      map[tableID][]db.Key
 	funcs     []db.Function // every schema's, with the catalog
+	// Databases are the server's the user may connect to, with the catalog
+	// (PG; F15.1); dbs the connections to those but the DSN's, made as the
+	// tree opens one, by name.
+	Databases []string
+	dbs       map[string]*Conn
 	seqs      []db.Sequence
 
 	// DB is the database, on query titles, "" for MySQL, whose schemas
@@ -243,6 +248,24 @@ type Conn struct {
 	DB                    string
 	startedPath, mainPath string
 	mainOn                db.Conn // the connection mainPath is of; another is a redial's (F8.19)
+}
+
+// inDB is the connection to database name: c itself for the one it is dialed
+// to, else one of its own, made on first use, with c's name, mode and lock
+// (F15.1).
+func (c *Conn) inDB(name string) *Conn {
+	if name == "" || name == c.DB {
+		return c
+	}
+	if c.dbs[name] == nil {
+		if c.dbs == nil {
+			c.dbs = map[string]*Conn{}
+		}
+		spec := c.Spec
+		spec.Database = name
+		c.dbs[name] = newConn(spec)
+	}
+	return c.dbs[name]
 }
 
 func newConn(spec config.Connection) *Conn {
@@ -655,7 +678,13 @@ func connectTo(ctx context.Context, spec config.Connection, readOnly bool) (db.C
 		pw = s
 		secrets.Store(spec.Name, s)
 	}
-	c, info, err := engines[spec.Engine].Connect(ctx, spec.DSN, pw.(string), readOnly)
+	dsn := spec.DSN
+	if spec.Database != "" {
+		if dsn, err = postgres.WithDatabase(dsn, spec.Database); err != nil {
+			return nil, db.Info{}, err
+		}
+	}
+	c, info, err := engines[spec.Engine].Connect(ctx, dsn, pw.(string), readOnly)
 	if err != nil {
 		secrets.Delete(spec.Name)
 	}

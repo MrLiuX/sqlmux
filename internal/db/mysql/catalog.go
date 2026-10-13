@@ -299,6 +299,9 @@ order by 1, 2`)
 	return out, nil
 }
 
+// Databases is none: MySQL's databases are its schemas (§5).
+func (Engine) Databases(context.Context, db.Conn) ([]string, error) { return nil, nil }
+
 // Sequences is none: MySQL has no sequences.
 func (Engine) Sequences(context.Context, db.Conn) ([]db.Sequence, error) { return nil, nil }
 

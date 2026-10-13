@@ -137,3 +137,28 @@ func TestHistoryPlainAndPalette(t *testing.T) {
 		t.Fatalf("palette: %v", b.drop)
 	}
 }
+
+// A database of a PG connection has its own history: what ran on one is not
+// listed on another, the connection's name the same (F15.1).
+func TestHistoryByDatabase(t *testing.T) {
+	play := newConn(config.Connection{Name: "history_by_db", Engine: "postgres"}) // a name of its own: the file is the whole run's
+	other := play.inDB("other")
+	other.DB = "other"
+	recordHistory(&run{conn: play}, "select 1", db.Result{}, "")
+	recordHistory(&run{conn: other}, "select 2", db.Result{}, "")
+	sqls := func(c *Conn) (out []string) {
+		for _, h := range historyOf(c) {
+			out = append(out, h.SQL)
+		}
+		return out
+	}
+	if got := sqls(play); len(got) != 1 || got[0] != "select 1" {
+		t.Errorf("play's %q", got)
+	}
+	if got := sqls(other); len(got) != 1 || got[0] != "select 2" {
+		t.Errorf("other's %q", got)
+	}
+	if hs := historyOf(play); hs[0].DB != "" || historyOf(other)[0].DB != "other" {
+		t.Errorf("recorded %+v", hs)
+	}
+}

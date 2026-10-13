@@ -30,6 +30,10 @@ type Connection struct {
 	// Temp is a connection of the command line, a file or a URL: written nowhere,
 	// not in the manager (F14.1).
 	Temp bool `toml:"-"`
+	// Database is the database a PG connection is dialed to instead of the one
+	// the DSN names: the child of a connection in the tree (F15.1), written
+	// nowhere.
+	Database string `toml:"-"`
 }
 
 // UnknownKeys are the lines that say which keys of config.toml, and of each

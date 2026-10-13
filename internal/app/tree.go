@@ -97,6 +97,7 @@ type catalogMsg struct {
 	tables  []db.Table
 	funcs   []db.Function
 	seqs    []db.Sequence
+	dbs     []string
 	err     error
 }
 
@@ -118,7 +119,11 @@ func (a *App) loadCatalog(c *Conn) tea.Cmd {
 		// read of them that fails shows none
 		funcs, _ := eng.Functions(ctx, meta)
 		seqs, _ := eng.Sequences(ctx, meta)
-		return catalogMsg{conn: c, schemas: schemas, current: current, tables: tables, funcs: funcs, seqs: seqs, err: err}
+		var dbs []string // a database's own connection lists none: the DSN's does (F15.1)
+		if c.Spec.Database == "" {
+			dbs, _ = eng.Databases(ctx, meta)
+		}
+		return catalogMsg{conn: c, schemas: schemas, current: current, tables: tables, funcs: funcs, seqs: seqs, dbs: dbs, err: err}
 	}
 }
 
@@ -131,7 +136,7 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 		return a.showToast(i18n.T("%s：%s", m.conn.Spec.Name, m.err))
 	}
 	c := m.conn
-	c.Schemas, c.Tables, c.funcs, c.seqs = m.schemas, m.tables, m.funcs, m.seqs
+	c.Schemas, c.Tables, c.funcs, c.seqs, c.Databases = m.schemas, m.tables, m.funcs, m.seqs, m.dbs
 	// home stays once set, while there: what Meta's current one is moves
 	// with MySQL's USE in a quick SQL, and the tree keeps what is open (§7.8)
 	if !slices.Contains(c.Schemas, c.home) {

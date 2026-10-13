@@ -129,6 +129,10 @@ type Engine interface {
 	// Schemas lists the user's schemas (MySQL's databases), and the one
 	// unqualified names go to first, "" for none.
 	Schemas(ctx context.Context, c Conn) (schemas []string, current string, err error)
+	// Databases lists the databases the server has that the user can
+	// connect to; nil for an engine whose databases are its schemas or that
+	// has none (§5, §8.4).
+	Databases(ctx context.Context, c Conn) ([]string, error)
 	// Tables lists every schema's tables and views by schema and name.
 	Tables(ctx context.Context, c Conn) ([]Table, error)
 	// TableColumns reads a table's columns, its primary key and the unique

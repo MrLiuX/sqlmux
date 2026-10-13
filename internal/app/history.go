@@ -15,7 +15,7 @@ import (
 // ponytail: best effort; a history that cannot be written is not worth an
 // error over the result the user is waiting for
 func recordHistory(r *run, stmt string, res db.Result, failed string) {
-	h := config.History{At: clock(), Conn: r.conn.Spec.Name, Schema: r.schema, SQL: stmt, Tag: res.Tag, TookMS: res.Took.Milliseconds()}
+	h := config.History{At: clock(), Conn: r.conn.Spec.Name, DB: r.conn.Spec.Database, Schema: r.schema, SQL: stmt, Tag: res.Tag, TookMS: res.Took.Milliseconds()}
 	h.Error, _, _ = strings.Cut(failed, "\n")
 	_ = config.AppendHistory(h)
 }
@@ -23,7 +23,7 @@ func recordHistory(r *run, stmt string, res db.Result, failed string) {
 // historyOf is the statements conn ran, the newest first (F14.2).
 func historyOf(c *Conn) []config.History {
 	hs, _ := config.LoadHistory()
-	hs = slices.DeleteFunc(hs, func(h config.History) bool { return h.Conn != c.Spec.Name })
+	hs = slices.DeleteFunc(hs, func(h config.History) bool { return h.Conn != c.Spec.Name || h.DB != c.Spec.Database })
 	slices.Reverse(hs)
 	return hs
 }

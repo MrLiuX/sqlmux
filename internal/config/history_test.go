@@ -139,3 +139,27 @@ func TestParseHistoryMax(t *testing.T) {
 		t.Fatal("0 is no limit to keep")
 	}
 }
+
+// A statement run in another database of the connection says which; one in the
+// DSN's does not, and a line of before F15.1 reads as that (F15.1).
+func TestHistoryDatabase(t *testing.T) {
+	historyFile(t)
+	if err := AppendHistory(History{Conn: "play", DB: "other", SQL: "select 1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := AppendHistory(History{Conn: "play", SQL: "select 2"}); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(historyPath())
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if !strings.Contains(lines[0], `"db":"other"`) || strings.Contains(lines[1], `"db"`) {
+		t.Fatalf("history.jsonl:\n%s", data)
+	}
+	f, _ := os.OpenFile(historyPath(), os.O_APPEND|os.O_WRONLY, 0)
+	_, _ = f.WriteString(`{"at":"2026-10-12T09:30:00Z","conn":"play","sql":"old","took_ms":1}` + "\n")
+	f.Close()
+	hs, err := LoadHistory()
+	if err != nil || len(hs) != 3 || hs[0].DB != "other" || hs[1].DB != "" || hs[2].DB != "" || hs[2].SQL != "old" {
+		t.Fatalf("%+v %v", hs, err)
+	}
+}

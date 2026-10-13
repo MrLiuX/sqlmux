@@ -34,6 +34,20 @@ func (Engine) Schemas(ctx context.Context, c db.Conn) (schemas []string, current
 	return schemas, current, nil
 }
 
+// Databases lists the databases the user may connect to by name: not the
+// templates, not those that take no connections (§8.4).
+func (Engine) Databases(ctx context.Context, c db.Conn) ([]string, error) {
+	r, err := c.Query(ctx, `select datname from pg_database where not datistemplate and datallowconn and has_database_privilege(datname, 'CONNECT') order by 1`)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, len(r.Rows))
+	for i, row := range r.Rows {
+		names[i] = row[0].S
+	}
+	return names, nil
+}
+
 // Tables lists every schema's tables, views, materialized views, foreign
 // tables and partitioned tables, by schema and name. Partitions are left
 // out: their parent stands for them.

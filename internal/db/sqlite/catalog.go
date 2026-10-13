@@ -220,6 +220,9 @@ func (Engine) Keys(ctx context.Context, c db.Conn, _, table string) ([]db.Key, e
 	return out, nil
 }
 
+// Databases is none: a SQLite file is the one database (§5).
+func (Engine) Databases(context.Context, db.Conn) ([]string, error) { return nil, nil }
+
 // Functions, Sequences and FunctionDef are none: SQLite has no stored functions or sequences.
 func (Engine) Functions(context.Context, db.Conn) ([]db.Function, error)         { return nil, nil }
 func (Engine) Sequences(context.Context, db.Conn) ([]db.Sequence, error)         { return nil, nil }
