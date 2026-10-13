@@ -593,6 +593,9 @@ func (a *App) statusLine() ui.StatusLine {
 	name := strings.ToUpper(mode.String())
 	if ed := a.vim(); ed != nil { // V-LINE, V-BLOCK and REPLACE in the colors of VISUAL and INSERT
 		name = ed.Mode().String()
+		if ed.Mode() == editor.Select { // the selection is VISUAL's color, though what is typed goes in (F15.8)
+			modeColor = th.Keyword
+		}
 	}
 	if a.jump != nil {
 		name, modeColor = "JUMP", th.Info

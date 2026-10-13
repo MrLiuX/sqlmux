@@ -36,6 +36,10 @@ func (e *Editor) Paste(text string) Effect {
 		if e.plain {
 			e.endChange()
 		}
+	case Select: // over the selected tabstop, as typing is (F15.8)
+		e.mode = Visual
+		e.visualOp("c", cmd{})
+		e.editKey(pasteKey + text)
 	default:
 		// ponytail: pending keys go; nvim keeps an operator (d then a
 		// paste pastes, d still waiting). Keep it if anyone pastes there.

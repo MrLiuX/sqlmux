@@ -170,7 +170,7 @@ func vimMode(m editor.Mode) keymap.Mode {
 	return [...]keymap.Mode{
 		editor.Normal: keymap.Normal, editor.Insert: keymap.Insert, editor.Replace: keymap.Insert,
 		editor.Visual: keymap.Visual, editor.VisualLine: keymap.Visual, editor.VisualBlock: keymap.Visual,
-		editor.Command: keymap.Command,
+		editor.Command: keymap.Command, editor.Select: keymap.Insert, // what is typed goes in: INSERT's keys
 	}[m]
 }
 
@@ -234,7 +234,8 @@ func (a *App) queryKey(p *Pane, t *queryTab, k keymap.Key) tea.Cmd {
 		// NORMAL's; add a query INSERT scope when it has to be remappable
 		return a.queryComplete(t, true)
 	}
-	open, inInsert := t.comp != nil, t.ed.Mode() == editor.Insert // i, a, A, o type nothing: no list (§9.7)
+	m := t.ed.Mode()
+	open, inInsert := t.comp != nil, m == editor.Insert || m == editor.Select // i, a, A, o type nothing: no list (§9.7); a character over a selected tabstop does (F15.8)
 	cmd := a.queryDid(t, t.ed.Feed(string(k)))
 	switch {
 	case t.ed.Mode() != editor.Insert:

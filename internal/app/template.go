@@ -2,7 +2,6 @@ package app
 
 import (
 	"regexp"
-	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -131,27 +130,18 @@ func (a *App) alter(kind alterKind) tea.Cmd {
 
 var placeholder = regexp.MustCompile(`<[a-z_]+>`)
 
-// selectPlaceholder puts the cursor of query t on its first placeholder, and
-// over it, so that what is typed, c in VISUAL, takes its place.
+// selectPlaceholder makes the statement of query t a snippet, its placeholders
+// the tabstops: the first is selected, and what is typed takes its place, Tab
+// goes on to the next (F15.8).
 func selectPlaceholder(t *queryTab) {
+	var stops []editor.Range
 	lines := t.ed.Lines()
 	for i, l := range lines {
-		if loc := placeholder.FindStringIndex(l); loc != nil {
-			t.ed.Goto(editor.Pos{Line: i, Col: loc[0]})
-			n := utf8.RuneCountInString(l[loc[0]:loc[1]])
-			if t.ed.Plain() {
-				for range n {
-					t.ed.Feed("<S-Right>")
-				}
-				return
-			}
-			t.ed.Feed("v")
-			for range n - 1 {
-				t.ed.Feed("l")
-			}
-			return
+		for _, loc := range placeholder.FindAllStringIndex(l, -1) {
+			stops = append(stops, editor.Range{From: editor.Pos{Line: i, Col: loc[0]}, To: editor.Pos{Line: i, Col: loc[1]}})
 		}
 	}
+	t.ed.Snippet(editor.Pos{}, editor.Pos{Line: len(lines) - 1, Col: len(lines[len(lines)-1])}, stops)
 }
 
 // alterItems are the table node's menu items for the templates; those alterSQL

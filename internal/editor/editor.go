@@ -29,11 +29,12 @@ const (
 	VisualLine
 	Command // the / ? or : line is open
 	VisualBlock
+	Select // a snippet's tabstop selected: what is typed takes its place (F15.8)
 )
 
 // String is the name the status bar shows (§7.8).
 func (m Mode) String() string {
-	return [...]string{"NORMAL", "INSERT", "REPLACE", "VISUAL", "V-LINE", "COMMAND", "V-BLOCK"}[m]
+	return [...]string{"NORMAL", "INSERT", "REPLACE", "VISUAL", "V-LINE", "COMMAND", "V-BLOCK", "SELECT"}[m]
 }
 
 // Effect is what a key did that the query acts on.
@@ -115,6 +116,7 @@ type Editor struct {
 
 	cl         *cmdline // the / ? or : line being typed
 	lastSearch search
+	snip       *snippet    // the snippet being filled in, nil for none (F15.8)
 	hl         bool        // the last search's matches are lit, until esc in NORMAL (hlsearch, F15.9)
 	stat       *searchStat // what a search or n N left for the line under the text, until the next key
 
@@ -167,9 +169,12 @@ func (e *Editor) SetWidth(n int) {
 // Feed takes one key.
 func (e *Editor) Feed(k string) Effect {
 	e.eff, e.stat = Effect{}, nil
+	e.snipAlive()
 	switch {
 	case e.plain:
 		e.plainKey(k)
+	case e.mode == Select:
+		e.selectKey(k)
 	case e.mode == Insert || e.mode == Replace:
 		e.insertKey(k)
 	case e.mode == Command:
@@ -182,6 +187,7 @@ func (e *Editor) Feed(k string) Effect {
 		e.keys = append(e.keys, k)
 		e.normal()
 	}
+	e.snipAlive()
 	e.scrollToCursor()
 	if e.stat != nil && e.height > 1 { // the line of it is the text's last: the cursor is not on it
 		h := e.height

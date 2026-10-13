@@ -67,13 +67,18 @@ func TestAlterTemplates(t *testing.T) {
 		t.Fatalf("add column: %v", q)
 	}
 	from, to, ok := q.ed.Selection()
-	if !ok || q.ed.Mode() != editor.Visual || from != (editor.Pos{Line: 0, Col: 42}) || to != (editor.Pos{Line: 0, Col: 47}) { // <name>
+	if !ok || q.ed.Mode() != editor.Select || from != (editor.Pos{Line: 0, Col: 42}) || to != (editor.Pos{Line: 0, Col: 47}) || !strings.Contains(statusRow(a), "SELECT") { // <name>
 		t.Fatalf("selection %v..%v %v, mode %v", from, to, ok, q.ed.Mode())
 	}
-	feed(t, a, "cid<Esc>")
-	if want := `alter table "public"."t_order" add column id <type>;`; text(q) != want {
-		t.Errorf("c writes over it: %q", text(q))
+	feed(t, a, "id")
+	if want := `alter table "public"."t_order" add column id <type>;`; text(q) != want || q.ed.Mode() != editor.Insert {
+		t.Errorf("what is typed writes over it: %q, mode %v", text(q), q.ed.Mode())
 	}
+	feed(t, a, "<Tab>bigint<Tab>") // the next placeholder, selected; the last Tab ends the snippet, and types nothing
+	if want := `alter table "public"."t_order" add column id bigint;`; text(q) != want || q.ed.Mode() != editor.Insert {
+		t.Errorf("Tab goes on: %q, mode %v", text(q), q.ed.Mode())
+	}
+	feed(t, a, "<Esc>")
 	// on a column: written in; nothing left to select
 	a.win().focus(0)
 	treeTo(t, a, "user_id")
@@ -129,6 +134,14 @@ func TestAlterTemplatePlain(t *testing.T) {
 	feed(t, a, "t_orders")
 	if want := `alter table "public"."t_order" rename to t_orders;`; text(q) != want {
 		t.Errorf("typing writes over it: %q", text(q))
+	}
+	a.win().focus(0)
+	treeTo(t, a, "t_order")
+	a.run("table.alter.add_index", 0) // two placeholders: Tab, S-Tab and the last Tab
+	q = a.focusedQuery()
+	feed(t, a, "idx<Tab>qty<S-Tab>")
+	if from, to, ok := q.ed.SelectionSpan(); !ok || text(q) != `create index idx on "public"."t_order" (qty);` || text(q)[from.Col:to.Col] != "idx" {
+		t.Errorf("S-Tab back to the first: %q %v %v", text(q), from, to)
 	}
 }
 
@@ -215,5 +228,54 @@ func TestAlterMenu(t *testing.T) {
 	view.conn = lite
 	if got, want := labels(view), "打开|在新 tab 打开|删除视图…"; got != want {
 		t.Errorf("a SQLite view: %s", got)
+	}
+}
+
+// The tabstops still to come are on the visual color, the one being filled in
+// is the selection; the mode block says SELECT in VISUAL's color; Tab belongs to
+// the candidates when they are up, and to the snippet when they are not (F15.8).
+func TestSnippetInTheView(t *testing.T) {
+	a := inObjects(t)
+	treeTo(t, a, "t_order")
+	a.run("table.alter.add_column", 0)
+	q := a.focusedQuery()
+	f := a.render()
+	area := bodyRect(a.layout()[a.focused().ID])
+	name, typ := textCells(f, area, "<name>"), textCells(f, area, "<type>")
+	if len(name) != 1 || len(typ) != 1 {
+		t.Fatalf("the placeholders: %v %v", name, typ)
+	}
+	th := a.theme
+	if bg := f.Buf.CellAt(typ[0][0], typ[0][1]).Style.Bg; bg != th.Visual {
+		t.Errorf("a tabstop to come: %v, want the visual color", bg)
+	}
+	if bg := f.Buf.CellAt(name[0][0], name[0][1]).Style.Bg; bg != th.Visual {
+		t.Errorf("the selected one: %v", bg)
+	}
+	if cell := f.Buf.CellAt(a.w-2, a.h-1); cell.Style.Bg != th.Keyword || !strings.Contains(statusRow(a), "SELECT") {
+		t.Errorf("the mode block: %q on %v", statusRow(a), cell.Style.Bg)
+	}
+	feed(t, a, "t") // what is typed over a selection completes, as in INSERT
+	if q.comp == nil {
+		t.Fatal("no candidates after typing over the tabstop")
+	}
+	feed(t, a, "_o")
+	sel := q.comp.sel
+	feed(t, a, "<Tab>")
+	if q.comp == nil || q.comp.sel == sel || !strings.Contains(text(q), "add column t_o <type>") {
+		t.Errorf("Tab with candidates up is theirs: sel %d -> %d, %q", sel, q.comp.sel, text(q))
+	}
+	feed(t, a, "<Esc>") // closes them and leaves INSERT; the snippet is still there
+	if q.comp != nil {
+		t.Fatal("esc leaves the candidates up")
+	}
+	f = a.render()
+	typ = textCells(f, area, "<type>")
+	if len(typ) != 1 || f.Buf.CellAt(typ[0][0], typ[0][1]).Style.Bg != th.Visual {
+		t.Errorf("after esc the tabstop to come is still marked: %v", typ)
+	}
+	feed(t, a, "a<Tab>")
+	if from, to, ok := q.ed.Selection(); !ok || q.ed.Mode() != editor.Select || text(q)[from.Col:to.Col+1] != "<type>" {
+		t.Errorf("Tab with no candidates: %v %v %v", from, to, ok)
 	}
 }

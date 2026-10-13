@@ -58,6 +58,10 @@ func (e *Editor) insertKey(k string) {
 	if k == "<M-BS>" {
 		k = "<C-w>"
 	}
+	if (k == "<Tab>" || k == "<S-Tab>") && e.snipAlive() != nil { // the next tabstop, not a tab (F15.8)
+		e.jump(k == "<Tab>")
+		return
+	}
 	if k == "<C-w>" || k == "<C-u>" {
 		e.endChange()
 		e.ins.fresh = true

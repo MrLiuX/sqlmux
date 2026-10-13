@@ -221,7 +221,7 @@ func (e *Editor) undoLine() {
 // The modeless editor has no
 // NORMAL: it ends its step and its selection, and goes on typing.
 func (e *Editor) Load(text string) Effect {
-	e.eff = Effect{}
+	e.eff, e.snip = Effect{}, nil
 	switch {
 	case e.cl != nil:
 		e.closeCmdline()

@@ -128,6 +128,10 @@ func (e *Editor) plainKey(k string) {
 		}
 		return
 	case "<Tab>", "<S-Tab>":
+		if e.snipAlive() != nil { // the next tabstop (F15.8)
+			e.jump(k == "<Tab>")
+			return
+		}
 		if e.indentSelection(k == "<S-Tab>") {
 			return
 		}

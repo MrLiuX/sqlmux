@@ -62,11 +62,15 @@ func (a *App) textView(ed *editor.Editor, pane int, json bool) ui.Query {
 	return q
 }
 
-// searchView puts in q the matches of ed's last search that are lit, and the
-// line the search left under the text (F15.9).
+// searchView puts in q the matches of ed's last search that are lit, the line
+// the search left under the text (F15.9), and the tabstops of a snippet that
+// are still to come (F15.8).
 func searchView(ed *editor.Editor, q *ui.Query) {
 	for _, h := range ed.Hits() {
 		q.Hits = append(q.Hits, ui.Span(h))
 	}
 	q.Stat, q.StatRight, _ = ed.Stat()
+	for _, h := range ed.SnippetStops() {
+		q.Stops = append(q.Stops, ui.Span(h))
+	}
 }

@@ -37,7 +37,8 @@ type Query struct {
 	// Stat and StatRight the line a search left under the text (F15.9).
 	Hits            []Span
 	Stat, StatRight string
-	Failed          int // the first line of the statement whose last run failed: its ▶ in error; -1 for none
+	Stops           []Span // the tabstops of a snippet still to come, on the visual color (F15.8)
+	Failed          int    // the first line of the statement whose last run failed: its ▶ in error; -1 for none
 	Pane            int
 	Names           SQLNames       // the tables and columns among the text's names, for their colors; nil for none
 	Dialect         sqlkit.Dialect // its connection's SQL
@@ -197,6 +198,16 @@ func (c Query) hitAt(n, col int) *Span {
 	return nil
 }
 
+// stopAt is whether byte col of line n is in a tabstop to come.
+func (c Query) stopAt(n, col int) bool {
+	for _, h := range c.Stops {
+		if h.Line == n && col >= h.From && col < h.To {
+			return true
+		}
+	}
+	return false
+}
+
 // drawLine draws line n on row, from display column Left; fg are its
 // characters' colors.
 func (c Query) drawLine(f *Frame, ta uv.Rectangle, row, n int, fg []color.Color, bg color.Color) {
@@ -222,6 +233,8 @@ func (c Query) drawLine(f *Frame, ta uv.Rectangle, row, n int, fg []color.Color,
 		default:
 			if h := c.hitAt(n, i); h != nil {
 				st = th.hit(h.Current, st)
+			} else if c.stopAt(n, i) {
+				st.Bg = th.Visual
 			}
 		}
 		switch {

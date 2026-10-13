@@ -4,7 +4,7 @@ package editor
 // end of the selection, operators work on it.
 
 func (e *Editor) visual() bool {
-	return e.mode == Visual || e.mode == VisualLine || e.mode == VisualBlock
+	return e.mode == Visual || e.mode == VisualLine || e.mode == VisualBlock || e.mode == Select
 }
 
 // Selection is what VISUAL has selected, from one end to the other in text
