@@ -30,10 +30,26 @@ import (
 // to stderr, over the screen; the caller gets the error anyway.
 func init() { _ = mysql.SetLogger(log.New(io.Discard, "", 0)) }
 
+// sshNet is the network a connection through an ssh is dialed as. The driver
+// keeps the dials it is given by name in one table for the process, so one is
+// registered once, and the dialer of each connection is in the ctx it dials with.
+const sshNet = "sqlmux-ssh"
+
+func init() {
+	mysql.RegisterDialContext(sshNet, func(ctx context.Context, addr string) (net.Conn, error) {
+		d, ok := db.DialerOf(ctx)
+		if !ok {
+			return nil, errors.New("no ssh dialer")
+		}
+		return d.Dial(ctx, "tcp", addr)
+	})
+}
+
 type Conn struct {
 	pool *sql.DB
 	c    *sql.Conn
 	kill driver.Connector // a second connection's, for KILL QUERY (§8.3)
+	dial db.Dialer        // how kill reaches the server, when it is through an ssh: Dial is nil when it is not
 	id   string           // connection_id()
 	tx   byte             // 'I' or 'T', as the statements run tell (sqlkit.MySQLTx)
 	dead bool             // a request found the connection lost: the Worker, told so by Closed, dials before the next
@@ -85,9 +101,15 @@ func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, d
 	if err != nil {
 		return nil, db.Info{}, err
 	}
-	if d, ok := db.DialerOf(ctx); ok { // through ssh (F15.2): the driver dials by a network's registered name
-		mysql.RegisterDialContext(d.Name, func(ctx context.Context, addr string) (net.Conn, error) { return d.Dial(ctx, "tcp", addr) })
-		cfg.Net = d.Name
+	d, ssh := db.DialerOf(ctx)
+	connCtx := ctx
+	if ssh { // through ssh (F15.2)
+		cfg.Net = sshNet
+		// the dial is done at once and ssh then waits for the server as long as it
+		// likes: what cfg.Timeout is for the dial is the handshake's too
+		var cancel context.CancelFunc
+		connCtx, cancel = context.WithTimeout(ctx, cfg.Timeout)
+		defer cancel()
 	}
 	dial, err := mysql.NewConnector(cfg)
 	if err != nil {
@@ -101,15 +123,15 @@ func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, d
 	}
 	pool := sql.OpenDB(dial)
 	pool.SetMaxOpenConns(1)
-	conn, err := pool.Conn(ctx)
+	conn, err := pool.Conn(connCtx)
 	if err != nil {
 		pool.Close()
-		if d, ok := db.DialerOf(ctx); ok && d.Failed != nil { // the driver says "bad connection": the ssh knows why
+		if ssh && d.Failed != nil { // the driver says "bad connection": the ssh knows why
 			err = cmp.Or(d.Failed(), err)
 		}
 		return nil, db.Info{}, err
 	}
-	c := &Conn{pool: pool, c: conn, kill: kill, tx: 'I'}
+	c := &Conn{pool: pool, c: conn, kill: kill, dial: d, tx: 'I'}
 	// MySQL's schemas are its databases: no database before them on
 	// query titles (§8.6)
 	info := db.Info{Addr: cfg.User + "@" + cfg.Addr}
@@ -326,6 +348,9 @@ func (c *Conn) watch(ctx context.Context) (run context.Context, stop func()) {
 			defer grace.Stop()
 			kctx, cancel := context.WithTimeout(context.Background(), cancelGrace)
 			defer cancel()
+			if c.dial.Dial != nil {
+				kctx = db.WithDialer(kctx, c.dial)
+			}
 			pool := sql.OpenDB(c.kill)
 			defer pool.Close()
 			_, _ = pool.ExecContext(kctx, "kill query "+c.id)

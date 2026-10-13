@@ -54,3 +54,38 @@ func TestConnectThroughSSHFails(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+// An ssh that is up and never answers is given up on at the DSN's timeout, as
+// the dial of one with no ssh is, and the error says that, not that we killed
+// the ssh (F15.2).
+func TestConnectThroughSSHTimeout(t *testing.T) {
+	db.FakeSSH(t, "exec sleep 8")
+	ctx := db.WithDialer(context.Background(), db.SSHDialer("me@jump"))
+	start := time.Now()
+	_, _, err := Connect(ctx, "u:p@tcp(db.invalid:3306)/d?timeout=1s", "", false)
+	if took := time.Since(start); err == nil || took > 4*time.Second || !strings.Contains(err.Error(), "deadline exceeded") || strings.Contains(err.Error(), "killed") {
+		t.Fatalf("%v after %v", err, took)
+	}
+}
+
+// Connections through the same machine made at once each have their ssh's words
+// for an error: the driver dials by a name it keeps for the process, so each
+// connection's dialer is the one in its own ctx (F15.2).
+func TestConnectThroughSSHConcurrent(t *testing.T) {
+	db.FakeSSH(t, "sleep 0.2; echo 'me@jump: Permission denied (publickey).' >&2; exit 255")
+	for range 4 {
+		errs := make(chan error, 4)
+		for range 4 {
+			go func() {
+				ctx := db.WithDialer(context.Background(), db.SSHDialer("me@jump"))
+				_, _, err := Connect(ctx, "u:p@tcp(db.invalid:3306)/d", "", false)
+				errs <- err
+			}()
+		}
+		for range 4 {
+			if err := <-errs; err == nil || !strings.Contains(err.Error(), "Permission denied (publickey).") {
+				t.Fatalf("%v", err)
+			}
+		}
+	}
+}
