@@ -56,3 +56,64 @@ func TestFitView(t *testing.T) {
 		}
 	}
 }
+
+// Version moves with a change of the text and with nothing else (F15.5).
+func TestVersion(t *testing.T) {
+	e := New("one\ntwo")
+	v := e.Version()
+	e.Feed("j")
+	e.Feed("l")
+	if e.Version() != v {
+		t.Error("moving changed it")
+	}
+	for _, k := range []string{"x", "u", "o", "<Esc>", "d", "d"} {
+		was := e.Version()
+		e.Feed(k)
+		if k != "<Esc>" && k != "d" && e.Version() == was {
+			t.Errorf("%s did not change it", k)
+		}
+	}
+	was := e.Version()
+	e.Load("other")
+	if e.Version() == was {
+		t.Error("Load did not change it")
+	}
+}
+
+// What FitView found for a text and a width is not kept past a change of
+// either, or of the tabstop (F15.5).
+func TestFitViewFollowsTextAndWidth(t *testing.T) {
+	e := New(strings.Repeat("x", 50))
+	e.SetWidth(52)
+	e.left = 3
+	e.FitView()
+	if e.Left() != 0 {
+		t.Fatal("fits")
+	}
+	e.Load(strings.Repeat("y", 70)) // the same width, a text that does not fit
+	e.left = 3
+	e.FitView()
+	if e.Left() != 3 {
+		t.Errorf("a longer text: left %d", e.Left())
+	}
+	e.Load(strings.Repeat("x", 50))
+	e.left = 3
+	e.width = 40 // not through SetWidth, which scrolls
+	e.FitView()
+	if e.Left() != 3 {
+		t.Errorf("narrower: left %d", e.Left())
+	}
+	e.Load("\t\tz")
+	e.TabWidth = 2
+	e.width = 6
+	e.left = 3
+	e.FitView()
+	if e.Left() != 0 {
+		t.Fatalf("tabs of 2: left %d", e.Left())
+	}
+	e.TabWidth, e.left = 8, 3
+	e.FitView()
+	if e.Left() != 3 {
+		t.Errorf("tabs of 8: left %d", e.Left())
+	}
+}

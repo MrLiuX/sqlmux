@@ -295,10 +295,16 @@ func (e *Editor) FitView() {
 	if e.left == 0 || e.width <= 0 {
 		return
 	}
-	for _, l := range e.lines {
-		if vcol(l, len(l), e.TabWidth) >= e.width {
-			return
+	if k := [3]int{e.ver, e.width, e.TabWidth}; k != e.fitKey { // the text is walked once for a text and a width
+		e.fitKey, e.fits = k, true
+		for _, l := range e.lines {
+			if vcol(l, len(l), e.TabWidth) >= e.width {
+				e.fits = false
+				break
+			}
 		}
 	}
-	e.left = 0
+	if e.fits {
+		e.left = 0
+	}
 }

@@ -27,6 +27,9 @@ type valueEditor struct {
 	saved    string // what :w last wrote back, or opened
 
 	cell *cellSrc // where it goes back to; none for a result's
+
+	wide    int // the text's width as drawn, worked out for the editor's version and tabstop
+	wideKey [2]int
 }
 
 // valueOpen is e (grid.value): the cell under the cursor of the focused table
@@ -86,6 +89,16 @@ func inValue(a *App) bool { return a.value != nil }
 // it has them instead.
 func (a *App) valueActive() bool { return a.value != nil && a.confirm == nil }
 
+// width is the columns the text takes whole, kept for the text as it is: it is
+// asked for with every key and frame, and the text may be of some MB.
+func (v *valueEditor) width() int {
+	ed := v.ed
+	if k := [2]int{ed.Version() + 1, ed.TabWidth}; k != v.wideKey {
+		v.wide, v.wideKey = ui.Query{Lines: ed.Lines(), TabWidth: ed.TabWidth}.Width(), k
+	}
+	return v.wide
+}
+
 // text is what the editor holds.
 func (v *valueEditor) text() string { return strings.Join(v.ed.Lines(), "\n") }
 
@@ -104,10 +117,9 @@ func (a *App) valueBox() uv.Rectangle {
 			cell = r
 		}
 	}
-	ed := a.value.ed
 	half := min(max(pane.Dx()/2, 40), pane.Dx())
-	w := min(max(half, ui.Query{Lines: ed.Lines(), TabWidth: ed.TabWidth}.Width()+5), pane.Dx()) // the border and a column each side, and one for the cursor past the longest line's end
-	x := min(cell.Min.X, pane.Max.X-w)                                                           // the cell is in the pane, which w does not outgrow
+	w := min(max(half, a.value.width()+5), pane.Dx()) // the border and a column each side, and one for the cursor past the longest line's end
+	x := min(cell.Min.X, pane.Max.X-w)                // the cell is in the pane, which w does not outgrow
 	below, above := pane.Max.Y-cell.Max.Y, cell.Min.Y-pane.Min.Y
 	if below < valueMinRows && above > below {
 		return uv.Rect(x, pane.Min.Y, w, above)

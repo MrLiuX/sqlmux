@@ -23,13 +23,13 @@ type step struct {
 
 func (e *Editor) setLine(n int, s string) {
 	e.beginChange()
-	e.eff.Changed = true
+	e.eff.Changed, e.ver = true, e.ver+1
 	e.lines[n] = s
 }
 
 func (e *Editor) insertLines(at int, ls ...string) {
 	e.beginChange()
-	e.eff.Changed = true
+	e.eff.Changed, e.ver = true, e.ver+1
 	e.lines = slices.Insert(e.lines, at, ls...)
 	e.moveMarks(at, at, len(ls))
 }
@@ -37,7 +37,7 @@ func (e *Editor) insertLines(at int, ls ...string) {
 // deleteLines deletes lines [from, to); the text keeps one line at least.
 func (e *Editor) deleteLines(from, to int) {
 	e.beginChange()
-	e.eff.Changed = true
+	e.eff.Changed, e.ver = true, e.ver+1
 	e.lines = slices.Delete(e.lines, from, to)
 	if len(e.lines) == 0 {
 		e.lines = []string{""}
@@ -172,7 +172,7 @@ func (e *Editor) redo(n int) {
 func (e *Editor) restore(text []string, saved Pos) {
 	p, oldN, newN := diff(e.lines, text)
 	e.lines = slices.Clone(text)
-	e.eff.Changed = true
+	e.eff.Changed, e.ver = true, e.ver+1
 	// ponytail: the marks move with the lines, but vim also puts back the
 	// selection the step saved (uh_visual), which gv then selects; add it if
 	// gv after u is missed.
@@ -236,7 +236,7 @@ func (e *Editor) Load(text string) Effect {
 	}
 	e.keys = nil
 	if ls := strings.Split(strings.TrimSuffix(text, "\n"), "\n"); !slices.Equal(ls, e.lines) {
-		e.eff.Changed = true
+		e.eff.Changed, e.ver = true, e.ver+1
 		if e.ReadOnly { // nothing to undo in what no key changes, and a step is two copies of the text
 			e.lines, e.uLine = ls, -1
 			e.clampCursor()
