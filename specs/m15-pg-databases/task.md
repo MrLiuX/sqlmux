@@ -1,27 +1,27 @@
 # M15 PG 数据库层级 · 任务清单
 
-- **状态**：**进行中**（第一批 F15.5–F15.9 passed 2026-10-13，0b4a268，全量 191 个脚本 3734 条、红的只有 f11.2 的 4 条 brew 环境问题；F15.1–F15.4 仍是 draft，等 worker 的清单；2026-10-11 用户规划时定方向，排在 M14 之后）。
+- **状态**：**进行中**（第一批 F15.5–F15.9 passed 2026-10-13，0b4a268；第二批 F15.1 passed 2026-10-13，e056ebf，全量 197 个脚本 3848 条、红的只有 f11.2 的 4 条 brew 环境问题，reviewer 退回过一次（面板条目的 id 不带库、在别的库时开错同名表，e25ca90 修）；F15.2–F15.4、F15.10、F15.11 待开发；2026-10-11 用户规划时定方向，排在 M14 之后）。
 - **目标**：PG 的树从 连接 → schema 改成 连接 → 数据库 → schema，同 DataGrip；SSH 隧道；query 的上下文提示与值补全（用户后续补充的编辑体验需求也归到这里）；状态栏的随机提示；用户 2026-10-13 验收 M14 时的五条（F15.5–F15.9：值编辑器宽度、ORDER 框宽度、flash 无匹配即退出、snippet 式占位符、`gj` 与搜索高亮）。
 - **范围**：tech-design §5（`Conn` 按数据库分 Meta / Main）、§7.8（数据库节点、特性提示）、§8.4（`Databases`、SSH 隧道）、§11（签名提示与值补全）、§14（connections.toml 的 ssh 字段、layout / state 的 `db`）。
 - **完成标准**：F15.1–F15.11 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m15`。
 - **依赖**：M14 passed。
 - **审查节点**（worker 2026-10-13 起草、决策者定）：1 = F15.5–F15.9（已过）；2 = F15.1（a、b 两个 commit，单独一批）；3 = F15.3、F15.10、F15.11（编辑体验）；4 = F15.2、F15.4。
 
-## F15.1 PG 数据库层级 · 状态：todo
+## F15.1 PG 数据库层级 · 状态：passed（e056ebf；e2e 3163b9f）
 
 用户 2026-10-11：同 DataGrip，PG 一个连接只能看一个库，树从 连接 → schema 改成 连接 → 数据库 → schema。做法（worker 2026-10-13 起草、决策者同意，§5）：不改 Worker / Meta / Main 的模型，每个（连接, 数据库）一对 `Meta` / `Main`，事务模式随之按库。
 
 - **涉及**：`internal/db`、`internal/db/postgres`（`Databases`、DSN 改库）、`internal/config`（`Database` 覆盖字段、layout / state / history 的 `db`）、`internal/app`（树、query 的库选择、标题、state 键）
 
 **开发**（§5、§7.8「数据库节点」、§8.4、§14）
-- [ ] F15.1a 数据层：`Engine.Databases(ctx, c)`（PG：`pg_database` 去模板、去 `datallowconn = false`，再 `has_database_privilege(datname, 'CONNECT')` 过滤；MySQL / SQLite 返回 nil）；`config.Connection` 加不落盘的 `Database` 覆盖字段；`Conn` 加 数据库名 → 子 `*Conn` 的表，展开时才建、才连；layout / last.toml、state.json 的表键、history.jsonl 加 `db` 字段，和 DSN 的库一样时省略，旧文件照读。
-- [ ] F15.1b 树和用到它的地方：连接 → 数据库 → schema（PG 才有；MySQL、SQLite 不变）；DSN 里的库排第一、默认展开，别的库点开才连；节点 id 加 `/db:<name>`；展开状态、layout 恢复、`tree.refresh`（光标所在库）、右键菜单、表 tab 标题（非默认库才带库名）和 state 键、query 标题的 `DB` 字段、状态栏的地址都带库名；query 切库放进 `query.schema` 的下拉（`db.schema ▾`）第一级，不另开下拉。
+- [x] F15.1a 数据层：`Engine.Databases(ctx, c)`（PG：`pg_database` 去模板、去 `datallowconn = false`，再 `has_database_privilege(datname, 'CONNECT')` 过滤；MySQL / SQLite 返回 nil）；`config.Connection` 加不落盘的 `Database` 覆盖字段；`Conn` 加 数据库名 → 子 `*Conn` 的表，展开时才建、才连；layout / last.toml、state.json 的表键、history.jsonl 加 `db` 字段，和 DSN 的库一样时省略，旧文件照读。
+- [x] F15.1b 树和用到它的地方：连接 → 数据库 → schema（PG 才有；MySQL、SQLite 不变）；DSN 里的库排第一、默认展开，别的库点开才连；节点 id 加 `/db:<name>`；展开状态、layout 恢复、`tree.refresh`（光标所在库）、右键菜单、表 tab 标题（非默认库才带库名）和 state 键、query 标题的 `DB` 字段、状态栏的地址都带库名；query 切库放进 `query.schema` 的下拉（`db.schema ▾`）第一级，不另开下拉。
 
 **验收**
-- [ ] 集成（PG）：列表不含 template*、没 CONNECT 权限的库被滤掉；连另一个库后 `current_database()` 对。config 往返和旧文件兼容的单测；MySQL / SQLite 列表为空。
-- [ ] golden：两个库、一个展开一个没展开的树；MySQL / SQLite 的树 golden 不变。
-- [ ] 单测：展开才拨号（假引擎计 Connect 次数）；layout 里存了非默认库的 query 重启后回到那个库。
-- [ ] e2e：树里展开第二个库、打开其中一张表、query 里 `select current_database()` 是它；query 的下拉里切库。
+- [x] 集成（PG）：列表不含 template*、没 CONNECT 权限的库被滤掉；连另一个库后 `current_database()` 对。config 往返和旧文件兼容的单测；MySQL / SQLite 列表为空。
+- [x] golden：两个库、一个展开一个没展开的树；MySQL / SQLite 的树 golden 不变。
+- [x] 单测：展开才拨号（假引擎计 Connect 次数）；layout 里存了非默认库的 query 重启后回到那个库。
+- [x] e2e：树里展开第二个库、打开其中一张表、query 里 `select current_database()` 是它；query 的下拉里切库。
 
 ## F15.2 SSH 隧道 · 状态：todo
 
