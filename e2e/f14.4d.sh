@@ -2,7 +2,7 @@
 # F14.4d 结构修改的模板在 vim = false（plain 编辑器）下：第一个占位符一样被选中、打字就替换它，C-e 执行走危险确认（specs/m14-sqlite/task.md F14.4；复审）。
 # F14.4 结构修改的模板（SQLite，vim = false）（specs/m14-sqlite/task.md F14.4；tech-design §7.8「右键菜单」）
 # 表节点的右键菜单和命令面板里有「加列… / 加索引… / 改名… / 删除列… / 删除索引…」：各开一条按引擎拼好的模板 SQL 到当前连接的新 query，占位符
-# <name> / <type> / <column> / <index> / <new_name> 是字面的，第一个 VISUAL 选中、按 c 直接替换；删除类直接写、不写成注释，执行走危险确认。
+# <name> / <type> / <column> / <index> / <new_name> 是字面的，第一个在 SELECT 模式下选中、打字直接替换（M15 F15.8，原来 VISUAL 选中、要按 c）；删除类直接写、不写成注释，执行走危险确认。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 . "$(dirname "$0")/palette.sh"

@@ -80,7 +80,9 @@ value_body() {
   key g t; key Space; key q; sleep 0.5
   check "gt、SPC q 也不漏到底下：浮窗还在，标题没变" eval 'pop_open && [[ $(pop_title) == "note · text" ]]'
   key Escape; sleep 0.4
-  check "esc（NORMAL，没有改动）：关浮窗，表 tab 还在（gt / SPC q 没有切走或关掉它）" eval '! pop_open && [[ $(tabbar 1) == *t_val* ]]'
+  check "搜索高亮亮着时第一下 esc 只清高亮：浮窗还在（M15 F15.9，docs 79fd4e1）" eval 'pop_open'
+  key Escape; sleep 0.4
+  check "再按 esc（NORMAL，没有改动）：关浮窗，表 tab 还在（gt / SPC q 没有切走或关掉它）" eval '! pop_open && [[ $(tabbar 1) == *t_val* ]]'
 }
 
 ro_body() {   # read_only 连接 / 结果 tab：能开，改动的键 toast「只读」，esc / q 关，y 照常

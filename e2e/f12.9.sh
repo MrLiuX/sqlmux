@@ -16,7 +16,8 @@ mkdir -p "$D/own"; printf '[[connection]]\nname = "doraemon"\nengine = "postgres
 start -C "$D/own"; open_table t_ord; wait_for 8 settled
 go_open
 check "go：浮层是列表（右上角 3/3），列出 id / source / n 和类型，没有「默认」这一项" eval 'list_open && [[ $(dd_items | sed -E "s/^[0-9][↑↓] //; s/ .*//" | tr "\n" " ") == "id source n " ]] && ! e2e_plain | grep -q "默认"'
-check "提示行：j/k 移动 · SPC 方向 · a 移出 · A 清空 · ↵ 只按这一列 · / 搜索" eval 'e2e_plain | grep -qF "j/k 移动 · SPC 方向 · a 移出 · A 清空 · ↵ 只按这一列 · / 搜索"'
+# M15 F15.6：框按内容宽（这张表三列、最窄 30），提示行放不下就折成两行、再放不下丢末尾的项（「/ 搜索」）
+check "提示行：j/k 移动 · SPC 方向 · a 移出 / A 清空 · ↵ 只按这一列（两行，末尾的「/ 搜索」放不下被丢）" eval 'e2e_plain | grep -qF "j/k 移动 · SPC 方向 · a 移出" && e2e_plain | grep -qF "A 清空 · ↵ 只按这一列" && ! e2e_plain | grep -qF "/ 搜索"'
 check "打开时光标在第一项（id），状态栏 COMMAND" eval '[[ $(dd_cursor) == 0 ]] && mode_is COMMAND'
 key j; key j; sleep 0.3
 check "j j：光标移到第三项（n），没有把 jj 打进过滤框（列表的计数还是 3/3）" eval '[[ $(dd_cursor) == 2 ]] && [[ $(list_n) == 3/3 ]]'
