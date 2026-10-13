@@ -36,8 +36,9 @@ type completion struct {
 type candidate struct {
 	label, insert, note string
 	pos                 []int
-	kw                  bool // a keyword, not by what the list says of it
-	space               bool // a word, not a value, a function or a list's item, so the next word comes after a space (§9.7)
+	kw                  bool  // a keyword, not by what the list says of it
+	space               bool  // a word, not a value, a function or a list's item, so the next word comes after a space (§9.7)
+	stops               []int // a snippet: the tabstops, each empty, at these bytes of insert (F15.11)
 }
 
 // whereKeywords are what a condition is made of besides columns (§9.7).
@@ -75,7 +76,7 @@ func (a *App) complete(t *dataTab) {
 		}
 		var cols, kws []candidate
 		for _, c := range t.cols.Cols {
-			cols = append(cols, candidate{label: c.Name, insert: c.Name, note: c.Type, space: true})
+			cols = append(cols, candidate{label: c.Name, insert: t.conn.ident(c.Name), note: c.Type, space: true})
 		}
 		for _, k := range whereKeywords {
 			if k != "ilike" || t.conn.eng.Dialect() == sqlkit.PG { // PG's alone
@@ -128,6 +129,14 @@ func valueCandidates(col db.Column, kind sqlkit.ValueKind, d sqlkit.Dialect) []c
 		out = append(out, candidate{label: "default", insert: "default", note: i18n.T("关键字"), kw: true})
 	}
 	return out
+}
+
+// ellipsis is s cut to n characters at most, the last one … when it was cut.
+func ellipsis(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n-1]) + "…"
+	}
+	return s
 }
 
 // noSelection is the sel of a list that has no item selected yet: Tab, C-n or
@@ -272,6 +281,14 @@ func wordStart(rs []rune, i int) bool {
 	return i == 0 || strings.ContainsRune("_.-$", rs[i-1]) || unicode.IsLower(rs[i-1]) && unicode.IsUpper(rs[i])
 }
 
+// ident is name as SQL text on c: quoted when it has to be (F15.11).
+func (c *Conn) ident(name string) string {
+	if c.eng.Dialect().NeedsQuote(name) {
+		return c.eng.Quote(name)
+	}
+	return name
+}
+
 // table is c's table name of schema, as PG folds what isn't quoted.
 func (c *Conn) table(schema, name string) (db.Table, bool) {
 	for _, t := range c.Tables {
@@ -402,8 +419,7 @@ func (a *App) wantCols() tea.Cmd {
 // the cursor's depth first, the other tables and keywords. It opens with a
 // word typed, or right after a qualifier that resolves; manual (C-n) with
 // nothing. The columns the cache lacks are fetched, a table once per asked.
-// ponytail: names go in bare, as the catalog has them; one that wants
-// quotes (upper case, a space) needs them typed.
+// A name that has to be quoted goes in quoted (F15.11).
 func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked map[tableID]bool, manual bool) (*completion, []tea.Cmd) {
 	c := sqlkit.CompletionContext(sql, pos, conn.eng.Dialect())
 	vc := sqlkit.ValueContext(sql, pos, conn.eng.Dialect())
@@ -419,7 +435,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 			cmds = append(cmds, a.fetchCols(conn, t))
 		}
 		for _, col := range cs.Cols {
-			out = append(out, candidate{label: col.Name, insert: col.Name, note: col.Type + " · " + t.Name, space: true})
+			out = append(out, candidate{label: col.Name, insert: conn.ident(col.Name), note: col.Type + " · " + t.Name, space: true})
 		}
 		return out
 	}
@@ -430,7 +446,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 				if t.View() {
 					note = i18n.T("视图")
 				}
-				out = append(out, candidate{label: t.Name, insert: t.Name, note: note, space: true})
+				out = append(out, candidate{label: t.Name, insert: conn.ident(t.Name), note: note, space: true})
 			}
 		}
 		return out
@@ -465,7 +481,17 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 	var ctes []candidate
 	isCTE := map[string]bool{}
 	for _, n := range c.CTEs {
-		ctes, isCTE[strings.ToLower(n)] = append(ctes, candidate{label: n, insert: n, note: "CTE", space: true}), true
+		ctes, isCTE[strings.ToLower(n)] = append(ctes, candidate{label: n, insert: conn.ident(n), note: "CTE", space: true}), true
+	}
+	// setTable is the table an UPDATE's SET is of: the first the statement names
+	// at the cursor's depth
+	setTable := func() (db.Table, bool) {
+		for _, r := range c.Tables {
+			if r.Depth == c.Depth {
+				return table(r.Schema, r.Name)
+			}
+		}
+		return db.Table{}, false
 	}
 	var groups [][]candidate
 	resolved := false
@@ -508,23 +534,40 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 		var rest []candidate
 		for _, col := range conn.cols[idOf(t)].Cols {
 			if !col.Generated && !slices.ContainsFunc(c.Listed, func(l string) bool { return strings.EqualFold(l, col.Name) }) {
-				rest = append(rest, candidate{label: col.Name, insert: col.Name, note: col.Type})
+				rest = append(rest, candidate{label: col.Name, insert: conn.ident(col.Name), note: col.Type})
 			}
 		}
 		if len(rest) > 1 && c.Prefix == "" {
-			names := make([]string, len(rest))
+			names, inserts := make([]string, len(rest)), make([]string, len(rest))
 			for i, r := range rest {
-				names[i] = r.label
+				names[i], inserts[i] = r.label, r.insert
 			}
-			all := strings.Join(names, ", ")
-			label := all
-			if r := []rune(all); len(r) > 40 {
-				label = string(r[:39]) + "…"
-			}
-			rest = append([]candidate{{label: label, insert: all, note: i18n.T("全部 %d 列", len(rest))}}, rest...)
+			rest = append([]candidate{{label: ellipsis(strings.Join(names, ", "), 40), insert: strings.Join(inserts, ", "), note: i18n.T("全部 %d 列", len(rest))}}, rest...)
 		}
 		groups = [][]candidate{rest}
+	case sqlkit.CompInsertRest: // the columns and VALUES of the table, the cursor in the parentheses of the values (F15.11)
+		resolved = true
+		t, found := table(c.Into.Schema, c.Into.Name)
+		if !found {
+			break
+		}
+		columns(t) // fetches them when the cache lacks them
+		var names, inserts []string
+		for _, col := range conn.cols[idOf(t)].Cols {
+			if !col.Generated {
+				names, inserts = append(names, col.Name), append(inserts, conn.ident(col.Name))
+			}
+		}
+		if len(names) > 0 {
+			insert := "(" + strings.Join(inserts, ", ") + ") values ()"
+			label := "(" + ellipsis(strings.Join(names, ", "), 24) + ") values ()"
+			groups = [][]candidate{{{label: label, insert: insert, note: i18n.T("全部 %d 列", len(names)), stops: []int{len(insert) - 1}}}}
+		}
 	default:
+		if t, ok := setTable(); c.InSet && ok { // an UPDATE's SET: the columns of its table, no other (F15.11)
+			groups, resolved = [][]candidate{columns(t)}, true
+			break
+		}
 		var near, far []candidate
 		named := map[tableID]bool{}
 		for _, r := range c.Tables {
@@ -665,7 +708,11 @@ func (p accepted) put(e *editor.Editor) editor.Effect {
 // accept takes the selected candidate into in.
 func (c *completion) accept(in *ui.Input) {
 	p := c.plan(in.Text, in.Pos)
-	in.Text, in.Pos = in.Text[:p.start]+p.ins+in.Text[in.Pos+p.drop:], p.start+len(p.ins)
+	end := p.start + len(p.ins)
+	if stops := c.items[c.sel].stops; len(stops) > 0 { // a snippet in an input with no tabstops: the cursor at the first
+		end = p.start + stops[0]
+	}
+	in.Text, in.Pos = in.Text[:p.start]+p.ins+in.Text[in.Pos+p.drop:], end
 }
 
 // move moves the selection by d, around the ends (§9.7).

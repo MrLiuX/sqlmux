@@ -10,6 +10,7 @@ const (
 	CompTables                     // after FROM, JOIN, UPDATE, INTO, TABLE, or a comma of FROM's list
 	CompColumns                    // after Qualifier.: its columns, or its tables when it is a schema
 	CompInsertCols                 // in INSERT INTO t (…): Into's columns not in Listed
+	CompInsertRest                 // after INSERT INTO t and a blank: what comes next is the columns and VALUES of Into (F15.11)
 )
 
 // TableRef is a table a statement names, as Schema.Name, and the alias it
@@ -30,12 +31,15 @@ type Completion struct {
 	Depth     int    // the parentheses the cursor is in
 	Tables    []TableRef
 	CTEs      []string
-	Into      TableRef // CompInsertCols: the table inserted into
+	Into      TableRef // CompInsertCols, CompInsertRest: the table inserted into
 	Listed    []string // CompInsertCols: the columns the parentheses name already, quotes off
 	// WantsColumn: nothing is typed, the cursor is after a blank, and a
 	// column is what comes next: after SELECT, WHERE, AND, OR, ON, SET,
 	// HAVING, BY, or the comma of a select, set or order by list (M8 F8.4)
 	WantsColumn bool
+	// InSet: an assignment's column goes here, after the SET of an UPDATE or
+	// the comma of its list, typed or not (F15.11)
+	InSet bool
 }
 
 // CompletionContext tells what the cursor at pos in text is at (§9.7):
@@ -89,14 +93,17 @@ func CompletionContext(text string, pos int, d Dialect) Completion {
 					c.Kind = CompTables
 				}
 				c.WantsColumn = w == "select" || w == "set" || w == "by"
+				c.InSet = w == "set" && j > 0
 				break
 			}
 		}
 	default:
 		c.WantsColumn = columnFollows[word(p)]
+		c.InSet = word(p) == "set" && p > 0
 	}
 	c.WantsColumn = c.WantsColumn && spaceBefore(all, pos)
 	c.readInsert(text, ts, depth, before)
+	c.readInsertRest(text, ts, before)
 	c.readNames(text, ts, depth)
 	return c
 }
@@ -185,6 +192,29 @@ func (c *Completion) readInsert(text string, ts []Token, depth []int, before int
 			}
 		}
 		c.Kind, c.Into, c.Listed = CompInsertCols, into, listed
+		return
+	}
+}
+
+// readInsertRest makes c a CompInsertRest when the cursor, with ts[:before]
+// ahead of it and nothing after it, is right after "INSERT | REPLACE [IGNORE]
+// INTO [schema.]name": a ( or VALUES is what comes next.
+func (c *Completion) readInsertRest(text string, ts []Token, before int) {
+	w := func(i int) string { return lower(text, ts, i) }
+	name := func(i int) bool {
+		return i < len(ts) && (ts[i].Kind == Ident || ts[i].Kind == Quoted || ts[i].Kind == Keyword)
+	}
+	for i := 1; i < before; i++ {
+		if w(i) != "into" || w(i-1) != "insert" && w(i-1) != "replace" && w(i-1) != "ignore" || !name(i+1) {
+			continue
+		}
+		into, k := TableRef{Name: unquote(text[ts[i+1].Start:ts[i+1].End])}, i+2
+		if w(k) == "." && name(k+1) {
+			into.Schema, into.Name, k = into.Name, unquote(text[ts[k+1].Start:ts[k+1].End]), k+2
+		}
+		if k == before && before == len(ts) {
+			c.Kind, c.Into = CompInsertRest, into
+		}
 		return
 	}
 }

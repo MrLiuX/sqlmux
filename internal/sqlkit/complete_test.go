@@ -197,3 +197,64 @@ func TestFromListComma(t *testing.T) {
 		}
 	}
 }
+
+// What comes after INSERT INTO t and a blank is its columns and VALUES; not
+// once a word of it is begun, a ( or VALUES is there, or the cursor is not at
+// the end (F15.11).
+func TestInsertRestContext(t *testing.T) {
+	for _, c := range []struct {
+		sql  string
+		d    Dialect
+		into TableRef
+	}{
+		{"insert into t |", PG, TableRef{Name: "t"}},
+		{"insert into public.t_log\n  |", PG, TableRef{Schema: "public", Name: "t_log"}},
+		{`insert into "T" |`, PG, TableRef{Name: "T"}},
+		{"replace into `t` |", MySQL, TableRef{Name: "t"}},
+		{"insert ignore into t |", MySQL, TableRef{Name: "t"}},
+		{"select 1; insert into t |", PG, TableRef{Name: "t"}},
+		{"insert into comment |", PG, TableRef{Name: "comment"}},
+		{"insert into t|", PG, TableRef{}},
+		{"insert into |", PG, TableRef{}},
+		{"insert into t v|", PG, TableRef{}},
+		{"insert into t (|", PG, TableRef{}},
+		{"insert into t (a) |", PG, TableRef{}},
+		{"insert into t |values (1)", PG, TableRef{}},
+		{"insert into t select 1 from u |", PG, TableRef{}},
+		{"select * from t |", PG, TableRef{}},
+		{"insert into t (a) values (1); select |", PG, TableRef{}},
+	} {
+		pos := strings.Index(c.sql, "|")
+		got := CompletionContext(c.sql[:pos]+c.sql[pos+1:], pos, c.d)
+		if ok := got.Kind == CompInsertRest; ok != (c.into != TableRef{}) || ok && got.Into != c.into {
+			t.Errorf("%s: %v %+v", c.sql, got.Kind, got.Into)
+		}
+	}
+}
+
+// An assignment's column goes after an UPDATE's SET and the comma of its list,
+// typed or not; not after the other words, nor SET statements (F15.11).
+func TestInSetContext(t *testing.T) {
+	for sql, want := range map[string]bool{
+		"update t set |":                    true,
+		"update t set a = 1, |":             true,
+		"update t set a = 1, b|":            true,
+		"update t set st|":                  true,
+		"update t set a = f(1, 2), |":       true,
+		"update t set a = (select 1, 2), |": true,
+		"insert into t (a) values (1) on conflict (a) do update set |": true,
+		"update t set a = |":                   false,
+		"update t set a = 1 where |":           false,
+		"update t set a = 1, b = c|":           false,
+		"update t set a = 1 where b = 1 and |": false,
+		"set |":                                false,
+		"set search_path to |":                 false,
+		"set @a = 1, |":                        false,
+		"select a, |":                          false,
+	} {
+		pos := strings.Index(sql, "|")
+		if got := CompletionContext(sql[:pos]+sql[pos+1:], pos, PG); got.InSet != want {
+			t.Errorf("%q: InSet %v", sql, got.InSet)
+		}
+	}
+}

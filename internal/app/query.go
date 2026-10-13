@@ -271,7 +271,16 @@ func (a *App) queryComplete(t *queryTab, manual bool) tea.Cmd {
 func (a *App) queryAccept(t *queryTab) tea.Cmd {
 	c, cur := t.comp, t.ed.Cursor()
 	t.comp = nil
-	cmd := a.queryDid(t, c.plan(t.ed.Lines()[cur.Line], cur.Col).put(t.ed))
+	p := c.plan(t.ed.Lines()[cur.Line], cur.Col)
+	cmd := a.queryDid(t, p.put(t.ed))
+	if stops := c.items[c.sel].stops; len(stops) > 0 { // a snippet: its tabstops are the first to fill in (F15.11)
+		var rs []editor.Range
+		for _, off := range stops {
+			at := editor.Pos{Line: cur.Line, Col: p.start + off}
+			rs = append(rs, editor.Range{From: at, To: at})
+		}
+		t.ed.Snippet(editor.Pos{Line: cur.Line, Col: p.start}, editor.Pos{Line: cur.Line, Col: p.start + len(p.ins)}, rs)
+	}
 	if c.items[c.sel].space { // the next word may be a column: its list comes up at once (F8.17)
 		cmd = tea.Batch(cmd, a.queryComplete(t, false))
 	}
