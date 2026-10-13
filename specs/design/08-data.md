@@ -99,6 +99,9 @@ catalog 按连接缓存（每个 session 的每个 `Conn` 一份，M5 起；原�
 
 **加载时机**：Init 时在 `Meta` 上异步查两样，各一条查询：非系统 schema 的列表，以及这些 schema 里所有表的名字和行数估计。列属性、主键、唯一索引、枚举按表查，第一次打开这张表时才查，查过就缓存，刷新时清掉。这样大库启动时不用把整张 `pg_attribute` 读回来。
 
+- **数据库列表**（M15 F15.1）：`Engine.Databases(ctx, c)`：PG 查 `pg_database`，去掉 `datistemplate`、`datallowconn = false` 的，再按 `has_database_privilege(datname, 'CONNECT')` 过滤；MySQL、SQLite 返回 nil（它们没有这一层，§5）。展开连接时随 catalog 一次读，`R` 刷新。
+- **SSH 隧道**（M15 F15.2，connections.toml 的 `ssh = "user@host"`，§14）：不用 `x/crypto/ssh`（agent、`~/.ssh/config`、ProxyJump 都得自己接），每次拨号起一个本机的 `ssh -W host:port user@host`（`-o BatchMode=yes -o ExitOnForwardFailure=yes`），它的 stdin / stdout 当 `net.Conn` 接到 pgx 的 `DialFunc` 和 mysql 的 `RegisterDialContext`；没有本地端口、没有清理竞态，连接关了进程退，重拨再起一个。要密码或口令的 ssh 在 TUI 里没法交互：BatchMode 下 ssh 失败，它的 stderr 原文进连接错误，文档里写「先 `ssh-add`」（worker 起草时提出、决策者同意：终端用户本来就用 ssh agent）。命令行的临时连接（URL）不支持 ssh；SQLite 忽略这个字段。
+
 ### 8.5 分页与计数
 
 **取数**：`SELECT * FROM t WHERE … ORDER BY … LIMIT n OFFSET m`。

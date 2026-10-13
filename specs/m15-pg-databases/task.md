@@ -2,27 +2,95 @@
 
 - **状态**：**进行中**（第一批 F15.5–F15.9 passed 2026-10-13，0b4a268，全量 191 个脚本 3734 条、红的只有 f11.2 的 4 条 brew 环境问题；F15.1–F15.4 仍是 draft，等 worker 的清单；2026-10-11 用户规划时定方向，排在 M14 之后）。
 - **目标**：PG 的树从 连接 → schema 改成 连接 → 数据库 → schema，同 DataGrip；SSH 隧道；query 的上下文提示与值补全（用户后续补充的编辑体验需求也归到这里）；状态栏的随机提示；用户 2026-10-13 验收 M14 时的五条（F15.5–F15.9：值编辑器宽度、ORDER 框宽度、flash 无匹配即退出、snippet 式占位符、`gj` 与搜索高亮）。
-- **范围**：tech-design §5（`Conn` 按数据库分 Meta / Main）、§7.8（树）、§8（`pg_database`）、§14（connections.toml 的 ssh 字段）。
+- **范围**：tech-design §5（`Conn` 按数据库分 Meta / Main）、§7.8（数据库节点、特性提示）、§8.4（`Databases`、SSH 隧道）、§11（签名提示与值补全）、§14（connections.toml 的 ssh 字段、layout / state 的 `db`）。
+- **完成标准**：F15.1–F15.11 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m15`。
 - **依赖**：M14 passed。
-- **审查节点**：待定（F15.5–F15.9 小、不依赖数据库层级，建议先做成第一批；F15.1 单独一批；F15.2–F15.4 一批）。
+- **审查节点**（worker 2026-10-13 起草、决策者定）：1 = F15.5–F15.9（已过）；2 = F15.1（a、b 两个 commit，单独一批）；3 = F15.3、F15.10、F15.11（编辑体验）；4 = F15.2、F15.4。
 
-已定的方向（2026-10-11，用户同意）：
+## F15.1 PG 数据库层级 · 状态：todo
 
-- **F15.1 数据库层级**：PG 一个连接只能看一个库，所以每个数据库一对 `Meta` / `Main`，展开时才连；DSN 里的库默认展开；列表来自 `pg_database`（排除模板）。MySQL 不变（它的 database 就是 schema 这一层），SQLite 没有这一层。这是 M5 以来最大的模型改动，单独一个里程碑。
-- **F15.2 SSH 隧道**：connections.toml 的 `ssh = "user@host"`（走本机的 ssh agent 和 `~/.ssh/config`），连接时先开隧道。终端用户多数自己 `ssh -L`，优先级低于 F15.1。
+用户 2026-10-11：同 DataGrip，PG 一个连接只能看一个库，树从 连接 → schema 改成 连接 → 数据库 → schema。做法（worker 2026-10-13 起草、决策者同意，§5）：不改 Worker / Meta / Main 的模型，每个（连接, 数据库）一对 `Meta` / `Main`，事务模式随之按库。
 
-- **F15.3 query 的编辑体验：上下文提示与值补全**（用户 2026-10-11：INSERT 的 VALUES 里不知道第几个值对应哪个字段、什么类型，DataGrip 有字段名 hint；同类的编辑体验优化都归到这一条，用户 2026-10-11 定排到 M15，后续体验到的编辑体验问题和需求也补进这一条）。做法定为「签名提示加值补全」，不做行内虚拟文本（列号映射的代价，以后单独评估）：
-  - **签名提示**：光标在某个「列上下文」里时，光标所在行的上一行（第一行时是下一行）画一条浮层，列出相关字段和类型，当前字段高亮、两边变暗，放不下只显示当前字段前后几个、两头 `…`；光标移动跟着换，出了上下文就消失，不用唤起也不用关；`[query] hints = false` 关掉。上下文：`INSERT … VALUES (…)`（按语句里的列清单，没写列清单按 catalog 的列顺序；第几个值按括号深度 1 的逗号数，字符串和注释里的不算，多行 VALUES 每个括号重新计数；`INSERT … SELECT` 不提示）；`UPDATE … SET col = `（这一列的名字和类型）；`WHERE` / `ON` / `HAVING` 里 `col = ` / `IN (` 的右边（这一列）；用户定义的函数的调用括号里（名字加参数签名，来自 catalog，和 M14 F14.3 的 Functions 节点同一份数据；内置函数不做，没有 catalog）。
-  - **值补全**：在上面这些位置弹补全：枚举列列出枚举值（带引号）、布尔列 `true` / `false`、可空列 `NULL`、有默认值的列 `DEFAULT`（只在 INSERT / UPDATE 里）、时间列 `now()` / `CURRENT_TIMESTAMP`，和单元格编辑的选项浮层用同一份 catalog 数据；其余列照旧不弹。
-  - **同类小项**（一起做）：`INSERT INTO t ` 后补全时提供 `(全部列) VALUES ()` 的骨架（光标停在括号里）；`UPDATE t SET` 后的列补全只列这张表的列；补全插入的标识符需要引号时加引号（去掉 §12「已知上限」里的那一条）。
-  - 候选但没定（用户补充后加）：`SELECT` 列表里 `*` 展开成全部列名；悬停或 `K` 看光标下标识符的类型和注释。
+- **涉及**：`internal/db`、`internal/db/postgres`（`Databases`、DSN 改库）、`internal/config`（`Database` 覆盖字段、layout / state / history 的 `db`）、`internal/app`（树、query 的库选择、标题、state 键）
 
-- **F15.4 状态栏的随机提示**（用户 2026-10-11：特性多、新用户不会细看文档，底部放大镜左边轮播「你知道吗：table pane 里 `yl` 复制当前单元格」这类提示）：
-  - 位置：状态栏里命令面板入口的左边，`dim` 色，前缀「Tip: 」；是状态栏里最先让位的一段（§7.8 的保留顺序不变，它排在全部之后），模式附加信息、待输入序列、toast 都不受它影响。
-  - 内容：一个提示清单放在代码里，每条是 Action ID 加一句话；句子走 i18n（`i18n.T`，中英文都有，跟 `[ui] language` 切换，和别的界面文案一样），键位文字从 keymap 读（`{key}` 占位，不写死），所以用户改过键的提示跟着变；用户把那个 Action 解绑了就跳过这条。每条提示都对应一个真实存在的 Action 或特性，加特性时顺手加提示。
-  - 轮播：启动时随机一条，之后每 5 分钟换一条，不重复直到轮完；单击提示换下一条；命令 `tips.next`「下一条提示」、`tips.show`「所有提示…」（打开一个列表浮层，能搜索，`↵` 执行那个 Action）。
-  - 关掉：`[ui] tips = false`。
-  - 候选但没定：只在闲置（10 秒没按键）时才换；第一次启动的前 N 次更频繁。
+**开发**（§5、§7.8「数据库节点」、§8.4、§14）
+- [ ] F15.1a 数据层：`Engine.Databases(ctx, c)`（PG：`pg_database` 去模板、去 `datallowconn = false`，再 `has_database_privilege(datname, 'CONNECT')` 过滤；MySQL / SQLite 返回 nil）；`config.Connection` 加不落盘的 `Database` 覆盖字段；`Conn` 加 数据库名 → 子 `*Conn` 的表，展开时才建、才连；layout / last.toml、state.json 的表键、history.jsonl 加 `db` 字段，和 DSN 的库一样时省略，旧文件照读。
+- [ ] F15.1b 树和用到它的地方：连接 → 数据库 → schema（PG 才有；MySQL、SQLite 不变）；DSN 里的库排第一、默认展开，别的库点开才连；节点 id 加 `/db:<name>`；展开状态、layout 恢复、`tree.refresh`（光标所在库）、右键菜单、表 tab 标题（非默认库才带库名）和 state 键、query 标题的 `DB` 字段、状态栏的地址都带库名；query 切库放进 `query.schema` 的下拉（`db.schema ▾`）第一级，不另开下拉。
+
+**验收**
+- [ ] 集成（PG）：列表不含 template*、没 CONNECT 权限的库被滤掉；连另一个库后 `current_database()` 对。config 往返和旧文件兼容的单测；MySQL / SQLite 列表为空。
+- [ ] golden：两个库、一个展开一个没展开的树；MySQL / SQLite 的树 golden 不变。
+- [ ] 单测：展开才拨号（假引擎计 Connect 次数）；layout 里存了非默认库的 query 重启后回到那个库。
+- [ ] e2e：树里展开第二个库、打开其中一张表、query 里 `select current_database()` 是它；query 的下拉里切库。
+
+## F15.2 SSH 隧道 · 状态：todo
+
+用户 2026-10-11 定方向；做法（worker 起草、决策者同意，§8.4「SSH 隧道」）：本机 `ssh -W` 子进程当 `net.Conn`，不用 `x/crypto/ssh`，不支持交互式口令（文档写「先 `ssh-add`」）。
+
+- **涉及**：`internal/db`（拨号）、`internal/db/postgres`、`internal/db/mysql`、`internal/config`（`ssh` 字段）、`internal/app`（表单）
+
+**开发**（§8.4、§14）
+- [ ] connections.toml `ssh = "user@host"`（端口、密钥、ProxyJump 走 `~/.ssh/config`）；每次拨号起 `ssh -W host:port -o BatchMode=yes -o ExitOnForwardFailure=yes user@host`，stdin / stdout 接 pgx 的 `DialFunc` 和 mysql 的 `RegisterDialContext`；连接关了进程退；ssh 失败时 stderr 原文进连接错误。命令行的临时连接不支持；SQLite 忽略。
+- [ ] 连接表单加 `ssh` 一项（高级里）。
+
+**验收**
+- [ ] 单测：拨号函数用 PATH 里的假 `ssh` 脚本（回显、断开、退出码非零时的错误原文）。
+- [ ] 集成：假 ssh 脚本把 stdin / stdout 接到 docker 里的 PG 端口（`nc`），`SELECT 1` 通；连接 spec 往返；表单里能写能读。
+- [ ] 真实 ssh 只在用户机器上手动验收一条，CI 不测。
+
+## F15.3 签名提示 · 状态：todo
+
+用户 2026-10-11：INSERT 的 VALUES 里不知道第几个值对应哪个字段、什么类型。细节在 §11「签名提示与值补全」。F15.3 只做上下文识别和提示浮层；值补全和小项拆成 F15.10、F15.11（worker 起草时拆，编号追加、不动 F15.4）。
+
+- **涉及**：`internal/sqlkit`（`ValueContext`）、`internal/ui`（提示浮层）、`internal/app`（query）、`internal/config`（`[query] hints`）
+
+**开发**（§11）
+- [ ] `sqlkit.ValueContext(sql, offset)`：表、列清单、第几个、种类（insert / update / where / call），用 `CompletionContext` 同一套扫描器。
+- [ ] 提示浮层：光标行上一行（第一行时下一行）一行，当前字段高亮、两边 `dim`、放不下两头 `…`；光标移动跟着换，出上下文消失；`[query] hints = false` 关。
+
+**验收**
+- [ ] sqlkit 表驱动单测：多行 VALUES 每个括号重数、`INSERT … SELECT` 不出、字符串 / 注释里的逗号不算、没列清单用 catalog 顺序、函数调用括号里取签名；mutation 逐条验。
+- [ ] golden：一个 INSERT 的、一个放不下的。
+- [ ] e2e：打 INSERT 到第二个值时提示行高亮第二列；`hints = false` 没有。
+
+## F15.4 状态栏的随机提示 · 状态：todo
+
+用户 2026-10-11 定；细节在 §7.8「特性提示」。
+
+- **涉及**：`internal/ui`（状态栏）、`internal/app`（清单、`tips.next` / `tips.show`）、`internal/i18n`、`internal/config`（`[ui] tips`）
+
+**开发**（§7.8、§14）
+- [ ] 清单在代码里（Action ID + 一句话 i18n，`{key}` 从 keymap 读，解绑的跳过）；启动随机、5 分钟一条（`tea.Tick`）、不重复到轮完、单击换下一条；`tips.next`、`tips.show`（列表浮层复用命令面板的列表，`↵` 执行）；`[ui] tips = false`。
+
+**验收**
+- [ ] 单测：轮转不重复、轮完重来、解绑跳过、改键跟着变；每条提示的 Action 存在（遍历清单对 Action 表）；i18n 中英文齐全（现有 i18n 测试扫）。
+- [ ] golden：状态栏带提示、窄到让位。
+
+## F15.10 值补全 · 状态：todo
+
+- **依赖**：F15.3
+- **涉及**：`internal/app`（补全）、`internal/sqlkit`
+
+**开发**（§11「值补全」）
+- [ ] 在 F15.3 的列上下文里弹补全：枚举值（带引号）、布尔 `true` / `false`、可空 `NULL`、有默认值 `DEFAULT`（只 INSERT / UPDATE）、时间 `now()` / `CURRENT_TIMESTAMP`，候选来自单元格编辑选项浮层的同一份 catalog；其余列不弹。
+
+**验收**
+- [ ] 单测：每类候选和不弹的。
+- [ ] e2e：枚举列的 VALUES 里弹出枚举值，`Tab` 补全。
+
+## F15.11 补全的同类小项 · 状态：todo
+
+- **依赖**：F15.8（snippet）、F15.3
+- **涉及**：`internal/app`（补全）、`internal/sqlkit`
+
+**开发**（§11「同类小项」、§9.7）
+- [ ] `INSERT INTO t ` 后的补全给 `(全部列) VALUES ()` 骨架，VALUES 括号里一个 tabstop，列清单是普通文字。
+- [ ] `UPDATE t SET` 后的列补全只列这张表的列。
+- [ ] 补全插入的标识符需要引号时加引号，去掉 §9.7 的 `ponytail:` 上限和 §12「已知上限」那条。
+
+**验收**
+- [ ] 单测三项。
+- [ ] e2e：INSERT 骨架后打值；大小写混合的列名补全后带引号。
 
 用户 2026-10-13 验收 M14 时提的（决策者当天定细节，已写进设计章节；都不依赖 F15.1，建议排第一批）：
 
