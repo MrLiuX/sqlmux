@@ -148,6 +148,10 @@ check "MySQL：表名 order 是关键字：\`order\`" line_is 1 'select * from `
 at "update mx set pl"
 key Enter; sleep 0.4
 check "MySQL：UPDATE 的 SET：plain 不加引号" line_is 1 'update mx set plain'
+at "update t_order o join t_user u on u.id = o.user_id set st"
+check "MySQL：update … join … set st：第一张表 t_order 的列（status）" names_are "status|"
+at "update t_order o join t_user u on u.id = o.user_id set em"
+check "MySQL：update … join … set em：第二张表 t_user 的列（email）也列（两张都列，docs e6600d4）" names_are "email|"
 at "update mx set "
 check "MySQL：UPDATE mx SET：只列 mx 的列" eval 'names_are "Key|a b|Mixed|plain|g|"'
 

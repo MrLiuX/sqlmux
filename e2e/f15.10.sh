@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F15.10 值补全（specs/m15-pg-databases/task.md F15.10；tech-design §11「签名提示与值补全」）
 # 光标在一个列的值的位置（INSERT 的一行、UPDATE 的 SET、条件的右边）：弹这一列的候选——枚举的值（带引号）、布尔的 true / false、
-# 时间的 now() / current_timestamp、可空的 null、有默认值的 default（条件里没有 default）；其余不弹。只在值开始的地方弹（( , = <> != 之后），
+# 时间的 now() / current_timestamp、可空的 null、有默认值的 default（只在 INSERT / UPDATE 里；条件里 null 和 default 都没有，docs e6600d4）；其余不弹。只在值开始的地方弹（( , = <> != 之后），
 # 不在值打完之后；字符串里按整串匹配；候选先不选中，Tab 选第一项、↵ 接受。单测覆盖每一类，这里测真实终端里的弹出、接受和不弹的位置（PG 和 MySQL）。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
@@ -78,7 +78,9 @@ check "IN (…) 的第二个：枚举标签" names_are "pending|queued|running|d
 at "select * from t_order where created_at = "
 check "条件里的时间列：now() / current_timestamp，没有 null（not null）、没有 default" names_are "now()|current_timestamp|"
 at "select * from t_order where status = 'done' and paid = "
-check "and 之后的条件：paid 的 true / false / null" names_are "true|false|null|"
+check "and 之后的条件：paid 的 true / false，没有 null（条件里不给 null 和 default，docs e6600d4）" names_are "true|false|"
+at "select * from t_user where email = "
+check "条件里的可空文本列（email）：不弹（条件里没有 null）" none
 at "select * from t_order where id = "
 check "条件里的 not null 数字列：不弹（default 不在条件里）" none
 at "select * from t_order where id = 1 and "
