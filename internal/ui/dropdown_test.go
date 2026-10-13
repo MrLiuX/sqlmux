@@ -123,11 +123,9 @@ func TestDropdownHintRows(t *testing.T) {
 }
 
 // The width of a text is the one it is drawn in: a glyph of no width is a
-// column, a tab goes to its tabstop, with a tab in the line or not, and the
-// gutter is in (F15.5).
+// column, a tab goes to its tabstop, with a tab in the line or not (F15.5).
 func TestQueryWidthIsTheDrawnWidth(t *testing.T) {
 	zero := strings.Repeat("a\u200b", 20)
-	gutter := Query{Lines: []string{"x"}}.gutter()
 	for _, c := range []struct {
 		line string
 		want int
@@ -140,8 +138,8 @@ func TestQueryWidthIsTheDrawnWidth(t *testing.T) {
 		{"ab\tc", 5},
 		{strings.Repeat("宽", 10), 20},
 	} {
-		if got := (Query{Lines: []string{c.line}, TabWidth: 2}).Width(); got != gutter+c.want {
-			t.Errorf("%q: %d, want %d", c.line, got, gutter+c.want)
+		if got := (Query{Lines: []string{c.line}, TabWidth: 2}).TextWidth(); got != c.want {
+			t.Errorf("%q: %d, want %d", c.line, got, c.want)
 		}
 	}
 }

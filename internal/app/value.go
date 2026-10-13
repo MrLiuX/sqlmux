@@ -28,8 +28,8 @@ type valueEditor struct {
 
 	cell *cellSrc // where it goes back to; none for a result's
 
-	wide    int // the text's width as drawn, worked out for the editor's version and tabstop
-	wideKey [2]int
+	wide    int // the text's width as drawn, worked out for the editor's version
+	wideVer int
 }
 
 // valueOpen is e (grid.value): the cell under the cursor of the focused table
@@ -93,8 +93,8 @@ func (a *App) valueActive() bool { return a.value != nil && a.confirm == nil }
 // asked for with every key and frame, and the text may be of some MB.
 func (v *valueEditor) width() int {
 	ed := v.ed
-	if k := [2]int{ed.Version() + 1, ed.TabWidth}; k != v.wideKey {
-		v.wide, v.wideKey = ui.Query{Lines: ed.Lines(), TabWidth: ed.TabWidth}.Width(), k
+	if ver := ed.Version() + 1; ver != v.wideVer { // the tabstop is the program's, the same for good
+		v.wide, v.wideVer = ui.Query{Lines: ed.Lines(), TabWidth: ed.TabWidth}.TextWidth(), ver
 	}
 	return v.wide
 }
@@ -118,8 +118,8 @@ func (a *App) valueBox() uv.Rectangle {
 		}
 	}
 	half := min(max(pane.Dx()/2, 40), pane.Dx())
-	w := min(max(half, a.value.width()+5), pane.Dx()) // the border and a column each side, and one for the cursor past the longest line's end
-	x := min(cell.Min.X, pane.Max.X-w)                // the cell is in the pane, which w does not outgrow
+	w := min(max(half, a.value.width()+ui.Query{Lines: a.value.ed.Lines()}.Gutter()+5), pane.Dx()) // the border and a column each side, and one for the cursor past the longest line's end
+	x := min(cell.Min.X, pane.Max.X-w)                                                             // the cell is in the pane, which w does not outgrow
 	below, above := pane.Max.Y-cell.Max.Y, cell.Min.Y-pane.Min.Y
 	if below < valueMinRows && above > below {
 		return uv.Rect(x, pane.Min.Y, w, above)
@@ -160,7 +160,7 @@ func (a *App) valueTextBox() ui.TextBox {
 func (a *App) valueSize() {
 	ed := a.value.ed
 	a.sizeEditor(ed, ui.Query{Lines: ed.Lines()}.TextArea(a.valueText()))
-	ed.FitView() // the box follows the text: what scrolled it sideways when it was narrower is gone
+	ed.FitView(a.value.width()) // the box follows the text: what scrolled it sideways when it was narrower is gone
 }
 
 // valueAt is the line and display column of the value's text under p.

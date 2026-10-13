@@ -691,3 +691,31 @@ func TestValueTypingAtTheEndOfTheLongestLine(t *testing.T) {
 		t.Errorf("box %v, text %v", box, text)
 	}
 }
+
+// The box follows the text as it is: deleting the longest line makes it
+// narrower, putting one back wider (F15.5).
+func TestValueBoxFollowsTheText(t *testing.T) {
+	a, _ := valueTab(t)
+	ed := a.value.ed
+	ed.Load("short\n" + strings.Repeat("x", 70) + "\nshort")
+	wide := a.valueBox().Dx()
+	feed(t, a, "jdd")
+	if narrow := a.valueBox().Dx(); narrow >= wide {
+		t.Errorf("without the longest line: %d, with it %d", narrow, wide)
+	}
+	feed(t, a, "u")
+	if again := a.valueBox().Dx(); again != wide {
+		t.Errorf("undone: %d, want %d", again, wide)
+	}
+}
+
+// A text wider than the pane stays scrolled to the cursor: the view goes back to
+// the left only when the whole text is shown (F15.5).
+func TestValueTooWideStaysScrolled(t *testing.T) {
+	a, _ := valueTab(t)
+	a.value.ed.Load(strings.Repeat("x", 400))
+	feed(t, a, "$")
+	if l := a.value.ed.Left(); l == 0 {
+		t.Errorf("a text of 400 columns in a box of %d, the cursor at its end: left %d", a.valueBox().Dx(), l)
+	}
+}

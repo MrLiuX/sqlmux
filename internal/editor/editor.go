@@ -116,8 +116,6 @@ type Editor struct {
 
 	cl         *cmdline // the / ? or : line being typed
 	lastSearch search
-	fitKey     [3]int      // what fits was worked out for: the version, the width, the tabstop
-	fits       bool        // no line is too wide for the view (FitView)
 	ver        int         // counts the changes of the text, for what is kept by it (Version)
 	snip       *snippet    // the snippet being filled in, nil for none (F15.8)
 	hl         bool        // the last search's matches are lit, until esc in NORMAL (hlsearch, F15.9)

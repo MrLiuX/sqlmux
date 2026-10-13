@@ -80,14 +80,14 @@ const (
 	SelBlock
 )
 
-// gutter is ▶, the line numbers at 3 columns at least, a blank.
-func (c Query) gutter() int { return 1 + max(3, len(strconv.Itoa(len(c.Lines)))) + 1 }
+// Gutter is ▶, the line numbers at 3 columns at least, a blank.
+func (c Query) Gutter() int { return 1 + max(3, len(strconv.Itoa(len(c.Lines)))) + 1 }
 
-// Width is the columns the text takes whole, the gutter in: the longest line as
-// drawn (F15.5).
-// ponytail: every line is walked glyph by glyph, as drawLine does; a value of
-// some MB wants the width kept by the text's version.
-func (c Query) Width() int {
+// TextWidth is the columns the text takes whole: the longest line as drawn
+// (F15.5).
+// ponytail: every line is walked glyph by glyph, as drawLine does; the value
+// editor keeps it by the text's version.
+func (c Query) TextWidth() int {
 	w := 0
 	for _, l := range c.Lines {
 		v := 0
@@ -97,7 +97,7 @@ func (c Query) Width() int {
 		}
 		w = max(w, v)
 	}
-	return c.gutter() + w
+	return w
 }
 
 // glyph is the grapheme at byte i of l, which starts at display column v, and
@@ -112,7 +112,7 @@ func (c Query) glyph(l string, i, v int) (string, int) {
 
 // TextArea is where the text goes in r: right of the gutter.
 func (c Query) TextArea(r uv.Rectangle) uv.Rectangle {
-	g := min(c.gutter(), r.Dx())
+	g := min(c.Gutter(), r.Dx())
 	return uv.Rect(r.Min.X+g, r.Min.Y, r.Dx()-g, r.Dy())
 }
 
@@ -143,7 +143,7 @@ func (c Query) Draw(f *Frame, r uv.Rectangle) uv.Position {
 		}
 		colors = SQLColors(th, text, c.Dialect, c.Names)
 	}
-	ta, width := c.TextArea(r), c.gutter()-2
+	ta, width := c.TextArea(r), c.Gutter()-2
 	for y := range r.Dy() {
 		n, row := c.Top+y, r.Min.Y+y
 		if n >= len(c.Lines) {

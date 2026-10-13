@@ -37,8 +37,8 @@ func TestReplaceViewFollowsTheCursor(t *testing.T) {
 	}
 }
 
-// FitView shows the text from its start when every line fits the view with the
-// column past its end, and leaves the view alone when one does not (F15.5).
+// FitView shows the text from its start when its longest line fits the view with
+// the column past its end, and leaves the view alone when it does not (F15.5).
 func TestFitView(t *testing.T) {
 	for _, c := range []struct{ line, width, left, want int }{
 		{50, 52, 3, 0},  // fits with room
@@ -50,7 +50,7 @@ func TestFitView(t *testing.T) {
 		e := New(strings.Repeat("x", c.line))
 		e.SetWidth(c.width)
 		e.left = c.left
-		e.FitView()
+		e.FitView(c.line)
 		if e.Left() != c.want {
 			t.Errorf("%d columns of text in %d, left %d: %d, want %d", c.line, c.width, c.left, e.Left(), c.want)
 		}
@@ -77,43 +77,5 @@ func TestVersion(t *testing.T) {
 	e.Load("other")
 	if e.Version() == was {
 		t.Error("Load did not change it")
-	}
-}
-
-// What FitView found for a text and a width is not kept past a change of
-// either, or of the tabstop (F15.5).
-func TestFitViewFollowsTextAndWidth(t *testing.T) {
-	e := New(strings.Repeat("x", 50))
-	e.SetWidth(52)
-	e.left = 3
-	e.FitView()
-	if e.Left() != 0 {
-		t.Fatal("fits")
-	}
-	e.Load(strings.Repeat("y", 70)) // the same width, a text that does not fit
-	e.left = 3
-	e.FitView()
-	if e.Left() != 3 {
-		t.Errorf("a longer text: left %d", e.Left())
-	}
-	e.Load(strings.Repeat("x", 50))
-	e.left = 3
-	e.width = 40 // not through SetWidth, which scrolls
-	e.FitView()
-	if e.Left() != 3 {
-		t.Errorf("narrower: left %d", e.Left())
-	}
-	e.Load("\t\tz")
-	e.TabWidth = 2
-	e.width = 6
-	e.left = 3
-	e.FitView()
-	if e.Left() != 0 {
-		t.Fatalf("tabs of 2: left %d", e.Left())
-	}
-	e.TabWidth, e.left = 8, 3
-	e.FitView()
-	if e.Left() != 3 {
-		t.Errorf("tabs of 8: left %d", e.Left())
 	}
 }
