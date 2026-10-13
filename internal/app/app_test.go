@@ -125,13 +125,23 @@ func sized(w, h int, icons string) *App {
 	return sizedWith(w, h, c)
 }
 
+// tipsInTests has the status bar's tip on, as the defaults have it: off, so the
+// frames that are not about it are the same whichever tip comes up (F15.4).
+var tipsInTests = false
+
+// newApp is New with the tips off unless tipsInTests has them on.
+func newApp(c *config.Config, keys *keymap.Map, sess *Session, st *config.State, warning string) *App {
+	c.Tips = c.Tips && tipsInTests
+	return New(c, keys, sess, st, warning)
+}
+
 func sizedWith(w, h int, c *config.Config) *App {
 	if os.Getenv("XDG_DATA_HOME") == testData {
 		dir, _ := os.MkdirTemp(testData, "data")
 		os.Setenv("XDG_DATA_HOME", dir)
 	}
 	keys, _ := keymap.New(c.Leader, c.Vim, c.Timeoutlen, c.Bindings)
-	a := New(c, keys, testSession(), &config.State{}, "")
+	a := newApp(c, keys, testSession(), &config.State{}, "")
 	a.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	return a
 }
@@ -1027,7 +1037,7 @@ func TestRendererUsesGraphemeWidths(t *testing.T) {
 	keys, _ := keymap.New(c.Leader, c.Vim, c.Timeoutlen, c.Bindings)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second) // Init stopped sending it
 	defer cancel()
-	p := tea.NewProgram(quitOnMode{New(c, keys, testSession(), &config.State{}, "")}, tea.WithContext(ctx), tea.WithInput(nil), tea.WithOutput(&out),
+	p := tea.NewProgram(quitOnMode{newApp(c, keys, testSession(), &config.State{}, "")}, tea.WithContext(ctx), tea.WithInput(nil), tea.WithOutput(&out),
 		tea.WithWindowSize(80, 24), tea.WithEnvironment([]string{"TERM=xterm-256color"}))
 	if _, err := p.Run(); err != nil {
 		t.Fatal(err)
@@ -1041,7 +1051,7 @@ func TestRendererUsesGraphemeWidths(t *testing.T) {
 func TestStartupWarningIsAToast(t *testing.T) {
 	c := config.Default()
 	keys, _ := keymap.New(c.Leader, c.Vim, c.Timeoutlen, c.Bindings)
-	a := New(c, keys, testSession(), &config.State{}, "careful")
+	a := newApp(c, keys, testSession(), &config.State{}, "careful")
 	a.Init()
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
 	if row := strings.Split(a.render().String(), "\n")[43]; !strings.HasSuffix(row, " careful ┘") {

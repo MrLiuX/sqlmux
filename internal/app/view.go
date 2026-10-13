@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"image/color"
+	"slices"
 	"strings"
 	"time"
 
@@ -512,7 +513,8 @@ func iconRuns(i ui.Icon, st uv.Style, tail string) []ui.Run {
 // Drop order of status bar segments when the bar is too narrow (§7.8); the
 // mode extra info goes before all of them, the session name is cut last.
 const (
-	dropConn = iota + 1
+	dropTip = iota + 1 // the tip is the first to give way
+	dropConn
 	dropWindow
 	dropCursor
 )
@@ -560,6 +562,9 @@ func (a *App) statusLine() ui.StatusLine {
 	s.Right = []ui.Segment{
 		{Runs: iconRuns(ic.Search, bar(th.Info), strings.TrimRight(" "+a.label(a.keys.Hint("palette.open", "global")), " ")+" "), Action: "palette.open"},
 		{Runs: append(iconRuns(ic.Keys, bar(th.FgMuted), " "), pending, ui.Run{Text: " ", Style: bar(th.FgMuted)})},
+	}
+	if tip := a.tipText(); tip != "" { // left of the palette's entry; a click is the next one (F15.4)
+		s.Right = slices.Insert(s.Right, 0, ui.Segment{Runs: []ui.Run{{Text: " Tip: " + tip + " ", Style: bar(th.Dim)}}, Action: "tips.next", Drop: dropTip, Tip: true})
 	}
 	switch t, c := a.typingTab(), a.focusedQuery(); {
 	case t != nil && t.typing == "where":
