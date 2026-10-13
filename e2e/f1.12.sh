@@ -76,7 +76,7 @@ mclick "$(x_of t_log)" "$(y_of t_log)"; wait_for 8 settled
 check "中键 t_log：在 ① 新开 tab，焦点到 ①" eval '[[ $(title) == *" t_log ─"* && $(focused) == 1 && $(e2e_text 34 160 43 | noicon) == *"3:t_log*"* ]] || { e2e_text 34 160 43; false; }'
 
 # ---- 工作区：tab 节点跟着变；单击或 ↵ 切到对应的 pane 和 tab
-key C-h
+key C-h; key G   # the tree to its end: the workspace section stays on screen however many databases the shared server lists
 ws_tabs() { tree | cut -d"|" -f1 | sed -n "/工作区/,\$p" | grep -cE " (agent|t_order|t_log)( |$)"; }   # 工作区里 tab 节点的个数
 check "工作区的 window 下有三个 tab 节点 agent、t_order、t_log" eval '[[ $(ws_tabs) == 3 ]] || tree'
 wsy() { tree | cut -d'|' -f1 | grep -n '' | sed -n '/工作区/,$p' | grep -E " $1( |$)" | head -1 | cut -d: -f1 | awk '{ print $1 + 3 }'; }
