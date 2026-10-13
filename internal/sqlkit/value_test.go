@@ -175,3 +175,29 @@ func TestValuePrefix(t *testing.T) {
 		}
 	}
 }
+
+// A value begins after a ( , = <> or !=, what is typed there being its start;
+// after a value or a word it does not (F15.10).
+func TestValueBegins(t *testing.T) {
+	for sql, want := range map[string]bool{
+		"insert into t (a, b) values (|":            true,
+		"insert into t (a, b) values (1, |":         true,
+		"insert into t (a, b) values (1, 'x|":       true,
+		"insert into t (a, b) values (1, nu|":       true,
+		"insert into t (a, b) values (1, /* c */ |": true,
+		"insert into t (a, b) values (1 |":          false,
+		"insert into t (a, b) values (now() |":      false,
+		"insert into t (a, b) values ('x' |":        false,
+		"insert into t (a, b) values (1, 2 |":       false,
+		"update t set a = |":                        true,
+		"update t set a = 1 |":                      false,
+		"select * from t where a <> |":              true,
+		"select * from t where a != |":              true,
+		"select * from t where a in (1, |":          true,
+	} {
+		pos := strings.Index(sql, "|")
+		if v := ValueContext(sql[:pos]+sql[pos+1:], pos, PG); !v.OK || v.Begins != want {
+			t.Errorf("%q: %v", sql, v.Begins)
+		}
+	}
+}

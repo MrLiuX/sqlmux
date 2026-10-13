@@ -1,5 +1,7 @@
 package sqlkit
 
+import "slices"
+
 // ValueKind is what a value typed at the cursor is for (§11「签名提示与值补全」).
 type ValueKind int
 
@@ -22,6 +24,7 @@ type Value struct {
 	Depth     int    // the parentheses the cursor is in
 	Prefix    string // the word, number or string typed at the cursor, a string's quote in, from Start; Start is the cursor's own place when there is none
 	Start     int
+	Begins    bool // nothing of the value is before Prefix: it follows a ( , = <> or !=, where a value begins
 	Qualifier string
 	Func      TableRef // a call's: the function, Schema.Name
 	// Outer is what the call is an argument of, the call around it or the
@@ -77,6 +80,13 @@ func ValueContext(text string, pos int, d Dialect) Value {
 			prefix, start = text[t.Start:pos], t.Start
 		}
 	}
+	begins := false
+	for i := n - 1; i >= 0; i-- { // the token before what is typed
+		if ts[i].End <= start {
+			begins = slices.Contains([]string{"(", ",", "=", "<>", "!="}, w(i))
+			break
+		}
+	}
 	var c Completion
 	c.readNames(text, ts, depth)
 	at, cols, isInsert := insertValues(text, ts, depth)
@@ -103,7 +113,7 @@ func ValueContext(text string, pos int, d Dialect) Value {
 		chain = append(chain, Value{Kind: ValueWhere, Cols: []string{wc.Column}, Qualifier: wc.Qualifier})
 	}
 	for i := range chain {
-		chain[i].OK, chain[i].Tables, chain[i].Depth, chain[i].Prefix, chain[i].Start = true, c.Tables, len(open), prefix, start
+		chain[i].OK, chain[i].Tables, chain[i].Depth, chain[i].Prefix, chain[i].Start, chain[i].Begins = true, c.Tables, len(open), prefix, start, begins
 		if i+1 < len(chain) {
 			chain[i].Outer = &chain[i+1]
 		}

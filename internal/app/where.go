@@ -438,7 +438,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 	// a value's place: the column's values, and a string typed there is no other
 	// word's (F15.10)
 	var vals []candidate
-	if vc.OK && (vc.Kind != sqlkit.ValueInsert || vc.Depth == 1) && (vc.Kind != sqlkit.ValueUpdate || vc.Depth == 0) {
+	if vc.OK && vc.Begins && (vc.Kind != sqlkit.ValueInsert || vc.Depth == 1) && (vc.Kind != sqlkit.ValueUpdate || vc.Depth == 0) {
 		for _, r := range vc.Tables {
 			if t, ok := table(r.Schema, r.Name); ok {
 				columns(t) // asks for them when the cache lacks them

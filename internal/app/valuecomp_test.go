@@ -73,6 +73,14 @@ func TestValueCompletion(t *testing.T) {
 	if got := offered(c); got != "-" {
 		t.Fatalf("more values than columns: %q", got)
 	}
+	feed(t, a, "<Esc>ggdGiinsert into t_order (id, status) values (1 ")
+	if got := offered(c); got != "-" {
+		t.Fatalf("after a value: %q", got)
+	}
+	feed(t, a, "<Esc>ggdGiupdate t_order set status = 'done' ")
+	if got := offered(c); got != "-" {
+		t.Fatalf("after a string: %q", got)
+	}
 	feed(t, a, "<Esc>ggdGiinsert into t_order (id, status) values (1, 5")
 	if got := offered(c); got != "-" {
 		t.Fatalf("after a number: %q", got)
