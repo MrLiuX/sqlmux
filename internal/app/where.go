@@ -775,11 +775,7 @@ type histEntry struct {
 
 // tableState is t's history and favorites, made on first use.
 func (a *App) tableState(t *dataTab) *config.TableState {
-	key := t.conn.Spec.Name + "/"
-	if t.conn.Spec.Database != "" {
-		key += t.conn.Spec.Database + "/"
-	}
-	key += t.table.Schema + "." + t.table.Name
+	key := t.conn.tableKey(t.table)
 	if a.state.Tables == nil {
 		a.state.Tables = map[string]*config.TableState{}
 	}

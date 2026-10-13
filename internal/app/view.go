@@ -358,7 +358,7 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 			f.Cursor = &c
 		}
 	case t.pending && t.conn.State == connFailed: // a layout's tab, its connection not to be had (F12.5)
-		ui.ErrorPage{Title: t.conn.Spec.Name, Text: t.conn.err.Error()}.Draw(f, gridRect(r, t))
+		ui.ErrorPage{Title: t.conn.label(), Text: t.conn.err.Error()}.Draw(f, gridRect(r, t))
 	}
 	drawBar(f, t.bar, p, r)
 }

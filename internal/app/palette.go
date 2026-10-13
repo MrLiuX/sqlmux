@@ -168,14 +168,14 @@ func (a *App) paletteItems() []paletteItem {
 	// the current connection's Schema first, as the tree lists it, its other
 	// schemas, then the other connections connected (§12)
 	cur := a.palette.conn
-	for _, c := range append([]*Conn{cur}, slices.DeleteFunc(slices.Clone(a.sess.Conns), func(c *Conn) bool { return c == cur })...) {
+	for _, c := range append([]*Conn{cur}, slices.DeleteFunc(a.sess.conns(), func(c *Conn) bool { return c == cur })...) { // every (connection, database) connected (F15.1)
 		if c == nil { // a start with no connection (F7.4)
 			continue
 		}
 		for _, here := range []bool{true, false} {
 			for _, t := range c.Tables {
 				if (c == cur && t.Schema == c.Schema) == here {
-					items = append(items, paletteItem{itemTable, c.Spec.Name + "/" + t.Schema + "." + t.Name, a.icons.Table, t.Name, c.Spec.Name + "." + t.Schema})
+					items = append(items, paletteItem{itemTable, c.tableKey(t), a.icons.Table, t.Name, c.label() + "." + t.Schema})
 				}
 			}
 		}
@@ -388,12 +388,12 @@ func (a *App) previewed() (id string, c *Conn, t db.Table, ok bool) {
 	return id, c, t, ok
 }
 
-// tableByID is the table of a palette item's id, connection/schema.name,
-// and its connection.
+// tableByID is the table of a palette item's id (Conn.tableKey), and its
+// connection: the database's, not the DSN's by the name.
 func (a *App) tableByID(id string) (*Conn, db.Table, bool) {
-	name, table, _ := strings.Cut(id, "/")
-	for _, c := range a.sess.Conns {
-		if c.Spec.Name != name {
+	for _, c := range a.sess.conns() {
+		table, ok := strings.CutPrefix(id, c.keyPrefix())
+		if !ok {
 			continue
 		}
 		if i := slices.IndexFunc(c.Tables, func(t db.Table) bool { return t.Schema+"."+t.Name == table }); i >= 0 {
