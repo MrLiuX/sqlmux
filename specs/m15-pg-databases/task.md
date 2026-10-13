@@ -1,6 +1,6 @@
 # M15 PG 数据库层级 · 任务清单
 
-- **状态**：**进行中**（第一批 F15.5–F15.9 passed 2026-10-13，0b4a268；第二批 F15.1 passed 2026-10-13，e056ebf，全量 197 个脚本 3848 条、红的只有 f11.2 的 4 条 brew 环境问题，reviewer 退回过一次（面板条目的 id 不带库、在别的库时开错同名表，e25ca90 修）；F15.2–F15.4、F15.10、F15.11 待开发；2026-10-11 用户规划时定方向，排在 M14 之后）。
+- **状态**：**进行中**（第一批 F15.5–F15.9 passed 2026-10-13，0b4a268；第二批 F15.1 passed 2026-10-13，e056ebf，全量 197 个脚本 3848 条、红的只有 f11.2 的 4 条 brew 环境问题，reviewer 退回过一次（面板条目的 id 不带库、在别的库时开错同名表，e25ca90 修）；第三批 F15.3 / F15.10 / F15.11 passed 2026-10-14，1ae0694，全量 199 个脚本 3964 条、红的只有 f11.2 的 brew 和共用 PG 上残留的 sqlmux_e2e_* 库撑长了树；F15.2、F15.4 已提交（节点 4）待审；2026-10-11 用户规划时定方向，排在 M14 之后）。
 - **目标**：PG 的树从 连接 → schema 改成 连接 → 数据库 → schema，同 DataGrip；SSH 隧道；query 的上下文提示与值补全（用户后续补充的编辑体验需求也归到这里）；状态栏的随机提示；用户 2026-10-13 验收 M14 时的五条（F15.5–F15.9：值编辑器宽度、ORDER 框宽度、flash 无匹配即退出、snippet 式占位符、`gj` 与搜索高亮）。
 - **范围**：tech-design §5（`Conn` 按数据库分 Meta / Main）、§7.8（数据库节点、特性提示）、§8.4（`Databases`、SSH 隧道）、§11（签名提示与值补全）、§14（connections.toml 的 ssh 字段、layout / state 的 `db`）。
 - **完成标准**：F15.1–F15.11 passed；tester 在最后一个 commit 上跑完整回归；用户验收通过后打 tag `m15`。
@@ -38,20 +38,20 @@
 - [ ] 集成：假 ssh 脚本把 stdin / stdout 接到 docker 里的 PG 端口（`nc`），`SELECT 1` 通；连接 spec 往返；表单里能写能读。
 - [ ] 真实 ssh 只在用户机器上手动验收一条，CI 不测。
 
-## F15.3 签名提示 · 状态：todo
+## F15.3 签名提示 · 状态：passed（1ae0694；e2e 83bfd24）
 
 用户 2026-10-11：INSERT 的 VALUES 里不知道第几个值对应哪个字段、什么类型。细节在 §11「签名提示与值补全」。F15.3 只做上下文识别和提示浮层；值补全和小项拆成 F15.10、F15.11（worker 起草时拆，编号追加、不动 F15.4）。
 
 - **涉及**：`internal/sqlkit`（`ValueContext`）、`internal/ui`（提示浮层）、`internal/app`（query）、`internal/config`（`[query] hints`）
 
 **开发**（§11）
-- [ ] `sqlkit.ValueContext(sql, offset)`：表、列清单、第几个、种类（insert / update / where / call），用 `CompletionContext` 同一套扫描器。
-- [ ] 提示浮层：光标行上一行（第一行时下一行）一行，当前字段高亮、两边 `dim`、放不下两头 `…`；光标移动跟着换，出上下文消失；`[query] hints = false` 关。
+- [x] `sqlkit.ValueContext(sql, offset)`：表、列清单、第几个、种类（insert / update / where / call），用 `CompletionContext` 同一套扫描器。
+- [x] 提示浮层：光标行上一行（第一行时下一行）一行，当前字段高亮、两边 `dim`、放不下两头 `…`；光标移动跟着换，出上下文消失；`[query] hints = false` 关。
 
 **验收**
-- [ ] sqlkit 表驱动单测：多行 VALUES 每个括号重数、`INSERT … SELECT` 不出、字符串 / 注释里的逗号不算、没列清单用 catalog 顺序、函数调用括号里取签名；mutation 逐条验。
-- [ ] golden：一个 INSERT 的、一个放不下的。
-- [ ] e2e：打 INSERT 到第二个值时提示行高亮第二列；`hints = false` 没有。
+- [x] sqlkit 表驱动单测：多行 VALUES 每个括号重数、`INSERT … SELECT` 不出、字符串 / 注释里的逗号不算、没列清单用 catalog 顺序、函数调用括号里取签名；mutation 逐条验。
+- [x] golden：一个 INSERT 的、一个放不下的。
+- [x] e2e：打 INSERT 到第二个值时提示行高亮第二列；`hints = false` 没有。
 
 ## F15.4 状态栏的随机提示 · 状态：todo
 
@@ -66,31 +66,31 @@
 - [ ] 单测：轮转不重复、轮完重来、解绑跳过、改键跟着变；每条提示的 Action 存在（遍历清单对 Action 表）；i18n 中英文齐全（现有 i18n 测试扫）。
 - [ ] golden：状态栏带提示、窄到让位。
 
-## F15.10 值补全 · 状态：todo
+## F15.10 值补全 · 状态：passed（1ae0694；e2e 83bfd24）
 
 - **依赖**：F15.3
 - **涉及**：`internal/app`（补全）、`internal/sqlkit`
 
 **开发**（§11「值补全」）
-- [ ] 在 F15.3 的列上下文里弹补全：枚举值（带引号）、布尔 `true` / `false`、可空 `NULL` 和有默认值 `DEFAULT`（这两项只 INSERT / UPDATE，条件里不给）、时间 `now()` / `CURRENT_TIMESTAMP`，候选来自单元格编辑选项浮层的同一份 catalog；其余列不弹。
+- [x] 在 F15.3 的列上下文里弹补全：枚举值（带引号）、布尔 `true` / `false`、可空 `NULL` 和有默认值 `DEFAULT`（这两项只 INSERT / UPDATE，条件里不给）、时间 `now()` / `CURRENT_TIMESTAMP`，候选来自单元格编辑选项浮层的同一份 catalog；其余列不弹。
 
 **验收**
-- [ ] 单测：每类候选和不弹的。
-- [ ] e2e：枚举列的 VALUES 里弹出枚举值，`Tab` 补全。
+- [x] 单测：每类候选和不弹的。
+- [x] e2e：枚举列的 VALUES 里弹出枚举值，`Tab` 补全。
 
-## F15.11 补全的同类小项 · 状态：todo
+## F15.11 补全的同类小项 · 状态：passed（1ae0694；e2e 83bfd24）
 
 - **依赖**：F15.8（snippet）、F15.3
 - **涉及**：`internal/app`（补全）、`internal/sqlkit`
 
 **开发**（§11「同类小项」、§9.7）
-- [ ] `INSERT INTO t ` 后的补全给 `(全部列) VALUES ()` 骨架，VALUES 括号里一个 tabstop，列清单是普通文字。
-- [ ] `UPDATE t SET` 后的列补全只列 UPDATE 和 SET 之间第 0 层的表（MySQL 多表 UPDATE 都列）。
-- [ ] 补全插入的标识符需要引号时加引号，去掉 §9.7 的 `ponytail:` 上限；保留字每个方言一份表（§9.7「接受」：PG 不变，MySQL 8.4 `RESERVED = 1`，SQLite 的关键字表）。
+- [x] `INSERT INTO t ` 后的补全给 `(全部列) VALUES ()` 骨架，VALUES 括号里一个 tabstop，列清单是普通文字。
+- [x] `UPDATE t SET` 后的列补全只列 UPDATE 和 SET 之间第 0 层的表（MySQL 多表 UPDATE 都列）。
+- [x] 补全插入的标识符需要引号时加引号，去掉 §9.7 的 `ponytail:` 上限；保留字每个方言一份表（§9.7「接受」：PG 不变，MySQL 8.4 `RESERVED = 1`，SQLite 的关键字表）。
 
 **验收**
-- [ ] 单测三项。
-- [ ] e2e：INSERT 骨架后打值；大小写混合的列名补全后带引号。
+- [x] 单测三项。
+- [x] e2e：INSERT 骨架后打值；大小写混合的列名补全后带引号。
 
 用户 2026-10-13 验收 M14 时提的（决策者当天定细节，已写进设计章节；都不依赖 F15.1，建议排第一批）：
 
