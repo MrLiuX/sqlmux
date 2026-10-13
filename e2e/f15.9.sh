@@ -87,7 +87,10 @@ e2e_type "/foo"; key Enter; sleep 0.5
 check "值编辑器：/foo 回车，两个 foo 都有底色（当前一处 search_current，另一处 search），命令行 [2/2]（光标在第一个 foo 上，下一处是第二个）" eval '[[ $(cur) == foo && $(sch) == foo && $(tail_of /foo) == "[2/2]" ]]' || { cur; sch; tail_of /foo; }
 key n; sleep 0.4
 check "n：回到第一个（W [1/2]），当前和其余的底色换位" eval '[[ $(tail_of /foo) == "W [1/2]" && $(cur) == foo ]]' || tail_of /foo
-key Escape; key Escape; sleep 0.4
+key Escape; sleep 0.4
+check "值编辑器里高亮亮着时第一下 esc 只清高亮（M15 reviewer 退回后的 §11：编辑器还开着）" eval '[[ -z $(sch) && -z $(cur) ]] && e2e_plain | grep -qF " · TEXT"' || { sch; cur; }
+key Escape; sleep 0.4
+check "再按一下 esc 才关掉值编辑器" eval '! e2e_plain | grep -qF " · TEXT"'
 key g J; sleep 0.8
 check "gJ 不再是 JSON 视图（原来的键；表格里没绑）" eval '! in_json'
 key g j; sleep 0.8
@@ -96,6 +99,15 @@ e2e_type '/"id"'; key Enter; sleep 0.5
 check "JSON 视图里 / 搜索：每个 \"id\" 有底色，[1/2]（两行：id 1 和 id 2），当前一处 search_current" eval '[[ $(tail_of "/\"id\"") == "[1/2]" && -n $(cur) && -n $(sch) ]]' || { tail_of '/"id"'; cur; sch; }
 key n; sleep 0.4
 check "n：[2/2]" eval '[[ $(tail_of "/\"id\"") == "[2/2]" ]]' || tail_of '/"id"'
+key Escape; sleep 0.4
+check "JSON 视图里高亮亮着时第一下 esc 只清高亮，还在 JSON 视图" eval '[[ -z $(sch) && -z $(cur) ]] && in_json' || { sch; cur; }
+e2e_type '/"id"'; key Enter; sleep 0.4; key q; sleep 0.5
+check "q 直接回表格（不先清高亮）" eval '! in_json'
+key g j; sleep 0.6
+e2e_type '/"id"'; key Enter; sleep 0.4; key Escape; key Escape; sleep 0.5
+check "两下 esc：先清高亮、再回表格" eval '! in_json'
+key g j; sleep 0.6
+check "再 gj 进 JSON 视图" eval 'in_json'
 key g j; sleep 0.6
 check "再按 gj 回表格" eval '! in_json'
 _e2e_kill
