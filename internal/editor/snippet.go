@@ -101,8 +101,10 @@ func (e *Editor) snipAlive() *snippet {
 // snipSync moves the snippet's places by what changed in the text since it
 // last looked: one change, from the first byte that differs to the last, which
 // is of what typing, a completion or a paste make. A change inside the tabstop
-// being filled in, or inside another, makes it longer or shorter; one before a
-// place moves it; one that cuts a tabstop leaves a point where it was; the
+// being filled in, or inside another, makes it longer or shorter, and one that
+// begins in the one being filled in and reaches over its end makes it reach to
+// where the change ends; one before a place moves it; one that cuts any other
+// leaves a point where it was; the
 // snippet's own text growing with a change in it, and ending with any other.
 func (e *Editor) snipSync() {
 	s := e.snip
@@ -118,7 +120,7 @@ func (e *Editor) snipSync() {
 		from, to := s.stops[i][0], s.stops[i][1]
 		switch {
 		case i == s.cur && from <= a && a <= to: // typed in, over its end too: a line break takes the blanks after it
-			to = max(to+d, a+len(now)-len(old)+b-a)
+			to = max(to, b) + d
 		case i != s.cur && from < a && b < to: // typed in
 			to += d
 		case b <= from: // before it
