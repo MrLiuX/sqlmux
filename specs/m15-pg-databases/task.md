@@ -1,6 +1,6 @@
 # M15 PG 数据库层级 · 任务清单
 
-- **状态**：**draft**（2026-10-11 用户规划时定方向，排在 M14 之后）。
+- **状态**：**进行中**（第一批 F15.5–F15.9 passed 2026-10-13，0b4a268，全量 191 个脚本 3734 条、红的只有 f11.2 的 4 条 brew 环境问题；F15.1–F15.4 仍是 draft，等 worker 的清单；2026-10-11 用户规划时定方向，排在 M14 之后）。
 - **目标**：PG 的树从 连接 → schema 改成 连接 → 数据库 → schema，同 DataGrip；SSH 隧道；query 的上下文提示与值补全（用户后续补充的编辑体验需求也归到这里）；状态栏的随机提示；用户 2026-10-13 验收 M14 时的五条（F15.5–F15.9：值编辑器宽度、ORDER 框宽度、flash 无匹配即退出、snippet 式占位符、`gj` 与搜索高亮）。
 - **范围**：tech-design §5（`Conn` 按数据库分 Meta / Main）、§7.8（树）、§8（`pg_database`）、§14（connections.toml 的 ssh 字段）。
 - **依赖**：M14 passed。
@@ -26,10 +26,10 @@
 
 用户 2026-10-13 验收 M14 时提的（决策者当天定细节，已写进设计章节；都不依赖 F15.1，建议排第一批）：
 
-- **F15.5 值编辑器的宽度按内容**（§10.3）：浮窗宽取最长一行（JSON 格式化之后）加边框和内边距，最少 pane 内容区的一半（最小 40）、最多 pane 内容区的宽；左对齐光标所在格，右边出界整体左移；原来固定一半，长 JSON 的行被截掉看不全。验收：单测宽度的三档（短文本一半、长行撑开、超长到 pane 宽）；golden 一个长 JSON 的。
-- **F15.6 ORDER / COLS 框的宽度按内容**（§7.8「ORDER」）：`ui.Dropdown.Box` 不再让提示行把框撑宽（现在 `max(w, hintRowWidth+4)` 把六项提示的 ORDER 撑到整个 pane）；提示行放不下折成两行，再放不下按值编辑器提示行的规则丢末尾的项。看一眼别的用这个框的下拉有没有被同一句撑宽。验收：golden ORDER 框和 COLS 框都按内容、远窄于 pane（ORDER 比 COLS 宽序号标记那几列，不是同宽，tester 试跑时改）、提示行两行；单测提示行的折行和丢项。
-- **F15.7 flash 跳转没有匹配就退出**（§6.10）：模式打到一个匹配都没有时直接退出 JUMP、光标不动、这个字符丢掉；原来留在全黑的遮罩里，删字符才回来、看不见已打的前缀。验收：单测；e2e 打一个屏幕上没有的字符后模式块回到 NORMAL、遮罩没了。
-- **F15.8 snippet 式的占位符**（§11「snippet 与 Select 模式」、§7.8「模板」）：编辑器加最小的 snippet 和 Select 模式：插入带 tabstop 的文字时第一个在 Select 模式下选中、打字即替换，`Tab` / `S-Tab` 跳下一个 / 上一个，剩下的 tabstop `visual` 底；结构模板的占位符改走它（原来 VISUAL 选中第一个、要按 `c`）；F15.3 的 `(全部列) VALUES ()` 骨架也用它。照 nvim 的 `vim.snippet` 和 `:help Select-mode`，拿不准的以 nvim 实测为准。验收：单测（第一个选中、打字替换、Tab / S-Tab、最后一个结束、离开范围结束、补全开着时 Tab 归补全）；e2e 右键「加索引…」后直接打字、`Tab` 到 `<column>` 再打字，语句正确。用户顺带提的「改表、改列的表单」不排，以后再说。
-- **F15.9 JSON 视图的键和编辑器的搜索高亮**（§7.6、§6.4、§11「搜索」、§7.7）：`gJ` 改成 `gj`；JSON 视图的翻页和刷新沿用表格的键（`[keys.grid]` / `[keys.result]` 里绑到 `grid.page.*` / `result.page.*` / `grid.refresh` 的，用户改成 `<` / `>` 也生效），`json.page.*` / `json.refresh` 三个 Action 去掉，提示行的键位跟着读；编辑器（query、值编辑器、JSON 视图）的 `/` `?` 回车后所有匹配 `search` 底、当前匹配 `search_current` 底，`n` / `N` 跟着换，NORMAL 下 `esc` 清掉；回车和 `n` / `N` 后命令行留着显示模式、右端 `[1/2]`、绕回加 `W`，下一个不是 `n` / `N` 的键消失，计数写法照 nvim search.c `update_search_stat`。主题加 `search`、`search_current` 两个键（没写时退回 `visual` / `yank`），`sqlmux keys` 和 default.toml、README 的键位表跟着改。验收：单测高亮区间和计数（含绕回、超过 99）；golden 一个两处匹配的；e2e query 里 `/` 后看见两种底色和 `[1/2]`，JSON 视图里用户的 `<` `>` 翻页。
+- **F15.5 值编辑器的宽度按内容**（状态：passed（0b4a268；e2e 0b4a268））（§10.3）：浮窗宽取最长一行（JSON 格式化之后）加边框和内边距，最少 pane 内容区的一半（最小 40）、最多 pane 内容区的宽；左对齐光标所在格，右边出界整体左移；原来固定一半，长 JSON 的行被截掉看不全。验收：单测宽度的三档（短文本一半、长行撑开、超长到 pane 宽）；golden 一个长 JSON 的。
+- **F15.6 ORDER / COLS 框的宽度按内容**（状态：passed（0b4a268；e2e 0b4a268））（§7.8「ORDER」）：`ui.Dropdown.Box` 不再让提示行把框撑宽（现在 `max(w, hintRowWidth+4)` 把六项提示的 ORDER 撑到整个 pane）；提示行放不下折成两行，再放不下按值编辑器提示行的规则丢末尾的项。看一眼别的用这个框的下拉有没有被同一句撑宽。验收：golden ORDER 框和 COLS 框都按内容、远窄于 pane（ORDER 比 COLS 宽序号标记那几列，不是同宽，tester 试跑时改）、提示行两行；单测提示行的折行和丢项。
+- **F15.7 flash 跳转没有匹配就退出**（状态：passed（0b4a268；e2e 0b4a268））（§6.10）：模式打到一个匹配都没有时直接退出 JUMP、光标不动、这个字符丢掉；原来留在全黑的遮罩里，删字符才回来、看不见已打的前缀。验收：单测；e2e 打一个屏幕上没有的字符后模式块回到 NORMAL、遮罩没了。
+- **F15.8 snippet 式的占位符**（状态：passed（0b4a268；e2e 0b4a268））（§11「snippet 与 Select 模式」、§7.8「模板」）：编辑器加最小的 snippet 和 Select 模式：插入带 tabstop 的文字时第一个在 Select 模式下选中、打字即替换，`Tab` / `S-Tab` 跳下一个 / 上一个，剩下的 tabstop `visual` 底；结构模板的占位符改走它（原来 VISUAL 选中第一个、要按 `c`）；F15.3 的 `(全部列) VALUES ()` 骨架也用它。照 nvim 的 `vim.snippet` 和 `:help Select-mode`，拿不准的以 nvim 实测为准。验收：单测（第一个选中、打字替换、Tab / S-Tab、最后一个结束、离开范围结束、补全开着时 Tab 归补全）；e2e 右键「加索引…」后直接打字、`Tab` 到 `<column>` 再打字，语句正确。用户顺带提的「改表、改列的表单」不排，以后再说。 已知、不排：R 模式里改写越过下一个 tabstop 的开头时那个 tabstop 缩成一个点，nvim 会保留剩下的部分（审查时说明是改动前就有的）。
+- **F15.9 JSON 视图的键和编辑器的搜索高亮**（状态：passed（0b4a268；e2e 0b4a268））（§7.6、§6.4、§11「搜索」、§7.7）：`gJ` 改成 `gj`；JSON 视图的翻页和刷新沿用表格的键（`[keys.grid]` / `[keys.result]` 里绑到 `grid.page.*` / `result.page.*` / `grid.refresh` 的，用户改成 `<` / `>` 也生效），`json.page.*` / `json.refresh` 三个 Action 去掉，提示行的键位跟着读；编辑器（query、值编辑器、JSON 视图）的 `/` `?` 回车后所有匹配 `search` 底、当前匹配 `search_current` 底，`n` / `N` 跟着换，NORMAL 下 `esc` 清掉；回车和 `n` / `N` 后命令行留着显示模式、右端 `[1/2]`、绕回加 `W`，下一个不是 `n` / `N` 的键消失，计数写法照 nvim search.c `update_search_stat`。主题加 `search`、`search_current` 两个键（没写时退回 `visual` / `yank`），`sqlmux keys` 和 default.toml、README 的键位表跟着改。验收：单测高亮区间和计数（含绕回、超过 99）；golden 一个两处匹配的；e2e query 里 `/` 后看见两种底色和 `[1/2]`，JSON 视图里用户的 `<` `>` 翻页。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
