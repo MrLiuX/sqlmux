@@ -117,7 +117,9 @@ func (e *Editor) snipSync() {
 	for i := range s.stops {
 		from, to := s.stops[i][0], s.stops[i][1]
 		switch {
-		case i == s.cur && from <= a && b <= to, i != s.cur && from < a && b < to: // typed in
+		case i == s.cur && from <= a && a <= to: // typed in, over its end too: a line break takes the blanks after it
+			to = max(to+d, a+len(now)-len(old)+b-a)
+		case i != s.cur && from < a && b < to: // typed in
 			to += d
 		case b <= from: // before it
 			from, to = from+d, to+d

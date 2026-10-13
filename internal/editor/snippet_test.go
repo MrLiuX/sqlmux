@@ -386,3 +386,30 @@ func TestSnippetPlainEndsWithTheCursorOut(t *testing.T) {
 		t.Errorf("Tab with no snippet: %q", e.Lines()[0])
 	}
 }
+
+// A line break typed in a tabstop takes the blanks after the cursor, which are
+// what follows the tabstop: the change reaches over its end, and the tabstop is
+// still the one being filled in, the cursor in it, the snippet alive (F15.8).
+func TestSnippetLineBreakBeforeABlank(t *testing.T) {
+	e := New(`create index <name> on "public"."cust" (<column>);`)
+	e.SetHeight(10)
+	e.Snippet(Pos{}, Pos{0, 50}, []Range{{Pos{0, 13}, Pos{0, 19}}, {Pos{0, 40}, Pos{0, 48}}})
+	typed(e, "1", "<CR>")
+	if e.snipAlive() == nil || e.Lines()[0] != "create index 1" || e.Lines()[1] != `on "public"."cust" (<column>);` {
+		t.Fatalf("after the line break: snippet %v, %q, cursor %v", e.snip != nil, e.Lines(), e.Cursor())
+	}
+	typed(e, "2", "<Tab>")
+	if got := tabstopText(e); got != "<column>" || e.Lines()[1] != `2on "public"."cust" (<column>);` {
+		t.Errorf("Tab: %q in %q", got, e.Lines())
+	}
+}
+
+// Typing in the middle of the tabstop being filled in makes the whole of it
+// longer (F15.8).
+func TestSnippetTypedInTheMiddle(t *testing.T) {
+	e := snippetOf(alterText)
+	typed(e, "<Esc>", "i", "Q", "<Esc>", "a", "<Tab>", "<S-Tab>") // before the > of <name>
+	if got := tabstopText(e); got != "<nameQ>" {
+		t.Errorf("%q in %q", got, e.Lines()[0])
+	}
+}
