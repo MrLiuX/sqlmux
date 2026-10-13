@@ -59,14 +59,8 @@ func (a *App) complete(t *dataTab) {
 	if w.Column != "" {
 		var vals []candidate
 		for _, c := range t.cols.Cols {
-			if !strings.EqualFold(c.Name, w.Column) {
-				continue
-			}
-			for _, e := range c.Enum {
-				vals = append(vals, candidate{label: e, insert: sqlkit.Literal(e, t.conn.eng.Dialect()), note: i18n.T("值")})
-			}
-			if c.Type == "boolean" || c.Type == "tinyint(1)" { // MySQL's takes true and false too
-				vals = append(vals, candidate{label: "true", insert: "true", note: i18n.T("值")}, candidate{label: "false", insert: "false", note: i18n.T("值")})
+			if strings.EqualFold(c.Name, w.Column) {
+				vals = append(vals, valueChoices(c, t.conn.eng.Dialect())...)
 			}
 		}
 		groups, pattern = [][]candidate{vals}, strings.TrimLeft(w.Prefix, `'"`) // MySQL's "…" too
@@ -111,7 +105,8 @@ func valueChoices(col db.Column, d sqlkit.Dialect) (out []candidate) {
 // valueCandidates are what the value of col can be where a statement sets or
 // compares it (F15.10): the cell options' (§10.2): a time's now() and
 // current_timestamp, an enum's labels quoted or a boolean's, NULL when it takes
-// one, DEFAULT when it has one, in an INSERT or an UPDATE and not a condition.
+// one, DEFAULT when it has one, both in an INSERT or an UPDATE and not a
+// condition, where `= null` and `in (null)` are never true.
 // ponytail: SQLite has no now(); a date or a time gets the timestamp too
 func valueCandidates(col db.Column, kind sqlkit.ValueKind, d sqlkit.Dialect) []candidate {
 	var out []candidate
@@ -122,21 +117,13 @@ func valueCandidates(col db.Column, kind sqlkit.ValueKind, d sqlkit.Dialect) []c
 		out = append(out, candidate{label: "current_timestamp", insert: "current_timestamp", note: i18n.T("值")})
 	}
 	out = append(out, valueChoices(col, d)...)
-	if !col.NotNull {
+	if !col.NotNull && kind != sqlkit.ValueWhere {
 		out = append(out, candidate{label: "null", insert: "null", note: i18n.T("关键字"), kw: true})
 	}
 	if kind != sqlkit.ValueWhere && hasDefault(col, kind == sqlkit.ValueInsert) {
 		out = append(out, candidate{label: "default", insert: "default", note: i18n.T("关键字"), kw: true})
 	}
 	return out
-}
-
-// ellipsis is s cut to n characters at most, the last one … when it was cut.
-func ellipsis(s string, n int) string {
-	if r := []rune(s); len(r) > n {
-		return string(r[:n-1]) + "…"
-	}
-	return s
 }
 
 // noSelection is the sel of a list that has no item selected yet: Tab, C-n or
@@ -483,15 +470,19 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 	for _, n := range c.CTEs {
 		ctes, isCTE[strings.ToLower(n)] = append(ctes, candidate{label: n, insert: conn.ident(n), note: "CTE", space: true}), true
 	}
-	// setTable is the table an UPDATE's SET is of: the first the statement names
-	// at the cursor's depth
-	setTable := func() (db.Table, bool) {
-		for _, r := range c.Tables {
-			if r.Depth == c.Depth {
-				return table(r.Schema, r.Name)
+	// setColumns are the columns of the tables an UPDATE names before its SET at
+	// the cursor's depth, a MySQL join's both, each table's in turn
+	// known is whether the catalog has one of them: its columns may still be
+	// on their way
+	setColumns := func() (out []candidate, known bool) {
+		named := map[tableID]bool{}
+		for _, r := range c.Updated {
+			if t, ok := table(r.Schema, r.Name); ok && r.Depth == c.Depth && !named[idOf(t)] {
+				named[idOf(t)], known = true, true
+				out = append(out, columns(t)...)
 			}
 		}
-		return db.Table{}, false
+		return out, known
 	}
 	var groups [][]candidate
 	resolved := false
@@ -542,7 +533,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 			for i, r := range rest {
 				names[i], inserts[i] = r.label, r.insert
 			}
-			rest = append([]candidate{{label: ellipsis(strings.Join(names, ", "), 40), insert: strings.Join(inserts, ", "), note: i18n.T("全部 %d 列", len(rest))}}, rest...)
+			rest = append([]candidate{{label: ui.Truncate(strings.Join(names, ", "), 40), insert: strings.Join(inserts, ", "), note: i18n.T("全部 %d 列", len(rest))}}, rest...)
 		}
 		groups = [][]candidate{rest}
 	case sqlkit.CompInsertRest: // the columns and VALUES of the table, the cursor in the parentheses of the values (F15.11)
@@ -560,13 +551,15 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 		}
 		if len(names) > 0 {
 			insert := "(" + strings.Join(inserts, ", ") + ") values ()"
-			label := "(" + ellipsis(strings.Join(names, ", "), 24) + ") values ()"
+			label := "(" + ui.Truncate(strings.Join(names, ", "), 24) + ") values ()"
 			groups = [][]candidate{{{label: label, insert: insert, note: i18n.T("全部 %d 列", len(names)), stops: []int{len(insert) - 1}}}}
 		}
 	default:
-		if t, ok := setTable(); c.InSet && ok { // an UPDATE's SET: the columns of its table, no other (F15.11)
-			groups, resolved = [][]candidate{columns(t)}, true
-			break
+		if c.InSet { // an UPDATE's SET: the columns of its tables, no other, none while they are asked for (F15.11)
+			if cols, known := setColumns(); known {
+				groups, resolved = [][]candidate{cols}, true
+				break
+			}
 		}
 		var near, far []candidate
 		named := map[tableID]bool{}

@@ -142,7 +142,7 @@
 
 - **位置**：`insert into <表> (` 的括号里，光标在 `(` 之后或逗号之后（可以带半截列名）；表名可以带 schema、带引号，PG 和 MySQL 都算。到了这个位置就弹出，前缀可以为空，和 WHERE 的取值模式一样；所以敲 `(`（自动配对成 `(|)`）或 `, ` 就直接列出来。
 - **候选**：这张表里还没写进括号的列，按表里的列顺序，右侧注释照常是类型；不是 `generated always` 的才列（`generated always as identity` 和生成列插不进去，写了会报错）。前缀为空时第一项是「全部列」：显示成剩下的列用 `, ` 连起来，放不下的用省略号，右侧注释「全部 N 列」；有前缀后这一项不出现，其余照 fzf 匹配。
-- **接受**：单个列插入列名，不补空格（后面接 `,` 或 `)`）；「全部列」把剩下的列用 `, ` 连起来一次插进去，光标停在最后一列后面，正好在 `)` 前。列名和其他补全一样，需要引号的（PG 的大写、空格、保留字，MySQL / SQLite 的空格和关键字）加引号插入，显示的仍是原名（M15 F15.11，`sqlkit.Dialect.NeedsQuote`；MySQL / SQLite 的保留字没有列表，关键字表里的都加，多加无害）。
+- **接受**：单个列插入列名，不补空格（后面接 `,` 或 `)`）；「全部列」把剩下的列用 `, ` 连起来一次插进去，光标停在最后一列后面，正好在 `)` 前。列名和其他补全一样，需要引号的（PG 的大写、空格、保留字，MySQL / SQLite 的空格和保留字）加引号插入，显示的仍是原名（M15 F15.11，`sqlkit.Dialect.NeedsQuote`）。保留字每个方言一份表，照 `pgReserved` 的做法：PG 是 `pg_get_keywords()` 的 R 和 T 类（PG 17）；MySQL 是 8.4 `information_schema.KEYWORDS` 里 `RESERVED = 1` 的 262 个（只给这些加，不按 sqlkit 的关键字表加：那张表少 `rank`、`condition`、`option`、`int` 等 149 个保留字，又多 `comment`、`first`、`view` 等 80 个非保留字）；SQLite 是 sqlite.org 的关键字表（147 个，全加引号无害；关键字表漏了 `autoincrement`、`isnull`、`notnull`、`raise` 等）。单测各方言挑几个只在保留字表里的词和几个只在关键字表里的词。
 
 **WHERE 的 `C-r` 历史 / 收藏下拉**：也按当前输入模糊过滤，体验与 shell 里 fzf 的 CTRL-R 相同。
 

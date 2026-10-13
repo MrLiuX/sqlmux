@@ -316,3 +316,13 @@ func TestParseHints(t *testing.T) {
 		t.Fatalf("false: %v %v", c, err)
 	}
 }
+
+// The status bar's tips are on, `[ui] tips = false` turns them off (F15.4).
+func TestParseTips(t *testing.T) {
+	if c, err := Parse(""); err != nil || !c.Tips {
+		t.Fatalf("default: %v %v", c, err)
+	}
+	if c, err := Parse("[ui]\ntips = false\n"); err != nil || c.Tips {
+		t.Fatalf("false: %v %v", c, err)
+	}
+}

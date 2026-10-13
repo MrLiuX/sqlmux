@@ -19,6 +19,10 @@ type Segment struct {
 	Runs   []Run
 	Action string // clicking it runs this
 	Drop   int    // when too narrow, droppable segments go lowest Drop first, right to left; 0 never
+	// Tip: a line about a feature (F15.4), the first to give way, and the
+	// mode's extra info does not go with it, which it would for any other
+	// segment: the info goes first for the room it takes, the tip before it.
+	Tip bool
 }
 
 func (s Segment) width() int {
@@ -31,7 +35,8 @@ func (s Segment) width() int {
 
 // StatusLine is the one-row bar at the bottom (B-01~B-03, §7.8): Left from
 // the left edge, Info then Right against the right edge. When space runs out,
-// Info goes first, then droppable segments, and last the Shrink run is cut.
+// Info goes first, then droppable segments, and last the Shrink run is cut; a
+// Tip goes before them all, and is the room the Info has when it is short.
 type StatusLine struct {
 	Left  []Segment
 	Info  string // mode extra info, ellipsized; M1's WHERE input shows "-- editing WHERE --" here (§7.8)
@@ -48,6 +53,9 @@ func (s StatusLine) Draw(f *Frame, r uv.Rectangle) (rightX int) {
 	th := f.Theme
 	f.Fill(r, uv.Style{Bg: th.Bar})
 	left, right := dropToFit(s.Left, s.Right, r.Dx())
+	if s.Info != "" && r.Dx()-segsWidth(left)-segsWidth(right) < Width(s.Info)+2 { // the info is not cut for a tip
+		right = slices.DeleteFunc(right, func(g Segment) bool { return g.Tip })
+	}
 	if over := segsWidth(left) + segsWidth(right) - r.Dx(); over > 0 {
 		shrink(left, over)
 	}
@@ -58,7 +66,7 @@ func (s StatusLine) Draw(f *Frame, r uv.Rectangle) (rightX int) {
 		x = drawSegment(f, x, r.Min.Y, rx, seg)
 	}
 	// Info is the first to go: once any segment had to be dropped, it's gone too.
-	whole := len(left)+len(right) == len(s.Left)+len(s.Right)
+	whole := plain(left)+plain(right) == plain(s.Left)+plain(s.Right)
 	if spare := rx - x; s.Info != "" && whole && spare >= minInfo {
 		info := " " + Truncate(s.Info, spare-2) + " "
 		f.Text(rx-Width(info), r.Min.Y, rx, info, uv.Style{Fg: th.Dim, Bg: th.Bar})
@@ -68,6 +76,17 @@ func (s StatusLine) Draw(f *Frame, r uv.Rectangle) (rightX int) {
 		rx = drawSegment(f, rx, r.Min.Y, r.Max.X, seg)
 	}
 	return rightX
+}
+
+// plain is how many of ss are not a Tip.
+func plain(ss []Segment) int {
+	n := 0
+	for _, s := range ss {
+		if !s.Tip {
+			n++
+		}
+	}
+	return n
 }
 
 // dropToFit removes droppable segments until both groups fit in w: lowest

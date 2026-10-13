@@ -45,19 +45,16 @@ func WhereContext(s string, pos int, d Dialect) Where {
 		}
 		return ""
 	}
-	word := func(i int) bool {
-		return i < len(back) && (back[i].Kind == Ident || back[i].Kind == Keyword || back[i].Kind == Quoted)
-	}
 	w.WantsColumn = blank && (text(0) == "and" || text(0) == "or")
 	switch {
-	case (text(0) == "=" || text(0) == "<>" || text(0) == "!=") && word(1):
+	case (text(0) == "=" || text(0) == "<>" || text(0) == "!=") && isName(back, 1):
 		w.Column, w.Qualifier = unquote(s[back[1].Start:back[1].End]), qualifier(s, back, 2)
 	default: // in ( a, b, … : back to the (
 		i := 0
 		for text(i) == "," && i+1 < len(back) && back[i+1].Kind != Punct && back[i+1].Kind != Op {
 			i += 2
 		}
-		if text(i) == "(" && text(i+1) == "in" && word(i+2) {
+		if text(i) == "(" && text(i+1) == "in" && isName(back, i+2) {
 			w.Column, w.Qualifier = unquote(s[back[i+2].Start:back[i+2].End]), qualifier(s, back, i+3)
 		}
 	}

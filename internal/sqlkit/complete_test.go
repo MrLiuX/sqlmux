@@ -53,6 +53,7 @@ func TestCompletionContext(t *testing.T) {
 		}
 		want := Completion{OK: true, Kind: c.kind, Prefix: c.prefix, Start: pos - len(c.prefix), Qualifier: c.qual, Depth: c.depth, Tables: c.tables, CTEs: c.ctes}
 		want.WantsColumn = got.WantsColumn // TestWantsColumn's
+		want.Updated = got.Updated         // TestUpdatedTables'
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("%s:\n got %+v\nwant %+v", c.sql, got, want)
 		}
@@ -127,6 +128,8 @@ func TestInsertColumnsContext(t *testing.T) {
 		{"insert into comment (|", "", PG, true, TableRef{Name: "comment"}, nil}, // a table named as a keyword is
 		{"insert into public.comment (a, |", "", PG, true, TableRef{Schema: "public", Name: "comment"}, []string{"a"}},
 		{"insert into `key` (|", "", MySQL, true, TableRef{Name: "key"}, nil},
+		{"select a into t (|", "", PG, false, TableRef{}, nil},                                     // INTO of SELECT … INTO is no INSERT's
+		{"insert into t as x (a, |", "", PG, true, TableRef{Name: "t", Alias: "x"}, []string{"a"}}, // PG's alias
 		{"insert into key (|", "", MySQL, true, TableRef{Name: "key"}, nil},
 		{"load data local infile 'f' ignore into table t (|", "", MySQL, false, TableRef{}, nil},
 	} {
@@ -212,6 +215,9 @@ func TestInsertRestContext(t *testing.T) {
 		{`insert into "T" |`, PG, TableRef{Name: "T"}},
 		{"replace into `t` |", MySQL, TableRef{Name: "t"}},
 		{"insert ignore into t |", MySQL, TableRef{Name: "t"}},
+		{"insert into s.t as x |", PG, TableRef{Schema: "s", Name: "t", Alias: "x"}},
+		{"insert into t as |", PG, TableRef{}},
+		{"select a into t |", PG, TableRef{}},
 		{"select 1; insert into t |", PG, TableRef{Name: "t"}},
 		{"insert into comment |", PG, TableRef{Name: "comment"}},
 		{"insert into t|", PG, TableRef{}},
@@ -255,6 +261,29 @@ func TestInSetContext(t *testing.T) {
 		pos := strings.Index(sql, "|")
 		if got := CompletionContext(sql[:pos]+sql[pos+1:], pos, PG); got.InSet != want {
 			t.Errorf("%q: InSet %v", sql, got.InSet)
+		}
+	}
+}
+
+// The tables an UPDATE names before its SET: all of a MySQL join's, not the
+// FROM PG writes after it, nor another statement's (F15.11).
+func TestUpdatedTables(t *testing.T) {
+	for _, c := range []struct {
+		sql  string
+		d    Dialect
+		want []TableRef
+	}{
+		{"update t set a = 1", PG, []TableRef{{Name: "t"}}},
+		{"update only s.t as x set a = 1", PG, []TableRef{{Schema: "s", Name: "t", Alias: "x"}}},
+		{"update t1 join t2 on t1.id = t2.id set |", MySQL, []TableRef{{Name: "t1"}, {Name: "t2"}}},
+		{"update t1 a, t2 b set |", MySQL, []TableRef{{Name: "t1", Alias: "a"}, {Name: "t2", Alias: "b"}}},
+		{"update t set a = u.a from u where u.id = t.id", PG, []TableRef{{Name: "t"}}},
+		{"update t set a = (select max(x) from u)", PG, []TableRef{{Name: "t"}}},
+		{"select * from t", PG, nil},
+		{"insert into t (a) select a from u on conflict (a) do update set a = 1", PG, nil},
+	} {
+		if got := CompletionContext(c.sql, len(c.sql), c.d); !reflect.DeepEqual(got.Updated, c.want) {
+			t.Errorf("%q: %+v, want %+v", c.sql, got.Updated, c.want)
 		}
 	}
 }

@@ -60,11 +60,12 @@ const (
 	itemQuery // a query of the Queries node (F12.10)
 	itemCommand
 	itemSQL // a quick SQL from the history
+	itemTip // a line of the status bar's tips, which runs the action it is about (F15.4)
 )
 
 // itemTags name a row's kind. The SQL history, a list of one kind, has
 // none (§12).
-var itemTags = [...]string{itemSession: i18n.N("会话"), itemWindow: i18n.N("窗口"), itemPane: "Pane", itemTab: "Tab", itemTable: i18n.N("表"), itemQuery: "Query", itemCommand: i18n.N("命令"), itemSQL: ""}
+var itemTags = [...]string{itemSession: i18n.N("会话"), itemWindow: i18n.N("窗口"), itemPane: "Pane", itemTab: "Tab", itemTable: i18n.N("表"), itemQuery: "Query", itemCommand: i18n.N("命令"), itemSQL: "", itemTip: i18n.N("提示")}
 
 // scopes are the palette's tabs (K-02). The prefix typed in the input is the
 // only scope state: Tab rewrites it, and palette.command is `>` typed (§12).
@@ -72,6 +73,10 @@ type scopeTab struct {
 	label, prefix string
 	kinds         []itemKind
 }
+
+// tipPrefix is the scope of the tips: typed by tips.show, not a tab of the
+// palette, which Tab does not stop at either (F15.4).
+const tipPrefix = "?"
 
 var scopes = []scopeTab{
 	{i18n.N("所有"), "", []itemKind{itemSession, itemWindow, itemPane, itemTab, itemTable, itemQuery, itemCommand}}, // not the SQL history (§12)
@@ -81,7 +86,8 @@ var scopes = []scopeTab{
 	{"Tab", "#", []itemKind{itemTab}},
 	{i18n.N("表"), "@", []itemKind{itemTable, itemQuery}},
 	{i18n.N("命令"), ">", []itemKind{itemCommand}},
-	{"SQL", ";", []itemKind{itemSQL}}, // what follows the ; is SQL, the history while there is none
+	{"SQL", ";", []itemKind{itemSQL}},              // what follows the ; is SQL, the history while there is none
+	{i18n.N("提示"), tipPrefix, []itemKind{itemTip}}, // the tips of the status bar, ↵ does what one is about (F15.4); the last: not a tab
 }
 
 // sqlScope is where the input is quick SQL (§12): the ; one.
@@ -108,7 +114,7 @@ func (it paletteItem) key() itemKey { return itemKey{it.kind, it.id} }
 func (it paletteItem) recent() config.Recent {
 	// never kept for SQL (the history is its own) nor for a tab or a
 	// session (paletteRun), but paletteItems sorts them too
-	kind := [...]string{itemSession: "session", itemWindow: "window", itemPane: "pane", itemTab: "tab", itemTable: "table", itemQuery: "query", itemCommand: "command", itemSQL: "sql"}[it.kind]
+	kind := [...]string{itemSession: "session", itemWindow: "window", itemPane: "pane", itemTab: "tab", itemTable: "table", itemQuery: "query", itemCommand: "command", itemSQL: "sql", itemTip: "tip"}[it.kind]
 	return config.Recent{Kind: kind, ID: it.id}
 }
 
@@ -193,6 +199,11 @@ func (a *App) paletteItems() []paletteItem {
 	for _, id := range ids {
 		items = append(items, paletteItem{itemCommand, id, a.icons.Command, i18n.T(actions[id].Title), id})
 	}
+	for _, t := range tips { // the ones with a key now
+		if line := a.tipLine(t); line != "" {
+			items = append(items, paletteItem{itemTip, t.action, a.icons.Command, line, i18n.T(actions[t.action].Title)})
+		}
+	}
 	if cur != nil {
 		for _, sql := range a.state.SQL[cur.Spec.Name] {
 			items = append(items, paletteItem{itemSQL, sql, a.icons.Query, sql, ""})
@@ -270,11 +281,16 @@ func (a *App) paletteView() ui.Palette {
 	scope, query := a.paletteScope()
 	p := ui.Palette{Search: a.icons.Search, Input: a.palette.input, Scope: scope, Sel: a.palette.sel, Top: a.palette.top}
 	for _, s := range scopes {
-		p.Scopes = append(p.Scopes, strings.TrimSpace(i18n.T(s.label)+" "+s.prefix)) // "表 @": the tab says what to type
+		if s.prefix != tipPrefix {
+			p.Scopes = append(p.Scopes, strings.TrimSpace(i18n.T(s.label)+" "+s.prefix)) // "表 @": the tab says what to type
+		}
 	}
 	for _, m := range ms {
 		it := items[m.Index]
 		right := ""
+		if it.kind == itemTip {
+			right = a.keyFor(it.id)
+		}
 		if it.kind == itemCommand {
 			right = a.keyFor(it.id)
 			if on := actions[it.id].On; on != nil {
@@ -304,7 +320,7 @@ func (a *App) paletteView() ui.Palette {
 		p.Enter = bound(ui.Hint{Key: run, Label: label, Action: "palette.run"})
 	case a.palette.sel < len(ms):
 		it := items[ms[a.palette.sel].Index]
-		enter := [...]string{itemSession: i18n.T("切换"), itemWindow: i18n.T("切换"), itemPane: i18n.T("聚焦"), itemTab: i18n.T("切换"), itemTable: i18n.T("打开"), itemQuery: i18n.T("打开"), itemCommand: i18n.T("执行"), itemSQL: i18n.T("执行")}[it.kind]
+		enter := [...]string{itemSession: i18n.T("切换"), itemWindow: i18n.T("切换"), itemPane: i18n.T("聚焦"), itemTab: i18n.T("切换"), itemTable: i18n.T("打开"), itemQuery: i18n.T("打开"), itemCommand: i18n.T("执行"), itemSQL: i18n.T("执行"), itemTip: i18n.T("执行")}[it.kind]
 		if it.kind == itemCommand && actions[it.id].On != nil {
 			enter = i18n.T("切换")
 		}
@@ -623,7 +639,8 @@ func (a *App) quickShows() bool {
 // input's prefix; what was typed after it stays.
 func (a *App) paletteScopeTo(i int) {
 	scope, query := a.paletteScope()
-	i = (i + len(scopes)) % len(scopes)
+	n := len(scopes) - 1 // the tabs: not the typed ones, which come last
+	i = (i + n) % n
 	pos := max(a.palette.input.Pos-len(scopes[scope].prefix), 0) + len(scopes[i].prefix)
 	a.palette.input = ui.Input{Text: scopes[i].prefix + query, Pos: pos}
 	a.palette.sel, a.palette.top, a.palette.comp = 0, 0, nil
@@ -655,7 +672,7 @@ func (a *App) paletteRun(i int, newTab bool) tea.Cmd {
 	if newTab && it.kind != itemTable {
 		return nil
 	}
-	if it.kind == itemTab || it.kind == itemSession { // ponytail: not kept among the recent: a pane's ID, a tab's place and a session's name change from run to run
+	if it.kind == itemTab || it.kind == itemSession || it.kind == itemTip { // a tip is a way to run an action, not a pick to remember; ponytail: not kept among the recent: a pane's ID, a tab's place and a session's name change from run to run
 		return a.paletteDo(it)
 	}
 	r := it.recent()
@@ -676,7 +693,7 @@ func (a *App) paletteDo(it paletteItem) tea.Cmd {
 	into := a.palette.into
 	a.palette = nil
 	switch it.kind {
-	case itemCommand:
+	case itemCommand, itemTip:
 		return a.run(it.id, 0)
 	case itemTable:
 		if c, t, ok := a.tableByID(it.id); ok {

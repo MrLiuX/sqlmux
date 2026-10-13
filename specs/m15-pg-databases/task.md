@@ -72,7 +72,7 @@
 - **涉及**：`internal/app`（补全）、`internal/sqlkit`
 
 **开发**（§11「值补全」）
-- [ ] 在 F15.3 的列上下文里弹补全：枚举值（带引号）、布尔 `true` / `false`、可空 `NULL`、有默认值 `DEFAULT`（只 INSERT / UPDATE）、时间 `now()` / `CURRENT_TIMESTAMP`，候选来自单元格编辑选项浮层的同一份 catalog；其余列不弹。
+- [ ] 在 F15.3 的列上下文里弹补全：枚举值（带引号）、布尔 `true` / `false`、可空 `NULL` 和有默认值 `DEFAULT`（这两项只 INSERT / UPDATE，条件里不给）、时间 `now()` / `CURRENT_TIMESTAMP`，候选来自单元格编辑选项浮层的同一份 catalog；其余列不弹。
 
 **验收**
 - [ ] 单测：每类候选和不弹的。
@@ -85,8 +85,8 @@
 
 **开发**（§11「同类小项」、§9.7）
 - [ ] `INSERT INTO t ` 后的补全给 `(全部列) VALUES ()` 骨架，VALUES 括号里一个 tabstop，列清单是普通文字。
-- [ ] `UPDATE t SET` 后的列补全只列这张表的列。
-- [ ] 补全插入的标识符需要引号时加引号，去掉 §9.7 的 `ponytail:` 上限和 §12「已知上限」那条。
+- [ ] `UPDATE t SET` 后的列补全只列 UPDATE 和 SET 之间第 0 层的表（MySQL 多表 UPDATE 都列）。
+- [ ] 补全插入的标识符需要引号时加引号，去掉 §9.7 的 `ponytail:` 上限；保留字每个方言一份表（§9.7「接受」：PG 不变，MySQL 8.4 `RESERVED = 1`，SQLite 的关键字表）。
 
 **验收**
 - [ ] 单测三项。

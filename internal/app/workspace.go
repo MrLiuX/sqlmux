@@ -760,11 +760,20 @@ func connectTo(ctx context.Context, spec config.Connection, readOnly bool) (db.C
 			return nil, db.Info{}, err
 		}
 	}
-	c, info, err := engines[spec.Engine].Connect(ctx, dsn, pw.(string), readOnly)
+	c, info, err := engines[spec.Engine].Connect(tunneled(ctx, spec), dsn, pw.(string), readOnly)
 	if err != nil {
 		secrets.Delete(spec.Name)
 	}
 	return c, info, err
+}
+
+// tunneled is ctx asking for the connection to go through spec's ssh, when it
+// has one: a SQLite file has no network to go through (F15.2).
+func tunneled(ctx context.Context, spec config.Connection) context.Context {
+	if spec.SSH == "" || spec.Engine == "sqlite" {
+		return ctx
+	}
+	return db.WithDialer(ctx, db.SSHDialer(spec.SSH))
 }
 
 // take makes c connected over d.

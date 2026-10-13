@@ -289,7 +289,7 @@ func TestKeyProblemsNotice(t *testing.T) {
 	if len(problems) < 2 {
 		t.Fatalf("problems: %v", problems)
 	}
-	a := New(c, keys, testSession(), &config.State{}, "")
+	a := newApp(c, keys, testSession(), &config.State{}, "")
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
 	a.KeyProblems(problems)
 	if a.confirm == nil || !strings.HasPrefix(a.confirm.text, "keymaps.toml 有 2 处问题：\n") || strings.Count(a.confirm.text, "\n") != len(problems) {

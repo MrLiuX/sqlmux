@@ -59,6 +59,8 @@ func init() {
 		"palette.tab":     {Title: i18n.N("命令面板：Tab"), Run: do(func(a *App, _ Args) { a.openPalette("#") })},
 		"palette.table":   {Title: i18n.N("命令面板：表"), Run: do(func(a *App, _ Args) { a.openPalette("@") })},
 		"palette.session": {Title: i18n.N("命令面板：session"), Run: do(func(a *App, _ Args) { a.openPalette("$") })},
+		"tips.next":       {Title: i18n.N("下一条提示"), Run: do(func(a *App, _ Args) { a.nextTip() })},
+		"tips.show":       {Title: i18n.N("所有提示…"), Run: do(func(a *App, _ Args) { a.openPalette("?") })},  // ? as if ? was typed: the tips scope
 		"palette.sql":     {Title: i18n.N("快速 SQL"), Run: do(func(a *App, _ Args) { a.openPalette(";") })}, // ; as if ; was typed (§12)
 		// Keys inside the palette. Like every overlay's own actions they are
 		// Local, which the palette does not list (§12); bound elsewhere in

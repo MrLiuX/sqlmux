@@ -27,6 +27,7 @@ type Connection struct {
 	PasswordEnv string `toml:"password_env,omitempty"`
 	Password    string `toml:"password,omitempty"`
 	ReadOnly    bool   `toml:"read_only,omitempty"` // §13, from F5.3
+	SSH         string `toml:"ssh,omitempty"`       // "user@host": the server is reached through that machine's ssh (§8.4, F15.2)
 	// Temp is a connection of the command line, a file or a URL: written nowhere,
 	// not in the manager (F14.1).
 	Temp bool `toml:"-"`
@@ -174,6 +175,9 @@ func (c Connection) Check(names []string) (field, problem string) {
 	}
 	if !slices.Contains([]string{"postgres", "mysql", "sqlite"}, c.Engine) {
 		return "engine", fmt.Sprintf(i18n.T("engine = %q：只能是 postgres、mysql 或 sqlite"), c.Engine)
+	}
+	if strings.HasPrefix(c.SSH, "-") || strings.ContainsAny(c.SSH, " \t") { // ssh would take it for an option, or for two words
+		return "ssh", fmt.Sprintf(i18n.T("ssh = %q：写成 user@host，不能以 - 开头，也不能含空格"), c.SSH)
 	}
 	return "", ""
 }

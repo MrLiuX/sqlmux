@@ -185,8 +185,8 @@ func TestConnFormFields(t *testing.T) {
 	}
 }
 
-// The 高级 fold holds dsn and password_cmd: closed, they are out of the way;
-// open, a dsn typed there is the connection and host, port, user and
+// The 高级 fold holds dsn, password_cmd and ssh: closed, they are out of the
+// way; open, a dsn typed there is the connection and host, port, user and
 // database are dim and passed by Tab; password_cmd is its password.
 func TestConnFormAdvanced(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
@@ -199,6 +199,10 @@ func TestConnFormAdvanced(t *testing.T) {
 	feed(t, a, "<Space><Tab>postgres://u@h/d<Tab>printf pw")
 	if !a.form.dsnGiven() || !a.form.skipped(fieldHost) {
 		t.Fatal("host is not dim with a dsn")
+	}
+	feed(t, a, "<Tab>")
+	if a.form.sel != fieldSSH {
+		t.Errorf("past password_cmd: on %d", a.form.sel)
 	}
 	feed(t, a, "<Tab>") // round to name
 	if a.form.sel != fieldName {

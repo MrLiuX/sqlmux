@@ -4,6 +4,7 @@
 package mysql
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"database/sql/driver"
@@ -12,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -83,6 +85,10 @@ func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, d
 	if err != nil {
 		return nil, db.Info{}, err
 	}
+	if d, ok := db.DialerOf(ctx); ok { // through ssh (F15.2): the driver dials by a network's registered name
+		mysql.RegisterDialContext(d.Name, func(ctx context.Context, addr string) (net.Conn, error) { return d.Dial(ctx, "tcp", addr) })
+		cfg.Net = d.Name
+	}
 	dial, err := mysql.NewConnector(cfg)
 	if err != nil {
 		return nil, db.Info{}, err
@@ -98,6 +104,9 @@ func Connect(ctx context.Context, dsn, password string, readOnly bool) (*Conn, d
 	conn, err := pool.Conn(ctx)
 	if err != nil {
 		pool.Close()
+		if d, ok := db.DialerOf(ctx); ok && d.Failed != nil { // the driver says "bad connection": the ssh knows why
+			err = cmp.Or(d.Failed(), err)
+		}
 		return nil, db.Info{}, err
 	}
 	c := &Conn{pool: pool, c: conn, kill: kill, tx: 'I'}

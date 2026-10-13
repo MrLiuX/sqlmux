@@ -23,7 +23,7 @@ func emptyApp(t *testing.T) *App {
 	c.Icons = ui.IconSet("nerd")
 	c.BaseIcons = c.Icons
 	keys, _ := keymap.New(c.Leader, c.Vim, c.Timeoutlen, c.Bindings)
-	a := New(c, keys, OpenEmpty(), &config.State{}, "")
+	a := newApp(c, keys, OpenEmpty(), &config.State{}, "")
 	a.Update(tea.WindowSizeMsg{Width: 160, Height: 45})
 	return a
 }

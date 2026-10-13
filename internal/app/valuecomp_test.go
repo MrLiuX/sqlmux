@@ -100,7 +100,7 @@ func TestValueCompletion(t *testing.T) {
 }
 
 // An UPDATE's SET and a condition offer the column's values too, the SET its
-// DEFAULT, the condition none; a time column its now.
+// DEFAULT, the condition neither that nor NULL; a time column its now.
 func TestValueCompletionPlaces(t *testing.T) {
 	a, c := hinted(t, "")
 	table, cols, _ := ordersTable(0)
@@ -112,9 +112,11 @@ func TestValueCompletionPlaces(t *testing.T) {
 		{"update t_order set id = ", "default"},
 		{"update t_order set status = ", "pending running done failed null"},
 		{"update t_order set status = (", "-"},
-		{"select * from t_order where created_at = ", "now() current_timestamp null"}, // no DEFAULT in a condition
-		{"select * from t_order o where o.status = ", "pending running done failed null"},
-		{"select * from t_order where status in ('done', ", "pending running done failed null"},
+		{"select * from t_order where created_at = ", "now() current_timestamp"}, // no DEFAULT nor NULL in a condition: = null is never true
+		{"select * from t_order o where o.status = ", "pending running done failed"},
+		{"select * from t_order where status in ('done', ", "pending running done failed"},
+		{"select * from t_order where status in (", "pending running done failed"},
+		{"select * from t_order where status <> ", "pending running done failed"},
 		{"insert into t_order (created_at) values (", "now() current_timestamp null default"},
 		{"insert into t_order (id) values (", "default"},
 		{"update t_order set status = 'done', note = 'x', ", "id status amount paid meta note created_at"}, // a column, which is not a value's place
@@ -179,6 +181,22 @@ func TestValueCompletionColumnsComeLate(t *testing.T) {
 	feed(t, a, "'p")
 	if !c.asked[idOf(table)] {
 		t.Fatalf("columns asked for in a string: %v", c.asked)
+	}
+}
+
+// An UPDATE's SET whose table's columns are not in the cache has no list, not
+// the tables and keywords a word is anywhere, until they are in (F15.11).
+func TestUpdateSetColumnsComeLate(t *testing.T) {
+	a, c := hinted(t, "")
+	table, cols, _ := ordersTable(0)
+	delete(a.sess.Conns[0].cols, idOf(table))
+	feed(t, a, "iupdate t_order set st")
+	if got := offered(c); got != "-" || !c.asked[idOf(table)] {
+		t.Fatalf("columns asked for: list %q, asked %v", got, c.asked)
+	}
+	a.Update(colsMsg{a.sess.Conns[0], table, cols, nil})
+	if got := offered(c); got != "status" {
+		t.Fatalf("columns in: %q", got)
 	}
 }
 

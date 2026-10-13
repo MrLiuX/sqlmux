@@ -66,6 +66,9 @@ autopairs    = true              # 输入括号、引号时补上另一半（§7
 confirm_dangerous = true         # 执行没带 WHERE 的 delete / update、drop、truncate，以及保存里有删除行时先确认（§13，M6）
 border       = "single"          # single | rounded | double | bold | hidden，pane 和浮层的边框（M8 F8.10，取值同 lazygit；Unicode 没有粗圆角，所以粗和圆角二选一）
 
+[ui]                             # M15 F15.4
+tips         = true              # 状态栏里一条特性提示，5 分钟换一条（§7.8）；false 关掉
+
 [tree]                           # M8 F8.22
 width        = 32                # 侧栏宽度（列，含边框）
 
