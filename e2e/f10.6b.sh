@@ -52,6 +52,7 @@ a = open(sys.argv[1]).read().replace("name = \"p1\"\nengine = \"postgres\"\ndsn 
 sys.exit(0 if a == open(sys.argv[2]).read() else 1)
 PY'
 key Escape; sleep 0.5
+e2e_plain | grep -qF "┌─ 连接 ─" && { key Escape; sleep 0.5; }   # M15 F15.1: the longer tree shows the dialog still closing under load
 check "关掉管理：树里 stage 段（p1、s1）在 prod 段（p2）前面（组的顺序按文件第一次出现）" roots_is "plain,── stage,p1,s1,── prod,p2,──"
 
 # ---- 清空 group：删掉那一行

@@ -59,7 +59,7 @@ check "展开之后服务端 ${B} 上有连接了（展开才拨号）" eval '[[
 tree_to t_user; key Enter; sleep 2
 check "默认库的表 t_user：状态栏地址没有库名（… sqlmux@localhost:<端口>）" eval '[[ $(addr) == sqlmux@localhost:* && $(addr) != */* ]]' || { addr; bar; }
 tree_to bt; key Enter; sleep 2
-check "别的库 ${B} 的表 bt：打开，状态栏地址带库名（…/${B}）" eval '[[ $(addr) == *"/${B}" ]] && ptitle | grep -q " bt "' || { addr; ptitle; }
+check "别的库 ${B} 的表 bt：打开，状态栏地址带库名（…/${B}）" eval '[[ $(addr) == *"/${B}" ]] && ptitle | grep -qF "${B}.public.bt"' || { addr; ptitle; }
 check "表里是那个库的数据（b-row）" eval 'e2e_plain | grep -qF "b-row"'
 pal ">新建 query"; sleep 0.5; key Enter; sleep 1.5
 check "在这张表的 tab 上新建 query：标题 <库>.<schema> 是 ${B}.public" eval '[[ $(qtitle) == "doraemon · ${B}.public ▾" ]]' || { ptitle; qtitle; }

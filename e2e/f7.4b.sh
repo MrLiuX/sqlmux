@@ -68,7 +68,7 @@ e2e_click "$mx" "$(field_y 2)"; sleep 0.3
 check "单击 mysql 段：选中 mysql，port 跟着变成 3306" eval '[[ $(frows | sed -n 5p) == "port 3306" ]]'
 e2e_click "$mx" "$(field_y 2)"; sleep 0.3
 check "再点已经选中的 mysql 段：什么都不做（port 还是 3306）" eval '[[ $(frows | sed -n 5p) == "port 3306" ]]'
-px=$(e2e_find postgres "$(field_y 2)" | cut -d' ' -f1); e2e_click "$px" "$(field_y 2)"; sleep 0.3
+px=$(e2e_find postgres "$(field_y 2)" | tr " " "\n" | awk '$1 > 34 { print; exit }'); e2e_click "$px" "$(field_y 2)"; sleep 0.3   # x right of the sidebar: the tree has a postgres database node on that row too
 check "单击 postgres 段：切回，port 回到 5432" eval '[[ $(frows | sed -n 5p) == "port 5432" ]]'
 key Tab; key Tab; key Tab; clr; key BTab; key Space; sleep 0.3
 check "port 清空后切 engine：跟着换成 3306" eval '[[ $(frows | sed -n 5p) == "port 3306" ]] || { frows | sed -n 5p; true; }'

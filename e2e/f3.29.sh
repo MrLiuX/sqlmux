@@ -11,7 +11,7 @@ toggle() { key Space; e2e_type b; sleep 0.4; }
 tree_shown() { [[ -n $(geom 0) ]]; }
 
 start; open_table t_order; wait_for 8 settled
-key C-h; key /; key Escape; key g g; key 2 j; key h                          # 把 public 折起来：t_order 不在可见节点里
+key C-h; key /; key Escape; key g g; key 3 j; key h                          # 把 public 折起来：t_order 不在可见节点里
 check "准备：public 折起来了，树上看不到 t_order 表节点" eval '! e2e_rows 2 31 4 $(( $(H) - 4 )) 3 | grep -q "t_order .*6.0k"'
 key C-l; toggle
 check "SPC b：树收起" eval '! tree_shown && focus_is 1'
@@ -24,7 +24,7 @@ check "树展开时 SPC b：照旧收起" eval '! tree_shown'
 
 # ---- 树正在过滤、目标被滤掉：什么都不改；清掉过滤后，原来手动折叠的节点仍是折叠的（5514975）
 start; open_table t_order; wait_for 8 settled
-key C-h; key g g; key 2 j; key h                                             # 手动把 public 折起来
+key C-h; key g g; key 3 j; key h                                             # 手动把 public 折起来
 key /; e2e_type sku; sleep 0.3; key Enter
 check "准备：过滤 sku，光标在 t_sku" eval '[[ $(cur) == "t_sku 20" ]] || { echo "  cursor on \"$(cur)\""; false; }'
 key C-l; toggle; toggle
