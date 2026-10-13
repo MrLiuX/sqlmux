@@ -288,9 +288,6 @@ func (a *App) paletteView() ui.Palette {
 	for _, m := range ms {
 		it := items[m.Index]
 		right := ""
-		if it.kind == itemTip {
-			right = a.keyFor(it.id)
-		}
 		if it.kind == itemCommand {
 			right = a.keyFor(it.id)
 			if on := actions[it.id].On; on != nil {

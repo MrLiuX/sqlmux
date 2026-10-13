@@ -2,6 +2,7 @@ package app
 
 import (
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -236,8 +237,13 @@ func TestTipsShow(t *testing.T) {
 	if len(ms) != len(tips) {
 		t.Fatalf("%d of %d tips", len(ms), len(tips))
 	}
-	if it := items[ms[0].Index]; it.kind != itemTip || !strings.Contains(it.name, "{") == false {
+	if it := items[ms[0].Index]; it.kind != itemTip || strings.Contains(it.name, "{key}") { // the key is in, not its place
 		t.Errorf("a row: %+v", it)
+	}
+	b := tipsApp(t, "", "[keys.grid]\n\"yl\" = \"\"\n") // one with no key is not in the list
+	b.run("tips.show", 0)
+	if bitems, bms := b.paletteMatches(); len(bms) != len(tips)-1 || slices.ContainsFunc(bms, func(m ui.Match) bool { return strings.Contains(bitems[m.Index].name, "复制当前单元格") }) {
+		t.Errorf("%d rows, the unbound one among them or not left out", len(bms))
 	}
 	feed(t, a, "放大")
 	items, ms = a.paletteMatches()
