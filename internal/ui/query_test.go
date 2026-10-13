@@ -19,7 +19,7 @@ import (
 // share one in tokyonight-storm).
 var queryTheme = func() *Theme {
 	th := *TokyonightStorm
-	for i, p := range []*color.Color{&th.Fg, &th.Keyword, &th.Number, &th.SQLString, &th.Comment, &th.Func, &th.Dim, &th.Focus, &th.Error, &th.PaneBg, &th.Row, &th.Visual, &th.SQLTable, &th.SQLColumn, &th.SQLOperator} {
+	for i, p := range []*color.Color{&th.Fg, &th.Keyword, &th.Number, &th.SQLString, &th.Comment, &th.Func, &th.Dim, &th.Focus, &th.Error, &th.PaneBg, &th.Row, &th.Visual, &th.SQLTable, &th.SQLColumn, &th.SQLOperator, &th.Bar} {
 		*p = color.RGBA{uint8(i + 1), 0, 0, 0xff}
 	}
 	return &th
@@ -39,7 +39,7 @@ func colorShot(f *Frame, cur uv.Position) string {
 	th, w, h := queryTheme, f.Bounds().Dx(), f.Bounds().Dy()
 	fgs := map[color.Color]string{th.Fg: ".", th.Keyword: "k", th.Number: "n", th.SQLString: "s", th.Comment: "c", th.Func: "f", th.Dim: "d", th.Focus: ">", th.Error: "e",
 		th.SQLTable: "t", th.SQLColumn: "l", th.SQLOperator: "o"}
-	bgs := map[color.Color]string{th.PaneBg: " ", th.Row: "r", th.Visual: "v"}
+	bgs := map[color.Color]string{th.PaneBg: " ", th.Row: "r", th.Visual: "v", th.Bar: "b"}
 	var b strings.Builder
 	for y := range h {
 		var text, fg, bg strings.Builder
@@ -106,6 +106,11 @@ func TestGoldenQuery(t *testing.T) {
 		{"wide cut at the left", Query{Lines: []string{"a中" + strings.Repeat("x", 20)}, Left: 2, Cursor: TextPos{0, 17}, CursorCol: 16, Normal: true}, 20, 1},
 		{"insert", Query{Lines: []string{"select 1;", ""}, Cursor: TextPos{1, 0}}, 20, 3},
 		{"punct", Query{Lines: []string{"select * from play.t_log;", "select f(a, b) from t[1];"}, Cursor: TextPos{0, 0}, Normal: true}, 30, 2},
+		{"signature", Query{Lines: []string{"insert into t (id, name, status)", "values (1, 'a', "}, Cursor: TextPos{1, 15}, CursorCol: 15, Sig: Signature{Fields: []string{"id bigint", "name text", "status order_status"}, Cur: 2}}, 40, 3},
+		{"signature too wide", Query{Lines: []string{"", "insert into t values (1, 'a', "}, Cursor: TextPos{1, 29}, CursorCol: 29, Sig: Signature{Fields: []string{"id bigint", "name text", "email text", "status order_status", "created_at timestamptz", "note text"}, Cur: 3}}, 40, 3},
+		{"signature under the first line", Query{Lines: []string{"select f(1, ", "", ""}, Cursor: TextPos{0, 12}, CursorCol: 12, Sig: Signature{Fields: []string{"a integer", "b text"}, Cur: 1}}, 30, 3},
+		{"signature of one field too wide", Query{Lines: []string{"", "x"}, Cursor: TextPos{1, 1}, CursorCol: 1, Sig: Signature{Fields: []string{"a_long_column_name numeric(10,2)"}}}, 20, 2},
+		{"signature over the search count", Query{Lines: []string{"a", "b"}, Cursor: TextPos{0, 0}, Stat: "/b", Sig: Signature{Fields: []string{"x"}}}, 20, 2},
 		{"names", Query{Lines: []string{"select * from t_order where user_id = 'df'"}, Cursor: TextPos{0, 0}, Names: sqlNames("t_order", "user_id")}, 50, 1},
 	} {
 		t.Run(c.name, func(t *testing.T) {

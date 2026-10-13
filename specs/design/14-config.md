@@ -77,6 +77,7 @@ transpose    = false             # 新打开的表是否转置（关掉再重开
 [query]
 max_rows = 500                   # M10 F10.4
 history_max = 1000               # M14 F14.2：history.jsonl 保留的条数，启动时截掉最旧的；必须大于 0
+hints = true                     # M15 F15.3：query 里光标处的值是哪个字段的提示行（§11）；false 关掉
 ```
 
 ```toml

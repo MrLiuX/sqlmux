@@ -305,3 +305,14 @@ func TestUnknownKeys(t *testing.T) {
 		t.Errorf("keys of another case: %q", got)
 	}
 }
+
+// The line of the field a query's value goes in is on, `[query] hints = false`
+// turns it off (F15.3).
+func TestParseHints(t *testing.T) {
+	if c, err := Parse(""); err != nil || !c.Hints {
+		t.Fatalf("default: %v %v", c, err)
+	}
+	if c, err := Parse("[query]\nhints = false\n"); err != nil || c.Hints {
+		t.Fatalf("false: %v %v", c, err)
+	}
+}

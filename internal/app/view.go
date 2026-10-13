@@ -337,6 +337,9 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 	if c := queryOf(p); c != nil {
 		view, body := a.queryView(p, c)
 		view.Names, _ = a.sqlNames(c.conn, strings.Join(view.Lines, "\n"), cmp.Or(c.schema, c.conn.Schema), nil) // for the drawing alone: queryView goes with every key
+		if b.Focused && a.focusedQuery() == c {
+			view.Sig = a.signature(c)
+		}
 		if cur := view.Draw(f, body); cur.X >= 0 && b.Focused && a.focusedQuery() == c {
 			f.Cursor = &cur
 		}

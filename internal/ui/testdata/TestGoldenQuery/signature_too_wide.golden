@@ -1,0 +1,10 @@
+ |   1  …, status order_status, …         |
+ |.ddd.dddd>>>>>>>>>>>>>>>>>>>dddd........|
+ |     bbbbbbbbbbbbbbbbbbbbbbbbbbb        |
+@|▶  2 insert into t values (1, 'a',      |
+ |>....kkkkkk.kkkk...kkkkkk.ono.ssso......|
+ |                                        |
+ |                                        |
+ |........................................|
+ |                                        |
+cursor 34,1

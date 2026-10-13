@@ -45,29 +45,10 @@ type Completion struct {
 // grammar, so a guess past what it knows.
 func CompletionContext(text string, pos int, d Dialect) Completion {
 	all := Scan(text, d)
-	for _, t := range all {
-		if t.Kind != String && t.Kind != Comment && t.Kind != Quoted || t.Start >= pos || pos > t.End {
-			continue
-		}
-		// at its end the cursor is in it when it is open, what is typed
-		// there joining it: a line comment, a string the text ends in
-		if pos < t.End || Scan(text[t.Start:t.End]+" ", d)[0].End > t.End-t.Start {
-			return Completion{}
-		}
+	if inside(text, all, pos, d, String, Comment, Quoted) {
+		return Completion{}
 	}
-	ts, depth := meaningful(text, all)
-	// the statement: between the ; before pos and the one after it
-	lo, hi := 0, len(ts)
-	for i, t := range ts {
-		if t.Kind == Punct && text[t.Start] == ';' && depth[i] == 0 {
-			if t.End <= pos {
-				lo = i + 1
-			} else if hi == len(ts) {
-				hi = i
-			}
-		}
-	}
-	ts, depth = ts[lo:hi], depth[lo:hi]
+	ts, depth := statementAt(text, all, pos)
 	c := Completion{OK: true, Start: pos}
 	before := len(ts) // the tokens before the word at the cursor: ts[:before]
 	for i, t := range ts {
@@ -90,13 +71,7 @@ func CompletionContext(text string, pos int, d Dialect) Completion {
 		}
 	}
 	word := func(i int) string { return lower(text, ts, i) }
-	// UPDATE names a table at the start of a statement, not after DO (PG's
-	// ON CONFLICT DO UPDATE), KEY (MySQL's ON DUPLICATE KEY UPDATE) or FOR
-	// (FOR UPDATE, FOR NO KEY UPDATE), where it is a clause
-	update := func(i int) bool {
-		prev := word(i - 1)
-		return word(i) == "update" && prev != "do" && prev != "key" && prev != "for"
-	}
+	update := func(i int) bool { return isUpdate(text, ts, i) }
 	switch p := before - 1; {
 	case word(p) == "." && p > 0 && ts[p-1].End == ts[p].Start && ts[p-1].Kind != Punct:
 		c.Kind, c.Qualifier = CompColumns, unquote(text[ts[p-1].Start:ts[p-1].End])
@@ -122,15 +97,61 @@ func CompletionContext(text string, pos int, d Dialect) Completion {
 	}
 	c.WantsColumn = c.WantsColumn && spaceBefore(all, pos)
 	c.readInsert(text, ts, depth, before)
+	c.readNames(text, ts, depth)
+	return c
+}
+
+// inside is whether pos is in a token of one of kinds. At its end it is in
+// one that is open, what is typed there joining it: a line comment, a string
+// the text ends in.
+func inside(text string, all []Token, pos int, d Dialect, kinds ...Kind) bool {
+	for _, t := range all {
+		if !slices.Contains(kinds, t.Kind) || t.Start >= pos || pos > t.End {
+			continue
+		}
+		if pos < t.End || Scan(text[t.Start:t.End]+" ", d)[0].End > t.End-t.Start {
+			return true
+		}
+	}
+	return false
+}
+
+// statementAt is the meaningful tokens of the statement pos is in, between the
+// ; before it and the one after, and their depths.
+func statementAt(text string, all []Token, pos int) ([]Token, []int) {
+	ts, depth := meaningful(text, all)
+	lo, hi := 0, len(ts)
+	for i, t := range ts {
+		if t.Kind == Punct && text[t.Start] == ';' && depth[i] == 0 {
+			if t.End <= pos {
+				lo = i + 1
+			} else if hi == len(ts) {
+				hi = i
+			}
+		}
+	}
+	return ts[lo:hi], depth[lo:hi]
+}
+
+// isUpdate is whether ts[i] is the UPDATE that names a table, at the start
+// of a statement, not after DO (PG's ON CONFLICT DO UPDATE), KEY (MySQL's ON
+// DUPLICATE KEY UPDATE) or FOR (FOR UPDATE, FOR NO KEY UPDATE), where it is a
+// clause.
+func isUpdate(text string, ts []Token, i int) bool {
+	prev := lower(text, ts, i-1)
+	return lower(text, ts, i) == "update" && prev != "do" && prev != "key" && prev != "for"
+}
+
+// readNames reads the tables and the WITH's names of the statement ts.
+func (c *Completion) readNames(text string, ts []Token, depth []int) {
 	for i := 0; i < len(ts); i++ {
-		switch w := word(i); {
-		case w == "from" || w == "join" || update(i) || w == "into":
+		switch w := lower(text, ts, i); {
+		case w == "from" || w == "join" || isUpdate(text, ts, i) || w == "into":
 			i = c.readTables(text, ts, depth, i+1) - 1
 		case w == "with" && depth[i] == 0: // the names; the FROMs in them are read on
 			c.readCTEs(text, ts, i+1)
 		}
 	}
-	return c
 }
 
 // readInsert makes c a CompInsertCols when the cursor, with ts[:before]

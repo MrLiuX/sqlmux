@@ -34,6 +34,9 @@ type Config struct {
 	// MaxRows the rows a query's run keeps of each result (§11).
 	ResultHeight float64
 	MaxRows      int
+	// Hints is whether a query shows the field its cursor's value goes in
+	// (`[query] hints`, §11, F15.3).
+	Hints bool
 	// HistoryMax is how many statements history.jsonl keeps, the oldest cut
 	// at the start (`[query] history_max`, §11).
 	HistoryMax int
@@ -72,7 +75,7 @@ type Config struct {
 }
 
 func Default() *Config {
-	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "en", Border: uv.NormalBorder(), Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 500, HistoryMax: 1000, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true, GridFullWidth: 22, TreeWidth: 32}
+	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "en", Border: uv.NormalBorder(), Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 500, HistoryMax: 1000, Hints: true, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true, GridFullWidth: 22, TreeWidth: 32}
 }
 
 // Dir is $XDG_CONFIG_HOME/sqlmux, falling back to ~/.config/sqlmux on every
@@ -138,8 +141,9 @@ func Parse(data string) (*Config, error) {
 		AutoPairs  *bool    `toml:"autopairs"`
 		Dangerous  *bool    `toml:"confirm_dangerous"`
 		Query      struct {
-			MaxRows    *int `toml:"max_rows"`
-			HistoryMax *int `toml:"history_max"`
+			MaxRows    *int  `toml:"max_rows"`
+			HistoryMax *int  `toml:"history_max"`
+			Hints      *bool `toml:"hints"`
 		} `toml:"query"`
 		Tree struct {
 			Width *int `toml:"width"`
@@ -226,6 +230,9 @@ func Parse(data string) (*Config, error) {
 			return nil, fmt.Errorf("[query] max_rows = %d: must be greater than 0", *n)
 		}
 		c.MaxRows = *n
+	}
+	if raw.Query.Hints != nil {
+		c.Hints = *raw.Query.Hints
 	}
 	if n := raw.Query.HistoryMax; n != nil {
 		if *n <= 0 {

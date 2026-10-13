@@ -37,8 +37,9 @@ type Query struct {
 	// Stat and StatRight the line a search left under the text (F15.9).
 	Hits            []Span
 	Stat, StatRight string
-	Stops           []Span // the tabstops of a snippet still to come, on the visual color (F15.8)
-	Failed          int    // the first line of the statement whose last run failed: its ▶ in error; -1 for none
+	Stops           []Span    // the tabstops of a snippet still to come, on the visual color (F15.8)
+	Sig             Signature // the fields of the value being typed, a line over the cursor's, under it on the first (F15.3)
+	Failed          int       // the first line of the statement whose last run failed: its ▶ in error; -1 for none
 	Pane            int
 	Names           SQLNames       // the tables and columns among the text's names, for their colors; nil for none
 	Dialect         sqlkit.Dialect // its connection's SQL
@@ -169,6 +170,7 @@ func (c Query) Draw(f *Frame, r uv.Rectangle) uv.Position {
 		}
 		c.drawLine(f, ta, row, n, colors[starts[n]:], bg)
 	}
+	c.drawSig(f, r, ta)
 	if c.Prompt != "" && r.Dy() > 0 {
 		return drawCmdline(f, uv.Rect(r.Min.X, r.Max.Y-1, r.Dx(), 1), c.Prompt+c.Text, len(c.Prompt)+c.Pos)
 	}
@@ -180,6 +182,22 @@ func (c Query) Draw(f *Frame, r uv.Rectangle) uv.Position {
 		return uv.Pos(-1, -1)
 	}
 	return uv.Pos(x, y)
+}
+
+// drawSig draws the signature on the line over the cursor's, or under it when
+// that is the view's first. A / ? : line or a search's count is drawn over it.
+func (c Query) drawSig(f *Frame, r, ta uv.Rectangle) {
+	y := r.Min.Y + c.Cursor.Line - c.Top
+	if y < r.Min.Y || y >= r.Max.Y {
+		return
+	}
+	row := y - 1
+	if row < r.Min.Y {
+		row = y + 1
+	}
+	if row < r.Max.Y {
+		c.Sig.draw(f, ta, row)
+	}
 }
 
 // drawStat draws the line a search left on the last row: the pattern, the

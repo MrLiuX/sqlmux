@@ -62,6 +62,7 @@ type App struct {
 	keywordCase  string // gq's (§9.5)
 	formatPrg    string
 	autoPairs    bool // a query's INSERT, a WHERE and the quick SQL (§7.9)
+	valueHints   bool // a query's line of the field its value goes in (§11, F15.3)
 	// confirmDangerous asks before a run that would delete or drop, and a
 	// save that deletes rows (§13).
 	confirmDangerous bool
@@ -132,7 +133,7 @@ var whichKeyDelay = 400 * time.Millisecond
 func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, warning string) *App {
 	a := &App{
 		theme: cfg.Theme, icons: cfg.Icons, baseIcons: cfg.BaseIcons, plain: !cfg.Vim, themeName: cfg.ThemeName, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, resultHeight: cfg.ResultHeight, fullWidth: cfg.GridFullWidth, treeWidth: cfg.TreeWidth, border: cfg.Border, newDesc: cfg.GridDesc, newTurned: cfg.GridTranspose,
-		keywordCase: cfg.KeywordCase, formatPrg: cfg.FormatPrg, autoPairs: cfg.AutoPairs, confirmDangerous: cfg.ConfirmDangerous,
+		keywordCase: cfg.KeywordCase, formatPrg: cfg.FormatPrg, autoPairs: cfg.AutoPairs, valueHints: cfg.Hints, confirmDangerous: cfg.ConfirmDangerous,
 		keys: keys, res: keymap.NewResolver(keys), sess: sess, sessions: []*Session{sess},
 		mouse: uv.Pos(-1, -1), warning: JoinNotes(warning, sess.warning), state: st,
 	}
