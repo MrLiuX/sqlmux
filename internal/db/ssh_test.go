@@ -15,9 +15,9 @@ import (
 	"time"
 )
 
-func dialSSH(t *testing.T, dest string) net.Conn {
+func dialSSH(t *testing.T) net.Conn {
 	t.Helper()
-	c, err := SSHDialer(dest).Dial(context.Background(), "tcp", "db.internal:5432")
+	c, err := SSHDialer("me@jump").Dial(context.Background(), "tcp", "db.internal:5432")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func dialSSH(t *testing.T, dest string) net.Conn {
 // quietly, and what goes in comes out of its stdout: the connection (F15.2).
 func TestSSHDialerEcho(t *testing.T) {
 	args := FakeSSH(t, "exec cat")
-	c := dialSSH(t, "me@jump")
+	c := dialSSH(t)
 	if a := c.RemoteAddr(); a.Network() != "tcp" || a.String() != "db.internal:5432" { // pgx dials a cancel request to it again
 		t.Errorf("remote address %s %s", a.Network(), a)
 	}
@@ -52,7 +52,7 @@ func TestSSHDialerEcho(t *testing.T) {
 // both on the read that finds the connection gone, and on the write after.
 func TestSSHDialerFailure(t *testing.T) {
 	FakeSSH(t, "echo 'me@jump: Permission denied (publickey).' >&2; exit 255")
-	c := dialSSH(t, "me@jump")
+	c := dialSSH(t)
 	_, err := c.Read(make([]byte, 1))
 	if err == nil || !strings.Contains(err.Error(), "ssh me@jump: me@jump: Permission denied (publickey).") {
 		t.Fatalf("read: %v", err)
@@ -62,13 +62,13 @@ func TestSSHDialerFailure(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 	FakeSSH(t, "head -n1 >/dev/null")
-	c = dialSSH(t, "me@jump")
-	c.Write([]byte("bye\n"))
+	c = dialSSH(t)
+	_, _ = c.Write([]byte("bye\n"))
 	if _, err := c.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
 		t.Fatalf("a clean end: %v", err)
 	}
 	FakeSSH(t, "exit 3") // silent: the status is all there is
-	c = dialSSH(t, "me@jump")
+	c = dialSSH(t)
 	if _, err := c.Read(make([]byte, 1)); err == nil || !strings.Contains(err.Error(), "exit status 3") {
 		t.Fatalf("no stderr: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestSSHDialerFailure(t *testing.T) {
 // error waiting: it is read when the process is gone, the child not waited for.
 func TestSSHDialerStderrHeldOpen(t *testing.T) {
 	FakeSSH(t, "echo 'proxy failed' >&2; sleep 20 >&2 & exit 255")
-	c := dialSSH(t, "me@jump")
+	c := dialSSH(t)
 	start := time.Now()
 	_, err := c.Read(make([]byte, 1))
 	if err == nil || !strings.Contains(err.Error(), "proxy failed") || time.Since(start) > 2*time.Second {
@@ -104,7 +104,7 @@ func TestSSHDialerFailed(t *testing.T) {
 	FakeSSH(t, "exec cat") // a connection that is up has not failed; neither has one that ended well
 	c2, _ := d.Dial(context.Background(), "tcp", "h:1")
 	defer c2.Close()
-	c2.Write([]byte("x"))
+	_, _ = c2.Write([]byte("x"))
 	if err := d.Failed(); err != nil {
 		t.Errorf("up: %v", err)
 	}
@@ -130,17 +130,17 @@ func TestSSHDialerMissing(t *testing.T) {
 func TestSSHConnCloseAndDeadline(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	FakeSSH(t, "echo $$ >"+pidFile+"; exec sleep 30")
-	c := dialSSH(t, "me@jump")
-	start, ne := time.Now(), net.Error(nil)
+	c := dialSSH(t)
+	ne := net.Error(nil)
 	for _, set := range []func(time.Time) error{c.SetDeadline, c.SetReadDeadline} {
-		c.SetDeadline(time.Time{}) // the one before has run out
-		set(time.Now().Add(50 * time.Millisecond))
-		start = time.Now()
+		_ = c.SetDeadline(time.Time{}) // the one before has run out
+		_ = set(time.Now().Add(50 * time.Millisecond))
+		start := time.Now()
 		if _, err := c.Read(make([]byte, 1)); !errors.As(err, &ne) || !ne.Timeout() || time.Since(start) > 2*time.Second {
 			t.Fatalf("deadline: %v after %v", err, time.Since(start))
 		}
 	}
-	c.SetDeadline(time.Time{})
+	_ = c.SetDeadline(time.Time{})
 	var pid int
 	for i := 0; i < 100 && pid == 0; i++ { // the script writes it as it starts
 		b, _ := os.ReadFile(pidFile)
@@ -151,7 +151,7 @@ func TestSSHConnCloseAndDeadline(t *testing.T) {
 	if pid == 0 {
 		t.Fatal("no pid")
 	}
-	start = time.Now()
+	start := time.Now()
 	c.Close()
 	if time.Since(start) > 3*time.Second {
 		t.Errorf("Close took %v", time.Since(start))
@@ -165,11 +165,11 @@ func TestSSHConnCloseAndDeadline(t *testing.T) {
 // write for ever.
 func TestSSHConnWriteDeadline(t *testing.T) {
 	FakeSSH(t, "exec sleep 30")
-	c := dialSSH(t, "me@jump")
+	c := dialSSH(t)
 	ne := net.Error(nil)
 	for _, set := range []func(time.Time) error{c.SetDeadline, c.SetWriteDeadline} {
-		c.SetDeadline(time.Time{})
-		set(time.Now().Add(100 * time.Millisecond))
+		_ = c.SetDeadline(time.Time{})
+		_ = set(time.Now().Add(100 * time.Millisecond))
 		start := time.Now()
 		if _, err := c.Write(bytes.Repeat([]byte("x"), 1<<20)); !errors.As(err, &ne) || !ne.Timeout() || time.Since(start) > 2*time.Second {
 			t.Fatalf("%v after %v", err, time.Since(start))

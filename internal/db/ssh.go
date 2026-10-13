@@ -153,7 +153,7 @@ func (c *sshConn) Write(p []byte) (int, error) {
 func (c *sshConn) Close() error {
 	c.in.Close()
 	c.out.Close()
-	c.cmd.Process.Kill()
+	_ = c.cmd.Process.Kill() // gone already is what it is for
 	<-c.done
 	return nil
 }
