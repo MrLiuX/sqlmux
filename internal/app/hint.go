@@ -2,6 +2,7 @@ package app
 
 import (
 	"cmp"
+	"slices"
 	"strings"
 
 	"github.com/kackerx/sqlmux/internal/db"
@@ -41,18 +42,7 @@ func (a *App) signature(t *queryTab) ui.Signature {
 func (c *Conn) fields(schema string, v sqlkit.Value) ui.Signature {
 	switch v.Kind {
 	case sqlkit.ValueInsert:
-		var have []db.Column
-		if len(v.Tables) > 0 {
-			if t, ok := c.table(cmp.Or(v.Tables[0].Schema, schema), v.Tables[0].Name); ok {
-				have = c.cols[idOf(t)].Cols
-			}
-		}
-		names := v.Cols
-		if len(names) == 0 { // no list: the columns in the table's order
-			for _, col := range have {
-				names = append(names, col.Name)
-			}
-		}
+		names, have := c.insertNames(schema, v)
 		if v.Index >= len(names) { // more values than columns: no field to name
 			break
 		}
@@ -62,17 +52,8 @@ func (c *Conn) fields(schema string, v sqlkit.Value) ui.Signature {
 		}
 		return s
 	case sqlkit.ValueUpdate, sqlkit.ValueWhere:
-		for _, r := range v.Tables {
-			if v.Qualifier != "" && !strings.EqualFold(v.Qualifier, cmp.Or(r.Alias, r.Name)) && !strings.EqualFold(v.Qualifier, r.Name) {
-				continue
-			}
-			if t, ok := c.table(cmp.Or(r.Schema, schema), r.Name); ok {
-				for _, col := range c.cols[idOf(t)].Cols {
-					if strings.EqualFold(col.Name, v.Cols[0]) {
-						return ui.Signature{Fields: []string{field(col.Name, []db.Column{col})}}
-					}
-				}
-			}
+		if col, ok := c.setColumn(schema, v); ok {
+			return ui.Signature{Fields: []string{field(col.Name, []db.Column{col})}}
 		}
 	case sqlkit.ValueCall:
 		for _, f := range c.funcs { // the first overload that has the argument
@@ -83,6 +64,60 @@ func (c *Conn) fields(schema string, v sqlkit.Value) ui.Signature {
 		}
 	}
 	return ui.Signature{}
+}
+
+// insertNames are the columns the values of an INSERT's row go to: those the
+// statement lists, else the table's in its order; and the columns of the
+// table the cache has.
+func (c *Conn) insertNames(schema string, v sqlkit.Value) (names []string, have []db.Column) {
+	if len(v.Tables) > 0 {
+		if t, ok := c.table(cmp.Or(v.Tables[0].Schema, schema), v.Tables[0].Name); ok {
+			have = c.cols[idOf(t)].Cols
+		}
+	}
+	if names = v.Cols; len(names) == 0 {
+		for _, col := range have {
+			names = append(names, col.Name)
+		}
+	}
+	return names, have
+}
+
+// setColumn is the column an UPDATE's SET or a condition's value is for: the
+// one among the tables the statement names that the qualifier, when there is
+// one, names.
+func (c *Conn) setColumn(schema string, v sqlkit.Value) (db.Column, bool) {
+	for _, r := range v.Tables {
+		if v.Qualifier != "" && !strings.EqualFold(v.Qualifier, cmp.Or(r.Alias, r.Name)) && !strings.EqualFold(v.Qualifier, r.Name) {
+			continue
+		}
+		if t, ok := c.table(cmp.Or(r.Schema, schema), r.Name); ok {
+			for _, col := range c.cols[idOf(t)].Cols {
+				if strings.EqualFold(col.Name, v.Cols[0]) {
+					return col, true
+				}
+			}
+		}
+	}
+	return db.Column{}, false
+}
+
+// valueColumn is the column the value v is for, when the cache has it: an
+// INSERT row's, an UPDATE's, a condition's; none for a call's argument.
+func (c *Conn) valueColumn(schema string, v sqlkit.Value) (db.Column, bool) {
+	switch v.Kind {
+	case sqlkit.ValueInsert:
+		names, have := c.insertNames(schema, v)
+		if v.Index < len(names) {
+			if i := slices.IndexFunc(have, func(col db.Column) bool { return strings.EqualFold(col.Name, names[v.Index]) }); i >= 0 {
+				return have[i], true
+			}
+		}
+	case sqlkit.ValueUpdate, sqlkit.ValueWhere:
+		return c.setColumn(schema, v)
+	case sqlkit.ValueCall: // an argument has no column
+	}
+	return db.Column{}, false
 }
 
 // field is "name type" for the column named name among have, the name alone

@@ -146,3 +146,32 @@ func TestValueTables(t *testing.T) {
 		}
 	}
 }
+
+// What is typed at the cursor: a word, a number, a string with its quote, even
+// with the closing quote after the cursor; a string closed before it is none.
+func TestValuePrefix(t *testing.T) {
+	for _, c := range []struct {
+		sql, prefix string
+		depth       int
+	}{
+		{"insert into t (a) values (|", "", 1},
+		{"insert into t (a) values (pe|", "pe", 1},
+		{"insert into t (a) values (12|", "12", 1},
+		{"insert into t (a) values ('pe|'", "'pe", 1},
+		{"insert into t (a) values ('pe|", "'pe", 1},
+		{"insert into t (a) values ('pe'|", "", 1},
+		{"insert into t (a) values (1, 'a, b|'", "'a, b", 1},
+		{"update t set a = (|", "", 1},
+		{"update t set a = |", "", 0},
+		{"update t set a = nu|", "nu", 0},
+		{"select * from t where a = 'x|", "'x", 0},
+		{"select * from t where a in ('x', 'y|", "'y", 1},
+	} {
+		pos := strings.Index(c.sql, "|")
+		sql := c.sql[:pos] + c.sql[pos+1:]
+		v := ValueContext(sql, pos, PG)
+		if !v.OK || v.Prefix != c.prefix || v.Depth != c.depth || sql[v.Start:pos] != c.prefix {
+			t.Errorf("%q: %+v", c.sql, v)
+		}
+	}
+}

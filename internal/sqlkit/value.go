@@ -19,6 +19,9 @@ type Value struct {
 	Tables    []TableRef // those the statement names
 	Cols      []string   // quotes off
 	Index     int
+	Depth     int    // the parentheses the cursor is in
+	Prefix    string // the word, number or string typed at the cursor, a string's quote in, from Start; Start is the cursor's own place when there is none
+	Start     int
 	Qualifier string
 	Func      TableRef // a call's: the function, Schema.Name
 	// Outer is what the call is an argument of, the call around it or the
@@ -68,6 +71,12 @@ func ValueContext(text string, pos int, d Dialect) Value {
 		}
 		return n2
 	}
+	prefix, start := "", pos
+	for _, t := range all {
+		if t.Start < pos && pos <= t.End && (t.Kind == Ident || t.Kind == Keyword || t.Kind == Number || t.Kind == String && inside(text, all, pos, d, String)) {
+			prefix, start = text[t.Start:pos], t.Start
+		}
+	}
 	var c Completion
 	c.readNames(text, ts, depth)
 	at, cols, isInsert := insertValues(text, ts, depth)
@@ -94,7 +103,7 @@ func ValueContext(text string, pos int, d Dialect) Value {
 		chain = append(chain, Value{Kind: ValueWhere, Cols: []string{wc.Column}, Qualifier: wc.Qualifier})
 	}
 	for i := range chain {
-		chain[i].OK, chain[i].Tables = true, c.Tables
+		chain[i].OK, chain[i].Tables, chain[i].Depth, chain[i].Prefix, chain[i].Start = true, c.Tables, len(open), prefix, start
 		if i+1 < len(chain) {
 			chain[i].Outer = &chain[i+1]
 		}

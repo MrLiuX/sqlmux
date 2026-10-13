@@ -272,19 +272,26 @@ func (t *dataTab) commitCell() {
 	}
 }
 
+// choices are the values a column offers by its type: an enum's labels, a
+// boolean's true and false; vals are the engine's own text for them, so one
+// back to what was loaded is no change (§10.2).
+func choices(col db.Column) (labels, vals []string) {
+	switch col.Type {
+	case "boolean":
+		return []string{"true", "false"}, []string{"t", "f"}
+	case "tinyint(1)": // MySQL's boolean
+		return []string{"true", "false"}, []string{"1", "0"}
+	}
+	return col.Enum, col.Enum
+}
+
 // options is what the cell being edited offers under it (§10.2): a
 // boolean's or an enum's values, filtered by what is typed once it is,
 // then NULL, DEFAULT and back to what was loaded, as the column allows.
 func (t *dataTab) options() []option {
 	c := t.cell
 	col := t.column(c.key.col)
-	labels, vals := col.Enum, col.Enum
-	switch col.Type { // the engine's own text for them, so one back to what was loaded is no change
-	case "boolean":
-		labels, vals = []string{"true", "false"}, []string{"t", "f"}
-	case "tinyint(1)": // MySQL's boolean
-		labels, vals = []string{"true", "false"}, []string{"1", "0"}
-	}
+	labels, vals := choices(col)
 	pattern := c.in.Text
 	if c.in.All {
 		pattern = ""

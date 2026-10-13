@@ -93,6 +93,43 @@ func (a *App) complete(t *dataTab) {
 	}
 }
 
+// valueChoices are the values of col that a literal can be: an enum's labels
+// quoted, a boolean's true and false (§9.7).
+func valueChoices(col db.Column, d sqlkit.Dialect) (out []candidate) {
+	labels, _ := choices(col)
+	for _, l := range labels {
+		insert := l
+		if len(col.Enum) > 0 {
+			insert = sqlkit.Literal(l, d)
+		}
+		out = append(out, candidate{label: l, insert: insert, note: i18n.T("值")})
+	}
+	return out
+}
+
+// valueCandidates are what the value of col can be where a statement sets or
+// compares it (F15.10): the cell options' (§10.2): a time's now() and
+// current_timestamp, an enum's labels quoted or a boolean's, NULL when it takes
+// one, DEFAULT when it has one, in an INSERT or an UPDATE and not a condition.
+// ponytail: SQLite has no now(); a date or a time gets the timestamp too
+func valueCandidates(col db.Column, kind sqlkit.ValueKind, d sqlkit.Dialect) []candidate {
+	var out []candidate
+	if timeKind(col.Type) != ui.NotTime {
+		if d != sqlkit.SQLite {
+			out = append(out, candidate{label: "now()", insert: "now()", note: i18n.T("值")})
+		}
+		out = append(out, candidate{label: "current_timestamp", insert: "current_timestamp", note: i18n.T("值")})
+	}
+	out = append(out, valueChoices(col, d)...)
+	if !col.NotNull {
+		out = append(out, candidate{label: "null", insert: "null", note: i18n.T("关键字"), kw: true})
+	}
+	if kind != sqlkit.ValueWhere && hasDefault(col, kind == sqlkit.ValueInsert) {
+		out = append(out, candidate{label: "default", insert: "default", note: i18n.T("关键字"), kw: true})
+	}
+	return out
+}
+
 // noSelection is the sel of a list that has no item selected yet: Tab, C-n or
 // ↓ select the first, S-Tab, C-p or ↑ the last (F8.17, nvim's noselect).
 const noSelection = -1
@@ -369,7 +406,8 @@ func (a *App) wantCols() tea.Cmd {
 // quotes (upper case, a space) needs them typed.
 func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked map[tableID]bool, manual bool) (*completion, []tea.Cmd) {
 	c := sqlkit.CompletionContext(sql, pos, conn.eng.Dialect())
-	if !c.OK {
+	vc := sqlkit.ValueContext(sql, pos, conn.eng.Dialect())
+	if !c.OK && !vc.OK { // a comment, a quoted name; a string is a value's place maybe
 		return nil, nil
 	}
 	var cmds []tea.Cmd
@@ -396,6 +434,33 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 			}
 		}
 		return out
+	}
+	// a value's place: the column's values, and a string typed there is no other
+	// word's (F15.10)
+	var vals []candidate
+	if vc.OK && (vc.Kind != sqlkit.ValueInsert || vc.Depth == 1) && (vc.Kind != sqlkit.ValueUpdate || vc.Depth == 0) {
+		for _, r := range vc.Tables {
+			if t, ok := table(r.Schema, r.Name); ok {
+				columns(t) // asks for them when the cache lacks them
+			}
+		}
+		if col, ok := conn.valueColumn(schema, vc); ok {
+			vals = valueCandidates(col, vc.Kind, conn.eng.Dialect())
+		}
+	}
+	if !c.OK || vals != nil && vc.Start != c.Start { // in a string, or after a number: the values alone
+		if vals == nil {
+			return nil, cmds
+		}
+		pattern := strings.TrimLeft(vc.Prefix, `'"`)
+		if vc.Prefix != "" && vc.Prefix != pattern { // in a string: the literals, which end with the quote that is there
+			vals = slices.DeleteFunc(vals, func(cd candidate) bool { return vc.Prefix[0] != '\'' || cd.insert[0] != '\'' })
+		}
+		comp := ranked(sql, pos, pattern, vc.Start, vals)
+		if comp != nil && pattern == "" && !manual {
+			comp.sel = noSelection
+		}
+		return comp, cmds
 	}
 	var ctes []candidate
 	isCTE := map[string]bool{}
@@ -485,6 +550,11 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 		groups = [][]candidate{near, far, append(ctes, tables(schema, named)...), kws}
 		if c.AtStart { // what is typed there is almost always a keyword (F12.6)
 			groups = [][]candidate{kws, groups[2], near, far}
+		}
+	}
+	if vals != nil {
+		if groups, resolved = append([][]candidate{vals}, groups...), true; c.Prefix == "" && !manual {
+			groups = groups[:1]
 		}
 	}
 	if c.Prefix == "" && !manual && !resolved {
