@@ -32,10 +32,7 @@ const dropdownRows = 10
 func (d Dropdown) hintRows(w int) (rows [][]Hint) {
 	hs := d.Hints
 	for len(hs) > 0 && len(rows) < 2 {
-		n := 1 // one is always shown, cut by the box's edge if it must
-		for n < len(hs) && hintRowWidth(hs[:n+1]) <= w-4 {
-			n++
-		}
+		n := max(leadingHints(hs, w-4), 1) // one is always shown, cut by the box's edge if it must
 		rows, hs = append(rows, hs[:n]), hs[n:]
 	}
 	return rows

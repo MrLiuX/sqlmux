@@ -129,7 +129,7 @@ func (a *App) jsonKey(p *Pane, k keymap.Key) tea.Cmd {
 		return nil
 	}
 	a.jsonSize(p, jv)
-	return a.roKey(jv.ed, k, false, a.viewJSON, func(eff editor.Effect) tea.Cmd { return a.jsonDid(p, jv, eff) })
+	return a.roKey(jv.ed, k, true, a.viewJSON, func(eff editor.Effect) tea.Cmd { return a.jsonDid(p, jv, eff) })
 }
 
 // jsonDid acts on what the editor did: the clipboard, the toasts, :q.

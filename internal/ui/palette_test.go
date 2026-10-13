@@ -174,3 +174,16 @@ func TestCompleteBoxLimit(t *testing.T) {
 		t.Errorf("above, 12 items and a foot: %v %d rows", box, rows)
 	}
 }
+
+// The result's first button is drawn when it has the room after the title and
+// two columns, and not a column short (F-04).
+func TestPaletteResultHintsBoundary(t *testing.T) {
+	p := Palette{Search: Icon{Text: "~"}, Result: &PaletteResult{Title: "100+ 行 · 12ms · 只读", Hints: []Hint{{Key: "C-y", Label: "CSV"}}}}
+	for w, want := range map[int]bool{37: false, 38: true} {
+		f := NewFrame(w, 30, TokyonightStorm)
+		p.Draw(f, uv.Rect(0, 0, w, 29))
+		if got := strings.Contains(f.String(), "C-y CSV"); got != want {
+			t.Errorf("%d wide: drawn %v, want %v", w, got, want)
+		}
+	}
+}

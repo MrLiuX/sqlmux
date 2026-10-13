@@ -27,6 +27,9 @@ type valueEditor struct {
 	saved    string // what :w last wrote back, or opened
 
 	cell *cellSrc // where it goes back to; none for a result's
+
+	wide    int // the text's width as drawn, worked out for the editor's version
+	wideVer int
 }
 
 // valueOpen is e (grid.value): the cell under the cursor of the focused table
@@ -86,6 +89,16 @@ func inValue(a *App) bool { return a.value != nil }
 // it has them instead.
 func (a *App) valueActive() bool { return a.value != nil && a.confirm == nil }
 
+// width is the columns the text takes whole, kept for the text as it is: it is
+// asked for with every key and frame, and the text may be of some MB.
+func (v *valueEditor) width() int {
+	ed := v.ed
+	if ver := ed.Version() + 1; ver != v.wideVer { // the tabstop is the program's, the same for good
+		v.wide, v.wideVer = ui.Query{Lines: ed.Lines(), TabWidth: ed.TabWidth}.TextWidth(), ver
+	}
+	return v.wide
+}
+
 // text is what the editor holds.
 func (v *valueEditor) text() string { return strings.Join(v.ed.Lines(), "\n") }
 
@@ -104,10 +117,9 @@ func (a *App) valueBox() uv.Rectangle {
 			cell = r
 		}
 	}
-	ed := a.value.ed
 	half := min(max(pane.Dx()/2, 40), pane.Dx())
-	w := min(max(half, ui.Query{Lines: ed.Lines(), TabWidth: ed.TabWidth}.Width()+4), pane.Dx()) // the border and a column each side
-	x := min(cell.Min.X, pane.Max.X-w)                                                           // the cell is in the pane, which w does not outgrow
+	w := min(max(half, a.value.width()+ui.Query{Lines: a.value.ed.Lines()}.Gutter()+5), pane.Dx()) // the border and a column each side, and one for the cursor past the longest line's end
+	x := min(cell.Min.X, pane.Max.X-w)                                                             // the cell is in the pane, which w does not outgrow
 	below, above := pane.Max.Y-cell.Max.Y, cell.Min.Y-pane.Min.Y
 	if below < valueMinRows && above > below {
 		return uv.Rect(x, pane.Min.Y, w, above)
@@ -126,7 +138,7 @@ func (a *App) valueText() uv.Rectangle { return a.valueTextBox().Inner(a.valueBo
 // keys under the text, from the keymap where there is a key (F12.8).
 func (a *App) valueTextBox() ui.TextBox {
 	v := a.value
-	hs := []ui.Hint{{Key: a.keys.Hint("value.leave", "value"), Label: i18n.T("关闭"), Action: "value.leave"}}
+	hs := []ui.Hint{{Key: a.keys.Hint("value.leave", "value"), Label: i18n.T("关闭"), Action: "value.leave close"}}
 	switch {
 	case a.plain: // no : commands, no gq
 		if !v.readOnly {
@@ -148,6 +160,7 @@ func (a *App) valueTextBox() ui.TextBox {
 func (a *App) valueSize() {
 	ed := a.value.ed
 	a.sizeEditor(ed, ui.Query{Lines: ed.Lines()}.TextArea(a.valueText()))
+	ed.FitView(a.value.width()) // the box follows the text: what scrolled it sideways when it was narrower is gone
 }
 
 // valueAt is the line and display column of the value's text under p.
@@ -188,7 +201,11 @@ func (a *App) drawValue(f *ui.Frame) {
 func (a *App) valueKey(k keymap.Key) tea.Cmd {
 	v := a.value
 	a.valueSize()
-	return a.roKey(v.ed, k, v.readOnly, func() tea.Cmd { return a.valueClose(false) }, a.valueDid)
+	cmd := a.roKey(v.ed, k, v.readOnly, func() tea.Cmd { return a.valueClose(false) }, a.valueDid)
+	if a.value != nil { // the box is as wide as the text now
+		a.valueSize()
+	}
+	return cmd
 }
 
 // valueDid acts on what the editor did: the clipboard, the toasts, a : command

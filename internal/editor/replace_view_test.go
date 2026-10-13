@@ -36,3 +36,46 @@ func TestReplaceViewFollowsTheCursor(t *testing.T) {
 		t.Errorf("cursor %v, left %d", e.Cursor(), e.Left())
 	}
 }
+
+// FitView shows the text from its start when its longest line fits the view with
+// the column past its end, and leaves the view alone when it does not (F15.5).
+func TestFitView(t *testing.T) {
+	for _, c := range []struct{ line, width, left, want int }{
+		{50, 52, 3, 0},  // fits with room
+		{51, 52, 3, 0},  // fits with the cursor's column
+		{52, 52, 3, 3},  // the cursor's column would not
+		{200, 52, 3, 3}, // far too long
+		{50, 52, 0, 0},
+	} {
+		e := New(strings.Repeat("x", c.line))
+		e.SetWidth(c.width)
+		e.left = c.left
+		e.FitView(c.line)
+		if e.Left() != c.want {
+			t.Errorf("%d columns of text in %d, left %d: %d, want %d", c.line, c.width, c.left, e.Left(), c.want)
+		}
+	}
+}
+
+// Version moves with a change of the text and with nothing else (F15.5).
+func TestVersion(t *testing.T) {
+	e := New("one\ntwo")
+	v := e.Version()
+	e.Feed("j")
+	e.Feed("l")
+	if e.Version() != v {
+		t.Error("moving changed it")
+	}
+	for _, k := range []string{"x", "u", "o", "<Esc>", "d", "d"} {
+		was := e.Version()
+		e.Feed(k)
+		if k != "<Esc>" && k != "d" && e.Version() == was {
+			t.Errorf("%s did not change it", k)
+		}
+	}
+	was := e.Version()
+	e.Load("other")
+	if e.Version() == was {
+		t.Error("Load did not change it")
+	}
+}

@@ -153,3 +153,76 @@ func TestValueAndJSONSearchLit(t *testing.T) {
 	}
 	golden.RequireEqual(t, f.String())
 }
+
+// With the matches of a search lit, the first esc of the value editor and the
+// JSON view only puts them out, the second leaves; q leaves at once (F15.9).
+func TestEscClearsTheSearchFirst(t *testing.T) {
+	a, _ := valueTab(t)
+	feed(t, a, "/tags<CR>")
+	feed(t, a, "<Esc>")
+	if a.value == nil || a.value.ed.Lit() {
+		t.Fatalf("value editor, first esc: open %v", a.value != nil)
+	}
+	feed(t, a, "<Esc>")
+	if a.value != nil {
+		t.Error("value editor, second esc leaves")
+	}
+	b := sized(160, 45, "nerd")
+	loadOrders(t, b, 3)
+	p := b.focused()
+	feed(t, b, "gj/status<CR><Esc>")
+	if jv := jsonViewOf(p); jv == nil || jv.ed.Lit() {
+		t.Fatalf("JSON view, first esc: view %v", jv != nil)
+	}
+	feed(t, b, "<Esc>")
+	if jsonViewOf(p) != nil {
+		t.Error("JSON view, second esc brings the table back")
+	}
+	feed(t, b, "gj/status<CR>q")
+	if jsonViewOf(p) != nil {
+		t.Error("q leaves with the matches lit")
+	}
+	feed(t, b, "gj/zzzz<CR><Esc>") // nothing found: nothing was lit, esc leaves at once
+	if jsonViewOf(p) != nil {
+		t.Error("esc after a search that found nothing leaves")
+	}
+}
+
+// The buttons of the hint row, 回表格 and 关闭, close with the matches of a search
+// lit: only the esc key puts them out first (F15.9).
+func TestHintButtonsCloseWithTheSearchLit(t *testing.T) {
+	press := func(a *App, action string) {
+		t.Helper()
+		a.View()
+		for _, h := range a.hits {
+			if h.Target.Action == action {
+				click(a, h.Rect.Min)
+				return
+			}
+		}
+		t.Fatalf("no button %q", action)
+	}
+	a, _ := valueTab(t)
+	feed(t, a, "/n<CR>")
+	press(a, "value.leave close")
+	if a.value != nil {
+		t.Error("the value editor's 关闭 does not close")
+	}
+	feed(t, a, "e")
+	feed(t, a, "ggx") // a change not written back: the button asks first, and no is no
+	press(a, "value.leave close")
+	if a.value == nil || a.confirm == nil || !strings.Contains(a.confirm.text, "放弃") {
+		t.Fatalf("关闭 with a change: box %v, question %v", a.value != nil, a.confirm != nil)
+	}
+	feed(t, a, "n")
+	if a.value == nil || a.confirm != nil {
+		t.Errorf("no to the question: box %v, question %v", a.value != nil, a.confirm != nil)
+	}
+	b := sized(160, 45, "nerd")
+	loadOrders(t, b, 3)
+	feed(t, b, "gj/status<CR>")
+	press(b, "json.leave close")
+	if jsonViewOf(b.focused()) != nil {
+		t.Error("the JSON view's 回表格 does not leave")
+	}
+}

@@ -98,7 +98,10 @@ func TestDropdownHintRows(t *testing.T) {
 		{100, []int{5}},
 		{50, []int{4, 1}}, // inner 46: four take 44
 		{34, []int{2, 2}},
+		{30, []int{2, 2}}, // inner 26: the two take just that
+		{29, []int{1, 2}}, // one column less: the second goes to the next row
 		{20, []int{1, 1}}, // two rows at most: the rest is left out
+		{8, []int{1, 1}},  // the first is wider than the box: shown all the same, cut by the border
 	} {
 		var got []int
 		for _, r := range d.hintRows(c.w) {
@@ -116,5 +119,38 @@ func TestDropdownHintRows(t *testing.T) {
 	rows3 := strings.Split(out, "\n")[6:8] // under the rule
 	if !strings.Contains(rows3[0], "space direction") || !strings.Contains(rows3[1], "A clear") || strings.Contains(out, "this one") {
 		t.Errorf("two rows, the last hint left out:\n%s", out)
+	}
+}
+
+// The width of a text is the one it is drawn in: a glyph of no width is a
+// column, a tab goes to its tabstop, with a tab in the line or not (F15.5).
+func TestQueryWidthIsTheDrawnWidth(t *testing.T) {
+	zero := strings.Repeat("a\u200b", 20)
+	for _, c := range []struct {
+		line string
+		want int
+	}{
+		{"abc", 3},
+		{zero, 40},
+		{"\t" + zero, 42},
+		{strings.Repeat("\x01", 20), 20},
+		{"\t" + strings.Repeat("\x01", 20), 22},
+		{"ab\tc", 5},
+		{strings.Repeat("宽", 10), 20},
+	} {
+		if got := (Query{Lines: []string{c.line}, TabWidth: 2}).TextWidth(); got != c.want {
+			t.Errorf("%q: %d, want %d", c.line, got, c.want)
+		}
+	}
+}
+
+// A box too narrow for even the first hint shows it, cut by the border, in
+// the text box (the value editor's) as in the dropdown (F12.8, F15.6).
+func TestTextBoxFirstHintIsShownCut(t *testing.T) {
+	f := NewFrame(30, 12, TokyonightStorm)
+	tb := TextBox{Title: "t", Hints: []Hint{{Key: "esc", Label: "close it now"}, {Key: "C-s", Label: "write"}}}
+	tb.Frame(f, uv.Rect(2, 1, 12, 8))
+	if out := f.String(); !strings.Contains(out, "esc clo") || strings.Contains(out, "C-s") {
+		t.Errorf("a box narrower than the first hint:\n%s", out)
 	}
 }

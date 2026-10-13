@@ -83,12 +83,15 @@ func (e *Editor) SnippetStops() []Hit {
 	return hits
 }
 
-// snipAlive is the snippet, brought up to date with the text, nil when it
-// has ended: the cursor is out of its text, or what is left of it is none.
+// snipAlive is the snippet, brought up to date with the text, nil when it has
+// ended: in INSERT or SELECT (the modeless editor is in INSERT) the cursor is out of every tabstop (o, or A and
+// typing after the text, are), as nvim's CursorMovedI has it; moving in NORMAL
+// does not end it.
 func (e *Editor) snipAlive() *snippet {
 	e.snipSync()
-	if s := e.snip; s != nil {
-		if off := e.offset(e.cur); off < s.from || off > s.to {
+	if s := e.snip; s != nil && (e.mode == Insert || e.mode == Replace || e.mode == Select) {
+		off := e.offset(e.cur)
+		if !slices.ContainsFunc(s.stops, func(st [2]int) bool { return st[0] <= off && off <= st[1] }) {
 			e.snip = nil
 		}
 	}
@@ -108,15 +111,8 @@ func (e *Editor) snipSync() {
 	}
 	old, now := strings.Join(s.text, "\n"), strings.Join(e.lines, "\n")
 	s.text = slices.Clone(e.lines)
-	a := 0
-	for a < len(old) && a < len(now) && old[a] == now[a] {
-		a++
-	}
-	tail := 0
-	for tail < len(old)-a && tail < len(now)-a && old[len(old)-1-tail] == now[len(now)-1-tail] {
-		tail++
-	}
-	b, d := len(old)-tail, len(now)-len(old)
+	a, b := changeOf(old, now, e.offset(e.cur))
+	d := len(now) - len(old)
 	inStop := s.stops[s.cur][0] <= a && b <= s.stops[s.cur][1] // the one being filled in is what changed
 	for i := range s.stops {
 		from, to := s.stops[i][0], s.stops[i][1]
@@ -229,4 +225,25 @@ func (e *Editor) selectKey(k string) {
 			e.insertKey(k)
 		}
 	}
+}
+
+// changeOf is what changed from old to now as old[a:b] replaced: from the first
+// byte that differs to the last. A text put in or taken out between equal bytes
+// (a line break before another) could have been at any of several places: it is
+// taken to be where the cursor, at offset at of now, is after it, as typing has it.
+func changeOf(old, now string, at int) (a, b int) {
+	for a < len(old) && a < len(now) && old[a] == now[a] {
+		a++
+	}
+	same := 0 // the bytes the two end alike
+	for same < min(len(old), len(now)) && old[len(old)-1-same] == now[len(now)-1-same] {
+		same++
+	}
+	b = len(old) - min(same, len(old)-a, len(now)-a)
+	if r, m := b-a, len(now)-len(old)+b-a; r == 0 || m == 0 {
+		lo := min(len(old), len(now)) - same
+		a = min(max(at-m, lo), a)
+		b = a + r
+	}
+	return a, b
 }

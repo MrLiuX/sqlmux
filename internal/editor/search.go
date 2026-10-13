@@ -220,7 +220,6 @@ func (e *Editor) findNext(c cmd, reverse bool) target {
 func (e *Editor) searchNext(p Pos, count int, back bool) target {
 	s := e.lastSearch
 	fail := target{to: e.cur}
-	e.hl = true
 	if s.pattern == "" {
 		e.eff.Error = i18n.T(noPattern)
 		return fail
@@ -240,7 +239,7 @@ func (e *Editor) searchNext(p Pos, count int, back bool) target {
 		wrapped = wrapped || back && !q.less(p) || !back && !p.less(q)
 		p = q
 	}
-	e.stat = e.statOf(m, p, back, wrapped)
+	e.hl, e.stat = true, e.statOf(m, p, back, wrapped)
 	return target{to: p, ok: true}
 }
 
@@ -305,6 +304,9 @@ type Hit struct {
 	Line, From, To int
 	Current        bool
 }
+
+// Lit is whether the matches of a search are lit, which esc in NORMAL puts out.
+func (e *Editor) Lit() bool { return e.hl }
 
 // Hits are the matches of the last search on the lines in view, while they
 // are lit: from a search until esc in NORMAL.

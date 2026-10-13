@@ -116,6 +116,7 @@ type Editor struct {
 
 	cl         *cmdline // the / ? or : line being typed
 	lastSearch search
+	ver        int         // counts the changes of the text, for what is kept by it (Version)
 	snip       *snippet    // the snippet being filled in, nil for none (F15.8)
 	hl         bool        // the last search's matches are lit, until esc in NORMAL (hlsearch, F15.9)
 	stat       *searchStat // what a search or n N left for the line under the text, until the next key
@@ -144,10 +145,14 @@ func New(text string) *Editor {
 }
 
 func (e *Editor) Lines() []string { return e.lines }
-func (e *Editor) Cursor() Pos     { return e.cur }
-func (e *Editor) Mode() Mode      { return e.mode }
-func (e *Editor) Top() int        { return e.top }
-func (e *Editor) Left() int       { return e.left }
+
+// Version changes with every change of the text, which a view that keeps what
+// it worked out of the text goes by.
+func (e *Editor) Version() int { return e.ver }
+func (e *Editor) Cursor() Pos  { return e.cur }
+func (e *Editor) Mode() Mode   { return e.mode }
+func (e *Editor) Top() int     { return e.top }
+func (e *Editor) Left() int    { return e.left }
 
 // Pending is the command typed so far, as nvim's showcmd shows it.
 func (e *Editor) Pending() string { return strings.Join(e.keys, "") }

@@ -101,9 +101,7 @@ func (b TextBox) Frame(f *Frame, box uv.Rectangle) bool {
 	}
 	if hs := b.Hints; b.hinted(box) {
 		x0, x1 := box.Min.X+2, box.Max.X-2
-		for len(hs) > 1 && hintRowWidth(hs) > x1-x0 {
-			hs = hs[:len(hs)-1]
-		}
+		hs = hs[:max(leadingHints(hs, x1-x0), 1)] // the first is shown, cut by the border if it must
 		hintRow(f, x0, box.Max.Y-2, x1, hs, uv.Style{Fg: th.Dim, Bg: th.PaneBg}, Target{Kind: KindButton})
 	}
 	return true

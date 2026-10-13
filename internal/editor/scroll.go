@@ -287,3 +287,13 @@ func (e *Editor) scrollSideways() {
 	}
 	e.left = max(e.left, 0)
 }
+
+// FitView puts the view at the left when the longest line, widest columns wide,
+// is not too wide for it, the column past its end, where INSERT's cursor is,
+// counted: a view that was made wider to show the text whole shows it from its
+// start. The caller has the width of the text, which it keeps by Version.
+func (e *Editor) FitView(widest int) {
+	if e.left > 0 && widest < e.width {
+		e.left = 0
+	}
+}

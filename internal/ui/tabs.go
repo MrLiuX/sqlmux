@@ -125,6 +125,16 @@ func hintRowWidth(hs []Hint) int {
 	return w
 }
 
+// leadingHints is how many of hs, from the first, fit whole in a hint row of
+// room columns: the last ones are given up, not cut.
+func leadingHints(hs []Hint, room int) int {
+	n := 0
+	for n < len(hs) && hintRowWidth(hs[:n+1]) <= room {
+		n++
+	}
+	return n
+}
+
 // tabText is how a hint reads in a tab bar: "Key Label"; its width is the
 // hint's hit region, measured before drawing to pick the hover style.
 func (h Hint) tabText() string {
