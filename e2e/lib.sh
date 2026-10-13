@@ -95,6 +95,9 @@ SH
   # F7.6: the default language is English. The scripts' assertions are in Chinese, so they get language = "zh" unless a
   # script's own config.toml sets one; E2E_NOLANG=1 skips it (f6.4 tests the default language itself).
   [[ -n $E2E_NOLANG ]] || grep -qs '^language' "$E2E_TMP/config/sqlmux/config.toml" || prepend_cfg 'language = "zh"'
+  # F15.4: the status bar shows a random tip that changes by itself, which would fail its assertions at random; [ui] is a table, so
+  # it goes at the END of config.toml. A script's own [ui] section (the one that tests the tips) is left alone.
+  grep -qs '^\[ui\]' "$E2E_TMP/config/sqlmux/config.toml" || printf '\n[ui]\ntips = false\n' >>"$E2E_TMP/config/sqlmux/config.toml"
   t -f /dev/null set -s extended-keys "$keys" \; new-session -d -s t -x "$w" -y "$h" \
     -e XDG_CONFIG_HOME="$E2E_TMP/config" -e XDG_STATE_HOME="${state:-$E2E_TMP/state}" \
     -e XDG_DATA_HOME="${data:-$E2E_TMP/data}" -e E2E_PATH="${path:-$E2E_TMP/bin:$PATH}" -e COLORTERM=truecolor -e HISTFILE=/dev/null -e E2E_DIR="$E2E_TMP" \
