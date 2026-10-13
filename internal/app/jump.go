@@ -112,9 +112,19 @@ func (a *App) jumpKey(k keymap.Key) tea.Cmd {
 	if i := slices.IndexFunc(j.matches, func(m jumpMatch) bool { return m.label == text }); i >= 0 {
 		return a.jumpTo(j.matches[i])
 	}
-	j.pattern += text
-	a.jumpScan()
+	a.jumpType(text)
 	return nil
+}
+
+// jumpType puts text on the pattern; with no match left on the screen the
+// jump ends, the cursor where it was and the text gone, as flash.nvim leaves
+// it (F15.7).
+func (a *App) jumpType(text string) {
+	j := a.jump
+	j.pattern += text
+	if a.jumpScan(); len(j.matches) == 0 {
+		a.jump = nil
+	}
 }
 
 // jumpBack is backspace: the last character of the pattern goes; with none

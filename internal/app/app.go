@@ -658,9 +658,8 @@ func wheelMove(m tea.Mouse) (down, right int) {
 // starts editing the current cell with s; a query takes it whole, as
 // text in any mode (§11).
 func (a *App) paste(s string) tea.Cmd {
-	if j := a.jump; j != nil { // text for the pattern, whatever has the focus (F10.8)
-		j.pattern += strings.NewReplacer("\r\n", " ", "\r", " ", "\n", " ").Replace(s)
-		a.jumpScan()
+	if a.jump != nil { // text for the pattern, whatever has the focus (F10.8)
+		a.jumpType(strings.NewReplacer("\r\n", " ", "\r", " ", "\n", " ").Replace(s))
 		return nil
 	}
 	if a.ddl != nil && a.ddl.col != "" { // the column's box goes with it, as with a key, and what is pasted is then typed (F9.8)

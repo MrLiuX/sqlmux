@@ -46,10 +46,10 @@ func TestJumpInTable(t *testing.T) {
 		t.Errorf("backspace to nothing: %+v", a.jump)
 	}
 	feed(t, a, "Run")
-	if len(a.jump.matches) != 0 {
-		t.Errorf("a capital makes it exact: %d matches of Run", len(a.jump.matches))
+	if a.jump != nil || a.mode() != keymap.Normal || tab.row != 0 || tab.col != 0 {
+		t.Errorf("a capital makes it exact, and with no match the jump ends, the cursor where it was: %+v", a.jump)
 	}
-	feed(t, a, "<BS><BS><BS>run<Esc>")
+	feed(t, a, "srun<Esc>")
 	if a.jump != nil || tab.row != 0 || tab.col != 0 || a.mode() != keymap.Normal {
 		t.Errorf("esc leaves, the cursor stays: jump %v at %d, %d", a.jump, tab.row, tab.col)
 	}
@@ -134,11 +134,11 @@ func TestJumpInTree(t *testing.T) {
 	data := a.focused()
 	tabs := len(data.Tabs)
 	a.win().focus(0)
-	feed(t, a, "sT_sku")
-	if len(a.jump.matches) != 0 {
-		t.Fatalf("a capital T is exact: %d matches", len(a.jump.matches))
+	feed(t, a, "sT_") // a capital T is exact: nothing is T_ and the jump ends
+	if a.jump != nil {
+		t.Fatalf("the jump goes on with %d matches", len(a.jump.matches))
 	}
-	feed(t, a, "<BS><BS><BS><BS><BS><BS>t_sku")
+	feed(t, a, "st_sku")
 	if len(a.jump.matches) != 1 || a.jump.matches[0].target.Kind != ui.KindNode {
 		t.Fatalf("matches of t_sku: %+v", a.jump.matches)
 	}
@@ -286,9 +286,13 @@ func TestJumpPaste(t *testing.T) {
 	a.focusPane(a.win().Root.B.Pane.ID)
 	c.ed.Load("select 1;")
 	feed(t, a, "ssel")
-	a.Update(tea.PasteMsg{Content: "ec\nt"})
-	if a.jump == nil || a.jump.pattern != "selec t" || strings.Join(c.ed.Lines(), "") != "select 1;" {
+	a.Update(tea.PasteMsg{Content: "ec"})
+	if a.jump == nil || a.jump.pattern != "selec" || strings.Join(c.ed.Lines(), "") != "select 1;" {
 		t.Errorf("pattern %+v, text %q", a.jump, c.ed.Lines())
+	}
+	a.Update(tea.PasteMsg{Content: "\nx"}) // a newline is a space, which no text has before x: the jump ends
+	if a.jump != nil || strings.Join(c.ed.Lines(), "") != "select 1;" {
+		t.Errorf("a paste with no match: %+v, text %q", a.jump, c.ed.Lines())
 	}
 }
 
@@ -456,5 +460,29 @@ func TestJumpNoCapitalLabelAfterMatch(t *testing.T) {
 	labels, _ := matchLabels(a)
 	if len(labels) < 47 || slices.Contains(labels, "x") || slices.Contains(labels, "X") || !slices.ContainsFunc(labels, func(l string) bool { return l != strings.ToLower(l) }) {
 		t.Errorf("%d labels: %v", len(labels), labels)
+	}
+}
+
+// A character that no text on the screen follows the pattern with ends the
+// jump at once, the cursor where it was and the character dropped, in a table,
+// a query and the tree alike; it does not stay in a screen all dim (F15.7).
+func TestJumpEndsWithNoMatch(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	loadOrders(t, a, 3)
+	c := queryOf(a.win().Root.B.Pane)
+	a.focusPane(a.win().Root.B.Pane.ID)
+	c.ed.Load("select 1;")
+	cur := c.ed.Cursor()
+	feed(t, a, "sselect")
+	if a.jump == nil || len(a.jump.matches) != 1 {
+		t.Fatalf("jump %+v", a.jump)
+	}
+	feed(t, a, "#")
+	if a.jump != nil || a.mode() != keymap.Normal || a.context().Overlay != "" || c.ed.Cursor() != cur {
+		t.Errorf("after a character no text follows with: jump %+v, mode %v, overlay %q", a.jump, a.mode(), a.context().Overlay)
+	}
+	feed(t, a, "s#") // the first character already
+	if a.jump != nil {
+		t.Errorf("a first character with no match: %+v", a.jump)
 	}
 }
