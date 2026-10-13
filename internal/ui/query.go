@@ -71,6 +71,28 @@ const (
 // gutter is ▶, the line numbers at 3 columns at least, a blank.
 func (c Query) gutter() int { return 1 + max(3, len(strconv.Itoa(len(c.Lines)))) + 1 }
 
+// Width is the columns the text takes whole, the gutter in: the longest line
+// as drawn, a tab to its tabstop (F15.5).
+func (c Query) Width() int {
+	w := 0
+	for _, l := range c.Lines {
+		if !strings.Contains(l, "\t") {
+			w = max(w, Width(l))
+			continue
+		}
+		v := 0
+		for i := 0; i < len(l); {
+			gr, gw := ansi.FirstGraphemeCluster(l[i:], ansi.GraphemeWidth)
+			if gw = max(gw, 1); l[i] == '\t' {
+				gw = c.TabWidth - v%c.TabWidth
+			}
+			v, i = v+gw, i+len(gr)
+		}
+		w = max(w, v)
+	}
+	return c.gutter() + w
+}
+
 // TextArea is where the text goes in r: right of the gutter.
 func (c Query) TextArea(r uv.Rectangle) uv.Rectangle {
 	g := min(c.gutter(), r.Dx())

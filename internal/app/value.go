@@ -90,9 +90,10 @@ func (a *App) valueActive() bool { return a.value != nil && a.confirm == nil }
 func (v *valueEditor) text() string { return strings.Join(v.ed.Lines(), "\n") }
 
 // valueBox is where the editor is: left at the cursor's cell and from the row
-// under it down to the foot of the pane, half the pane wide (40 at least, the
-// pane at most); over the cell, its bottom border on the row above it, when
-// the rows below are fewer than 8 and fewer than those above (F12.8).
+// under it down to the foot of the pane, as wide as its longest line (half the
+// pane, 40 at least, and the pane at most); over the cell, its bottom border on
+// the row above it, when the rows below are fewer than 8 and fewer than those
+// above (F12.8, F15.5).
 func (a *App) valueBox() uv.Rectangle {
 	p := a.focused()
 	pane := bodyRect(a.layout()[p.ID])
@@ -103,8 +104,10 @@ func (a *App) valueBox() uv.Rectangle {
 			cell = r
 		}
 	}
-	w := min(max(pane.Dx()/2, 40), pane.Dx())
-	x := min(cell.Min.X, pane.Max.X-w) // the cell is in the pane, which w does not outgrow
+	ed := a.value.ed
+	half := min(max(pane.Dx()/2, 40), pane.Dx())
+	w := min(max(half, ui.Query{Lines: ed.Lines(), TabWidth: ed.TabWidth}.Width()+4), pane.Dx()) // the border and a column each side
+	x := min(cell.Min.X, pane.Max.X-w)                                                           // the cell is in the pane, which w does not outgrow
 	below, above := pane.Max.Y-cell.Max.Y, cell.Min.Y-pane.Min.Y
 	if below < valueMinRows && above > below {
 		return uv.Rect(x, pane.Min.Y, w, above)

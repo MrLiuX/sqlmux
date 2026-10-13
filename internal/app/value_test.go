@@ -536,10 +536,14 @@ func TestValueBoxPlacement(t *testing.T) {
 			if pane.Dx() < 40 {
 				narrow++
 			}
+			feed(t, a, "e")
+			if a.value == nil {
+				t.Fatalf("%v: e does not open the editor", size)
+			}
 			if box := a.valueBox(); box != want {
 				t.Fatalf("%v: below %d, above %d: box %v, want %v (cell %v, pane %v)", size, below, above, box, want, cell, pane)
 			}
-			feed(t, a, "j")
+			feed(t, a, "<Esc>j")
 		}
 	}
 	if flipped == 0 || exactly8 == 0 || short == 0 || narrow == 0 {
@@ -561,6 +565,47 @@ func TestValueBoxPlacement(t *testing.T) {
 	if box := a.valueBox(); box.Max.X > pane.Max.X || box.Min.X > cell.Min.X {
 		t.Errorf("the last column: box %v, cell %v, pane %v", box, cell, pane)
 	}
+}
+
+// The box is as wide as the longest line of the text, a tab at its tabstop, the
+// border and the gutter in: half the pane for a short text (40 at least), more
+// for a long line, the pane at most; it stays at the cell's left and moves left
+// when it would go over the pane's right edge (F15.5).
+func TestValueBoxWidth(t *testing.T) {
+	a, _ := valueTab(t)
+	pane := bodyRect(a.layout()[a.focused().ID])
+	half := pane.Dx() / 2
+	ed := a.value.ed
+	gutter := 5 // ▶, three digits at least, a blank
+	for _, c := range []struct {
+		name, text string
+		want       int
+	}{
+		{"short", "{}", half},
+		{"just under the half", strings.Repeat("x", half-gutter-4), half},
+		{"a long line", "{\n" + strings.Repeat("y", 70) + "\n}", 70 + gutter + 4},
+		{"a tab is its tabstop", "\t" + strings.Repeat("z", 60), ed.TabWidth + 60 + gutter + 4},
+		{"wide characters are two cells", strings.Repeat("宽", 40), 80 + gutter + 4},
+		{"longer than the pane", strings.Repeat("w", 400), pane.Dx()},
+	} {
+		ed.Load(c.text)
+		if box := a.valueBox(); box.Dx() != c.want {
+			t.Errorf("%s: %d wide, want %d (pane %d)", c.name, box.Dx(), c.want, pane.Dx())
+		}
+	}
+	ed.Load(strings.Repeat("v", half-gutter-4+3)) // wider than the half by a little: the cell's left stays
+	cell := func() uv.Rectangle { _, g, area, _ := a.gridOf(a.focused()); return g.CellRect(area) }()
+	if box := a.valueBox(); box.Min.X != cell.Min.X || box.Dx() != half+3 {
+		t.Errorf("left at the cell: box %v, cell %v", box, cell)
+	}
+	feed(t, a, "<Esc>$e")
+	a.value.ed.Load(strings.Repeat("v", 90))
+	if box := a.valueBox(); box.Max.X != pane.Max.X || box.Dx() != 90+gutter+4 {
+		t.Errorf("the last column: box %v, pane %v", box, pane)
+	}
+	b, _ := valueTab(t) // a long JSON line shows whole
+	b.value.ed.Load("{\n  \"url\": \"https://example.com/a/long/path/that/goes/on/and/on?with=query&until=past_the_half\",\n  \"n\": 1\n}")
+	golden.RequireEqual(t, b.render().String())
 }
 
 // The keys under the text are the keymap's, the last ones given up whole when
