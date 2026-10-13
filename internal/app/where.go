@@ -472,15 +472,17 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 	}
 	// setColumns are the columns of the tables an UPDATE names before its SET at
 	// the cursor's depth, a MySQL join's both, each table's in turn
-	setColumns := func() (out []candidate) {
+	// known is whether the catalog has one of them: its columns may still be
+	// on their way
+	setColumns := func() (out []candidate, known bool) {
 		named := map[tableID]bool{}
 		for _, r := range c.Updated {
 			if t, ok := table(r.Schema, r.Name); ok && r.Depth == c.Depth && !named[idOf(t)] {
-				named[idOf(t)] = true
+				named[idOf(t)], known = true, true
 				out = append(out, columns(t)...)
 			}
 		}
-		return out
+		return out, known
 	}
 	var groups [][]candidate
 	resolved := false
@@ -553,9 +555,11 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 			groups = [][]candidate{{{label: label, insert: insert, note: i18n.T("全部 %d 列", len(names)), stops: []int{len(insert) - 1}}}}
 		}
 	default:
-		if cols := setColumns(); c.InSet && cols != nil { // an UPDATE's SET: the columns of its tables, no other (F15.11)
-			groups, resolved = [][]candidate{cols}, true
-			break
+		if c.InSet { // an UPDATE's SET: the columns of its tables, no other, none while they are asked for (F15.11)
+			if cols, known := setColumns(); known {
+				groups, resolved = [][]candidate{cols}, true
+				break
+			}
 		}
 		var near, far []candidate
 		named := map[tableID]bool{}

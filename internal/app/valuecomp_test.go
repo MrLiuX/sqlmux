@@ -184,6 +184,22 @@ func TestValueCompletionColumnsComeLate(t *testing.T) {
 	}
 }
 
+// An UPDATE's SET whose table's columns are not in the cache has no list, not
+// the tables and keywords a word is anywhere, until they are in (F15.11).
+func TestUpdateSetColumnsComeLate(t *testing.T) {
+	a, c := hinted(t, "")
+	table, cols, _ := ordersTable(0)
+	delete(a.sess.Conns[0].cols, idOf(table))
+	feed(t, a, "iupdate t_order set st")
+	if got := offered(c); got != "-" || !c.asked[idOf(table)] {
+		t.Fatalf("columns asked for: list %q, asked %v", got, c.asked)
+	}
+	a.Update(colsMsg{a.sess.Conns[0], table, cols, nil})
+	if got := offered(c); got != "status" {
+		t.Fatalf("columns in: %q", got)
+	}
+}
+
 // C-n with nothing typed lists the value's candidates and what a word is anywhere.
 func TestValueCompletionManual(t *testing.T) {
 	a, c := hinted(t, "")
