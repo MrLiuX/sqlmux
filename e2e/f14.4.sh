@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F14.4 结构修改的模板（PG）（specs/m14-sqlite/task.md F14.4；tech-design §7.8「右键菜单」）
 # 表节点的右键菜单和命令面板里有「加列… / 加索引… / 改名… / 删除列… / 删除索引…」：各开一条按引擎拼好的模板 SQL 到当前连接的新 query，占位符
-# <name> / <type> / <column> / <index> / <new_name> 是字面的，第一个 VISUAL 选中、按 c 直接替换；删除类直接写、不写成注释，执行走危险确认。
+# <name> / <type> / <column> / <index> / <new_name> 是字面的，第一个在 SELECT 模式下选中、打字直接替换（M15 F15.8，原来 VISUAL 选中、要按 c）；删除类直接写、不写成注释，执行走危险确认。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
 . "$(dirname "$0")/palette.sh"
@@ -25,19 +25,19 @@ rclick 6 "$(srow cust)"
 check "表 cust 右键：打开 / 在新 tab 打开 / 删除表… 之后是五个模板项" eval '[[ $(mitems) == "打开|在新 tab 打开|删除表…|加列…|加索引…|改名…|删除列…|删除索引…|" ]]' || mitems
 mclick "加列…"
 check "加列…：新 query 里是 alter table \"public\".\"cust\" add column <name> <type>;（schema 是库里的 public）" eval '[[ $(tmpl) == "alter table \"public\".\"cust\" add column <name> <type>;" ]]' || newest
-check "光标停在第一个占位符上并选中（VISUAL）" eval 'mode_is VISUAL'
-e2e_type c; e2e_type age; key Escape; sleep 1.5
-check "按 c 直接替换：<name> 换成 age，<type> 还在" eval '[[ $(newest | tr -d "\n") == "alter table \"public\".\"cust\" add column age <type>;" ]]' || newest
+check "光标停在第一个占位符上并选中（SELECT）" eval 'mode_is SELECT'
+e2e_type age; key Escape; sleep 1.5
+check "直接打字替换：<name> 换成 age，<type> 还在" eval '[[ $(newest | tr -d "\n") == "alter table \"public\".\"cust\" add column age <type>;" ]]' || newest
 
-# 其余四项：各一条模板，第一个占位符选中（VISUAL）
+# 其余四项：各一条模板，第一个占位符选中（SELECT）
 for row in '加索引…|create index <name> on "public"."cust" (<column>);' '改名…|alter table "public"."cust" rename to <new_name>;' '删除列…|alter table "public"."cust" drop column <column>;' '删除索引…|drop index "public".<index>;'; do
   rclick 6 "$(srow cust)"; mclick "${row%%|*}"
-  check "${row%%|*}：$(echo "${row#*|}" | tr -d '"')" eval '[[ $(tmpl) == "${row#*|}" ]] && mode_is VISUAL' || newest
+  check "${row%%|*}：$(echo "${row#*|}" | tr -d '"')" eval '[[ $(tmpl) == "${row#*|}" ]] && mode_is SELECT' || newest
   key Escape; key Escape; sleep 0.3
 done
 # 删除类直接写、不写成注释；占位符换成真名之后执行走危险确认，取消什么都不动、确认才删
 rclick 6 "$(srow cust)"; mclick "删除索引…"; sleep 1.5
-e2e_type c; e2e_type ix_nm; key Escape; sleep 0.5
+e2e_type ix_nm; key Escape; sleep 0.5
 key Enter; sleep 1
 check "删除索引模板换上 ix_nm 后 ↵ 执行：弹危险确认（「这次执行有 1 条危险语句」，列出 drop index），索引还在" eval 'e2e_plain | grep -qF "drop index \"public\".ix_nm" && e2e_plain | grep -qE "危险语句" && [[ $(psql_n "select count(*) from pg_indexes where indexname = '"'"'ix_nm'"'"'") == 1 ]]'
 key Escape; sleep 0.5
@@ -54,7 +54,7 @@ check "视图的改名模板：alter view \"public\".\"v_cust\" rename to <new_n
 # 命令面板：当前表 tab 上有这五项，同一条模板
 key Escape; key Escape; open_table cust; wait_for 8 settled
 pal ">加索引"; sleep 0.4; key Enter
-check "命令面板「加索引…」：对当前表 cust 开模板，光标所在的列（id）直接写进去：create index <name> on \"public\".\"cust\" (\"id\");" eval '[[ $(tmpl) == "create index <name> on \"public\".\"cust\" (\"id\");" && $(bar) == *VISUAL* ]]' || newest
+check "命令面板「加索引…」：对当前表 cust 开模板，光标所在的列（id）直接写进去：create index <name> on \"public\".\"cust\" (\"id\");" eval '[[ $(tmpl) == "create index <name> on \"public\".\"cust\" (\"id\");" && $(bar) == *SELECT* ]]' || newest
 key Escape; key Escape; open_table cust; wait_for 8 settled; key l
 pal ">删除列"; sleep 0.4; key Enter
 check "光标在 nm 列上再从面板「删除列…」：alter table \"public\".\"cust\" drop column \"nm\";（列名直接写进模板，没有占位符）" eval '[[ $(tmpl) == "alter table \"public\".\"cust\" drop column \"nm\";" ]]' || newest
