@@ -325,7 +325,7 @@ func mainRun(r *run, texts []string, maxRows int, manual, resets bool) runDone {
 	s, l := r.conn, r.lang
 	m := runDone{r: r}
 	run := s.Main.Run
-	if !s.sql() && !slices.ContainsFunc(texts, l.Writes) { // a command the server lists as read-only has no side effect to repeat: a lost connection is dialed again and it runs again (SQL cannot tell, §8.4)
+	if !slices.ContainsFunc(texts, func(text string) bool { return !l.Reruns(text) }) { // every one is known to have no effect to repeat: a lost connection is dialed again and the request runs again, sent or not (§8.7)
 		run = s.Main.RunSafe
 	}
 	m.err = run(context.Background(), func(ctx context.Context, c db.Conn) error {

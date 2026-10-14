@@ -79,33 +79,48 @@ func someCommands() redis.Commands {
 	cs := redis.Commands{}
 	for name, cmd := range map[string]redis.Command{
 		"get": {Flags: []string{"readonly"}}, "set": {Flags: []string{"write"}}, "flushall": {Flags: []string{"write"}, Categories: []string{"@dangerous"}},
+		// as redis 8.2 flags them: none writes, none is readonly
+		"publish": {Flags: []string{"pubsub", "loading", "stale", "fast"}}, "exec": {Flags: []string{"noscript", "loading", "stale", "skip_slowlog"}}, "ping": {Flags: []string{"fast"}},
 	} {
 		cs[name] = cmd
 	}
 	return cs
 }
 
-// A command the server lists as read-only goes again on the connection dialed anew
-// when the request that found it lost had sent it: it has no side effect to repeat.
-// A write does not, and its toast says to run it (F8.19, F16.4).
+// A line goes again on the connection dialed anew, when the request that found it
+// lost had sent it, only if every command of it carries the server's readonly flag:
+// PUBLISH has no write flag and would be sent twice, EXEC would be run in a new
+// connection with no MULTI, and a command the server did not list is not known. What
+// does not go again keeps its error and a toast that says to run it (F8.19, §8.7).
 func TestRedisConsoleAfterLostConnection(t *testing.T) {
 	evs := heard(t)
-	run := func(text string, failed map[string]error) (*App, *execDB) {
-		d := &execDB{fail: failed}
-		a, _ := redisConsole(t, d, someCommands(), text)
-		d2 := &execDB{res: map[string]db.Result{"GET k": {Cols: []db.Col{{Name: "value"}}, Rows: [][]db.Val{{{S: "v"}}}}}}
+	for _, c := range []struct {
+		text  string
+		again bool
+	}{
+		{"GET k", true},
+		{"PUBLISH ch m", false},
+		{"EXEC", false},
+		{"PING", false},
+		{"SET k 1", false},
+		{"NOSUCH k", false},
+		{"GET k\nPUBLISH ch m", false},
+		{"GET k\nGET k", true},
+	} {
+		last := c.text[strings.LastIndex(c.text, "\n")+1:] // the line that finds the connection gone
+		d := &execDB{fail: map[string]error{last: errLost}}
+		a, _ := redisConsole(t, d, someCommands(), c.text)
+		d2 := &execDB{res: map[string]db.Result{last: {Cols: []db.Col{{Name: "value"}}, Rows: [][]db.Val{{{S: "v"}}}}}}
 		redialed(a, d2)
 		*evs = nil
+		feed(t, a, "gg")
+		if strings.Contains(c.text, "\n") {
+			feed(t, a, "VG")
+		}
 		press(t, a, "<CR>")
-		return a, d2
-	}
-	a, d2 := run("GET k", map[string]error{"GET k": errLost})
-	if !slices.Equal(d2.ran, []string{"GET k"}) || strings.Contains(logText(a), "broken pipe") || len(*evs) != 1 || !(*evs)[0].Rerun {
-		t.Errorf("a read: %q, log %q, events %+v", d2.ran, logText(a), *evs)
-	}
-	a, d2 = run("SET k 1", map[string]error{"SET k 1": errLost})
-	if len(d2.ran) != 0 || !strings.Contains(logText(a), "broken pipe") || len(*evs) != 1 || (*evs)[0].Rerun {
-		t.Errorf("a write: %q, log %q, events %+v", d2.ran, logText(a), *evs)
+		if again := len(d2.ran) > 0; again != c.again || len(*evs) != 1 || (*evs)[0].Rerun != c.again || strings.Contains(logText(a), "broken pipe") == c.again {
+			t.Errorf("%q: ran again %q, events %+v, log %q, want again %v", c.text, d2.ran, *evs, logText(a), c.again)
+		}
 	}
 }
 
@@ -475,7 +490,7 @@ func TestRedisCompletionWithoutDocs(t *testing.T) {
 			t.Errorf("%q: %q, want %q", typed, got, want)
 		}
 	}
-	if got := strings.Join(typedAt(t, a, c, "", true), " "); got != "CONFIG FLUSHALL GET SET" {
+	if got := strings.Join(typedAt(t, a, c, "", true), " "); got != "CONFIG EXEC FLUSHALL GET PING PUBLISH SET" {
 		t.Errorf("all: %q", got)
 	}
 }

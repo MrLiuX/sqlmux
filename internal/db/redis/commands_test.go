@@ -55,6 +55,29 @@ func TestCommandsJudge(t *testing.T) {
 	if !none.Writes("get k") || none.Dangerous("flushall") {
 		t.Error("a server that did not say: everything writes, nothing is dangerous")
 	}
+	// the readonly flag, and nothing else, is what a line is repeated on (§8.7)
+	for _, c := range []struct {
+		line string
+		want bool
+	}{
+		{"GET k", true},
+		{"  get   k  ", true},
+		{"EVAL_RO 'return 1' 0", true},
+		{"EVAL 'return 1' 0", false},
+		{"set k 1", false},
+		{"nosuch k", false},
+		{"config help", false}, // not a write, and not flagged readonly either
+		{`get "unclosed`, false},
+		{"# GET k", false},
+		{"", false},
+	} {
+		if got := cs.ReadOnly(c.line); got != c.want {
+			t.Errorf("ReadOnly(%q) = %v", c.line, got)
+		}
+	}
+	if none.ReadOnly("get k") {
+		t.Error("a server that did not say: nothing is known to be readonly")
+	}
 }
 
 // The history keeps no line that has a password in it.
