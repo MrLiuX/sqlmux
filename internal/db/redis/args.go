@@ -116,3 +116,38 @@ func escapes(c byte) byte {
 	}
 	return c
 }
+
+// Typed reads a line up to the cursor for what completing it needs: the words that
+// are finished, and the one being typed, as the line has it (a quote and all), with
+// whether it is in a quote still open. A comment is none (§9.8).
+func Typed(before string) (words []string, partial string, open bool) {
+	if strings.HasPrefix(strings.TrimLeft(before, " \t\r"), "#") {
+		return nil, "", false
+	}
+	start, quote := -1, byte(0) // where the word being read began, and its open quote
+	for i := 0; i < len(before); i++ {
+		c := before[i]
+		switch {
+		case quote != 0:
+			if c == '\\' && i+1 < len(before) {
+				i++
+			} else if c == quote {
+				quote = 0
+			}
+		case isBlank(c):
+			start = -1
+		default:
+			if start < 0 {
+				start = i
+			}
+			if c == '"' || c == '\'' {
+				quote = c
+			}
+		}
+	}
+	if start < 0 {
+		start = len(before)
+	}
+	words, _ = SplitLine(before[:start])
+	return words, before[start:], quote != 0
+}

@@ -43,11 +43,21 @@ type Query struct {
 	Pane            int
 	Names           SQLNames       // the tables and columns among the text's names, for their colors; nil for none
 	Dialect         sqlkit.Dialect // its connection's SQL
-	Yank            Sel            // what a yank took, flashing (F3.32)
+	// Lang is what the text is made of when it is not SQL read as Dialect: its
+	// statements, which one the cursor is in, the colors (§5「语言缝」).
+	Lang Lang
+	Yank Sel // what a yank took, flashing (F3.32)
 	// Colors are the text's own colors by byte, a value editor's (F12.2):
 	// with them there are no statements and no ▶; Pane is ValuePane, so a click
 	// on the text is the box's, not that of a query under it.
 	Colors []color.Color
+}
+
+// Lang is a language of the text of a query, where SQL's is not the one (§5).
+type Lang interface {
+	Stmts(text string) []sqlkit.Stmt
+	At(text string, stmts []sqlkit.Stmt, pos int) int
+	Colors(th *Theme, text string, names SQLNames) []color.Color
 }
 
 // Span is a match to light: bytes [From, To) of line Line, Current for the one
@@ -135,14 +145,21 @@ func (c Query) Draw(f *Frame, r uv.Rectangle) uv.Position {
 	from, to := -1, -1 // the statement under the cursor, by lines
 	colors := c.Colors
 	if !value {
-		stmts := sqlkit.Statements(text, c.Dialect)
+		stmts, at := sqlkit.Statements(text, c.Dialect), func(s []sqlkit.Stmt, pos int) int { return sqlkit.StmtAt(text, s, pos) }
+		colors = nil
+		if c.Lang != nil {
+			stmts, at = c.Lang.Stmts(text), func(s []sqlkit.Stmt, pos int) int { return c.Lang.At(text, s, pos) }
+			colors = c.Lang.Colors(th, text, c.Names)
+		}
 		for _, s := range stmts {
 			first[lineOf(s.Start)] = true
 		}
-		if i := sqlkit.StmtAt(text, stmts, starts[cur.Line]+cur.Col); i >= 0 && c.Normal {
+		if i := at(stmts, starts[cur.Line]+cur.Col); i >= 0 && c.Normal {
 			from, to = lineOf(stmts[i].Lead), lineOf(stmts[i].End) // with the comment lines above it (§9.2)
 		}
-		colors = SQLColors(th, text, c.Dialect, c.Names)
+		if colors == nil {
+			colors = SQLColors(th, text, c.Dialect, c.Names)
+		}
 	}
 	ta, width := c.TextArea(r), c.Gutter()-2
 	for y := range r.Dy() {

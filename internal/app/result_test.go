@@ -29,6 +29,7 @@ type execDB struct {
 	res  map[string]db.Result
 	fail map[string]error
 	ran  []string
+	rows []int // the maxRows each Exec was given
 	tx   byte
 }
 
@@ -43,8 +44,8 @@ func (d *execDB) Query(_ context.Context, sql string, args ...db.Val) (db.Result
 
 func (d *execDB) TxStatus() byte { return cmp.Or(d.tx, 'I') }
 
-func (d *execDB) Exec(_ context.Context, sql string, _ int) ([]db.Result, error) {
-	d.ran = append(d.ran, sql)
+func (d *execDB) Exec(_ context.Context, sql string, maxRows int) ([]db.Result, error) {
+	d.ran, d.rows = append(d.ran, sql), append(d.rows, maxRows)
 	if sql == "rollback" {
 		d.tx = 'I'
 	}

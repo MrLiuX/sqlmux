@@ -138,6 +138,19 @@ func (a *App) exportSource(d *dropdown) exportSrc {
 	for _, c := range rt.page.Cols {
 		src.cols = append(src.cols, exportCol{c.Name, c.Type})
 	}
+	if rt.mem != nil { // the whole reply is here, nothing to run again
+		src.all = &exportAll{base: name, each: func(_ context.Context, head func([]db.Col) error, row func([]db.Val) error) error {
+			if err := head(rt.mem.Cols); err != nil {
+				return err
+			}
+			for _, v := range rt.mem.Rows {
+				if err := row(v); err != nil {
+					return err
+				}
+			}
+			return nil
+		}}
+	}
 	if rt.pageable && r.from != nil {
 		s := r.stmts[rt.stmt]
 		schema := r.schema

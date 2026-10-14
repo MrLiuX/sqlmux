@@ -192,7 +192,7 @@ func (a *App) paletteItems() []paletteItem {
 	}
 	var ids []string
 	for id, act := range actions {
-		if act.Title != "" && !act.Local {
+		if act.Title != "" && !act.Local && !(act.SQL && cur != nil && !cur.sql()) {
 			ids = append(ids, id)
 		}
 	}

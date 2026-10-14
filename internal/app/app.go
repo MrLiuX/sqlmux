@@ -284,6 +284,10 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.gotKeyDone(msg)
 	case keyExists:
 		a.gotKeyExists(msg)
+	case hintDue:
+		return a, a.gotHintDue(msg)
+	case hintMsg:
+		return a, a.gotHints(msg)
 	case namespaceFound:
 		return a, a.gotNamespaceFound(msg)
 	case pageMsg:

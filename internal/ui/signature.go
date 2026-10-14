@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"strings"
 
 	uv "github.com/charmbracelet/ultraviolet"
@@ -13,7 +14,10 @@ import (
 type Signature struct {
 	Fields []string
 	Cur    int
+	Sep    string // between fields, ", " when empty: a Redis command's are parted by a blank (§9.8)
 }
+
+func (s Signature) sep() string { return cmp.Or(s.Sep, sigSep) }
 
 const (
 	sigSep = ", "
@@ -25,15 +29,15 @@ const (
 // of those left out.
 func (s Signature) fit(room int) (from, to int) {
 	width := func(from, to int) int {
-		w := len(sigSep) * (to - from - 1)
+		w := len(s.sep()) * (to - from - 1)
 		for _, f := range s.Fields[from:to] {
 			w += Width(f)
 		}
 		if from > 0 {
-			w += Width(sigDot + sigSep)
+			w += Width(sigDot + s.sep())
 		}
 		if to < len(s.Fields) {
-			w += Width(sigSep + sigDot)
+			w += Width(s.sep() + sigDot)
 		}
 		return w
 	}
@@ -59,21 +63,21 @@ func (s Signature) draw(f *Frame, ta uv.Rectangle, row int) {
 	}
 	from, to := s.fit(ta.Dx() - 2)
 	dim, cur := uv.Style{Fg: th.Dim, Bg: th.Bar}, uv.Style{Fg: th.Focus, Bg: th.Bar, Attrs: uv.AttrBold}
-	text := strings.Join(s.Fields[from:to], sigSep)
+	text := strings.Join(s.Fields[from:to], s.sep())
 	if from > 0 {
-		text = sigDot + sigSep + text
+		text = sigDot + s.sep() + text
 	}
 	if to < len(s.Fields) {
-		text += sigSep + sigDot
+		text += s.sep() + sigDot
 	}
 	f.Fill(uv.Rect(ta.Min.X, row, min(Width(text)+2, ta.Dx()), 1), dim)
 	x := ta.Min.X + 1
 	if from > 0 {
-		x = f.Text(x, row, ta.Max.X, sigDot+sigSep, dim)
+		x = f.Text(x, row, ta.Max.X, sigDot+s.sep(), dim)
 	}
 	for i := from; i < to; i++ {
 		if i > from {
-			x = f.Text(x, row, ta.Max.X, sigSep, dim)
+			x = f.Text(x, row, ta.Max.X, s.sep(), dim)
 		}
 		st := dim
 		if i == s.Cur {
@@ -82,6 +86,6 @@ func (s Signature) draw(f *Frame, ta uv.Rectangle, row int) {
 		x = f.Text(x, row, ta.Max.X, s.Fields[i], st)
 	}
 	if to < len(s.Fields) {
-		f.Text(x, row, ta.Max.X, sigSep+sigDot, dim)
+		f.Text(x, row, ta.Max.X, s.sep()+sigDot, dim)
 	}
 }

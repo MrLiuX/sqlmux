@@ -28,6 +28,7 @@ type Action struct {
 	Run   func(*App, Args) tea.Cmd
 	On    func(*App) bool // a toggle's state: the palette shows ON / OFF and stays open (§12)
 	Local bool            // an overlay's or an input's own key, which the palette leaves out (§12)
+	SQL   bool            // for a SQL connection: the palette leaves it out for another (§5)
 }
 
 // quitWindow is how long the "press C-c again" toast stays; a second press
@@ -319,7 +320,7 @@ func init() {
 		"where.run":   {Title: i18n.N("执行"), Local: true, Run: when(inWhere, func(a *App) tea.Cmd { return a.runWhere(a.typingTab()) })},
 		"where.leave": {Title: i18n.N("回到表格"), Local: true, Run: when(inWhere, func(a *App) tea.Cmd { a.typingTab().stopTyping(); return nil })},
 		"session.new": {Title: i18n.N("新建 session"), Run: func(a *App, _ Args) tea.Cmd { return a.askNewSession() }},
-		"query.format": {Title: i18n.N("格式化整个 query"), Run: func(a *App, _ Args) tea.Cmd {
+		"query.format": {Title: i18n.N("格式化整个 query"), SQL: true, Run: func(a *App, _ Args) tea.Cmd {
 			if t := a.focusedQuery(); t != nil {
 				return a.formatAll(t)
 			}

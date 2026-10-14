@@ -4,8 +4,12 @@ package app
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
@@ -84,4 +88,106 @@ func TestRedisConnection(t *testing.T) {
 	if e := c.drv.ErrorOf(err); e.Code != "WRONGTYPE" {
 		t.Errorf("an error: %v %+v", err, e)
 	}
+}
+
+// The console runs a command on the server and lays its reply out; one that blocks
+// (BLPOP with no timeout) is cancelled by C-c, which closes the connection, and the
+// next command goes on a connection dialed again (F16.4).
+func TestRedisConsoleRunsAndCancels(t *testing.T) {
+	a, c := redisApp(t, redis.OwnDB(t), 1000)
+	a.run("query.new", 0)
+	q := a.sess.queries()[0]
+	q.conn = c
+	runText := func(text string) tea.Cmd { return a.runSQL(q, c, "", q.name, text, 0, q.ver) }
+	command(t, c, "RPUSH", "l", "a", "b", "c")
+	settle(a, runText("LRANGE l 0 -1"))
+	rt := resultOf(a.win().Result)
+	if rt == nil || len(rt.page.Rows) != 3 || rt.page.Rows[0][0].S != "a" {
+		t.Fatalf("LRANGE: %+v", rt)
+	}
+	blocked := runText("BLPOP nolist 0")
+	done := make(chan tea.Msg, 1)
+	go func() { done <- blocked().(tea.BatchMsg)[0]() }()
+	time.Sleep(300 * time.Millisecond)
+	start := time.Now()
+	c.cancel()
+	select {
+	case m := <-done:
+		a.Update(m)
+	case <-time.After(5 * time.Second):
+		t.Fatal("C-c did not end the command")
+	}
+	if time.Since(start) > 3*time.Second || a.toast != i18n.T("查询已取消") {
+		t.Errorf("cancel took %v, toast %q", time.Since(start), a.toast)
+	}
+	settle(a, runText("PING"))
+	if rt := resultOf(a.win().Result); rt == nil || rt.page.Rows[0][0].S != "PONG" {
+		t.Errorf("after the cancel: %+v", rt)
+	}
+}
+
+// A console on a real server completes what COMMAND DOCS lists and what the db has:
+// the names of commands, a key after GET, a field after HGET and the key, the list
+// made again when the names come from the server (F16.5).
+func TestRedisConsoleCompletes(t *testing.T) {
+	a, c := redisApp(t, redis.IntegrationDSN(t), 1000)
+	if c.docs == nil || c.cmds == nil {
+		t.Fatalf("docs %d, commands %d", len(c.docs), len(c.cmds))
+	}
+	a.run("query.new", 0)
+	q := a.sess.queries()[0]
+	q.conn = c
+	labels := func() (out []string) {
+		if q.comp != nil {
+			for _, it := range q.comp.items {
+				out = append(out, it.label)
+			}
+		}
+		return out
+	}
+	typed := func(text string) {
+		t.Helper()
+		q.ed.Load(text)
+		feed(t, a, "A")
+		cmd := a.queryComplete(q, false)
+		for _, m := range collect(cmd) { // the ticks and the asks, as the program would deliver them
+			_, next := a.Update(m)
+			for _, m2 := range collect(next) {
+				_, last := a.Update(m2)
+				settle(a, last)
+			}
+		}
+	}
+	typed("hse")
+	if got := labels(); len(got) == 0 || got[0] != "HSET" {
+		t.Errorf("hse: %v", got)
+	}
+	feed(t, a, "<Esc>")
+	typed("GET app:users:")
+	if got := labels(); !slices.Equal(got, []string{"app:users:1", "app:users:2", "app:users:3"}) {
+		t.Errorf("a key: %v", got)
+	}
+	feed(t, a, "<Esc>")
+	typed("HGET hash:user na")
+	if got := labels(); len(got) == 0 || got[0] != "name" {
+		t.Errorf("a field: %v", got)
+	}
+	feed(t, a, "<Esc>")
+}
+
+// collect is the messages of cmd, a batch's each.
+func collect(cmd tea.Cmd) (out []tea.Msg) {
+	if cmd == nil {
+		return nil
+	}
+	switch m := cmd().(type) {
+	case tea.BatchMsg:
+		for _, c := range m {
+			out = append(out, collect(c)...)
+		}
+	case nil:
+	default:
+		out = append(out, m)
+	}
+	return out
 }

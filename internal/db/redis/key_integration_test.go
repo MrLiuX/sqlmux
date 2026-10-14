@@ -4,8 +4,11 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -264,5 +267,205 @@ func TestKeyRebuild(t *testing.T) {
 	long, err := keyOf(t, seed, "hash:big", 5, 100).Rebuild(ctx)
 	if err != nil || !strings.HasPrefix(long, "# ") || strings.Count(long, "field") > 12 {
 		t.Errorf("a long hash is cut and says so: %q %v", long[:min(len(long), 120)], err)
+	}
+}
+
+// A hash as long as load_all is read whole (sorted by name, filtered locally, its
+// count the filter's), one a field longer is not (no sorting, the count of a filter
+// is -1); a string counts one, whatever its length; a key with a time to live is
+// rebuilt with it (F16.3).
+func TestKeyEdges(t *testing.T) {
+	ctx := context.Background()
+	own := OwnDB(t)
+	c := connectTo(t, own)
+	run := func(args ...string) {
+		t.Helper()
+		var vals []db.Val
+		for _, a := range args[1:] {
+			vals = append(vals, db.Val{S: a})
+		}
+		if _, err := c.Query(ctx, args[0], vals...); err != nil {
+			t.Fatal(args, err)
+		}
+	}
+	run("HSET", "h", "f5", "5", "f3", "3", "f1", "1", "f4", "4", "f2", "2")
+	whole := keyOf(t, own, "h", 5, 100)
+	cols, err := whole.Columns(ctx)
+	if err != nil || cols.Sortable != nil {
+		t.Fatalf("whole: sortable %v %v", cols.Sortable, err)
+	}
+	p, err := whole.Page(ctx, db.PageQuery{Cols: cols, Limit: 100})
+	if err != nil || !slices.Equal(rowsOf(p), []string{"f1=1", "f2=2", "f3=3", "f4=4", "f5=5"}) {
+		t.Errorf("whole page: %v %v", rowsOf(p), err)
+	}
+	if n, err := whole.Count(ctx, "f*"); err != nil || n != 5 {
+		t.Errorf("count of a filter, whole: %d %v", n, err)
+	}
+	part := keyOf(t, own, "h", 4, 100)
+	if cols, err := part.Columns(ctx); err != nil || cols.Sortable == nil || len(cols.Sortable) != 0 {
+		t.Errorf("a field longer: sortable %v %v", cols.Sortable, err)
+	}
+	if n, err := part.Count(ctx, "f*"); err != nil || n != -1 {
+		t.Errorf("count of a filter, scanned: %d %v", n, err)
+	}
+	run("SET", "s", "a string of some length")
+	if n, err := keyOf(t, own, "s", 5, 100).Count(ctx, ""); err != nil || n != 1 {
+		t.Errorf("a string counts %d %v", n, err)
+	}
+	run("SET", "t", "v")
+	run("EXPIRE", "t", "1000")
+	if text, err := keyOf(t, own, "t", 5, 100).Rebuild(ctx); err != nil || !strings.Contains(text, "\nPEXPIRE t ") {
+		t.Errorf("rebuilt with its ttl: %q %v", text, err)
+	}
+}
+
+// onlyWithJSON skips the test on a server without the RedisJSON module (redis-stack
+// has it, a plain redis-server does not); CI's does (F16.3).
+func onlyWithJSON(t *testing.T, c *Conn) {
+	t.Helper()
+	r, err := c.Query(context.Background(), "MODULE", db.Val{S: "LIST"})
+	if err != nil || !strings.Contains(strings.ToLower(joinCells(r)), "rejson") {
+		t.Skip("the server has no RedisJSON")
+	}
+}
+
+// joinCells is every cell of r, a space between.
+func joinCells(r db.Result) string {
+	var parts []string
+	for _, row := range r.Rows {
+		for _, v := range row {
+			parts = append(parts, v.S)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// A RedisJSON value is one row of the column value as JSON text: read (JSON.GET), its
+// column typed json with no row to add, counted as one with no length in the Info, written
+// back whole (JSON.SET) when the cell is as it was, deleted, and rebuilt with JSON.SET
+// (F16.3).
+func TestKeyJSON(t *testing.T) {
+	ctx := context.Background()
+	own := OwnDB(t)
+	c := connectTo(t, own)
+	onlyWithJSON(t, c)
+	doc := `{"a":1,"b":[1,2,{"c":null}],"s":"text"}`
+	if _, err := c.Query(ctx, "JSON.SET", db.Val{S: "j"}, db.Val{S: "$"}, db.Val{S: doc}); err != nil {
+		t.Fatal(err)
+	}
+	k := keyOf(t, own, "j", 50, 100)
+	cols, err := k.Columns(ctx)
+	if err != nil || len(cols.Cols) != 1 || cols.Cols[0].Type != "json" || cols.PK == nil || len(cols.PK) != 0 || cols.NoInsert == "" {
+		t.Fatalf("columns %+v %v", cols, err)
+	}
+	p, err := k.Page(ctx, db.PageQuery{Cols: cols, Limit: 100})
+	if err != nil || len(p.Rows) != 1 {
+		t.Fatalf("page %v %v", p.Rows, err)
+	}
+	sameJSON := func(got, want string) bool {
+		var a, b any
+		return json.Unmarshal([]byte(got), &a) == nil && json.Unmarshal([]byte(want), &b) == nil && reflect.DeepEqual(a, b)
+	}
+	if !sameJSON(p.Rows[0][0].S, doc) {
+		t.Errorf("value %q", p.Rows[0][0].S)
+	}
+	attrs := map[string]string{}
+	for _, a := range p.Info {
+		attrs[a.Name] = a.Value
+	}
+	if _, has := attrs["length"]; attrs["type"] != "json" || has {
+		t.Errorf("info %v", p.Info)
+	}
+	if n, err := k.Count(ctx, ""); err != nil || n != 1 {
+		t.Errorf("count %d %v", n, err)
+	}
+	if text, err := k.Rebuild(ctx); err != nil || !strings.HasPrefix(text, "JSON.SET j $ ") {
+		t.Errorf("rebuilt %q %v", text, err)
+	}
+	// written back whole when the cell is as it was; not when it is not
+	cur := p.Rows[0][0].S
+	if _, _, err := k.Save(ctx, db.Changes{Updates: []db.Row{{Key: []string{}, Cols: []db.Change{{Name: "value", Old: val(cur), Val: val(`{"a":2}`)}}}}}, false); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := k.Page(ctx, db.PageQuery{Cols: cols, Limit: 100}); !sameJSON(p.Rows[0][0].S, `{"a":2}`) {
+		t.Errorf("written: %q", p.Rows[0][0].S)
+	}
+	if _, _, err := k.Save(ctx, db.Changes{Updates: []db.Row{{Key: []string{}, Cols: []db.Change{{Name: "value", Old: val(cur), Val: val(`{"a":3}`)}}}}}, false); !errors.Is(err, db.ErrStale) {
+		t.Errorf("a cell that is not as it was: %v", err)
+	}
+	if _, _, err := k.Save(ctx, db.Changes{Deletes: [][]string{{}}}, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := k.Columns(ctx); !errors.Is(err, ErrNoKey) {
+		t.Errorf("deleted: %v", err)
+	}
+}
+
+// commandCalls is how many times the server has been asked for the command name.
+func commandCalls(t *testing.T, c *Conn, name string) int {
+	t.Helper()
+	r, err := c.Query(context.Background(), "INFO", db.Val{S: "commandstats"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range r.Rows {
+		for l := range strings.SplitSeq(row[0].S, "\n") {
+			if rest, ok := strings.CutPrefix(strings.TrimSpace(l), "cmdstat_"+name+":calls="); ok {
+				n, _, _ := strings.Cut(rest, ",")
+				v, _ := strconv.Atoi(n)
+				return v
+			}
+		}
+	}
+	return 0
+}
+
+// The commands that make a hash or a set again read about load_all of it, not all: a
+// key of millions is not pulled whole to Meta; and a read that fails is the error of
+// Rebuild, not a command with fewer entries (F16.3).
+func TestKeyRebuildReadsLoadAll(t *testing.T) {
+	ctx := context.Background()
+	own := OwnDB(t)
+	c := connectTo(t, own)
+	for _, key := range []string{"h", "s"} {
+		args := []db.Val{{S: key}}
+		for i := range 3000 {
+			if key == "h" {
+				args = append(args, db.Val{S: "f" + strconv.Itoa(i)})
+			}
+			args = append(args, db.Val{S: "v" + strconv.Itoa(i)})
+		}
+		cmd := map[string]string{"h": "HSET", "s": "SADD"}[key]
+		if _, err := c.Query(ctx, cmd, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for key, cmd := range map[string]string{"h": "hscan", "s": "sscan"} {
+		before := commandCalls(t, c, cmd)
+		text, err := keyOf(t, own, key, 3, 100).Rebuild(ctx)
+		// a read of all 3000 is some 300 calls of 10; the others' scans in the meantime are a few
+		if calls := commandCalls(t, c, cmd) - before; err != nil || calls > 50 || !strings.HasPrefix(text, "# ") {
+			t.Errorf("%s: %d calls of %s, %v", key, calls, cmd, err)
+		}
+		if n := strings.Count(text, "\n"); n != 1 {
+			t.Errorf("%s: %d lines %q", key, n, text[:min(len(text), 80)])
+		}
+	}
+	// a read the server refuses: the error, not the part that was read
+	for _, args := range [][]string{{"SETUSER", "sqlmux_noscan", "on", ">p", "~*", "+@all", "-@read", "+type", "+hlen", "+scard", "+pttl", "+object", "+memory"}} {
+		var vals []db.Val
+		for _, a := range args {
+			vals = append(vals, db.Val{S: a})
+		}
+		if _, err := c.Query(ctx, "ACL", vals...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { _, _ = c.Query(ctx, "ACL", db.Val{S: "DELUSER"}, db.Val{S: "sqlmux_noscan"}) })
+	dsn := strings.Replace(own, "redis://", "redis://sqlmux_noscan:p@", 1)
+	for _, key := range []string{"h", "s"} {
+		if _, err := keyOf(t, dsn, key, 3, 100).Rebuild(ctx); err == nil || !strings.Contains(err.Error(), "NOPERM") {
+			t.Errorf("%s: %v", key, err)
+		}
 	}
 }

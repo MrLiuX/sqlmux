@@ -49,6 +49,11 @@ func TestLayout(t *testing.T) {
 		{"a map by key", "hgetall", map[any]any{"b": "2", "a": "1"}, 0, "field,value", "a|1,b|2", "HGETALL · " + i18n.T("%d 个字段", 2)},
 		{"nested", "x", []any{[]any{"a", int64(1)}, map[any]any{"k": []any{"v"}}}, 0, "value", `["a",1],{"k":["v"]}`, "X · " + i18n.T("%d 项", 2)},
 		{"inf in a nested", "x", []any{[]any{inf()}}, 0, "value", `["+Inf"]`, "X · " + i18n.T("%d 项", 1)},
+		{"pairs of a sorted set", "ZRANGE", []any{[]any{"a", 1.5}, []any{"b", 2.0}}, 0, "member,score", "a|1.5,b|2", "ZRANGE · " + i18n.T("%d 项", 2)},
+		{"arrays of one length", "xrange", []any{[]any{"1-0", []any{"f", "v"}}, []any{"2-0", []any{"f", "w"}}}, 0, "1,2", `1-0|["f","v"],2-0|["f","w"]`, "XRANGE · " + i18n.T("%d 项", 2)},
+		{"three places", "x", []any{[]any{"a", "b", "c"}}, 0, "1,2,3", "a|b|c", "X · " + i18n.T("%d 项", 1)},
+		{"arrays of two lengths", "x", []any{[]any{"a", "b"}, []any{"c"}}, 0, "value", `["a","b"],["c"]`, "X · " + i18n.T("%d 项", 2)},
+		{"arrays of one", "x", []any{[]any{"a"}, []any{"b"}}, 0, "value", `["a"],["b"]`, "X · " + i18n.T("%d 项", 2)},
 		{"cut", "lrange", []any{"1", "2", "3", "4"}, 2, "value", "1,2", "LRANGE · " + i18n.T("%d 项", 4)},
 	} {
 		r := Layout(c.cmd, c.reply, c.maxRows)

@@ -98,8 +98,8 @@ func (a *App) setTheme(name string) tea.Cmd {
 // on the one it has.
 func (a *App) openQueryDrop(k dropKind) {
 	p := a.focused()
-	if c := queryOf(p); c != nil && (k != dropSchema || len(c.conn.Schemas) > 0) {
-		if k == dropSchema && len(c.conn.root().Databases) > 1 { // the server's databases first, then the one picked's schemas
+	if c := queryOf(p); c != nil && (k != dropSchema || len(c.conn.Schemas) > 0 || !c.conn.sql()) {
+		if k == dropSchema && (len(c.conn.root().Databases) > 1 || !c.conn.sql()) { // the server's databases first, then the one picked's schemas; a Redis db has none
 			k = dropDatabase
 		}
 		a.showDrop(k, c, p)
@@ -124,7 +124,13 @@ func (a *App) dropItems() (items []string, current int) {
 		return d.query.conn.Schemas, slices.Index(d.query.conn.Schemas, d.query.schema)
 	case dropDatabase:
 		names := d.query.conn.root().databaseNames()
-		return names, slices.Index(names, d.query.conn.DB)
+		current = slices.Index(names, d.query.conn.DB)
+		if !d.query.conn.sql() {
+			for i, n := range names {
+				names[i] = dbText(n)
+			}
+		}
+		return names, current
 	case dropTheme:
 		names := config.ThemeNames()
 		return names, slices.Index(names, a.themeName)
@@ -270,8 +276,13 @@ func (a *App) dropPick(i int) tea.Cmd {
 		d.query.schema = item
 		return a.keepQuery(d.query)
 	case dropDatabase: // the one it is in goes on to its schemas, another is where the query goes
+		if !d.query.conn.sql() { // a Redis db is its connection's: the dbs' own names are "db<n>"
+			item = strings.TrimPrefix(item, "db")
+		}
 		if item == d.query.conn.DB {
-			a.showDrop(dropSchema, d.query, d.pane)
+			if d.query.conn.sql() {
+				a.showDrop(dropSchema, d.query, d.pane)
+			}
 			return nil
 		}
 		return a.pickConn(d.query, d.query.conn.root().inDB(item))

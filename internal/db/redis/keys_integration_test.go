@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -133,5 +134,47 @@ func TestKeyOperations(t *testing.T) {
 	}
 	if n, err := Unlink(ctx, c, "free", "we*ird", "nosuch"); err != nil || n != 2 {
 		t.Errorf("unlink: %d %v", n, err)
+	}
+}
+
+// Completing key names reads a few rounds of SCAN, not the db; fields of a hash are
+// its HKEYS, unless it is longer than the limit or is no hash (F16.5).
+func TestKeyHints(t *testing.T) {
+	ctx := context.Background()
+	c := connectTo(t, IntegrationDSN(t)) // db0: 12000 bulk keys
+	start := time.Now()
+	got, err := KeyHints(ctx, c, "app:users:", 50)
+	if err != nil || !slices.Equal(got, []string{"app:users:1", "app:users:2", "app:users:3"}) {
+		t.Errorf("app:users: %v %v", got, err)
+	}
+	if got, err := KeyHints(ctx, c, "bulk:1", 20); err != nil || len(got) != 20 || !strings.HasPrefix(got[0], "bulk:1") {
+		t.Errorf("bulk:1: %d %v %v", len(got), got, err)
+	}
+	if got, err := KeyHints(ctx, c, "nothing:", 20); err != nil || len(got) != 0 {
+		t.Errorf("nothing: %v %v", got, err)
+	}
+	own := connectTo(t, OwnDB(t))
+	for _, k := range []string{"a*b1", "axb2"} {
+		if _, err := own.Query(ctx, "SET", db.Val{S: k}, db.Val{S: "1"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, err := KeyHints(ctx, own, "a*b", 20); err != nil || !slices.Equal(got, []string{"a*b1"}) {
+		t.Errorf("a glob character in the prefix is itself: %v %v", got, err)
+	}
+	if d := time.Since(start); d > 3*time.Second {
+		t.Errorf("took %v", d)
+	}
+	if f, err := HashFields(ctx, c, "hash:user", 100); err != nil || !slices.Equal(f, []string{"age", "email", "meta", "name"}) {
+		t.Errorf("fields %v %v", f, err)
+	}
+	if f, err := HashFields(ctx, c, "hash:big", 100); err != nil || len(f) != 0 {
+		t.Errorf("a long hash: %d %v", len(f), err)
+	}
+	if f, err := HashFields(ctx, c, "str:plain", 100); err != nil || len(f) != 0 {
+		t.Errorf("a string: %v %v", f, err)
+	}
+	if f, err := HashFields(ctx, c, "no:such", 100); err != nil || len(f) != 0 {
+		t.Errorf("no key: %v %v", f, err)
 	}
 }

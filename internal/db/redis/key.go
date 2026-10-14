@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -278,7 +277,8 @@ func text(s string) db.Val {
 // stays in the server's order, its score's.
 func (k Key) local(p db.Paged, q db.PageQuery, byName bool) db.Paged {
 	if f := strings.TrimSpace(q.Filter); f != "" {
-		p.Rows = slices.DeleteFunc(p.Rows, func(r []db.Val) bool { return !Match(f, r[0].S) })
+		match := Matcher(f)
+		p.Rows = slices.DeleteFunc(p.Rows, func(r []db.Val) bool { return !match(r[0].S) })
 	}
 	order := q.Order
 	if len(order) == 0 && byName {
@@ -343,28 +343,41 @@ func (k Key) scan(p db.Paged, q db.PageQuery, step func(cursor uint64, match str
 			return p, err
 		}
 	}
-	count := int64(max(q.Limit, 10))
-	for {
-		batch, next, err := step(cursor, q.Filter, count)
-		if err != nil {
-			return p, err
+	entries, cursor, err := scanLoop(cursor, q.Filter, q.Limit, width, step)
+	for _, e := range entries {
+		row := make([]db.Val, width)
+		for j := range width {
+			row[j] = text(e[j])
 		}
-		for i := 0; i+width <= len(batch); i += width {
-			row := make([]db.Val, width)
-			for j := range width {
-				row[j] = text(batch[i+j])
-			}
-			p.Rows = append(p.Rows, row)
-		}
-		cursor = next
-		if cursor == 0 || q.Limit > 0 && len(p.Rows) >= q.Limit {
-			break
-		}
+		p.Rows = append(p.Rows, row)
+	}
+	if err != nil {
+		return p, err
 	}
 	if cursor != 0 {
 		p.Next, p.Cursor = true, strconv.FormatUint(cursor, 10)
 	}
 	return p, nil
+}
+
+// scanLoop reads the batches step gives from cursor on, till limit entries of width
+// strings are in (0: till the cursor is round), and says where it stopped: 0 at the
+// end. An error is the batches' own, those read before it kept.
+func scanLoop(cursor uint64, match string, limit, width int, step func(cursor uint64, match string, count int64) ([]string, uint64, error)) ([][]string, uint64, error) {
+	var entries [][]string
+	count := int64(max(limit, 10))
+	for {
+		batch, next, err := step(cursor, match, count)
+		if err != nil {
+			return entries, cursor, err
+		}
+		for i := 0; i+width <= len(batch); i += width {
+			entries = append(entries, batch[i:i+width])
+		}
+		if cursor = next; cursor == 0 || limit > 0 && len(entries) >= limit {
+			return entries, cursor, nil
+		}
+	}
 }
 
 // stream is a page of entries by ID: those after the cursor, the ID of the last
@@ -626,9 +639,18 @@ func (k Key) Rebuild(ctx context.Context) (string, error) {
 				}
 				line("JSON.SET", k.Name, "$", v)
 			case "hash":
+				entries, _, err := scanLoop(0, "", k.LoadAll, 2, func(cursor uint64, match string, count int64) ([]string, uint64, error) {
+					return cl.HScan(ctx, k.Name, cursor, match, count).Result()
+				})
+				if err != nil {
+					return err
+				}
 				words := []string{"HSET", k.Name}
-				for _, r := range hashHead(ctx, cl, k.Name, k.LoadAll) {
-					words = append(words, r...)
+				// ponytail: the first LoadAll entries HSCAN gives, in the order of their names; a
+				// hash longer than that is not sorted whole, which would read it whole
+				slices.SortFunc(entries, func(a, b []string) int { return strings.Compare(a[0], b[0]) })
+				for _, e := range entries[:min(len(entries), k.LoadAll)] {
+					words = append(words, e...)
 				}
 				line(words...)
 			case "list":
@@ -638,12 +660,18 @@ func (k Key) Rebuild(ctx context.Context) (string, error) {
 				}
 				line(append([]string{"RPUSH", k.Name}, vs...)...)
 			case "set":
-				ms, err := cl.SMembers(ctx, k.Name).Result()
+				entries, _, err := scanLoop(0, "", k.LoadAll, 1, func(cursor uint64, match string, count int64) ([]string, uint64, error) {
+					return cl.SScan(ctx, k.Name, cursor, match, count).Result()
+				})
 				if err != nil {
 					return err
 				}
-				slices.Sort(ms)
-				line(append([]string{"SADD", k.Name}, ms[:min(len(ms), k.LoadAll)]...)...)
+				words := []string{"SADD", k.Name} // sorted as the hash's is, of what it read
+				slices.SortFunc(entries, func(a, b []string) int { return strings.Compare(a[0], b[0]) })
+				for _, e := range entries[:min(len(entries), k.LoadAll)] {
+					words = append(words, e[0])
+				}
+				line(words...)
 			case "zset":
 				zs, err := cl.ZRangeWithScores(ctx, k.Name, 0, upto).Result()
 				if err != nil {
@@ -676,22 +704,6 @@ func (k Key) Rebuild(ctx context.Context) (string, error) {
 	return strings.TrimSuffix(b.String(), "\n"), err
 }
 
-// hashHead is the first n fields of a hash with their values, in the order of the
-// names, as pairs.
-func hashHead(ctx context.Context, cl *goredis.Client, key string, n int) [][]string {
-	m, _ := cl.HGetAll(ctx, key).Result()
-	names := make([]string, 0, len(m))
-	for f := range m {
-		names = append(names, f)
-	}
-	sort.Strings(names)
-	var out [][]string
-	for _, f := range names[:min(n, len(names))] {
-		out = append(out, []string{f, m[f]})
-	}
-	return out
-}
-
 // Quote is s as redis-cli reads a word: bare when it has nothing in it that a
 // line splits or quotes, else in double quotes with the escapes of SplitLine.
 func Quote(s string) string {
@@ -702,6 +714,7 @@ func Quote(s string) string {
 	}
 	var b strings.Builder
 	b.WriteByte('"')
+	valid := utf8.ValidString(s) // once: it reads all of s
 	for _, c := range []byte(s) {
 		switch {
 		case c == '"' || c == '\\':
@@ -713,7 +726,7 @@ func Quote(s string) string {
 			b.WriteString(`\r`)
 		case c == '\t':
 			b.WriteString(`\t`)
-		case c < 0x20 || c == 0x7f || c >= 0x80 && !utf8.ValidString(s):
+		case c < 0x20 || c == 0x7f || c >= 0x80 && !valid:
 			fmt.Fprintf(&b, `\x%02x`, c)
 		default:
 			b.WriteByte(c)
