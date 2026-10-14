@@ -61,6 +61,7 @@ check "（准备）选中 s1，group 是 stage" eval '[[ $(lsel) == s1 && $(fval
 edit_group ""
 check "清空 group 保存：s1 那一块没有 group 行了" eval '! grep -A5 "name = \"s1\"" "$(ct)" | head -5 | grep -q "^group"'
 key Escape; sleep 0.5
+e2e_plain | grep -qF "┌─ 连接 ─" && { key Escape; sleep 0.5; }   # as above: the dialog may still be closing under load
 check "树里 s1 回到没分组的那段（plain 后面）" roots_is "plain,s1,── stage,p1,── prod,p2,──"
 
 # ---- 删掉一个组的第一个连接：prod 里只剩 p2，组的顺序按文件
