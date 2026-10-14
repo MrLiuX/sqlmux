@@ -101,7 +101,7 @@
 - [ ] golden：每种类型一屏（带信息行）、游标翻页的页脚、JSON 查看。
 - [ ] e2e：打开各类型键、改一个格子 `C-s` 后 redis-cli 里对、设 / 去 TTL、改名、删除、`R` 刷新、重启后 layout 恢复到键 tab。
 
-## F16.4 控制台 · 状态：todo
+## F16.4 控制台 · 状态：passed（82ad643；e2e 07d8c13）
 
 - **依赖**：F16.0、F16.1
 - **涉及**：`internal/db/redis`、`internal/app`（`redisLang`、result 内存翻页）
@@ -120,7 +120,7 @@
 - [ ] golden：每种回复形状一屏。
 - [ ] e2e：跑 `SET` / `GET` / `ZRANGE … WITHSCORES` / `HGETALL` / `LRANGE 0 -1`、写命令被只读挡、BLPOP 取消；Redis 控制台里 `gq`、面板的快速 SQL 和「DDL」不出现。
 
-## F16.5 补全与签名提示 · 状态：todo
+## F16.5 补全与签名提示 · 状态：passed（82ad643；e2e 07d8c13）
 
 - **依赖**：F16.4、F15.3
 - **涉及**：`internal/db/redis`、`internal/app`、`internal/ui`（复用提示浮层）
