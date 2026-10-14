@@ -4,7 +4,7 @@ A terminal database client organized the way tmux is: sessions, windows, panes a
 
 ![sqlmux](assets/screenshot.png)
 
-> **Status: early development.** PostgreSQL and MySQL. The UI is in English; `language = "zh"` in `config.toml` switches it to Chinese. Milestones are tracked in [specs/plan.md](specs/plan.md), and the design is in [specs/tech-design.md](specs/tech-design.md) (Chinese).
+> **Status: early development.** PostgreSQL, MySQL, SQLite and Redis. The UI is in English; `language = "zh"` in `config.toml` switches it to Chinese. Milestones are tracked in [specs/plan.md](specs/plan.md), and the design is in [specs/tech-design.md](specs/tech-design.md) (Chinese).
 
 ## What works today
 
@@ -13,7 +13,8 @@ A terminal database client organized the way tmux is: sessions, windows, panes a
 - Inline editing: edit cells, then save everything in one transaction. Enum, boolean and time columns get pickers.
 - SQL queries: a vim editor that is diff-tested against nvim, with completion, formatting, a schema picker, and results in a bottom pane.
 - Command palette (`C-p`) and quick SQL (`;`).
-- Every key can be rebound, per pane type; `SPC` is the leader. Themes and Nerd Font icons are configurable (`icons = "ascii"` if you have no Nerd Font).
+- Redis: a tree of databases, namespaces (split on `:`) and keys; a table per key (string, hash, list, set, zset, stream, RedisJSON) with inline editing; a console that runs one command per line, with completion and a signature line from the server's `COMMAND DOCS`.
+- Every key can be rebound, per pane type; `SPC` is the leader. The grid and the tree take `hjkl` and the arrow keys in both modes (`vim = false` adds PgUp / PgDn and Delete). Themes and Nerd Font icons are configurable (`icons = "ascii"` if you have no Nerd Font).
 
 ## Build
 
