@@ -30,13 +30,15 @@ type Icons struct {
 	Postgres      Icon
 	MySQL         Icon
 	Redis         Icon
-	SQLite        Icon
-	Search, Keys  Icon // status bar: palette entry, pending keys
-	Conn          Icon
-	Key           Icon // primary key columns
-	Command       Icon // palette rows (K-03)
-	Window        Icon // the tree's workspace (§7.8)
-	Pane          Icon // not drawn since F10.5; a theme file that names it still loads (§7.7)
+	// A Redis key's type in the tree (F16.2)
+	Str, Hash, List, Set, ZSet, Stream, JSON Icon
+	SQLite                                   Icon
+	Search, Keys                             Icon // status bar: palette entry, pending keys
+	Conn                                     Icon
+	Key                                      Icon // primary key columns
+	Command                                  Icon // palette rows (K-03)
+	Window                                   Icon // the tree's workspace (§7.8)
+	Pane                                     Icon // not drawn since F10.5; a theme file that names it still loads (§7.7)
 	// The query bar's buttons (Q-05) and ORDER's direction; nil Fg: info
 	// and warn (§7.7)
 	Save, Refresh, Transpose Icon
@@ -69,6 +71,13 @@ var NerdIcons = &Icons{
 	Postgres:    Icon{Text: "\ue76e"}, // nf-dev-postgresql
 	MySQL:       Icon{Text: "\ue704"}, // nf-dev-mysql
 	Redis:       Icon{Text: "\ue76d"}, // nf-dev-redis
+	Str:         Icon{Text: "\uf031"}, // nf-fa-font
+	Hash:        Icon{Text: "\uf292"}, // nf-fa-hashtag
+	List:        Icon{Text: "\uf03a"}, // nf-fa-list
+	Set:         Icon{Text: "\uf009"}, // nf-fa-th_large
+	ZSet:        Icon{Text: "\uf091"}, // nf-fa-trophy
+	Stream:      Icon{Text: "\uf043"}, // nf-fa-tint
+	JSON:        Icon{Text: "\uf1c9"}, // nf-fa-file_code_o
 	SQLite:      Icon{Text: "\ue7c4"}, // nf-dev-sqllite
 	Search:      Icon{Text: "\uf002"}, // nf-fa-search
 	Keys:        Icon{Text: "\uf11c"}, // nf-fa-keyboard_o
@@ -115,6 +124,13 @@ var ASCIIIcons = &Icons{
 	Postgres:    Icon{Text: "pg"},
 	MySQL:       Icon{Text: "my"},
 	Redis:       Icon{Text: "re"},
+	Str:         Icon{Text: "s"},
+	Hash:        Icon{Text: "h"},
+	List:        Icon{Text: "l"},
+	Set:         Icon{Text: "t"},
+	ZSet:        Icon{Text: "z"},
+	Stream:      Icon{Text: "x"},
+	JSON:        Icon{Text: "j"},
 	SQLite:      Icon{Text: "sq"},
 	Search:      Icon{Text: "~"},
 	Keys:        Icon{Text: "kb"},
@@ -166,6 +182,28 @@ func IconSet(name string) *Icons {
 
 // Engine is the icon of a connection to engine, as connections.toml
 // names it (§7.7).
+// KeyType is the icon of a Redis key of the type TYPE says (F16.2); the key's
+// own for a type that is none of the known ones.
+func (ic *Icons) KeyType(typ string) Icon {
+	switch typ {
+	case "string":
+		return ic.Str
+	case "hash":
+		return ic.Hash
+	case "list":
+		return ic.List
+	case "set":
+		return ic.Set
+	case "zset":
+		return ic.ZSet
+	case "stream":
+		return ic.Stream
+	case "ReJSON-RL":
+		return ic.JSON
+	}
+	return ic.Key
+}
+
 func (ic *Icons) Engine(engine string) Icon {
 	switch engine {
 	case "mysql":
@@ -195,7 +233,7 @@ func (ic *Icons) byName() map[string]*Icon {
 	return map[string]*Icon{
 		"schema": &ic.Schema, "table": &ic.Table, "query": &ic.Query,
 		"filter": &ic.Filter, "search": &ic.Search, "keys": &ic.Keys, "conn": &ic.Conn,
-		"key": &ic.Key, "postgres": &ic.Postgres, "mysql": &ic.MySQL, "redis": &ic.Redis, "sqlite": &ic.SQLite, "command": &ic.Command, "window": &ic.Window,
+		"key": &ic.Key, "postgres": &ic.Postgres, "mysql": &ic.MySQL, "redis": &ic.Redis, "str": &ic.Str, "hash": &ic.Hash, "list": &ic.List, "set": &ic.Set, "zset": &ic.ZSet, "stream": &ic.Stream, "json": &ic.JSON, "sqlite": &ic.SQLite, "command": &ic.Command, "window": &ic.Window,
 		"save": &ic.Save, "refresh": &ic.Refresh, "transpose": &ic.Transpose,
 		"row_add": &ic.RowAdd, "row_delete": &ic.RowDelete, "auto_refresh": &ic.AutoRefresh, "stop": &ic.Stop,
 		"sort_asc": &ic.SortAsc, "sort_desc": &ic.SortDesc, "view": &ic.View, "column": &ic.Column, "lock": &ic.Lock,

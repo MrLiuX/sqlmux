@@ -52,7 +52,19 @@ func (a *App) menuItems(n node) []menuItem {
 			{drop, a.dropTable},
 		}
 		return append(items, a.alterItems(n)...)
-	case nodeConn, nodeDatabase, nodeSchema, nodeGroup, nodeColumn, nodeObjects, nodeIndex, nodeKey, nodeFunc, nodeSequence, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeSep: // no menu
+	case nodeRedisKey:
+		return []menuItem{
+			{i18n.T("删除"), func() tea.Cmd { return a.deleteRedisKey(n) }},
+			{i18n.T("改名…"), func() tea.Cmd { return a.renameRedisKey(n) }},
+			{i18n.T("设 TTL…"), func() tea.Cmd { return a.ttlKey(n) }},
+		}
+	case nodeNamespace:
+		return []menuItem{{i18n.T("删除…"), func() tea.Cmd { return a.deleteNamespace(n) }}}
+	case nodeDatabase:
+		if n.conn.redis() {
+			return []menuItem{{i18n.T("刷新"), func() tea.Cmd { return a.loadKeys(n.conn) }}}
+		}
+	case nodeConn, nodeSchema, nodeGroup, nodeColumn, nodeObjects, nodeIndex, nodeKey, nodeFunc, nodeSequence, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeSep, nodeNote: // no menu
 	}
 	return nil
 }
@@ -128,10 +140,17 @@ func (a *App) renameQueryFile() tea.Cmd {
 }
 
 // treeDelete is tree.delete (dd): a query file's deletion, a table's or a
-// view's drop; on any other node it does nothing.
+// view's drop, a Redis key's or a namespace's delete; on any other node it
+// does nothing.
 func (a *App) treeDelete() tea.Cmd {
-	if n, ok := a.treeNode(); ok && n.kind == nodeTable {
+	n, ok := a.treeNode()
+	switch {
+	case ok && n.kind == nodeTable:
 		return a.dropTable()
+	case ok && n.kind == nodeRedisKey:
+		return a.deleteRedisKey(n)
+	case ok && n.kind == nodeNamespace:
+		return a.deleteNamespace(n)
 	}
 	return a.deleteQuery()
 }

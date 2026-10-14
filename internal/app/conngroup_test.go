@@ -111,7 +111,7 @@ func TestTreeGroups(t *testing.T) {
 				out = append(out, n.Text)
 			case nodeSep:
 				out = append(out, "── "+n.Text)
-			case nodeDatabase, nodeSchema, nodeGroup, nodeTable, nodeColumn, nodeObjects, nodeIndex, nodeKey, nodeFunc, nodeSequence, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeQueryFile:
+			case nodeDatabase, nodeSchema, nodeGroup, nodeTable, nodeColumn, nodeObjects, nodeIndex, nodeKey, nodeFunc, nodeSequence, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeQueryFile, nodeNamespace, nodeRedisKey, nodeNote:
 			}
 		}
 		return strings.Join(out, "|")

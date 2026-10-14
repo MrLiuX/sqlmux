@@ -16,9 +16,6 @@ func TestNoEngineConnection(t *testing.T) {
 	c := a.sess.Conns[0]
 	c.Spec.Engine, c.drv, c.eng = "redis", kvDriver{}, nil
 	a.render()
-	if cmd := a.loadCatalog(c); cmd != nil { // a catalog of tables is none of its business
-		t.Errorf("a catalog of nothing: %v", cmd)
-	}
 	says := func(keys, toast string) {
 		t.Helper()
 		a.toast = ""
@@ -42,7 +39,7 @@ func TestNoEngineConnection(t *testing.T) {
 	}
 	// the tree
 	says("<C-h>", "")
-	for _, keys := range []string{"j", "k", "l", "h", "<CR>", "R", "dd", "<Esc>", "t", "/", "x", "<Esc>"} {
+	for _, keys := range []string{"j", "k", "l", "h", "<CR>", "dd", "<Esc>", "t", "/", "x", "<Esc>"} {
 		says(keys, "")
 	}
 	// a table pane: a key tab (F16.3) is made with its source, here the tab is made as a table's

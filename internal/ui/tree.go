@@ -36,6 +36,7 @@ type TreeNode struct {
 type Tree struct {
 	Nodes       []TreeNode // those showing, filter or not
 	Total       int        // the tables and views of every schema
+	Noun        string     // what Total counts: tables, or the keys of Redis (F16.2)
 	Matches     int        // those the filter keeps
 	Filter      Input
 	Filtering   bool // the filter row is the input keys go to
@@ -82,7 +83,7 @@ func (t Tree) Draw(f *Frame, in uv.Rectangle) uv.Position {
 			cursor = c
 		}
 	} else {
-		f.Text(x, y, hdr, fmt.Sprintf("%d tables", t.Total), dim)
+		f.Text(x, y, hdr, fmt.Sprintf("%d %s", t.Total, cmp.Or(t.Noun, "tables")), dim)
 	}
 
 	sep := func(y int) {

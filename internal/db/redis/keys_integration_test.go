@@ -1,0 +1,137 @@
+//go:build integration
+
+package redis
+
+import (
+	"context"
+	"errors"
+	"slices"
+	"testing"
+	"time"
+
+	"github.com/kackerx/sqlmux/internal/db"
+)
+
+func connectTo(t *testing.T, dsn string) *Conn {
+	t.Helper()
+	c, _, err := Connect(context.Background(), dsn, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.Close() })
+	return c
+}
+
+func names(ks []KeyInfo) (out []string) {
+	for _, k := range ks {
+		out = append(out, k.Name)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// A scan reads every key of a db once with its type, stops at its budget, takes a
+// pattern, and sees the size of the db whatever it read (F16.2, seed db0).
+func TestScan(t *testing.T) {
+	ctx := context.Background()
+	c := connectTo(t, IntegrationDSN(t))
+	all, err := Scan(ctx, c, "*", 100000)
+	if err != nil || !all.Complete || all.Total < 12000 || int64(len(all.Keys)) != all.Total {
+		t.Fatalf("all: %d keys of %d, complete %v, %v", len(all.Keys), all.Total, all.Complete, err)
+	}
+	if len(names(all.Keys)) != len(slices.Compact(names(all.Keys))) {
+		t.Error("a key twice")
+	}
+	types := map[string]string{}
+	for _, k := range all.Keys {
+		types[k.Name] = k.Type
+	}
+	for name, want := range map[string]string{"str:plain": "string", "hash:user": "hash", "list:queue": "list", "set:tags": "set", "zset:rank": "zset", "stream:events": "stream", "str:binary": "string", "bulk:777": "string"} {
+		if types[name] != want {
+			t.Errorf("%s is %q, want %q", name, types[name], want)
+		}
+	}
+	cut, err := Scan(ctx, c, "*", 1500)
+	if err != nil || cut.Complete || len(cut.Keys) != 1500 || cut.Total != all.Total {
+		t.Errorf("budget: %d keys, complete %v, total %d, %v", len(cut.Keys), cut.Complete, cut.Total, err)
+	}
+	app, err := Scan(ctx, c, "app:*", 100)
+	if err != nil || !app.Complete || !slices.Equal(names(app.Keys), []string{"app:config", "app:orders:100", "app:orders:101", "app:users:1", "app:users:2", "app:users:3"}) {
+		t.Errorf("app:*: %v %v", names(app.Keys), err)
+	}
+	if one, err := Scan(ctx, c, "app:users:1", 100); err != nil || len(one.Keys) != 1 {
+		t.Errorf("a pattern with no glob: %v %v", names(one.Keys), err)
+	}
+	if none, err := Scan(ctx, c, "nothing:*", 100); err != nil || !none.Complete || len(none.Keys) != 0 {
+		t.Errorf("no match: %v %v", none, err)
+	}
+	// each: every key, no budget
+	n := 0
+	if err := Each(ctx, c, "bulk:*", func(ks []string) error { n += len(ks); return nil }); err != nil || n != 12000 {
+		t.Errorf("each: %d %v", n, err)
+	}
+	stop := context.DeadlineExceeded
+	if err := Each(ctx, c, "bulk:*", func([]string) error { return stop }); !errors.Is(err, stop) {
+		t.Errorf("each stopped by its function: %v", err)
+	}
+}
+
+// Databases are those with keys, by number; Glob names a key that has the
+// glob's characters in its name; delete, rename and TTL on a db of the test's
+// own.
+func TestKeyOperations(t *testing.T) {
+	ctx := context.Background()
+	if dbs, err := Databases(ctx, connectTo(t, IntegrationDSN(t))); err != nil || !slices.Contains(dbs, "0") || !slices.Contains(dbs, "1") || slices.Index(dbs, "0") > slices.Index(dbs, "1") {
+		t.Errorf("databases: %v %v", dbs, err)
+	}
+	c := connectTo(t, OwnDB(t))
+	for _, k := range []string{"we*ird", "we?ird", "we[i]rd", `we\ird`, "weXird", "a", "b"} {
+		if _, err := c.Query(ctx, "SET", db.Val{S: k}, db.Val{S: "1"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, k := range []string{"we*ird", "we?ird", "we[i]rd", `we\ird`} {
+		got, err := Scan(ctx, c, Glob(k), 100)
+		if err != nil || !slices.Equal(names(got.Keys), []string{k}) {
+			t.Errorf("Glob(%q): %v %v", k, names(got.Keys), err)
+		}
+	}
+	// a budget under what one SCAN gives cuts the batch, and the scan is not complete (the 7 keys and the one that claims the db)
+	if cut, err := Scan(ctx, c, "*", 3); err != nil || len(cut.Keys) != 3 || cut.Complete {
+		t.Errorf("a budget under one batch: %d keys, complete %v, %v", len(cut.Keys), cut.Complete, err)
+	}
+	if all, err := Scan(ctx, c, "*", 8); err != nil || len(all.Keys) != 8 || !all.Complete {
+		t.Errorf("a budget that is the size: %d keys, complete %v, %v", len(all.Keys), all.Complete, err)
+	}
+	if exists, err := Rename(ctx, c, "a", "b", false); err != nil || !exists {
+		t.Errorf("rename onto a key: exists %v %v", exists, err)
+	}
+	if r, _ := c.Query(ctx, "EXISTS", db.Val{S: "a"}); r.Rows[0][0].S != "1" {
+		t.Error("a key that was not renamed is gone")
+	}
+	if exists, err := Rename(ctx, c, "a", "b", true); err != nil || exists {
+		t.Errorf("rename over: exists %v %v", exists, err)
+	}
+	if r, _ := c.Query(ctx, "EXISTS", db.Val{S: "a"}, db.Val{S: "b"}); r.Rows[0][0].S != "1" {
+		t.Errorf("after the rename: %v", r.Rows)
+	}
+	if exists, err := Rename(ctx, c, "b", "free", false); err != nil || exists {
+		t.Errorf("rename to a free name: exists %v %v", exists, err)
+	}
+	if _, err := Rename(ctx, c, "nosuch", "x", false); err == nil {
+		t.Error("renaming a key that is not there")
+	}
+	ttl := func() string { r, _ := c.Query(ctx, "TTL", db.Val{S: "free"}); return r.Rows[0][0].S }
+	if err := SetTTL(ctx, c, "free", 90*time.Second); err != nil || ttl() == "-1" {
+		t.Errorf("a TTL: %s %v", ttl(), err)
+	}
+	if err := SetTTL(ctx, c, "free", 0); err != nil || ttl() != "-1" {
+		t.Errorf("no TTL: %s %v", ttl(), err)
+	}
+	if err := SetTTL(ctx, c, "nosuch", time.Minute); err == nil {
+		t.Error("a TTL of a key that is not there")
+	}
+	if n, err := Unlink(ctx, c, "free", "we*ird", "nosuch"); err != nil || n != 2 {
+		t.Errorf("unlink: %d %v", n, err)
+	}
+}

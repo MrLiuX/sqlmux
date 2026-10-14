@@ -245,8 +245,11 @@ type Conn struct {
 	// tree opens one, by name.
 	Databases []string
 	dbs       map[string]*Conn
-	parent    *Conn // the connection a database's is of, nil for one of connections.toml
-	seqs      []db.Sequence
+	// scan is what the scan of a Redis db read, found what the tree's filter
+	// asked the server for (F16.2)
+	scan, found *keyScan
+	parent      *Conn // the connection a database's is of, nil for one of connections.toml
+	seqs        []db.Sequence
 
 	// DB is the database, on query titles, "" for MySQL, whose schemas
 	// are its databases; startedPath Main's search_path as it connected;
@@ -361,6 +364,10 @@ func (c *Conn) setSpec(spec config.Connection) {
 	c.setConfig(spec)
 	c.setDriver(spec)
 }
+
+// redis is whether c is a connection to Redis, dialed or not: its db nodes
+// have keys under them, not schemas (F16.2).
+func (c *Conn) redis() bool { return c.Spec.Engine == "redis" }
 
 // sql is whether c is a SQL connection: what is SQL's, a catalog, a query's
 // statements, quick SQL, a WHERE, asks it (§5「连接缝」, F16.1).
