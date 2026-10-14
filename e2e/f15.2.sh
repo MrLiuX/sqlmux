@@ -15,6 +15,7 @@ cat >"$D/bin/ssh" <<'SH'
 printf '%s\n' "$*" >>"$SSHLOG"
 case "$*" in
   *me@bad*) echo "me@bad: Permission denied (publickey)." >&2; echo "second line of ssh's stderr" >&2; exit 255 ;;
+  *me@polite*) trap 'kill $P 2>/dev/null; exit 0' TERM; echo $$ >>"$SSHPIDS"; nc localhost "${2##*:}" & P=$!; wait $P; exit 0 ;;   # ssh that leaves with exit status 0 when it is terminated, as ssh -W does
   *me@gone*) echo "ssh: Could not resolve hostname gone" >&2; exit 255 ;;
 esac
 echo $$ >>"$SSHPIDS"
@@ -35,6 +36,12 @@ name = "viapg"
 engine = "postgres"
 dsn = "$PGURL"
 ssh = "me@bastion"
+
+[[connection]]
+name = "viapolite"
+engine = "postgres"
+dsn = "$PGURL"
+ssh = "me@polite"
 
 [[connection]]
 name = "viamy"
@@ -86,6 +93,17 @@ _e2e_kill
 check "MySQL：ssh 参数里是 -W my.internal:<MySQL 端口>" eval 'grep -q "^-W my.internal:$MYPORT -o BatchMode=yes -o ExitOnForwardFailure=yes me@bastion$" "$SSHLOG"' || cat "$SSHLOG"
 open_table t_user; wait_for 8 settled
 check "MySQL 的表 t_user 经隧道打开" eval 'grid_has "user_"' || e2e_plain | sed -n 3,8p
+N0=$(nlog); kill $(cat "$SSHPIDS") 2>/dev/null; sleep 1
+key R; wait_for 12 settled; sleep 2
+check "MySQL：杀掉隧道进程后 R：第一次就重拨（日志多了行），数据回来" eval '(( $(nlog) > N0 )) && grid_has "user_"' || { echo "  log $N0 -> $(nlog)"; e2e_plain | sed -n 1,10p | cut -c1-150; }
+quit_app; _e2e_kill
+
+# ---- ssh 收到 SIGTERM 时退出码是 0（真的 ssh -W 就是这样）：也算连接断了，下一次请求重拨
+: >"$SSHLOG"; : >"$SSHPIDS"; sstart viapolite
+open_table t_user; wait_for 8 settled
+N0=$(nlog); kill $(cat "$SSHPIDS") 2>/dev/null; sleep 1
+key R; wait_for 12 settled; sleep 2
+check "ssh 以退出码 0 退出（被 SIGTERM）：R 重拨（日志多了行），数据回来" eval '(( $(nlog) > N0 )) && grid_has "user_"' || { echo "  log $N0 -> $(nlog)"; e2e_plain | sed -n 1,10p | cut -c1-150; }
 quit_app; _e2e_kill
 
 # ---- SQLite 忽略 ssh

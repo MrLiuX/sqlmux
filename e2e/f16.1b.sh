@@ -71,6 +71,14 @@ addr() { bar | grep -oE '[^ ]+ · [^ ]*(localhost|redisbox.internal):[0-9]+[^ ]*
 nth_row() { local y n=0; for y in $(seq 4 42); do [[ $(e2e_text 1 32 "$y") == *" $1 "* ]] && ((++n == $2)) && { echo "$y"; return; }; done; }
 node_x() { e2e_find "$1" "$2" | tr ' ' '\n' | awk '$1 < 32 { print; exit }'; }
 click_node() { local y; y=$(nth_row "$1" "${2:-1}"); e2e_click "$(node_x "$1" "$y")" "$y"; sleep 0.4; }
+runl() { key C-l; key g g; key d G; key i; e2e_type "$1"; key Escape; key Enter; sleep 1.5; }   # the console: replace its text with one line, run it
+rrows() { local g y; g=($(geom 3)); for ((y = g[1] + 1; y < g[1] + g[3] - 2; y++)); do e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) "$y"; done | python3 -c "
+import re, sys
+for l in sys.stdin:
+    t = re.sub(r'\\s+', ' ', re.sub('[\ue000-\uf8ff]', '', l.replace('│', ' ').replace('┼', ' ')).strip())
+    if not t or set(t) <= set('─ '): continue
+    print(t)"; }   # the result tab's table, squeezed
+logline() { local g y; g=($(geom 3)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 1)) $((g[0] + g[2] - 2)) "$y"; done | grep -a "$1" | tail -1; }
 quit_app() { e2e_type ":"; sleep 0.4; e2e_type qa; key Enter; wait_for 8 exited; sleep 0.5; }
 toast() { e2e_text 1 "$(e2e_flag pane_width)" "$(( $(H) - 1 ))" | python3 -c 'import sys; print(sys.stdin.read().strip("└─┘│ \n"))'; }
 nlog() { wc -l <"$SSHLOG" | tr -d ' '; }
@@ -106,6 +114,16 @@ N0=$(nlog); kill $(cat "$SSHPIDS") 2>/dev/null; sleep 1
 tree_db0() { local i y; y=$(nth_row db0 1); key C-h; key g g; for ((i = 4; i < y; i++)); do key j; done; }   # the cursor on the db0 node (the only one: sqlmux NAME connects that connection alone)
 tree_db0; key R; sleep 2.5
 check "杀掉隧道进程后 R：又起了新的 ssh，树里的键回来" eval '(( $(nlog) > N0 )) && [[ $(dbrows) == "db0 db1 " ]]' || { echo "  log $N0 -> $(nlog)"; dbrows; toast; }
+N0=$(nlog); kill $(cat "$SSHPIDS") 2>/dev/null; sleep 1
+key C-l   # the tree had the focus (from the R above): ① first, runl goes on to ②
+runl "GET str:plain"
+check "杀掉隧道进程后在控制台跑只读命令 GET：自动起新的 ssh，重跑，结果回来（value / hello）" eval '(( $(nlog) > N0 )) && [[ $(rrows | tr "\n" "/") == "value/1 hello/" ]]' || { echo "  log $N0 -> $(nlog)"; rrows; logline GET; }
+N0=$(nlog); kill $(cat "$SSHPIDS") 2>/dev/null; sleep 1
+runl "SET zz 1"
+echo "WRITE-LOG: $(logline "SET zz")"
+check "杀掉隧道进程后跑写命令 SET zz 1：不自动重跑（zz 没有被写），日志里说连接断了、已重连" eval '[[ $(rc exists zz) == 0 && -n $(logline "SET zz") ]]' || { rc exists zz; logline "SET zz"; }
+runl "SET zz 1"
+check "再跑一次 SET zz 1：连接已重拨，写进去了（zz = 1）" eval '[[ $(rc get zz) == 1 ]]' || { rc exists zz; logline "SET zz"; }
 quit_app
 check "退出：隧道进程都退了，服务端上没有 sqlmux 的连接" eval 'wait_for 5 eval "[[ \$(alive) == 0 && \$(nclients) == 0 ]]"' || echo "  alive $(alive), clients $(nclients)"
 _e2e_kill

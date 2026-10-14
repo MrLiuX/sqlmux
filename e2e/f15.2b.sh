@@ -15,6 +15,7 @@ cat >"$D/bin/ssh" <<'SH'
 printf '%s\n' "$*" >>"$SSHLOG"
 case "$*" in
   *me@bad*) sleep 1; echo "me@bad: Permission denied (publickey)." >&2; exit 255 ;;     # both connections to it fail at the same time
+  *me@silent*) exit 3 ;;                                                                    # ssh dies with an exit code and not a word
   *me@mute*) echo $$ >>"$SSHPIDS"; exec sleep 120 ;;                                       # the far end never answers
 esac
 echo $$ >>"$SSHPIDS"
@@ -40,6 +41,18 @@ name = "badmy"
 engine = "mysql"
 dsn = "$MYURL"
 ssh = "me@bad"
+
+[[connection]]
+name = "silentpg"
+engine = "postgres"
+dsn = "$PGURL"
+ssh = "me@silent"
+
+[[connection]]
+name = "silentmy"
+engine = "mysql"
+dsn = "$MYURL"
+ssh = "me@silent"
 
 [[connection]]
 name = "mutepg"
@@ -80,6 +93,12 @@ import sys; t = open(sys.argv[1], errors='replace').read()
 sys.exit(0 if 'badmy：' in t and t.count('Permission denied (publickey).') >= 2 else 1)" "$D/toasts"; }
 check "badmy 经同一台跳板机、同时失败：toast「badmy：…」也带 ssh 的原文（MySQL；两条 toast 里原文各一份）" twice || cat "$D/toasts"
 check "两个连接各拨了一次（日志里至少两行，都是 me@bad）" eval '(( $(nlog) >= 2 )) && ! grep -qv "me@bad$" "$SSHLOG"' || cat "$SSHLOG"
+
+# ssh 没说话就退了：toast 只有退出码，「ssh me@silent: exit status 3」（PG 和 MySQL）
+click_node silentpg; collect 4
+check "silentpg：ssh 退出码 3、没有 stderr：toast「silentpg：ssh me@silent: exit status 3」" eval 'saw "silentpg：" && saw "ssh me@silent: exit status 3"' || cat "$D/toasts"
+click_node silentmy; collect 4
+check "silentmy：同样「silentmy：ssh me@silent: exit status 3」" eval 'saw "silentmy：" && saw "ssh me@silent: exit status 3"' || cat "$D/toasts"
 
 # ---- ② 对面不说话：到 DSN 的 timeout 放弃，报超时
 : >"$SSHLOG"
