@@ -57,6 +57,8 @@ func TestSSHDialerFailure(t *testing.T) {
 	_, err := c.Read(make([]byte, 1))
 	if err == nil || !strings.Contains(err.Error(), "ssh me@jump: me@jump: Permission denied (publickey).") {
 		t.Fatalf("read: %v", err)
+	} else if !NetworkError(err) { // the tunnel is gone: a request on it is to be dialed again (Broken)
+		t.Errorf("not a network error: %v", err)
 	}
 	time.Sleep(50 * time.Millisecond)
 	if _, err := c.Write([]byte("x")); err == nil || !strings.Contains(err.Error(), "Permission denied") {
@@ -72,6 +74,8 @@ func TestSSHDialerFailure(t *testing.T) {
 	c = dialSSH(t)
 	if _, err := c.Read(make([]byte, 1)); err == nil || !strings.Contains(err.Error(), "exit status 3") {
 		t.Fatalf("no stderr: %v", err)
+	} else if !NetworkError(err) {
+		t.Errorf("not a network error: %v", err)
 	}
 }
 

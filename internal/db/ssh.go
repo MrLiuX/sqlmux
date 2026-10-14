@@ -123,11 +123,18 @@ func (c *sshConn) failure() error {
 	if !errors.As(c.exit, &ee) {
 		return nil
 	}
-	if msg := strings.TrimSpace(c.stderr.String()); msg != "" {
-		return fmt.Errorf("ssh %s: %s", c.dest, msg)
+	msg := strings.TrimSpace(c.stderr.String())
+	if msg == "" {
+		msg = c.exit.Error()
 	}
-	return fmt.Errorf("ssh %s: %w", c.dest, c.exit)
+	return sshFailure("ssh " + c.dest + ": " + msg)
 }
+
+// sshFailure is the error of a tunnel that died, one NetworkError knows. It has
+// no Unwrap: go-redis unwraps an error of its handshake once, the message with it.
+type sshFailure string
+
+func (e sshFailure) Error() string { return string(e) }
 
 // exitError is why the connection ended: what ssh said when it failed, else
 // err itself.

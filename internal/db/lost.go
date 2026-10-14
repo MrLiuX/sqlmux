@@ -21,13 +21,14 @@ const (
 
 // NetworkError is whether err is the network's, which engines have in
 // common: a closed or reset connection, an EOF where a reply was due, a
-// timeout. A cancel of the request's ctx is not.
+// timeout, a tunnel whose ssh has ended. A cancel of the request's ctx is not.
 func NetworkError(err error) bool {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
 	var ne net.Error // an OpError: a closed, reset or broken connection, a timeout
-	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.As(err, &ne)
+	var sf sshFailure
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.As(err, &ne) || errors.As(err, &sf)
 }
 
 // Event is what a Worker tells the app of a redial (Worker.Notify): it
