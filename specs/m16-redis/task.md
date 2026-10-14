@@ -45,7 +45,7 @@
 - [ ] 全量 e2e 和现有 golden 一条不改全过；`just check` 绿。
 - [ ] 单测：`SQLTable` 对 PG / MySQL / SQLite 的 Page / Count / Each / Save 与改前逐字相同（现有 page_test / save_test 套到 Source 上）；假 Source（内存）驱动 `dataTab`：游标翻页（只有下一页、页号对应游标）、`Count` -1 显示 `?`、`Sortable` 为空时表头排序 toast、`NoInsert` 时新增行被拒。
 
-## F16.1 驱动与连接 · 状态：todo
+## F16.1 驱动与连接 · 状态：passed（c384691；e2e ca569a3）
 
 - **依赖**：F16.0
 - **涉及**：`internal/db/redis`、`internal/config`、`internal/app`（表单、workspace）、docker-compose、ci.yml、`testdata/seed`
@@ -64,7 +64,7 @@
 - [ ] 冒烟（单测，nil 引擎的 Redis 连接）：打开 query、树、表格 pane 的渲染和按键不 panic（F16.0 审查时 worker 试过，queryView 第一处就 panic）。
 - [ ] e2e：新建 Redis 连接（表单、测试按钮）、状态栏地址块、断线（`CLIENT KILL`）后自动重拨。
 
-## F16.2 树 · 状态：todo
+## F16.2 树 · 状态：passed（c384691；e2e ca569a3）
 
 - **依赖**：F16.1
 - **涉及**：`internal/app`（tree）、`internal/db/redis`、`internal/ui`（图标）
@@ -83,7 +83,7 @@
 - [ ] golden：db → 命名空间 → 键展开、超预算尾注、七种图标。
 - [ ] e2e：展开 db、点进命名空间、`/` 过滤、删命名空间。
 
-## F16.3 键 tab · 状态：todo
+## F16.3 键 tab · 状态：passed（c384691；e2e ca569a3）
 
 - **依赖**：F16.0、F16.2
 - **涉及**：`internal/db/redis`（`Key` 实现 Source）、`internal/app`（key tab、layout）、`internal/ui`（信息行）、`internal/config`（layout 的 key 字段）
@@ -128,7 +128,7 @@
 **开发**（§9.8「补全」）
 - [ ] a. `COMMAND DOCS`（Redis 7+）：命令名、子命令、参数签名、一句说明，连接时取一次缓存在 Meta 上；没有 DOCS（`ERR unknown subcommand`）就只补命令名（`COMMAND` 里来）。
 - [ ] b. 补全：命令名 → 子命令 → 键名；候选排序照 §9.7；签名提示用 F15.3 的浮层，当前参数高亮（可变 / 可选参数、子命令的签名从 DOCS 的 arguments 树展开）。
-- [ ] c. 键名补全：打字时 Meta 上 `SCAN MATCH <前缀>* COUNT 100`，去抖（只一轮，不循环到底）；字段名：HGET / HSET / HDEL 的键已知且长度 ≤ load_all 时 `HKEYS`。
+- [ ] c. 键名补全：打字时 Meta 上 `SCAN MATCH <前缀>* COUNT 1000`，去抖，几轮为止不循环到底（验收时定，照实现：原来写 COUNT 100）；字段名：HGET / HSET / HDEL 的键已知且长度 ≤ load_all 时 `HKEYS`。
 
 **验收**
 - [ ] 单测：DOCS 的 arguments 树 → 签名文本 / 当前参数下标（可选、可变、oneof、block、子命令）表驱动；mutation；假连接没有 DOCS 时退化为只补命令名。
