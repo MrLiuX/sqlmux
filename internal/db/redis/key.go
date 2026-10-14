@@ -332,18 +332,25 @@ func cmpFloat(a, b float64) int {
 }
 
 // scan is a page of a hash or set read by HSCAN or SSCAN from the cursor of the
-// query, reading on till it has a page of entries or the cursor comes round; the
-// page may hold a few more than the limit, a batch giving what it gives. width is
-// how many of the strings it gives make a row.
+// query, reading on till it has a page of entries or the cursor comes round. A
+// batch gives what it gives, a listpack all of the key whatever COUNT says, so the
+// cursor of the next page may be in the middle of a batch: "cursor:skip", the
+// batch read again from cursor, its first skip entries left out. width is how
+// many of the strings it gives make a row.
 func (k Key) scan(p db.Paged, q db.PageQuery, step func(cursor uint64, match string, count int64) ([]string, uint64, error), width int) (db.Paged, error) {
 	var cursor uint64
+	var skip int
 	if q.Cursor != "" {
+		c, sk, _ := strings.Cut(q.Cursor, ":")
 		var err error
-		if cursor, err = strconv.ParseUint(q.Cursor, 10, 64); err != nil {
+		if cursor, err = strconv.ParseUint(c, 10, 64); err == nil && sk != "" {
+			skip, err = strconv.Atoi(sk)
+		}
+		if err != nil {
 			return p, err
 		}
 	}
-	entries, cursor, err := scanLoop(cursor, q.Filter, q.Limit, width, step)
+	entries, cursor, skip, err := scanLoop(cursor, skip, q.Filter, q.Limit, width, step)
 	for _, e := range entries {
 		row := make([]db.Val, width)
 		for j := range width {
@@ -354,28 +361,41 @@ func (k Key) scan(p db.Paged, q db.PageQuery, step func(cursor uint64, match str
 	if err != nil {
 		return p, err
 	}
-	if cursor != 0 {
+	if cursor != 0 || skip != 0 {
 		p.Next, p.Cursor = true, strconv.FormatUint(cursor, 10)
+		if skip != 0 {
+			p.Cursor += ":" + strconv.Itoa(skip)
+		}
 	}
 	return p, nil
 }
 
-// scanLoop reads the batches step gives from cursor on, till limit entries of width
-// strings are in (0: till the cursor is round), and says where it stopped: 0 at the
-// end. An error is the batches' own, those read before it kept.
-func scanLoop(cursor uint64, match string, limit, width int, step func(cursor uint64, match string, count int64) ([]string, uint64, error)) ([][]string, uint64, error) {
+// scanLoop reads the batches step gives from cursor on, the first without its first
+// skip entries, till limit entries of width strings are in (0: till the cursor is
+// round), and says where it stopped: the cursor, 0 at the end, and how many entries
+// of the batch it is read from were taken already, when the limit cut it. An error
+// is the batches' own, those read before it kept.
+func scanLoop(cursor uint64, skip int, match string, limit, width int, step func(cursor uint64, match string, count int64) ([]string, uint64, error)) ([][]string, uint64, int, error) {
 	var entries [][]string
 	count := int64(max(limit, 10))
 	for {
 		batch, next, err := step(cursor, match, count)
 		if err != nil {
-			return entries, cursor, err
+			return entries, cursor, skip, err
 		}
+		var rows [][]string
 		for i := 0; i+width <= len(batch); i += width {
-			entries = append(entries, batch[i:i+width])
+			rows = append(rows, batch[i:i+width])
 		}
+		rows = rows[min(skip, len(rows)):]
+		if limit > 0 && len(entries)+len(rows) > limit {
+			take := limit - len(entries)
+			return append(entries, rows[:take]...), cursor, skip + take, nil
+		}
+		entries = append(entries, rows...)
+		skip = 0
 		if cursor = next; cursor == 0 || limit > 0 && len(entries) >= limit {
-			return entries, cursor, nil
+			return entries, cursor, 0, nil
 		}
 	}
 }
@@ -639,7 +659,7 @@ func (k Key) Rebuild(ctx context.Context) (string, error) {
 				}
 				line("JSON.SET", k.Name, "$", v)
 			case "hash":
-				entries, _, err := scanLoop(0, "", k.LoadAll, 2, func(cursor uint64, match string, count int64) ([]string, uint64, error) {
+				entries, _, _, err := scanLoop(0, 0, "", k.LoadAll, 2, func(cursor uint64, match string, count int64) ([]string, uint64, error) {
 					return cl.HScan(ctx, k.Name, cursor, match, count).Result()
 				})
 				if err != nil {
@@ -649,7 +669,7 @@ func (k Key) Rebuild(ctx context.Context) (string, error) {
 				// ponytail: the first LoadAll entries HSCAN gives, in the order of their names; a
 				// hash longer than that is not sorted whole, which would read it whole
 				slices.SortFunc(entries, func(a, b []string) int { return strings.Compare(a[0], b[0]) })
-				for _, e := range entries[:min(len(entries), k.LoadAll)] {
+				for _, e := range entries {
 					words = append(words, e...)
 				}
 				line(words...)
@@ -660,7 +680,7 @@ func (k Key) Rebuild(ctx context.Context) (string, error) {
 				}
 				line(append([]string{"RPUSH", k.Name}, vs...)...)
 			case "set":
-				entries, _, err := scanLoop(0, "", k.LoadAll, 1, func(cursor uint64, match string, count int64) ([]string, uint64, error) {
+				entries, _, _, err := scanLoop(0, 0, "", k.LoadAll, 1, func(cursor uint64, match string, count int64) ([]string, uint64, error) {
 					return cl.SScan(ctx, k.Name, cursor, match, count).Result()
 				})
 				if err != nil {
@@ -668,7 +688,7 @@ func (k Key) Rebuild(ctx context.Context) (string, error) {
 				}
 				words := []string{"SADD", k.Name} // sorted as the hash's is, of what it read
 				slices.SortFunc(entries, func(a, b []string) int { return strings.Compare(a[0], b[0]) })
-				for _, e := range entries[:min(len(entries), k.LoadAll)] {
+				for _, e := range entries {
 					words = append(words, e[0])
 				}
 				line(words...)

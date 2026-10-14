@@ -130,10 +130,14 @@ func TestRedisConsoleRunsAndCancels(t *testing.T) {
 // the names of commands, a key after GET, a field after HGET and the key, the list
 // made again when the names come from the server (F16.5).
 func TestRedisConsoleCompletes(t *testing.T) {
-	a, c := redisApp(t, redis.IntegrationDSN(t), 1000)
+	a, c := redisApp(t, redis.OwnDB(t), 1000) // a db with few keys: the rounds of a scan read all of them
 	if c.docs == nil || c.cmds == nil || !c.cmdsReady {
 		t.Fatalf("docs %d, commands %d", len(c.docs), len(c.cmds))
 	}
+	for _, k := range []string{"app:users:1", "app:users:2", "app:users:3"} {
+		command(t, c, "SET", k, "x")
+	}
+	command(t, c, "HSET", "hash:user", "name", "Ann", "age", "30")
 	a.run("query.new", 0)
 	q := a.sess.queries()[0]
 	q.conn = c

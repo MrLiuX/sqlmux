@@ -143,9 +143,20 @@ func TestKeyHints(t *testing.T) {
 	ctx := context.Background()
 	c := connectTo(t, IntegrationDSN(t)) // db0: 12000 bulk keys
 	start := time.Now()
+	// db0 has more keys than the rounds read, and which of them are seen is up to the hash seed of the
+	// server: what it gives is some of the keys that match, in a db of the test's own all of them
 	got, err := KeyHints(ctx, c, "app:users:", 50)
-	if err != nil || !slices.Equal(got, []string{"app:users:1", "app:users:2", "app:users:3"}) {
+	if err != nil || len(got) > 3 || slices.IndexFunc(got, func(k string) bool { return !strings.HasPrefix(k, "app:users:") }) >= 0 {
 		t.Errorf("app:users: %v %v", got, err)
+	}
+	own := connectTo(t, OwnDB(t))
+	for _, k := range []string{"app:users:1", "app:users:2", "app:users:3", "other"} {
+		if _, err := own.Query(ctx, "SET", db.Val{S: k}, db.Val{S: "1"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, err := KeyHints(ctx, own, "app:users:", 50); err != nil || !slices.Equal(got, []string{"app:users:1", "app:users:2", "app:users:3"}) {
+		t.Errorf("app:users: of a db of its own: %v %v", got, err)
 	}
 	if got, err := KeyHints(ctx, c, "bulk:1", 20); err != nil || len(got) != 20 || !strings.HasPrefix(got[0], "bulk:1") {
 		t.Errorf("bulk:1: %d %v %v", len(got), got, err)
@@ -153,7 +164,6 @@ func TestKeyHints(t *testing.T) {
 	if got, err := KeyHints(ctx, c, "nothing:", 20); err != nil || len(got) != 0 {
 		t.Errorf("nothing: %v %v", got, err)
 	}
-	own := connectTo(t, OwnDB(t))
 	for _, k := range []string{"a*b1", "axb2"} {
 		if _, err := own.Query(ctx, "SET", db.Val{S: k}, db.Val{S: "1"}); err != nil {
 			t.Fatal(err)

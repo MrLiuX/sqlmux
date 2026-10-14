@@ -33,6 +33,13 @@ func TestErrorOfAndBroken(t *testing.T) {
 	}
 	dial := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}
 	read := &net.OpError{Op: "read", Net: "tcp", Err: errors.New("connection reset by peer")}
+	db.FakeSSH(t, "exit 3") // the ssh of a tunnel that is killed or ends: what a read of it gives
+	conn, err := db.SSHDialer("me@jump").Dial(context.Background(), "tcp", "h:1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_, tunnel := conn.Read(make([]byte, 1))
 	for _, c := range []struct {
 		name string
 		err  error
@@ -47,6 +54,7 @@ func TestErrorOfAndBroken(t *testing.T) {
 		{"a client that is closed", goredis.ErrClosed, db.LostUnsent},
 		{"a dial that failed", fmt.Errorf("x: %w", dial), db.LostUnsent},
 		{"a reset", read, db.LostSent},
+		{"a tunnel that ended", tunnel, db.LostSent},
 		{"EOF", io.EOF, db.LostSent},
 		{"any other", errors.New("something"), db.NotLost},
 	} {

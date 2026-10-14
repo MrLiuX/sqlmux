@@ -111,6 +111,14 @@ func TestKeyReads(t *testing.T) {
 	if n, err := k.Count(ctx, "*e"); err != nil || n != 2 {
 		t.Errorf("hash count of a filter %d %v", n, err)
 	}
+	// a short hash that is scanned (load_all below its length): a listpack gives all of it to one
+	// HSCAN, and the pages are LIMIT rows each all the same
+	short := keyOf(t, dsn, "hash:user", 3, 100)
+	first := page(short, db.PageQuery{Limit: 2})
+	second := page(short, db.PageQuery{Limit: 2, Cursor: first.Cursor})
+	if len(first.Rows) != 2 || !first.Next || len(second.Rows) != 2 || second.Next || first.Rows[0][0].S == second.Rows[0][0].S || first.Rows[1][0].S == second.Rows[0][0].S {
+		t.Errorf("a scanned hash of 4 by 2: %v then %v (next %v %v)", rowsOf(first), rowsOf(second), first.Next, second.Next)
+	}
 	// a hash too long to read whole: by HSCAN, a next page by its cursor, no sorting, a filter that is MATCH
 	k = keyOf(t, dsn, "hash:big", 50, 100)
 	cols, _ = k.Columns(ctx)
