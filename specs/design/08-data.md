@@ -158,11 +158,11 @@ Redis 不塞进 `db.Engine`（那是 SQL 形状的接口：Quote、Arg、Tables�
   - **断线判定**：go-redis 的 `net.Error`、`io.EOF`、`redis: client is closed`；`LOADING`、`MASTERDOWN`、`READONLY` 这类服务端错误不算。重连没有会话状态要重放（db 在 URL 里）。
   - **不做**：Cluster、Sentinel（go-redis 有，等第二轮）；ACL 的用户名在 URL 里照传。
 - **树**（F16.2，§7.8「Redis 的树」）：**只用 SCAN，永远不用 KEYS**。展开 db 节点时在 `Meta` 上 `SCAN cursor MATCH <模式> COUNT 1000` 循环到游标归零或扫够 `[redis] scan_keys`（默认 10000）个，每批键用一条 pipeline 的 `TYPE` 取类型；结果记在 `Conn.Catalog`（键名、类型、所在 db），按分隔符切成命名空间树。侧栏的 `/` 过滤改成重新扫（`MATCH`），同一预算；预算用完的提示是键列表末尾的一行（§7.8，db 节点的尾注仍是 `DBSIZE`）。`DBSIZE` 给 db 节点的总数。`tree.refresh` 重扫光标所在的 db。命名空间删除：先按同样的 MATCH 扫出键名（这时不设预算，用户确认的数字要是真的），再每 500 个一条 `UNLINK`，走 `Main`；`C-c` 能停，中途失败或取消都 toast 删了多少。
-- **键 tab**（F16.3）：打开一个键是一个 `kind = "key"` 的 tab（§5）。第一行是**信息行**（在查询条的位置）：类型图标和类型名、TTL（人话化 `12m03s`，`-1` 显示「不过期」，`R` 刷新）、编码（`OBJECT ENCODING`）、内存（`MEMORY USAGE`，只在这里查）、长度（`STRLEN` / `HLEN` / `LLEN` / `SCARD` / `ZCARD` / `XLEN`）；行上的操作：设 TTL（`EXPIRE` / `PERSIST`）、改名、删除，各自弹现成的输入框 / 确认框；`C-s` 写回表格的修改。表格按类型，各是一个 `db.Source` 实现：
+- **键 tab**（F16.3）：打开一个键是一个 `kind = "key"` 的 tab（§5）。查询条上方多一行**信息行**（信息行、MATCH 输入框、芯片行三行；F16.3 时定，原来写「在查询条的位置」）：顺序 TYPE（图标和类型名）、LEN（`STRLEN` / `HLEN` / `LLEN` / `SCARD` / `ZCARD` / `XLEN`）、TTL（人话化 `12m03s`，`-1` 显示「不过期」）、ENC（`OBJECT ENCODING`）、MEM（`MEMORY USAGE`，每页随 `Info` 取一次，一条便宜的命令）、RENAME、DELETE，窄了从右边裁；`R` 刷新整行；行上的操作：设 TTL（`EXPIRE` / `PERSIST`）、改名、删除，各自弹现成的输入框 / 确认框；`C-s` 写回表格的修改。表格按类型，各是一个 `db.Source` 实现：
 
   | 类型 | 列 | 翻页 | 过滤 / 排序 | 写回（一批包进 `MULTI` / `EXEC`） |
   |---|---|---|---|---|
-  | string | 单格 `value`；合法 JSON 直接以值编辑器打开 | 无 | 无 | `SET k v KEEPTTL`；没有新增行 |
+  | string | 单格 `value`（`e` 开值编辑器，JSON 在里面排版） | 无 | 无 | `SET k v KEEPTTL`；没有新增行 |
   | hash | `field` / `value` | 长度 ≤ `[redis] load_all`（默认 5000）一次 `HGETALL`、本地翻页；超过用 `HSCAN COUNT 1000`，只能「下一页」 | 本地：多列排序、按值过滤、`MATCH` 模式；HSCAN：只有 `MATCH` | `HSET` / `HDEL`；改 field 是 `HDEL` + `HSET` |
   | list | `index` / `value` | `LRANGE` 按偏移 | 无（index 只读，`Generated`） | `LSET`；删除是 `LSET` 哨兵 + `LREM`（Redis 文档的做法）；新增 `RPUSH` |
   | set | `member` | 同 hash（`SMEMBERS` / `SSCAN`） | 同 hash | `SADD` / `SREM`；改成员是 `SREM` + `SADD` |
@@ -170,6 +170,6 @@ Redis 不塞进 `db.Engine`（那是 SQL 形状的接口：Quote、Arg、Tables�
   | stream | `id` 加展平的字段（并集，缺的格子空） | `XRANGE` / `XREVRANGE` 按 ID 游标 | 无 | 只 `XDEL` |
   | RedisJSON | 值编辑器（`JSON.GET`；`TYPE` 给的 `ReJSON-RL`） | 无 | 无 | `JSON.SET k $`；没有新增行 |
 
-  行的身份：hash 的 field、set 的 member、list 的 index、zset 的 member、stream 的 ID。写回前的乐观校验同 §10.3：`MULTI` 之前 `WATCH k`，`EXEC` 返回 nil（键被别人改过）报「行数据已变化」并重载（Redis 没有按格比对的办法，整键 WATCH 是它的事务模型）。没有事务模式切换：Redis 的 MULTI 不是交互式事务，`Conn.Manual` 对它恒为自动。新增行走现有的新增行操作（`HSET` / `SADD` / `ZADD` / `RPUSH`）；string 和 JSON 没有新增行。值是合法 JSON 的格子行内高亮，`↵` 进值编辑器。「以 JSON 查看」（`key.json`，§7.6 的 JSON 视图）：hash 整体变 object、list / set 变数组、zset 变 `[member, score]` 数组、stream 变 `{id, fields}` 数组，只读看，复制为 JSON 同一份。DDL 查看是重建它的命令（`redis.Key.Rebuild`，不在 `Source` 里：`HSET k f v …`、`SET k v EX ttl`，长的截到 `load_all` 并注明），复用 ddlview。二进制值按 §8.1 的占位符。布局文件记 `connection`、`db`、`key`（§14）。导出（`Each`）在 HSCAN / SSCAN 类型上是整键循环，按 `[redis] scan_keys` 同样的预算截断并提示，不另开配置。命令面板的「表」范围在 Redis 连接上这一版不列键（要 SCAN、有预算问题），键只从树和侧栏 `/` 进。
+  行的身份：hash 的 field、set 的 member、list 的 index、zset 的 member、stream 的 ID。写回前的乐观校验同 §10.3：`MULTI` 之前 `WATCH k`，`WATCH` 之后、`MULTI` 之前把要改的格子读回来逐格比 `Old`（WATCH 管不到读页之后、保存之前别人的改动），不符或 `EXEC` 返回 nil（键在 WATCH 后被别人改过）都报「行数据已变化」并重载。没有事务模式切换：Redis 的 MULTI 不是交互式事务，`Conn.Manual` 对它恒为自动。新增行走现有的新增行操作（`HSET` / `SADD` / `ZADD` / `RPUSH`）；string 和 JSON 没有新增行。格子里的 JSON 不按格高亮（`ui.Grid` 按列着色，按格要改绘制和缓存；F16.3 时定不做，第二轮候选），`e` 开值编辑器看排版后的。「以 JSON 查看」（`key.json`，§7.6 的 JSON 视图）：hash 整体变 object、list / set 变数组、zset 变 `[member, score]` 数组、stream 变 `{id, fields}` 数组，只读看，复制为 JSON 同一份。DDL 查看是重建它的命令（`redis.Key.Rebuild`，不在 `Source` 里：`HSET k f v …`、`SET k v EX ttl`，长的截到 `load_all` 并注明），复用 ddlview。二进制值按 §8.1 的占位符。布局文件记 `connection`、`db`、`key`（§14）。导出（`Each`）在 HSCAN / SSCAN 类型上是整键循环，按 `[redis] scan_keys` 同样的预算截断并提示，不另开配置。命令面板的「表」范围在 Redis 连接上这一版不列键（要 SCAN、有预算问题），键只从树和侧栏 `/` 进。
 - **已知上限**：控制台里手敲 `SELECT n` 只改这条 Main 的 db，标题和树不跟着变（`ponytail:` 标出）；HSCAN / SSCAN 翻页只能向前、计数是 `-1`、本地排序不可用；stream 的字段并集按当前页算；`WATCH` 粒度是整个键，别人改了同一个 hash 的另一个 field 也会报「行数据已变化」；RedisJSON 只在装了模块的服务端上（`MODULE LIST`，没有时 JSON 类型不出现）。
 

@@ -90,7 +90,7 @@
 
 **开发**（§5 `KeyTab`、§8.7「键 tab」、§14）
 - [ ] a. `redis.Key` 实现 Source：`Columns` 按 TYPE 出各类型的列和 `Sortable`（≤ load_all 的 hash / set / zset 全列，zset 的 score；HSCAN / SSCAN 和 list / stream 为空）、`NoInsert`（stream、string、json）；Page（hash / set / zset ≤ load_all 整取、本地翻页 / 排序 / 过滤，超过走 HSCAN / SSCAN / ZRANGE 偏移；list LRANGE；stream XRANGE 按 ID 游标）；Count（HLEN / LLEN / SCARD / ZCARD / XLEN；MATCH 过滤且走游标的类型 -1）；Each（导出，按 `scan_keys` 预算截断并提示）；Save（只读连接直接拒；WATCH + MULTI / EXEC，按 §8.7 的表；string `SET … KEEPTTL`；list 的删除 = LSET 哨兵 + LREM）；Info = 类型、TTL、编码、长度，内存（MEMORY USAGE）只在 `R` 刷新时查；`Rebuild` 给 DDL 查看。
-- [ ] b. tab：`kind = "key"`（layout 记 connection、db、key），复用 dataTab 的网格 / 编辑 / 标记 / `C-s`；标题 = 键名；信息行画在标题下；TTL（EXPIRE / PERSIST）、改名、删除在信息行上操作，TTL 人话化（`12m03s`）、-1 =「不过期」、`R` 刷新；键在别处被删或换了类型，下一次取数报「键已不存在 / 类型已变」并回到信息行。
+- [ ] b. tab：`kind = "key"`（layout 记 connection、db、key），复用 dataTab 的网格 / 编辑 / 标记 / `C-s`；标题 = 键名；信息行在查询条上方（TYPE、LEN、TTL、ENC、MEM、RENAME、DELETE，窄了从右边裁）；TTL（EXPIRE / PERSIST）、改名、删除在信息行上操作，TTL 人话化（`12m03s`）、-1 =「不过期」、`R` 刷新；键在别处被删或换了类型，下一次取数报「键已不存在 / 类型已变」并回到信息行。
 - [ ] c. 查询条的 WHERE 位置放 MATCH 模式，占位提示由 Source 给；WHERE 补全、`*`、复制为 INSERT 在 Redis 上 toast 不支持。
 - [ ] d. RedisJSON：值编辑器打开、`JSON.SET $` 写回；TYPE 给的 `ReJSON-RL` 识别为 json。
 - [ ] e. 「以 JSON 查看」（`key.json`）和 DDL 查看（`Rebuild` 的命令：HSET / SET … EX / RPUSH …）复用 jsonview / ddlview；二进制值走 §8.1 占位符。
@@ -136,6 +136,6 @@
 - [ ] golden：签名提示行（含当前参数高亮）、键名候选框。
 - [ ] e2e：打 `HSET key f` 时提示行高亮第二个参数；`GET us` 补出键名。
 
-不做（第二轮候选）：Pub/Sub tab、MONITOR、SLOWLOG、CLIENT LIST、内存分析、Cluster / Sentinel、按 score 范围过滤 zset、键的批量设 TTL、命令面板里列键。
+不做（第二轮候选）：Pub/Sub tab、MONITOR、SLOWLOG、CLIENT LIST、内存分析、Cluster / Sentinel、按 score 范围过滤 zset、键的批量设 TTL、命令面板里列键、格子里的 JSON 按格高亮、string 键是 JSON 时直接开值编辑器（F16.3 时定不做）。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
