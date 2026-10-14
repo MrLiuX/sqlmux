@@ -17,7 +17,7 @@
 
 决策者 2026-10-14 定的（worker 起草清单时问）：Redis 的 db 用 F15.1 的子连接（每 db 一对 Meta / Main，URL 路径 `/N`），不用 `SELECT`（worker 第一版提的，第二版撤回想改成每次请求 pipeline 里先 SELECT；决策者定子连接：F15.1 的机制现成、没有连接态要管）；F16.0 单独一个 feature、一个审查节点；query tab 的语言缝做（`lang` 接口，不另开控制台 tab）；命令面板的「表」范围这一版在 Redis 连接上不列键；测试只起 redis-stack（7.x），Redis 6 的退化用假连接单测；`Source` 的签名按 §5（绑定连接和表 / 键，`Count` 用 -1，有 `Each`，没有 `Describe`）。
 
-## F16.6 表格和树的方向键 · 状态：todo
+## F16.6 表格和树的方向键 · 状态：passed（6eda9bb；e2e 6468808）
 
 用户 2026-10-14：vim 模式下 `←↓↑→` 不动表格光标（非 vim 层有，§6.9）。nvim 的 NORMAL 本来就认方向键，两种模式都给。
 
@@ -30,7 +30,7 @@
 - [ ] 单测：两种模式下 grid / tree 作用域都解析出方向键，默认键位兼容性测试仍过。
 - [ ] e2e：vim 模式下表格里 `→` `↓` 动光标、树里 `→` 展开。
 
-## F16.0 接口缝（SQL 侧重构，行为不变）· 状态：todo
+## F16.0 接口缝（SQL 侧重构，行为不变）· 状态：passed（6eda9bb；e2e 6468808）
 
 - **依赖**：M15
 - **涉及**：`internal/db`（`source.go`）、`internal/app`
