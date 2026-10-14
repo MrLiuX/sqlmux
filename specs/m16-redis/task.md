@@ -36,8 +36,8 @@
 **开发**（§5「接口缝」「连接缝」「语言缝」）
 - [ ] a. `db/source.go`：`Source`、`PageQuery`、`Page`、`Attr`；`db.SQLTable` 包现有 `Page` / `Count` / `Select` / `Each` / `Save`，fetch 里选 Meta / Main 和 `Guarded` 的逻辑搬进去。
 - [ ] b. `dataTab` 持 `src db.Source`：fetch / count / sendSave / export 改走它；request 加游标表；`Columns` 加 `Sortable`、`NoInsert`；`conn.cols` 缓存仍只给 SQL。
-- [ ] c. `db.Driver` 抽出；`Conn.drv`；`eng == nil` 的入口挡住；三处拨号（reconnect、workspace、connform）走 Driver；`counted.Unwrap`。
-- [ ] d. app 内 `lang` 接口 + `sqlLang`，query / result / resultpage / hint / format / template 改走它；非 SQL 连接上 `gq`、快速 SQL、对象 DDL 等入口隐藏。
+- [ ] c. `db.Driver` 抽出；`Conn.drv`；三处拨号（reconnect、workspace、connform）走 Driver；`counted.Unwrap`。（「`eng == nil` 的入口挡住」挪到 F16.1 f：现在没有 Redis 连接可测，F16.0 审查时定。）
+- [ ] d. app 内 `lang` 接口 + `sqlLang`，query / result / resultpage 的分句、写 / 危险判定、自动 LIMIT 翻页改走它。（高亮、补全、签名提示、格式化各自变成 lang 的方法，和「非 SQL 连接上 `gq`、快速 SQL、对象 DDL 入口隐藏」挪到 F16.4 f：没有第二种语言签名定不了形。）
 
 **验收**
 - [ ] 全量 e2e 和现有 golden 一条不改全过；`just check` 绿。
@@ -53,11 +53,13 @@
 - [ ] b. config：`engine = "redis"`（Check 放行）；`[redis] delimiter` / `scan_keys` / `load_all` 和连接里的 `delimiter` 覆盖（进未知键白名单；非 redis 连接写了 delimiter 时 Check 提示）；密码走现有 password_cmd / env / 钥匙串；`ssh` 对 Redis 同样生效（`Options.Dialer` 接 db 的拨号，F15.2 的假 ssh 能测）。
 - [ ] c. 表单：engine 选项加 redis，DSN 示例，`db` 一栏（只是 URL 路径 `/N` 的另一种写法，不另存）；测试按钮发 `PING`。
 - [ ] d. 取消 / 阻塞命令：先写 spike 测试（真 Redis 上 `BLPOP` 不带超时、取消 ctx，看 go-redis 能否中断；预期不能）；不能就取消时关连接，让 Worker 走 F8.19 重拨。
+- [ ] f. `eng == nil` 的入口挡住（从 F16.0 c 挪来）：加第一个 Redis 连接时连接、树、目录加载、query / 表格的渲染都不碰 `eng`；`Conn.sql()` 之类的一个判断，每处按 Redis 的实现挡。
 - [ ] e. 集成环境：docker-compose 和 ci.yml 加 redis-stack-server（带 RedisJSON）；`testdata/seed/redis.txt`（每种类型、一个大 hash > 5000、一个大 keyspace > 10000、二进制值、带 TTL 的键）用 `redis-cli --pipe` 导入；`SQLMUX_TEST_REDIS`。改 seed 要通知 reviewer 和 tester。
 
 **验收**
 - [ ] 集成：PING；INFO 解析；ACL 用户名密码；rediss 只测 URL 解析；取消 BLPOP 在 2 s 内返回且连接可再用；ssh 经假 ssh 通；db 3 的子连接 `CLIENT INFO` 里 db=3。
 - [ ] 单测：DSN → 表单字段往返；connections.toml 往返和旧文件兼容；Check 对 engine 和 delimiter 的提示文字。
+- [ ] 冒烟（单测，nil 引擎的 Redis 连接）：打开 query、树、表格 pane 的渲染和按键不 panic（F16.0 审查时 worker 试过，queryView 第一处就 panic）。
 - [ ] e2e：新建 Redis 连接（表单、测试按钮）、状态栏地址块、断线（`CLIENT KILL`）后自动重拨。
 
 ## F16.2 树 · 状态：todo
@@ -107,13 +109,14 @@
 - [ ] b. 高亮：命令名来自连接时在 Meta 上取一次的 `COMMAND` 缓存，字符串和注释沿用现有色键。
 - [ ] c. 判定：只读连接拒绝 `write` 标记的命令，`@dangerous` 走 confirm_dangerous，两份名单都来自 `COMMAND INFO`；子命令（`CONFIG SET`、`CLIENT KILL`）按 `command|sub` 查；`COMMAND` 被 ACL 禁掉时全按写处理、危险名单空、toast 一次。
 - [ ] d. 回复成表：标量 `value`；数组一列；map 两列 field / value；等长二维数组按列；更深嵌套是格子里的 JSON；nil 是 NULL；错误进错误栏。整份回复在内存，按 500 行翻页，「全部」不重跑（resultpage 新增「内存页」路径，SQL 仍是 AutoLimit 重跑）。
+- [ ] f. `lang` 补齐（从 F16.0 d 挪来）：高亮、补全、签名提示、格式化各自变成 lang 的方法，`sqlLang` / `redisLang` 各一份；非 SQL 连接上 `gq`、快速 SQL、对象 DDL 的入口隐藏（面板里不列、键按了无事）。
 - [ ] e. 阻塞命令（BLPOP / SUBSCRIBE 不带超时）取消 = F16.1d 的关连接重拨；历史走现有 history.jsonl；控制台里 `SELECT n` 只改这条 Main 的 db，标题和树不跟着变（`ponytail:` 标出）。
 
 **验收**
 - [ ] 单测：分词（引号、转义、空格、注释、未闭合引号）表驱动；回复 → 表（标量 / 数组 / map / 等长二维 / 嵌套 / nil / 错误）；mutation 逐条验。
 - [ ] 集成：只读连接拒写（用 COMMAND INFO，不手写名单）；FLUSHALL 走确认；5000+ 元素的回复分页、「全部」不重发命令（用 `INCR` 计数验证只跑一次）。
 - [ ] golden：每种回复形状一屏。
-- [ ] e2e：跑 `SET` / `GET` / `ZRANGE … WITHSCORES` / `HGETALL` / `LRANGE 0 -1`、写命令被只读挡、BLPOP 取消。
+- [ ] e2e：跑 `SET` / `GET` / `ZRANGE … WITHSCORES` / `HGETALL` / `LRANGE 0 -1`、写命令被只读挡、BLPOP 取消；Redis 控制台里 `gq`、面板的快速 SQL 和「DDL」不出现。
 
 ## F16.5 补全与签名提示 · 状态：todo
 
