@@ -186,6 +186,45 @@ func TestJumpInQuery(t *testing.T) {
 	}
 }
 
+// s in a JSON view jumps in its text as in a query's: the matches are all of
+// them in it, ↵ goes to the nearest, a label to its own, the cursor on the
+// character; esc leaves it where it was (F16.8).
+func TestJumpInJSONView(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	loadOrders(t, a, 3)
+	feed(t, a, "gj")
+	jv := jsonViewOf(a.focused())
+	feed(t, a, "sstat")
+	var in []jumpMatch
+	for _, m := range a.jump.matches {
+		if m.target.Kind == ui.KindText && m.target.Pane == a.focused().ID {
+			in = append(in, m)
+		}
+	}
+	if len(in) != 3 {
+		t.Fatalf("matches of stat in the text: %d of %d", len(in), len(a.jump.matches))
+	}
+	if feed(t, a, "<CR>"); a.jump != nil || jv.ed.Cursor() != (editor.Pos{Line: 3, Col: 5}) {
+		t.Fatalf("↵ to the nearest: jump %v, cursor %+v", a.jump != nil, jv.ed.Cursor())
+	}
+	feed(t, a, "sstat")
+	feed(t, a, a.jump.matches[len(a.jump.matches)-1].label) // the last on the screen
+	if a.jump != nil || jv.ed.Cursor().Line != 3+2*15 || jv.ed.Cursor().Col != 5 {
+		t.Errorf("a label: jump %v, cursor %+v", a.jump != nil, jv.ed.Cursor())
+	}
+	feed(t, a, "ggsstat<Esc>")
+	if a.jump != nil || jv.ed.Cursor().Line != 0 || jsonViewOf(a.focused()) == nil {
+		t.Errorf("esc: jump %v, cursor %+v", a.jump != nil, jv.ed.Cursor())
+	}
+}
+
+func TestGoldenJumpJSONView(t *testing.T) {
+	a := wide(160, 45)
+	loadOrders(t, a, 3)
+	feed(t, a, "gjsstat")
+	golden.RequireEqual(t, a.render().String())
+}
+
 // A click or the wheel puts the jump away, the click going where it is (F10.8).
 func TestJumpLeftByClickAndWheel(t *testing.T) {
 	a := wide(160, 45)

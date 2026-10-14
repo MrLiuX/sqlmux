@@ -140,6 +140,7 @@ leader = "<Space>"
 "q" = "json.leave q" # esc first puts out the matches of a search lit, q leaves at once (F15.9)
 "gj" = "grid.view.json"
 "Y" = "json.yank" # the whole text, not the line vim's Y has (F16.9)
+"s" = "jump.start" # (F16.8)
 
 [keys.queryinsert] # a query in INSERT, where vim has C-r for a register (F14.2)
 "<C-r>" = "query.history"

@@ -163,6 +163,8 @@ func (a *App) jumpTo(m jumpMatch) tea.Cmd {
 		if c, n, v := a.queryAt(t.Pane, m.at); c != nil {
 			c.ed.Click(n, v)
 			c.comp = nil
+		} else if jv, n, v := a.jsonAt(t.Pane, m.at); jv != nil {
+			jv.ed.Click(n, v)
 		}
 	}
 	return nil
@@ -189,9 +191,14 @@ func (a *App) jumpScan() {
 		case k == ui.KindCell || k == ui.KindNode:
 			rect = h.Rect
 		case k == ui.KindText:
-			if p := a.win().pane(h.Target.Pane); p != nil && queryOf(p) != nil {
+			p := a.win().pane(h.Target.Pane)
+			switch {
+			case p == nil:
+			case queryOf(p) != nil:
 				view, body := a.queryView(p, queryOf(p))
 				rect = view.TextArea(body)
+			case jsonViewOf(p) != nil: // a JSON view's text too (F16.8)
+				rect = ui.Query{Lines: jsonViewOf(p).ed.Lines()}.TextArea(a.jsonArea(p))
 			}
 		}
 		for y := rect.Min.Y; y < rect.Max.Y; y++ {
@@ -273,7 +280,7 @@ func (a *App) jumpCursor(f *ui.Frame) (uv.Position, bool) {
 		ns, _ := a.treeNodes()
 		cur, _ := a.treeAt(ns)
 		return find(ui.Target{Kind: ui.KindNode, Pane: p.ID, I: cur})
-	case queryOf(p) != nil:
+	case queryOf(p) != nil || jsonViewOf(p) != nil:
 		if f.Cursor != nil {
 			return uv.Pos(f.Cursor.X, f.Cursor.Y), true
 		}
