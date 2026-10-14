@@ -70,9 +70,16 @@ jobs:
         options: >-
           --health-cmd "mysqladmin ping -h 127.0.0.1 -usqlmux -psqlmux"
           --health-interval 2s --health-retries 30
+      redis: # redis-stack-server, for RedisJSON (M16)
+        image: redis/redis-stack-server:7.4.0-v3
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s --health-retries 30
     env:
       SQLMUX_TEST_PG: postgres://sqlmux:sqlmux@localhost:5432/sqlmux?sslmode=disable
       SQLMUX_TEST_MYSQL: sqlmux:sqlmux@tcp(localhost:3306)/sqlmux
+      SQLMUX_TEST_REDIS: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -85,4 +92,5 @@ jobs:
         run: |
           PGPASSWORD=sqlmux psql -h localhost -U sqlmux -d sqlmux -v ON_ERROR_STOP=1 -f testdata/seed/pg.sql
           mysql -h 127.0.0.1 -uroot -psqlmux sqlmux < testdata/seed/mysql.sql
+          docker run -i --rm --network host redis/redis-stack-server:7.4.0-v3 redis-cli -h 127.0.0.1 < testdata/seed/redis.txt
       - run: go test -tags integration ./...

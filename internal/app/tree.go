@@ -104,6 +104,9 @@ type catalogMsg struct {
 // loadCatalog reads c's schemas and every schema's tables on its Meta; a
 // table's columns wait until it is opened (§8.4).
 func (a *App) loadCatalog(c *Conn) tea.Cmd {
+	if !c.sql() { // a key-value server has no catalog of tables (F16.2 reads its keys)
+		return nil
+	}
 	meta, eng := c.Meta, c.eng
 	return func() tea.Msg {
 		ctx := context.Background()

@@ -32,6 +32,9 @@ type formatDone struct {
 // formatprg; what comes back after the text changed, or with the editor
 // no longer in NORMAL, is dropped.
 func (a *App) queryFormat(t *queryTab, f editor.FormatSpan, whole bool) tea.Cmd {
+	if !t.conn.sql() {
+		return a.showToast(i18n.T("这个连接的命令没有格式化"))
+	}
 	lines := t.ed.Lines()
 	text := strings.Join(lines, "\n")
 	from, to := offsetOf(lines, f.From), offsetOf(lines, f.To)

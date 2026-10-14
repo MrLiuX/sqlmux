@@ -19,7 +19,7 @@ import (
 // ponytail: the text is scanned once a frame for the focused query, as the
 // colors are; keep the context per change if a big file lags
 func (a *App) signature(t *queryTab) ui.Signature {
-	if !a.valueHints {
+	if !a.valueHints || !t.conn.sql() { // a Redis command's is F16.5's
 		return ui.Signature{}
 	}
 	lines, cur := t.ed.Lines(), t.ed.Cursor()

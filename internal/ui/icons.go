@@ -29,6 +29,7 @@ type Icons struct {
 	Filter        Icon
 	Postgres      Icon
 	MySQL         Icon
+	Redis         Icon
 	SQLite        Icon
 	Search, Keys  Icon // status bar: palette entry, pending keys
 	Conn          Icon
@@ -67,6 +68,7 @@ var NerdIcons = &Icons{
 	Filter:      Icon{Text: "\uf0b0"}, // nf-fa-filter
 	Postgres:    Icon{Text: "\ue76e"}, // nf-dev-postgresql
 	MySQL:       Icon{Text: "\ue704"}, // nf-dev-mysql
+	Redis:       Icon{Text: "\ue76d"}, // nf-dev-redis
 	SQLite:      Icon{Text: "\ue7c4"}, // nf-dev-sqllite
 	Search:      Icon{Text: "\uf002"}, // nf-fa-search
 	Keys:        Icon{Text: "\uf11c"}, // nf-fa-keyboard_o
@@ -112,6 +114,7 @@ var ASCIIIcons = &Icons{
 	Filter:      Icon{Text: "?"},
 	Postgres:    Icon{Text: "pg"},
 	MySQL:       Icon{Text: "my"},
+	Redis:       Icon{Text: "re"},
 	SQLite:      Icon{Text: "sq"},
 	Search:      Icon{Text: "~"},
 	Keys:        Icon{Text: "kb"},
@@ -169,6 +172,8 @@ func (ic *Icons) Engine(engine string) Icon {
 		return ic.MySQL
 	case "sqlite":
 		return ic.SQLite
+	case "redis":
+		return ic.Redis
 	}
 	return ic.Postgres
 }
@@ -190,7 +195,7 @@ func (ic *Icons) byName() map[string]*Icon {
 	return map[string]*Icon{
 		"schema": &ic.Schema, "table": &ic.Table, "query": &ic.Query,
 		"filter": &ic.Filter, "search": &ic.Search, "keys": &ic.Keys, "conn": &ic.Conn,
-		"key": &ic.Key, "postgres": &ic.Postgres, "mysql": &ic.MySQL, "sqlite": &ic.SQLite, "command": &ic.Command, "window": &ic.Window,
+		"key": &ic.Key, "postgres": &ic.Postgres, "mysql": &ic.MySQL, "redis": &ic.Redis, "sqlite": &ic.SQLite, "command": &ic.Command, "window": &ic.Window,
 		"save": &ic.Save, "refresh": &ic.Refresh, "transpose": &ic.Transpose,
 		"row_add": &ic.RowAdd, "row_delete": &ic.RowDelete, "auto_refresh": &ic.AutoRefresh, "stop": &ic.Stop,
 		"sort_asc": &ic.SortAsc, "sort_desc": &ic.SortDesc, "view": &ic.View, "column": &ic.Column, "lock": &ic.Lock,

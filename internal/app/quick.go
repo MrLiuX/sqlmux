@@ -80,6 +80,9 @@ func (a *App) runQuick(sql string) tea.Cmd {
 		a.state.SQL = map[string][]string{}
 	}
 	c := p.conn
+	if !c.sql() {
+		return a.showToast(i18n.T("这个连接没有快速 SQL"))
+	}
 	if c.State != connReady { // a layout's other session, still connecting (F6.5)
 		return a.notReady(c)
 	}

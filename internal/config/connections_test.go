@@ -65,7 +65,7 @@ func TestLoadConnectionErrors(t *testing.T) {
 		"":                               "里面没有 [[connection]]",
 		"[[connection]]\nname = \"a\"\n": "第 1 个连接：缺少 engine",
 		"[[connection]]\nengine = \"postgres\"\n":                                       "第 1 个连接：缺少 name",
-		"[[connection]]\nname = \"a\"\nengine = \"oracle\"\ndsn = \"x\"\n":              `第 1 个连接：engine = "oracle"：只能是 postgres、mysql 或 sqlite`,
+		"[[connection]]\nname = \"a\"\nengine = \"oracle\"\ndsn = \"x\"\n":              `第 1 个连接：engine = "oracle"：只能是 postgres、mysql、sqlite 或 redis`,
 		"[[connection]]\nname = \"a/b\"\nengine = \"postgres\"\ndsn = \"x\"\n":          `第 1 个连接：name = "a/b"：不能含 / 或 \，也不能以 . 开头`,
 		"[[connection]]\nname = 'a\\b'\nengine = \"postgres\"\ndsn = \"x\"\n":           `第 1 个连接：name = "a\\b"：不能含 / 或 \，也不能以 . 开头`,
 		"[[connection]]\nname = \"..\"\nengine = \"postgres\"\ndsn = \"x\"\n":           `第 1 个连接：name = ".."：不能含 / 或 \，也不能以 . 开头`,
@@ -201,5 +201,35 @@ func TestCheckSSH(t *testing.T) {
 		if field, _ := c.Check(nil); (field == "ssh") != bad || field != "" && field != "ssh" {
 			t.Errorf("%q: field %q", ssh, field)
 		}
+	}
+}
+
+// A redis connection is a connection, and its delimiter is a key that is
+// known; a delimiter on any other is a problem of its own (F16.1).
+func TestRedisConnection(t *testing.T) {
+	ok := Connection{Name: "r", Engine: "redis", DSN: "redis://localhost:6379/0", Delimiter: "/"}
+	if field, problem := ok.Check(nil); field != "" || problem != "" {
+		t.Errorf("redis: %q %q", field, problem)
+	}
+	bad := Connection{Name: "p", Engine: "postgres", DSN: "postgres://h/d", Delimiter: ":"}
+	if field, _ := bad.Check(nil); field != "delimiter" {
+		t.Errorf("a delimiter on postgres: field %q", field)
+	}
+	connectionsFile(t, "[[connection]]\nname = \"r\"\nengine = \"redis\"\ndsn = \"redis://localhost/0\"\ndelimiter = \"/\"\n")
+	conns, _, err := LoadConnections("")
+	if err != nil || conns[0].Delimiter != "/" {
+		t.Fatalf("read: %+v %v", conns, err)
+	}
+	if lines := UnknownKeys(&Config{}); len(lines) != 0 {
+		t.Errorf("delimiter is known: %v", lines)
+	}
+	was := conns[0]
+	to := was
+	to.Delimiter = ":"
+	if _, err := UpdateConnection("r", was, to); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, connectionsPath()); !strings.Contains(got, "delimiter = \":\"\n") || strings.Contains(got, `"/"`) {
+		t.Errorf("rewritten:\n%s", got)
 	}
 }

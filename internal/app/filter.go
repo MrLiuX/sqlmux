@@ -82,6 +82,9 @@ func (a *App) filterCell() tea.Cmd {
 	if !ok || s.add != nil { // a row added has no value in the database
 		return nil
 	}
+	if !t.conn.sql() { // a Redis key's filter is a MATCH pattern, not a condition of a cell
+		return a.showToast(i18n.T("这一列的类型不支持按值过滤"))
+	}
 	d := t.conn.eng.Dialect()
 	cond, ok := cellCondition(d, t.conn.eng.Quote(s.key.col), s.col.Type, s.col.Fixed, s.orig)
 	if !ok {

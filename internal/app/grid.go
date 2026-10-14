@@ -674,7 +674,7 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 	}
 	return ui.QueryBar{
 		Selected: selected, SelectedStay: staySelected,
-		Where: where, Typing: t.typing == "where", Pane: p.ID, Right: right, Note: t.note, Names: names, Dialect: t.conn.eng.Dialect(),
+		Where: where, Typing: t.typing == "where", Pane: p.ID, Right: right, Note: t.note, Names: names, Dialect: t.conn.dialect(),
 		History: ic.History, HistKey: a.keys.Hint("where.history", "input"),
 		Chips:   chips,
 		Buttons: a.toolButtons(t),

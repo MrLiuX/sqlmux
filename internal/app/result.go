@@ -143,6 +143,9 @@ func (a *App) queryRun(arg string) tea.Cmd {
 	if t == nil || t.running != nil { // a run at a time a query
 		return nil
 	}
+	if !t.conn.sql() { // ponytail: the console of a key-value server runs its commands from F16.4
+		return a.showToast(i18n.T("这个连接的 query 还不能执行"))
+	}
 	text, from, to := querySpan(t, arg)
 	if from < 0 {
 		return nil

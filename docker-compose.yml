@@ -31,3 +31,23 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-usqlmux", "-psqlmux"]
       interval: 2s
       retries: 30
+
+  # M16: redis-stack-server has RedisJSON. testdata/seed/redis.txt is db0 (one of
+  # each type, a namespace tree, a hash of 6000 fields, 12000 keys) and db1 (two
+  # keys), a command a line, loaded by redis-seed once: its JSON.SET fails
+  # on a server with no RedisJSON. A TTL in it is ten years.
+  redis:
+    image: redis/redis-stack-server:7.4.0-v3
+    ports: ["56379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      retries: 30
+
+  redis-seed: # once: a data volume that has the seed already is left alone
+    image: redis/redis-stack-server:7.4.0-v3
+    depends_on:
+      redis: {condition: service_healthy}
+    volumes: ["./testdata/seed/redis.txt:/seed/redis.txt:ro"]
+    entrypoint: ["sh", "-c", "[ \"$$(redis-cli -h redis exists seed:done)\" = 1 ] || redis-cli -h redis < /seed/redis.txt"]
+    restart: "no"
