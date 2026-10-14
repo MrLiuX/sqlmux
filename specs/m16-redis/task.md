@@ -2,7 +2,7 @@
 
 - **状态**：**draft**（2026-10-11 用户定方向；2026-10-14 用户验收 M15 后定：接着做 M16。worker 先按下面的方向起草每个 feature 的开发 / 验收清单和接口缝的签名发决策者，决策者同时写设计章节，清单定下来改 todo 再开工）。
 - **目标**：Redis 支持的第一版，做到能日常用：连接、按命名空间分的树、六种类型加 RedisJSON 的键 tab、一行一条命令的控制台、来自服务器的补全和签名提示。用户体验过初版之后再定第二轮（Pub/Sub、MONITOR、SLOWLOG、Cluster / Sentinel、内存分析，候选 M17）。
-- **范围**：tech-design §4（`internal/db/redis`、go-redis v9）、§5（tab 的新类型 `key`；表格 tab 和数据源之间的接口缝）、§7.7（类型图标）、§7.8（树的 db 和命名空间层、键 tab 的信息行）、§8（键值引擎的接口、SCAN 预算、翻页规则）、§9（控制台的词法、分句、补全）、§11（控制台）、§13（只读与危险命令来自 `COMMAND INFO`）、§14（`redis://` DSN、`[redis]` 段）、§15。
+- **范围**（设计 2026-10-14 已写进各章，以它们为准，下面的「已定的方向」是当时的记录）：tech-design §4（`internal/db/redis`、go-redis v9）、§5（tab 的新类型 `key`；`db.Source` 接口缝）、§7.7（类型图标）、§7.8（「Redis 的树」）、§8.7（连接、SCAN、键 tab 的数据源表）、§9.8（控制台的词法、高亮、补全）、§11（「Redis 控制台」的回复摆法）、§13（只读与危险命令来自 `COMMAND INFO`）、§14（`redis://` DSN、`delimiter`、`[redis]` 段、layout 的 `key` tab）、§15（redis-stack 容器、`SQLMUX_TEST_REDIS`）。
 - **依赖**：M15 passed（F15.3 的签名提示浮层在这里和 Redis 共用；M14 F14.2 的历史）。
 - **审查节点**：待定，倾向三个：F16.1–F16.2（驱动、连接、树）；F16.3（键 tab）；F16.4–F16.5（控制台、补全）。
 

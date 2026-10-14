@@ -18,13 +18,13 @@
 | 单元格编辑 | 按列属性提供选项：时间分段调整、NULL、DEFAULT、布尔、枚举 |
 | WHERE | 不做简写语法，直接输入完整的 SQL 条件表达式 |
 | 结果展示 | 每个 window 底部一个全宽结果区，内部用 tab 区分：日志、各 query 的结果、已固定的结果（已确认） |
-| 范围 | PostgreSQL + MySQL。Redis 暂缓，只在 session 层留出位置 |
+| 范围 | PostgreSQL、MySQL、SQLite（M14）、Redis（M16，键值引擎走表格 tab 下的接口缝，§5、§8.7） |
 
 ## 1. 范围
 
 - 覆盖 PRD 第 5 章全部功能需求（Redis 相关除外），以及第 6、7、8 章的键位、鼠标和视觉规范。键位的调整见 §6.8 和 §18。
 - 在 PRD 之外新增：query 内的 SQL 模糊补全（§9.7）。PRD 原本只要求 WHERE 输入框补全字段名。
-- 不做：PRD 1.4 列出的非目标；Redis 的 key 浏览（布局未定）；表格多选和批量编辑（PRD 已标为后续版本）。
+- 不做：PRD 1.4 列出的非目标；表格多选和批量编辑（PRD 已标为后续版本）。
 
 ## 2. 技术选型
 
@@ -97,7 +97,7 @@ sqlmux/
 │  ├─ keymap/                 键位记法解析（含 keymaps.toml 的键位语法 ParseKeys，M13 F13.15 起）、作用域 trie、次数前缀、用户映射、冲突检测、提示查询、default.toml（embed）；不 import config / ui
 │  ├─ editor/                 vim 编辑器的纯逻辑，不 import ui 和 bubbletea；testdata/ 放 nvim 差分用例
 │  ├─ sqlkit/                 词法扫描、分句、读写判定、自动 LIMIT、WHERE 拼接校验、补全上下文、格式化（内嵌 sql-formatter）
-│  ├─ db/                     Conn / Engine 接口、Worker、postgres/、mysql/、sqlite/（M14 F14.1，modernc.org/sqlite，纯 Go）、catalog 查询
+│  ├─ db/                     Conn / Engine / Source 接口、Worker、postgres/、mysql/、sqlite/（M14 F14.1，modernc.org/sqlite，纯 Go）、redis/（M16，go-redis v9：连接、SCAN 树、键 tab 的数据源、控制台的命令词法与 COMMAND DOCS 补全）、catalog 查询
 │  ├─ config/                 config / connections / state / 布局文件的读写与 XDG 路径
 │  └─ i18n/                   界面文案的翻译：T(中文, 参数…)，en 表
 ├─ e2e/                       tester 的黑盒测试脚本，从 e2e 分支合并进来
@@ -123,7 +123,7 @@ sqlmux/
 依赖：
 
 - 界面：`charm.land/bubbletea/v2`、`github.com/charmbracelet/ultraviolet`，以及 `github.com/charmbracelet/x/ansi`（宽度计算、颜色解析）。不用 bubbles 的 textinput：它按 rune 删字，退格会把 é、👍🏽 这类字素簇拆开（M1 核对时实测）。单行输入框在 F0.4 命令行的输入处理上扩展。
-- 数据库驱动：`github.com/jackc/pgx/v5`、`github.com/go-sql-driver/mysql`
+- 数据库驱动：`github.com/jackc/pgx/v5`、`github.com/go-sql-driver/mysql`、`modernc.org/sqlite`、`github.com/redis/go-redis/v9`（M16，BSD-2）
 - 格式化：`github.com/dop251/goja`
 - 模糊匹配：`github.com/junegunn/fzf/src/algo`
 - 其他：`github.com/BurntSushi/toml`

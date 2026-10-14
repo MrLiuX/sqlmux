@@ -58,6 +58,26 @@ Tab 的种类：
 - `DataTab`：所属的 `*Conn`（M5 起）、表引用、`Query{Where, Order, Limit, Page}`（`Order` 是有序的 `[]OrderCol{Col, Desc}`，M12 F12.1 起多列；空表示默认排序）、隐藏列集合、`GridState{Row, Col, Scroll, Transpose}`、当前页数据、`Edits map[CellKey]Edit`（修改后的值为文本、NULL 或 DEFAULT）、总行数（-1 表示未知）、请求序号 `seq`。
 - `QueryTab`：文件路径、`*editor.Buffer`、所选的连接 `*Conn`（M5 起）和 schema（仅 PG，§8.6）、它在结果区里的结果 tab。执行走所选连接的 `Main`，同一个连接上的 query 共用它（用户 2026-10-02 定：每个 query 一条连接更复杂、更容易出错，这一版先复用）。
 - `ResultTab`：来源 query、执行序号、`*db.Result`、`GridState`、是否固定。
+- `KeyTab`（M16 F16.3，`kind = "key"`）：所属的 `*Conn`、Redis 的 db 号、键名；其余和 `DataTab` 一样（`Query`、`GridState`、`Edits`、当前页、总数、`seq`），因为它就是一个 `DataTab`，数据源换成这个键（下面的「接口缝」）。标题是键名，长的按 tab 标题的规则截断；信息行见 §8.7。
+
+**表格 tab 和数据源之间的接口缝**（M16，用户 2026-10-11 定；这是 M16 最大的工程量，先定这里和 §8.7 再动代码）：表格 tab 只依赖一组操作，SQL 表和 Redis 键各自实现，`app/edit.go` 的保存和 `app/grid.go` 的取数、计数不再直接拼 SQL：
+
+```go
+package db
+
+type Source interface {                 // 一个表格 tab 背后的数据：一张 SQL 表 / 视图，或一个 Redis 键
+    Columns(ctx) (Columns, error)       // 列、行标识、不能编辑的原因、过滤框的占位提示（SQL「WHERE …」、Redis「MATCH 模式」）
+    Page(ctx, q Query) (Result, next bool, error)   // q.Filter 是引擎自己解释的一段文本，q.Order 多列，q.Limit / q.Offset 或 q.Cursor
+    Count(ctx, filter string) (int64, error)        // -1 表示不知道（HSCAN 的大 hash、视图）
+    Save(ctx, changes []Change, manual bool) (failed int, tx bool, err error)   // 一批修改原子写回：SQL 一个事务，Redis 一个 MULTI / EXEC
+    Describe(ctx) (string, error)       // DDL / 重建这个键的命令，给 ddlview
+}
+```
+
+- 三处保持引擎中性：过滤条件是一段不透明的文本（SQL 是 WHERE，Redis 是 MATCH 模式，以后 Mongo 是 filter JSON），校验和占位提示由引擎给；行的身份是引擎给的不透明值（SQL 是主键 / 唯一索引的值，Redis 是 field / member / index / ID，以后是 `_id`），`Change` 里按这个值定位；嵌套值一律是格子里的 JSON 文本，由值编辑器处理。翻页有偏移和游标两种：`Page` 返回下一页用的 `Query`（偏移加一页或带上游标），表格不区分，只知道「有没有下一页」和「能不能回上一页」（游标翻页只能向前，§8.7）。
+- 这道缝就是唯一的抽象层：不提前为 MongoDB / Elasticsearch 抽第二层，缝由 SQL 和 Redis 两个真实现定形，第三种引擎来了再用它验证；不做引擎注册表、能力矩阵、插件接口。Mongo（库 → 集合 → 文档）和 ES（索引 → 文档）都能照这组操作映射，树、键 tab、控制台三件套不变。
+- SQL 的实现是现在的 `db.Page` / `db.Count` / `db.Save` 加 `Engine.TableColumns` / `DDL` 收进一个 `db.Table` 值（`Conn`、`Engine`、schema、表名），行为不变；Redis 的实现按键类型分（§8.7 的表）。`Conn` 结构不变：Redis 连接的 `Meta` / `Main` 还是两个 `*db.Worker`，底下的 `db.Conn` 由 `redis` 包实现（§8.7）；`Catalog` 对 Redis 是扫到的键（§8.7「树」），`Schema` 是当前 db 号。
+- 已知上限：SQL 表上的过滤仍然是 WHERE 文本，补全、历史、`C-r` 下拉照旧只对 SQL 有；Redis 的过滤框只有 MATCH 模式、没有补全。
 
 **表格和 query 可以放在同一个 pane 的不同 tab 里**（M3 F3.4 起，用户要求，与 DataGrip 一致）：
 

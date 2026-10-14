@@ -18,6 +18,7 @@
     - 拦下时整次都不执行，不算一次执行（不加执行序号、不出占位），日志记一行 `<连接> 是只读连接，整次都没有执行`（`error` 色）并切到日志 tab，不弹 toast、▶ 不变红、不出错误栏；结果区的重跑也检查。
   - **数据库层**：`Meta`、`Main` 两条都设只读：PG 在 RuntimeParams 里设 `default_transaction_read_only = on`（同 §8.2 的 `Meta`，`RESET` / `DISCARD ALL` 之后仍是 on），MySQL 执行 `SET SESSION TRANSACTION READ ONLY`，兜住判定漏掉的情况（例如会写数据的函数）。已知上限：`select set_config('default_transaction_read_only', 'off', false)` 判为读，两层都挡不住，代码里用 `ponytail:` 标出；`set U&"default_transaction_read_only" = off` 这类 Unicode 转义的标识符，判定也认不出，同样是已知上限。
   - 只读是为了防止误操作，不是权限边界。真正需要限制权限时，应使用只读的数据库账号。这一点要写进用户文档。
+- **Redis**（M16 F16.4，§9.8）：只读连接（`read_only = true`）上，`COMMAND INFO` flags 带 `write` 的命令整次不发（同 SQL 的只读拦截：日志记原因、切到日志 tab），表格的写回也拦；服务端没有「只读连接」可设（`READONLY` 是副本的），所以只有应用层这一道，和 SQL 一样不是权限边界，真要限制用 ACL 的 `-@write`。危险命令：ACL 分类 `@dangerous` 的（`FLUSHALL`、`FLUSHDB`、`CONFIG`、`DEBUG`、`SHUTDOWN`、`KEYS`、`MONITOR`、`CLIENT KILL` …）执行前走 `confirm_dangerous` 的确认框（标题「这次执行有 N 条危险命令」），树上的命名空间删除同样（「删除 N 个键？」）；单个键的删除不问（同 SQL 删一行不问）。两份名单都来自服务端；`COMMAND` 本身被 ACL 禁掉时，所有命令按写处理、危险名单为空并 toast 一次。
 - **快速 SQL**：只读由数据库事务保证，即使一条会写数据的 select 被判为读，也写不进去。但只读事务挡不住 `copy … to` 文件 / program、`reindex`、`cluster`、`load`、`checkpoint` 这类语句（M4 审查时实测），所以这些首词在应用层判为写、拦下（§12「写语句」）。
 - **凭据**：
   - `connections.toml` 支持 `password_cmd`（例如 macOS 的 `security` 命令、`pass`）、`password_env`；PG 还会被 pgconn 自动读取 `~/.pgpass`。

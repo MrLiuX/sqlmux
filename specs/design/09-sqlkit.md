@@ -151,3 +151,15 @@
 - **列表**：历史在前、收藏在后（M8 F8.14，用户要历史在上；原来收藏在前），两组都非空时中间一行 `sep` 色的横线，组内按时间从新到旧；每项前面画图标 `star` / `history`，不画组标题（F3.31）；底部一行提示（移动 · 应用 · 收藏 / 取消收藏 · 关闭，键位从 keymap 读）；WHERE 行右端的 `▾` 前面写打开下拉的键（`history` 图标 + `where.history` 的键，`dim` 色，这一段也能点开下拉；输入框留得下 16 列才显示，放不下只留 `▾`，F8.14 审查时定）；`icons = "ascii"` 时也不画，`*` / `h` 和右侧的说明已经能区分。打开时列出全部，不按输入框里已有的文字过滤，开始输入后才过滤。右侧说明：收藏项显示附带的 ORDER / LIMIT，跟默认值不同时才显示（`status ↓ · 500`）；历史项显示时间（`09-24 14:05`）。
 - **按键**（`[keys.where]`，Action `where.up/down/apply/star/close`）：`C-n` / `Tab` / `↓` 下一项，`C-p` / `S-Tab` / `↑` 上一项，到头绕回（F3.31）；`↵` 应用，把 WHERE、ORDER、LIMIT 都换成这一项的，从第 1 页开始执行；`C-e`（`where.edit`，M9 F9.1）只把这一项的 WHERE 文字填进输入框、INSERT、光标在末尾，ORDER / LIMIT 不动、不执行，方便改个值再执行；`C-f` 收藏 / 取消收藏（下拉没开、焦点在 WHERE 输入框时也是它：收藏输入框里的条件连同当前 ORDER / LIMIT，已有就取消，toast「已收藏」/「已取消收藏」，M9 F9.2）；`esc` 关闭，输入框里的文字保留。表格上按 `C-r`（`where.history` 绑在 `[keys.grid]`，M9 F9.4）先进 WHERE 输入再打开下拉。
 - **历史的规则**：每次 `↵` 执行一条非空的 WHERE，就连同当时的 ORDER / LIMIT 记一条；内容相同的去重并挪到最前面；每张表最多 100 条（F3.31，原为 50），满了丢最旧的。快速 SQL 的历史仍是 50 条。收藏不限数量。
+
+### 9.8 Redis 控制台的词法与补全（M16）
+
+不用 `sqlkit`：Redis 的控制台是一行一条命令，词法是 redis-cli 的 `sdssplitargs`（`internal/db/redis`，不另开包）。
+
+- **拆参数**（照 redis-cli）：空白分隔；`"…"` 里认 `\n` `\r` `\t` `\b` `\a` `\xHH` 和 `\"`；`'…'` 里只认 `\'`；引号后必须紧跟空白或行尾，否则整行报「引号没有闭合 / 引号后有字符」，这一行不发。`#` 开头（前面只有空白）的行是注释，空行跳过。一行一条命令，不认 `;`。
+- **执行范围**（§11「Redis 控制台」）：`↵` 跑光标所在行；VISUAL 选区跑选到的每一行；`▶ run` 同 query。每行一条请求，逐条跑，出错就停。
+- **高亮**：命令名（首词，和子命令一起，如 `CONFIG GET`、`JSON.SET`）来自 `COMMAND`（连接时在 `Meta` 上取一次，缓存在 `Conn.Catalog`），用 `keyword` 色；字符串和注释沿用 `sql_string` / `comment`；数字 `number`。认不出的首词不着色。
+- **只读与危险**（§13）：`COMMAND INFO` 的 flags 里带 `write` 的是写命令，ACL 分类 `@dangerous` 的是危险命令；两份名单都来自服务端，不手写；没拿到（没权限执行 COMMAND）时按写处理。
+- **补全**（F16.5，`COMMAND DOCS`，Redis 7 起；6 没有 DOCS 时只补命令名）：首词位置补命令名（含 `JSON.` 这类模块命令），第二个词位置如果首词有子命令（DOCS 里的 `subcommands`）补子命令；之后按 DOCS 的 `arguments` 定位当前参数：`key` 类型的参数位置在 `Meta` 上 `SCAN 0 MATCH <前缀>* COUNT 100` 补键名（去抖 150ms，同一个前缀只扫一次）；`HGET` / `HSET` / `HDEL` / `HMGET` 的 field 位置、键已知且长度 ≤ `load_all` 时 `HKEYS`；`oneof` / `pure-token` 的参数位置补那几个 token（`EX` / `PX` / `NX` / `XX`）。排序照 §9.7（F12.6）。签名提示用 F15.3 的浮层：DOCS 的 `arguments` 展开成 `SET key value [NX | XX] [GET] [EX seconds | …]`，当前参数高亮；可选块和 `multiple` 的参数按 DOCS 的 flags 标 `[]` 和 `…`，不做 redis-cli 那种完整的 hint 文法，认不出就整段 dim。
+- 已知上限：参数定位是线性的，`multiple` 之后的可选 token 定位可能偏；DOCS 没有 `key_specs` 的模块命令不补键名。
+
