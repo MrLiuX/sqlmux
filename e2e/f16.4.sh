@@ -98,7 +98,8 @@ runl "SET k3 \"tab\\there\\x41\""
 check "\"…\" 里的 \t 和 \x41 照 redis-cli 转义：值是 tab、here、A（十六进制 746162 09 68657265 41）" eval '[[ $(rc get k3 | tr -d "\n" | xxd -p) == 74616209686572654* ]]' || rc get k3 | xxd -p
 runl "SET k5 \"abc\"def"
 check "引号后有字符（\"abc\"def）：整行不发，日志写「引号后有字符」（k5 没有）" eval '[[ $(rc exists k5) == 0 && -n $(logline "引号后有字符") ]]' || logline SET
-runl "SET k4 \"abc"
+# the editor closes a typed " by itself (autopairs, §7.9): ↵ would send "abc" shut. Take the one it added away: esc, $, x
+key C-l; key g g; key d G; key i; e2e_type 'SET k4 "abc'; key Escape; e2e_type '$x'; key Enter; sleep 1.5
 check "没闭合的引号（§9.8：整行报「引号没有闭合」，这一行不发）：k4 没有，日志写「引号没有闭合」" eval '[[ $(rc exists k4) == 0 && -n $(logline "引号没有闭合") ]]' || { rc get k4; logline SET; }
 key C-l; key g g; key d G; key i; e2e_type "SET m1 a"; key Enter; e2e_type "# a comment line"; key Enter; e2e_type "SET m2 b"; key Enter; e2e_type "SET m3 c"; key Escape; key g g; key j; key j; key Enter; sleep 1.3
 check "三行里光标在第 3 行（SET m2 b，中间隔着一行 # 注释）按 ↵：只跑这一行：m2 = b，m1、m3 没有" eval '[[ $(rc get m2) == b && $(rc exists m1 m3) == 0 ]]' || { rc exists m1 m2 m3; }
