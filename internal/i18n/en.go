@@ -431,6 +431,7 @@ var en = map[string]string{
 	"%d–%d 行 · %s":     "%d–%d rows · %s",
 	"%d–%d+ 行 · %s":    "%d–%d+ rows · %s",
 	"%s 是只读连接，整次都没有执行": "%s is a read-only connection, nothing was run",
+	"已导出 %s · %d 行，%s": "Exported %s · %d rows, %s",
 	"已导出 %s · %d 行":    "Exported %s · %d rows",
 	"CSV · 当前页":        "CSV · this page",
 	"CSV · 全部":         "CSV · all",

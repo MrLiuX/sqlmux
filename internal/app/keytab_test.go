@@ -25,3 +25,15 @@ func TestKeyTabLayout(t *testing.T) {
 		t.Errorf("restored %+v %q", tb.Data, warn)
 	}
 }
+
+// The state keeps a key under its connection and db, as the tree names them.
+func TestKeyTableKey(t *testing.T) {
+	a, c := redisTree(t, someKeys())
+	_ = a
+	if got := c.tableKey(db.Table{Name: "app:users:1", Kind: "k"}); got != "cache/db0/app:users:1" {
+		t.Errorf("key %q", got)
+	}
+	if got := c.inDB("3").tableKey(db.Table{Name: "k", Kind: "k"}); got != "cache/db3/k" {
+		t.Errorf("key in db 3 %q", got)
+	}
+}

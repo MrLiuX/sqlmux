@@ -290,7 +290,12 @@ func (c *Conn) root() *Conn {
 // tableKey is table t of c as the palette's ids and state.json's table keys
 // have it, <connection>/[<database>/]<schema>.<table>: one place for both
 // (F15.1).
-func (c *Conn) tableKey(t db.Table) string { return c.keyPrefix() + t.Schema + "." + t.Name }
+func (c *Conn) tableKey(t db.Table) string {
+	if t.Kind == "k" { // a Redis key: <connection>/db<n>/<key> (§14)
+		return c.Spec.Name + "/" + dbText(cmp.Or(c.Spec.Database, c.DB)) + "/" + t.Name
+	}
+	return c.keyPrefix() + t.Schema + "." + t.Name
+}
 
 // keyPrefix is what tableKey starts with.
 func (c *Conn) keyPrefix() string {

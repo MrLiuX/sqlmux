@@ -3,6 +3,8 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -103,11 +105,27 @@ func TestKeyTabSaves(t *testing.T) {
 	if got := command(t, c, "HGET", "h", "b").Rows[0][0].S; got != "other" {
 		t.Errorf("a stale row was written: %q", got)
 	}
+	// the DDL is read again for each view: the key is not as it was
+	ddl := func() string {
+		if cmd := a.openDDL(false); cmd != nil {
+			a.Update(cmd())
+		}
+		v, _ := a.ddlContent()
+		a.ddl = nil
+		return v.Text
+	}
+	if got := ddl(); !strings.Contains(got, " a 10 ") {
+		t.Errorf("DDL %q", got)
+	}
+	command(t, c, "HSET", "h", "a", "11")
+	if got := ddl(); !strings.Contains(got, " a 11 ") {
+		t.Errorf("DDL after a change %q", got)
+	}
 	// a read-only connection refuses
 	c.readOnly = true
-	d.edits = map[editKey]edit{{d.rowKey(0), "value"}: {val: db.Val{S: "x"}, orig: d.page.Rows[0][1]}}
+	d.edits = map[editKey]edit{{d.rowKey(0), "value"}: {val: db.Val{S: "x"}, orig: db.Val{S: "11"}}}
 	settle(a, a.save())
-	if got := command(t, c, "HGET", "h", "a").Rows[0][0].S; got != "10" {
+	if got := command(t, c, "HGET", "h", "a").Rows[0][0].S; got != "11" {
 		t.Errorf("a read-only connection wrote: %q", got)
 	}
 }
@@ -170,5 +188,83 @@ func TestKeyTabOperations(t *testing.T) {
 	settle(a, a.confirm.then())
 	if got := command(t, c, "EXISTS", "k2").Rows[0][0].S; got != "0" || d.bar == nil {
 		t.Errorf("deleted: EXISTS %s, bar %v", got, d.bar)
+	}
+}
+
+// The JSON view of a key tab is the key's own value by its type, the DDL view the
+// commands that make it again, and an export past the scan budget is a part of
+// the key, said so (F16.3).
+func TestKeyTabViews(t *testing.T) {
+	dir := inDir(t)
+	a, c := redisApp(t, redis.IntegrationDSN(t), 100)
+	for name, want := range map[string]string{
+		"str:plain":     `"hello"`,
+		"hash:user":     `{"age":"30","email":"ann@example.com","meta":"{\"vip\":true}","name":"Ann"}`,
+		"list:queue":    `["first","second","third","fourth","fifth"]`,
+		"set:tags":      `["blue","green","red"]`,
+		"zset:rank":     `[["alice",1],["bob",2.5],["carol",3],["dave",3],["erin",10]]`,
+		"stream:events": `[{"id":"1700000000000-1","fields":{"type":"login","user":"ann"}},{"id":"1700000000000-2","fields":{"target":"button","type":"click","user":"ann"}},{"id":"1700000000001-1","fields":{"type":"logout","user":"ann"}}]`,
+	} {
+		d := openKey(t, a, c, name)
+		a.viewJSON()
+		got := strings.Join(strings.Fields(jsonViewOf(a.focused()).text), "")
+		if got != strings.Join(strings.Fields(want), "") {
+			t.Errorf("%s: %s", name, got)
+		}
+		a.viewJSON()
+		if d.jv != nil {
+			t.Fatal("the view stays")
+		}
+	}
+	// the commands that make it again
+	openKey(t, a, c, "hash:user")
+	cmd := a.openDDL(false)
+	msg, ok := cmd().(ddlMsg)
+	if !ok {
+		t.Fatalf("no DDL asked: %T", cmd())
+	}
+	a.Update(msg)
+	if v, title := a.ddlContent(); title != "hash:user" || !strings.Contains(v.Text, "HSET hash:user") || !strings.Contains(v.Text, "Ann") {
+		t.Errorf("DDL %q %q", title, v.Text)
+	}
+	a.ddl = nil
+	if a.openDDL(true) != nil || a.ddl != nil {
+		t.Error("a key has no column DDL")
+	}
+	// an export that reads more than the budget says it is a part
+	big := openKey(t, a, c, "hash:big")
+	exportAt(t, a, exportCSVAll)
+	if toast := a.toast; !strings.Contains(toast, db.ErrTruncated.Error()) {
+		t.Errorf("toast %q", toast)
+	}
+	files, _ := filepath.Glob(filepath.Join(dir, "hash:big*.csv"))
+	if len(files) != 1 {
+		t.Fatalf("files %v", files)
+	}
+	if b, _ := os.ReadFile(files[0]); strings.Count(string(b), "\n") < 100 || strings.Count(string(b), "\n") > 2000 || big.bar != nil {
+		t.Errorf("a part of the key is in the file: %d lines", strings.Count(string(b), "\n"))
+	}
+}
+
+// A stream's entries are not changed, only deleted, and a string or a stream has
+// no row to add; a list's index is the place and is not changed (F16.3).
+func TestKeyTabNoEdit(t *testing.T) {
+	a, c := redisApp(t, redis.IntegrationDSN(t), 1000)
+	d := openKey(t, a, c, "stream:events")
+	if s, ok := d.cellAtCursor(); !ok || s.why != d.cols.NoUpdate || s.why == "" {
+		t.Errorf("a stream's cell: %+v", s)
+	}
+	settle(a, a.addRow())
+	if a.toast != d.cols.NoInsert || a.toast == "" {
+		t.Errorf("a row of a stream: %q", a.toast)
+	}
+	d = openKey(t, a, c, "str:plain")
+	settle(a, a.addRow())
+	if a.toast != d.cols.NoInsert || a.toast == "" {
+		t.Errorf("a row of a string: %q", a.toast)
+	}
+	d = openKey(t, a, c, "list:queue")
+	if s, ok := d.cellAtCursor(); !ok || s.why == "" || d.col != 0 {
+		t.Errorf("a list's index: %+v", s)
 	}
 }

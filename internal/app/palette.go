@@ -16,6 +16,7 @@ import (
 
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db/redis"
 	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
@@ -589,10 +590,15 @@ func (a *App) fetchDDL(m previewDue) tea.Cmd {
 // countTimeout at most.
 func (a *App) ddlCmd(ctx context.Context, conn *Conn, t db.Table) tea.Cmd {
 	meta, eng := conn.Meta, conn.eng
+	key := redis.Key{Meta: meta, Name: t.Name, LoadAll: a.loadAll}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, countTimeout)
 		defer cancel()
 		m := ddlMsg{conn: conn, table: t}
+		if eng == nil { // a Redis key: the commands that make it again
+			m.text, m.err = key.Rebuild(ctx)
+			return m
+		}
 		m.err = meta.RunSafe(ctx, func(ctx context.Context, c db.Conn) (err error) {
 			if m.text, err = eng.DDL(ctx, c, t.Schema, t.Name); err != nil || t.View() {
 				return err

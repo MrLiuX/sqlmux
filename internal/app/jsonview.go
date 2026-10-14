@@ -42,6 +42,9 @@ func (a *App) jsonArea(p *Pane) uv.Rectangle {
 // jsonText is the page of tab as a JSON array, each record as Y yanks it
 // (§7.5), a table's with its changes in, indented, in full.
 func jsonText(tab *Tab) string {
+	if t := tab.Data; t != nil && t.table.Kind == "k" {
+		return keyJSON(tab)
+	}
 	var objects []string
 	for row := 0; ; row++ {
 		fs, ok := jsonFields(tab, row)
@@ -59,6 +62,79 @@ func jsonText(tab *Tab) string {
 		return err.Error()
 	}
 	return text
+}
+
+// keyJSON is the page of a key tab as the key's own value (§8.7): a hash is an
+// object, a list or a set an array, a zset an array of [member, score], a stream
+// an array of {id, fields} with the fields an entry has; a string or a RedisJSON
+// value is itself. A page of the longer ones is a part of the key.
+func keyJSON(tab *Tab) string {
+	var typ string
+	for _, at := range tab.Data.info {
+		if at.Name == "type" {
+			typ = at.Value
+		}
+	}
+	var items []string
+	var failed error
+	enc := func(f jsonField) string {
+		raw, err := jsonOf(jsonValue(f.class, f.val))
+		if err != nil {
+			failed = err
+		}
+		return string(raw)
+	}
+	for row := 0; ; row++ {
+		fs, ok := jsonFields(tab, row)
+		if !ok {
+			break
+		}
+		by := map[string]jsonField{}
+		for _, f := range fs {
+			by[f.name] = f
+		}
+		switch typ {
+		case "hash":
+			k, _ := jsonOf(by["field"].val.S)
+			items = append(items, string(k)+":"+enc(by["value"]))
+		case "list":
+			items = append(items, enc(by["value"]))
+		case "set":
+			items = append(items, enc(by["member"]))
+		case "zset":
+			items = append(items, "["+enc(by["member"])+","+enc(by["score"])+"]")
+		case "stream":
+			var fields []string
+			for _, f := range fs {
+				if f.name != "id" && !f.val.Null {
+					k, _ := jsonOf(f.name)
+					fields = append(fields, string(k)+":"+enc(f))
+				}
+			}
+			items = append(items, `{"id":`+enc(by["id"])+`,"fields":{`+strings.Join(fields, ",")+`}}`)
+		default: // string, json
+			items = append(items, enc(fs[0]))
+		}
+	}
+	text := "null"
+	switch {
+	case typ == "hash":
+		text = "{" + strings.Join(items, ",") + "}"
+	case typ == "string" || typ == "json":
+		if len(items) > 0 {
+			text = items[0]
+		}
+	default:
+		text = "[" + strings.Join(items, ",") + "]"
+	}
+	if failed != nil {
+		return failed.Error()
+	}
+	out, err := indentJSON([]byte(text))
+	if err != nil {
+		return err.Error()
+	}
+	return out
 }
 
 // jsonSig is what jsonText depends on: the rows, as the page's slice and its
