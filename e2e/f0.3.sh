@@ -90,7 +90,7 @@ tui '[keys.grid]\n"T" = ""\n'; two_tabs; check "解绑 grid.transpose：tab 栏�
 side_hints() { local c; c=$(e2e_find ┐ 1); text_is 1 "${c%% *}" 43 "$1"; }
 tui ''; check "侧栏提示行（默认）" side_hints "│ j/k move · ↵ open            │"
 tui '[keys.tree]\n"<CR>" = ""\n'; check "解绑 tree.open：整项不显示" side_hints "│ j/k move                     │"
-tui '[keys.tree]\n"j" = ""\n'; check "解绑 tree.down：j/k move 整项不显示" side_hints "│ ↵ open                       │"
+tui '[keys.tree]\n"j" = ""\n"<Down>" = ""\n'; check "解绑 tree.down（j 和 ↓，F16.6 起方向键两种模式都有）：j/k move 整项不显示" side_hints "│ ↵ open                       │"
 conf ''; e2e_start -x 80 "$E2E_BIN"; wait_for 5 flag_is alternate_on 1; sleep 0.3
 check "80 宽：两项都放得下（整项省略的规则由 golden 覆盖）" side_hints "│ j/k move · ↵ open    │"
 
