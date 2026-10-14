@@ -100,6 +100,19 @@ func (cs Commands) Writes(line string) bool {
 		has(c.Categories, "@scripting") && !has(c.Flags, "readonly")
 }
 
+// ReadOnly is whether the line is of a command the server flags readonly: one
+// with no effect to repeat, which a request lost after it was sent runs again.
+// One the server does not list, or would not say, or a line that does not split,
+// is not (§8.7).
+func (cs Commands) ReadOnly(line string) bool {
+	args, err := SplitLine(line)
+	if err != nil || len(args) == 0 {
+		return false
+	}
+	c, ok := cs.of(args)
+	return ok && slices.Contains(c.Flags, "readonly")
+}
+
 // Dangerous is whether the line is of a command in the @dangerous category (§13);
 // a server that did not say has none.
 func (cs Commands) Dangerous(line string) bool {

@@ -47,6 +47,7 @@ func (redisLang) At(text string, stmts []sqlkit.Stmt, pos int) int {
 
 func (l redisLang) Writes(stmt string) bool    { return l.cmds.Writes(stmt) }
 func (l redisLang) Dangerous(stmt string) bool { return l.cmds.Dangerous(stmt) }
+func (l redisLang) Reruns(stmt string) bool    { return l.cmds.ReadOnly(stmt) }
 
 // Page: a reply has no cursor to go on from, it is held whole and paged in memory.
 func (redisLang) Page(stmt string, _, _ int) (string, bool) { return stmt, false }
