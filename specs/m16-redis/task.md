@@ -109,9 +109,9 @@
 **开发**（§9.8、§11「Redis 控制台」、§13）
 - [ ] a. `redisLang`：一行一条命令，`#` 开头是注释，引号照 redis-cli（`"…"` 带转义、`'…'`）；`↵` 跑光标行，选区和全部同 query；标题的 db 段下拉换子连接。
 - [ ] b. 高亮：命令名来自连接时在 Meta 上取一次的 `COMMAND` 缓存，字符串和注释沿用现有色键。
-- [ ] c. 判定：只读连接拒绝 `write` 标记的命令，`@dangerous` 走 confirm_dangerous，两份名单都来自 `COMMAND INFO`；子命令（`CONFIG SET`、`CLIENT KILL`）按 `command|sub` 查；`COMMAND` 被 ACL 禁掉时全按写处理、危险名单空、toast 一次。
+- [ ] c. 判定：只读连接拒绝的命令按 §13（`write` / `may_replicate` flag、非 `readonly` 的 `@scripting`、`@admin`、服务端没列出的；审查时定，原来只拦 `write`：`EVAL` 和 `CONFIG SET` 没有这个 flag），`@dangerous` 走 confirm_dangerous，两份名单都来自 `COMMAND INFO`；子命令（`CONFIG SET`、`CLIENT KILL`）按 `command|sub` 查；`COMMAND` 被 ACL 禁掉时全按写处理、危险名单空、toast 一次。
 - [ ] d. 回复成表：标量 `value`；数组一列；map 两列 field / value；等长二维数组按列；更深嵌套是格子里的 JSON；nil 是 NULL；错误进错误栏。整份回复在内存，按 500 行翻页，「全部」不重跑（resultpage 新增「内存页」路径，SQL 仍是 AutoLimit 重跑）。
-- [ ] f. `lang` 补齐（从 F16.0 d 挪来）：高亮、补全、签名提示、格式化各自变成 lang 的方法，`sqlLang` / `redisLang` 各一份；非 SQL 连接上 `gq`、快速 SQL、对象 DDL 的入口隐藏（面板里不列、键按了无事）。
+- [ ] f. `lang` 补齐（从 F16.0 d 挪来）：高亮进 lang（`Colors`、`At`）；补全和签名提示不进接口，`queryComplete` / `signature` 按 `conn.sql()` 分两支（`redisComplete` / `redisSignature`）；Redis 没有格式化；非 SQL 连接上 `gq`、快速 SQL、对象 DDL 的入口隐藏（面板里不列、键按了无事）。（审查时定，照实现：原来写四样各成 lang 的方法，两处 if 比给接口加两个方法简单，第三种语言来了再抽。）
 - [ ] e. 阻塞命令（BLPOP / SUBSCRIBE 不带超时）取消 = F16.1d 的关连接重拨；历史走现有 history.jsonl；控制台里 `SELECT n` 只改这条 Main 的 db，标题和树不跟着变（`ponytail:` 标出）。
 
 **验收**
