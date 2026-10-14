@@ -65,18 +65,30 @@ Tab 的种类：
 ```go
 package db
 
-type Source interface {                 // 一个表格 tab 背后的数据：一张 SQL 表 / 视图，或一个 Redis 键
-    Columns(ctx) (Columns, error)       // 列、行标识、不能编辑的原因、过滤框的占位提示（SQL「WHERE …」、Redis「MATCH 模式」）
-    Page(ctx, q Query) (Result, next bool, error)   // q.Filter 是引擎自己解释的一段文本，q.Order 多列，q.Limit / q.Offset 或 q.Cursor
-    Count(ctx, filter string) (int64, error)        // -1 表示不知道（HSCAN 的大 hash、视图）
-    Save(ctx, changes []Change, manual bool) (failed int, tx bool, err error)   // 一批修改原子写回：SQL 一个事务，Redis 一个 MULTI / EXEC
-    Describe(ctx) (string, error)       // DDL / 重建这个键的命令，给 ddlview
+type Source interface {     // 一个表格 tab 背后的数据：一张 SQL 表 / 视图，或一个 Redis 键；绑定了它的连接（Worker）和表 / 键，决策者 2026-10-14 定
+    Columns(ctx) (Columns, error)                    // 列、行标识、不能编辑 / 新增的原因、过滤框的占位提示；R 刷新时再读一次（Redis 的键换了类型列就变）
+    Page(ctx, q PageQuery) (Page, error)
+    Count(ctx, filter string) (int64, error)         // -1 表示不知道（HSCAN 的大 hash、视图），tab 显示 ?
+    Each(ctx, q PageQuery, head func([]Col) error, row func([]Val) error) error   // 导出：q 留下的全部行，流式
+    Save(ctx, changes Changes, manual bool) (failed int, tx byte, err error)       // 一批修改原子写回：SQL 一个事务，Redis WATCH + MULTI / EXEC
+}
+type PageQuery struct {
+    Filter        string     // 不透明文本：SQL 的 WHERE、Redis 的 MATCH
+    Order         []OrderCol
+    Limit, Offset int
+    Cursor        string     // 游标引擎的续页，取自上一页的 Page.Cursor
+}
+type Page struct {
+    Result                  // 行
+    Next    bool
+    Cursor  string          // 非空 = 按游标翻页，tab 只给「下一页」，页号对应的游标记在 request 上
+    Info    []Attr          // 标题下的信息行 Attr{Name, Value}；SQL 为空，键 tab 用（§8.7）
 }
 ```
 
 - 三处保持引擎中性：过滤条件是一段不透明的文本（SQL 是 WHERE，Redis 是 MATCH 模式，以后 Mongo 是 filter JSON），校验和占位提示由引擎给；行的身份是引擎给的不透明值（SQL 是主键 / 唯一索引的值，Redis 是 field / member / index / ID，以后是 `_id`），`Change` 里按这个值定位；嵌套值一律是格子里的 JSON 文本，由值编辑器处理。翻页有偏移和游标两种：`Page` 返回下一页用的 `Query`（偏移加一页或带上游标），表格不区分，只知道「有没有下一页」和「能不能回上一页」（游标翻页只能向前，§8.7）。
 - 这道缝就是唯一的抽象层：不提前为 MongoDB / Elasticsearch 抽第二层，缝由 SQL 和 Redis 两个真实现定形，第三种引擎来了再用它验证；不做引擎注册表、能力矩阵、插件接口。Mongo（库 → 集合 → 文档）和 ES（索引 → 文档）都能照这组操作映射，树、键 tab、控制台三件套不变。
-- SQL 的实现 `db.SQLTable{Engine, Schema, Name, Meta}` 只是把现有的 `Page` / `Count` / `Select` / `Save` 包一层，逻辑不挪；`db.Changes` / `Row` / `Change` 原样用于 Redis，行身份（`Key`）是引擎给的不透明值，Redis 把 hash 的 field 当主键列，改它就是改名（`HDEL` 旧 + `HSET` 新）。`Columns` 加 `Sortable []string`（表头点排序和 ORDER 框只认它：SQL 全部列，Redis 按类型）和 `NoInsert string`（不能新增行的原因，stream）；现有的 `ReadOnly` / `Column.ReadOnly` / `Generated` / `NotNull` 够表达其余。DDL 不进缝：SQL 的留在 `Engine.DDL`，Redis 的重建命令在 `redis.Key` 上。不进缝的三处 SQL 专属功能——`*` 按值过滤、复制为 INSERT、PG 的 `cellCheck`——在 Redis 上 toast「不支持」，不加 Source 方法。
+- SQL 的实现 `db.SQLTable{Engine, Schema, Name, Meta, Main}` 只是把现有的 `Page` / `Count` / `Select` / `Each` / `Save` 包一层，逻辑不挪，fetch 里「手动事务或在事务里读 `Main`、`Guarded` 的 savepoint」也搬进它；只读连接的写回在 `Save` 里直接拒（「只读连接」错误，不进事务 / MULTI）；`db.Changes` / `Row` / `Change` 原样用于 Redis，行身份（`Key`）是引擎给的不透明值，Redis 把 hash 的 field 当主键列，改它就是改名（`HDEL` 旧 + `HSET` 新）。`Columns` 加 `Sortable []string`（表头点排序和 ORDER 框只认它：SQL 全部列，Redis 按类型）和 `NoInsert string`（不能新增行的原因，stream）；现有的 `ReadOnly` / `Column.ReadOnly` / `Generated` / `NotNull` 够表达其余。DDL 不进缝：SQL 的留在 `Engine.DDL`，Redis 的重建命令在 `redis.Key` 上。不进缝的三处 SQL 专属功能——`*` 按值过滤、复制为 INSERT、PG 的 `cellCheck`——在 Redis 上 toast「不支持」，不加 Source 方法。
 - **连接缝**：`db.Driver{Connect, Broken, ErrorOf}` 从 `Engine` 抽出、`Engine` 内嵌它；引擎表改成 Driver 表；`app.Conn` 持 `drv`，`eng` 只对 SQL 连接非 nil，要 `eng` 的入口（query 的 SQL 路径、快速 SQL、WHERE 补全、DDL 预览、对象树、签名提示）按「是不是 SQL 连接」挡住。`Worker` 不动：Redis 的连接也实现 `db.Conn`（§8.7），重拨、取消、`counted` 全沿用，只给 `counted` 加 `Unwrap() Conn` 让 redis 包拿回自己的连接做 SCAN / pipeline；`TxStatus` 恒为空闲，`Guarded` 不发 savepoint。
 - **query tab 的语言缝**（worker 2026-10-14 提、决策者定做）：query 的 SQL 管线（分句、高亮、写 / 危险判定、自动 LIMIT 翻页、`UseSchema`、补全、签名提示、`gq` 格式化，散在 result / hint / format / template / resultpage 里）收进 `app` 内部的 `lang` 接口，`sqlLang` / `redisLang` 两个实现，签名在 F16.0 里照 `sqlLang` 的真实调用写；不另开一种控制台 tab 重写编辑器 / 文件 / 运行状态的外壳。非 SQL 连接上 `gq`、快速 SQL、对象 DDL 这些入口隐藏。
 - `Conn` 结构不变：Redis 连接的 `Meta` / `Main` 还是两个 `*db.Worker`；Redis 的每个 db 是一个子 `Conn`（同 F15.1 的 PG 数据库，拨号时 URL 路径改成 `/N`，不用 `SELECT`：Main 是 query 和写回共用的，键 tab 在 db 3、控制台在 db 0 时来回 SELECT 会互相踩）；`Catalog` 对 Redis 是扫到的键（§8.7「树」）。

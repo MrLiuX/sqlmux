@@ -244,7 +244,7 @@ query 里的 `x` 是 vim 的删除字符，所以 query 的 tab 用 `:q` 关闭�
 - 编辑器里没有 NORMAL 上下文：leader、`gt` / `gT`、`?`、`[map.*]` 在编辑器里都不生效（`SPC` 是要打的字）。能「到」编辑器的只有两类绑定：Ctrl 组合，和 `[keys.global]`；`Tab`、退格、`↵`、方向键、`esc`、`F5` 这类非 Ctrl 的绑定在这里不生效，免得编辑键被 NORMAL 的默认绑定截走。用户绑的 Ctrl 键优先于编辑器自己的 `C-a` / `C-w` / `C-z`。`C-h` 例外：§6.2 说它在一些终端里就是退格，plain 编辑器面向的正是这类用户，所以在编辑器里当退格、不切焦点，`C-j` / `C-k` / `C-l` 照旧。表格、树、引导页上这些照常。状态栏不显示模式块。界面上的键位提示在 `vim = false` 时优先取 novim 层的键（`↓`、`PgDn`、`Del`），plain query 的 tab 栏不画 `gt` / `gT`。
 - 编辑器行为不再对照 nvim，nvim 差分测试不适用，用普通单测。
 
-**2. 一套叠加的非 vim 默认键位**（F6.6b，`default-novim.toml`，`vim = false` 时叠在 `default.toml` 上，同一套解析、冲突检查和导出；`sqlmux keys` 按配置导出叠加后的结果）：
+**2. 一套叠加的非 vim 默认键位**（F6.6b，`default-novim.toml`，`vim = false` 时叠在 `default.toml` 上，同一套解析、冲突检查和导出；`sqlmux keys` 按配置导出叠加后的结果）。M16 F16.6 起表格和树的方向键（`←↓↑→` = `grid.left/down/up/right`、`tree.up/down/expand/collapse`）挪进 `default.toml`，两种模式都有（nvim 的 NORMAL 本来就认方向键；用户 2026-10-14：vim 模式下方向键不动光标，不用 vim 的人也会碰到）；`PgUp` / `PgDn` / `Delete` 仍只在非 vim 层：
 
 | 作用域 | 加的键 | 操作 |
 |---|---|---|
