@@ -552,6 +552,9 @@ func (a *App) addRow() tea.Cmd {
 	if why := t.whyNoEdit(); why != "" {
 		return a.showToast(why)
 	}
+	if why := t.cols.NoInsert; why != "" {
+		return a.showToast(why)
+	}
 	// added keeps the order they show in, (page, after), a save's too:
 	// right after the cursor's, or before those added under its row before
 	// ponytail: at the last page's end the rows of pages before it, a LIMIT
@@ -762,10 +765,10 @@ func (a *App) sendSave(t *dataTab, closing bool) tea.Cmd {
 	t.saving, t.closing = true, closing
 	t.conn.busy++
 	t.out++
-	main, eng, table, key, manual := t.conn.Main, t.conn.eng, t.table, t.cols.Key(), t.conn.Manual
+	src, manual := t.source(t.cols), t.conn.Manual
 	return func() tea.Msg {
 		start := time.Now()
-		m.failed, m.tx, m.err = db.Save(context.Background(), main, eng, table.Schema, table.Name, key, ch, manual)
+		m.failed, m.tx, m.err = src.Save(context.Background(), ch, manual)
 		m.took = time.Since(start)
 		return m
 	}

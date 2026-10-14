@@ -375,6 +375,8 @@ var en = map[string]string{
 	"正在执行，结束后再关闭":         "Running: close it when it ends",
 	"死锁，整个事务已回滚":          "Deadlock: the whole transaction was rolled back",
 	"没有插入":                "nothing was inserted",
+	"只读连接":                "read-only connection",
+	"%s 不能按这一列排序":         "%s cannot be sorted by this column",
 	"行不存在":                "the row is gone",
 	"行数据已变化或行不存在":         "the row changed or is gone",
 	"超出 %s 的范围":           "out of range for %s",

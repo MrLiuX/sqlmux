@@ -65,8 +65,14 @@ type dataTab struct {
 	table db.Table
 	cols  db.Columns // the catalog's, as fetched: PK and types for the grid
 	next  bool       // a page follows (§8.5)
-	seq   int        // the last request's; older answers are dropped (§8.3)
-	bar   *errorBar  // the last fetch's or save's error, under the table (§7.8「错误栏」)
+	// src is where the rows come from when it is not the table's own, a SQL
+	// one built as each request needs it (§5「接口缝」); cursors, once a page
+	// came with a cursor, are the cursor each page of the source starts at,
+	// page 0's "": it pages by cursor, to the pages seen and one more.
+	src     db.Source
+	cursors []string
+	seq     int       // the last request's; older answers are dropped (§8.3)
+	bar     *errorBar // the last fetch's or save's error, under the table (§7.8「错误栏」)
 
 	// The query bar's. request is what the last request asked for, shown
 	// what the rows on screen came from: row numbers and chips are shown's,
@@ -147,7 +153,9 @@ type pageMsg struct {
 	cols db.Columns // the catalog's, to cache
 	page db.Result
 	next bool
-	err  error
+	// cursor is where the page after it starts, for a source that pages by cursor
+	cursor string
+	err    error
 }
 
 // countMsg answers a count.
@@ -158,12 +166,59 @@ type countMsg struct {
 	err error
 }
 
-// query is what t asks of its table.
-func (t *dataTab) query() db.Query {
-	return db.Query{
-		Schema: t.table.Schema, Table: t.table.Name, Where: t.applied,
-		Order: t.order, Desc: t.desc, Limit: t.limit, Offset: t.pageNo * t.limit,
+// source is where t's rows come from; known is the catalog's columns of a
+// SQL table, when the connection has them.
+func (t *dataTab) source(known db.Columns) db.Source {
+	if t.src != nil {
+		return t.src
 	}
+	c := t.conn
+	return db.SQLTable{E: c.eng, Schema: t.table.Schema, Name: t.table.Name, Meta: c.Meta, Main: c.Main, Known: known, ReadOnly: c.readOnly}
+}
+
+// live is whether t's reads see what its connection wrote and has not
+// committed (§8.2).
+func (t *dataTab) live() bool { return t.conn.Manual || t.conn.inTx() }
+
+// pageQueryOf is the page request r asks of a source whose columns are cols, the
+// cursor of that page among cursors (those of the page before it).
+func pageQueryOf(r request, cursors []string, live bool, cols db.Columns) db.PageQuery {
+	q := db.PageQuery{Cols: cols, Filter: r.applied, Order: r.order, Limit: r.limit, Offset: r.pageNo * r.limit, Live: live}
+	if len(q.Order) == 0 && r.desc { // the row identity turned
+		for _, k := range cols.Key() {
+			q.Order = append(q.Order, db.OrderCol{Col: k, Desc: true})
+		}
+	}
+	if r.pageNo < len(cursors) {
+		q.Cursor = cursors[r.pageNo]
+	}
+	return q
+}
+
+// keepCursor notes where the page after the one shown starts when the source
+// pages by cursor, and drops what a page 0 starts anew.
+func (t *dataTab) keepCursor(next string) {
+	if t.shown.pageNo == 0 {
+		t.cursors = nil
+	}
+	switch {
+	case next != "":
+		if len(t.cursors) == 0 {
+			t.cursors = []string{""}
+		}
+		t.cursors = append(t.cursors[:min(len(t.cursors), t.shown.pageNo+1)], next)
+	case len(t.cursors) > 0: // the last page
+		t.cursors = t.cursors[:min(len(t.cursors), t.shown.pageNo+1)]
+	}
+}
+
+// reach is page n as far as t can get to it: a source that pages by cursor
+// goes to the pages it has seen and the next.
+func (t *dataTab) reach(n int) int {
+	if len(t.cursors) > 0 {
+		return min(n, len(t.cursors)-1)
+	}
+	return n
 }
 
 // fetch reads the page t.request asks for on Meta, or in the manual mode
@@ -185,7 +240,7 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 	// what is on its way is older than this now, whether this goes or not
 	t.seq++
 	// a ; would end the statement and start another: 1=1; drop table t (§9.6)
-	if sqlkit.HasSemicolon(t.applied, t.conn.eng.Dialect()) {
+	if t.src == nil && sqlkit.HasSemicolon(t.applied, t.conn.eng.Dialect()) {
 		t.bar = &errorBar{ui.ErrorBar{First: ui.Note{Head: i18n.T("WHERE 里不能有 ;")}}, "fetch"}
 		t.backToShown()
 		return nil
@@ -193,30 +248,19 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 	t.recount = t.recount || recount
 	t.conn.busy++
 	t.out++
-	seq, table, meta, eng, q := t.seq, t.table, t.conn.Meta, t.conn.eng, t.query()
-	w := meta
-	if t.conn.Manual || t.conn.inTx() { // Main's own writes not committed show (§8.2)
-		w = t.conn.Main
-	}
-	cols, cached := t.conn.cols[idOf(table)]
-	page := func() tea.Msg {
+	seq, table := t.seq, t.table
+	r, cursors, live := t.request, slices.Clone(t.cursors), t.live()
+	cols := t.conn.cols[idOf(table)] // zero when the catalog has none yet
+	src := t.source(cols)
+	return func() tea.Msg {
 		ctx := context.Background()
-		if !cached {
-			var err error
-			if cols, err = eng.TableColumns(ctx, meta, table.Schema, table.Name); err != nil {
-				return pageMsg{tab: t, seq: seq, err: err}
-			}
+		cols, err := src.Columns(ctx)
+		if err != nil {
+			return pageMsg{tab: t, seq: seq, err: err}
 		}
-		q := q
-		q.Key, q.Lead = cols.Key(), cols.Lead
-		var r db.Result
-		var next bool
-		err := w.RunSafe(ctx, func(ctx context.Context, c db.Conn) error {
-			return db.Guarded(ctx, c, "sqlmux_page", func() (err error) { r, next, err = db.Page(ctx, c, eng, q); return err })
-		})
-		return pageMsg{tab: t, seq: seq, cols: cols, page: r, next: next, err: err}
+		p, err := src.Page(ctx, pageQueryOf(r, cursors, live, cols))
+		return pageMsg{tab: t, seq: seq, cols: cols, page: p.Result, next: p.Next, cursor: p.Cursor, err: err}
 	}
-	return page
 }
 
 // gotPage takes a page in: the rows, their request as what is shown, and
@@ -251,6 +295,7 @@ func (a *App) gotPage(m pageMsg) tea.Cmd {
 	}
 	clearBar(&t.bar, "fetch")
 	t.cols, t.page, t.next, t.shown = m.cols, m.page, m.next, t.request
+	t.keepCursor(m.cursor)
 	t.deselect()                                                        // the rows are others
 	t.colOrder = slices.DeleteFunc(t.colOrder, func(name string) bool { // a column that is gone (F10.3)
 		return !slices.ContainsFunc(t.page.Cols, func(c db.Col) bool { return c.Name == name })
@@ -302,11 +347,11 @@ func (a *App) count(t *dataTab) tea.Cmd {
 	t.countSeq++
 	t.counted = counting
 	t.out++
-	seq, meta, eng, q := t.countSeq, t.conn.Meta, t.conn.eng, t.query()
+	seq, filter, src := t.countSeq, t.applied, t.source(t.cols)
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), countTimeout)
 		defer cancel()
-		n, err := db.Count(ctx, meta, eng, q)
+		n, err := src.Count(ctx, filter)
 		return countMsg{tab: t, seq: seq, n: n, err: err}
 	}
 }
@@ -315,7 +360,7 @@ func (a *App) gotCount(m countMsg) {
 	m.tab.out--
 	if t := m.tab; m.seq == t.countSeq {
 		t.count, t.counted = m.n, countDone
-		if m.err != nil { // DeadlineExceeded past 3s, or the WHERE's own error
+		if m.err != nil || m.n < 0 { // DeadlineExceeded past 3s, the WHERE's own error, or a source that cannot say
 			t.counted = countLost
 		}
 	}
@@ -865,6 +910,7 @@ func (a *App) gridLine(n int, bottom bool) tea.Cmd {
 	if pages, ok := t.pages(); ok {
 		page = min(page, int(pages)-1)
 	}
+	page = t.reach(page)
 	rec := n - 1 - page*t.shown.limit
 	if page != t.shown.pageNo || t.pageNo != t.shown.pageNo { // another page on its way: this one instead
 		t.pageNo, t.wantRec = page, rec+1
@@ -920,7 +966,7 @@ func (a *App) typeKey(t *dataTab, k keymap.Key) tea.Cmd {
 	if pages, ok := t.pages(); ok { // past the ends: to the end
 		n = min(n, int(pages))
 	}
-	t.pageNo = max(n-1, 0)
+	t.pageNo = t.reach(max(n-1, 0))
 	return a.fetch(t, false)
 }
 

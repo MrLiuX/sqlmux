@@ -1,5 +1,7 @@
 package db
 
+import "slices"
+
 // Table is one relation the schema tree lists (§8.4): a table, a view,
 // a materialized view, a foreign table, or a partitioned table's parent.
 type Table struct {
@@ -37,6 +39,17 @@ type Columns struct {
 	// Lead is what select lists before *, the key select * does not give:
 	// SQLite's "rowid, " for a table with no primary key (F14.1).
 	Lead string
+	// Sortable is the columns the source can sort by: nil for every one, which
+	// a SQL table can; an empty slice for none (§5「接口缝」).
+	Sortable []string
+	// NoInsert is why a row cannot be added, "" when one can: a Redis stream's
+	// entries are made with XADD, not a row.
+	NoInsert string
+}
+
+// CanSort is whether the source can sort by column name.
+func (c Columns) CanSort(name string) bool {
+	return c.Sortable == nil || slices.Contains(c.Sortable, name)
 }
 
 // Key is the columns that identify a row (§10.1): the primary key, else the

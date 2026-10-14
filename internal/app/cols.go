@@ -302,6 +302,11 @@ func (a *App) orderToggle(t *dataTab, col string) tea.Cmd {
 // setOrder sorts t by order, from the first page; none is the default, by the
 // row identity.
 func (a *App) setOrder(t *dataTab, order []db.OrderCol) tea.Cmd {
+	for _, o := range order {
+		if !t.cols.CanSort(o.Col) {
+			return a.showToast(i18n.T("%s 不能按这一列排序", t.table.Name))
+		}
+	}
 	t.order, t.desc, t.pageNo = order, len(order) == 0 && a.newDesc, 0
 	return a.fetch(t, false)
 }

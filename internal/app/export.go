@@ -70,10 +70,10 @@ func (s exportSrc) bytesPage() bool {
 type exportCol struct{ name, typ string }
 
 type exportAll struct {
-	base   string // the file's name for all of it
-	worker *db.Worker
-	setup  func(context.Context, db.Conn) error
-	sql    string
+	base string // the file's name for all of it
+	// each gives the rows to head and row, on the connection they come from, in
+	// a request of its own
+	each func(ctx context.Context, head func([]db.Col) error, row func([]db.Val) error) error
 }
 
 // exportOpen is ge, and the export buttons: the dropdown of what to export,
@@ -111,16 +111,19 @@ func (a *App) exportSource(d *dropdown) exportSrc {
 			}
 			src.page.Rows = append(src.page.Rows, out)
 		}
-		w := t.conn.Meta
-		if t.conn.Manual || t.conn.inTx() { // as fetch reads, to see what is not committed
-			w = t.conn.Main
-		}
 		s := t.shown // what the grid shows, not what is asked and not there yet
-		q := db.Query{Schema: t.table.Schema, Table: t.table.Name, Where: s.applied, Order: s.order, Desc: s.desc, Key: t.cols.Key(), Lead: t.cols.Lead}
+		source := t.source(t.cols)
+		again := pageQueryOf(s, t.cursors, t.live(), t.cols) // as fetch reads, to see what is not committed
+		all := again
+		all.Limit, all.Offset, all.Cursor = 0, 0, ""
 		// ponytail: select * reads the columns COLS hides too and drops them, so
 		// the wide ones travel for nothing; name the shown ones if that matters
-		src.all = &exportAll{base: t.table.Name, worker: w, sql: db.Select(t.conn.eng, q)}
-		src.again = &exportAll{base: t.table.Name, worker: w, sql: src.all.sql + fmt.Sprintf(" limit %d offset %d", s.limit, s.pageNo*s.limit)}
+		src.all = &exportAll{base: t.table.Name, each: func(ctx context.Context, head func([]db.Col) error, row func([]db.Val) error) error {
+			return source.Each(ctx, all, head, row)
+		}}
+		src.again = &exportAll{base: t.table.Name, each: func(ctx context.Context, head func([]db.Col) error, row func([]db.Val) error) error {
+			return source.Each(ctx, again, head, row)
+		}}
 		return src
 	}
 	rt := d.result
@@ -139,10 +142,20 @@ func (a *App) exportSource(d *dropdown) exportSrc {
 	if rt.pageable && r.from != nil {
 		s := r.stmts[rt.stmt]
 		schema := r.schema
-		setup := func(ctx context.Context, c db.Conn) error { _, err := r.conn.mainSetup(ctx, c, schema); return err }
-		src.all = &exportAll{base: name, worker: r.conn.Main, sql: r.sql[s.Start:s.End], setup: setup}
-		again, _ := sqlkit.AutoLimit(src.all.sql, r.conn.eng.Dialect(), len(rt.page.Rows), rt.offset)
-		src.again = &exportAll{base: name, worker: r.conn.Main, sql: again, setup: setup}
+		// the statement on Main, set up as a run is, in a savepoint in a transaction of the user's: a failed read would fail it all (§10.3)
+		each := func(sql string) func(context.Context, func([]db.Col) error, func([]db.Val) error) error {
+			return func(ctx context.Context, head func([]db.Col) error, row func([]db.Val) error) error {
+				return r.conn.Main.Run(ctx, func(ctx context.Context, c db.Conn) error {
+					if _, err := r.conn.mainSetup(ctx, c, schema); err != nil {
+						return err
+					}
+					return db.Guarded(ctx, c, "sqlmux_export", func() error { return db.Each(ctx, c, sql, head, row) })
+				})
+			}
+		}
+		all := r.sql[s.Start:s.End]
+		again, _ := sqlkit.AutoLimit(all, r.conn.eng.Dialect(), len(rt.page.Rows), rt.offset)
+		src.all, src.again = &exportAll{base: name, each: each(all)}, &exportAll{base: name, each: each(again)}
 	}
 	return src
 }
@@ -196,15 +209,7 @@ func (a *App) export(src exportSrc, at int) tea.Cmd {
 		out := &exportOut{f: f, w: bufio.NewWriter(f), json: asJSON, want: src.cols}
 		var err error
 		if stream {
-			err = from.worker.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
-				if from.setup != nil {
-					if err := from.setup(ctx, c); err != nil {
-						return err
-					}
-				}
-				// in a transaction of the user's a failed read would fail it all (§10.3)
-				return db.Guarded(ctx, c, "sqlmux_export", func() error { return db.Each(ctx, c, from.sql, out.head, out.row) })
-			})
+			err = from.each(context.Background(), out.head, out.row)
 		} else {
 			err = out.head(src.page.Cols)
 			for _, row := range src.page.Rows {

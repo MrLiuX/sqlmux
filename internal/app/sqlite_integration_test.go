@@ -4,7 +4,6 @@ package app
 
 import (
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/kackerx/sqlmux/internal/config"
@@ -38,7 +37,8 @@ func TestSQLiteRowidTable(t *testing.T) {
 		t.Errorf("in the file: %v %v", r.Rows, err)
 	}
 	src := a.exportSource(&dropdown{kind: dropExport, tab: tab, pane: a.focused()})
-	if !strings.HasPrefix(src.all.sql, "select rowid, * from") {
-		t.Errorf("an export asks %q", src.all.sql)
+	var head []db.Col
+	if err := src.all.each(t.Context(), func(c []db.Col) error { head = c; return nil }, func([]db.Val) error { return nil }); err != nil || len(head) == 0 || head[0].Name != "rowid" {
+		t.Errorf("an export asks for rowid first: %v %v", head, err)
 	}
 }
