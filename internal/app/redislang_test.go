@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -70,7 +71,7 @@ func redisConsole(t *testing.T, d *execDB, cs redis.Commands, text string) (*App
 	t.Helper()
 	a, c := inRun(t, d, text)
 	conn := a.sess.Conns[0]
-	conn.Spec.Engine, conn.drv, conn.eng, conn.cmds, conn.DB = "redis", kvDriver{}, nil, cs, "0"
+	conn.Spec.Engine, conn.drv, conn.eng, conn.cmds, conn.DB, conn.cmdsReady = "redis", kvDriver{}, nil, cs, "0", true
 	return a, c
 }
 
@@ -448,4 +449,73 @@ func TestRedisCompletionWithoutDocs(t *testing.T) {
 	if got := strings.Join(typedAt(t, a, c, "", true), " "); got != "CONFIG FLUSHALL GET SET" {
 		t.Errorf("all: %q", got)
 	}
+}
+
+// Before the server has told its commands the console does not run: a dangerous
+// command would go with no question. Once they are in it asks as it should; a server
+// that would not tell has every command a write and none dangerous (§13, F16.4).
+func TestRedisConsoleWaitsForCommands(t *testing.T) {
+	d := &execDB{res: map[string]db.Result{"GET k": {Tag: "GET"}}}
+	a, c := redisConsole(t, d, nil, "FLUSHALL")
+	conn := a.sess.Conns[0]
+	conn.cmdsReady = false
+	a.confirmDangerous = true
+	feed(t, a, "gg")
+	press(t, a, "<CR>")
+	if len(d.ran) != 0 || a.confirm != nil || !strings.Contains(a.toast, "还在读") {
+		t.Fatalf("before the list: ran %q, confirm %v, toast %q", d.ran, a.confirm, a.toast)
+	}
+	a.Update(cmdsMsg{conn: conn, cmds: someCommands()})
+	press(t, a, "<CR>")
+	if a.confirm == nil || len(d.ran) != 0 {
+		t.Fatalf("with the list: confirm %v, ran %q", a.confirm, d.ran)
+	}
+	a.confirm = nil
+	// no list: the server said no
+	conn.cmdsReady, conn.cmds = false, nil
+	a.Update(cmdsMsg{conn: conn, err: errors.New("NOPERM")})
+	if !conn.cmdsReady || !strings.Contains(a.toast, "NOPERM") {
+		t.Errorf("a refusal: ready %v, toast %q", conn.cmdsReady, a.toast)
+	}
+	c.ed.Load("GET k")
+	conn.readOnly = true
+	press(t, a, "<CR>")
+	if len(d.ran) != 0 {
+		t.Errorf("read only with no list: ran %q", d.ran)
+	}
+	conn.readOnly = false
+	press(t, a, "<CR>")
+	if !slices.Equal(d.ran, []string{"GET k"}) || a.confirm != nil {
+		t.Errorf("no list, not read only: ran %q, confirm %v", d.ran, a.confirm)
+	}
+	conn.cmdsAsked = false
+	if a.loadCommands(conn) == nil || a.loadCommands(conn) != nil { // once
+		t.Error("not asked once")
+	}
+}
+
+// What the completion was told of the db is forgotten when a command that writes
+// has run, and when the db is read again (§9.8, F16.5).
+func TestRedisHintsForgotten(t *testing.T) {
+	d := &execDB{res: map[string]db.Result{"GET k": {Tag: "GET"}, "SET k 1": {Tag: "SET"}}}
+	a, c := redisConsole(t, d, someCommands(), "GET k\nSET k 1")
+	conn := a.sess.Conns[0]
+	told := func() { conn.hints = map[string][]string{"keys\x00ne": nil} }
+	told()
+	feed(t, a, "gg")
+	press(t, a, "<CR>")
+	if conn.hints == nil {
+		t.Error("a read forgot them")
+	}
+	feed(t, a, "j")
+	press(t, a, "<CR>")
+	if conn.hints != nil {
+		t.Error("a write did not")
+	}
+	told()
+	a.gotKeys(keysMsg{conn: conn, scan: &keyScan{}})
+	if conn.hints != nil {
+		t.Error("reading the db again did not")
+	}
+	_ = c
 }

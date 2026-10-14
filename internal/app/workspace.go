@@ -264,6 +264,7 @@ type Conn struct {
 	cmds      redis.Commands
 	docs      redis.Docs
 	cmdsAsked bool
+	cmdsReady bool // COMMAND has answered, with the list or without it
 	// hints are the key names and hash fields the server gave for the console's
 	// completion, by what they were asked for (§9.8)
 	hints map[string][]string

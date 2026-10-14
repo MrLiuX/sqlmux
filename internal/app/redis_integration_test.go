@@ -131,7 +131,7 @@ func TestRedisConsoleRunsAndCancels(t *testing.T) {
 // made again when the names come from the server (F16.5).
 func TestRedisConsoleCompletes(t *testing.T) {
 	a, c := redisApp(t, redis.IntegrationDSN(t), 1000)
-	if c.docs == nil || c.cmds == nil {
+	if c.docs == nil || c.cmds == nil || !c.cmdsReady {
 		t.Fatalf("docs %d, commands %d", len(c.docs), len(c.cmds))
 	}
 	a.run("query.new", 0)

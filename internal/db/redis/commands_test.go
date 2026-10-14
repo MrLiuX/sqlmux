@@ -62,7 +62,7 @@ func TestSensitive(t *testing.T) {
 	for line, want := range map[string]bool{
 		"AUTH hunter2": true, "auth user pw": true, "HELLO 3 AUTH u p": true, "migrate h 6379 k 0 1000 AUTH2 u p": true,
 		"ACL SETUSER bob on >pw": true, "acl getuser bob": false, "CONFIG SET requirepass x": true, "config set maxmemory 1": false,
-		"config set maxmemory 1 requirepass x": true, "config get requirepass": false, "GET auth": false, "": false,
+		"config set maxmemory 1 requirepass x": true, "CONFIG SET masterauth x": true, "config set masteruser u": true, "config get requirepass": false, "GET auth": false, "": false,
 	} {
 		if got := Sensitive(line); got != want {
 			t.Errorf("%q: %v", line, got)

@@ -230,6 +230,9 @@ func (a *App) runSQL(t *queryTab, conn *Conn, schema, name, sql string, base, ve
 	if conn.State != connReady { // a layout's query, its connection not up yet (F6.5)
 		return a.notReady(conn)
 	}
+	if !conn.sql() && !conn.cmdsReady { // what writes and what is dangerous is not known yet (§13)
+		return a.showToast(i18n.T("还在读 %s 的命令列表", conn.label()))
+	}
 	if conn.readOnly {
 		if i := slices.IndexFunc(stmts, func(s sqlkit.Stmt) bool { return l.Writes(sql[s.Start:s.End]) }); i >= 0 {
 			p := a.showResult(a.win())
@@ -474,6 +477,9 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 			tabs = append(tabs, Tab{Name: r.label(len(tabs) + 1), Result: rt})
 		}
 		ddl = ddl || r.conn.lang().DDL(stmt)
+		if !r.conn.sql() && r.lang.Writes(stmt) { // the names the completion was told of may be others now (§9.8)
+			r.conn.hints = nil
+		}
 	}
 	if m.err != nil {
 		s := r.stmts[len(m.rs)]
