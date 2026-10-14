@@ -313,7 +313,7 @@ func (c *Conn) qualified(t db.Table) string {
 // tabName is the name of table t's tab: the table's, the database's too when
 // it is not the DSN's.
 func (c *Conn) tabName(t db.Table) string {
-	if c.Spec.Database == "" {
+	if c.Spec.Database == "" || c.redis() { // a key's db is the connection's, as the tree shows it
 		return t.Name
 	}
 	return c.qualified(t)

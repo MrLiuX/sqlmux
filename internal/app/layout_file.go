@@ -88,6 +88,9 @@ func paneLayout(p *Pane) config.LayoutPane {
 			}
 			slices.Sort(lt.Cols)
 			lt.OrderCols = slices.Clone(d.colOrder)
+			if d.table.Kind == "k" { // its pages go by cursors, which a new start has none of: the first
+				lt.Kind, lt.Key, lt.Table, lt.Page = "key", d.table.Name, "", 0
+			}
 		case tb.Query != nil:
 			t := tb.Query
 			c, schema := t.conn, t.schema
@@ -249,17 +252,20 @@ func restoreWindow(s *Session, lw config.LayoutWindow, used map[string]bool) (*W
 // or a query on its file; warn says why there is none. A tab with no
 // connection is on the session's start (§14).
 func (s *Session) restoreTab(lt config.LayoutTab, used map[string]bool) (tb Tab, warn string) {
-	if lt.Kind != "table" && lt.Kind != "query" {
+	if lt.Kind != "table" && lt.Kind != "key" && lt.Kind != "query" {
 		return tb, i18n.T("不认识的 tab")
 	}
 	name := cmp.Or(lt.Connection, s.start.Spec.Name)
 	i := slices.IndexFunc(s.Conns, func(c *Conn) bool { return c.Spec.Name == name })
 	if i < 0 {
-		return tb, i18n.T("没有名为 %s 的连接，跳过 %s", name, cmp.Or(lt.Table, lt.QueryName()))
+		return tb, i18n.T("没有名为 %s 的连接，跳过 %s", name, cmp.Or(lt.Table, lt.Key, lt.QueryName()))
 	}
 	c := s.Conns[i].inDB(lt.DB)
-	if lt.Kind == "table" { // a schema it does not name is the connection's home, known with the catalog
+	if lt.Kind != "query" { // a schema it does not name is the connection's home, known with the catalog
 		d := newDataTab(c, db.Table{Schema: lt.Schema, Name: lt.Table})
+		if lt.Kind == "key" {
+			d.table = db.Table{Name: lt.Key, Kind: "k"}
+		}
 		r := d.request
 		r.applied, r.order, r.desc, r.pageNo = lt.Where, lt.Order, lt.Desc, max(lt.Page, 0)
 		if lt.Limit > 0 { // typed by hand it may be anything
@@ -349,6 +355,10 @@ func (a *App) resolvePending(c *Conn) []tea.Cmd {
 					return o.Data != nil && o.Data.conn == c && o.Data.table.Name == d.table.Name && home(o.Data.table) == home(d.table)
 				}) { // the same table as one before it: a pane has it once (F3.37)
 					dropTab(p, i)
+					continue
+				}
+				if d.table.Kind == "k" { // not in a catalog: it reads once its connection is up
+					cmds = append(cmds, a.fetch(d, true))
 					continue
 				}
 				d.table.Schema = home(d.table)

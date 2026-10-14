@@ -111,7 +111,7 @@ func (a *App) exportSource(d *dropdown) exportSrc {
 			src.page.Rows = append(src.page.Rows, out)
 		}
 		s := t.shown // what the grid shows, not what is asked and not there yet
-		source := t.source(t.cols)
+		source := a.source(t, t.cols)
 		again := pageQueryOf(s, t.cursors, t.live(), t.cols) // as fetch reads, to see what is not committed
 		all := again
 		all.Limit, all.Offset, all.Cursor = 0, 0, ""

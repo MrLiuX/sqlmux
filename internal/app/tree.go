@@ -760,7 +760,9 @@ func (a *App) treeOpen(tablesOnly bool) tea.Cmd {
 	case !ok:
 	case n.kind == nodeTable:
 		return a.openTable(n.conn, n.table)
-	case n.kind == nodeRedisKey, n.kind == nodeNote: // a key tab is F16.3's
+	case n.kind == nodeRedisKey:
+		return a.openTable(n.conn, db.Table{Name: n.redisKey.Name, Kind: "k"})
+	case n.kind == nodeNote:
 	case tablesOnly:
 	case n.kind == nodeQueryFile:
 		return a.openQueryFile(n.query)

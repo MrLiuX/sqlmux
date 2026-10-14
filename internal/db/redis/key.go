@@ -427,7 +427,8 @@ func nextID(id string) string {
 }
 
 // info is the line under the title of the key's tab (§8.7): its type, how long it
-// has to live, its encoding, how much memory it takes, and how many entries it has.
+// has to live, its encoding, how much memory it takes, and how many entries it has,
+// the ones the tab shows first first.
 func (k Key) info(ctx context.Context, cl *goredis.Client, typ string) ([]db.Attr, error) {
 	ttl, err := cl.PTTL(ctx, k.Name).Result()
 	if err != nil {
@@ -439,15 +440,16 @@ func (k Key) info(ctx context.Context, cl *goredis.Client, typ string) ([]db.Att
 	if err != nil {
 		return nil, err
 	}
-	attrs := []db.Attr{{Name: "type", Value: typeName(typ)}, {Name: "ttl", Value: HumanTTL(ttl)}}
+	attrs := []db.Attr{{Name: "type", Value: typeName(typ)}}
+	if typ != "ReJSON-RL" {
+		attrs = append(attrs, db.Attr{Name: "length", Value: strconv.FormatInt(n, 10)})
+	}
+	attrs = append(attrs, db.Attr{Name: "ttl", Value: HumanTTL(ttl)})
 	if enc != "" {
 		attrs = append(attrs, db.Attr{Name: "encoding", Value: enc})
 	}
 	if merr == nil {
 		attrs = append(attrs, db.Attr{Name: "memory", Value: humanBytes(mem)})
-	}
-	if typ != "ReJSON-RL" {
-		attrs = append(attrs, db.Attr{Name: "length", Value: strconv.FormatInt(n, 10)})
 	}
 	return attrs, nil
 }

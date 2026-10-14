@@ -92,7 +92,7 @@ func (a *App) keyColor(typ string) (c color.Color) {
 		return th.Warn
 	case "stream":
 		return th.Info
-	case "ReJSON-RL":
+	case "ReJSON-RL", "json":
 		return th.SQLOperator
 	}
 	return th.Dim
@@ -192,6 +192,7 @@ func (a *App) gotKeys(m keysMsg) tea.Cmd {
 		return nil
 	}
 	if m.err != nil {
+		a.dropPending(c)
 		return a.showToast(i18n.T("%s：%s", c.label(), m.err))
 	}
 	if c.Spec.Database == "" {
@@ -203,7 +204,7 @@ func (a *App) gotKeys(m keysMsg) tea.Cmd {
 	}
 	c.scan = m.scan
 	a.clampTree()
-	return a.findKeys(c)
+	return tea.Batch(append(a.resolvePending(c), a.findKeys(c))...)
 }
 
 func atoiOr(s string) int { n, _ := strconv.Atoi(s); return n }
@@ -291,12 +292,23 @@ func (a *App) gotFilterDue(m filterDue) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+// onKey is op on the key of the focused pane's tab, as it is on a node of the tree;
+// nothing when the tab is not a key's.
+func (a *App) onKey(op func(node) tea.Cmd) tea.Cmd {
+	if t := dataOf(a.focused()); t != nil && t.table.Kind == "k" {
+		return op(node{conn: t.conn, redisKey: redis.KeyInfo{Name: t.table.Name}})
+	}
+	return nil
+}
+
 // keyDone answers an operation on keys: what to say, and the db's keys to read
-// again.
+// again; key is the one it was done to and to the name it has now, "" when it
+// kept it: the tabs of it read it again, following the name.
 type keyDone struct {
-	conn *Conn
-	say  string
-	err  error
+	conn    *Conn
+	say     string
+	err     error
+	key, to string
 }
 
 func (a *App) gotKeyDone(m keyDone) tea.Cmd {
@@ -315,7 +327,21 @@ func (a *App) gotKeyDone(m keyDone) tea.Cmd {
 			say = m.say + " · " + say
 		}
 	}
-	return tea.Batch(a.showToast(say), a.loadKeys(c))
+	cmds := []tea.Cmd{a.showToast(say), a.loadKeys(c)}
+	if m.key != "" {
+		for _, p := range a.sessionOf(c).panes() {
+			for i, tb := range p.Tabs {
+				if t := tb.Data; t != nil && t.conn == c && t.table.Kind == "k" && t.table.Name == m.key {
+					if m.err == nil && m.to != "" {
+						t.table.Name = m.to
+						p.Tabs[i].Name = c.tabName(t.table)
+					}
+					cmds = append(cmds, a.fetch(t, true))
+				}
+			}
+		}
+	}
+	return tea.Batch(cmds...)
 }
 
 // writable is whether c takes a change of keys; else it says why.
@@ -345,7 +371,7 @@ func (a *App) deleteRedisKey(n node) tea.Cmd {
 				_, err := redis.Unlink(ctx, conn, key)
 				return err
 			})
-			return keyDone{c, i18n.T("已删除键 %s", nameText(key)), err}
+			return keyDone{c, i18n.T("已删除键 %s", nameText(key)), err, key, ""}
 		}
 	}
 	if !a.confirmDangerous {
@@ -385,7 +411,7 @@ func (a *App) renameTo(c *Conn, key, to string, overwrite bool) tea.Cmd {
 		if exists {
 			return keyExists{c, key, to}
 		}
-		return keyDone{c, i18n.T("%s 改名为 %s", nameText(key), nameText(to)), err}
+		return keyDone{c, i18n.T("%s 改名为 %s", nameText(key), nameText(to)), err, key, to}
 	}
 }
 
@@ -418,7 +444,7 @@ func (a *App) ttlKey(n node) tea.Cmd {
 		c.busy++
 		return func() tea.Msg {
 			err := main.Run(context.Background(), func(ctx context.Context, conn db.Conn) error { return redis.SetTTL(ctx, conn, key, ttl) })
-			return keyDone{c, i18n.T("%s 的 TTL 已设", nameText(key)), err}
+			return keyDone{c, i18n.T("%s 的 TTL 已设", nameText(key)), err, key, ""}
 		}, false
 	}}
 	return nil
@@ -496,7 +522,7 @@ func (a *App) gotNamespaceFound(m namespaceFound) tea.Cmd {
 					say = i18n.T("已取消，已删除 %d 个键", deleted)
 				}
 			}
-			return keyDone{c, say, err}
+			return keyDone{conn: c, say: say, err: err}
 		}
 	}
 	if !a.confirmDangerous {

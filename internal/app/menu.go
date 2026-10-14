@@ -54,6 +54,7 @@ func (a *App) menuItems(n node) []menuItem {
 		return append(items, a.alterItems(n)...)
 	case nodeRedisKey:
 		return []menuItem{
+			{i18n.T("打开"), func() tea.Cmd { return a.treeOpen(false) }},
 			{i18n.T("删除…"), func() tea.Cmd { return a.deleteRedisKey(n) }},
 			{i18n.T("改名…"), func() tea.Cmd { return a.renameRedisKey(n) }},
 			{i18n.T("设 TTL…"), func() tea.Cmd { return a.ttlKey(n) }},
