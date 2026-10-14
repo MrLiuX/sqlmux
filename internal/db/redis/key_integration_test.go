@@ -8,6 +8,7 @@ import (
 	"errors"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -397,5 +398,74 @@ func TestKeyJSON(t *testing.T) {
 	}
 	if _, err := k.Columns(ctx); !errors.Is(err, ErrNoKey) {
 		t.Errorf("deleted: %v", err)
+	}
+}
+
+// commandCalls is how many times the server has been asked for the command name.
+func commandCalls(t *testing.T, c *Conn, name string) int {
+	t.Helper()
+	r, err := c.Query(context.Background(), "INFO", db.Val{S: "commandstats"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range r.Rows {
+		for l := range strings.SplitSeq(row[0].S, "\n") {
+			if rest, ok := strings.CutPrefix(strings.TrimSpace(l), "cmdstat_"+name+":calls="); ok {
+				n, _, _ := strings.Cut(rest, ",")
+				v, _ := strconv.Atoi(n)
+				return v
+			}
+		}
+	}
+	return 0
+}
+
+// The commands that make a hash or a set again read about load_all of it, not all: a
+// key of millions is not pulled whole to Meta; and a read that fails is the error of
+// Rebuild, not a command with fewer entries (F16.3).
+func TestKeyRebuildReadsLoadAll(t *testing.T) {
+	ctx := context.Background()
+	own := OwnDB(t)
+	c := connectTo(t, own)
+	for _, key := range []string{"h", "s"} {
+		args := []db.Val{{S: key}}
+		for i := range 3000 {
+			if key == "h" {
+				args = append(args, db.Val{S: "f" + strconv.Itoa(i)})
+			}
+			args = append(args, db.Val{S: "v" + strconv.Itoa(i)})
+		}
+		cmd := map[string]string{"h": "HSET", "s": "SADD"}[key]
+		if _, err := c.Query(ctx, cmd, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for key, cmd := range map[string]string{"h": "hscan", "s": "sscan"} {
+		before := commandCalls(t, c, cmd)
+		text, err := keyOf(t, own, key, 3, 100).Rebuild(ctx)
+		// a read of all 3000 is some 300 calls of 10; the others' scans in the meantime are a few
+		if calls := commandCalls(t, c, cmd) - before; err != nil || calls > 50 || !strings.HasPrefix(text, "# ") {
+			t.Errorf("%s: %d calls of %s, %v", key, calls, cmd, err)
+		}
+		if n := strings.Count(text, "\n"); n != 1 {
+			t.Errorf("%s: %d lines %q", key, n, text[:min(len(text), 80)])
+		}
+	}
+	// a read the server refuses: the error, not the part that was read
+	for _, args := range [][]string{{"SETUSER", "sqlmux_noscan", "on", ">p", "~*", "+@all", "-@read", "+type", "+hlen", "+scard", "+pttl", "+object", "+memory"}} {
+		var vals []db.Val
+		for _, a := range args {
+			vals = append(vals, db.Val{S: a})
+		}
+		if _, err := c.Query(ctx, "ACL", vals...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { _, _ = c.Query(ctx, "ACL", db.Val{S: "DELUSER"}, db.Val{S: "sqlmux_noscan"}) })
+	dsn := strings.Replace(own, "redis://", "redis://sqlmux_noscan:p@", 1)
+	for _, key := range []string{"h", "s"} {
+		if _, err := keyOf(t, dsn, key, 3, 100).Rebuild(ctx); err == nil || !strings.Contains(err.Error(), "NOPERM") {
+			t.Errorf("%s: %v", key, err)
+		}
 	}
 }
