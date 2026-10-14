@@ -20,7 +20,7 @@ var ErrExists = msgError(i18n.N("已有同名的项"))
 // ErrNoNull is a value of NULL: Redis has none.
 var ErrNoNull = msgError(i18n.N("Redis 的值不能是 NULL"))
 
-// onPlanned is a test's hook: it runs once the changes are checked and planned,
+// onPlanned is a test's hook, for tests only: it runs once the changes are checked and planned,
 // before the commands go out, where another client may change the key.
 var onPlanned func()
 
@@ -102,6 +102,33 @@ func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (
 	nd, nu := len(ch.Deletes), len(ch.Updates)
 	at := func(idx int, err error) error { return changeError{idx, err} }
 	cmd := func(owner int, args ...any) { steps = append(steps, step{args, owner}) }
+	// What a read of the key's entries comes to: a nil is that the entry is not there,
+	// absent that a check found none, taken that it found one, and any error besides (a
+	// connection that went, the server's) is returned as it is, not made a row's.
+	miss := func(idx int, err error) error {
+		if errors.Is(err, goredis.Nil) {
+			return at(idx, db.ErrGone)
+		}
+		return err
+	}
+	absent := func(idx int, ok bool, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case !ok:
+			return at(idx, db.ErrGone)
+		}
+		return nil
+	}
+	taken := func(idx int, ok bool, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case ok:
+			return at(idx, ErrExists)
+		}
+		return nil
+	}
 	switch typ {
 	case "string", "ReJSON-RL":
 		if len(ch.Inserts) > 0 {
@@ -115,14 +142,14 @@ func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (
 		}
 		for i := range ch.Deletes {
 			if _, err := get(); err != nil {
-				return nil, at(i, db.ErrGone)
+				return nil, miss(i, err)
 			}
 			cmd(i, "UNLINK", key)
 		}
 		for i, r := range ch.Updates {
 			cur, err := get()
 			if err != nil {
-				return nil, at(nd+i, db.ErrGone)
+				return nil, miss(nd+i, err)
 			}
 			for _, c := range r.Cols {
 				if err := writable(c); err != nil {
@@ -140,8 +167,9 @@ func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (
 		}
 	case "hash":
 		for i, d := range ch.Deletes {
-			if ok, _ := tx.HExists(ctx, key, d[0]).Result(); !ok {
-				return nil, at(i, db.ErrGone)
+			ok, err := tx.HExists(ctx, key, d[0]).Result()
+			if err := absent(i, ok, err); err != nil {
+				return nil, err
 			}
 			cmd(i, "HDEL", key, d[0])
 		}
@@ -149,7 +177,7 @@ func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (
 			field, owner := r.Key[0], nd+i
 			cur, err := tx.HGet(ctx, key, field).Result()
 			if err != nil {
-				return nil, at(owner, db.ErrGone)
+				return nil, miss(owner, err)
 			}
 			value, rename := cur, ""
 			for _, c := range r.Cols {
@@ -167,8 +195,9 @@ func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (
 				}
 			}
 			if rename != "" && rename != field {
-				if ok, _ := tx.HExists(ctx, key, rename).Result(); ok {
-					return nil, at(owner, ErrExists)
+				ok, err := tx.HExists(ctx, key, rename).Result()
+				if err := taken(owner, ok, err); err != nil {
+					return nil, err
 				}
 				cmd(owner, "HDEL", key, field)
 				cmd(owner, "HSET", key, rename, value)
@@ -181,8 +210,9 @@ func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (
 			if err != nil {
 				return nil, at(nd+nu+i, err)
 			}
-			if ok, _ := tx.HExists(ctx, key, f).Result(); ok {
-				return nil, at(nd+nu+i, ErrExists)
+			ok, err := tx.HExists(ctx, key, f).Result()
+			if err := taken(nd+nu+i, ok, err); err != nil {
+				return nil, err
 			}
 			cmd(nd+nu+i, "HSET", key, f, v)
 		}
@@ -206,7 +236,7 @@ func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (
 			}
 			cur, err := tx.LIndex(ctx, key, idx).Result()
 			if err != nil {
-				return nil, at(nd+i, db.ErrGone)
+				return nil, miss(nd+i, err)
 			}
 			for _, c := range r.Cols {
 				if err := writable(c); err != nil {
@@ -230,21 +260,27 @@ func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (
 		}
 	case "set":
 		for i, d := range ch.Deletes {
-			if ok, _ := tx.SIsMember(ctx, key, d[0]).Result(); !ok {
-				return nil, at(i, db.ErrGone)
+			ok, err := tx.SIsMember(ctx, key, d[0]).Result()
+			if err := absent(i, ok, err); err != nil {
+				return nil, err
 			}
 			cmd(i, "SREM", key, d[0])
 		}
 		for i, r := range ch.Updates {
 			old := r.Key[0]
-			if ok, _ := tx.SIsMember(ctx, key, old).Result(); !ok {
-				return nil, at(nd+i, db.ErrGone)
+			ok, err := tx.SIsMember(ctx, key, old).Result()
+			if err := absent(nd+i, ok, err); err != nil {
+				return nil, err
 			}
 			for _, c := range r.Cols {
 				if err := writable(c); err != nil {
 					return nil, at(nd+i, err)
 				}
-				if ok, _ := tx.SIsMember(ctx, key, c.Val.S).Result(); ok && c.Val.S != old {
+				ok, err := tx.SIsMember(ctx, key, c.Val.S).Result()
+				if err != nil {
+					return nil, err
+				}
+				if ok && c.Val.S != old {
 					return nil, at(nd+i, ErrExists)
 				}
 				cmd(nd+i, "SREM", key, old)
@@ -256,15 +292,16 @@ func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (
 			if err != nil {
 				return nil, at(nd+nu+i, err)
 			}
-			if ok, _ := tx.SIsMember(ctx, key, m).Result(); ok {
-				return nil, at(nd+nu+i, ErrExists)
+			ok, err := tx.SIsMember(ctx, key, m).Result()
+			if err := taken(nd+nu+i, ok, err); err != nil {
+				return nil, err
 			}
 			cmd(nd+nu+i, "SADD", key, m)
 		}
 	case "zset":
 		for i, d := range ch.Deletes {
 			if _, err := tx.ZScore(ctx, key, d[0]).Result(); err != nil {
-				return nil, at(i, db.ErrGone)
+				return nil, miss(i, err)
 			}
 			cmd(i, "ZREM", key, d[0])
 		}
@@ -272,7 +309,7 @@ func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (
 			member, owner := r.Key[0], nd+i
 			cur, err := tx.ZScore(ctx, key, member).Result()
 			if err != nil {
-				return nil, at(owner, db.ErrGone)
+				return nil, miss(owner, err)
 			}
 			score, rename := strconv.FormatFloat(cur, 'g', -1, 64), ""
 			for _, c := range r.Cols {
@@ -290,8 +327,8 @@ func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (
 				}
 			}
 			if rename != "" && rename != member {
-				if _, err := tx.ZScore(ctx, key, rename).Result(); err == nil {
-					return nil, at(owner, ErrExists)
+				if _, err := tx.ZScore(ctx, key, rename).Result(); !errors.Is(err, goredis.Nil) {
+					return nil, taken(owner, err == nil, err)
 				}
 				cmd(owner, "ZREM", key, member)
 				cmd(owner, "ZADD", key, score, rename)
@@ -304,8 +341,8 @@ func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (
 			if err != nil {
 				return nil, at(nd+nu+i, err)
 			}
-			if _, err := tx.ZScore(ctx, key, m).Result(); err == nil {
-				return nil, at(nd+nu+i, ErrExists)
+			if _, err := tx.ZScore(ctx, key, m).Result(); !errors.Is(err, goredis.Nil) {
+				return nil, taken(nd+nu+i, err == nil, err)
 			}
 			cmd(nd+nu+i, "ZADD", key, s, m)
 		}
@@ -314,8 +351,9 @@ func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (
 			return nil, at(nd, fmt.Errorf("%s", i18n.T("stream 的条目不能改，只能删除")))
 		}
 		for i, d := range ch.Deletes {
-			if es, _ := tx.XRange(ctx, key, d[0], d[0]).Result(); len(es) != 1 {
-				return nil, at(i, db.ErrGone)
+			es, err := tx.XRange(ctx, key, d[0], d[0]).Result()
+			if err := absent(i, len(es) == 1, err); err != nil {
+				return nil, err
 			}
 			cmd(i, "XDEL", key, d[0])
 		}

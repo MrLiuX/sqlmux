@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -250,5 +251,70 @@ func TestKeySaveCommitUnknown(t *testing.T) {
 	}
 	if !errors.Is(err, db.ErrCommitUnknown) {
 		t.Errorf("not said to be unknown: %v", err)
+	}
+}
+
+// A check of the key that the server refuses, or a connection that goes, is the
+// error of the save, as it is: not "the row is gone", which is what a nil says (F16.3).
+func TestKeySaveReadFailsIsNotGone(t *testing.T) {
+	ctx := context.Background()
+	own := OwnDB(t)
+	admin := connectTo(t, own)
+	for _, cmd := range [][]string{
+		{"HSET", "h", "a", "1"}, {"SADD", "s", "a"}, {"ZADD", "z", "1", "a"}, {"RPUSH", "l", "a"}, {"SET", "str", "a"}, {"XADD", "x", "1-1", "f", "v"},
+	} {
+		var vals []db.Val
+		for _, a := range cmd[1:] {
+			vals = append(vals, val(a))
+		}
+		if _, err := admin.Query(ctx, cmd[0], vals...); err != nil {
+			t.Fatal(cmd, err)
+		}
+	}
+	for _, args := range [][]string{{"SETUSER", "sqlmux_noread", "on", ">p", "~*", "+@all", "-@read", "+type"}} {
+		var vals []db.Val
+		for _, a := range args {
+			vals = append(vals, val(a))
+		}
+		if _, err := admin.Query(ctx, "ACL", vals...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { _, _ = admin.Query(ctx, "ACL", val("DELUSER"), val("sqlmux_noread")) })
+	dsn := strings.Replace(own, "redis://", "redis://sqlmux_noread:p@", 1)
+	for _, c := range []struct {
+		key string
+		ch  db.Changes
+	}{
+		{"h", db.Changes{Deletes: [][]string{{"a"}}}}, {"h", db.Changes{Updates: []db.Row{upd("a", chg("value", "1", "2"))}}},
+		{"h", db.Changes{Updates: []db.Row{upd("a", chg("field", "a", "b"))}}}, {"h", db.Changes{Inserts: [][]db.Change{add("field", "b", "value", "2")}}},
+		{"s", db.Changes{Deletes: [][]string{{"a"}}}}, {"s", db.Changes{Updates: []db.Row{upd("a", chg("member", "a", "b"))}}}, {"s", db.Changes{Inserts: [][]db.Change{add("member", "b")}}},
+		{"z", db.Changes{Deletes: [][]string{{"a"}}}}, {"z", db.Changes{Updates: []db.Row{upd("a", chg("score", "1", "2"))}}},
+		{"z", db.Changes{Updates: []db.Row{upd("a", chg("member", "a", "b"))}}}, {"z", db.Changes{Inserts: [][]db.Change{add("member", "b", "score", "2")}}},
+		{"l", db.Changes{Updates: []db.Row{upd("0", chg("value", "a", "b"))}}},
+		{"str", db.Changes{Updates: []db.Row{upd("", chg("value", "a", "b"))}}}, {"str", db.Changes{Deletes: [][]string{{}}}},
+		{"x", db.Changes{Deletes: [][]string{{"1-1"}}}},
+	} {
+		k := keyOf(t, dsn, c.key, 50, 100)
+		_, _, err := k.Save(ctx, c.ch, false)
+		if err == nil || errors.Is(err, db.ErrGone) || errors.Is(err, db.ErrStale) || errors.Is(err, ErrExists) || !strings.Contains(err.Error(), "NOPERM") || strings.Contains(err.Error(), "'type'") { // the check that is refused, not the TYPE before them
+			t.Errorf("%s %+v: %v", c.key, c.ch, err)
+		}
+	}
+}
+
+// The command that fails when the batch runs is told by its change: a score that is
+// no number is the added row's, after the updated one which went (F16.3).
+func TestKeySaveNamesTheChangeThatFailed(t *testing.T) {
+	ctx := context.Background()
+	dsn := OwnDB(t)
+	c := connectTo(t, dsn)
+	if _, err := c.Query(ctx, "ZADD", val("z"), val("1"), val("a")); err != nil {
+		t.Fatal(err)
+	}
+	k := keyOf(t, dsn, "z", 50, 100)
+	failed, _, err := k.Save(ctx, db.Changes{Updates: []db.Row{upd("a", chg("score", "1", "2"))}, Inserts: [][]db.Change{add("member", "b", "score", "not a number")}}, false)
+	if failed != 1 || err == nil || !strings.Contains(err.Error(), "float") {
+		t.Errorf("failed %d: %v", failed, err)
 	}
 }

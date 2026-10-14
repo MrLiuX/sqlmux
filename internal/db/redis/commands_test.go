@@ -1,6 +1,12 @@
 package redis
 
-import "testing"
+import (
+	"errors"
+	"io"
+	"testing"
+
+	goredis "github.com/redis/go-redis/v9"
+)
 
 // The commands are those COMMAND lists with their subcommands, and a line is a
 // write or dangerous by its command's flags and categories: a subcommand by its
@@ -60,6 +66,23 @@ func TestSensitive(t *testing.T) {
 	} {
 		if got := Sensitive(line); got != want {
 			t.Errorf("%q: %v", line, got)
+		}
+	}
+}
+
+// A read of a key that finds it gone, or of another type, says so as one thing; any
+// other error is itself (F16.3).
+func TestKeyErr(t *testing.T) {
+	for name, c := range map[string]struct {
+		err  error
+		same bool
+	}{
+		"nil": {goredis.Nil, false}, "wrong type": {redisError("WRONGTYPE Operation against a key holding the wrong kind of value"), false},
+		"another reply": {redisError("ERR syntax error"), true}, "a network one": {io.EOF, true},
+	} {
+		got := keyErr(c.err)
+		if c.same && !errors.Is(got, c.err) || !c.same && !errors.Is(got, ErrNoKey) {
+			t.Errorf("%s: %v", name, got)
 		}
 	}
 }

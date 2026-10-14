@@ -3,11 +3,14 @@ package redis
 import "regexp"
 
 // Match is whether s matches the glob pattern as MATCH of SCAN reads it: * is
-// any run, ? any character, [a-c] one of a set, [^a] and [!a] one that is not, and
+// any run, ? any character, [a-c] one of a set, [^a] one that is not (Redis has no [!a]: it is a set of ! and a), and
 // \ makes the next character itself.
-func Match(pattern, s string) bool {
+func Match(pattern, s string) bool { return Matcher(pattern)(s) }
+
+// Matcher is Match of one pattern, compiled once for the many strings it is asked of.
+func Matcher(pattern string) func(s string) bool {
 	re, err := regexp.Compile(globRegexp(pattern))
-	return err == nil && re.MatchString(s)
+	return func(s string) bool { return err == nil && re.MatchString(s) }
 }
 
 // globRegexp is pattern as an anchored regular expression.
@@ -27,7 +30,7 @@ func globRegexp(pattern string) string {
 			out = append(out, []rune(regexp.QuoteMeta(string(rs[i])))...)
 		case '[':
 			j := i + 1
-			if j < len(rs) && (rs[j] == '^' || rs[j] == '!') {
+			if j < len(rs) && rs[j] == '^' {
 				j++
 			}
 			for j < len(rs) && rs[j] != ']' {
@@ -42,7 +45,7 @@ func globRegexp(pattern string) string {
 			}
 			set := []rune{'['}
 			k := i + 1
-			if rs[k] == '^' || rs[k] == '!' {
+			if rs[k] == '^' {
 				set, k = append(set, '^'), k+1
 			}
 			for ; k < j; k++ {

@@ -1,13 +1,14 @@
 package redis
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
-// MATCH's glob: * ? [a-c] [^a] [!a] \x, and a [ with no ] is itself (F16.3).
+// MATCH's glob: * ? [a-c] [^a] \x, and a [ with no ] is itself (F16.3).
 func TestMatch(t *testing.T) {
 	for _, c := range []struct {
 		pattern, s string
@@ -17,7 +18,7 @@ func TestMatch(t *testing.T) {
 		{"a*", "abc", true}, {"a*", "bac", false}, {"*c", "abc", true}, {"a*c", "ac", true}, {"a*c", "abd", false},
 		{"a?c", "abc", true}, {"a?c", "ac", false}, {"a?c", "abbc", false},
 		{"[abc]x", "bx", true}, {"[abc]x", "dx", false}, {"[a-c]x", "bx", true}, {"[a-c]x", "dx", false},
-		{"[^a]x", "bx", true}, {"[^a]x", "ax", false}, {"[!a]x", "bx", true}, {"[!a]x", "ax", false},
+		{"[^a]x", "bx", true}, {"[^a]x", "ax", false}, {"[!a]x", "bx", false}, {"[!a]x", "ax", true}, {"[!a]x", "!x", true},
 		{`a\*b`, "a*b", true}, {`a\*b`, "axb", false}, {`a\\b`, `a\b`, true}, {`\[x`, "[x", true},
 		{"[x", "[x", true}, {"a.b", "a.b", true}, {"a.b", "axb", false}, {"a(b)", "a(b)", true},
 		{"日*", "日本", true}, {"a*\n", "ab\n", true}, {"a*", "ab\ncd", true},
@@ -60,5 +61,19 @@ func TestQuote(t *testing.T) {
 		if words, err := SplitLine("X " + got); err != nil || len(words) != 2 || words[1] != in {
 			t.Errorf("Quote(%q) reads back as %q %v", in, words, err)
 		}
+	}
+}
+
+// A long text with quotes in it and multi-byte characters (a JSON of Chinese) is quoted
+// in time that follows its length, not the square of it.
+func TestQuoteLongText(t *testing.T) {
+	in := `{"name":"` + strings.Repeat("你好", 100_000) + `"}`
+	start := time.Now()
+	got := Quote(in)
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("%d bytes took %v", len(in), d)
+	}
+	if words, err := SplitLine("X " + got); err != nil || len(words) != 2 || words[1] != in {
+		t.Errorf("read back: %v", err)
 	}
 }
