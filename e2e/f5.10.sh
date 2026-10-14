@@ -83,6 +83,8 @@ check "切到 doraemon 的 t_order 再执行：走 doraemon" eval '[[ $(grid) ==
 e2e_keys Escape; sleep 0.3
 
 # ---- 连不上：节点 error 色，toast「bad：<驱动的错误>」，别的连接照常；R 重试
+# 树里列着集群所有的库（F15.1），并行跑的别的脚本的私有库会把 bad 挤出屏幕：先把 doraemon 和 seed 折起来
+key C-h; key g g; key h; key j; key h; key g g
 click_node bad
 check "单击 bad：连不上，名字 error 色，toast「bad：…」（数据库不存在），别的不受影响" wait_for 5 eval 'y=$(nth_row bad 1); style_has "$(node_x bad "$y")" "$y" fg=$ERROR >/dev/null && screen_has "bad：" && screen_has "nosuchdb" && running && [[ $(tables_n) == "22 tables" ]]'
 sleep 3.5                                                                         # 等 toast 消失；单击已经把树的光标放在 bad 上
