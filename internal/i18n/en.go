@@ -108,6 +108,7 @@ var en = map[string]string{
 	"切换连接…":            "Switch connection…",
 	"刷新":               "Refresh",
 	"已删除键 %s":          "deleted %s",
+	"删除键 %s？":          "Delete key %s?",
 	"设 TTL…":           "Set TTL…",
 	"刷新表列表":            "Refresh the tables",
 	"历史 / 收藏":          "History / favorites",

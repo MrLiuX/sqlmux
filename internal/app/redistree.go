@@ -329,22 +329,30 @@ func (a *App) writable(c *Conn) (ok bool, why tea.Cmd) {
 	return true, nil
 }
 
-// deleteRedisKey is the menu's 删除 on a key, and dd: UNLINK, with no question, as
-// the delete of a row of a table has none (§13).
+// deleteRedisKey is the menu's 删除… on a key, and dd: asked first unless
+// confirm_dangerous is off, a key being a piece of data as a table is (§13);
+// then UNLINK.
 func (a *App) deleteRedisKey(n node) tea.Cmd {
 	c, key := n.conn, n.redisKey.Name
 	if ok, why := a.writable(c); !ok {
 		return why
 	}
-	main := c.Main
-	c.busy++
-	return func() tea.Msg {
-		err := main.Run(context.Background(), func(ctx context.Context, conn db.Conn) error {
-			_, err := redis.Unlink(ctx, conn, key)
-			return err
-		})
-		return keyDone{c, i18n.T("已删除键 %s", nameText(key)), err}
+	del := func() tea.Cmd {
+		main := c.Main
+		c.busy++
+		return func() tea.Msg {
+			err := main.Run(context.Background(), func(ctx context.Context, conn db.Conn) error {
+				_, err := redis.Unlink(ctx, conn, key)
+				return err
+			})
+			return keyDone{c, i18n.T("已删除键 %s", nameText(key)), err}
+		}
 	}
+	if !a.confirmDangerous {
+		return del()
+	}
+	a.confirm = &confirmBox{text: i18n.T("删除键 %s？", nameText(key)), yes: i18n.T("删除"), danger: true, then: del}
+	return nil
 }
 
 // renameKey is the menu's 改名: the name asked in the status bar, RENAME on
