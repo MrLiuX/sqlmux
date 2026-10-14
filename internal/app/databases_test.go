@@ -53,9 +53,9 @@ func (*fakePG) Databases(context.Context, db.Conn) ([]string, error) {
 func withDatabases(t *testing.T) (*App, *Conn, *fakePG) {
 	t.Helper()
 	f := &fakePG{Engine: postgres.Engine{}}
-	was := engines["postgres"]
-	engines["postgres"] = f
-	t.Cleanup(func() { engines["postgres"] = was })
+	was := drivers["postgres"]
+	drivers["postgres"] = f
+	t.Cleanup(func() { drivers["postgres"] = was })
 	a := sized(160, 45, "nerd")
 	c := a.sess.Conns[0]
 	c.Spec.DSN, c.DB, c.Databases = "postgres://u@h/base", "base", []string{"alpha", "base", "zeta"}

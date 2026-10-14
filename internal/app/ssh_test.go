@@ -36,9 +36,9 @@ func (versionDB) Query(context.Context, string, ...db.Val) (db.Result, error) {
 func seeing(t *testing.T, engine string) *dialerSeen {
 	t.Helper()
 	d := &dialerSeen{Engine: postgres.Engine{}}
-	was := engines[engine]
-	engines[engine] = d
-	t.Cleanup(func() { engines[engine] = was })
+	was := drivers[engine]
+	drivers[engine] = d
+	t.Cleanup(func() { drivers[engine] = was })
 	return d
 }
 

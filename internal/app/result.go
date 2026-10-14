@@ -160,7 +160,7 @@ func querySpan(t *queryTab, arg string) (text string, from, to int) {
 	lines := ed.Lines()
 	text = strings.Join(lines, "\n")
 	at := func(pos editor.Pos) int { return offsetOf(lines, pos) }
-	stmts := sqlkit.Statements(text, t.conn.eng.Dialect())
+	stmts := t.conn.lang().Stmts(text)
 	from, to = -1, -1
 	switch s, e, visual := ed.Selection(); {
 	case arg != "":
@@ -208,8 +208,8 @@ func querySpan(t *queryTab, arg string) (text string, from, to int) {
 // back, the log saying so (§13); on any other, dangerous statements are
 // asked about, once for the run, before it begins.
 func (a *App) runSQL(t *queryTab, conn *Conn, schema, name, sql string, base, ver int) tea.Cmd {
-	d := conn.eng.Dialect()
-	stmts := sqlkit.Statements(sql, d)
+	l := conn.lang()
+	stmts := l.Stmts(sql)
 	if len(stmts) == 0 || t.running != nil {
 		return nil
 	}
@@ -217,7 +217,7 @@ func (a *App) runSQL(t *queryTab, conn *Conn, schema, name, sql string, base, ve
 		return a.notReady(conn)
 	}
 	if conn.readOnly {
-		if i := slices.IndexFunc(stmts, func(s sqlkit.Stmt) bool { return sqlkit.BreaksReadOnly(sql[s.Start:s.End], d) }); i >= 0 {
+		if i := slices.IndexFunc(stmts, func(s sqlkit.Stmt) bool { return l.Writes(sql[s.Start:s.End]) }); i >= 0 {
 			p := a.showResult(a.win())
 			a.log(&run{name: name, win: a.win()}, sql[stmts[i].Start:stmts[i].End], i18n.T("%s 是只读连接，整次都没有执行", conn.Spec.Name), true)
 			selectTab(p, 0)
@@ -227,7 +227,7 @@ func (a *App) runSQL(t *queryTab, conn *Conn, schema, name, sql string, base, ve
 	if a.confirmDangerous {
 		var risky []string
 		for _, s := range stmts {
-			if text := sql[s.Start:s.End]; sqlkit.Dangerous(text, d) {
+			if text := sql[s.Start:s.End]; l.Dangerous(text) {
 				risky = append(risky, text)
 			}
 		}
@@ -269,7 +269,7 @@ func dangerText(risky []string) string {
 // startRun is runSQL once it is settled that the statements go: the run
 // begun, its placeholder shown, the statements sent.
 func (a *App) startRun(t *queryTab, conn *Conn, schema, name, sql string, base, ver int, stmts []sqlkit.Stmt) tea.Cmd {
-	d := conn.eng.Dialect()
+	l := conn.lang()
 	a.sess.RunSeq++
 	r := &run{from: t, conn: conn, schema: schema, name: name, sql: sql, base: base, ver: ver, seq: a.sess.RunSeq, start: time.Now(), win: a.win(), stmts: stmts}
 	t.running, t.failed, t.bar = r, -1, nil
@@ -287,12 +287,9 @@ func (a *App) startRun(t *queryTab, conn *Conn, schema, name, sql string, base, 
 	// be another table
 	resets := false // what search_path, or MySQL's database, is past this run is not known (§8.6)
 	for i, s := range stmts {
-		texts[i], r.pageable[i] = sqlkit.AutoLimit(sql[s.Start:s.End], d, a.maxRows+1, 0)
+		texts[i], r.pageable[i] = l.Page(sql[s.Start:s.End], a.maxRows+1, 0)
 		r.pageable[i] = r.pageable[i] && !resets // after a SET or USE of the run a page would ask for the schema again, and read another table
-		switch sqlkit.FirstWord(texts[i], d) {
-		case "set", "reset", "discard", "use":
-			resets = true
-		}
+		resets = resets || l.Resets(texts[i])
 	}
 	maxRows, manual := a.maxRows, r.conn.Manual
 	return tea.Batch(func() tea.Msg { return mainRun(r, texts, maxRows, manual, resets) }, a.runTick(r))
@@ -305,7 +302,7 @@ func (a *App) startRun(t *queryTab, conn *Conn, schema, name, sql string, base, 
 // is what a run and a page of a result are sent as (F10.4); it goes on the
 // request's goroutine, so r and what it holds are read, not changed.
 func mainRun(r *run, texts []string, maxRows int, manual, resets bool) runDone {
-	s, d := r.conn, r.conn.eng.Dialect()
+	s, l := r.conn, r.conn.lang()
 	m := runDone{r: r}
 	m.err = s.Main.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
 		defer func() { m.tx = db.TxStatus(c) }()
@@ -315,7 +312,7 @@ func mainRun(r *run, texts []string, maxRows int, manual, resets bool) runDone {
 		}
 		var begin func(string) bool // after the SET, which is kept so
 		if manual {
-			begin = func(stmt string) bool { return !sqlkit.NoBegin(stmt, d) }
+			begin = func(stmt string) bool { return !l.NoBegin(stmt) }
 		}
 		m.rs, err = db.ExecEach(ctx, c, texts, maxRows, begin)
 		if resets || db.TxStatus(c) != 'I' {
@@ -326,7 +323,7 @@ func mainRun(r *run, texts []string, maxRows int, manual, resets bool) runDone {
 	if errors.As(m.err, new(db.TxLost)) { // it is the user's statement that was not run, not the SET
 		m.set = ""
 	}
-	m.rs, m.err = runTxLost(m.rs, m.err, texts, d)
+	m.rs, m.err = runTxLost(m.rs, m.err, texts, l)
 	return m
 }
 
@@ -452,10 +449,7 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 			}
 			tabs = append(tabs, Tab{Name: r.label(len(tabs) + 1), Result: &resultTab{gridState: gs, run: r, part: len(tabs) + 1, stmt: i, pageable: r.pageable[i]}})
 		}
-		switch sqlkit.FirstWord(stmt, r.conn.eng.Dialect()) {
-		case "create", "alter", "drop", "rename": // MySQL's RENAME TABLE
-			ddl = true
-		}
+		ddl = ddl || r.conn.lang().DDL(stmt)
 	}
 	if m.err != nil {
 		s := r.stmts[len(m.rs)]
@@ -530,7 +524,7 @@ func (a *App) log(r *run, stmt, did string, failed bool) {
 // logError logs statement stmt of run r failing with err (§11): the
 // server's severity and message, then DETAIL and HINT a line each.
 func (a *App) logError(r *run, stmt string, err error) db.ServerError {
-	e := r.conn.eng.ErrorOf(err)
+	e := r.conn.driver().ErrorOf(err)
 	a.log(r, stmt, e.Severity+": "+e.Message, true)
 	for _, l := range e.More {
 		r.win.log = append(r.win.log, ui.LogLine{Tail: "    " + l, Err: true})

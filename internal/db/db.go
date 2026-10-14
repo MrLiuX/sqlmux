@@ -111,13 +111,23 @@ type RolledBack struct{ Err error }
 func (e RolledBack) Error() string { return e.Err.Error() }
 func (e RolledBack) Unwrap() error { return e.Err }
 
-// Engine is what PG and MySQL each do their own way above a Conn (§8.1):
-// connecting, writing names and arguments into SQL, the catalog (§8.4),
-// quick SQL (§12), a query's schema (§8.6) and what an error says.
-type Engine interface {
+// Driver is what every kind of server does its own way under a Worker
+// (§5「连接缝」): connecting, whether an error is a lost connection, and what
+// an error says. A key-value server is a Driver and no Engine.
+type Driver interface {
 	// Connect opens one connection; readOnly makes its transactions read
 	// only, as Meta's are (§8.2).
 	Connect(ctx context.Context, dsn, password string, readOnly bool) (Conn, Info, error)
+	// Broken says whether err is a lost connection (§8.2「断线重连」).
+	Broken(err error) Lost
+	ErrorOf(err error) ServerError
+}
+
+// Engine is what PG, MySQL and SQLite each do their own way above a Conn
+// (§8.1): writing names and arguments into SQL, the catalog (§8.4), quick SQL
+// (§12) and a query's schema (§8.6), as well as what a Driver does.
+type Engine interface {
+	Driver
 	Dialect() sqlkit.Dialect
 	Quote(names ...string) string // a name, or schema and name, quoted
 	Arg(n int) string             // the nth argument, from 1
@@ -154,9 +164,6 @@ type Engine interface {
 	// UseSchema makes schema the first unqualified names go to, then
 	// started, the one c connected with (§8.6).
 	UseSchema(ctx context.Context, c Conn, schema, started string) error
-	// Broken says whether err is a lost connection (§8.2「断线重连」).
-	Broken(err error) Lost
-	ErrorOf(err error) ServerError
 }
 
 // Info is where a connection landed: user@host:port for the status bar,

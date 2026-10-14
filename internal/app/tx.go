@@ -9,7 +9,6 @@ import (
 
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/i18n"
-	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // txOpen is why a connection's transaction keeps it as it is: a query on
@@ -86,11 +85,11 @@ func txLost(sql string, err error) error {
 // runTxLost is what a query run says when it failed with the transaction
 // lost: at a COMMIT or a ROLLBACK the user typed, what txLost says of it, a
 // rollback ending the run as done.
-func runTxLost(rs []db.Result, err error, texts []string, d sqlkit.Dialect) ([]db.Result, error) {
+func runTxLost(rs []db.Result, err error, texts []string, l lang) ([]db.Result, error) {
 	if !errors.As(err, new(db.TxLost)) || len(rs) >= len(texts) {
 		return rs, err
 	}
-	sql := sqlkit.EndsTx(texts[len(rs)], d)
+	sql := l.EndsTx(texts[len(rs)])
 	switch said := txLost(sql, err); {
 	case sql == "rollback" && len(rs)+1 == len(texts): // it is the last: nothing is left unrun
 		return append(rs, db.Result{Tag: "ROLLBACK"}), nil

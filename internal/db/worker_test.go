@@ -645,3 +645,23 @@ func TestSaveLost(t *testing.T) {
 		}
 	}
 }
+
+// A request is given its connection wrapped for counting, and Unwrap gives back
+// the one the driver made, also after a redial (§5「连接缝」).
+func TestWorkerUnwrap(t *testing.T) {
+	first, second := &blockConn{}, &blockConn{}
+	w := NewWorker(first)
+	w.Redial, w.Broken = func(context.Context) (Conn, error) { return second, nil }, func(error) Lost { return NotLost }
+	own := func() Conn {
+		var got Conn
+		_ = w.Run(context.Background(), func(_ context.Context, c Conn) error { got = c.(interface{ Unwrap() Conn }).Unwrap(); return nil })
+		return got
+	}
+	if own() != Conn(first) {
+		t.Error("not the connection the driver made")
+	}
+	w.broken = true // the next request dials first
+	if own() != Conn(second) {
+		t.Error("not the connection dialed again")
+	}
+}

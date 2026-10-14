@@ -36,7 +36,7 @@ func (a *App) queryFormat(t *queryTab, f editor.FormatSpan, whole bool) tea.Cmd 
 	text := strings.Join(lines, "\n")
 	from, to := offsetOf(lines, f.From), offsetOf(lines, f.To)
 	d := t.conn.eng.Dialect()
-	stmts := sqlkit.Statements(text, d)
+	stmts := t.conn.lang().Stmts(text)
 	switch {
 	case f.Selected:
 		to -= len(text[from:to]) - len(strings.TrimSuffix(text[from:to], "\n"))

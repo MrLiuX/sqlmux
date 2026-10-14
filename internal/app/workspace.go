@@ -203,8 +203,11 @@ type Conn struct {
 	// included (F8.19).
 	liveMu sync.Mutex
 	live   config.Connection
-	// eng and readOnly are Spec.Engine's and Spec.ReadOnly as the connection
-	// was dialed: an edit of the spec meanwhile is for the next dial (F8.16).
+	// drv, eng and readOnly are Spec.Engine's and Spec.ReadOnly as the
+	// connection was dialed: an edit of the spec meanwhile is for the next dial
+	// (F8.16). eng is drv as a SQL engine, nil for another kind of server
+	// (§5「连接缝」): what asks for it is not there for such a connection.
+	drv        db.Driver
 	eng        db.Engine
 	readOnly   bool
 	State      connState
@@ -354,7 +357,23 @@ func newConn(spec config.Connection) *Conn {
 // may be in.
 func (c *Conn) setSpec(spec config.Connection) {
 	c.setConfig(spec)
-	c.eng, c.readOnly = engines[spec.Engine], spec.ReadOnly
+	c.setDriver(spec)
+}
+
+// setDriver makes c's driver, and its engine when it is a SQL one, what spec
+// names.
+func (c *Conn) setDriver(spec config.Connection) {
+	c.drv = drivers[spec.Engine]
+	c.eng, _ = c.drv.(db.Engine)
+	c.readOnly = spec.ReadOnly
+}
+
+// driver is c's Driver: the one it was dialed with, else its engine's.
+func (c *Conn) driver() db.Driver {
+	if c.drv == nil && c.eng != nil {
+		return c.eng
+	}
+	return c.drv
 }
 
 // setConfig makes spec what the connection is for the redials of the
@@ -372,8 +391,8 @@ func (c *Conn) liveSpec() config.Connection {
 	return c.live
 }
 
-// engines are the engines connections.toml names (§8.1).
-var engines = map[string]db.Engine{"postgres": postgres.Engine{}, "mysql": mysql.Engine{}, "sqlite": sqlite.Engine{}}
+// drivers are the servers connections.toml names (§8.1, §5「连接缝」).
+var drivers = map[string]db.Driver{"postgres": postgres.Engine{}, "mysql": mysql.Engine{}, "sqlite": sqlite.Engine{}}
 
 func (a *App) win() *Window { return a.sess.Windows[a.sess.Active] }
 
@@ -760,7 +779,7 @@ func connectTo(ctx context.Context, spec config.Connection, readOnly bool) (db.C
 			return nil, db.Info{}, err
 		}
 	}
-	c, info, err := engines[spec.Engine].Connect(tunneled(ctx, spec), dsn, pw.(string), readOnly)
+	c, info, err := drivers[spec.Engine].Connect(tunneled(ctx, spec), dsn, pw.(string), readOnly)
 	if err != nil {
 		secrets.Delete(spec.Name)
 	}

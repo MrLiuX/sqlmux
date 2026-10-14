@@ -85,6 +85,11 @@ func Setup(c Conn, f func() error) error {
 
 func (c *counted) TxStatus() byte { return TxStatus(c.Conn) }
 
+// Unwrap is the connection as the driver made it: what a request is given is
+// counted, and a driver whose calls are more than db.Conn's gets its own
+// back with it (§5「连接缝」).
+func (c *counted) Unwrap() Conn { return c.Conn }
+
 func (c *counted) closed() bool {
 	cl, ok := c.Conn.(closer)
 	return ok && cl.Closed()

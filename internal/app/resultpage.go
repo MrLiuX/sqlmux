@@ -8,7 +8,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/kackerx/sqlmux/internal/i18n"
-	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // pageDone answers resultPage: what mainRun made of the one statement, for
@@ -45,7 +44,7 @@ func (a *App) resultPage(d int) tea.Cmd {
 	}
 	offset := rt.offset + d*a.maxRows
 	s := r.stmts[rt.stmt]
-	text, _ := sqlkit.AutoLimit(r.sql[s.Start:s.End], r.conn.eng.Dialect(), a.maxRows+1, offset)
+	text, _ := r.conn.lang().Page(r.sql[s.Start:s.End], a.maxRows+1, offset)
 	rt.paging = true
 	r.conn.busy++
 	maxRows, manual := a.maxRows, r.conn.Manual

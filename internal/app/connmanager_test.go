@@ -846,7 +846,7 @@ func TestConnManagerDialAfterEdit(t *testing.T) {
 	feed(t, a, "<C-s>")
 	second.State = connFailed
 	a.connect(second)
-	if second.eng != engines["postgres"] {
+	if second.eng != drivers["postgres"] {
 		t.Errorf("dialed as postgres: engine %T", second.eng)
 	}
 

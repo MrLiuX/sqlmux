@@ -203,10 +203,10 @@ func (a *App) gotDropped(m dropped) tea.Cmd {
 	c := m.conn
 	c.busy--
 	if m.err != nil {
-		if c.eng.Broken(m.err) != db.NotLost { // the connection event says it: reconnected, run it again
+		if c.driver().Broken(m.err) != db.NotLost { // the connection event says it: reconnected, run it again
 			return a.loadCatalog(c)
 		}
-		e := c.eng.ErrorOf(m.err)
+		e := c.driver().ErrorOf(m.err)
 		msg := e.Message
 		if errors.Is(m.err, context.Canceled) {
 			msg = i18n.T("查询已取消")

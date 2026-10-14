@@ -523,7 +523,7 @@ func testConn(spec config.Connection, password string) (string, error) {
 			return "", err
 		}
 	}
-	conn, _, err := engines[spec.Engine].Connect(tunneled(ctx, spec), spec.DSN, password, true)
+	conn, _, err := drivers[spec.Engine].Connect(tunneled(ctx, spec), spec.DSN, password, true)
 	if err != nil {
 		return "", err
 	}

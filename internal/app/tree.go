@@ -40,7 +40,7 @@ func (a *App) connect(c *Conn) tea.Cmd {
 	}
 	c.State = connConnecting
 	spec := c.Spec
-	c.eng, c.readOnly = engines[spec.Engine], spec.ReadOnly // as this dial has them
+	c.setDriver(spec) // as this dial has them
 	return func() tea.Msg {
 		d, err := dial(context.Background(), spec)
 		return connected{c, d, err}

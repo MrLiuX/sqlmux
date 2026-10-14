@@ -507,7 +507,7 @@ func killBackends(t *testing.T, eng, dsn string, c *Conn) {
 	if eng == "mysql" {
 		idSQL, killSQL = "select connection_id()", "kill %s"
 	}
-	admin, _, err := engines[eng].Connect(ctx, dsn, "", false)
+	admin, _, err := drivers[eng].Connect(ctx, dsn, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

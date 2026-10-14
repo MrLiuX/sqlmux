@@ -19,7 +19,6 @@ import (
 
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/i18n"
-	"github.com/kackerx/sqlmux/internal/sqlkit"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
@@ -154,7 +153,7 @@ func (a *App) exportSource(d *dropdown) exportSrc {
 			}
 		}
 		all := r.sql[s.Start:s.End]
-		again, _ := sqlkit.AutoLimit(all, r.conn.eng.Dialect(), len(rt.page.Rows), rt.offset)
+		again, _ := r.conn.lang().Page(all, len(rt.page.Rows), rt.offset)
 		src.all, src.again = &exportAll{base: name, each: each(all)}, &exportAll{base: name, each: each(again)}
 	}
 	return src

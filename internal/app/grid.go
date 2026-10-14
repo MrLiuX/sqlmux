@@ -289,7 +289,7 @@ func (a *App) gotPage(m pageMsg) tea.Cmd {
 	case m.err != nil: // under the rows shown, which stay; its WHERE is there to be fixed (backToShown), the count owed
 		// ponytail: no 位置 line, the SQL being ours, not the WHERE typed;
 		// map Position into the WHERE if it is ever wanted
-		t.bar = newErrorBar("fetch", t.conn.eng.ErrorOf(m.err), "", "")
+		t.bar = newErrorBar("fetch", t.conn.driver().ErrorOf(m.err), "", "")
 		t.backToShown()
 		return nil
 	}
