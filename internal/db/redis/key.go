@@ -669,7 +669,7 @@ func (k Key) Rebuild(ctx context.Context) (string, error) {
 				// ponytail: the first LoadAll entries HSCAN gives, in the order of their names; a
 				// hash longer than that is not sorted whole, which would read it whole
 				slices.SortFunc(entries, func(a, b []string) int { return strings.Compare(a[0], b[0]) })
-				for _, e := range entries[:min(len(entries), k.LoadAll)] {
+				for _, e := range entries {
 					words = append(words, e...)
 				}
 				line(words...)
@@ -688,7 +688,7 @@ func (k Key) Rebuild(ctx context.Context) (string, error) {
 				}
 				words := []string{"SADD", k.Name} // sorted as the hash's is, of what it read
 				slices.SortFunc(entries, func(a, b []string) int { return strings.Compare(a[0], b[0]) })
-				for _, e := range entries[:min(len(entries), k.LoadAll)] {
+				for _, e := range entries {
 					words = append(words, e[0])
 				}
 				line(words...)
