@@ -45,6 +45,9 @@ type Columns struct {
 	// NoInsert is why a row cannot be added, "" when one can: a Redis stream's
 	// entries are made with XADD, not a row.
 	NoInsert string
+	// NoUpdate is why a cell of a row that is there cannot be changed, "" when
+	// it can: a Redis stream's entries are deleted, not changed.
+	NoUpdate string
 }
 
 // CanSort is whether the source can sort by column name.

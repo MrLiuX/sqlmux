@@ -223,6 +223,9 @@ func (t *dataTab) cellAtCursor() (cellSrc, bool) {
 		s.why = i18n.T("%s 是 %s，只读", s.col.Name, s.col.Type)
 	} else if s.why == "" {
 		s.why = s.col.ReadOnly
+		if s.why == "" && sr.add == nil {
+			s.why = t.cols.NoUpdate
+		}
 	}
 	return s, true
 }

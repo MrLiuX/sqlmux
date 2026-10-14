@@ -55,8 +55,13 @@ type Paged struct {
 // Attr is one name and value of a Paged's Info line.
 type Attr struct{ Name, Value string }
 
-// ErrReadOnly is a save on a read-only connection (§13).
-var ErrReadOnly = msgError(i18n.N("只读连接"))
+// ErrReadOnly is a save on a read-only connection (§13); ErrTruncated an Each
+// that stopped at the source's budget, what it gave a whole file of what it
+// read, which an export says so (§8.7).
+var (
+	ErrReadOnly  = msgError(i18n.N("只读连接"))
+	ErrTruncated = msgError(i18n.N("超过扫描预算，只导出了前面的一部分"))
+)
 
 // SQLTable is a Source that is a table or a view of a SQL engine: the
 // statements of Page, Count, Select and Save, each on the Worker it is read
