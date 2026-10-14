@@ -143,7 +143,9 @@ func TestFunctions(t *testing.T) {
 	}
 	var got []string
 	for _, f := range fs {
-		got = append(got, f.Schema+"."+f.Name+"("+f.Args+")")
+		if f.Schema == "agentable" || f.Schema == cfg.DBName { // the others of a shared server, a copy of the seed someone made, are not the seed's
+			got = append(got, f.Schema+"."+f.Name+"("+f.Args+")")
+		}
 	}
 	if want := "agentable.fn_agent_count() " + cfg.DBName + ".fn_greet(who varchar(64)) " + cfg.DBName + ".fn_order_total(order_id bigint)"; strings.Join(got, " ") != want {
 		t.Fatalf("functions %q, want %q", got, want)
