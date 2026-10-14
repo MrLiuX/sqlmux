@@ -116,7 +116,7 @@ start -y 12
 key C-h
 e2e_wheel 10 6 down; sleep 0.3
 check "滚一格：视图下移 3 个节点（public 起）；光标被夹到 public" eval '[[ $(tree | head -1) == "public" ]] && cursor_on public'
-for i in 1 2 3 4; do e2e_wheel 10 6 down; sleep 0.2; done
+for i in $(seq 1 12); do e2e_wheel 10 6 down; sleep 0.2; done
 check "滚到底：最后一个节点 Queries 贴着底边，不再往下" eval '[[ $(tree | tail -1) == Queries && $(e2e_text 2 31 $(last_y)) == *Queries* ]]'
 for i in 1 2 3 4 5 6; do e2e_wheel 10 6 up; sleep 0.2; done
 check "往回滚：回到顶部" eval '[[ $(tree | head -1) == doraemon ]]'
