@@ -78,8 +78,13 @@ key Escape; sleep 0.3
 # 模式附加信息（-- editing WHERE --）比提示重要：宽的时候两个都在，窄一点提示先让位、信息一个字不少
 open_table t_user; wait_for 8 settled; key /; sleep 0.5
 check "表格里 / 写 WHERE：状态栏有「-- editing WHERE --」，提示也在" eval '[[ $(bar) == *"-- editing WHERE --"* && -n $(tip) ]]' || bar
-e2e_resize 135 45; sleep 0.8
-check "收窄到 135 列：提示让位，「-- editing WHERE --」一个字不少" eval '[[ $(bar) == *"-- editing WHERE --"* && -z $(tip) ]]' || bar
+# 提示是随机抽的，长短不一：一点一点收窄，每个宽度上信息都是整条的，提示在某个宽度让位
+ok=1 gone=0; for w in 135 125 115 105 95; do
+  e2e_resize $w 45; sleep 0.8
+  [[ $(bar) == *"-- editing WHERE --"* ]] || ok=0
+  [[ -z $(tip) ]] && { gone=$w; break; }
+done
+check "收窄（135 … 95 列）：「-- editing WHERE --」每个宽度上一个字不少，提示在某个宽度（$gone 列）让位" eval '(( ok && gone > 0 ))' || bar
 e2e_resize 160 45; sleep 0.8; key Escape; sleep 0.3; key Escape; sleep 0.3
 # 一点一点收窄：提示（长短不一）在某个宽度让位，那时左边的 0: data 和右边的连接地址还在；让位之前它是整条的（不被截断）
 gone=0; for w in 140 130 120 110 100 95 90 85; do
