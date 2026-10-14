@@ -139,6 +139,7 @@ leader = "<Space>"
 "<Esc>" = "json.leave" # NORMAL's brings the table back; the editor has it otherwise
 "q" = "json.leave q" # esc first puts out the matches of a search lit, q leaves at once (F15.9)
 "gj" = "grid.view.json"
+"Y" = "json.yank" # the whole text, not the line vim's Y has (F16.9)
 
 [keys.queryinsert] # a query in INSERT, where vim has C-r for a register (F14.2)
 "<C-r>" = "query.history"

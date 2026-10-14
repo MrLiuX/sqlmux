@@ -144,6 +144,7 @@ var en = map[string]string{
 	"回到表格":                      "Back to the grid",
 	"回滚":                        "Roll back",
 	"固定结果":                      "Pin result",
+	"复制整个 JSON":                 "Copy the whole JSON",
 	"在 $EDITOR 中编辑":             "Edit in $EDITOR",
 	"在 query 里编辑":               "Edit in a query",
 	"复制为 INSERT":                "Copy as INSERT",

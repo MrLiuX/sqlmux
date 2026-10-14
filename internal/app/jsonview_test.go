@@ -218,6 +218,32 @@ func TestJSONViewKeys(t *testing.T) {
 	}
 }
 
+// Y in the JSON view puts the whole text on the clipboard, not the line vim's Y
+// would, from the keys and from the palette; with the table in sight it does
+// nothing (F16.9).
+func TestJSONViewYank(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	loadOrders(t, a, 3)
+	p := a.focused()
+	if _, ok := clipText(a.run("json.yank", 0)); ok {
+		t.Error("json.yank with the table in sight copies")
+	}
+	feed(t, a, "gj")
+	feed(t, a, "jj") // the cursor is not on the first line
+	want := expectedJSON(t, a, 3)
+	cmd := keys(t, a, "Y")
+	if got, ok := clipText(cmd); !ok || got != want || got != jsonViewOf(p).text {
+		t.Errorf("Y copied %q, want %q", got, want)
+	}
+	if a.flash == nil || a.flash.pane != p.ID || a.flash.text.Mode != ui.SelLines || a.flash.text.To.Line != strings.Count(want, "\n") {
+		t.Errorf("the flash: %+v", a.flash)
+	}
+	a.openPalette(">")
+	if !slices.ContainsFunc(a.paletteItems(), func(it paletteItem) bool { return it.kind == itemCommand && it.id == "json.yank" }) {
+		t.Error("the palette has no json.yank")
+	}
+}
+
 func TestGoldenJSONView160x45(t *testing.T) {
 	a := wide(160, 45)
 	loadOrders(t, a, 3)

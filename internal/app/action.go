@@ -264,6 +264,7 @@ func init() {
 			}
 			return a.jsonKey(a.focused(), cmp.Or(keymap.Key(args.Arg), keymap.Esc))
 		}},
+		"json.yank":       {Title: i18n.N("复制整个 JSON"), Run: func(a *App, _ Args) tea.Cmd { return a.jsonYank() }},
 		"grid.ddl.table":  {Title: i18n.N("表的 DDL"), Run: func(a *App, _ Args) tea.Cmd { return a.openDDL(false) }},
 		"ddl.down":        {Title: i18n.N("下移"), Local: true, Run: when(inDDL, func(a *App) tea.Cmd { a.scrollDDL(1, false); return nil })},
 		"ddl.up":          {Title: i18n.N("上移"), Local: true, Run: when(inDDL, func(a *App) tea.Cmd { a.scrollDDL(-1, false); return nil })},

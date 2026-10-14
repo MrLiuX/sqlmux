@@ -197,6 +197,18 @@ func (a *App) viewJSON() tea.Cmd {
 	return nil
 }
 
+// jsonYank is Y in a JSON view: the whole text, as the page has it, to the
+// system clipboard, flashing as a yank of all of it (F16.9).
+func (a *App) jsonYank() tea.Cmd {
+	p := a.focused()
+	jv := a.jsonSync(p)
+	if jv == nil { // an action run with no JSON view (the palette's)
+		return nil
+	}
+	all := ui.Sel{Mode: ui.SelLines, To: ui.TextPos{Line: len(jv.ed.Lines()) - 1}}
+	return tea.Batch(clipCopy(jv.text), a.flashYank(yankFlash{pane: p.ID, text: all}))
+}
+
 // jsonKey gives key k, which no binding of the view took, to its editor: esc
 // in NORMAL brings the table back, as the binding of esc does (§6.8).
 func (a *App) jsonKey(p *Pane, k keymap.Key) tea.Cmd {
