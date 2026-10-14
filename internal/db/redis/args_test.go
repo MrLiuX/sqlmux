@@ -52,3 +52,23 @@ func TestSplitLine(t *testing.T) {
 		}
 	}
 }
+
+// The words of a line up to the cursor are the finished ones and the one being typed,
+// which may be in a quote that is open (F16.5).
+func TestTyped(t *testing.T) {
+	for _, c := range []struct {
+		before  string
+		words   []string
+		partial string
+		open    bool
+	}{
+		{"", nil, "", false}, {"ge", nil, "ge", false}, {"get ", []string{"get"}, "", false}, {"get ke", []string{"get"}, "ke", false},
+		{`set "a b" va`, []string{"set", "a b"}, "va", false}, {`set "a b`, []string{"set"}, `"a b`, true}, {`set 'a b' `, []string{"set", "a b"}, "", false},
+		{`set "a\" b" x`, []string{"set", `a" b`}, "x", false}, {"  hset k  ", []string{"hset", "k"}, "", false}, {"# get k", nil, "", false}, {"get\tk", []string{"get"}, "k", false},
+	} {
+		words, partial, open := Typed(c.before)
+		if !slices.Equal(words, c.words) || partial != c.partial || open != c.open {
+			t.Errorf("%q: %q %q %v, want %q %q %v", c.before, words, partial, open, c.words, c.partial, c.open)
+		}
+	}
+}

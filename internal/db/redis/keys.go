@@ -185,3 +185,51 @@ func ParseTTL(s string) (ttl time.Duration, ok bool) {
 	d, err := time.ParseDuration(s)
 	return d, err == nil && d > 0
 }
+
+// hintRounds is how many SCANs a completion of key names makes at most: it looks at
+// a few thousand keys, not the whole of a db that has millions (§9.8).
+const hintRounds = 10
+
+// KeyHints are up to want keys of the db c is on that start with prefix, from SCAN
+// MATCH, a round at a time till there are want of them or hintRounds are done; the
+// answer is what it found, which for a big db and a rare prefix may not be all.
+func KeyHints(ctx context.Context, c db.Conn, prefix string, want int) (keys []string, err error) {
+	err = Use(ctx, c, func(cl *goredis.Client) error {
+		var cursor uint64
+		for range hintRounds {
+			batch, next, err := cl.Scan(ctx, cursor, Glob(prefix)+"*", scanCount).Result()
+			if err != nil {
+				return err
+			}
+			for _, k := range batch {
+				if !slices.Contains(keys, k) {
+					keys = append(keys, k)
+				}
+			}
+			if cursor = next; cursor == 0 || len(keys) >= want {
+				break
+			}
+		}
+		return nil
+	})
+	slices.Sort(keys)
+	return keys[:min(len(keys), want)], err
+}
+
+// HashFields are the fields of the hash key when it has no more than limit of them
+// (HKEYS reads them all); none for a longer one, a key that is not a hash, or none.
+func HashFields(ctx context.Context, c db.Conn, key string, limit int) (fields []string, err error) {
+	err = Use(ctx, c, func(cl *goredis.Client) error {
+		n, err := cl.HLen(ctx, key).Result()
+		if err != nil && strings.HasPrefix(err.Error(), "WRONGTYPE") || err == nil && n > int64(limit) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		fields, err = cl.HKeys(ctx, key).Result()
+		return err
+	})
+	slices.Sort(fields)
+	return fields, err
+}

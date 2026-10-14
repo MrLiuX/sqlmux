@@ -49,9 +49,10 @@ type queryTab struct {
 	// The candidate list in INSERT (§9.7); the tables whose columns were
 	// fetched for it this INSERT, and where it last completed: columns in
 	// while the cursor is still there complete again.
-	comp  *completion
-	asked map[tableID]bool
-	wait  *compWait
+	comp    *completion
+	asked   map[tableID]bool
+	wait    *compWait
+	hintSeq int // the last key or field completion asked for: older ones are dropped (§9.8)
 }
 
 // compWait is where a query last completed, C-n's or not.
@@ -258,7 +259,13 @@ func (a *App) queryComplete(t *queryTab, manual bool) tea.Cmd {
 	if t.asked == nil {
 		t.asked = map[tableID]bool{}
 	}
-	c, cmds := a.sqlComplete(t.conn, strings.Join(lines, "\n"), pos, cmp.Or(t.schema, t.conn.Schema), t.asked, manual)
+	var c *completion
+	var cmds []tea.Cmd
+	if t.conn.sql() {
+		c, cmds = a.sqlComplete(t.conn, strings.Join(lines, "\n"), pos, cmp.Or(t.schema, t.conn.Schema), t.asked, manual)
+	} else {
+		c, cmds = a.redisComplete(t, lines[cur.Line][:cur.Col], pos, manual)
+	}
 	if c != nil {
 		c.start -= pos - cur.Col // a column of the cursor's line: it is a word before the cursor
 	}

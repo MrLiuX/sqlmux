@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -123,4 +124,70 @@ func TestRedisConsoleRunsAndCancels(t *testing.T) {
 	if rt := resultOf(a.win().Result); rt == nil || rt.page.Rows[0][0].S != "PONG" {
 		t.Errorf("after the cancel: %+v", rt)
 	}
+}
+
+// A console on a real server completes what COMMAND DOCS lists and what the db has:
+// the names of commands, a key after GET, a field after HGET and the key, the list
+// made again when the names come from the server (F16.5).
+func TestRedisConsoleCompletes(t *testing.T) {
+	a, c := redisApp(t, redis.IntegrationDSN(t), 1000)
+	if c.docs == nil || c.cmds == nil {
+		t.Fatalf("docs %d, commands %d", len(c.docs), len(c.cmds))
+	}
+	a.run("query.new", 0)
+	q := a.sess.queries()[0]
+	q.conn = c
+	labels := func() (out []string) {
+		if q.comp != nil {
+			for _, it := range q.comp.items {
+				out = append(out, it.label)
+			}
+		}
+		return out
+	}
+	typed := func(text string) {
+		t.Helper()
+		q.ed.Load(text)
+		feed(t, a, "A")
+		cmd := a.queryComplete(q, false)
+		for _, m := range collect(cmd) { // the ticks and the asks, as the program would deliver them
+			_, next := a.Update(m)
+			for _, m2 := range collect(next) {
+				_, last := a.Update(m2)
+				settle(a, last)
+			}
+		}
+	}
+	typed("hse")
+	if got := labels(); len(got) == 0 || got[0] != "HSET" {
+		t.Errorf("hse: %v", got)
+	}
+	feed(t, a, "<Esc>")
+	typed("GET app:users:")
+	if got := labels(); !slices.Equal(got, []string{"app:users:1", "app:users:2", "app:users:3"}) {
+		t.Errorf("a key: %v", got)
+	}
+	feed(t, a, "<Esc>")
+	typed("HGET hash:user na")
+	if got := labels(); len(got) == 0 || got[0] != "name" {
+		t.Errorf("a field: %v", got)
+	}
+	feed(t, a, "<Esc>")
+}
+
+// collect is the messages of cmd, a batch's each.
+func collect(cmd tea.Cmd) (out []tea.Msg) {
+	if cmd == nil {
+		return nil
+	}
+	switch m := cmd().(type) {
+	case tea.BatchMsg:
+		for _, c := range m {
+			out = append(out, collect(c)...)
+		}
+	case nil:
+	default:
+		out = append(out, m)
+	}
+	return out
 }

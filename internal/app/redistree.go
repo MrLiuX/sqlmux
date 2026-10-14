@@ -162,6 +162,7 @@ type keysMsg struct {
 	// cmdsErr is why it would not say (§9.8)
 	cmds    redis.Commands
 	cmdsErr error
+	docs    redis.Docs // COMMAND DOCS, none before Redis 7 (§9.8)
 	asked   bool
 }
 
@@ -177,6 +178,7 @@ func (a *App) loadKeys(c *Conn) tea.Cmd {
 		m := keysMsg{conn: c, asked: asked}
 		if asked {
 			m.cmdsErr = meta.RunSafe(ctx, func(ctx context.Context, conn db.Conn) (err error) {
+				m.docs, _ = redis.LoadDocs(ctx, conn) // a server before 7 has none: the names alone are completed
 				m.cmds, err = redis.LoadCommands(ctx, conn)
 				return err
 			})
@@ -206,6 +208,7 @@ func (a *App) gotKeys(m keysMsg) tea.Cmd {
 	}
 	var told tea.Cmd
 	if m.asked {
+		c.docs = m.docs
 		if c.cmds = m.cmds; m.cmdsErr != nil { // what writes is not known: every command is taken for a write
 			told = a.showToast(i18n.T("%s：读不到命令列表（%s），命令都按写命令处理", c.label(), m.cmdsErr))
 		}

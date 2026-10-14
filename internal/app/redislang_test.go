@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/exp/golden"
+
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/db/redis"
@@ -67,7 +70,7 @@ func redisConsole(t *testing.T, d *execDB, cs redis.Commands, text string) (*App
 	t.Helper()
 	a, c := inRun(t, d, text)
 	conn := a.sess.Conns[0]
-	conn.Spec.Engine, conn.drv, conn.eng, conn.cmds = "redis", kvDriver{}, nil, cs
+	conn.Spec.Engine, conn.drv, conn.eng, conn.cmds, conn.DB = "redis", kvDriver{}, nil, cs, "0"
 	return a, c
 }
 
@@ -267,4 +270,164 @@ func TestPaletteHidesSQLOnlyCommands(t *testing.T) {
 	if has(a) {
 		t.Error("Redis: listed")
 	}
+}
+
+// someDocs is what a server says of SET and CONFIG, as COMMAND DOCS gives it.
+func someDocs() redis.Docs {
+	tok := func(t string) redis.Arg { return redis.Arg{Name: strings.ToLower(t), Type: "pure-token", Token: t} }
+	return redis.Docs{
+		"set": {Args: []redis.Arg{
+			{Name: "key", Type: "key"}, {Name: "value", Type: "string"},
+			{Name: "condition", Type: "oneof", Optional: true, Args: []redis.Arg{tok("NX"), tok("XX")}},
+			{Name: "seconds", Type: "integer", Token: "EX", Optional: true},
+		}},
+		"get":    {Summary: "Returns the string value of a key.", Args: []redis.Arg{{Name: "key", Type: "key"}}},
+		"foo":    {Args: []redis.Arg{{Name: "key", Type: "key"}, {Name: "field", Type: "string"}}}, // a field of something else
+		"hget":   {Args: []redis.Arg{{Name: "key", Type: "key"}, {Name: "field", Type: "string"}}},
+		"config": {Subs: map[string]redis.Doc{"set": {Args: []redis.Arg{{Name: "parameter", Type: "string"}, {Name: "value", Type: "string"}}}}},
+	}
+}
+
+// The signature of a Redis command is the line of its arguments with the one the
+// cursor is at lit: by the words before it, a subcommand's by its own; none for a
+// command the server has no docs of, or before the name is done (F16.5).
+func TestRedisSignature(t *testing.T) {
+	a, c := redisConsole(t, &execDB{}, someCommands(), "")
+	a.sess.Conns[0].docs = someDocs()
+	a.valueHints = true
+	for _, tc := range []struct {
+		typed  string
+		fields string
+		cur    int
+	}{
+		{"SET ", "SET key value [NX | XX] [EX seconds]", 1},
+		{"set k", "SET key value [NX | XX] [EX seconds]", 1},
+		{"set k ", "SET key value [NX | XX] [EX seconds]", 2},
+		{"set k v ", "SET key value [NX | XX] [EX seconds]", 3},
+		{"set k v nx ", "SET key value [NX | XX] [EX seconds]", 4},
+		{"set k v nx ex 10 ", "SET key value [NX | XX] [EX seconds]", 0},
+		{"config set ", "CONFIG SET parameter value", 1},
+		{"config set maxmemory ", "CONFIG SET parameter value", 2},
+		{"config ", "", 0}, {"set", "", 0}, {"nosuch k ", "", 0}, {"", "", 0}, {"# set k ", "", 0},
+	} {
+		c.ed.Load(tc.typed)
+		feed(t, a, "A") // INSERT at the end
+		s := a.signature(c)
+		if got := strings.Join(s.Fields, " "); got != tc.fields || tc.fields != "" && (s.Cur != tc.cur || s.Sep != " ") {
+			t.Errorf("%q: %q cur %d, want %q %d", tc.typed, got, s.Cur, tc.fields, tc.cur)
+		}
+		feed(t, a, "<Esc>")
+	}
+	c.ed.Load("set k v nx")
+	feed(t, a, "0llllli") // the cursor after "set k": only what is before it counts
+	if s := a.signature(c); s.Cur != 1 {
+		t.Errorf("in the middle of a line: %d", s.Cur)
+	}
+	feed(t, a, "<Esc>")
+	a.valueHints = false
+	c.ed.Load("set k ")
+	if len(a.signature(c).Fields) != 0 {
+		t.Error("hints are off")
+	}
+}
+
+// typedAt types text in INSERT at the end of a console's line and gives the labels
+// of the candidates the list has.
+func typedAt(t *testing.T, a *App, c *queryTab, text string, manual bool) (labels []string) {
+	t.Helper()
+	c.ed.Load(text)
+	feed(t, a, "A")
+	a.queryComplete(c, manual)
+	if c.comp != nil {
+		for _, it := range c.comp.items {
+			labels = append(labels, it.label)
+		}
+	}
+	feed(t, a, "<Esc>")
+	return labels
+}
+
+// The console completes the name of a command, a subcommand, the tokens of an
+// argument, a key and a hash's field from what the server gave: a list opens when a
+// word is typed, or for C-n; not in a quote or a comment; the keys come from the
+// server when the typing stops, and the list is made again with them (F16.5).
+func TestRedisCompletion(t *testing.T) {
+	a, c := redisConsole(t, &execDB{}, someCommands(), "")
+	conn := a.sess.Conns[0]
+	conn.docs, conn.hints = someDocs(), map[string][]string{"keys\x00us": {"user:1", "user:two words"}, "fields\x00h": {"field1", "other", "Field2"}}
+	for _, tc := range []struct {
+		typed  string
+		manual bool
+		want   string
+	}{
+		{"se", false, "SET"}, {"GE", false, "GET"}, {"", false, ""}, {"", true, "CONFIG FOO GET HGET SET"},
+		{"set k v ", true, "NX XX EX"}, {"set k v e", false, "EX"}, {"config s", false, "SET"}, {"config ", true, "SET"},
+		{"get us", false, "user:1 user:two words"}, {"hget h fi", false, "field1 Field2"}, {"foo h f", false, ""}, {"hget h ", true, "field1 other Field2"},
+		{`get "us`, false, ""}, {"# se", false, ""}, {"# ", true, ""}, {"nosuch k ", true, ""},
+	} {
+		got := typedAt(t, a, c, tc.typed, tc.manual)
+		if strings.Join(got, " ") != tc.want {
+			t.Errorf("%q manual %v: %q, want %q", tc.typed, tc.manual, got, tc.want)
+		}
+	}
+	// the word is replaced, and a key with a blank in it is quoted
+	c.ed.Load("get us")
+	feed(t, a, "A")
+	a.queryComplete(c, false)
+	c.comp.sel = 1
+	a.queryAccept(c)
+	if got := strings.Join(c.ed.Lines(), "\n"); got != `get "user:two words" ` { // a blank after it: the next word comes
+		t.Errorf("accepted: %q", got)
+	}
+	feed(t, a, "<Esc>")
+	c.ed.Load("get a\n  get us") // on a line that is not the first
+	feed(t, a, "GA")
+	a.queryComplete(c, false)
+	c.comp.sel = 0
+	a.queryAccept(c)
+	if got := strings.Join(c.ed.Lines(), "\n"); got != "get a\n  get user:1 " {
+		t.Errorf("accepted on the second line: %q", got)
+	}
+	feed(t, a, "<Esc>")
+	// a key that is not in yet is asked for after the typing stops, the last word typed only
+	seq := c.hintSeq
+	typedAt(t, a, c, "get zz", false)
+	if c.hintSeq != seq+1 {
+		t.Errorf("not asked: seq %d, was %d", c.hintSeq, seq)
+	}
+	if a.gotHintDue(hintDue{c, seq, "keys", "zz"}) != nil {
+		t.Error("an older word asks")
+	}
+	typedAt(t, a, c, "get us", false)   // what is known is not asked again
+	typedAt(t, a, c, `get "zz"`, false) // nor what is quoted
+	typedAt(t, a, c, "foo h f", false)  // nor the fields of what is no hash
+	if c.hintSeq != seq+1 {
+		t.Errorf("asked of what is known: %d", c.hintSeq)
+	}
+}
+
+// The signature line of a command with its current argument lit, and the box of the
+// keys that complete the word (F16.5).
+func TestGoldenRedisHints(t *testing.T) {
+	a, c := redisConsole(t, &execDB{}, someCommands(), "")
+	conn := a.sess.Conns[0]
+	conn.docs, conn.hints = someDocs(), map[string][]string{"keys\x00us": {"user:1", "user:2"}}
+	a.valueHints = true
+	pane := func() string {
+		r := a.layout()[a.focused().ID]
+		var lines []string
+		for _, l := range strings.Split(a.render().String(), "\n")[r.Min.Y : r.Min.Y+7] {
+			lines = append(lines, ansi.Cut(l, r.Min.X, r.Max.X))
+		}
+		return strings.Join(lines, "\n")
+	}
+	c.ed.Load("set k ")
+	feed(t, a, "A")
+	t.Run("signature", func(t *testing.T) { golden.RequireEqual(t, pane()) })
+	feed(t, a, "<Esc>")
+	c.ed.Load("get us")
+	feed(t, a, "A")
+	a.queryComplete(c, false)
+	t.Run("keys", func(t *testing.T) { golden.RequireEqual(t, pane()) })
+	feed(t, a, "<Esc>")
 }

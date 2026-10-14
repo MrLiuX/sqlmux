@@ -19,8 +19,11 @@ import (
 // ponytail: the text is scanned once a frame for the focused query, as the
 // colors are; keep the context per change if a big file lags
 func (a *App) signature(t *queryTab) ui.Signature {
-	if !a.valueHints || !t.conn.sql() { // a Redis command's is F16.5's
+	if !a.valueHints {
 		return ui.Signature{}
+	}
+	if !t.conn.sql() {
+		return a.redisSignature(t)
 	}
 	lines, cur := t.ed.Lines(), t.ed.Cursor()
 	v := sqlkit.ValueContext(strings.Join(lines, "\n"), offsetOf(lines, cur), t.conn.eng.Dialect())

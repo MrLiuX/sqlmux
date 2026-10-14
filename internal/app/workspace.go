@@ -262,7 +262,11 @@ type Conn struct {
 	// connection came up: what writes, what is dangerous (§9.8); nil when it
 	// would not say
 	cmds      redis.Commands
+	docs      redis.Docs
 	cmdsAsked bool
+	// hints are the key names and hash fields the server gave for the console's
+	// completion, by what they were asked for (§9.8)
+	hints map[string][]string
 }
 
 // inDB is the connection to database name: c itself for the one it is dialed
