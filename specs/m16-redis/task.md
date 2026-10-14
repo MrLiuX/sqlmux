@@ -6,7 +6,7 @@
 - **依赖**：M15 passed（F15.3 的签名提示浮层在这里和 Redis 共用；M14 F14.2 的历史）。
 - **二进制**：go-redis v9.23.0 让 strip 后的二进制 27.1 → 34.7 MB（+7.6；v9.5.4 是 +3.8，但少 DialerRetries 且是旧版）。决策者 2026-10-14 定：不降版本，接受；以后有人嫌大再看能不能用 build tag 去掉没用的部分。
 - **环境**：这台机器的 docker 拉不到任何镜像（代理报 size validation，f11.2 的 brew 同一个原因），compose 的 redis / redis-seed 和 ci.yml 的 redis service 只能靠 CI 验；本地集成测试用 brew 的 redis-server（56379，灌同一份 seed），没有 RedisJSON，JSON 类型以 CI 为准。
-- **审查节点**（worker 2026-10-14 起草、决策者定）：1 = F16.6 + F16.0（F16.6 是一行键位、先做；F16.0 接口缝单独成批：不改任何行为，全量 e2e 一条不改就是验收）；2 = F16.1 + F16.2；3 = F16.3；4 = F16.4 + F16.5。
+- **审查节点**（worker 2026-10-14 起草、决策者定）：1 = F16.6 + F16.0（F16.6 是一行键位、先做；F16.0 接口缝单独成批：不改任何行为，全量 e2e 一条不改就是验收）；2 = F16.1 + F16.2；3 = F16.3；4 = F16.4 + F16.5；5 = F16.7–F16.10（用户 2026-10-14 验收第一轮提的）。
 
 已定的方向（2026-10-11，用户同意；决策时参考了 RedisInsight 的 Browse 和 DataGrip 的 Redis 支持，目标是比它们展示更清楚、JSON 更友好、键盘能走完）：
 
@@ -135,6 +135,56 @@
 - [ ] 集成：7.x 的 SET / ZADD / XADD 签名与 `COMMAND DOCS` 一致；键名补全对 10000+ 键的库不超时。
 - [ ] golden：签名提示行（含当前参数高亮）、键名候选框。
 - [ ] e2e：打 `HSET key f` 时提示行高亮第二个参数；`GET us` 补出键名。
+
+## F16.7 JSON 视图快速移动时残留闪烁的光标块 · 状态：todo
+
+- **依赖**：无（M14 F14.5 的 JSON 视图）
+- **涉及**：`internal/app`（jsonview、`View` 的复用路径）、可能 `internal/editor`
+- 用户 2026-10-14 验收 M16 时发现（截图：PG 表 `mt_conversation` 的 JSON 视图，`j` / `k` 快速上下移动后某些位置留下一个一直闪烁的光标方块，第 17 行第 0 列，真正的光标在别处）。决策者没复现成功，只看了代码：`App.View` 的 `reuse` 路径原样返回上一帧 `a.seen`（含它的 `Cursor`），`drawJSON` 只在焦点 pane 上设 `f.Cursor`；闪烁的是终端自己的光标，所以是光标位置没跟上最后一帧，或是哪一帧把光标放到了 `textView` 算出的旧位置。找根因改在共用的那一处，不要在 JSON 视图里打补丁；query 编辑器同样走 `f.Cursor`，顺带确认它没有同样的问题。
+
+**开发**
+- [ ] a. 复现（tmux 里连发 30 个 `j`，`tmux display -p '#{cursor_x},#{cursor_y}'` 和编辑器的光标比）并修根因。
+
+**验收**
+- [ ] 单测：连发多次移动后 `View()` 的 `Cursor` 等于编辑器光标所在的屏幕位置，走到 `reuse` 路径也一样。
+- [ ] e2e：JSON 视图里连发 30 个 `j` 后终端光标和 `编辑器光标` 的行列一致；query 编辑器同一检查。
+
+## F16.8 JSON 视图的 `s` flash 式跳转 · 状态：todo
+
+- **依赖**：F10.8
+- **涉及**：`internal/app`（jump 的可跳区域）、`internal/keymap/default.toml`
+
+**开发**（§6.10、§6.4 `jsonview`）
+- [ ] a. `[keys.jsonview]` 加 `s = jump.start`；可跳区域加 JSON 视图的文字（同 query 的文字：复用命中表，标签就是一次点击）；跳到后光标落在那个字符上。
+
+**验收**
+- [ ] 单测：JSON 视图里 `s` 进 JUMP，模式匹配到文字、`↵` 跳过去；mutation。
+- [ ] golden：JSON 视图的 JUMP 遮罩一屏。
+- [ ] e2e：`s` + 两个字母跳到某个键名；`esc` 退出光标不动。
+
+## F16.9 JSON 视图的 `Y` 复制整个 JSON · 状态：todo
+
+- **依赖**：F14.5
+- **涉及**：`internal/app`、`internal/keymap/default.toml`、i18n
+
+**开发**（§7.6「JSON 视图」）
+- [ ] a. Action `json.yank`「复制整个 JSON」，`[keys.jsonview]` 默认 `Y`：把视图里的整段文本（当前页的 JSON 数组，和 `y` 看到的同一份）写到系统剪贴板，toast 同表格的 `Y`；命令面板里有。
+
+**验收**
+- [ ] 单测：`Y` 写入的内容等于视图文本；mutation。
+- [ ] e2e：假 pbcopy 收到整段 JSON（`e2e` 现有的假 pbcopy 做法）。
+
+## F16.10 Redis 的 db 节点按号排 · 状态：todo
+
+- **依赖**：F16.2
+- **涉及**：`internal/app`（redistree）
+
+**开发**（§7.8「Redis 的树」）
+- [ ] a. db 节点按号从小到大排（`db0, db1, db2, db3`），DSN 指定的那个仍默认展开；原来 DSN 的排最前面。
+
+**验收**
+- [ ] 单测：DSN 是 `/2`、keyspace 有 0 / 1 / 3 时顺序 0 1 2 3、db2 展开；mutation。
+- [ ] e2e：树里的顺序。
 
 不做（第二轮候选）：Pub/Sub tab、MONITOR、SLOWLOG、CLIENT LIST、内存分析、Cluster / Sentinel、按 score 范围过滤 zset、键的批量设 TTL、命令面板里列键、格子里的 JSON 按格高亮、string 键是 JSON 时直接开值编辑器（F16.3 时定不做）。
 
