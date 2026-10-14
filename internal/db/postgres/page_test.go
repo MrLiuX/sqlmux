@@ -31,7 +31,7 @@ func TestPage(t *testing.T) {
 		t.Errorf("composite key order: %v %v", r.Rows, err)
 	}
 	// no Order, Desc: the row identity sorts, every column of it the other way
-	desc := db.Query{Schema: "public", Table: "t_order", Key: []string{"id"}, Desc: true, Limit: 2}
+	desc := db.Query{Schema: "public", Table: "t_order", Key: []string{"id"}, Order: []db.OrderCol{{Col: "id", Desc: true}}, Limit: 2}
 	if r, _, err = db.Page(ctx, c, pg, desc); err != nil || r.Rows[0][0].S != "6000" || r.Rows[1][0].S != "5999" {
 		t.Errorf("default order, down: %v %v", r.Rows, err)
 	}
@@ -39,7 +39,7 @@ func TestPage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, _, err = db.Page(ctx, c, pg, db.Query{Schema: "public", Table: "t_order_item", Key: []string{"order_id", "line_no"}, Desc: true, Limit: 3, Offset: 1})
+	r, _, err = db.Page(ctx, c, pg, db.Query{Schema: "public", Table: "t_order_item", Key: []string{"order_id", "line_no"}, Order: []db.OrderCol{{Col: "order_id", Desc: true}, {Col: "line_no", Desc: true}}, Limit: 3, Offset: 1})
 	if err != nil || len(r.Rows) != 3 {
 		t.Fatalf("composite key, down: %v %v", r.Rows, err)
 	}

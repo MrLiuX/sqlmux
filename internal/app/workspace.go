@@ -368,14 +368,6 @@ func (c *Conn) setDriver(spec config.Connection) {
 	c.readOnly = spec.ReadOnly
 }
 
-// driver is c's Driver: the one it was dialed with, else its engine's.
-func (c *Conn) driver() db.Driver {
-	if c.drv == nil && c.eng != nil {
-		return c.eng
-	}
-	return c.drv
-}
-
 // setConfig makes spec what the connection is for the redials of the
 // dial it is in, its engine and lock the dial's.
 func (c *Conn) setConfig(spec config.Connection) {

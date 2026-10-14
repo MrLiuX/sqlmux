@@ -304,7 +304,7 @@ func (a *App) orderToggle(t *dataTab, col string) tea.Cmd {
 func (a *App) setOrder(t *dataTab, order []db.OrderCol) tea.Cmd {
 	for _, o := range order {
 		if !t.cols.CanSort(o.Col) {
-			return a.showToast(i18n.T("%s 不能按这一列排序", t.table.Name))
+			return a.showToast(i18n.T("不能按 %s 排序", o.Col))
 		}
 	}
 	t.order, t.desc, t.pageNo = order, len(order) == 0 && a.newDesc, 0

@@ -30,7 +30,7 @@ func TestPage(t *testing.T) {
 		t.Errorf("composite key order: %v %v", r.Rows, err)
 	}
 	// no Order, Desc: the row identity sorts the other way
-	if r, _, err = db.Page(ctx, c, my, db.Query{Schema: "sqlmux", Table: "t_order", Key: []string{"id"}, Desc: true, Limit: 2}); err != nil || r.Rows[0][0].S != "6000" || r.Rows[1][0].S != "5999" {
+	if r, _, err = db.Page(ctx, c, my, db.Query{Schema: "sqlmux", Table: "t_order", Key: []string{"id"}, Order: []db.OrderCol{{Col: "id", Desc: true}}, Limit: 2}); err != nil || r.Rows[0][0].S != "6000" || r.Rows[1][0].S != "5999" {
 		t.Errorf("default order, down: %v %v", r.Rows, err)
 	}
 	if r, next, err = db.Page(ctx, c, my, db.Query{Schema: "sqlmux", Table: "t_log", Limit: 2}); err != nil || len(r.Rows) != 2 || !next {
