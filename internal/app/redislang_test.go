@@ -431,3 +431,21 @@ func TestGoldenRedisHints(t *testing.T) {
 	t.Run("keys", func(t *testing.T) { golden.RequireEqual(t, pane()) })
 	feed(t, a, "<Esc>")
 }
+
+// A server with no COMMAND DOCS (before 7) completes the names of the commands
+// COMMAND lists, and nothing past the first word (F16.5).
+func TestRedisCompletionWithoutDocs(t *testing.T) {
+	cs := someCommands()
+	cs["config|get"] = redis.Command{}
+	cs["config"] = redis.Command{}
+	a, c := redisConsole(t, &execDB{}, cs, "")
+	a.sess.Conns[0].docs = nil
+	for typed, want := range map[string]string{"f": "FLUSHALL", "g": "GET"} {
+		if got := strings.Join(typedAt(t, a, c, typed, false), " "); got != want {
+			t.Errorf("%q: %q, want %q", typed, got, want)
+		}
+	}
+	if got := strings.Join(typedAt(t, a, c, "", true), " "); got != "CONFIG FLUSHALL GET SET" {
+		t.Errorf("all: %q", got)
+	}
+}
