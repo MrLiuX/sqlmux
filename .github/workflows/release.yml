@@ -55,7 +55,9 @@ jobs:
         run: |
           curl -fsSL "https://github.com/kackerx/sqlmux/archive/refs/tags/$TAG.tar.gz" -o source.tar.gz
           mkdir -p tap/Formula
-          sh src/.github/scripts/tap-formula.sh "$TAG" "$(sha256sum source.tar.gz | cut -d' ' -f1)" > tap/Formula/sqlmux.rb
+          commit=$(git -C src rev-parse --short HEAD)
+          date=$(TZ=UTC git -C src log -1 --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd)
+          sh src/.github/scripts/tap-formula.sh "$TAG" "$(sha256sum source.tar.gz | cut -d' ' -f1)" "$commit" "$date" > tap/Formula/sqlmux.rb
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
