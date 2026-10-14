@@ -140,7 +140,7 @@
 
 - **依赖**：无（M14 F14.5 的 JSON 视图）
 - **涉及**：`internal/app`（jsonview、`View` 的复用路径）、可能 `internal/editor`
-- 用户 2026-10-14 验收 M16 时发现（截图：PG 表 `mt_conversation` 的 JSON 视图，`j` / `k` 快速上下移动后某些位置留下一个一直闪烁的光标方块，第 17 行第 0 列，真正的光标在别处）。决策者没复现成功，只看了代码：`App.View` 的 `reuse` 路径原样返回上一帧 `a.seen`（含它的 `Cursor`），`drawJSON` 只在焦点 pane 上设 `f.Cursor`；闪烁的是终端自己的光标，所以是光标位置没跟上最后一帧，或是哪一帧把光标放到了 `textView` 算出的旧位置。找根因改在共用的那一处，不要在 JSON 视图里打补丁；query 编辑器同样走 `f.Cursor`，顺带确认它没有同样的问题。
+- 用户 2026-10-14 验收 M16 时发现（截图：PG 表 `mt_conversation` 的 JSON 视图，`j` / `k` 快速上下移动后某些位置留下一个一直闪烁的光标方块，第 17 行第 0 列，真正的光标在别处）。决策者没复现成功，只看了代码：`App.View` 的 `reuse` 路径原样返回上一帧 `a.seen`（含它的 `Cursor`），`drawJSON` 只在焦点 pane 上设 `f.Cursor`；闪烁的是终端自己的光标，所以是光标位置没跟上最后一帧，或是哪一帧把光标放到了 `textView` 算出的旧位置。找根因改在共用的那一处，不要在 JSON 视图里打补丁；query 编辑器同样走 `f.Cursor`，顺带确认它没有同样的问题。用户第二次的线索（截图 `/Users/ctw/proj/sqlmux-verify/.demo/f16.7-cursor.png`，第一张 `f16.7-cursor-first.png`）：两个 pane 并排都开着 JSON 视图（① `list:queue`，② `mt_conversation`），焦点在 ①，在 ① 里快速 `j` / `k` 时白色光标块在 **②** 里来回闪，位置是 ② 的第二行（ORDER 那一行）贴左边框的地方，①里真正的光标在第 2 行第 0 列；用户截不到那一帧。所以是某些帧把终端光标放到了另一个 pane 的坐标上，不是残留：查这几帧里 `f.Cursor` 是谁设的（没焦点的 pane 的 `drawJSON` / 值编辑器 / 输入框、或 `reuse` 路径的旧帧），用两个并排的 JSON 视图复现。
 
 **开发**
 - [ ] a. 复现（tmux 里连发 30 个 `j`，`tmux display -p '#{cursor_x},#{cursor_y}'` 和编辑器的光标比）并修根因。
