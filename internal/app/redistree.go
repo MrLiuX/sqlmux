@@ -92,7 +92,7 @@ func (a *App) keyColor(typ string) (c color.Color) {
 		return th.Warn
 	case "stream":
 		return th.Info
-	case "ReJSON-RL":
+	case "ReJSON-RL", "json":
 		return th.SQLOperator
 	}
 	return th.Dim
@@ -107,7 +107,7 @@ func dbText(name string) string { return "db" + name }
 func (a *App) keyNodes(dc *Conn, name string, add func(node) bool, open func(string, bool) bool, filtering bool) {
 	s := dc.scan
 	if filtering {
-		s = dc.found
+		s = a.win().tree.found[dc]
 	}
 	if s == nil {
 		return
@@ -192,6 +192,7 @@ func (a *App) gotKeys(m keysMsg) tea.Cmd {
 		return nil
 	}
 	if m.err != nil {
+		a.dropPending(c)
 		return a.showToast(i18n.T("%s：%s", c.label(), m.err))
 	}
 	if c.Spec.Database == "" {
@@ -203,7 +204,7 @@ func (a *App) gotKeys(m keysMsg) tea.Cmd {
 	}
 	c.scan = m.scan
 	a.clampTree()
-	return a.findKeys(c)
+	return tea.Batch(append(a.resolvePending(c), a.findKeys(c))...)
 }
 
 func atoiOr(s string) int { n, _ := strconv.Atoi(s); return n }
@@ -222,6 +223,7 @@ func filterPattern(typed string) string {
 
 // foundMsg is what a scan for the filter's pattern found in a db.
 type foundMsg struct {
+	win     *Window // the one whose filter it is
 	conn    *Conn
 	pattern string
 	scan    *keyScan
@@ -231,9 +233,10 @@ type foundMsg struct {
 // findKeys asks c's db for the keys the tree's filter matches, when it has one
 // and c is a connected db of Redis; the keys it showed before stay till then.
 func (a *App) findKeys(c *Conn) tea.Cmd {
-	pattern := filterPattern(a.win().tree.filter.Text)
+	w := a.win()
+	pattern := filterPattern(w.tree.filter.Text)
 	if pattern == "" || c.sql() || c.State != connReady {
-		c.found = nil
+		delete(w.tree.found, c)
 		return nil
 	}
 	meta, budget := c.Meta, a.scanKeys
@@ -243,19 +246,23 @@ func (a *App) findKeys(c *Conn) tea.Cmd {
 			s, err = redis.Scan(ctx, conn, pattern, budget)
 			return err
 		})
-		return foundMsg{c, pattern, &keyScan{keys: s.Keys, total: s.Total, more: !s.Complete}, err}
+		return foundMsg{w, c, pattern, &keyScan{keys: s.Keys, total: s.Total, more: !s.Complete}, err}
 	}
 }
 
-// gotFound shows what was found, unless the filter has changed since.
+// gotFound shows what was found in the window that asked, unless its filter has
+// changed since.
 func (a *App) gotFound(m foundMsg) tea.Cmd {
-	if a.sessionOf(m.conn) == nil || m.pattern != filterPattern(a.win().tree.filter.Text) {
+	if a.sessionOf(m.conn) == nil || m.pattern != filterPattern(m.win.tree.filter.Text) {
 		return nil
 	}
 	if m.err != nil {
 		return a.showToast(i18n.T("%s：%s", m.conn.label(), m.err))
 	}
-	m.conn.found = m.scan
+	if m.win.tree.found == nil {
+		m.win.tree.found = map[*Conn]*keyScan{}
+	}
+	m.win.tree.found[m.conn] = m.scan
 	a.clampTree()
 	return nil
 }
@@ -291,12 +298,23 @@ func (a *App) gotFilterDue(m filterDue) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+// onKey is op on the key of the focused pane's tab, as it is on a node of the tree;
+// nothing when the tab is not a key's.
+func (a *App) onKey(op func(node) tea.Cmd) tea.Cmd {
+	if t := dataOf(a.focused()); t != nil && t.table.Kind == "k" {
+		return op(node{conn: t.conn, redisKey: redis.KeyInfo{Name: t.table.Name}})
+	}
+	return nil
+}
+
 // keyDone answers an operation on keys: what to say, and the db's keys to read
-// again.
+// again; key is the one it was done to and to the name it has now, "" when it
+// kept it: the tabs of it read it again, following the name.
 type keyDone struct {
-	conn *Conn
-	say  string
-	err  error
+	conn    *Conn
+	say     string
+	err     error
+	key, to string
 }
 
 func (a *App) gotKeyDone(m keyDone) tea.Cmd {
@@ -307,15 +325,29 @@ func (a *App) gotKeyDone(m keyDone) tea.Cmd {
 	}
 	say := m.say
 	if m.err != nil {
-		say = c.drv.ErrorOf(m.err).Message
-		if e := c.drv.ErrorOf(m.err); e.Code != "" {
+		e := c.drv.ErrorOf(m.err)
+		if say = e.Message; e.Code != "" {
 			say = e.Code + " " + e.Message
 		}
 		if m.say != "" { // what was done before it failed, a cancel included
 			say = m.say + " · " + say
 		}
 	}
-	return tea.Batch(a.showToast(say), a.loadKeys(c))
+	cmds := []tea.Cmd{a.showToast(say), a.loadKeys(c)}
+	if m.key != "" {
+		for _, p := range a.sessionOf(c).panes() {
+			for i, tb := range p.Tabs {
+				if t := tb.Data; t != nil && t.conn == c && t.table.Kind == "k" && t.table.Name == m.key {
+					if m.err == nil && m.to != "" {
+						t.table.Name = m.to
+						p.Tabs[i].Name = c.tabName(t.table)
+					}
+					cmds = append(cmds, a.fetch(t, true))
+				}
+			}
+		}
+	}
+	return tea.Batch(cmds...)
 }
 
 // writable is whether c takes a change of keys; else it says why.
@@ -329,22 +361,30 @@ func (a *App) writable(c *Conn) (ok bool, why tea.Cmd) {
 	return true, nil
 }
 
-// deleteRedisKey is the menu's 删除 on a key, and dd: UNLINK, with no question, as
-// the delete of a row of a table has none (§13).
+// deleteRedisKey is the menu's 删除… on a key, and dd: asked first unless
+// confirm_dangerous is off, a key being a piece of data as a table is (§13);
+// then UNLINK.
 func (a *App) deleteRedisKey(n node) tea.Cmd {
 	c, key := n.conn, n.redisKey.Name
 	if ok, why := a.writable(c); !ok {
 		return why
 	}
-	main := c.Main
-	c.busy++
-	return func() tea.Msg {
-		err := main.Run(context.Background(), func(ctx context.Context, conn db.Conn) error {
-			_, err := redis.Unlink(ctx, conn, key)
-			return err
-		})
-		return keyDone{c, i18n.T("已删除键 %s", nameText(key)), err}
+	del := func() tea.Cmd {
+		main := c.Main
+		c.busy++
+		return func() tea.Msg {
+			err := main.Run(context.Background(), func(ctx context.Context, conn db.Conn) error {
+				_, err := redis.Unlink(ctx, conn, key)
+				return err
+			})
+			return keyDone{c, i18n.T("已删除键 %s", nameText(key)), err, key, ""}
+		}
 	}
+	if !a.confirmDangerous {
+		return del()
+	}
+	a.confirm = &confirmBox{text: i18n.T("删除键 %s？", nameText(key)), yes: i18n.T("删除"), danger: true, then: del}
+	return nil
 }
 
 // renameKey is the menu's 改名: the name asked in the status bar, RENAME on
@@ -377,7 +417,7 @@ func (a *App) renameTo(c *Conn, key, to string, overwrite bool) tea.Cmd {
 		if exists {
 			return keyExists{c, key, to}
 		}
-		return keyDone{c, i18n.T("%s 改名为 %s", nameText(key), nameText(to)), err}
+		return keyDone{c, i18n.T("%s 改名为 %s", nameText(key), nameText(to)), err, key, to}
 	}
 }
 
@@ -410,7 +450,7 @@ func (a *App) ttlKey(n node) tea.Cmd {
 		c.busy++
 		return func() tea.Msg {
 			err := main.Run(context.Background(), func(ctx context.Context, conn db.Conn) error { return redis.SetTTL(ctx, conn, key, ttl) })
-			return keyDone{c, i18n.T("%s 的 TTL 已设", nameText(key)), err}
+			return keyDone{c, i18n.T("%s 的 TTL 已设", nameText(key)), err, key, ""}
 		}, false
 	}}
 	return nil
@@ -447,6 +487,20 @@ func (a *App) deleteNamespace(n node) tea.Cmd {
 // unlinkBatch is how many keys an UNLINK takes at a time.
 const unlinkBatch = 500
 
+// unlinkAll deletes keys unlinkBatch at a time by unlink, which says how many of a
+// batch were there; deleted is how many went, those of the batches before an error
+// counted.
+func unlinkAll(keys []string, unlink func([]string) (int64, error)) (deleted int, err error) {
+	for batch := range slices.Chunk(keys, unlinkBatch) {
+		n, err := unlink(batch)
+		deleted += int(n)
+		if err != nil {
+			return deleted, err
+		}
+	}
+	return deleted, nil
+}
+
 func (a *App) gotNamespaceFound(m namespaceFound) tea.Cmd {
 	c := m.conn
 	if a.sessionOf(c) == nil {
@@ -470,15 +524,9 @@ func (a *App) gotNamespaceFound(m namespaceFound) tea.Cmd {
 		c.busy++
 		return func() tea.Msg {
 			deleted := 0
-			err := main.Run(context.Background(), func(ctx context.Context, conn db.Conn) error {
-				for batch := range slices.Chunk(m.keys, unlinkBatch) {
-					n, err := redis.Unlink(ctx, conn, batch...)
-					deleted += int(n)
-					if err != nil {
-						return err
-					}
-				}
-				return nil
+			err := main.Run(context.Background(), func(ctx context.Context, conn db.Conn) (err error) {
+				deleted, err = unlinkAll(m.keys, func(batch []string) (int64, error) { return redis.Unlink(ctx, conn, batch...) })
+				return err
 			})
 			say := i18n.T("已删除 %d 个键", deleted)
 			if err != nil && deleted < len(m.keys) {
@@ -488,7 +536,7 @@ func (a *App) gotNamespaceFound(m namespaceFound) tea.Cmd {
 					say = i18n.T("已取消，已删除 %d 个键", deleted)
 				}
 			}
-			return keyDone{c, say, err}
+			return keyDone{conn: c, say: say, err: err}
 		}
 	}
 	if !a.confirmDangerous {

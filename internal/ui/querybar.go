@@ -70,6 +70,12 @@ func (b Button) width() int {
 // WHERE and its input, then the chips, the buttons (Q-05) and what the last
 // query returned.
 type QueryBar struct {
+	// Info is a Redis key's row over WHERE (§8.7): chips that say what the key
+	// is, and run what can be done to it; none for a table, which has no such row.
+	Info []Chip
+	// Label is the word before the input, "WHERE" when empty; five columns, as
+	// that is: a key's MATCH.
+	Label   string
 	Where   Input
 	Typing  bool // the WHERE input has the keys
 	Chips   []Chip
@@ -91,8 +97,19 @@ type QueryBar struct {
 	HistKey string
 }
 
-// QueryBarRows is how tall a query bar is.
+// QueryBarRows is how tall a query bar is, its Info row not counted: InfoRows.
 const QueryBarRows = 2
+
+// InfoRows is how many rows more than QueryBarRows a bar with an Info takes.
+const InfoRows = 1
+
+// below is the rows of r that WHERE and the chips have: the Info row is the first.
+func (q QueryBar) below(r uv.Rectangle) uv.Rectangle {
+	if len(q.Info) > 0 {
+		r.Min.Y = min(r.Min.Y+InfoRows, r.Max.Y)
+	}
+	return r
+}
 
 // minWhere is the room the WHERE input keeps before the history's hint
 // takes any.
@@ -114,6 +131,7 @@ func (q QueryBar) histHint(r uv.Rectangle) string {
 // InputRect is where the WHERE input goes when the bar is drawn in r: after
 // "WHERE ", short of the history's hint and the ▾.
 func (q QueryBar) InputRect(r uv.Rectangle) uv.Rectangle {
+	r = q.below(r)
 	x := r.Min.X + 1 + Width("WHERE") + 1
 	end := r.Max.X - 2 - 1 // the ▾ and a space before it
 	if h := q.histHint(r); h != "" {
@@ -139,6 +157,12 @@ func (q QueryBar) fit(r uv.Rectangle) QueryBar {
 
 // ChipRect is where the chip running action goes when the bar is drawn in r.
 func (q QueryBar) ChipRect(r uv.Rectangle, action string) uv.Rectangle {
+	for i, c := range q.Info {
+		if c.Action == action {
+			return rowRects(q.Info, r, r.Min.Y)[i]
+		}
+	}
+	r = q.below(r)
 	q = q.fit(r)
 	for i, c := range q.Chips {
 		if c.Action == action {
@@ -151,6 +175,7 @@ func (q QueryBar) ChipRect(r uv.Rectangle, action string) uv.Rectangle {
 // ButtonRect is where the button running action goes when the bar is
 // drawn in r; empty when it gave way.
 func (q QueryBar) ButtonRect(r uv.Rectangle, action string) uv.Rectangle {
+	r = q.below(r)
 	q = q.fit(r)
 	chips, groups, _ := q.shown(r)
 	for i, g := range q.buttonRects(r, chips, groups) {
@@ -181,12 +206,16 @@ func (q QueryBar) buttonRects(r uv.Rectangle, chips int, groups []int) [][]uv.Re
 	return out
 }
 
-func (q QueryBar) chipRects(r uv.Rectangle) []uv.Rectangle {
+func (q QueryBar) chipRects(r uv.Rectangle) []uv.Rectangle { return rowRects(q.Chips, r, r.Min.Y+1) }
+
+// rowRects is where chips go side by side on row y of a bar drawn in r, the last
+// ones cut short where r ends.
+func rowRects(chips []Chip, r uv.Rectangle, y int) []uv.Rectangle {
 	var rects []uv.Rectangle
 	x := r.Min.X + 1
-	for _, c := range q.Chips {
+	for _, c := range chips {
 		w := Width(c.text())
-		rects = append(rects, uv.Rect(x, r.Min.Y+1, min(w, max(r.Max.X-x, 0)), 1))
+		rects = append(rects, uv.Rect(x, y, min(w, max(r.Max.X-x, 0)), 1))
 		x += w + 1
 	}
 	return rects
@@ -200,10 +229,18 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 	if r.Dy() < 1 {
 		return cursor
 	}
+	if len(q.Info) > 0 {
+		for i, cr := range rowRects(q.Info, r, r.Min.Y) {
+			q.drawChip(f, q.Info[i], cr)
+		}
+		if r = q.below(r); r.Dy() < 1 {
+			return cursor
+		}
+	}
 	bg := uv.Style{Fg: th.Fg, Bg: th.PaneBg}
 	dim := uv.Style{Fg: th.Dim, Bg: th.PaneBg}
 	f.Region(uv.Rect(r.Min.X, r.Min.Y, r.Dx(), 1), Target{Kind: KindHint, Pane: q.Pane, Action: "grid.where"}) // a click types in it (Q-01)
-	f.Text(r.Min.X+1, r.Min.Y, r.Max.X-1, "WHERE", uv.Style{Fg: th.Keyword, Bg: th.PaneBg, Attrs: uv.AttrBold})
+	f.Text(r.Min.X+1, r.Min.Y, r.Max.X-1, cmp.Or(q.Label, "WHERE"), uv.Style{Fg: th.Keyword, Bg: th.PaneBg, Attrs: uv.AttrBold})
 	vx := r.Max.X - 2 // ▾: the history and favorites (Q-02), with its key before it when there is room (F8.14)
 	vst, hx := dim, vx
 	h := q.histHint(r)
@@ -227,28 +264,8 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 	q = q.fit(r)
 	chips, groups, sel := q.shown(r)
 	for i, cr := range q.chipRects(r)[:chips] {
-		c := q.Chips[i]
-		chip := uv.Style{Fg: th.Fg, Bg: th.Sep}
-		var icon uv.Rectangle // its own button: lit on its own, the rest of the chip without it (§7.8)
-		if c.Icon.Text != "" {
-			w := Width(c.Icon.Text) + 1 // and the space after it; where the chip's text puts it, so none when cut off
-			icon = uv.Rect(cr.Min.X+Width(c.text())-w, y, w, 1).Intersect(cr)
-		}
-		if f.Region(cr, Target{Kind: KindHint, Pane: q.Pane, Action: c.Action}) && !f.Over(icon) {
-			chip.Bg = th.Select
-		}
-		x := f.Text(cr.Min.X, y, cr.Max.X, " "+c.Label+" ", uv.Style{Fg: th.Dim, Bg: chip.Bg})
-		if c.Input != nil { // after the [
-			cursor = uv.Pos(x+1+Width(c.Input.Text[:c.Input.Pos]), y)
-		}
-		x = f.Text(x, y, cr.Max.X, c.value()+" ", chip)
-		if c.Icon.Text != "" { // registered after the chip: on top for clicks
-			ist := uv.Style{Fg: th.Warn, Bg: th.Sep}
-			if !icon.Empty() && f.Region(icon, Target{Kind: KindHint, Pane: q.Pane, Action: c.IconAction}) {
-				ist.Bg = th.Select
-			}
-			f.Text(x, y, cr.Max.X, c.Icon.Text, c.Icon.On(ist)) // a theme's color for it wins (§7.7)
-			f.Text(x+Width(c.Icon.Text), y, cr.Max.X, " ", uv.Style{Bg: ist.Bg})
+		if c := q.drawChip(f, q.Chips[i], cr); c.X >= 0 {
+			cursor = c
 		}
 	}
 	rects := q.buttonRects(r, chips, groups)
@@ -288,6 +305,35 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 	}
 	if rx := r.Max.X - 1 - Width(right); rx > x {
 		f.Text(rx, y, r.Max.X-1, right, st)
+	}
+	return cursor
+}
+
+// drawChip paints chip c in cr, and says where the cursor goes when its input
+// has the keys, else (-1, -1).
+func (q QueryBar) drawChip(f *Frame, c Chip, cr uv.Rectangle) uv.Position {
+	th, y, cursor := f.Theme, cr.Min.Y, uv.Pos(-1, -1)
+	chip := uv.Style{Fg: th.Fg, Bg: th.Sep}
+	var icon uv.Rectangle // its own button: lit on its own, the rest of the chip without it (§7.8)
+	if c.Icon.Text != "" {
+		w := Width(c.Icon.Text) + 1 // and the space after it; where the chip's text puts it, so none when cut off
+		icon = uv.Rect(cr.Min.X+Width(c.text())-w, y, w, 1).Intersect(cr)
+	}
+	if f.Region(cr, Target{Kind: KindHint, Pane: q.Pane, Action: c.Action}) && !f.Over(icon) {
+		chip.Bg = th.Select
+	}
+	x := f.Text(cr.Min.X, y, cr.Max.X, " "+c.Label+" ", uv.Style{Fg: th.Dim, Bg: chip.Bg})
+	if c.Input != nil { // after the [
+		cursor = uv.Pos(x+1+Width(c.Input.Text[:c.Input.Pos]), y)
+	}
+	x = f.Text(x, y, cr.Max.X, c.value()+" ", chip)
+	if c.Icon.Text != "" { // registered after the chip: on top for clicks
+		ist := uv.Style{Fg: th.Warn, Bg: th.Sep}
+		if !icon.Empty() && f.Region(icon, Target{Kind: KindHint, Pane: q.Pane, Action: c.IconAction}) {
+			ist.Bg = th.Select
+		}
+		f.Text(x, y, cr.Max.X, c.Icon.Text, c.Icon.On(ist)) // a theme's color for it wins (§7.7)
+		f.Text(x+Width(c.Icon.Text), y, cr.Max.X, " ", uv.Style{Bg: ist.Bg})
 	}
 	return cursor
 }

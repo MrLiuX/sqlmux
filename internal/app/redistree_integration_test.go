@@ -104,8 +104,8 @@ func TestRedisTreeFilterOnServer(t *testing.T) {
 	a.sess.open[dbNode(c, "0")] = true
 	a.win().tree.filter = ui.Input{Text: "users", Pos: 5}
 	settle(a, a.askFilter())
-	if c.found == nil || len(c.found.keys) != 3 {
-		t.Fatalf("found: %+v", c.found)
+	if f := a.win().tree.found[c]; f == nil || len(f.keys) != 3 {
+		t.Fatalf("found: %+v", f)
 	}
 	want := []string{"cache", "  db0 " + ui.Magnitude(float64(c.scan.total)), "    app 3", "      users 3", "        1", "        2", "        3"}
 	if got := outline(a); !slices.Equal(got, want) {
@@ -142,8 +142,13 @@ func TestRedisKeyOperations(t *testing.T) {
 		return node{kind: nodeRedisKey, conn: c, redisKey: redis.KeyInfo{Name: name, Type: "string"}}
 	}
 	exists := func(name string) bool { return command(t, c, "EXISTS", name).Rows[0][0].S == "1" }
-	// delete
+	// delete: asked, then UNLINK; not asked with confirm_dangerous off
 	settle(a, a.deleteRedisKey(key("k1")))
+	if a.confirm == nil || !strings.Contains(a.confirm.text, "k1") || !exists("k1") {
+		t.Fatalf("a delete is asked about: %+v", a.confirm)
+	}
+	settle(a, a.confirm.then())
+	a.confirm = nil
 	if exists("k1") || a.toast != i18n.T("已删除键 %s", "k1") || c.busy != 0 {
 		t.Errorf("deleted: toast %q busy %d", a.toast, c.busy)
 	}
@@ -201,6 +206,7 @@ func TestRedisKeyOperations(t *testing.T) {
 	}
 	// read-only
 	c.readOnly = true
+	a.confirm = nil
 	for name, ask := range map[string]func() tea.Cmd{
 		"delete": func() tea.Cmd { return a.deleteRedisKey(key("fresh")) }, "rename": func() tea.Cmd { return a.renameRedisKey(key("fresh")) },
 		"ttl": func() tea.Cmd { return a.ttlKey(key("fresh")) }, "namespace": func() tea.Cmd { return a.deleteNamespace(node{conn: c, prefix: "x:"}) },

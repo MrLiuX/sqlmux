@@ -223,6 +223,9 @@ func (t *dataTab) cellAtCursor() (cellSrc, bool) {
 		s.why = i18n.T("%s 是 %s，只读", s.col.Name, s.col.Type)
 	} else if s.why == "" {
 		s.why = s.col.ReadOnly
+		if s.why == "" && sr.add == nil {
+			s.why = t.cols.NoUpdate
+		}
 	}
 	return s, true
 }
@@ -495,7 +498,7 @@ func (t *dataTab) cellHint() string {
 // checkText is what is wrong with text as a value of column col, "" when
 // nothing is (the cell's input and the value editor both ask it).
 func (t *dataTab) checkText(col, text string) string {
-	if t.conn.eng.Dialect() == sqlkit.PG {
+	if t.conn.sql() && t.conn.eng.Dialect() == sqlkit.PG {
 		return cellCheck(t.typeOf(col), text)
 	}
 	return ""
@@ -765,7 +768,7 @@ func (a *App) sendSave(t *dataTab, closing bool) tea.Cmd {
 	t.saving, t.closing = true, closing
 	t.conn.busy++
 	t.out++
-	src, manual := t.source(t.cols), t.conn.Manual
+	src, manual := a.source(t, t.cols), t.conn.Manual
 	return func() tea.Msg {
 		start := time.Now()
 		m.failed, m.tx, m.err = src.Save(context.Background(), ch, manual)

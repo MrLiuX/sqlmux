@@ -43,6 +43,7 @@ func TestErrorOfAndBroken(t *testing.T) {
 		{"READONLY", redisError("READONLY You can't write against a read only replica."), db.NotLost},
 		{"a cancel", context.Canceled, db.NotLost},
 		{"a deadline", context.DeadlineExceeded, db.NotLost},
+		{"a dial that was cancelled", &net.OpError{Op: "dial", Net: "tcp", Err: context.Canceled}, db.NotLost},
 		{"a client that is closed", goredis.ErrClosed, db.LostUnsent},
 		{"a dial that failed", fmt.Errorf("x: %w", dial), db.LostUnsent},
 		{"a reset", read, db.LostSent},

@@ -111,7 +111,7 @@ func (a *App) exportSource(d *dropdown) exportSrc {
 			src.page.Rows = append(src.page.Rows, out)
 		}
 		s := t.shown // what the grid shows, not what is asked and not there yet
-		source := t.source(t.cols)
+		source := a.source(t, t.cols)
 		again := pageQueryOf(s, t.cursors, t.live(), t.cols) // as fetch reads, to see what is not committed
 		all := again
 		all.Limit, all.Offset, all.Cursor = 0, 0, ""
@@ -166,6 +166,7 @@ type exportDone struct {
 	rows     int
 	err      error
 	streamed bool // the connection was busy with it
+	cut      bool // the source stopped at its budget: the file is a part (§8.7)
 }
 
 // export writes what the dropdown's item at is, a file in the current
@@ -207,8 +208,12 @@ func (a *App) export(src exportSrc, at int) tea.Cmd {
 	return func() tea.Msg {
 		out := &exportOut{f: f, w: bufio.NewWriter(f), json: asJSON, want: src.cols}
 		var err error
+		cut := false
 		if stream {
 			err = from.each(context.Background(), out.head, out.row)
+			if cut = errors.Is(err, db.ErrTruncated); cut {
+				err = nil
+			}
 		} else {
 			err = out.head(src.page.Cols)
 			for _, row := range src.page.Rows {
@@ -227,7 +232,7 @@ func (a *App) export(src exportSrc, at int) tea.Cmd {
 		if err != nil { // no half of a file is left
 			_ = os.Remove(path)
 		}
-		return exportDone{src: src, path: path, rows: out.n, err: err, streamed: stream}
+		return exportDone{src: src, path: path, rows: out.n, err: err, streamed: stream, cut: cut}
 	}
 }
 
@@ -242,6 +247,9 @@ func (a *App) gotExport(m exportDone) tea.Cmd {
 		return a.showToast(i18n.T("导出已取消"))
 	case m.err != nil:
 		return a.showToast(m.err.Error())
+	}
+	if m.cut {
+		return a.showToast(i18n.T("已导出 %s · %d 行，%s", m.path, m.rows, db.ErrTruncated))
 	}
 	return a.showToast(i18n.T("已导出 %s · %d 行", m.path, m.rows))
 }

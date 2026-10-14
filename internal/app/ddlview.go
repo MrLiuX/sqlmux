@@ -47,6 +47,9 @@ func (a *App) openDDL(column bool) tea.Cmd {
 	if t.conn.State != connReady { // its error page, or its dial still on: no Meta to ask
 		return a.showToast(i18n.T("连接还没连上"))
 	}
+	if column && t.table.Kind == "k" { // a key has no columns to say anything of
+		return nil
+	}
 	d := &ddlPopup{conn: t.conn, table: t.table}
 	if column {
 		gs, g, area, ok := a.gridOf(p)
@@ -56,6 +59,9 @@ func (a *App) openDDL(column bool) tea.Cmd {
 		d.col, d.at = t.page.Cols[t.shownCols()[gs.col]].Name, g.CellRect(area).Min
 	}
 	a.ddl = d
+	if t.table.Kind == "k" { // the key is not as it was when the DDL was read
+		delete(t.conn.ddl, idOf(t.table))
+	}
 	return a.askDDL(t.conn, t.table)
 }
 
@@ -88,12 +94,18 @@ func (a *App) ddlContent() (ui.TextView, string) {
 		return ui.TextView{Text: d.text, Colors: ui.SQLColors(a.theme, d.text, c.eng.Dialect(), a.ddlNames(c, t, d.text))}, d.label
 	}
 	title := t.Schema + "." + t.Name
+	if c.redis() {
+		title = t.Name
+	}
 	got := c.ddl[idOf(t)]
 	switch {
 	case !got.got:
 		return ui.TextView{Text: "…", Fg: a.theme.Dim}, title
 	case got.err != "":
 		return ui.TextView{Text: strings.ReplaceAll(got.err, "\n", " ")}, title
+	}
+	if c.redis() { // commands, not SQL: no colors
+		return ui.TextView{Text: got.text}, title
 	}
 	text, names := got.text, a.ddlNames(c, t, got.text)
 	if d.col != "" {

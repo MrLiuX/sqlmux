@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db/redis"
 	"github.com/kackerx/sqlmux/internal/editor"
 	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/keymap"
@@ -65,6 +67,7 @@ type dataTab struct {
 	table db.Table
 	cols  db.Columns // the catalog's, as fetched: PK and types for the grid
 	next  bool       // a page follows (§8.5)
+	info  []db.Attr  // a key's type, TTL, encoding, memory and length, as the last page said (§8.7)
 	// src is where the rows come from when it is not the table's own, a SQL
 	// one built as each request needs it (§5「接口缝」); cursors, once a page
 	// came with a cursor, are the cursor each page of the source starts at,
@@ -153,8 +156,10 @@ type pageMsg struct {
 	cols db.Columns // the catalog's, to cache
 	page db.Result
 	next bool
-	// cursor is where the page after it starts, for a source that pages by cursor
+	// cursor is where the page after it starts, for a source that pages by cursor;
+	// info the line a key tab shows under its title (§8.7)
 	cursor string
+	info   []db.Attr
 	err    error
 }
 
@@ -168,11 +173,14 @@ type countMsg struct {
 
 // source is where t's rows come from; known is the catalog's columns of a
 // SQL table, when the connection has them.
-func (t *dataTab) source(known db.Columns) db.Source {
+func (a *App) source(t *dataTab, known db.Columns) db.Source {
 	if t.src != nil {
 		return t.src
 	}
 	c := t.conn
+	if c.redis() {
+		return redis.Key{Meta: c.Meta, Main: c.Main, Name: t.table.Name, LoadAll: a.loadAll, ScanKeys: a.scanKeys, ReadOnly: c.readOnly}
+	}
 	return db.SQLTable{E: c.eng, Schema: t.table.Schema, Name: t.table.Name, Meta: c.Meta, Main: c.Main, Known: known, ReadOnly: c.readOnly}
 }
 
@@ -240,7 +248,7 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 	// what is on its way is older than this now, whether this goes or not
 	t.seq++
 	// a ; would end the statement and start another: 1=1; drop table t (§9.6)
-	if t.src == nil && sqlkit.HasSemicolon(t.applied, t.conn.eng.Dialect()) {
+	if t.src == nil && t.conn.sql() && sqlkit.HasSemicolon(t.applied, t.conn.eng.Dialect()) {
 		t.bar = &errorBar{ui.ErrorBar{First: ui.Note{Head: i18n.T("WHERE 里不能有 ;")}}, "fetch"}
 		t.backToShown()
 		return nil
@@ -251,7 +259,7 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 	seq, table := t.seq, t.table
 	r, cursors, live := t.request, slices.Clone(t.cursors), t.live()
 	cols := t.conn.cols[idOf(table)] // zero when the catalog has none yet
-	src := t.source(cols)
+	src := a.source(t, cols)
 	return func() tea.Msg {
 		ctx := context.Background()
 		cols, err := src.Columns(ctx)
@@ -259,7 +267,7 @@ func (a *App) fetch(t *dataTab, recount bool) tea.Cmd {
 			return pageMsg{tab: t, seq: seq, err: err}
 		}
 		p, err := src.Page(ctx, pageQueryOf(r, cursors, live, cols))
-		return pageMsg{tab: t, seq: seq, cols: cols, page: p.Result, next: p.Next, cursor: p.Cursor, err: err}
+		return pageMsg{tab: t, seq: seq, cols: cols, page: p.Result, next: p.Next, cursor: p.Cursor, info: p.Info, err: err}
 	}
 }
 
@@ -294,7 +302,7 @@ func (a *App) gotPage(m pageMsg) tea.Cmd {
 		return nil
 	}
 	clearBar(&t.bar, "fetch")
-	t.cols, t.page, t.next, t.shown = m.cols, m.page, m.next, t.request
+	t.cols, t.page, t.next, t.shown, t.info = m.cols, m.page, m.next, t.request, m.info
 	t.keepCursor(m.cursor)
 	t.deselect()                                                        // the rows are others
 	t.colOrder = slices.DeleteFunc(t.colOrder, func(name string) bool { // a column that is gone (F10.3)
@@ -347,7 +355,7 @@ func (a *App) count(t *dataTab) tea.Cmd {
 	t.countSeq++
 	t.counted = counting
 	t.out++
-	seq, filter, src := t.countSeq, t.applied, t.source(t.cols)
+	seq, filter, src := t.countSeq, t.applied, a.source(t, t.cols)
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), countTimeout)
 		defer cancel()
@@ -465,9 +473,38 @@ func bodyRect(r uv.Rectangle) uv.Rectangle {
 // over its error bar.
 func gridRect(r uv.Rectangle, t *dataTab) uv.Rectangle {
 	b := bodyRect(r)
-	b.Min.Y = min(b.Min.Y+ui.QueryBarRows, b.Max.Y)
+	b.Min.Y = min(b.Min.Y+t.barRows(), b.Max.Y)
 	b.Max.Y = max(b.Max.Y-t.bar.rows(), b.Min.Y)
 	return b
+}
+
+// barRows is how tall t's query bar is: a key's has its Info row (§8.7).
+func (t *dataTab) barRows() int {
+	if t.table.Kind == "k" {
+		return ui.QueryBarRows + ui.InfoRows
+	}
+	return ui.QueryBarRows
+}
+
+// keyLabels are the words of the Info row that are short of their name's.
+var keyLabels = map[string]string{"length": "LEN", "encoding": "ENC", "memory": "MEM"}
+
+// keyInfo is the row over a key tab's WHERE: what the key is, as its last page
+// said, and what is done to it (§8.7).
+func (a *App) keyInfo(t *dataTab) []ui.Chip {
+	var chips []ui.Chip
+	for _, at := range t.info {
+		c := ui.Chip{Label: cmp.Or(keyLabels[at.Name], strings.ToUpper(at.Name)), Value: at.Value}
+		switch at.Name {
+		case "type":
+			c.Icon = a.icons.KeyType(at.Value)
+			c.Icon.Fg = a.keyColor(at.Value)
+		case "ttl":
+			c.Action = "key.ttl"
+		}
+		chips = append(chips, c)
+	}
+	return append(chips, ui.Chip{Label: "RENAME", Action: "key.rename"}, ui.Chip{Label: "DELETE", Action: "key.delete"})
 }
 
 // grid is t as pane p draws it: the columns COLS shows, with what the
@@ -602,7 +639,7 @@ func orderText(order []db.OrderCol) string {
 	return strings.Join(parts, ", ")
 }
 
-// queryBar is the two rows over t's table (§7.8「查询条」).
+// queryBar is the two rows over t's table, a key's three (§7.8「查询条」).
 func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 	ic := a.icons
 	order := ui.Chip{Label: "ORDER", Value: "—", Action: "grid.order", IconAction: "grid.order.toggle", Stay: stayOrder} // no row identity to sort by
@@ -672,13 +709,17 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 	if t.jv != nil { // the view says so, and a click takes the table back (F14.5)
 		chips = append(chips, ui.Chip{Label: "JSON", Action: "grid.view.json", Stay: stayOrder})
 	}
-	return ui.QueryBar{
+	bar := ui.QueryBar{
 		Selected: selected, SelectedStay: staySelected,
 		Where: where, Typing: t.typing == "where", Pane: p.ID, Right: right, Note: t.note, Names: names, Dialect: t.conn.dialect(),
 		History: ic.History, HistKey: a.keys.Hint("where.history", "input"),
 		Chips:   chips,
 		Buttons: a.toolButtons(t),
 	}
+	if t.table.Kind == "k" { // its filter is a MATCH pattern (§8.7)
+		bar.Info, bar.Label = a.keyInfo(t), "MATCH"
+	}
+	return bar
 }
 
 // What gives way on the query bar's second row, the least first (§7.8「第二行

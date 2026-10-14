@@ -4,6 +4,8 @@
 - **目标**：Redis 支持的第一版，做到能日常用：连接、按命名空间分的树、六种类型加 RedisJSON 的键 tab、一行一条命令的控制台、来自服务器的补全和签名提示。用户体验过初版之后再定第二轮（Pub/Sub、MONITOR、SLOWLOG、Cluster / Sentinel、内存分析，候选 M17）。
 - **范围**（设计 2026-10-14 已写进各章，以它们为准，下面的「已定的方向」是当时的记录）：tech-design §4（`internal/db/redis`、go-redis v9）、§5（tab 的新类型 `key`；`db.Source` 接口缝）、§7.7（类型图标）、§7.8（「Redis 的树」）、§8.7（连接、SCAN、键 tab 的数据源表）、§9.8（控制台的词法、高亮、补全）、§11（「Redis 控制台」的回复摆法）、§13（只读与危险命令来自 `COMMAND INFO`）、§14（`redis://` DSN、`delimiter`、`[redis]` 段、layout 的 `key` tab）、§15（redis-stack 容器、`SQLMUX_TEST_REDIS`）。
 - **依赖**：M15 passed（F15.3 的签名提示浮层在这里和 Redis 共用；M14 F14.2 的历史）。
+- **二进制**：go-redis v9.23.0 让 strip 后的二进制 27.1 → 34.7 MB（+7.6；v9.5.4 是 +3.8，但少 DialerRetries 且是旧版）。决策者 2026-10-14 定：不降版本，接受；以后有人嫌大再看能不能用 build tag 去掉没用的部分。
+- **环境**：这台机器的 docker 拉不到任何镜像（代理报 size validation，f11.2 的 brew 同一个原因），compose 的 redis / redis-seed 和 ci.yml 的 redis service 只能靠 CI 验；本地集成测试用 brew 的 redis-server（56379，灌同一份 seed），没有 RedisJSON，JSON 类型以 CI 为准。
 - **审查节点**（worker 2026-10-14 起草、决策者定）：1 = F16.6 + F16.0（F16.6 是一行键位、先做；F16.0 接口缝单独成批：不改任何行为，全量 e2e 一条不改就是验收）；2 = F16.1 + F16.2；3 = F16.3；4 = F16.4 + F16.5。
 
 已定的方向（2026-10-11，用户同意；决策时参考了 RedisInsight 的 Browse 和 DataGrip 的 Redis 支持，目标是比它们展示更清楚、JSON 更友好、键盘能走完）：
@@ -72,7 +74,7 @@
 - [ ] b. SCAN 预算：展开 db 时在 Meta 上 `SCAN 0 COUNT 1000` 循环到 `[redis] scan_keys`，每批 pipeline `TYPE` 取类型；db 节点尾注 `DBSIZE`，超预算时「已扫描 10000 / 1.2M，用 / 过滤」；命名空间尾注 = 下面扫到的键数；永远不用 KEYS。
 - [ ] c. 侧栏 `/` 过滤在 Redis 连接上走服务端 `SCAN MATCH`（不含 `*` 两头补 `*`），同预算；不走本地过滤。
 - [ ] d. 图标名 `redis` 和 `str` / `hash` / `list` / `set` / `zset` / `stream` / `json` 进 `[icon]` 的名字表（名字写错启动报错那张），颜色用 §7.7 指定的现有主题键。
-- [ ] e. 操作：键 删除、改名（RENAME，目标存在时确认覆盖）、设 TTL；命名空间节点删除 = 不设预算扫全、确认「删除 N 个键？」后每批 500 个 `UNLINK`（走 confirm_dangerous），`C-c` 能停、toast 已删数量；`tree.refresh` 重扫光标所在 db。
+- [ ] e. 操作：键 删除（确认「删除键 <名>？」，菜单「删除…」和 `dd` 都问，走 confirm_dangerous）、改名（RENAME，目标存在时确认覆盖）、设 TTL；命名空间节点删除 = 不设预算扫全、确认「删除 N 个键？」后每批 500 个 `UNLINK`（走 confirm_dangerous），`C-c` 能停、toast 已删数量；`tree.refresh` 重扫光标所在 db。
 - [ ] f. layout / state 的树展开状态带 db 和命名空间；命令面板的「表」范围在 Redis 连接上不列键。
 
 **验收**
@@ -88,13 +90,13 @@
 
 **开发**（§5 `KeyTab`、§8.7「键 tab」、§14）
 - [ ] a. `redis.Key` 实现 Source：`Columns` 按 TYPE 出各类型的列和 `Sortable`（≤ load_all 的 hash / set / zset 全列，zset 的 score；HSCAN / SSCAN 和 list / stream 为空）、`NoInsert`（stream、string、json）；Page（hash / set / zset ≤ load_all 整取、本地翻页 / 排序 / 过滤，超过走 HSCAN / SSCAN / ZRANGE 偏移；list LRANGE；stream XRANGE 按 ID 游标）；Count（HLEN / LLEN / SCARD / ZCARD / XLEN；MATCH 过滤且走游标的类型 -1）；Each（导出，按 `scan_keys` 预算截断并提示）；Save（只读连接直接拒；WATCH + MULTI / EXEC，按 §8.7 的表；string `SET … KEEPTTL`；list 的删除 = LSET 哨兵 + LREM）；Info = 类型、TTL、编码、长度，内存（MEMORY USAGE）只在 `R` 刷新时查；`Rebuild` 给 DDL 查看。
-- [ ] b. tab：`kind = "key"`（layout 记 connection、db、key），复用 dataTab 的网格 / 编辑 / 标记 / `C-s`；标题 = 键名；信息行画在标题下；TTL（EXPIRE / PERSIST）、改名、删除在信息行上操作，TTL 人话化（`12m03s`）、-1 =「不过期」、`R` 刷新；键在别处被删或换了类型，下一次取数报「键已不存在 / 类型已变」并回到信息行。
+- [ ] b. tab：`kind = "key"`（layout 记 connection、db、key），复用 dataTab 的网格 / 编辑 / 标记 / `C-s`；标题 = 键名；信息行在查询条上方（TYPE、LEN、TTL、ENC、MEM、RENAME、DELETE，窄了从右边裁）；TTL（EXPIRE / PERSIST）、改名、删除在信息行上操作，TTL 人话化（`12m03s`）、-1 =「不过期」、`R` 刷新；键在别处被删或换了类型，下一次取数报「键已不存在 / 类型已变」并回到信息行。
 - [ ] c. 查询条的 WHERE 位置放 MATCH 模式，占位提示由 Source 给；WHERE 补全、`*`、复制为 INSERT 在 Redis 上 toast 不支持。
 - [ ] d. RedisJSON：值编辑器打开、`JSON.SET $` 写回；TYPE 给的 `ReJSON-RL` 识别为 json。
 - [ ] e. 「以 JSON 查看」（`key.json`）和 DDL 查看（`Rebuild` 的命令：HSET / SET … EX / RPUSH …）复用 jsonview / ddlview；二进制值走 §8.1 占位符。
 
 **验收**
-- [ ] 集成（真 Redis 上七种类型逐个）：Page 内容与 `redis-cli` 一致；各类型的写回（改值 / 增 / 删 / 改 Field = 改名）；只读连接的 Save 被拒、没发 MULTI；并发改同一键 → ErrStale（WATCH 失效）；EXEC 前断线 → ErrCommitUnknown；> load_all 的 hash 走 HSCAN，只有下一页，MATCH 过滤对；zset 两种模式；stream 只能 XDEL；list 删除用哨兵不误删相同值的别的行；二进制值不被写回；导出超预算截断并提示。
+- [ ] 集成（真 Redis 上七种类型逐个；RedisJSON 的用 `MODULE LIST` 判断，没有模块就 skip，由 CI 的 redis-stack 跑——没法在本机验证的也要写，不然这段代码第一次运行就是用户推送之后）：Page 内容与 `redis-cli` 一致；各类型的写回（改值 / 增 / 删 / 改 Field = 改名）；只读连接的 Save 被拒、没发 MULTI；并发改同一键 → ErrStale（WATCH 失效）；EXEC 前断线 → ErrCommitUnknown；> load_all 的 hash 走 HSCAN，只有下一页，MATCH 过滤对；zset 两种模式；stream 只能 XDEL；list 删除用哨兵不误删相同值的别的行；二进制值不被写回；导出超预算截断并提示。
 - [ ] 单测：Changes → 命令序列（表驱动，每类型每种变更）；TTL 文本；Sortable / NoInsert 随类型；layout 往返。
 - [ ] golden：每种类型一屏（带信息行）、游标翻页的页脚、JSON 查看。
 - [ ] e2e：打开各类型键、改一个格子 `C-s` 后 redis-cli 里对、设 / 去 TTL、改名、删除、`R` 刷新、重启后 layout 恢复到键 tab。
@@ -134,6 +136,6 @@
 - [ ] golden：签名提示行（含当前参数高亮）、键名候选框。
 - [ ] e2e：打 `HSET key f` 时提示行高亮第二个参数；`GET us` 补出键名。
 
-不做（第二轮候选）：Pub/Sub tab、MONITOR、SLOWLOG、CLIENT LIST、内存分析、Cluster / Sentinel、按 score 范围过滤 zset、键的批量设 TTL、命令面板里列键。
+不做（第二轮候选）：Pub/Sub tab、MONITOR、SLOWLOG、CLIENT LIST、内存分析、Cluster / Sentinel、按 score 范围过滤 zset、键的批量设 TTL、命令面板里列键、格子里的 JSON 按格高亮、string 键是 JSON 时直接开值编辑器（F16.3 时定不做）。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。

@@ -245,11 +245,11 @@ type Conn struct {
 	// tree opens one, by name.
 	Databases []string
 	dbs       map[string]*Conn
-	// scan is what the scan of a Redis db read, found what the tree's filter
-	// asked the server for (F16.2)
-	scan, found *keyScan
-	parent      *Conn // the connection a database's is of, nil for one of connections.toml
-	seqs        []db.Sequence
+	// scan is what the scan of a Redis db read (F16.2); what the tree's filter
+	// asked the server for is each window's own: treeState.found
+	scan   *keyScan
+	parent *Conn // the connection a database's is of, nil for one of connections.toml
+	seqs   []db.Sequence
 
 	// DB is the database, on query titles, "" for MySQL, whose schemas
 	// are its databases; startedPath Main's search_path as it connected;
@@ -290,7 +290,12 @@ func (c *Conn) root() *Conn {
 // tableKey is table t of c as the palette's ids and state.json's table keys
 // have it, <connection>/[<database>/]<schema>.<table>: one place for both
 // (F15.1).
-func (c *Conn) tableKey(t db.Table) string { return c.keyPrefix() + t.Schema + "." + t.Name }
+func (c *Conn) tableKey(t db.Table) string {
+	if t.Kind == "k" { // a Redis key: <connection>/db<n>/<key> (§14)
+		return c.Spec.Name + "/" + dbText(cmp.Or(c.Spec.Database, c.DB)) + "/" + t.Name
+	}
+	return c.keyPrefix() + t.Schema + "." + t.Name
+}
 
 // keyPrefix is what tableKey starts with.
 func (c *Conn) keyPrefix() string {
@@ -313,7 +318,7 @@ func (c *Conn) qualified(t db.Table) string {
 // tabName is the name of table t's tab: the table's, the database's too when
 // it is not the DSN's.
 func (c *Conn) tabName(t db.Table) string {
-	if c.Spec.Database == "" {
+	if c.Spec.Database == "" || c.redis() { // a key's db is the connection's, as the tree shows it
 		return t.Name
 	}
 	return c.qualified(t)

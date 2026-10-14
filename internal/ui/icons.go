@@ -198,7 +198,7 @@ func (ic *Icons) KeyType(typ string) Icon {
 		return ic.ZSet
 	case "stream":
 		return ic.Stream
-	case "ReJSON-RL":
+	case "ReJSON-RL", "json": // TYPE's word, and the tab's
 		return ic.JSON
 	}
 	return ic.Key

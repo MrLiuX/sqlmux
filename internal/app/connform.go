@@ -554,7 +554,7 @@ func testConn(spec config.Connection, password string) (string, error) {
 		return "", err
 	}
 	defer conn.Close()
-	version := "select version()"
+	version, args := "select version()", []db.Val(nil)
 	switch spec.Engine {
 	case "sqlite":
 		version = "select sqlite_version()"
@@ -562,14 +562,9 @@ func testConn(spec config.Connection, password string) (string, error) {
 		if _, err := conn.Query(ctx, "PING"); err != nil {
 			return "", err
 		}
-		version = "INFO"
+		version, args = "INFO", []db.Val{{S: "server"}}
 	}
-	var r db.Result
-	if spec.Engine == "redis" {
-		r, err = conn.Query(ctx, version, db.Val{S: "server"})
-	} else {
-		r, err = conn.Query(ctx, version)
-	}
+	r, err := conn.Query(ctx, version, args...)
 	if err != nil {
 		return "", err
 	}

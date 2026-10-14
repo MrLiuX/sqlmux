@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -159,7 +160,7 @@ func TestRedisTreeFilter(t *testing.T) {
 	if got := outline(a); len(got) != 0 { // nothing found yet: no connection kept
 		t.Errorf("before: %q", got)
 	}
-	c.found = &keyScan{keys: []redis.KeyInfo{{Name: "app:users:1", Type: "string"}, {Name: "app:users:2", Type: "string"}, {Name: "app:users:3", Type: "string"}}, total: 11}
+	a.win().tree.found = map[*Conn]*keyScan{c: {keys: []redis.KeyInfo{{Name: "app:users:1", Type: "string"}, {Name: "app:users:2", Type: "string"}, {Name: "app:users:3", Type: "string"}}, total: 11}}
 	if got, matches := outline(a), 0; !slices.Equal(got, []string{"cache", "  db0 11", "    app 3", "      users 3", "        1", "        2", "        3"}) {
 		t.Errorf("filtered: %q %d", got, matches)
 	}
@@ -167,13 +168,14 @@ func TestRedisTreeFilter(t *testing.T) {
 		t.Errorf("matches %d", matches)
 	}
 	// what was found for another filter is not shown, nor asked of a db that is not connected
-	c.found = nil
-	a.gotFound(foundMsg{conn: c, pattern: "*other*", scan: &keyScan{keys: []redis.KeyInfo{{Name: "x", Type: "string"}}}})
-	if c.found != nil {
+	a.win().tree.found = nil
+	found := func() *keyScan { return a.win().tree.found[c] }
+	a.gotFound(foundMsg{win: a.win(), conn: c, pattern: "*other*", scan: &keyScan{keys: []redis.KeyInfo{{Name: "x", Type: "string"}}}})
+	if found() != nil {
 		t.Error("a scan for a filter that is gone is shown")
 	}
-	a.gotFound(foundMsg{conn: c, pattern: "*users*", scan: &keyScan{keys: []redis.KeyInfo{{Name: "x", Type: "string"}}}})
-	if c.found == nil {
+	a.gotFound(foundMsg{win: a.win(), conn: c, pattern: "*users*", scan: &keyScan{keys: []redis.KeyInfo{{Name: "x", Type: "string"}}}})
+	if found() == nil {
 		t.Error("a scan for the filter is not shown")
 	}
 	if cmd := a.findKeys(c.inDB("1")); cmd != nil {
@@ -186,6 +188,66 @@ func TestRedisTreeFilter(t *testing.T) {
 	}
 	if a.gotFilterDue(filterDue{5}) == nil {
 		t.Error("the last change does not ask")
+	}
+}
+
+// The db the DSN names is listed with the dbs the server has keys in, in its place,
+// though INFO says none of it; typing in the filter asks the servers, and the
+// cursor goes to the first key it kept; a delete of keys goes by batches.
+func TestRedisTreeDetails(t *testing.T) {
+	a, c := redisTree(t, someKeys())
+	c.State = connReady
+	c.DB = "5"
+	a.gotKeys(keysMsg{conn: c, dbs: []string{"1", "3"}, scan: &keyScan{}})
+	if !slices.Equal(c.Databases, []string{"1", "3", "5"}) {
+		t.Errorf("databases %v", c.Databases)
+	}
+	c.DB = "0"
+	a.sess.open[dbNode(c, "0")] = true
+	t.Run("filter", func(t *testing.T) {
+		a.win().tree.filtering = true
+		a.win().tree.found = map[*Conn]*keyScan{c: {keys: []redis.KeyInfo{{Name: "app:users:1", Type: "string"}}}}
+		cmd := a.filterKey("u")
+		if cmd == nil {
+			t.Error("typing in the filter does not ask")
+		}
+		if n, ok := a.treeNode(); !ok || n.kind != nodeRedisKey || n.redisKey.Name != "app:users:1" {
+			t.Errorf("the cursor is on %+v", n)
+		}
+	})
+	var sizes []int
+	n, err := unlinkAll(make([]string, 1200), func(b []string) (int64, error) { sizes = append(sizes, len(b)); return int64(len(b)), nil })
+	if n != 1200 || err != nil || !slices.Equal(sizes, []int{500, 500, 200}) {
+		t.Errorf("batches %v: %d %v", sizes, n, err)
+	}
+	sizes = nil
+	errBoom := errors.New("boom")
+	n, err = unlinkAll(make([]string, 1200), func(b []string) (int64, error) { sizes = append(sizes, len(b)); return 3, errBoom })
+	if n != 3 || !errors.Is(err, errBoom) || len(sizes) != 1 {
+		t.Errorf("an error stops it: %v %d %v", sizes, n, err)
+	}
+}
+
+// What the server found for a filter is kept in the window whose filter it is: the
+// filter of another window, and the keys it found, are not drawn in this one.
+func TestFoundIsEachWindows(t *testing.T) {
+	a, c := redisTree(t, someKeys())
+	c.State = connReady
+	a.sess.open[dbNode(c, "0")] = true
+	first := a.win()
+	first.tree.filter = ui.Input{Text: "users", Pos: 5}
+	a.addWindow()
+	second := a.win()
+	second.tree.filter = ui.Input{Text: "orders", Pos: 6}
+	a.gotFound(foundMsg{win: first, conn: c, pattern: "*users*", scan: &keyScan{keys: []redis.KeyInfo{{Name: "app:users:1", Type: "string"}}}}) // answered while the other window is shown
+	a.gotFound(foundMsg{win: second, conn: c, pattern: "*orders*", scan: &keyScan{keys: []redis.KeyInfo{{Name: "app:orders:100", Type: "string"}}}})
+	a.selectWindow(0)
+	if got := outline(a); !slices.Contains(got, "      users 1") || slices.Contains(got, "      orders 1") {
+		t.Errorf("first window: %q", got)
+	}
+	a.selectWindow(1)
+	if got := outline(a); !slices.Contains(got, "      orders 1") || slices.Contains(got, "      users 1") {
+		t.Errorf("second window: %q", got)
 	}
 }
 

@@ -250,6 +250,9 @@ func init() {
 			return nil
 		}},
 		"value.save":     {Title: i18n.N("写回并关闭"), Local: true, Run: when(inValue, func(a *App) tea.Cmd { return a.valueSave() })},
+		"key.ttl":        {Title: i18n.N("设置键的 TTL"), Run: func(a *App, _ Args) tea.Cmd { return a.onKey(a.ttlKey) }},
+		"key.rename":     {Title: i18n.N("键改名"), Run: func(a *App, _ Args) tea.Cmd { return a.onKey(a.renameRedisKey) }},
+		"key.delete":     {Title: i18n.N("删除键"), Run: func(a *App, _ Args) tea.Cmd { return a.onKey(a.deleteRedisKey) }},
 		"grid.view.json": {Title: i18n.N("以 JSON 查看"), Run: func(a *App, _ Args) tea.Cmd { return a.viewJSON() }},
 		"json.leave": {Title: i18n.N("回到表格"), Local: true, Run: func(a *App, args Args) tea.Cmd { // "json.leave q" is q's, "json.leave close" the button's: they leave with the matches of a search lit too
 			if args.Arg == "close" {

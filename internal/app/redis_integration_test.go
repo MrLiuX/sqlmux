@@ -29,6 +29,24 @@ func TestRedisConnection(t *testing.T) {
 	if _, err := testConn(config.Connection{Name: "x", Engine: "redis", DSN: "redis://127.0.0.1:1/0"}, ""); err == nil {
 		t.Error("a server that is not there is tried")
 	}
+	// it is PING that is sent first: a user that may do all but that is refused
+	admin := opened(t, spec).sess.Conns[0]
+	acl := func(args ...string) error {
+		var vals []db.Val
+		for _, a := range args[1:] {
+			vals = append(vals, db.Val{S: a})
+		}
+		_, err := admin.Main.Query(ctx, args[0], vals...)
+		return err
+	}
+	if err := acl("ACL", "SETUSER", "sqlmux_noping", "on", ">p", "~*", "+@all", "-ping"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = acl("ACL", "DELUSER", "sqlmux_noping") })
+	noPing := config.Connection{Name: "x", Engine: "redis", DSN: strings.Replace(dsn, "redis://", "redis://sqlmux_noping:p@", 1)}
+	if _, err := testConn(noPing, ""); err == nil || !strings.Contains(err.Error(), "NOPERM") {
+		t.Errorf("the test button sends PING: %v", err)
+	}
 	a := opened(t, spec)
 	c := a.sess.Conns[0]
 	if c.State != connReady || c.eng != nil || c.drv == nil || c.DB != "0" || c.Addr == "" {
