@@ -24,7 +24,7 @@ type lang interface {
 	Dangerous(stmt string) bool
 	// Reruns is whether a request of stmt that was lost after it was sent runs
 	// again on the connection dialed anew: when stmt is known to have no effect
-	// to repeat (§8.4, §8.7).
+	// to repeat (§8.2, §8.7).
 	Reruns(stmt string) bool
 	// Page is stmt as it asks for the rows from offset, limit of them, and
 	// whether it can be asked for again so (§11).
@@ -51,7 +51,7 @@ func (l sqlLang) Colors(th *ui.Theme, text string, names ui.SQLNames) []color.Co
 }
 func (l sqlLang) Writes(stmt string) bool    { return sqlkit.BreaksReadOnly(stmt, l.d) }
 func (l sqlLang) Dangerous(stmt string) bool { return sqlkit.Dangerous(stmt, l.d) }
-func (sqlLang) Reruns(string) bool           { return false } // a select may call a function that writes (§8.4)
+func (sqlLang) Reruns(string) bool           { return false } // a select may call a function that writes (§8.2)
 func (l sqlLang) Page(stmt string, limit, offset int) (string, bool) {
 	return sqlkit.AutoLimit(stmt, l.d, limit, offset)
 }
