@@ -344,11 +344,14 @@ func (c *Conn) label() string {
 }
 
 // databaseNames are the databases of c's server as the tree lists them: the
-// one it is dialed to first, the rest by name (F15.1); none for an engine
-// that has none.
+// one it is dialed to first, the rest by name (F15.1), a Redis server's by
+// number (F16.10); none for an engine that has none.
 func (c *Conn) databaseNames() []string {
 	if len(c.Databases) == 0 {
 		return nil
+	}
+	if c.redis() { // gotKeys keeps them in order
+		return slices.Clone(c.Databases)
 	}
 	return append([]string{c.DB}, slices.DeleteFunc(slices.Clone(c.Databases), func(n string) bool { return n == c.DB })...)
 }

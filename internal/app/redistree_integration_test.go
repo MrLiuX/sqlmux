@@ -308,7 +308,7 @@ func TestRedisTreeRefresh(t *testing.T) {
 	a, c := redisApp(t, redis.OwnDB(t), 10000)
 	command(t, c, "SET", "late", "1")
 	ns, _ := a.treeNodes()
-	at := slices.IndexFunc(ns, func(n node) bool { return n.kind == nodeDatabase })
+	at := slices.IndexFunc(ns, func(n node) bool { return n.id == dbNode(c, c.DB) }) // not the first: the dbs go by number
 	a.treeGo(at)
 	a.focusPane(a.win().Tree.ID)
 	if slices.ContainsFunc(c.scan.keys, func(k redis.KeyInfo) bool { return k.Name == "late" }) {

@@ -204,6 +204,21 @@ func TestRedisTreeDetails(t *testing.T) {
 	}
 	c.DB = "0"
 	a.sess.open[dbNode(c, "0")] = true
+	t.Run("db order", func(t *testing.T) { // the DSN's db is not first, but open (F16.10)
+		c.DB, c.Databases = "2", nil
+		a.gotKeys(keysMsg{conn: c, dbs: []string{"0", "1", "3"}, scan: &keyScan{}})
+		var got []string
+		ns, _ := a.treeNodes()
+		for _, n := range ns {
+			if n.kind == nodeDatabase {
+				got = append(got, n.Text+map[bool]string{true: "▾", false: ""}[n.Open])
+			}
+		}
+		if want := []string{"db0", "db1", "db2▾", "db3"}; !slices.Equal(got, want) {
+			t.Errorf("dbs %v, want %v", got, want)
+		}
+		c.DB = "0"
+	})
 	t.Run("filter", func(t *testing.T) {
 		a.win().tree.filtering = true
 		a.win().tree.found = map[*Conn]*keyScan{c: {keys: []redis.KeyInfo{{Name: "app:users:1", Type: "string"}}}}
