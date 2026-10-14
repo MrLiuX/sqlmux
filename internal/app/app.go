@@ -282,6 +282,8 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.gotFilterDue(msg)
 	case keyDone:
 		return a, a.gotKeyDone(msg)
+	case cmdsMsg:
+		return a, a.gotCommands(msg)
 	case keyExists:
 		a.gotKeyExists(msg)
 	case hintDue:

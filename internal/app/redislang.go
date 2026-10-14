@@ -57,7 +57,8 @@ func (redisLang) NoBegin(string) bool                       { return true }
 
 // Colors is the command names in the keyword's color, the ones the server lists, with
 // the subcommand of one that has them (CONFIG GET); quoted strings, numbers and # lines
-// in theirs; a name the server did not list, or any when it said none, in none (§9.8).
+// in theirs (a scan of its own: it reads `a"b c"` as the word it is not, where
+// SplitLine reads one; it only colors); a name the server did not list, or any when it said none, in none (§9.8).
 func (l redisLang) Colors(th *ui.Theme, text string, _ ui.SQLNames) []color.Color {
 	out := make([]color.Color, len(text))
 	for i := range out {

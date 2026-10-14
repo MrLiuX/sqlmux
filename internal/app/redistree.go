@@ -158,12 +158,50 @@ type keysMsg struct {
 	dbs  []string // the server's dbs with keys, none from a db's own connection
 	scan *keyScan
 	err  error
-	// cmds are the server's commands, asked for the first time the db is read;
-	// cmdsErr is why it would not say (§9.8)
-	cmds    redis.Commands
-	cmdsErr error
-	docs    redis.Docs // COMMAND DOCS, none before Redis 7 (§9.8)
-	asked   bool
+}
+
+// cmdsMsg is the server's commands, and their docs when it has them; err is why it
+// would not say (§9.8).
+type cmdsMsg struct {
+	conn *Conn
+	cmds redis.Commands
+	docs redis.Docs
+	err  error
+}
+
+// loadCommands asks c's server for its commands, once, as the connection comes up,
+// on Meta ahead of the scan of the keys, which may take long: what writes and what
+// is dangerous is not known till it answers, and the console does not run before
+// (§9.8, §13).
+func (a *App) loadCommands(c *Conn) tea.Cmd {
+	if c.cmdsAsked {
+		return nil
+	}
+	c.cmdsAsked = true
+	meta := c.Meta
+	return func() tea.Msg {
+		m := cmdsMsg{conn: c}
+		m.err = meta.RunSafe(context.Background(), func(ctx context.Context, conn db.Conn) (err error) {
+			m.docs, _ = redis.LoadDocs(ctx, conn) // a server before 7 has none: the names alone are completed
+			m.cmds, err = redis.LoadCommands(ctx, conn)
+			return err
+		})
+		return m
+	}
+}
+
+// gotCommands keeps the commands; a server that would not say has every command
+// taken for a write and none for dangerous (§13).
+func (a *App) gotCommands(m cmdsMsg) tea.Cmd {
+	c := m.conn
+	if a.sessionOf(c) == nil {
+		return nil
+	}
+	c.cmds, c.docs, c.cmdsReady = m.cmds, m.docs, true
+	if m.err != nil {
+		return a.showToast(i18n.T("%s：读不到命令列表（%s），命令都按写命令处理", c.label(), m.err))
+	}
+	return nil
 }
 
 // loadKeys reads c's db on its Meta: with the connection of the DSN, which dbs
@@ -171,18 +209,9 @@ type keysMsg struct {
 // loadCatalog of a Redis connection.
 func (a *App) loadKeys(c *Conn) tea.Cmd {
 	meta, budget, root := c.Meta, a.scanKeys, c.Spec.Database == ""
-	asked := !c.cmdsAsked
-	c.cmdsAsked = true
 	return func() tea.Msg {
 		ctx := context.Background()
-		m := keysMsg{conn: c, asked: asked}
-		if asked {
-			m.cmdsErr = meta.RunSafe(ctx, func(ctx context.Context, conn db.Conn) (err error) {
-				m.docs, _ = redis.LoadDocs(ctx, conn) // a server before 7 has none: the names alone are completed
-				m.cmds, err = redis.LoadCommands(ctx, conn)
-				return err
-			})
-		}
+		m := keysMsg{conn: c}
 		var s redis.Scanned
 		err := meta.RunSafe(ctx, func(ctx context.Context, conn db.Conn) (err error) {
 			if root {
@@ -206,16 +235,10 @@ func (a *App) gotKeys(m keysMsg) tea.Cmd {
 	if a.sessionOf(c) == nil {
 		return nil
 	}
-	var told tea.Cmd
-	if m.asked {
-		c.docs = m.docs
-		if c.cmds = m.cmds; m.cmdsErr != nil { // what writes is not known: every command is taken for a write
-			told = a.showToast(i18n.T("%s：读不到命令列表（%s），命令都按写命令处理", c.label(), m.cmdsErr))
-		}
-	}
+	c.hints = nil // the keys are not the ones the completion was told of
 	if m.err != nil {
 		a.dropPending(c)
-		return tea.Batch(told, a.showToast(i18n.T("%s：%s", c.label(), m.err)))
+		return a.showToast(i18n.T("%s：%s", c.label(), m.err))
 	}
 	if c.Spec.Database == "" {
 		c.Databases = m.dbs
@@ -226,7 +249,7 @@ func (a *App) gotKeys(m keysMsg) tea.Cmd {
 	}
 	c.scan = m.scan
 	a.clampTree()
-	return tea.Batch(append(a.resolvePending(c), a.findKeys(c), told)...)
+	return tea.Batch(append(a.resolvePending(c), a.findKeys(c))...)
 }
 
 func atoiOr(s string) int { n, _ := strconv.Atoi(s); return n }
