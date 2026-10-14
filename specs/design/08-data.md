@@ -157,7 +157,7 @@ Redis 不塞进 `db.Engine`（那是 SQL 形状的接口：Quote、Arg、Tables�
   - **阻塞命令**（BLPOP、BRPOP、XREAD BLOCK、SUBSCRIBE、MONITOR …）会占住 `Main`：取消走 ctx，go-redis 取消不了已经发出的阻塞命令，所以取消时关掉这条连接重拨（F8.19 的路，事务状态对 Redis 不存在，不用报「事务已丢失」），同 §8.3 PG 的 5 秒断开。
   - **断线判定**：go-redis 的 `net.Error`、`io.EOF`、`redis: client is closed`；`LOADING`、`MASTERDOWN`、`READONLY` 这类服务端错误不算。重连没有会话状态要重放（db 在 URL 里）。
   - **不做**：Cluster、Sentinel（go-redis 有，等第二轮）；ACL 的用户名在 URL 里照传。
-- **树**（F16.2，§7.8「Redis 的树」）：**只用 SCAN，永远不用 KEYS**。展开 db 节点时在 `Meta` 上 `SCAN cursor MATCH <模式> COUNT 1000` 循环到游标归零或扫够 `[redis] scan_keys`（默认 10000）个，每批键用一条 pipeline 的 `TYPE` 取类型；结果记在 `Conn.Catalog`（键名、类型、所在 db），按分隔符切成命名空间树。侧栏的 `/` 过滤改成重新扫（`MATCH`），同一预算；预算用完的提示在 db 节点尾注。`DBSIZE` 给 db 节点的总数。`tree.refresh` 重扫光标所在的 db。命名空间删除：先按同样的 MATCH 扫出键名（这时不设预算，用户确认的数字要是真的），再每 500 个一条 `UNLINK`，走 `Main`；`C-c` 能停，中途失败或取消都 toast 删了多少。
+- **树**（F16.2，§7.8「Redis 的树」）：**只用 SCAN，永远不用 KEYS**。展开 db 节点时在 `Meta` 上 `SCAN cursor MATCH <模式> COUNT 1000` 循环到游标归零或扫够 `[redis] scan_keys`（默认 10000）个，每批键用一条 pipeline 的 `TYPE` 取类型；结果记在 `Conn.Catalog`（键名、类型、所在 db），按分隔符切成命名空间树。侧栏的 `/` 过滤改成重新扫（`MATCH`），同一预算；预算用完的提示是键列表末尾的一行（§7.8，db 节点的尾注仍是 `DBSIZE`）。`DBSIZE` 给 db 节点的总数。`tree.refresh` 重扫光标所在的 db。命名空间删除：先按同样的 MATCH 扫出键名（这时不设预算，用户确认的数字要是真的），再每 500 个一条 `UNLINK`，走 `Main`；`C-c` 能停，中途失败或取消都 toast 删了多少。
 - **键 tab**（F16.3）：打开一个键是一个 `kind = "key"` 的 tab（§5）。第一行是**信息行**（在查询条的位置）：类型图标和类型名、TTL（人话化 `12m03s`，`-1` 显示「不过期」，`R` 刷新）、编码（`OBJECT ENCODING`）、内存（`MEMORY USAGE`，只在这里查）、长度（`STRLEN` / `HLEN` / `LLEN` / `SCARD` / `ZCARD` / `XLEN`）；行上的操作：设 TTL（`EXPIRE` / `PERSIST`）、改名、删除，各自弹现成的输入框 / 确认框；`C-s` 写回表格的修改。表格按类型，各是一个 `db.Source` 实现：
 
   | 类型 | 列 | 翻页 | 过滤 / 排序 | 写回（一批包进 `MULTI` / `EXEC`） |
