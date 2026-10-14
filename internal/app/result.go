@@ -34,6 +34,19 @@ type resultTab struct {
 	offset   int
 	pageable bool
 	paging   bool
+	// mem is a Redis reply, whole, of which the grid shows the page at offset:
+	// there is no cursor to ask for the next, so it pages in memory (§11)
+	mem *db.Result
+}
+
+// memPage shows the rows of mem from offset, maxRows of them, as a page of a
+// statement does: Truncated when more follow.
+func (rt *resultTab) memPage(offset, maxRows int) {
+	page := *rt.mem
+	page.Rows = page.Rows[offset:min(offset+maxRows, len(page.Rows))]
+	page.Truncated = offset+maxRows < len(rt.mem.Rows)
+	rt.gridState = gridState{page: page, transpose: rt.transpose, jv: rt.jv}
+	rt.offset = offset
 }
 
 // run is one run of a query's SQL (§11「执行」), or a quick SQL's rows
@@ -50,6 +63,7 @@ type run struct {
 	start  time.Time
 	win    *Window
 	stmts  []sqlkit.Stmt
+	lang   lang // the connection's as it began: mainRun reads it off the UI goroutine
 	// whether each statement was given its LIMIT and can be asked for the next page (F10.4)
 	pageable []bool
 	done     bool
@@ -143,9 +157,6 @@ func (a *App) queryRun(arg string) tea.Cmd {
 	if t == nil || t.running != nil { // a run at a time a query
 		return nil
 	}
-	if !t.conn.sql() { // ponytail: the console of a key-value server runs its commands from F16.4
-		return a.showToast(i18n.T("这个连接的 query 还不能执行"))
-	}
 	text, from, to := querySpan(t, arg)
 	if from < 0 {
 		return nil
@@ -168,7 +179,7 @@ func querySpan(t *queryTab, arg string) (text string, from, to int) {
 	switch s, e, visual := ed.Selection(); {
 	case arg != "":
 		if n, _ := strconv.Atoi(arg); n >= 1 && n <= len(lines) {
-			if i := sqlkit.StmtAt(text, stmts, at(editor.Pos{Line: n - 1})); i >= 0 {
+			if i := t.conn.lang().At(text, stmts, at(editor.Pos{Line: n - 1})); i >= 0 {
 				from, to = stmts[i].Start, stmts[i].End
 			}
 		}
@@ -186,7 +197,7 @@ func querySpan(t *queryTab, arg string) (text string, from, to int) {
 	case visual:
 		from, to = at(editor.Pos{Line: s.Line}), at(editor.Pos{Line: e.Line, Col: len(lines[e.Line])})
 	default:
-		if i := sqlkit.StmtAt(text, stmts, at(ed.Cursor())); i >= 0 {
+		if i := t.conn.lang().At(text, stmts, at(ed.Cursor())); i >= 0 {
 			from, to = stmts[i].Start, stmts[i].End
 		}
 	}
@@ -274,7 +285,7 @@ func dangerText(risky []string) string {
 func (a *App) startRun(t *queryTab, conn *Conn, schema, name, sql string, base, ver int, stmts []sqlkit.Stmt) tea.Cmd {
 	l := conn.lang()
 	a.sess.RunSeq++
-	r := &run{from: t, conn: conn, schema: schema, name: name, sql: sql, base: base, ver: ver, seq: a.sess.RunSeq, start: time.Now(), win: a.win(), stmts: stmts}
+	r := &run{from: t, conn: conn, schema: schema, name: name, sql: sql, base: base, ver: ver, seq: a.sess.RunSeq, start: time.Now(), win: a.win(), stmts: stmts, lang: l}
 	t.running, t.failed, t.bar = r, -1, nil
 	p := a.showResult(r.win)
 	at, old := a.placeRun(r, []Tab{{Name: r.label(1), Result: &resultTab{run: r}}})
@@ -295,6 +306,9 @@ func (a *App) startRun(t *queryTab, conn *Conn, schema, name, sql string, base, 
 		resets = resets || l.Resets(texts[i])
 	}
 	maxRows, manual := a.maxRows, r.conn.Manual
+	if !conn.sql() { // a reply is held whole, and paged in memory (§11)
+		maxRows = 0
+	}
 	return tea.Batch(func() tea.Msg { return mainRun(r, texts, maxRows, manual, resets) }, a.runTick(r))
 }
 
@@ -305,13 +319,15 @@ func (a *App) startRun(t *queryTab, conn *Conn, schema, name, sql string, base, 
 // is what a run and a page of a result are sent as (F10.4); it goes on the
 // request's goroutine, so r and what it holds are read, not changed.
 func mainRun(r *run, texts []string, maxRows int, manual, resets bool) runDone {
-	s, l := r.conn, r.conn.lang()
+	s, l := r.conn, r.lang
 	m := runDone{r: r}
 	m.err = s.Main.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
 		defer func() { m.tx = db.TxStatus(c) }()
 		var err error
-		if m.set, err = s.mainSetup(ctx, c, r.schema); err != nil {
-			return err
+		if s.sql() {
+			if m.set, err = s.mainSetup(ctx, c, r.schema); err != nil {
+				return err
+			}
 		}
 		var begin func(string) bool // after the SET, which is kept so
 		if manual {
@@ -450,7 +466,12 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 			if j := slices.IndexFunc(r.prev, func(tb Tab) bool { return tb.Result != nil && tb.Result.stmt == i }); j >= 0 { // the tab it replaces, turned or in JSON, stays so
 				gs.transpose, gs.jv = r.prev[j].Result.transpose, r.prev[j].Result.jv
 			}
-			tabs = append(tabs, Tab{Name: r.label(len(tabs) + 1), Result: &resultTab{gridState: gs, run: r, part: len(tabs) + 1, stmt: i, pageable: r.pageable[i]}})
+			rt := &resultTab{gridState: gs, run: r, part: len(tabs) + 1, stmt: i, pageable: r.pageable[i]}
+			if !r.conn.sql() && len(res.Rows) > a.maxRows {
+				rt.mem = &res
+				rt.memPage(0, a.maxRows)
+			}
+			tabs = append(tabs, Tab{Name: r.label(len(tabs) + 1), Result: rt})
 		}
 		ddl = ddl || r.conn.lang().DDL(stmt)
 	}

@@ -284,7 +284,9 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 			name += " " + a.icons.Lock.Text
 		}
 		b.Hints = append(b.Hints, ui.Hint{Label: name, Action: "query.conn", Color: th.Info, Prio: 1, Group: 1})
-		if c.schema != "" { // a MySQL schema is a database: none before it (§8.6)
+		if !c.conn.sql() { // a Redis db, which is what the console's commands act on (§11)
+			b.Hints = append(b.Hints, ui.Hint{Label: "·", Prio: 1, Group: 1}, ui.Hint{Label: dbText(c.conn.DB) + " ▾", Action: "query.schema", Color: th.PK, Prio: 1, Group: 1})
+		} else if c.schema != "" { // a MySQL schema is a database: none before it (§8.6)
 			b.Hints = append(b.Hints, ui.Hint{Label: "·", Prio: 1, Group: 1}, ui.Hint{Label: strings.TrimPrefix(c.conn.DB+"."+c.schema, ".") + " ▾", Action: "query.schema", Color: th.PK, Prio: 1, Group: 1})
 		}
 		b.Hints = append(b.Hints, ui.Hint{Label: "▶ run", Action: "query.run", Button: true})

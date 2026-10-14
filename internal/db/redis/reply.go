@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,8 +24,19 @@ func Layout(cmd string, reply any, maxRows int) db.Result {
 	r := db.Result{Cols: []db.Col{{Name: "value"}}, Tag: strings.ToUpper(cmd)}
 	switch v := reply.(type) {
 	case []any:
-		for _, e := range v {
-			r.Rows = append(r.Rows, []db.Val{cell(e)})
+		if n := width(v); n > 1 { // an array of arrays of one length: a column of each place
+			r.Cols = columns(cmd, n)
+			for _, e := range v {
+				row := make([]db.Val, n)
+				for i, x := range e.([]any) {
+					row[i] = cell(x)
+				}
+				r.Rows = append(r.Rows, row)
+			}
+		} else {
+			for _, e := range v {
+				r.Rows = append(r.Rows, []db.Val{cell(e)})
+			}
 		}
 		r.Tag += " · " + i18n.T("%d 项", len(v))
 	case map[any]any:
@@ -45,6 +57,36 @@ func Layout(cmd string, reply any, maxRows int) db.Result {
 		r.Rows, r.Truncated = r.Rows[:maxRows], true
 	}
 	return r
+}
+
+// width is the length every element of v has when each is an array of it, 0 when
+// v is empty or any of its elements is another kind or of another length.
+func width(v []any) int {
+	n := 0
+	for i, e := range v {
+		a, ok := e.([]any)
+		if !ok || i > 0 && len(a) != n {
+			return 0
+		}
+		n = len(a)
+	}
+	return n
+}
+
+// scored are the commands whose pairs are a member and its score.
+var scored = []string{"zrange", "zrevrange", "zrangebyscore", "zrevrangebyscore", "zrangebylex", "zpopmin", "zpopmax", "zrandmember", "zdiff", "zunion", "zinter"}
+
+// columns are the names of the n columns of an array of arrays: member and score
+// for a sorted set's pairs, else the numbers of the places.
+func columns(cmd string, n int) []db.Col {
+	if n == 2 && slices.Contains(scored, strings.ToLower(cmd)) {
+		return []db.Col{{Name: "member"}, {Name: "score"}}
+	}
+	cols := make([]db.Col, n)
+	for i := range cols {
+		cols[i].Name = strconv.Itoa(i + 1)
+	}
+	return cols
 }
 
 // cell is a value of a reply as one cell: text as it is, a number as it is

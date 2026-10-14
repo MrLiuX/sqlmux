@@ -7,6 +7,7 @@ import (
 
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db/redis"
 	"github.com/kackerx/sqlmux/internal/i18n"
 )
 
@@ -15,6 +16,9 @@ import (
 // ponytail: best effort; a history that cannot be written is not worth an
 // error over the result the user is waiting for
 func recordHistory(r *run, stmt string, res db.Result, failed string) {
+	if !r.conn.sql() && redis.Sensitive(stmt) { // a password is not kept
+		return
+	}
 	h := config.History{At: clock(), Conn: r.conn.Spec.Name, DB: r.conn.Spec.Database, Schema: r.schema, SQL: stmt, Tag: res.Tag, TookMS: res.Took.Milliseconds()}
 	h.Error, _, _ = strings.Cut(failed, "\n")
 	_ = config.AppendHistory(h)

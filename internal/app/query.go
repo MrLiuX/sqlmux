@@ -194,7 +194,7 @@ func (a *App) queryView(p *Pane, t *queryTab) (ui.Query, uv.Rectangle) {
 	c := ui.Query{
 		Lines: ed.Lines(), TabWidth: ed.TabWidth, Top: ed.Top(), Left: ed.Left(),
 		Cursor: ui.TextPos(ed.Cursor()), CursorCol: ed.CursorCol(), Normal: ed.Mode() == editor.Normal,
-		Failed: t.failed, Pane: p.ID, Dialect: t.conn.dialect(),
+		Failed: t.failed, Pane: p.ID, Dialect: t.conn.dialect(), Lang: t.conn.lang(),
 	}
 	if f := a.flash; f != nil && f.pane == p.ID {
 		c.Yank = f.text

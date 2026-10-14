@@ -1,12 +1,23 @@
 package app
 
-import "github.com/kackerx/sqlmux/internal/sqlkit"
+import (
+	"image/color"
+
+	"github.com/kackerx/sqlmux/internal/sqlkit"
+	"github.com/kackerx/sqlmux/internal/ui"
+)
 
 // lang is what the text of a query tab is for its connection (§5「语言缝」):
 // the statements it is made of, and what the run needs to know of each.
 // sqlLang is SQL's; Redis's is a command a line.
 type lang interface {
 	Stmts(text string) []sqlkit.Stmt
+	// At is the statement of stmts the cursor at offset pos of text is in, -1
+	// for none.
+	At(text string, stmts []sqlkit.Stmt, pos int) int
+	// Colors is the color of each byte of text (§7.3, §9.8); names, for SQL's,
+	// tell its tables and columns apart.
+	Colors(th *ui.Theme, text string, names ui.SQLNames) []color.Color
 	// Writes is whether a read-only connection keeps stmt back, Dangerous
 	// whether a run of it is asked about first (§13).
 	Writes(stmt string) bool
@@ -28,8 +39,14 @@ type lang interface {
 type sqlLang struct{ d sqlkit.Dialect }
 
 func (l sqlLang) Stmts(text string) []sqlkit.Stmt { return sqlkit.Statements(text, l.d) }
-func (l sqlLang) Writes(stmt string) bool         { return sqlkit.BreaksReadOnly(stmt, l.d) }
-func (l sqlLang) Dangerous(stmt string) bool      { return sqlkit.Dangerous(stmt, l.d) }
+func (l sqlLang) At(text string, stmts []sqlkit.Stmt, pos int) int {
+	return sqlkit.StmtAt(text, stmts, pos)
+}
+func (l sqlLang) Colors(th *ui.Theme, text string, names ui.SQLNames) []color.Color {
+	return ui.SQLColors(th, text, l.d, names)
+}
+func (l sqlLang) Writes(stmt string) bool    { return sqlkit.BreaksReadOnly(stmt, l.d) }
+func (l sqlLang) Dangerous(stmt string) bool { return sqlkit.Dangerous(stmt, l.d) }
 func (l sqlLang) Page(stmt string, limit, offset int) (string, bool) {
 	return sqlkit.AutoLimit(stmt, l.d, limit, offset)
 }
@@ -51,4 +68,9 @@ func (l sqlLang) EndsTx(stmt string) string { return sqlkit.EndsTx(stmt, l.d) }
 func (l sqlLang) NoBegin(stmt string) bool  { return sqlkit.NoBegin(stmt, l.d) }
 
 // lang is the language of c's queries.
-func (c *Conn) lang() lang { return sqlLang{c.eng.Dialect()} }
+func (c *Conn) lang() lang {
+	if c.eng == nil {
+		return redisLang{c.cmds}
+	}
+	return sqlLang{c.eng.Dialect()}
+}

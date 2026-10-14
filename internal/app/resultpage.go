@@ -24,7 +24,7 @@ type pageDone struct {
 // way, the next page is only there when this one was cut at max_rows, the
 // one before when this is not the first.
 func (rt *resultTab) canPage(d int) bool {
-	return rt.pageable && !rt.paging && (d > 0 && rt.page.Truncated || d < 0 && rt.offset > 0)
+	return (rt.pageable || rt.mem != nil) && !rt.paging && (d > 0 && rt.page.Truncated || d < 0 && rt.offset > 0)
 }
 
 // resultPage is ] (d 1) and [ on the result tab shown: its statement asked
@@ -39,10 +39,14 @@ func (a *App) resultPage(d int) tea.Cmd {
 		return nil
 	}
 	r := rt.run
-	if r.conn.State != connReady {
+	if r.conn.State != connReady && rt.mem == nil {
 		return a.showToast(i18n.T("连接还没连上"))
 	}
 	offset := rt.offset + d*a.maxRows
+	if rt.mem != nil {
+		rt.memPage(offset, a.maxRows)
+		return nil
+	}
 	s := r.stmts[rt.stmt]
 	text, _ := r.conn.lang().Page(r.sql[s.Start:s.End], a.maxRows+1, offset)
 	rt.paging = true

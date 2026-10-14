@@ -31,7 +31,7 @@ func TestNoEngineConnection(t *testing.T) {
 		says(keys, "")
 	}
 	says("gqq", "这个连接的命令没有格式化")
-	says("<CR>", "这个连接的 query 还不能执行")
+	says("<CR>", "") // it runs (F16.4): its connection is not up here, which dials
 	says("<C-p>;select 1<CR>", "这个连接没有快速 SQL")
 	says("<Esc>", "")
 	for _, keys := range []string{"<C-p>", "<Esc>", "<C-p>k<Tab><CR>", "<Esc>", "<C-p>;<C-n>", "<Esc>", "gc", "<Esc>"} {

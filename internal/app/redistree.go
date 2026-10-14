@@ -158,6 +158,11 @@ type keysMsg struct {
 	dbs  []string // the server's dbs with keys, none from a db's own connection
 	scan *keyScan
 	err  error
+	// cmds are the server's commands, asked for the first time the db is read;
+	// cmdsErr is why it would not say (§9.8)
+	cmds    redis.Commands
+	cmdsErr error
+	asked   bool
 }
 
 // loadKeys reads c's db on its Meta: with the connection of the DSN, which dbs
@@ -165,9 +170,17 @@ type keysMsg struct {
 // loadCatalog of a Redis connection.
 func (a *App) loadKeys(c *Conn) tea.Cmd {
 	meta, budget, root := c.Meta, a.scanKeys, c.Spec.Database == ""
+	asked := !c.cmdsAsked
+	c.cmdsAsked = true
 	return func() tea.Msg {
 		ctx := context.Background()
-		m := keysMsg{conn: c}
+		m := keysMsg{conn: c, asked: asked}
+		if asked {
+			m.cmdsErr = meta.RunSafe(ctx, func(ctx context.Context, conn db.Conn) (err error) {
+				m.cmds, err = redis.LoadCommands(ctx, conn)
+				return err
+			})
+		}
 		var s redis.Scanned
 		err := meta.RunSafe(ctx, func(ctx context.Context, conn db.Conn) (err error) {
 			if root {
@@ -191,9 +204,15 @@ func (a *App) gotKeys(m keysMsg) tea.Cmd {
 	if a.sessionOf(c) == nil {
 		return nil
 	}
+	var told tea.Cmd
+	if m.asked {
+		if c.cmds = m.cmds; m.cmdsErr != nil { // what writes is not known: every command is taken for a write
+			told = a.showToast(i18n.T("%s：读不到命令列表（%s），命令都按写命令处理", c.label(), m.cmdsErr))
+		}
+	}
 	if m.err != nil {
 		a.dropPending(c)
-		return a.showToast(i18n.T("%s：%s", c.label(), m.err))
+		return tea.Batch(told, a.showToast(i18n.T("%s：%s", c.label(), m.err)))
 	}
 	if c.Spec.Database == "" {
 		c.Databases = m.dbs
@@ -204,7 +223,7 @@ func (a *App) gotKeys(m keysMsg) tea.Cmd {
 	}
 	c.scan = m.scan
 	a.clampTree()
-	return tea.Batch(append(a.resolvePending(c), a.findKeys(c))...)
+	return tea.Batch(append(a.resolvePending(c), a.findKeys(c), told)...)
 }
 
 func atoiOr(s string) int { n, _ := strconv.Atoi(s); return n }

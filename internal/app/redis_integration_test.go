@@ -6,6 +6,9 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
@@ -83,5 +86,41 @@ func TestRedisConnection(t *testing.T) {
 	_, err = c.Main.Query(ctx, "HGET", db.Val{S: "str:plain"}, db.Val{S: "f"})
 	if e := c.drv.ErrorOf(err); e.Code != "WRONGTYPE" {
 		t.Errorf("an error: %v %+v", err, e)
+	}
+}
+
+// The console runs a command on the server and lays its reply out; one that blocks
+// (BLPOP with no timeout) is cancelled by C-c, which closes the connection, and the
+// next command goes on a connection dialed again (F16.4).
+func TestRedisConsoleRunsAndCancels(t *testing.T) {
+	a, c := redisApp(t, redis.OwnDB(t), 1000)
+	a.run("query.new", 0)
+	q := a.sess.queries()[0]
+	q.conn = c
+	runText := func(text string) tea.Cmd { return a.runSQL(q, c, "", q.name, text, 0, q.ver) }
+	command(t, c, "RPUSH", "l", "a", "b", "c")
+	settle(a, runText("LRANGE l 0 -1"))
+	rt := resultOf(a.win().Result)
+	if rt == nil || len(rt.page.Rows) != 3 || rt.page.Rows[0][0].S != "a" {
+		t.Fatalf("LRANGE: %+v", rt)
+	}
+	blocked := runText("BLPOP nolist 0")
+	done := make(chan tea.Msg, 1)
+	go func() { done <- blocked().(tea.BatchMsg)[0]() }()
+	time.Sleep(300 * time.Millisecond)
+	start := time.Now()
+	c.cancel()
+	select {
+	case m := <-done:
+		a.Update(m)
+	case <-time.After(5 * time.Second):
+		t.Fatal("C-c did not end the command")
+	}
+	if time.Since(start) > 3*time.Second || a.toast != i18n.T("查询已取消") {
+		t.Errorf("cancel took %v, toast %q", time.Since(start), a.toast)
+	}
+	settle(a, runText("PING"))
+	if rt := resultOf(a.win().Result); rt == nil || rt.page.Rows[0][0].S != "PONG" {
+		t.Errorf("after the cancel: %+v", rt)
 	}
 }
