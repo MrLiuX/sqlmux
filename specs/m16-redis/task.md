@@ -96,7 +96,7 @@
 - [ ] e. 「以 JSON 查看」（`key.json`）和 DDL 查看（`Rebuild` 的命令：HSET / SET … EX / RPUSH …）复用 jsonview / ddlview；二进制值走 §8.1 占位符。
 
 **验收**
-- [ ] 集成（真 Redis 上七种类型逐个）：Page 内容与 `redis-cli` 一致；各类型的写回（改值 / 增 / 删 / 改 Field = 改名）；只读连接的 Save 被拒、没发 MULTI；并发改同一键 → ErrStale（WATCH 失效）；EXEC 前断线 → ErrCommitUnknown；> load_all 的 hash 走 HSCAN，只有下一页，MATCH 过滤对；zset 两种模式；stream 只能 XDEL；list 删除用哨兵不误删相同值的别的行；二进制值不被写回；导出超预算截断并提示。
+- [ ] 集成（真 Redis 上七种类型逐个；RedisJSON 的用 `MODULE LIST` 判断，没有模块就 skip，由 CI 的 redis-stack 跑——没法在本机验证的也要写，不然这段代码第一次运行就是用户推送之后）：Page 内容与 `redis-cli` 一致；各类型的写回（改值 / 增 / 删 / 改 Field = 改名）；只读连接的 Save 被拒、没发 MULTI；并发改同一键 → ErrStale（WATCH 失效）；EXEC 前断线 → ErrCommitUnknown；> load_all 的 hash 走 HSCAN，只有下一页，MATCH 过滤对；zset 两种模式；stream 只能 XDEL；list 删除用哨兵不误删相同值的别的行；二进制值不被写回；导出超预算截断并提示。
 - [ ] 单测：Changes → 命令序列（表驱动，每类型每种变更）；TTL 文本；Sortable / NoInsert 随类型；layout 往返。
 - [ ] golden：每种类型一屏（带信息行）、游标翻页的页脚、JSON 查看。
 - [ ] e2e：打开各类型键、改一个格子 `C-s` 后 redis-cli 里对、设 / 去 TTL、改名、删除、`R` 刷新、重启后 layout 恢复到键 tab。
