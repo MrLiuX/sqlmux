@@ -192,6 +192,9 @@ check "gq：什么都没发生（文字原样，没有格式化成别的样子�
 pal ">格式化"; sleep 0.5
 check "命令面板里没有「格式化整个 query」" eval '! e2e_plain | grep -q "格式化整个 query"' || true
 key Escape; sleep 0.3
+pal ">快速"; sleep 0.5
+check "命令面板 > 里没有「快速 SQL」（非 SQL 连接上面板里不列，task F16.4 f）" eval '! e2e_plain | grep -q "palette.sql"' || e2e_plain | grep -a "快速"
+key Escape; sleep 0.3
 pal ";select 1"; key Enter; sleep 1
 check "面板的 SQL（快速 SQL）范围里执行：toast「这个连接没有快速 SQL」" eval '[[ $(toast) == *"这个连接没有快速 SQL"* ]]' || toast
 key Escape; sleep 0.3
