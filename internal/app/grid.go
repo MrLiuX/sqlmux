@@ -289,7 +289,7 @@ func (a *App) gotPage(m pageMsg) tea.Cmd {
 	case m.err != nil: // under the rows shown, which stay; its WHERE is there to be fixed (backToShown), the count owed
 		// ponytail: no 位置 line, the SQL being ours, not the WHERE typed;
 		// map Position into the WHERE if it is ever wanted
-		t.bar = newErrorBar("fetch", t.conn.driver().ErrorOf(m.err), "", "")
+		t.bar = newErrorBar("fetch", t.conn.drv.ErrorOf(m.err), "", "")
 		t.backToShown()
 		return nil
 	}
@@ -674,7 +674,7 @@ func (a *App) queryBar(p *Pane, t *dataTab) ui.QueryBar {
 	}
 	return ui.QueryBar{
 		Selected: selected, SelectedStay: staySelected,
-		Where: where, Typing: t.typing == "where", Pane: p.ID, Right: right, Note: t.note, Names: names, Dialect: t.conn.eng.Dialect(),
+		Where: where, Typing: t.typing == "where", Pane: p.ID, Right: right, Note: t.note, Names: names, Dialect: t.conn.dialect(),
 		History: ic.History, HistKey: a.keys.Hint("where.history", "input"),
 		Chips:   chips,
 		Buttons: a.toolButtons(t),

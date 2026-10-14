@@ -395,12 +395,20 @@ func (a *App) drawSidebar(f *ui.Frame, r uv.Rectangle) {
 	}
 	in := b.Draw(f, r)
 	ns, matches := a.treeNodes()
-	total := 0 // the connections connected (§7.8)
+	total, keys := 0, 0 // the connections connected (§7.8)
 	for _, c := range a.sess.conns() {
 		total += len(c.Tables)
+		if c.scan != nil { // the keys of a db of Redis (F16.2)
+			keys += int(c.scan.total)
+		}
+	}
+	noun := "tables"
+	if total == 0 && keys > 0 {
+		total, noun = keys, "keys"
 	}
 	t := ui.Tree{
 		Total:     total,
+		Noun:      noun,
 		Matches:   matches,
 		Filter:    win.tree.filter,
 		Filtering: win.tree.filtering,

@@ -222,7 +222,7 @@ func TestPage(t *testing.T) {
 		t.Errorf("count %d %v", n, err)
 	}
 	cols, _ := e.TableColumns(ctx, c, "main", "t_log")
-	r, _, err = db.Page(ctx, c, e, db.Query{Schema: "main", Table: "t_log", Key: cols.Key(), Lead: cols.Lead, Limit: 10, Desc: true})
+	r, _, err = db.Page(ctx, c, e, db.Query{Schema: "main", Table: "t_log", Key: cols.Key(), Lead: cols.Lead, Limit: 10, Order: []db.OrderCol{{Col: "rowid", Desc: true}}})
 	if err != nil || r.Cols[0].Name != "rowid" || strings.Join(cells(r)[:3], "|") != "3|2026-01-01 00:00:03|stopped" {
 		t.Fatalf("t_log: %v %v", r.Cols, err)
 	}

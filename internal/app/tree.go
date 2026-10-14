@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db/redis"
 	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
@@ -104,6 +105,9 @@ type catalogMsg struct {
 // loadCatalog reads c's schemas and every schema's tables on its Meta; a
 // table's columns wait until it is opened (§8.4).
 func (a *App) loadCatalog(c *Conn) tea.Cmd {
+	if !c.sql() { // a key-value server's catalog is its keys (F16.2)
+		return a.loadKeys(c)
+	}
 	meta, eng := c.Meta, c.eng
 	return func() tea.Msg {
 		ctx := context.Background()
@@ -259,6 +263,9 @@ const (
 	nodeSep       // a rule between the groups of connections, no node (F10.6)
 	nodeQueries   // the root over the query files
 	nodeQueryFile // one of them
+	nodeNamespace // the keys of a Redis db whose names start alike (F16.2)
+	nodeRedisKey  // a Redis key
+	nodeNote      // a line of a tree that is none of its nodes' own: a scan that stopped
 )
 
 // node is one of the tree's rows: what it stands for, and how it draws.
@@ -274,9 +281,13 @@ type node struct {
 	key    db.Key      // a key leaf's
 	fn     db.Function // a function leaf's
 	query  string      // a query file's name
-	win    int
-	pane   *Pane
-	tab    int
+	// a namespace's name up to and with the delimiter, which MATCH asks for it by,
+	// and a Redis key's (F16.2)
+	prefix   string
+	redisKey redis.KeyInfo
+	win      int
+	pane     *Pane
+	tab      int
 }
 
 // opened is whether node id of s's tree shows its children: as the user
@@ -459,9 +470,10 @@ func (a *App) treeNodes() (ns []node, matches int) {
 		if c.down() != nil { // a redial failed: its next request tries again (F8.19)
 			cn.TextFg = th.Error
 		}
-		if filtering && !slices.ContainsFunc(append([]*Conn{c}, slices.Collect(maps.Values(c.dbs))...), func(d *Conn) bool {
-			return slices.ContainsFunc(d.Tables, func(t db.Table) bool { _, ok := pos[tableNode(d, t)]; return ok })
-		}) {
+		matched := func(d *Conn) bool { // what the filter kept in a db: tables, or the keys the server found
+			return slices.ContainsFunc(d.Tables, func(t db.Table) bool { _, ok := pos[tableNode(d, t)]; return ok }) || d.found != nil && len(d.found.keys) > 0
+		}
+		if filtering && !slices.ContainsFunc(append([]*Conn{c}, slices.Collect(maps.Values(c.dbs))...), matched) {
 			continue
 		}
 		if !add(cn) {
@@ -473,10 +485,17 @@ func (a *App) treeNodes() (ns []node, matches int) {
 		}
 		for _, name := range c.databaseNames() {
 			dc := c.inDB(name)
-			if filtering && !slices.ContainsFunc(dc.Tables, func(t db.Table) bool { _, ok := pos[tableNode(dc, t)]; return ok }) {
+			if filtering && !matched(dc) {
 				continue
 			}
-			dn := node{id: dbNode(c, name), kind: nodeDatabase, conn: dc, TreeNode: ui.TreeNode{Depth: 1, Branch: true, Open: dc.State == connReady && open(dbNode(c, name), dc == c), Icon: ic.Database, IconFg: th.Info, Text: name}}
+			text, note := name, ""
+			if dc.redis() { // db0, with the size of it (§7.8)
+				text = dbText(name)
+				if dc.scan != nil {
+					note = ui.Magnitude(float64(dc.scan.total))
+				}
+			}
+			dn := node{id: dbNode(c, name), kind: nodeDatabase, conn: dc, TreeNode: ui.TreeNode{Depth: 1, Branch: true, Open: dc.State == connReady && open(dbNode(c, name), dc == c), Icon: ic.Database, IconFg: th.Info, Text: text, Note: note, NoteFg: th.Border}}
 			switch dc.State {
 			case connConnecting:
 				dn.Aside = "…"
@@ -485,12 +504,22 @@ func (a *App) treeNodes() (ns []node, matches int) {
 			case connIdle, connReady:
 			}
 			if add(dn) {
-				schemas(dc, 1)
+				if dc.redis() {
+					a.keyNodes(dc, name, add, open, filtering)
+				} else {
+					schemas(dc, 1)
+				}
 			}
 		}
 	}
 	if filtering { // the workspace isn't what a filter looks for (§7.8)
-		return ns, len(pos)
+		found := len(pos)
+		for _, c := range s.conns() {
+			if c.found != nil {
+				found += len(c.found.keys)
+			}
+		}
+		return ns, found
 	}
 	if len(a.groupNames()) > 0 { // a rule with no title between the connections and the rest
 		add(node{id: "sep:", kind: nodeSep, TreeNode: ui.TreeNode{Sep: true}})
@@ -731,6 +760,7 @@ func (a *App) treeOpen(tablesOnly bool) tea.Cmd {
 	case !ok:
 	case n.kind == nodeTable:
 		return a.openTable(n.conn, n.table)
+	case n.kind == nodeRedisKey, n.kind == nodeNote: // a key tab is F16.3's
 	case tablesOnly:
 	case n.kind == nodeQueryFile:
 		return a.openQueryFile(n.query)
@@ -798,7 +828,7 @@ func (a *App) treeFilter() {
 // filterKey edits the tree's filter, nvim-tree's live filter (§7.8): the
 // cursor goes to the first match as it changes, and ↵ keeps it for the
 // list; esc clears it, the cursor staying on its node.
-func (a *App) filterKey(k keymap.Key) {
+func (a *App) filterKey(k keymap.Key) tea.Cmd {
 	t := &a.win().tree
 	switch k {
 	case "<CR>":
@@ -810,15 +840,17 @@ func (a *App) filterKey(k keymap.Key) {
 	default:
 		if editInput(&t.filter, k) {
 			a.treeFirstMatch()
+			return a.askFilter()
 		}
 	}
+	return nil
 }
 
 // treeFirstMatch puts the cursor on the first table or view the filter
 // kept, else the first node.
 func (a *App) treeFirstMatch() {
 	ns, _ := a.treeNodes()
-	a.treeGo(max(slices.IndexFunc(ns, func(n node) bool { return n.kind == nodeTable }), 0))
+	a.treeGo(max(slices.IndexFunc(ns, func(n node) bool { return n.kind == nodeTable || n.kind == nodeRedisKey }), 0))
 }
 
 // openTarget is the pane a table opens in (§5, §12): the focused one;

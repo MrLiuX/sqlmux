@@ -70,16 +70,18 @@ func TestConnDriver(t *testing.T) {
 	t.Cleanup(func() {
 		if was == nil {
 			delete(drivers, "kv")
+		} else {
+			drivers["kv"] = was
 		}
 	})
 	c := &Conn{}
 	c.setDriver(config.Connection{Engine: "postgres"})
-	if c.eng == nil || c.drv == nil || c.driver() != c.drv {
+	if c.eng == nil || c.drv == nil || db.Driver(c.eng) != c.drv {
 		t.Errorf("postgres: eng %v drv %v", c.eng, c.drv)
 	}
 	c.setDriver(config.Connection{Engine: "kv", ReadOnly: true})
-	if c.eng != nil || c.driver() != (kvDriver{}) || !c.readOnly {
-		t.Errorf("kv: eng %v driver %v read-only %v", c.eng, c.driver(), c.readOnly)
+	if c.eng != nil || c.drv != (kvDriver{}) || !c.readOnly {
+		t.Errorf("kv: eng %v driver %v read-only %v", c.eng, c.drv, c.readOnly)
 	}
 	// a page that fails says its error through the driver, with no engine
 	a := wide(160, 45)

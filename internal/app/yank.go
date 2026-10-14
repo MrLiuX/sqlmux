@@ -145,6 +145,9 @@ func (a *App) yankInsert() tea.Cmd {
 	if !ok {
 		return nil
 	}
+	if !t.conn.sql() {
+		return a.showToast(i18n.T("只有表里的行能复制为 INSERT"))
+	}
 	eng := t.conn.eng
 	var names, vals []string
 	for _, f := range t.ordered() { // as COLS has them, hidden ones too (F10.3)

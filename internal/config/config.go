@@ -40,6 +40,11 @@ type Config struct {
 	// Tips is whether the status bar carries a line about a feature (`[ui]
 	// tips`, §7.8, F15.4).
 	Tips bool
+	// RedisDelimiter, RedisScanKeys and RedisLoadAll are `[redis]`'s: what the
+	// tree splits a key's name by, how many keys a db's scan reads, and the
+	// length up to which a hash, set or zset is read whole (§8.7, F16.1).
+	RedisDelimiter              string
+	RedisScanKeys, RedisLoadAll int
 	// HistoryMax is how many statements history.jsonl keeps, the oldest cut
 	// at the start (`[query] history_max`, §11).
 	HistoryMax int
@@ -78,7 +83,7 @@ type Config struct {
 }
 
 func Default() *Config {
-	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "en", Border: uv.NormalBorder(), Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 500, HistoryMax: 1000, Hints: true, Tips: true, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true, GridFullWidth: 22, TreeWidth: 32}
+	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "en", Border: uv.NormalBorder(), Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 500, HistoryMax: 1000, Hints: true, Tips: true, RedisDelimiter: ":", RedisScanKeys: 10000, RedisLoadAll: 5000, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true, GridFullWidth: 22, TreeWidth: 32}
 }
 
 // Dir is $XDG_CONFIG_HOME/sqlmux, falling back to ~/.config/sqlmux on every
@@ -151,6 +156,11 @@ func Parse(data string) (*Config, error) {
 		UI struct {
 			Tips *bool `toml:"tips"`
 		} `toml:"ui"`
+		Redis struct {
+			Delimiter *string `toml:"delimiter"`
+			ScanKeys  *int    `toml:"scan_keys"`
+			LoadAll   *int    `toml:"load_all"`
+		} `toml:"redis"`
 		Tree struct {
 			Width *int `toml:"width"`
 		} `toml:"tree"`
@@ -239,6 +249,24 @@ func Parse(data string) (*Config, error) {
 	}
 	if raw.UI.Tips != nil {
 		c.Tips = *raw.UI.Tips
+	}
+	if d := raw.Redis.Delimiter; d != nil {
+		if *d == "" {
+			return nil, errors.New(`[redis] delimiter = "": must not be empty`)
+		}
+		c.RedisDelimiter = *d
+	}
+	if n := raw.Redis.ScanKeys; n != nil {
+		if *n <= 0 {
+			return nil, fmt.Errorf("[redis] scan_keys = %d: must be greater than 0", *n)
+		}
+		c.RedisScanKeys = *n
+	}
+	if n := raw.Redis.LoadAll; n != nil {
+		if *n <= 0 {
+			return nil, fmt.Errorf("[redis] load_all = %d: must be greater than 0", *n)
+		}
+		c.RedisLoadAll = *n
 	}
 	if raw.Query.Hints != nil {
 		c.Hints = *raw.Query.Hints

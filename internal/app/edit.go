@@ -800,7 +800,7 @@ func (a *App) gotSave(m saveMsg) tea.Cmd {
 		return a.showToast(i18n.T("%s：连接断开，提交结果未知：已刷新，请核对", t.conn.label()))
 	case m.err != nil: // on the error bar: the query bar keeps what went well alone (§7.8「错误栏」)
 		t.note = ui.Note{}
-		head, e := "", t.conn.driver().ErrorOf(m.err)
+		head, e := "", t.conn.drv.ErrorOf(m.err)
 		named := func(key string) string {
 			var named []string
 			for i, v := range splitKey(key) {

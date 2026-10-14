@@ -49,6 +49,9 @@ var whereKeywords = []string{"and", "or", "not", "is null", "is not null", "in",
 // value of that column goes (§9.7).
 func (a *App) complete(t *dataTab) {
 	t.comp = nil
+	if !t.conn.sql() { // a MATCH pattern has no completion (§5)
+		return
+	}
 	in := t.where
 	w := sqlkit.WhereContext(in.Text, in.Pos, t.conn.eng.Dialect())
 	if !w.OK {
@@ -297,6 +300,9 @@ func (a *App) sqlNames(c *Conn, text, schema string, cols *db.Columns) (names ui
 	// PG folds a name's ASCII letters unless it is "quoted"
 	// (downcase_identifier), its catalog's as they are; MySQL's and SQLite's go
 	// by any case on both sides, quoted too
+	if !c.sql() {
+		return
+	}
 	fold := func(s string) string { return s }
 	if c.eng.Dialect().CaseInsensitive() {
 		fold = strings.ToLower
@@ -408,6 +414,9 @@ func (a *App) wantCols() tea.Cmd {
 // nothing. The columns the cache lacks are fetched, a table once per asked.
 // A name that has to be quoted goes in quoted (F15.11).
 func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked map[tableID]bool, manual bool) (*completion, []tea.Cmd) {
+	if !conn.sql() {
+		return nil, nil
+	}
 	c := sqlkit.CompletionContext(sql, pos, conn.eng.Dialect())
 	vc := sqlkit.ValueContext(sql, pos, conn.eng.Dialect())
 	if !c.OK && !vc.OK { // a comment, a quoted name; a string is a value's place maybe

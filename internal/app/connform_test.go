@@ -814,3 +814,48 @@ func TestManagerHidesTempConnection(t *testing.T) {
 		t.Errorf("the last row is %d, not past the temporary one", a.form.cur)
 	}
 }
+
+// Redis has the default user and db 0, so its form needs a host alone: the port
+// follows the engine, the db row is called db and is a number, and what is
+// typed makes the URL (F16.1).
+func TestConnFormRedis(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	keychain(t, "none")
+	engine := "<C-p>conn.new<CR>cache<Tab><Tab><Right><Right><Right>" // postgres, mysql, sqlite, redis
+	a, _ := withSessions()
+	feed(t, a, engine)
+	if v := a.formView(); v.Fields[fieldDatabase].Label != "db" || a.form.fields[fieldPort].Input.Text != "6379" || v.Fields[fieldHost].Hidden || v.Fields[fieldUser].Hidden {
+		t.Fatalf("the form of redis: label %q port %q", v.Fields[fieldDatabase].Label, a.form.fields[fieldPort].Input.Text)
+	}
+	feed(t, a, "<Tab>h<CR>")
+	if got := connections(); a.form != nil || !strings.Contains(got, `engine = "redis"`) || !strings.Contains(got, `dsn = "redis://h:6379/0"`) {
+		t.Fatalf("a host alone: form %v, file:\n%s", a.form, got)
+	}
+	b, _ := withSessions()
+	feed(t, b, strings.Replace(engine, "cache", "cache2", 1)+"<Tab>h<Tab><Tab>u<Tab><Tab>3<CR>")
+	if got := connections(); !strings.Contains(got, `dsn = "redis://u@h:6379/3"`) {
+		t.Fatalf("a user and a db:\n%s", got)
+	}
+	c, _ := withSessions()
+	feed(t, c, strings.Replace(engine, "cache", "cache3", 1)+"<Tab>h<Tab><Tab><Tab><Tab>x<CR>")
+	if c.form == nil || c.form.err == "" || !c.form.fields[fieldDatabase].Bad {
+		t.Errorf("a db that is no number: %+v", c.form)
+	}
+	feed(t, c, "<C-u>-1<CR>")
+	if c.form == nil || !c.form.fields[fieldDatabase].Bad {
+		t.Errorf("a db below 0: %+v", c.form)
+	}
+	// a URL is split back into the rows, and written with no user when there is none
+	if host, port, user, database := splitDSN("redis", "redis://u:p@h:6380/3"); host != "h" || port != "6380" || user != "u" || database != "3" {
+		t.Errorf("split: %q %q %q %q", host, port, user, database)
+	}
+	if got := composeDSN("redis", "h", "6379", "", "0"); got != "redis://h:6379/0" {
+		t.Errorf("no user: %q", got)
+	}
+	if got := versionText("redis", "# Server\r\nredis_version:7.4.0\r\nredis_mode:standalone\r\n"); got != "Redis 7.4.0" {
+		t.Errorf("version %q", got)
+	}
+	if dsnExample["redis"] == "" || defaultPort["redis"] != "6379" {
+		t.Error("no example or port of redis")
+	}
+}

@@ -19,7 +19,6 @@ type Query struct {
 	Schema, Table string
 	Where         string     // a condition as typed; "" for none
 	Order         []OrderCol // the columns to sort by, in order; none for Key alone
-	Desc          bool       // with no Order: Key turned
 	Key           []string   // the row identity: the order, or Order's tiebreaker
 	Lead          string     // listed before *, as Columns.Lead (F14.1)
 	Limit, Offset int
@@ -38,8 +37,7 @@ func (q Query) from(e Engine) string {
 
 // Page reads one page of a table (§8.5): every column, sorted by Order and
 // then the row identity, the columns of it Order has left out, so pages are
-// stable (unordered with neither); with no Order the row identity sorts,
-// Desc turning it. It
+// stable (unordered with neither). It
 // asks for one row more than Limit to tell whether a next page exists, even
 // before the count is in. One statement only: PG's extended protocol and a
 // MySQL connection without multiStatements refuse more, whatever Where
@@ -66,8 +64,6 @@ func Select(e Engine, q Query) string {
 	for _, k := range q.Key {
 		switch {
 		case slices.ContainsFunc(q.Order, func(o OrderCol) bool { return o.Col == k }):
-		case len(q.Order) == 0 && q.Desc: // the row identity is what sorts: the other way
-			order = append(order, e.Quote(k)+" desc")
 		default:
 			order = append(order, e.Quote(k))
 		}

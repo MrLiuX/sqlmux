@@ -52,20 +52,25 @@ type App struct {
 	lastSess *Session // the one attached before sess (F9.10)
 	sessions []*Session
 
-	tabWidth     int       // the queries' (§14)
-	maxRows      int       // a query run keeps of each result (§11)
-	resultHeight float64   // the share the result area first takes
-	treeWidth    int       // config [tree] width: the sidebar's default width (§7.8)
-	fullWidth    int       // the grid's columns up to this wide are not squeezed (§7.6)
-	border       uv.Border // the boxes' lines (§7.1)
-	newDesc      bool      // a table opened anew sorts descending, and shows transposed (§14)
-	newTurned    bool
-	keywordCase  string // gq's (§9.5)
-	formatPrg    string
-	autoPairs    bool // a query's INSERT, a WHERE and the quick SQL (§7.9)
-	valueHints   bool // a query's line of the field its value goes in (§11, F15.3)
-	tipsOn       bool // the status bar's line about a feature (§7.8, F15.4)
-	tip          tipState
+	tabWidth int // the queries' (§14)
+	maxRows  int // a query run keeps of each result (§11)
+	// redisDelim, scanKeys and loadAll are `[redis]`'s (§8.7); filterSeq numbers
+	// the changes of the tree's filter that wait to be asked of the servers (F16.2)
+	redisDelim        string
+	scanKeys, loadAll int
+	filterSeq         int
+	resultHeight      float64   // the share the result area first takes
+	treeWidth         int       // config [tree] width: the sidebar's default width (§7.8)
+	fullWidth         int       // the grid's columns up to this wide are not squeezed (§7.6)
+	border            uv.Border // the boxes' lines (§7.1)
+	newDesc           bool      // a table opened anew sorts descending, and shows transposed (§14)
+	newTurned         bool
+	keywordCase       string // gq's (§9.5)
+	formatPrg         string
+	autoPairs         bool // a query's INSERT, a WHERE and the quick SQL (§7.9)
+	valueHints        bool // a query's line of the field its value goes in (§11, F15.3)
+	tipsOn            bool // the status bar's line about a feature (§7.8, F15.4)
+	tip               tipState
 	// confirmDangerous asks before a run that would delete or drop, and a
 	// save that deletes rows (§13).
 	confirmDangerous bool
@@ -135,7 +140,7 @@ var whichKeyDelay = 400 * time.Millisecond
 // not "", shows as a toast on start.
 func New(cfg *config.Config, keys *keymap.Map, sess *Session, st *config.State, warning string) *App {
 	a := &App{
-		theme: cfg.Theme, icons: cfg.Icons, baseIcons: cfg.BaseIcons, plain: !cfg.Vim, themeName: cfg.ThemeName, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, resultHeight: cfg.ResultHeight, fullWidth: cfg.GridFullWidth, treeWidth: cfg.TreeWidth, border: cfg.Border, newDesc: cfg.GridDesc, newTurned: cfg.GridTranspose,
+		theme: cfg.Theme, icons: cfg.Icons, baseIcons: cfg.BaseIcons, plain: !cfg.Vim, themeName: cfg.ThemeName, tabWidth: cfg.TabWidth, maxRows: cfg.MaxRows, redisDelim: cfg.RedisDelimiter, scanKeys: cfg.RedisScanKeys, loadAll: cfg.RedisLoadAll, resultHeight: cfg.ResultHeight, fullWidth: cfg.GridFullWidth, treeWidth: cfg.TreeWidth, border: cfg.Border, newDesc: cfg.GridDesc, newTurned: cfg.GridTranspose,
 		keywordCase: cfg.KeywordCase, formatPrg: cfg.FormatPrg, autoPairs: cfg.AutoPairs, valueHints: cfg.Hints, tipsOn: cfg.Tips, tip: tipState{cur: -1, pick: rand.IntN}, confirmDangerous: cfg.ConfirmDangerous,
 		keys: keys, res: keymap.NewResolver(keys), sess: sess, sessions: []*Session{sess},
 		mouse: uv.Pos(-1, -1), warning: JoinNotes(warning, sess.warning), state: st,
@@ -269,6 +274,18 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.gotSessionDialed(msg)
 	case catalogMsg:
 		return a, a.gotCatalog(msg)
+	case keysMsg:
+		return a, a.gotKeys(msg)
+	case foundMsg:
+		return a, a.gotFound(msg)
+	case filterDue:
+		return a, a.gotFilterDue(msg)
+	case keyDone:
+		return a, a.gotKeyDone(msg)
+	case keyExists:
+		a.gotKeyExists(msg)
+	case namespaceFound:
+		return a, a.gotNamespaceFound(msg)
 	case pageMsg:
 		return a, a.gotPage(msg)
 	case countMsg:
@@ -766,7 +783,7 @@ func (a *App) typeInto(k keymap.Key) tea.Cmd {
 	}
 	switch t := a.typingTab(); {
 	case a.win().tree.filtering:
-		a.filterKey(k)
+		return a.filterKey(k)
 	case t != nil:
 		return a.typeKey(t, k)
 	case a.focusedQuery() != nil: // what the query's keymap leaves goes to its vim (§6.4)

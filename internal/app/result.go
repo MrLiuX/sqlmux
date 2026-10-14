@@ -143,6 +143,9 @@ func (a *App) queryRun(arg string) tea.Cmd {
 	if t == nil || t.running != nil { // a run at a time a query
 		return nil
 	}
+	if !t.conn.sql() { // ponytail: the console of a key-value server runs its commands from F16.4
+		return a.showToast(i18n.T("这个连接的 query 还不能执行"))
+	}
 	text, from, to := querySpan(t, arg)
 	if from < 0 {
 		return nil
@@ -524,7 +527,7 @@ func (a *App) log(r *run, stmt, did string, failed bool) {
 // logError logs statement stmt of run r failing with err (§11): the
 // server's severity and message, then DETAIL and HINT a line each.
 func (a *App) logError(r *run, stmt string, err error) db.ServerError {
-	e := r.conn.driver().ErrorOf(err)
+	e := r.conn.drv.ErrorOf(err)
 	a.log(r, stmt, e.Severity+": "+e.Message, true)
 	for _, l := range e.More {
 		r.win.log = append(r.win.log, ui.LogLine{Tail: "    " + l, Err: true})

@@ -1,0 +1,42 @@
+
+SET str:plain hello
+SET str:number 42
+SET str:json "{\"name\":\"Ann\",\"tags\":[\"a\",\"b\"],\"n\":{\"x\":1}}"
+SET str:unicode "你好 world"
+SET str:binary "\x00\x01\xff\xfe"
+SET str:long "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"
+SET str:ttl expires EX 315360000
+HSET hash:user name Ann age 30 email ann@example.com meta "{\"vip\":true}"
+HSET hash:binary raw "\x00\x01\xff" text ok
+RPUSH list:queue first second third fourth fifth
+RPUSH list:dups x y x y x
+SADD set:tags red green blue
+SADD set:binary "\xff\xfe" plain
+ZADD zset:rank 1 alice 2.5 bob 3 carol 3 dave 10 erin
+XADD stream:events 1700000000000-1 type login user ann
+XADD stream:events 1700000000000-2 type click user ann target button
+XADD stream:events 1700000000001-1 type logout user ann
+JSON.SET json:doc $ "{\"a\":1,\"b\":[1,2,{\"c\":null}],\"s\":\"text\"}"
+
+SET app:users:1 ann
+SET app:users:2 bob
+SET app:users:3 carol
+SET app:orders:100 o100
+SET app:orders:101 o101
+SET app:config "{}"
+SET app oops
+SET cache:session:abc s1
+SET cache:session:def s2
+SET a::b double
+SET :lead start
+SET trail: end
+SET nodelimiter x
+
+EVAL "for i = 1, 6000 do redis.call('HSET', 'hash:big', 'field' .. i, 'value' .. i) end" 0
+EVAL "for i = 1, 12000 do redis.call('SET', 'bulk:' .. i, i) end" 0
+
+SELECT 1
+SET other:one 1
+SET other:two 2
+SELECT 0
+SET seed:done 1

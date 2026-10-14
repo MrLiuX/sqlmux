@@ -102,7 +102,6 @@ func TestDataTabOverASource(t *testing.T) {
 	if tab.pageNo != 1 {
 		t.Errorf("30G: page %d, want 2 (the one after the last seen)", tab.pageNo+1)
 	}
-	tab.pageNo = 2
 	tab.cursors = []string{"", "3", "6"}
 	src.n = 5 // the source is shorter now: page 2 is the last, and the page after it is gone
 	tab.pageNo = 1
@@ -122,7 +121,7 @@ func TestDataTabOverASource(t *testing.T) {
 		t.Errorf("count -1: %v", tab.counted)
 	}
 	// the source says what sorts and what adds
-	if cmd := a.setOrder(tab, orderOf("id")); cmd == nil || len(tab.order) != 0 || !strings.Contains(a.toast, "keys") {
+	if cmd := a.setOrder(tab, orderOf("id")); cmd == nil || len(tab.order) != 0 || !strings.Contains(a.toast, "id") {
 		t.Errorf("ORDER of a column that does not sort: order %v toast %q", tab.order, a.toast)
 	}
 	a.toast = ""

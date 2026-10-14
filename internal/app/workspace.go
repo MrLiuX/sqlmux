@@ -18,9 +18,11 @@ import (
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/db/mysql"
 	"github.com/kackerx/sqlmux/internal/db/postgres"
+	"github.com/kackerx/sqlmux/internal/db/redis"
 	"github.com/kackerx/sqlmux/internal/db/sqlite"
 	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/keymap"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
@@ -243,8 +245,11 @@ type Conn struct {
 	// tree opens one, by name.
 	Databases []string
 	dbs       map[string]*Conn
-	parent    *Conn // the connection a database's is of, nil for one of connections.toml
-	seqs      []db.Sequence
+	// scan is what the scan of a Redis db read, found what the tree's filter
+	// asked the server for (F16.2)
+	scan, found *keyScan
+	parent      *Conn // the connection a database's is of, nil for one of connections.toml
+	seqs        []db.Sequence
 
 	// DB is the database, on query titles, "" for MySQL, whose schemas
 	// are its databases; startedPath Main's search_path as it connected;
@@ -360,20 +365,29 @@ func (c *Conn) setSpec(spec config.Connection) {
 	c.setDriver(spec)
 }
 
+// redis is whether c is a connection to Redis, dialed or not: its db nodes
+// have keys under them, not schemas (F16.2).
+func (c *Conn) redis() bool { return c.Spec.Engine == "redis" }
+
+// sql is whether c is a SQL connection: what is SQL's, a catalog, a query's
+// statements, quick SQL, a WHERE, asks it (§5「连接缝」, F16.1).
+func (c *Conn) sql() bool { return c.eng != nil }
+
+// dialect is the dialect c's text is drawn in: a connection that is no SQL one
+// has PG's colors until its language has its own (F16.4).
+func (c *Conn) dialect() sqlkit.Dialect {
+	if c.eng == nil {
+		return sqlkit.PG
+	}
+	return c.eng.Dialect()
+}
+
 // setDriver makes c's driver, and its engine when it is a SQL one, what spec
 // names.
 func (c *Conn) setDriver(spec config.Connection) {
 	c.drv = drivers[spec.Engine]
 	c.eng, _ = c.drv.(db.Engine)
 	c.readOnly = spec.ReadOnly
-}
-
-// driver is c's Driver: the one it was dialed with, else its engine's.
-func (c *Conn) driver() db.Driver {
-	if c.drv == nil && c.eng != nil {
-		return c.eng
-	}
-	return c.drv
 }
 
 // setConfig makes spec what the connection is for the redials of the
@@ -392,7 +406,7 @@ func (c *Conn) liveSpec() config.Connection {
 }
 
 // drivers are the servers connections.toml names (§8.1, §5「连接缝」).
-var drivers = map[string]db.Driver{"postgres": postgres.Engine{}, "mysql": mysql.Engine{}, "sqlite": sqlite.Engine{}}
+var drivers = map[string]db.Driver{"postgres": postgres.Engine{}, "mysql": mysql.Engine{}, "sqlite": sqlite.Engine{}, "redis": redis.Driver{}}
 
 func (a *App) win() *Window { return a.sess.Windows[a.sess.Active] }
 
@@ -774,8 +788,12 @@ func connectTo(ctx context.Context, spec config.Connection, readOnly bool) (db.C
 		secrets.Store(spec.Name, s)
 	}
 	dsn := spec.DSN
-	if spec.Database != "" {
-		if dsn, err = postgres.WithDatabase(dsn, spec.Database); err != nil {
+	if spec.Database != "" { // a child of the connection in the tree: PG's database, Redis's db (F15.1, F16.2)
+		withDB := postgres.WithDatabase
+		if spec.Engine == "redis" {
+			withDB = redis.WithDB
+		}
+		if dsn, err = withDB(dsn, spec.Database); err != nil {
 			return nil, db.Info{}, err
 		}
 	}
