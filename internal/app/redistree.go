@@ -107,7 +107,7 @@ func dbText(name string) string { return "db" + name }
 func (a *App) keyNodes(dc *Conn, name string, add func(node) bool, open func(string, bool) bool, filtering bool) {
 	s := dc.scan
 	if filtering {
-		s = dc.found
+		s = a.win().tree.found[dc]
 	}
 	if s == nil {
 		return
@@ -223,6 +223,7 @@ func filterPattern(typed string) string {
 
 // foundMsg is what a scan for the filter's pattern found in a db.
 type foundMsg struct {
+	win     *Window // the one whose filter it is
 	conn    *Conn
 	pattern string
 	scan    *keyScan
@@ -232,9 +233,10 @@ type foundMsg struct {
 // findKeys asks c's db for the keys the tree's filter matches, when it has one
 // and c is a connected db of Redis; the keys it showed before stay till then.
 func (a *App) findKeys(c *Conn) tea.Cmd {
-	pattern := filterPattern(a.win().tree.filter.Text)
+	w := a.win()
+	pattern := filterPattern(w.tree.filter.Text)
 	if pattern == "" || c.sql() || c.State != connReady {
-		c.found = nil
+		delete(w.tree.found, c)
 		return nil
 	}
 	meta, budget := c.Meta, a.scanKeys
@@ -244,19 +246,23 @@ func (a *App) findKeys(c *Conn) tea.Cmd {
 			s, err = redis.Scan(ctx, conn, pattern, budget)
 			return err
 		})
-		return foundMsg{c, pattern, &keyScan{keys: s.Keys, total: s.Total, more: !s.Complete}, err}
+		return foundMsg{w, c, pattern, &keyScan{keys: s.Keys, total: s.Total, more: !s.Complete}, err}
 	}
 }
 
-// gotFound shows what was found, unless the filter has changed since.
+// gotFound shows what was found in the window that asked, unless its filter has
+// changed since.
 func (a *App) gotFound(m foundMsg) tea.Cmd {
-	if a.sessionOf(m.conn) == nil || m.pattern != filterPattern(a.win().tree.filter.Text) {
+	if a.sessionOf(m.conn) == nil || m.pattern != filterPattern(m.win.tree.filter.Text) {
 		return nil
 	}
 	if m.err != nil {
 		return a.showToast(i18n.T("%s：%s", m.conn.label(), m.err))
 	}
-	m.conn.found = m.scan
+	if m.win.tree.found == nil {
+		m.win.tree.found = map[*Conn]*keyScan{}
+	}
+	m.win.tree.found[m.conn] = m.scan
 	a.clampTree()
 	return nil
 }
@@ -319,8 +325,8 @@ func (a *App) gotKeyDone(m keyDone) tea.Cmd {
 	}
 	say := m.say
 	if m.err != nil {
-		say = c.drv.ErrorOf(m.err).Message
-		if e := c.drv.ErrorOf(m.err); e.Code != "" {
+		e := c.drv.ErrorOf(m.err)
+		if say = e.Message; e.Code != "" {
 			say = e.Code + " " + e.Message
 		}
 		if m.say != "" { // what was done before it failed, a cancel included
@@ -481,6 +487,20 @@ func (a *App) deleteNamespace(n node) tea.Cmd {
 // unlinkBatch is how many keys an UNLINK takes at a time.
 const unlinkBatch = 500
 
+// unlinkAll deletes keys unlinkBatch at a time by unlink, which says how many of a
+// batch were there; deleted is how many went, those of the batches before an error
+// counted.
+func unlinkAll(keys []string, unlink func([]string) (int64, error)) (deleted int, err error) {
+	for batch := range slices.Chunk(keys, unlinkBatch) {
+		n, err := unlink(batch)
+		deleted += int(n)
+		if err != nil {
+			return deleted, err
+		}
+	}
+	return deleted, nil
+}
+
 func (a *App) gotNamespaceFound(m namespaceFound) tea.Cmd {
 	c := m.conn
 	if a.sessionOf(c) == nil {
@@ -504,15 +524,9 @@ func (a *App) gotNamespaceFound(m namespaceFound) tea.Cmd {
 		c.busy++
 		return func() tea.Msg {
 			deleted := 0
-			err := main.Run(context.Background(), func(ctx context.Context, conn db.Conn) error {
-				for batch := range slices.Chunk(m.keys, unlinkBatch) {
-					n, err := redis.Unlink(ctx, conn, batch...)
-					deleted += int(n)
-					if err != nil {
-						return err
-					}
-				}
-				return nil
+			err := main.Run(context.Background(), func(ctx context.Context, conn db.Conn) (err error) {
+				deleted, err = unlinkAll(m.keys, func(batch []string) (int64, error) { return redis.Unlink(ctx, conn, batch...) })
+				return err
 			})
 			say := i18n.T("已删除 %d 个键", deleted)
 			if err != nil && deleted < len(m.keys) {

@@ -6,6 +6,7 @@ lint_version := "2.14.0"
 # the databases docker-compose.yml starts; set them to test against others
 export SQLMUX_TEST_PG := env("SQLMUX_TEST_PG", "postgres://sqlmux:sqlmux@localhost:55432/sqlmux?sslmode=disable")
 export SQLMUX_TEST_MYSQL := env("SQLMUX_TEST_MYSQL", "sqlmux:sqlmux@tcp(localhost:53306)/sqlmux")
+export SQLMUX_TEST_REDIS := env("SQLMUX_TEST_REDIS", "redis://localhost:56379/0")
 
 default:
     @just --list
@@ -116,7 +117,9 @@ golden *pkgs:
 generate:
     go generate ./internal/editor
 
-# start PG 17 and MySQL 8.4 of docker-compose.yml, seeded on their first start
+# start PG 17 and MySQL 8.4 of docker-compose.yml, seeded on their first start;
+# Redis is not here (an image that cannot be pulled would fail this): `docker compose up -d redis`,
+# or a redis-server --port 56379 given testdata/seed/redis.txt with redis-cli
 db-up:
     docker compose up -d --wait postgres mysql
 

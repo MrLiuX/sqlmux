@@ -245,11 +245,11 @@ type Conn struct {
 	// tree opens one, by name.
 	Databases []string
 	dbs       map[string]*Conn
-	// scan is what the scan of a Redis db read, found what the tree's filter
-	// asked the server for (F16.2)
-	scan, found *keyScan
-	parent      *Conn // the connection a database's is of, nil for one of connections.toml
-	seqs        []db.Sequence
+	// scan is what the scan of a Redis db read (F16.2); what the tree's filter
+	// asked the server for is each window's own: treeState.found
+	scan   *keyScan
+	parent *Conn // the connection a database's is of, nil for one of connections.toml
+	seqs   []db.Sequence
 
 	// DB is the database, on query titles, "" for MySQL, whose schemas
 	// are its databases; startedPath Main's search_path as it connected;

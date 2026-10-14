@@ -104,8 +104,8 @@ func TestRedisTreeFilterOnServer(t *testing.T) {
 	a.sess.open[dbNode(c, "0")] = true
 	a.win().tree.filter = ui.Input{Text: "users", Pos: 5}
 	settle(a, a.askFilter())
-	if c.found == nil || len(c.found.keys) != 3 {
-		t.Fatalf("found: %+v", c.found)
+	if f := a.win().tree.found[c]; f == nil || len(f.keys) != 3 {
+		t.Fatalf("found: %+v", f)
 	}
 	want := []string{"cache", "  db0 " + ui.Magnitude(float64(c.scan.total)), "    app 3", "      users 3", "        1", "        2", "        3"}
 	if got := outline(a); !slices.Equal(got, want) {

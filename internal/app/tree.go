@@ -24,6 +24,9 @@ type treeState struct {
 	at          string // the cursor's node: it stays on it as others come and go
 	filter      ui.Input
 	filtering   bool // the filter row has the keys (INSERT)
+	// found is what the server said of the filter's pattern, for each Redis db: the
+	// filter is the window's, so are its keys (F16.2)
+	found map[*Conn]*keyScan
 }
 
 // connected answers connect: c's Main and Meta, or why not.
@@ -471,7 +474,7 @@ func (a *App) treeNodes() (ns []node, matches int) {
 			cn.TextFg = th.Error
 		}
 		matched := func(d *Conn) bool { // what the filter kept in a db: tables, or the keys the server found
-			return slices.ContainsFunc(d.Tables, func(t db.Table) bool { _, ok := pos[tableNode(d, t)]; return ok }) || d.found != nil && len(d.found.keys) > 0
+			return slices.ContainsFunc(d.Tables, func(t db.Table) bool { _, ok := pos[tableNode(d, t)]; return ok }) || a.win().tree.found[d] != nil && len(a.win().tree.found[d].keys) > 0
 		}
 		if filtering && !slices.ContainsFunc(append([]*Conn{c}, slices.Collect(maps.Values(c.dbs))...), matched) {
 			continue
@@ -515,8 +518,8 @@ func (a *App) treeNodes() (ns []node, matches int) {
 	if filtering { // the workspace isn't what a filter looks for (§7.8)
 		found := len(pos)
 		for _, c := range s.conns() {
-			if c.found != nil {
-				found += len(c.found.keys)
+			if f := a.win().tree.found[c]; f != nil {
+				found += len(f.keys)
 			}
 		}
 		return ns, found

@@ -30,40 +30,57 @@ type Scanned struct {
 // at, one round trip each (§8.7).
 const scanCount = 1000
 
-// Scan reads the keys of the db c is on that match the glob match, SCAN by SCAN
-// and never KEYS, until the cursor comes round or budget keys are read; the
-// type of each batch comes in one pipeline (§8.7「树」). A key SCAN gives twice
-// is once. The keys are in the order they are read.
+// scanKeys gives take each batch of the keys of the db cl is on that match the
+// glob match, SCAN by SCAN and never KEYS, until the cursor comes round
+// (complete) or budget keys are given, 0 for no budget. A key SCAN gives twice is
+// once. take stopping it is that error.
+func scanKeys(ctx context.Context, cl *goredis.Client, match string, budget int, take func(keys []string) error) (complete bool, err error) {
+	// ponytail: SCAN may give a key twice while the table grows; the keys seen are
+	// kept to drop it, which costs memory as the db is big and has no test, a real
+	// server giving it rarely
+	seen, n := map[string]bool{}, 0
+	for cursor := uint64(0); ; {
+		batch, next, err := cl.Scan(ctx, cursor, match, scanCount).Result()
+		if err != nil {
+			return false, err
+		}
+		batch = slices.DeleteFunc(batch, func(k string) bool { dup := seen[k]; seen[k] = true; return dup })
+		if room := budget - n; budget > 0 && len(batch) > room {
+			batch = batch[:room]
+			next = 1 // the budget ends it
+		}
+		n += len(batch)
+		if len(batch) > 0 {
+			if err := take(batch); err != nil {
+				return false, err
+			}
+		}
+		if next == 0 {
+			return true, nil
+		}
+		if budget > 0 && n >= budget {
+			return false, nil
+		}
+		cursor = next
+	}
+}
+
+// Scan reads the keys of the db c is on that match the glob match until the
+// cursor comes round or budget keys are read; the type of each batch comes in
+// one pipeline (§8.7「树」). The keys are in the order they are read.
 func Scan(ctx context.Context, c db.Conn, match string, budget int) (s Scanned, err error) {
-	seen := map[string]bool{}
-	err = Use(ctx, c, func(cl *goredis.Client) error {
+	err = Use(ctx, c, func(cl *goredis.Client) (err error) {
 		if s.Total, err = cl.DBSize(ctx).Result(); err != nil {
 			return err
 		}
-		var cursor uint64
-		for {
-			batch, next, err := cl.Scan(ctx, cursor, match, scanCount).Result()
-			if err != nil {
-				return err
-			}
-			batch = slices.DeleteFunc(batch, func(k string) bool { dup := seen[k]; seen[k] = true; return dup })
-			if room := budget - len(s.Keys); len(batch) > room {
-				batch = batch[:room]
-				next = 1 // the budget ends it
-			}
+		s.Complete, err = scanKeys(ctx, cl, match, budget, func(batch []string) error {
 			types, err := typesOf(ctx, cl, batch)
-			if err != nil {
-				return err
-			}
-			for i, k := range batch {
+			for i, k := range batch[:len(types)] {
 				s.Keys = append(s.Keys, KeyInfo{k, types[i]})
 			}
-			if next == 0 || len(s.Keys) >= budget {
-				s.Complete = next == 0
-				return nil
-			}
-			cursor = next
-		}
+			return err
+		})
+		return err
 	})
 	return s, err
 }
@@ -94,24 +111,8 @@ func typesOf(ctx context.Context, cl *goredis.Client, keys []string) ([]string, 
 // (§8.7). each stopping it is that error.
 func Each(ctx context.Context, c db.Conn, match string, each func(keys []string) error) error {
 	return Use(ctx, c, func(cl *goredis.Client) error {
-		seen := map[string]bool{}
-		var cursor uint64
-		for {
-			batch, next, err := cl.Scan(ctx, cursor, match, scanCount).Result()
-			if err != nil {
-				return err
-			}
-			batch = slices.DeleteFunc(batch, func(k string) bool { dup := seen[k]; seen[k] = true; return dup })
-			if len(batch) > 0 {
-				if err := each(batch); err != nil {
-					return err
-				}
-			}
-			if next == 0 {
-				return nil
-			}
-			cursor = next
-		}
+		_, err := scanKeys(ctx, cl, match, 0, each)
+		return err
 	})
 }
 
