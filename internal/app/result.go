@@ -324,7 +324,11 @@ func (a *App) startRun(t *queryTab, conn *Conn, schema, name, sql string, base, 
 func mainRun(r *run, texts []string, maxRows int, manual, resets bool) runDone {
 	s, l := r.conn, r.lang
 	m := runDone{r: r}
-	m.err = s.Main.Run(context.Background(), func(ctx context.Context, c db.Conn) error {
+	run := s.Main.Run
+	if !s.sql() && !slices.ContainsFunc(texts, l.Writes) { // a command the server lists as read-only has no side effect to repeat: a lost connection is dialed again and it runs again (SQL cannot tell, §8.4)
+		run = s.Main.RunSafe
+	}
+	m.err = run(context.Background(), func(ctx context.Context, c db.Conn) error {
 		defer func() { m.tx = db.TxStatus(c) }()
 		var err error
 		if s.sql() {

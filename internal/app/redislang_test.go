@@ -85,6 +85,30 @@ func someCommands() redis.Commands {
 	return cs
 }
 
+// A command the server lists as read-only goes again on the connection dialed anew
+// when the request that found it lost had sent it: it has no side effect to repeat.
+// A write does not, and its toast says to run it (F8.19, F16.4).
+func TestRedisConsoleAfterLostConnection(t *testing.T) {
+	evs := heard(t)
+	run := func(text string, failed map[string]error) (*App, *execDB) {
+		d := &execDB{fail: failed}
+		a, _ := redisConsole(t, d, someCommands(), text)
+		d2 := &execDB{res: map[string]db.Result{"GET k": {Cols: []db.Col{{Name: "value"}}, Rows: [][]db.Val{{{S: "v"}}}}}}
+		redialed(a, d2)
+		*evs = nil
+		press(t, a, "<CR>")
+		return a, d2
+	}
+	a, d2 := run("GET k", map[string]error{"GET k": errLost})
+	if !slices.Equal(d2.ran, []string{"GET k"}) || strings.Contains(logText(a), "broken pipe") || len(*evs) != 1 || !(*evs)[0].Rerun {
+		t.Errorf("a read: %q, log %q, events %+v", d2.ran, logText(a), *evs)
+	}
+	a, d2 = run("SET k 1", map[string]error{"SET k 1": errLost})
+	if len(d2.ran) != 0 || !strings.Contains(logText(a), "broken pipe") || len(*evs) != 1 || (*evs)[0].Rerun {
+		t.Errorf("a write: %q, log %q, events %+v", d2.ran, logText(a), *evs)
+	}
+}
+
 // ↵ runs the line the cursor is on, as it is: no LIMIT, no search_path, one result
 // a command, a comment or a blank line none; a read-only connection keeps a write
 // back, and a dangerous command is asked about (F16.4).
@@ -254,22 +278,27 @@ func TestRedisConsoleDBDropdown(t *testing.T) {
 	}
 }
 
-// The palette lists the formatting of a query for a SQL connection and not for
-// Redis's, which has none (F16.4).
+// The palette lists the formatting of a query and the quick SQL for a SQL
+// connection and not for Redis's, which has none (F16.4).
 func TestPaletteHidesSQLOnlyCommands(t *testing.T) {
-	has := func(a *App) bool {
+	has := func(a *App, id string) bool {
 		a.openPalette(">")
 		defer func() { a.palette = nil }()
-		return slices.ContainsFunc(a.paletteItems(), func(it paletteItem) bool { return it.kind == itemCommand && it.id == "query.format" })
+		return slices.ContainsFunc(a.paletteItems(), func(it paletteItem) bool { return it.kind == itemCommand && it.id == id })
 	}
 	a := wide(160, 45)
-	if !has(a) {
-		t.Error("SQL: not listed")
+	ids := []string{"query.format", "palette.sql"}
+	for _, id := range ids {
+		if !has(a, id) {
+			t.Errorf("SQL: %s not listed", id)
+		}
 	}
 	c := a.sess.Conns[0]
 	c.Spec.Engine, c.drv, c.eng = "redis", kvDriver{}, nil
-	if has(a) {
-		t.Error("Redis: listed")
+	for _, id := range ids {
+		if has(a, id) {
+			t.Errorf("Redis: %s listed", id)
+		}
 	}
 }
 
