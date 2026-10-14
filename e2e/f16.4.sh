@@ -197,4 +197,13 @@ check "面板的 SQL（快速 SQL）范围里执行：toast「这个连接没有
 key Escape; sleep 0.3
 quit_app; _e2e_kill
 
+# ---- 带密码的行（AUTH、CONFIG SET requirepass）不进历史
+reseed; sstart rd
+runl "AUTH hunter2"
+runl "CONFIG SET requirepass \"\""; confirm_open && { key y; sleep 1; }
+runl "GET str:plain"
+quit_app
+check "AUTH hunter2 和 CONFIG SET requirepass 的行不在 history.jsonl 里（没有 hunter2、没有 requirepass），GET str:plain 在" eval 'f=$(ls "$D/dt"/sqlmux/history.jsonl) && ! grep -q "hunter2" "$f" && ! grep -qi "requirepass" "$f" && grep -q "GET str:plain" "$f"' || { tail -5 "$D/dt"/sqlmux/history.jsonl; }
+_e2e_kill
+
 e2e_done

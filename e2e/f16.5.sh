@@ -60,7 +60,14 @@ check "HGET hash:user n：候选是字段 name，右边写「字段」（键已�
 typed "HDEL hash:user "; key C-n; sleep 1
 check "HDEL hash:user ␣ C-n：四个字段 age email meta name" eval 'screen_has age && screen_has email && screen_has meta && screen_has name' || e2e_plain | sed -n 1,12p | cut -c34-165
 kill $MON 2>/dev/null; wait $MON 2>/dev/null
-check "服务端看到的：键名补全是 SCAN … MATCH str:p* COUNT 100，没有 KEYS；字段补全是 HKEYS hash:user" eval 'grep -qi "\"scan\" \"[0-9]*\" \"match\" \"str:p\\*\" \"count\" \"100\"" "$D/mon.txt" && ! grep -qi "\"keys\"" "$D/mon.txt" && grep -qi "\"hkeys\" \"hash:user\"" "$D/mon.txt"' || { grep -ai "scan\|keys" "$D/mon.txt" | head -5; }
+check "服务端看到的：键名补全是 SCAN 0 MATCH str:p* COUNT <n>（task 写 100，代码是 1000，文档以后改），没有 KEYS；字段补全是 HKEYS hash:user" eval 'grep -qi "\"scan\" \"[0-9]*\" \"match\" \"str:p\\*\" \"count\" \"[0-9]+\"" "$D/mon.txt" && ! grep -qi "\"keys\"" "$D/mon.txt" && grep -qi "\"hkeys\" \"hash:user\"" "$D/mon.txt"' || { grep -ai "scan\|keys" "$D/mon.txt" | head -5; }
+# 写命令之后键名补全看得到新键（缓存在写命令后清掉）
+reseed; sstart rd
+typed "GET zznew"
+check "（准备）新键 zznew:1 还没建：GET zznew 没有候选" eval '! screen_has "zznew:1"' || true
+key Escape; key g g; key d G; key i; e2e_type "SET zznew:1 v"; key Escape; key Enter; sleep 1.5
+typed "GET zznew"
+check "SET zznew:1 v 之后 GET zznew：候选里有 zznew:1（键名补全的缓存被写命令清掉了）" eval 'screen_has "zznew:1"' || e2e_plain | sed -n 1,10p | cut -c34-165
 quit_app; _e2e_kill
 
 e2e_done

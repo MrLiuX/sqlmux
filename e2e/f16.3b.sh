@@ -174,6 +174,24 @@ key ']'; sleep 1.5
 check "] 翻到第 2 页：行号 3、4 的两个 field（两页合起来是四个 field 不重不漏）" eval '[[ $(grid_rows | sed -n 2p) == 3\ * && $(grid_rows | wc -l | tr -d " ") == 3 ]]' || grid_rows
 quit_app; _e2e_kill; DIR=
 
+# 页的边界（load_all = 3、4 个 field）：LIMIT 1 / 3 / 4，每个 field 只出现一次，最后一页没有下一页；MATCH 加翻页；DDL 视图只列 load_all 项
+reseed; DIR=$D/l; sstart rd
+expand hash; open_key '^user$'
+fields_over_pages() { local seen= rows prev= i; for i in 1 2 3 4 5 6 7 8; do rows=$(grid_rows | sed 1d | awk '{ print $2 }' | tr '\n' ' '); [[ $rows == "$prev" ]] && break; seen+=" $rows"; prev=$rows; key ']'; sleep 1.2; done; echo $seen | tr ' ' '\n' | sort | uniq -c | awk '{ print $2 ":" $1 }' | paste -sd' ' -; }   # every field of every page from here on, counted: pages go till one more ] changes nothing
+key g l; sleep 0.3; e2e_type 3; key Enter; sleep 1.5
+check "LIMIT 3（页在一批中间截断）：第一页 3 行，翻到底四个 field（age email meta name）各出现一次，最后一页是 PAGE 2/2" eval '[[ $(fields_over_pages) == "age:1 email:1 meta:1 name:1" ]] && e2e_text 36 $PR 4 | grep -q "PAGE 2/2"' || { fields_over_pages; e2e_text 36 $PR 4; }
+key g l; sleep 0.3; e2e_type 4; key Enter; sleep 1.5
+check "LIMIT 4（页正好等于一批）：一页 4 行，PAGE 1/1，没有第二页" eval '[[ $(fields_over_pages) == "age:1 email:1 meta:1 name:1" ]] && e2e_text 36 $PR 4 | grep -q "PAGE 1/1"' || { fields_over_pages; e2e_text 36 $PR 4; }
+key g l; sleep 0.3; e2e_type 1; key Enter; sleep 1.5
+check "LIMIT 1：每页一行，PAGE 4/4 到底，四个 field 各一次" eval '[[ $(fields_over_pages) == "age:1 email:1 meta:1 name:1" ]] && e2e_text 36 $PR 4 | grep -q "PAGE 4/4"' || { fields_over_pages; e2e_text 36 $PR 4; }
+key g g; key /; e2e_type "*m*"; key Enter; sleep 1.5
+check "LIMIT 1 加 MATCH *m*：翻页翻出 email、meta、name 各一次（age 没有 m），页脚是 PAGE …/? 到最后一页" eval '[[ $(fields_over_pages) == "email:1 meta:1 name:1" ]]' || { fields_over_pages; e2e_text 36 $PR 4; }
+key /; for i in 1 2 3; do key BSpace; done; key Enter; sleep 1
+pal ">表的 DDL"; key Enter; sleep 1
+check "DDL 视图（load_all = 3）：第一行 # 只列出前 3 项，一共 4 项，一条 HSET hash:user 带三对（没有被 LIMIT 截成别的）" eval 'e2e_plain | grep -q "# 只列出前 3 项，一共 4 项" && e2e_plain | grep -E "HSET hash:user" | head -1 | grep -oE "(age|email|meta|name) " | sort -u | wc -l | tr -d " " | grep -qx 3' || e2e_plain | sed -n 8,14p | cut -c34-150
+key Escape; sleep 0.4
+quit_app; _e2e_kill; DIR=
+
 # ---- JSON 视图（gj）和 DDL 视图（命令面板「表的 DDL」）：每种类型是它自己的样子
 reseed; sstart rd
 expand hash; expand list; expand set; expand zset; expand stream; expand str
