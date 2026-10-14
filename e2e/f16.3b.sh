@@ -246,10 +246,6 @@ key g g; key l; set_cell 35
 rc hset hash:user age 99 >/dev/null
 key C-s; sleep 1.5
 check "再改 age = 35，保存之前别人把 age 改成了 99：C-s 报「field = age 的行数据已变化或行不存在，已回滚」，库里还是 99（没有覆盖）" eval 'e2e_plain | grep -q "field = age 的行数据已变化或行不存在，已回滚" && [[ $(rc hget hash:user age) == 99 ]]' || { toast; rc hget hash:user age; }
-key R; sleep 1; key g g; key l; sleep 3; key "*"; sleep 0.5
-check "键 tab 上 *（按值过滤）：toast「这一列的类型不支持按值过滤」" eval '[[ $(toast) == *不支持按值过滤* ]]' || toast
-sleep 3; key y; sleep 0.3; key i; sleep 0.5
-check "键 tab 上 y i（复制为 INSERT）：toast「只有表里的行能复制为 INSERT」" eval '[[ $(toast) == *只有表里的行能复制为* ]]' || toast
 quit_app; _e2e_kill
 
 # 只读连接：改了格子 C-s 被拒、没有发 MULTI；信息行上的 TTL / RENAME / DELETE 也拒
@@ -267,6 +263,15 @@ sleep 3; chip_click DELETE; sleep 0.4
 check "点 DELETE：同样被拒，没有确认框，键还在" eval '[[ $(toast) == *"ro 是只读连接"* ]] && ! confirm_open && [[ $(rc exists hash:user) == 1 ]]' || { toast; }
 kill $MON 2>/dev/null; wait $MON 2>/dev/null
 check "整个过程服务端上没见过 MULTI（只读在应用里拒了，没往服务端发）" eval '! grep -qi "\"multi\"" "$D/mon3.txt"' || grep -ai multi "$D/mon3.txt" | head -3
+quit_app; _e2e_kill
+
+# 键 tab 上不支持的操作：* 按值过滤、y i 复制为 INSERT
+reseed; sstart rd
+expand hash; open_key '^user$'
+key g g; key l; key "*"; sleep 0.5
+check "键 tab 上 *（按值过滤）：toast「这一列的类型不支持按值过滤」" eval '[[ $(toast) == *不支持按值过滤* ]]' || toast
+sleep 3; key y; sleep 0.3; key i; sleep 0.5
+check "键 tab 上 y i（复制为 INSERT）：toast「只有表里的行能复制为 INSERT」" eval '[[ $(toast) == *只有表里的行能复制为* ]]' || toast
 quit_app; _e2e_kill
 
 e2e_done

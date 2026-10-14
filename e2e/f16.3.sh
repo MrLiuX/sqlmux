@@ -124,7 +124,7 @@ key g g; key l; set_cell 31
 key j; key j; key j; key h; set_cell nick
 key k; key d; key d
 key o; set_cell city; key l; set_cell Paris
-check "（准备）hash:user 四处改动都标出来了：查询条上保存按钮的计数是 4" eval 'e2e_text 36 96 4 | grep -qE "PAGE 1/1 +4( |$)"' || e2e_text 36 96 4
+check "（准备）hash:user 四处改动都标出来了：查询条上保存按钮的计数是 4" eval 'e2e_text 36 96 4 | grep -qE "PAGE 1/1[^0-9]+4([^0-9]|$)"' || e2e_text 36 96 4
 key C-s; saved
 check "hash:user：age 改成 31、name 改名 nick（HDEL + HSET）、meta 删掉、新增 city = Paris：一次写回后 HGETALL 是 age 31 / email / nick Ann / city Paris，没有 name、meta" eval '[[ $(rc hget hash:user age) == 31 && $(rc hget hash:user nick) == Ann && $(rc hget hash:user city) == Paris && $(rc hexists hash:user name) == 0 && $(rc hexists hash:user meta) == 0 && $(rc hlen hash:user) == 4 ]]' || hall hash:user
 check "写回之后表格重读：四行 age city email nick（按 field 排），没有标记了" eval 'rowsare "field value
