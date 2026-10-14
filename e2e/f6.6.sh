@@ -115,6 +115,6 @@ check "再输入替换选区：select 7" eval '[[ $(cl 1) == "select 7" || $(cl 
 mkdir -p "$D/k-novim/sqlmux" "$D/k-vim/sqlmux"; printf 'vim = false\n' >"$D/k-novim/sqlmux/config.toml"
 kk() { XDG_CONFIG_HOME=$D/$1 XDG_STATE_HOME=$D/st XDG_DATA_HOME=$D/st "$E2E_BIN" keys; }
 check "vim = false：sqlmux keys 里 grid 的 ↓ 是 grid.down、PgDn 是 grid.page.next、Delete 是 grid.row.delete，query 的 C-e 是 query.run，↵ 没有绑定" eval 'k=$(kk k-novim); grep -qE "\| grid \| .(↓|<Down>|Down). \| grid.down" <<<"$k" && grep -q "grid.page.next" <<<"$k" && grep -q "grid.row.delete" <<<"$k" && grep -qE "\| query \| .(C-e|<C-e>). \| query.run" <<<"$k" && ! grep -qE "\| query \| .(↵|<CR>). \|" <<<"$k" || { grep -E "grid.down|query.run" <<<"$k"; false; }'
-check "vim = true（默认）：这些都不在" eval 'k=$(kk k-vim); ! grep -qE "\| grid \| .(↓|<Down>|Down). \|" <<<"$k" && ! grep -qE "\| query \| .(C-e|<C-e>). \| query.run" <<<"$k"'
+check "vim = true（默认）：方向键两种模式都有（F16.6），PgDn、Delete 和 query 的 C-e 不在" eval 'k=$(kk k-vim); grep -qE "\| grid \| .(↓|<Down>|Down). \| grid.down" <<<"$k" && grep -qE "\| tree \| .(→|<Right>|Right). \| tree.expand" <<<"$k" && ! grep -q "grid.page.next" <<<"$k" && ! grep -q "grid.row.delete" <<<"$k" && ! grep -qE "\| query \| .(C-e|<C-e>). \| query.run" <<<"$k"'
 
 e2e_done
