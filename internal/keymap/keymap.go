@@ -184,6 +184,13 @@ func New(userLeader string, vim bool, timeoutlen int, user []Line) (*Map, []Prob
 			ks, _ := Parse(b.Key)
 			m.novim[b.Table+" "+String(ks)] = true
 		}
+		for _, t := range []string{"keys.grid", "keys.tree"} { // the arrow keys are in default.toml since F16.6, the hints still name them first
+			for _, b := range m.tables[t] {
+				if len(b.Keys) == 1 && slices.Contains([]Key{"<Up>", "<Down>", "<Left>", "<Right>"}, b.Keys[0]) {
+					m.novim[t+" "+String(b.Keys)] = true
+				}
+			}
+		}
 	}
 	m.defaults = map[string][]Binding{}
 	for t, bs := range m.tables {

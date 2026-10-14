@@ -128,7 +128,7 @@ func TestSidebarHintRow(t *testing.T) {
 	}{
 		{160, "", "│ j/k move · ↵ open"},
 		{160, `"<CR>" = ""`, "│ j/k move"},
-		{160, `"j" = ""`, "│ ↵ open"},
+		{160, "\"j\" = \"\"\n\"<Down>\" = \"\"", "│ ↵ open"}, // the arrow key is the action's too since F16.6
 	} {
 		if got := strings.TrimRight(row(configured(t, c.w, 45, "[keys.tree]\n"+c.bind)), " │"); got != c.want {
 			t.Errorf("w=%d %s: %q, want %q", c.w, c.bind, got, c.want)

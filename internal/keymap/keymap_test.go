@@ -625,9 +625,10 @@ func TestMapNext(t *testing.T) {
 	}
 }
 
-// vim = false lays default-novim.toml over the defaults: the arrow keys in
-// the grid and the tree, PgUp, PgDn and Delete in the grid, ↵ unbound in a
-// query and C-e running it; with vim on none of it is there (§6.9, F6.6b).
+// vim = false lays default-novim.toml over the defaults: PgUp, PgDn and Delete
+// in the grid, ↵ unbound in a query and C-e running it; with vim on none of it
+// is there. The arrow keys of the grid and the tree are in both (§6.9, F6.6b,
+// F16.6).
 func TestNoVimLayer(t *testing.T) {
 	plainQuery := Context{Focus: []string{"query"}, Pane: "query", Mode: Insert, Plain: true}
 	off, on := mustLoad(t, ""), loadNoVim(t, "")
@@ -636,14 +637,18 @@ func TestNoVimLayer(t *testing.T) {
 		in      string
 		off, on []string
 	}{
-		{grid, "<Down>", []string{"keys <Down>"}, []string{"grid.down"}},
-		{grid, "<Right>", []string{"keys <Right>"}, []string{"grid.right"}},
+		{grid, "<Down>", []string{"grid.down"}, []string{"grid.down"}},
+		{grid, "<Right>", []string{"grid.right"}, []string{"grid.right"}},
+		{grid, "<Left>", []string{"grid.left"}, []string{"grid.left"}},
+		{grid, "<Up>", []string{"grid.up"}, []string{"grid.up"}},
 		{grid, "<PageDown>", []string{"keys <PageDown>"}, []string{"grid.page.next"}},
 		{grid, "<PageUp>", []string{"keys <PageUp>"}, []string{"grid.page.prev"}},
 		{grid, "<Del>", []string{"keys <Del>"}, []string{"grid.row.delete"}},
 		{grid, "j", []string{"grid.down"}, []string{"grid.down"}}, // the letters stay
-		{tree, "<Up>", []string{"keys <Up>"}, []string{"tree.up"}},
-		{tree, "<Left>", []string{"keys <Left>"}, []string{"tree.collapse"}},
+		{tree, "<Up>", []string{"tree.up"}, []string{"tree.up"}},
+		{tree, "<Left>", []string{"tree.collapse"}, []string{"tree.collapse"}},
+		{tree, "<Down>", []string{"tree.down"}, []string{"tree.down"}},
+		{tree, "<Right>", []string{"tree.expand"}, []string{"tree.expand"}},
 		{plainQuery, "<C-e>", []string{"keys <C-e>"}, []string{"query.run"}},
 		{plainQuery, "<CR>", []string{"keys <CR>"}, []string{"keys <CR>"}},
 		{query, "<CR>", []string{"query.run"}, []string{"keys <CR>"}},
@@ -655,7 +660,7 @@ func TestNoVimLayer(t *testing.T) {
 			t.Errorf("vim off, %v %q: got %v, want %v", c.ctx.Focus, c.in, actions(got), c.on)
 		}
 	}
-	// the hints name the layer's keys first, and the vim ones without it
+	// the hints name the layer's keys and the arrows first, and the vim ones without it
 	for _, c := range []struct{ action, scope, off, on string }{
 		{"grid.down", "grid", "j", "↓"}, {"tree.up", "tree", "k", "↑"}, {"grid.page.next", "grid", "]", "PageDown"}, {"grid.row.delete", "grid", "dd", "Del"},
 	} {
@@ -671,7 +676,7 @@ func TestNoVimLayer(t *testing.T) {
 	if got, _ := press(t, NewResolver(m), grid, "<PageDown>"); !reflect.DeepEqual(actions(got), []string{"grid.bottom"}) {
 		t.Errorf("rebound: %v", actions(got))
 	}
-	if toml := on.TOML(map[string]string{}); !strings.Contains(toml, "# \"<Down>\" = \"grid.down\"") || !strings.Contains(toml, "# \"<C-e>\" = \"query.run\"") {
+	if toml := on.TOML(map[string]string{}); !strings.Contains(toml, "# \"<Down>\" = \"grid.down\"") || !strings.Contains(toml, "# \"<C-e>\" = \"query.run\"") || !strings.Contains(off.TOML(map[string]string{}), "# \"<Down>\" = \"grid.down\"") {
 		t.Errorf("the export has them as defaults:\n%s", toml)
 	}
 	if !strings.Contains(on.TOML(nil), "query 的编辑器，只有 Ctrl 开头的键生效，C-h 除外") || strings.Contains(off.TOML(nil), "query 的编辑器") {
