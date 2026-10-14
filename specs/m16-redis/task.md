@@ -4,6 +4,8 @@
 - **目标**：Redis 支持的第一版，做到能日常用：连接、按命名空间分的树、六种类型加 RedisJSON 的键 tab、一行一条命令的控制台、来自服务器的补全和签名提示。用户体验过初版之后再定第二轮（Pub/Sub、MONITOR、SLOWLOG、Cluster / Sentinel、内存分析，候选 M17）。
 - **范围**（设计 2026-10-14 已写进各章，以它们为准，下面的「已定的方向」是当时的记录）：tech-design §4（`internal/db/redis`、go-redis v9）、§5（tab 的新类型 `key`；`db.Source` 接口缝）、§7.7（类型图标）、§7.8（「Redis 的树」）、§8.7（连接、SCAN、键 tab 的数据源表）、§9.8（控制台的词法、高亮、补全）、§11（「Redis 控制台」的回复摆法）、§13（只读与危险命令来自 `COMMAND INFO`）、§14（`redis://` DSN、`delimiter`、`[redis]` 段、layout 的 `key` tab）、§15（redis-stack 容器、`SQLMUX_TEST_REDIS`）。
 - **依赖**：M15 passed（F15.3 的签名提示浮层在这里和 Redis 共用；M14 F14.2 的历史）。
+- **二进制**：go-redis v9.23.0 让 strip 后的二进制 27.1 → 34.7 MB（+7.6；v9.5.4 是 +3.8，但少 DialerRetries 且是旧版）。决策者 2026-10-14 定：不降版本，接受；以后有人嫌大再看能不能用 build tag 去掉没用的部分。
+- **环境**：这台机器的 docker 拉不到任何镜像（代理报 size validation，f11.2 的 brew 同一个原因），compose 的 redis / redis-seed 和 ci.yml 的 redis service 只能靠 CI 验；本地集成测试用 brew 的 redis-server（56379，灌同一份 seed），没有 RedisJSON，JSON 类型以 CI 为准。
 - **审查节点**（worker 2026-10-14 起草、决策者定）：1 = F16.6 + F16.0（F16.6 是一行键位、先做；F16.0 接口缝单独成批：不改任何行为，全量 e2e 一条不改就是验收）；2 = F16.1 + F16.2；3 = F16.3；4 = F16.4 + F16.5。
 
 已定的方向（2026-10-11，用户同意；决策时参考了 RedisInsight 的 Browse 和 DataGrip 的 Redis 支持，目标是比它们展示更清楚、JSON 更友好、键盘能走完）：
@@ -72,7 +74,7 @@
 - [ ] b. SCAN 预算：展开 db 时在 Meta 上 `SCAN 0 COUNT 1000` 循环到 `[redis] scan_keys`，每批 pipeline `TYPE` 取类型；db 节点尾注 `DBSIZE`，超预算时「已扫描 10000 / 1.2M，用 / 过滤」；命名空间尾注 = 下面扫到的键数；永远不用 KEYS。
 - [ ] c. 侧栏 `/` 过滤在 Redis 连接上走服务端 `SCAN MATCH`（不含 `*` 两头补 `*`），同预算；不走本地过滤。
 - [ ] d. 图标名 `redis` 和 `str` / `hash` / `list` / `set` / `zset` / `stream` / `json` 进 `[icon]` 的名字表（名字写错启动报错那张），颜色用 §7.7 指定的现有主题键。
-- [ ] e. 操作：键 删除、改名（RENAME，目标存在时确认覆盖）、设 TTL；命名空间节点删除 = 不设预算扫全、确认「删除 N 个键？」后每批 500 个 `UNLINK`（走 confirm_dangerous），`C-c` 能停、toast 已删数量；`tree.refresh` 重扫光标所在 db。
+- [ ] e. 操作：键 删除（确认「删除键 <名>？」，菜单「删除…」和 `dd` 都问，走 confirm_dangerous）、改名（RENAME，目标存在时确认覆盖）、设 TTL；命名空间节点删除 = 不设预算扫全、确认「删除 N 个键？」后每批 500 个 `UNLINK`（走 confirm_dangerous），`C-c` 能停、toast 已删数量；`tree.refresh` 重扫光标所在 db。
 - [ ] f. layout / state 的树展开状态带 db 和命名空间；命令面板的「表」范围在 Redis 连接上不列键。
 
 **验收**
