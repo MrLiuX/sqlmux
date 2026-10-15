@@ -198,7 +198,7 @@ func (a *App) jumpScan() {
 				view, body := a.queryView(p, queryOf(p))
 				rect = view.TextArea(body)
 			case jsonViewOf(p) != nil: // a JSON view's text too (F16.8)
-				rect = ui.Query{Lines: jsonViewOf(p).ed.Lines()}.TextArea(a.jsonArea(p))
+				rect = a.jsonTextArea(p, jsonViewOf(p))
 			}
 		}
 		for y := rect.Min.Y; y < rect.Max.Y; y++ {

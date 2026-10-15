@@ -242,6 +242,19 @@ func TestJSONViewYank(t *testing.T) {
 	if !slices.ContainsFunc(a.paletteItems(), func(it paletteItem) bool { return it.kind == itemCommand && it.id == "json.yank" }) {
 		t.Error("the palette has no json.yank")
 	}
+	feed(t, a, "<Esc>")
+	// in VISUAL the Y is vim's: the lines selected, not the whole text
+	feed(t, a, "ggVj")
+	a.flash = nil
+	if got, ok := clipText(keys(t, a, "Y")); ok {
+		t.Errorf("VISUAL Y copied %q", got)
+	}
+	if f := a.flash; f == nil || f.text.Mode != ui.SelLines || f.text.From.Line != 0 || f.text.To.Line != 1 || jsonViewOf(p).ed.Mode() != editor.Normal {
+		t.Errorf("VISUAL Y: flash %+v", a.flash)
+	}
+	if feed(t, a, "ggVs"); a.jump == nil { // and the s is the jump's
+		t.Error("s in VISUAL does not jump")
+	}
 }
 
 func TestGoldenJSONView160x45(t *testing.T) {

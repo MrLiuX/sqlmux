@@ -735,6 +735,10 @@ func (a *App) dispatch(out []keymap.Result) tea.Cmd {
 				cmds = append(cmds, a.queryKey(a.focused(), c, "s"))
 				continue
 			}
+			if jv := jsonViewOf(a.focused()); r.Action == "json.yank" && jv != nil && vimMode(jv.ed.Mode()) == keymap.Visual { // so has a JSON view its own Y (F16.9)
+				cmds = append(cmds, a.jsonKey(a.focused(), "Y"))
+				continue
+			}
 			cmds = append(cmds, a.run(r.Action, r.Count))
 			continue
 		}

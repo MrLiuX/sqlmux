@@ -399,7 +399,7 @@ func count(keys []string) (int, []string) {
 var changes = map[string]bool{"i": true, "a": true, "I": true, "A": true, "o": true, "O": true, "R": true, "p": true, "P": true,
 	"J": true, "~": true, "r": true, "u": true, "<C-r>": true, "U": true}
 
-var visualMoves = map[string]bool{"<Esc>": true, "v": true, "V": true, "<C-v>": true, "<C-q>": true, "o": true, "O": true, "gv": true, "y": true}
+var visualMoves = map[string]bool{"<Esc>": true, "v": true, "V": true, "<C-v>": true, "<C-q>": true, "o": true, "O": true, "gv": true, "y": true, "Y": true}
 
 // edits is whether c would change the text.
 func (e *Editor) edits(c cmd) bool {
