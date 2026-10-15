@@ -149,7 +149,7 @@
 - [ ] 单测：连发多次移动后 `View()` 的 `Cursor` 等于编辑器光标所在的屏幕位置，走到 `reuse` 路径也一样。
 - [ ] e2e：JSON 视图里连发 30 个 `j` 后终端光标和 `编辑器光标` 的行列一致；query 编辑器同一检查。
 
-## F16.8 JSON 视图的 `s` flash 式跳转 · 状态：todo
+## F16.8 JSON 视图的 `s` flash 式跳转 · 状态：passed（ea91858；e2e 09213a7）
 
 - **依赖**：F10.8
 - **涉及**：`internal/app`（jump 的可跳区域）、`internal/keymap/default.toml`
@@ -162,7 +162,7 @@
 - [ ] golden：JSON 视图的 JUMP 遮罩一屏。
 - [ ] e2e：`s` + 两个字母跳到某个键名；`esc` 退出光标不动。
 
-## F16.9 JSON 视图的 `Y` 复制整个 JSON · 状态：todo
+## F16.9 JSON 视图的 `Y` 复制整个 JSON · 状态：passed（ea91858；e2e 09213a7）
 
 - **依赖**：F14.5
 - **涉及**：`internal/app`、`internal/keymap/default.toml`、i18n
@@ -174,7 +174,7 @@
 - [ ] 单测：`Y` 写入的内容等于视图文本；mutation。
 - [ ] e2e：假 pbcopy 收到整段 JSON（`e2e` 现有的假 pbcopy 做法）。
 
-## F16.10 Redis 的 db 节点按号排 · 状态：todo
+## F16.10 Redis 的 db 节点按号排 · 状态：passed（ea91858；e2e 09213a7）
 
 - **依赖**：F16.2
 - **涉及**：`internal/app`（redistree）
