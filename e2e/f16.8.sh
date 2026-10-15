@@ -121,6 +121,31 @@ assert [o[\"id\"] for o in a] == list(range(101, 201)), [o[\"id\"] for o in a][:
 # 表格里的 Y 还是记录
 key Escape; sleep 0.5; rm -f "$E2E_TMP/clipboard"; key Y; sleep 0.5
 check "回表格后 Y 还是复制那一条记录（一个 JSON 对象，以 { 开头，只有 id 101 那条），不是整页数组" eval '[[ "$(clip)" == "{"* && "$(clip)" != *"\"id\": 102"* && "$(clip)" == *"\"id\": 101"* ]]' || clip
+# ---- 审查时定的（docs 57f0b40）：VISUAL 下 Y 是 vim 的、s 仍然跳转；行号栏不参与匹配；两个 pane 的 JSON 视图互跳
+key Escape; sleep 0.3
+open_table t_user; wait_for 8 settled
+in_json || { key g j; sleep 1; }
+key g g; key j; key j; key l
+rm -f "$E2E_TMP/clipboard"; key V; key j; key Y; sleep 0.5
+check "VISUAL（V j）下 Y 是 vim 的按行复制：不写系统剪贴板（假 pbcopy 什么都没收到），回 NORMAL，还在 JSON 视图" eval '[[ -z $(clip) ]] && mode_is NORMAL && in_json' || { clip | head -3; bar; }
+key g v
+check "gv 回到原来的选区模式：V-LINE（照 nvim 的 restore_visual_mode）" mode_is V-LINE
+key Escape; key v; key l; key l; key Y; sleep 0.4; key g v
+check "v l l Y 之后 gv：回到 VISUAL（字符选区，不是整行），剪贴板仍然是空的" eval 'mode_is VISUAL && [[ -z $(clip) ]]'
+key Escape; sleep 0.2
+before=$(e2e_plain | sed -n 4,20p | cut -c36-100); key p; sleep 0.3
+check "只读视图里 p 不改内容（行 1–17 一样）" eval '[[ $(e2e_plain | sed -n 4,20p | cut -c36-100) == "$before" ]] && in_json'
+key g g; key v; key j; key s
+check "VISUAL 下 s 也跳转（spec：只读视图里 vim 的 s 没用）：进 JUMP" jump_is
+e2e_type name; sleep 0.4; e2e_type s; sleep 0.5
+check "按标签：光标落在第 11 行 name 的 n 上（44,13），退出 JUMP 和 VISUAL 回 NORMAL" eval 'mode_is NORMAL && [[ $(cur) == 44,13 ]]' || { cur; bar; }
+key g g; key s; e2e_type 1; sleep 0.5
+check "s 1：行号栏里的数字 1 不参与匹配（35–39 列没有标签），文字里的 1（\"id\": 1、\"active\": 1）有" eval '! e2e_bgcells "$WARN" | awk "\$1 >= 35 && \$1 <= 39 { f = 1 } END { exit !f }" && e2e_bgcells "$WARN" | awk "\$1 >= 40 && \$1 < 98 { n++ } END { exit !(n >= 3) }"' || e2e_bgcells "$WARN" | tr '\n' ';'
+key Escape; sleep 0.3
+two_panes; key C-l; open_table t_order; wait_for 8 settled; key g j; sleep 1; wait_for 5 settled; key C-h; sleep 0.3
+check "（准备）① 和 ② 都开着 JSON 视图，焦点在 ①" eval 'focus_is 1 && in_json'
+jump_to queued 1
+check "两个 pane 的 JSON 视图：① 里 s + queued，标签在 ② 的文字上；跳过去：焦点到 ②，光标落在匹配的第一个字符上（jump_to 里比过）" eval 'focus_is 2 && mode_is NORMAL && [[ $(cur) == "$WANT" ]]' || { cur; focused; }
 # 键位
 kk() { XDG_CONFIG_HOME=$D/$1 XDG_STATE_HOME=$D/st XDG_DATA_HOME=$D/st "$E2E_BIN" keys; }
 mkdir -p "$D/k/sqlmux"; K=$(kk k)
