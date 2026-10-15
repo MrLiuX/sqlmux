@@ -88,11 +88,11 @@ _e2e_kill
 
 # ---- DSN 里的 db：空的 db7 也列出来（DSN 指定的），?db=3 也认；每个 db 的树里是它自己的键
 sstart d7
-check "DSN 指向空的 db7：树里 db7（DSN 的，第一个）和有键的 db0、db1、db3 都在，其余按号排，连着的是 db7" eval '[[ $(dbrows) == "db7 db0 db1 db3 " ]]' || { dbrows; e2e_plain | sed -n 3,12p | cut -c1-40; }
+check "DSN 指向空的 db7：树里有键的 db0、db1、db3 和 DSN 的 db7 都在，按号排（F16.10：db7 不再排第一），连着的是 db7" eval '[[ $(dbrows) == "db0 db1 db3 db7 " ]]' || { dbrows; e2e_plain | sed -n 3,12p | cut -c1-40; }
 check "db7 是空的：没有键，尾注 0；服务端上的客户端在 db=7" eval '(( $(dbclients 7) >= 2 )) && [[ $(dbrow db7) == "▾ db7 0" ]]' || dbrow db7
 _e2e_kill
 sstart q3
-check "?db=3：连着 db3，树里 db3 在最前，里面是 marker3；地址块还是 q3 · localhost:<端口>" eval '[[ $(dbrows) == "db3 db0 db1 " ]] && e2e_plain | grep -q marker3 && (( $(dbclients 3) >= 2 ))' || { dbrows; e2e_plain | sed -n 3,12p | cut -c1-40; }
+check "?db=3：连着 db3，树里按号 db0 db1 db3、连着的是 db3，里面是 marker3；地址块还是 q3 · localhost:<端口>" eval '[[ $(dbrows) == "db0 db1 db3 " ]] && e2e_plain | grep -q marker3 && (( $(dbclients 3) >= 2 ))' || { dbrows; e2e_plain | sed -n 3,12p | cut -c1-40; }
 _e2e_kill
 
 # ---- 用户名密码（ACL）、没有密码、错的密码、连不上
