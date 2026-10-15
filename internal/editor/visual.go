@@ -178,6 +178,12 @@ func init() {
 		"d":  op("d"), "x": op("d"),
 		"c": op("c"), "s": op("c"),
 		"y": op("y"),
+		"Y": func(e *Editor, c cmd) { // the lines, a block as y has it (v_visop)
+			if e.mode != VisualBlock {
+				e.mode = VisualLine
+			}
+			e.visualOp("y", c)
+		},
 		">": op(">"), "<": op("<"),
 		"u": op("gu"), "U": op("gU"), "~": op("g~"),
 		"J":  op("J"),
@@ -191,7 +197,7 @@ func init() {
 var (
 	inBlock = map[string]bool{
 		"<Esc>": true, "v": true, "V": true, "<C-v>": true, "<C-q>": true, "o": true, "O": true, "gv": true,
-		"d": true, "x": true, "c": true, "y": true, ">": true, "<": true, "u": true, "U": true, "~": true,
+		"d": true, "x": true, "c": true, "y": true, "Y": true, ">": true, "<": true, "u": true, "U": true, "~": true,
 		"gc": true, "gq": true, "I": true, "A": true, "r": true,
 	}
 	blockOnly = map[string]bool{"I": true, "A": true, "r": true}

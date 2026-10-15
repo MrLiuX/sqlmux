@@ -71,3 +71,19 @@ func TestClipboardRegister(t *testing.T) {
 		t.Errorf(`the unnamed register after "+yy is "+'s: %q`, e.Lines())
 	}
 }
+
+// Y in VISUAL yanks the lines, a block as y does (v_visop).
+func TestVisualY(t *testing.T) {
+	for ks, want := range map[string]string{`wvl"+Y`: "one two\n", `Vj"+Y`: "one two\nthree\n", `0<C-v>jl"+Y`: "on\nth"} {
+		e := New("one two\nthree\nfour")
+		var clip *string
+		for _, k := range keys(t, ks) {
+			if f := e.Feed(k); f.Clip != nil {
+				clip = f.Clip
+			}
+		}
+		if clip == nil || *clip != want || e.Mode() != Normal {
+			t.Errorf("%s: %v, mode %v", ks, clip, e.Mode())
+		}
+	}
+}
