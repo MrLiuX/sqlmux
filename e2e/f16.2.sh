@@ -48,8 +48,8 @@ for l in sys.stdin:
     if not l.strip(): continue
     ind = len(l) - len(l.lstrip())
     if on and ind <= 2: break
-    if not on and re.match(r'^[▸▾] +db\\d+', l.strip()): on = True
-    if on: print(re.sub(r' +', ' ', l.strip()))"; }   # the rows of the first connection's db nodes and what is under them, spaces squeezed
+    if not on and re.match(r'^▾ +db\\d+', l.strip()): on = True
+    if on: print(re.sub(r' +', ' ', l.strip()))"; }   # the rows from the first open db node (the DSN's; F16.10 sorts the dbs by number, so it is not always the first) of the first connection and what is under them, spaces squeezed
 nth_row() { side | python3 -c "
 import re, sys
 n = int(sys.argv[2])
@@ -70,7 +70,7 @@ for l in sys.stdin:
     if on and ind <= 2: break
     if on and ind == 5 and t[0] in '▸▾': n += int(re.search(r'(\\d+)\$', t).group(1))
     if on and ind == 7 and t[0] not in '▸▾' and not t.startswith('已扫描'): n += 1
-    if not on and re.match(r'^[▸▾] +db\\d+', t): on = True
+    if not on and re.match(r'^▾ +db\\d+', t): on = True
 print(n)"; }   # how many keys the first db's top level stands for: the number after each namespace, one for each key on its own
 expand() { click_row "^[▸▾] +$1( |\$)" "${2:-1}"; }   # click the Nth node whose name is $1
 
