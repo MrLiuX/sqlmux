@@ -212,7 +212,24 @@ func TestJumpInJSONView(t *testing.T) {
 	if a.jump != nil || jv.ed.Cursor().Line != 3+2*15 || jv.ed.Cursor().Col != 5 {
 		t.Errorf("a label: jump %v, cursor %+v", a.jump != nil, jv.ed.Cursor())
 	}
-	feed(t, a, "ggsstat<Esc>")
+	feed(t, a, "30jsstat<CR>") // from the middle, the nearest of the three
+	if jv.ed.Cursor() != (editor.Pos{Line: 33, Col: 5}) {
+		t.Errorf("↵ from line 30: cursor %+v", jv.ed.Cursor())
+	}
+	feed(t, a, "ggs1") // the line numbers are not text to jump to
+	text := a.jsonTextArea(a.focused(), jv)
+	n := 0
+	for _, m := range a.jump.matches {
+		if m.target.Kind == ui.KindText && m.target.Pane == a.focused().ID {
+			if n++; m.at.X < text.Min.X {
+				t.Errorf("a match in the gutter: %+v", m.at)
+			}
+		}
+	}
+	if n == 0 {
+		t.Error("no match of 1 in the text")
+	}
+	feed(t, a, "<Esc>ggsstat<Esc>")
 	if a.jump != nil || jv.ed.Cursor().Line != 0 || jsonViewOf(a.focused()) == nil {
 		t.Errorf("esc: jump %v, cursor %+v", a.jump != nil, jv.ed.Cursor())
 	}

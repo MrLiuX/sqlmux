@@ -172,10 +172,16 @@ func (a *App) jsonSync(p *Pane) *jsonView {
 	return jv
 }
 
+// jsonTextArea is where the text of pane p's JSON view is, its area less the
+// gutter.
+func (a *App) jsonTextArea(p *Pane, jv *jsonView) uv.Rectangle {
+	return ui.Query{Lines: jv.ed.Lines()}.TextArea(a.jsonArea(p))
+}
+
 // jsonSize gives the editor the size of its area, which H M L, C-d and the
 // scrolling go by.
 func (a *App) jsonSize(p *Pane, jv *jsonView) {
-	a.sizeEditor(jv.ed, ui.Query{Lines: jv.ed.Lines()}.TextArea(a.jsonArea(p)))
+	a.sizeEditor(jv.ed, a.jsonTextArea(p, jv))
 }
 
 // viewJSON is grid.view.json on the focused table or result: its JSON view
@@ -247,7 +253,7 @@ func (a *App) jsonAt(id int, p uv.Position) (*jsonView, int, int) {
 		return nil, 0, 0
 	}
 	a.jsonSize(pane, jv)
-	text := ui.Query{Lines: jv.ed.Lines()}.TextArea(a.jsonArea(pane))
+	text := a.jsonTextArea(pane, jv)
 	return jv, jv.ed.Top() + p.Y - text.Min.Y, max(jv.ed.Left()+p.X-text.Min.X, 0)
 }
 
