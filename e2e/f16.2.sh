@@ -238,7 +238,7 @@ expand str; expand app; expand users
 key C-h; key g g; key j; key R; sleep 2
 check "展开 str、app → users 之后在 db0 上 R：重扫完它们还是展开的（展开状态保留）" eval 'tree | grep -qx "▾ str 7" && tree | grep -qx "▾ users 3" && tree | grep -qx "▾ app 6"' || tree
 expand hash
-click_row '^[▸▾] +db5( |$)' 1; sleep 2
+click_row '^[▸▾] +db5( |$)' 1; wait_for 15 eval 'tree | grep -qx "▸ hash 1"'   # db5 has 12k keys: the scan is slow when four scripts run at once
 check "db0 的 hash 展开着；点开 db5（它也有一个命名空间 hash）：db5 的 hash 是收着的，两个 db 的同名命名空间各管各的" eval 'tree | grep -qx "▾ hash 2" && tree | grep -qx "▸ hash 1"' || tree
 y=$(nth_row '^[▸▾] +hash( |$)' 2); e2e_click 14 "$y"; sleep 0.5
 check "展开 db5 的 hash（hash:big）：db0 的 hash 没有跟着变（两个都是 ▾）" eval '[[ $(tree | grep -c "^▾ hash") == 2 ]]' || tree
