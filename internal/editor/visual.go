@@ -179,10 +179,12 @@ func init() {
 		"c": op("c"), "s": op("c"),
 		"y": op("y"),
 		"Y": func(e *Editor, c cmd) { // the lines, a block as y has it (v_visop)
-			if e.mode != VisualBlock {
+			was := e.mode
+			if was != VisualBlock {
 				e.mode = VisualLine
 			}
 			e.visualOp("y", c)
+			e.lastVisual.mode = was // gv selects as it was (restore_visual_mode)
 		},
 		">": op(">"), "<": op("<"),
 		"u": op("gu"), "U": op("gU"), "~": op("g~"),

@@ -86,4 +86,13 @@ func TestVisualY(t *testing.T) {
 			t.Errorf("%s: %v, mode %v", ks, clip, e.Mode())
 		}
 	}
+	for ks, mode := range map[string]Mode{"wvjY": Visual, "Vj\"+Y": VisualLine, "w<C-v>jlY": VisualBlock} { // gv comes back as it was
+		e := New("one two\nthree\nfour")
+		for _, k := range keys(t, ks+"gv") {
+			e.Feed(k)
+		}
+		if e.Mode() != mode {
+			t.Errorf("%sgv: mode %v, want %v", ks, e.Mode(), mode)
+		}
+	}
 }
