@@ -1,0 +1,22 @@
+# Demo connections: the seed databases of docker-compose.yml (PostgreSQL 55432, MySQL 53306),
+# the SQLite copy of the seed next to this directory, and a redis-server on 56379 seeded with testdata/seed/redis.txt.
+[[connection]]
+name     = "play"
+engine   = "postgres"
+dsn      = "postgres://sqlmux@localhost:55432/sqlmux_play?sslmode=disable"
+password = "sqlmux"
+
+[[connection]]
+name   = "mysql"
+engine = "mysql"
+dsn    = "mysql://play:play@localhost:53306/play"
+
+[[connection]]
+name   = "sqlite"
+engine = "sqlite"
+dsn    = "play.db"
+
+[[connection]]
+name   = "redis"
+engine = "redis"
+dsn    = "redis://127.0.0.1:56379/2"

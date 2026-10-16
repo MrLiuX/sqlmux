@@ -1,0 +1,5 @@
+# sqlmux config for the demo recordings (assets/demo). The UI is English by default.
+theme  = "ristretto"
+border = "rounded"
+[tree]
+width = 34
