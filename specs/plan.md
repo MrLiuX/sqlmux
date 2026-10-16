@@ -28,6 +28,7 @@
 - 2026-10-16 快速 SQL（`;`）在 Redis 连接上跑命令：面板的 SQL 范围现在在 Redis 连接上没有反应（M16 定的「入口隐藏」），用户要 `;` 后直接打一条 Redis 命令、回复照控制台的规则摆成表；只读 / 危险判定和补全同控制台（§9.8、§13）。
 - 2026-10-16 录演示时发现的小 bug（video-producer 抽帧看到，决策者没复现第二条）：新建 session 时右下角的「Connecting to sqlite…」toast 不消失，切回原 session 后还在；命令面板的 session 行写「1 windows」（英文复数）。签名提示浮层盖住光标上一行是设计（§9.8 / F15.3），不算。
 - 2026-10-16 oss 做首页 README 时发现的（d39d737）：① brew formula（`.github/scripts/tap-formula.sh`）和 npm 包（`npm/sqlmux/package.json`）的描述还是「for PostgreSQL and MySQL」，要列四种引擎；② `go install …@latest` 装的 `--version` 显示 `(none, unknown)`（模块构建没有 vcs 信息），便宜就修；③ `sqlmux keys --format toml` 的注释把 F8.23、M5、§6.6 这类内部编号露给用户了，生成器里去掉（docs/keys.py 现在自己剥）；④ 命令行 `sqlmux redis://host:6379/0` 报 unknown URL，F14.1 只认 postgres:// mysql:// 和文件路径，Redis 用户第一反应就是这么试，加上。
+- 2026-10-16 用户：一个 pane 开到七八个 tab 后 tab 栏放不下，后面的整个看不见（截图：第 6 个只剩 `6:list:d`，第 8 个没了）。用户给的选项：自动换行 / 翻页 / 一个按钮展开多余的 tab 列表。决策者倾向 tab 栏横向滚动、当前 tab 始终可见（同浏览器和 tmux 的 window 列表）：放不下时两端画 dim 的 `‹N` / `N›`（N 是看不见的 tab 数，可点击，各滚一屏），`gt` / `gT` / 点击 / `{N}gt` 切过去时自动滚到当前 tab，`+` 和右侧键位提示照旧；不换行（吃内容区一行）、不另开翻页态；命令面板的 `#` 范围本来就列全部 tab。M17 时写进 §7.8「tab 栏」。
 - M16 定下的第二轮候选：Pub/Sub、MONITOR、Cluster、格子里的 JSON 按格高亮、string 键是 JSON 时直接开值编辑器（见 m16-redis/task.md 末尾）。
 
 ## 发布
