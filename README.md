@@ -28,6 +28,8 @@ brew install kackerx/tap/sqlmux
 | Go 1.26+ | `go install github.com/kackerx/sqlmux/cmd/sqlmux@latest` |
 | Binaries | macOS and Linux, amd64 and arm64, on the [Releases page](https://github.com/kackerx/sqlmux/releases), with `checksums.txt` |
 
+The icons come from a [Nerd Font](https://www.nerdfonts.com/). Without one they show up as boxes: put `icons = "ascii"` in `~/.config/sqlmux/config.toml`.
+
 Then open something:
 
 ```sh
