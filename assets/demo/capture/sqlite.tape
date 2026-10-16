@@ -33,9 +33,9 @@ Sleep 800ms
 Enter
 Sleep 1500ms
 Type "]"
-Sleep 1s
-Type "["
-Sleep 800ms
+Sleep 1200ms
+Type "]"
+Sleep 1200ms
 Type "gj"
 Sleep 2s
 Type "s"
