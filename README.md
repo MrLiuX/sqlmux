@@ -11,6 +11,8 @@ PostgreSQL, MySQL, SQLite and Redis. vim keys everywhere, the mouse too.
 
 <img src="assets/demo.gif" alt="sqlmux: a SQLite table with a WHERE, the JSON view, the command palette, quick SQL, split panes and a second session">
 
+[Watch the 68-second tour](https://github.com/kackerx/sqlmux/releases/download/v0.5.0/sqlmux-v0.5.0-tour.mp4) (MP4): a SQLite table, the palette and quick SQL, split panes and sessions, Redis keys and the console.
+
 </div>
 
 ## Install
