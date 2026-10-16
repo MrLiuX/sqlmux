@@ -1,0 +1,283 @@
+{
+  "version": 1,
+  "historyId": "67916cf3-0041-472d-92de-721534a0c0ea",
+  "currentRevision": "ac6e3044-90cd-48c6-857a-c8a5cf060a33",
+  "pendingChanges": false,
+  "files": {
+    "AGENTS.md": {
+      "hash": "1d4f0c8ca2507b94fd7c9df709fff01416adbd51a0f922b9d6ed2f40129147d5",
+      "content": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/1d/1d4f0c8ca2507b94fd7c9df709fff01416adbd51a0f922b9d6ed2f40129147d5"
+    },
+    "CLAUDE.md": {
+      "hash": "1d4f0c8ca2507b94fd7c9df709fff01416adbd51a0f922b9d6ed2f40129147d5",
+      "content": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/1d/1d4f0c8ca2507b94fd7c9df709fff01416adbd51a0f922b9d6ed2f40129147d5"
+    },
+    "footage/redis.mp4": {
+      "hash": "837faf641b4904bcdf660fdd1351df105dad26df675615f4d9a77b20e7f6f987",
+      "content": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/83/837faf641b4904bcdf660fdd1351df105dad26df675615f4d9a77b20e7f6f987"
+    },
+    "footage/sqlite.mp4": {
+      "hash": "1b3d45e34b6e24177f505f21400473db31d8617219f61177fc2ccc0bbd87ea21",
+      "content": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/1b/1b3d45e34b6e24177f505f21400473db31d8617219f61177fc2ccc0bbd87ea21"
+    },
+    "hyperframes.json": {
+      "hash": "ad5dadeef78a520800a9e5cdd27a92ff5ac37f11b6a07f611b6b52b9f8c79a17",
+      "content": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/ad/ad5dadeef78a520800a9e5cdd27a92ff5ac37f11b6a07f611b6b52b9f8c79a17"
+    },
+    "index.html": {
+      "hash": "bd9eba09d0d851856c7ae08a08080a9958671bb226c308d774a84cca82573ddf",
+      "content": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/bd/bd9eba09d0d851856c7ae08a08080a9958671bb226c308d774a84cca82573ddf"
+    },
+    "meta.json": {
+      "hash": "9af17b3492f37dd4c49ca1b31488036ced3a2d11dcdf0699c0ee70078eee9261",
+      "content": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/9a/9af17b3492f37dd4c49ca1b31488036ced3a2d11dcdf0699c0ee70078eee9261"
+    },
+    "package.json": {
+      "hash": "94049bf99b87730ac69f60b7ecc80e863fb73be121cbb823ef8e9ffd05215921",
+      "content": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/94/94049bf99b87730ac69f60b7ecc80e863fb73be121cbb823ef8e9ffd05215921"
+    },
+    "footage/tmux.mp4": {
+      "hash": "5e45eee73fef50be46931bf5a028f23c544b37a4973e74b23f91438229b0be22",
+      "content": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/5e/5e45eee73fef50be46931bf5a028f23c544b37a4973e74b23f91438229b0be22"
+    }
+  },
+  "revisions": {
+    "aa06e499-e7a1-4459-99bd-a9bac07fbca2": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1792121341164,
+      "endedAt": 1792121341179,
+      "files": {
+        "footage/redis.mp4": {
+          "before": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/60/609f5b4ac591a6dc9eff33bc9d0f18c410323187854d19172e90635e640968f0",
+          "after": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/83/837faf641b4904bcdf660fdd1351df105dad26df675615f4d9a77b20e7f6f987"
+        },
+        "footage/sqlite.mp4": {
+          "before": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/62/62c398114270fca22f5ab32f7735fc0722c094119aa8ed716d13f7b98b98cd1f",
+          "after": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/58/589e9ce7def12aea8409aabc0871d514f878cd7e9fddd3d26ce4f15d801e6d20"
+        },
+        "footage/tmux.mp4": {
+          "before": null,
+          "after": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/5e/5e45eee73fef50be46931bf5a028f23c544b37a4973e74b23f91438229b0be22"
+        },
+        "index.html": {
+          "before": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/7c/7c1ee1e193d96f584135227fdf07c0363e4f1011b7c9aa1ad90b5162fabac0c3",
+          "after": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/41/413cda415880254915c99c93882b02aaaa68e62a92040dd4bcc0ca654cae2548"
+        }
+      }
+    },
+    "9618f0e8-4842-498e-b070-bafdea365461": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1792121597485,
+      "endedAt": 1792121597493,
+      "files": {
+        "footage/sqlite.mp4": {
+          "before": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/58/589e9ce7def12aea8409aabc0871d514f878cd7e9fddd3d26ce4f15d801e6d20",
+          "after": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/ee/ee93b7428a370b7ce8818c7906fa16d483332c0193d87da952cce88b7956f6c2"
+        },
+        "index.html": {
+          "before": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/41/413cda415880254915c99c93882b02aaaa68e62a92040dd4bcc0ca654cae2548",
+          "after": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/c5/c5fc2001ab23a91c1f100df13855949e0c2481f1b43ceb65f34625df39c00a72"
+        }
+      }
+    },
+    "ac6e3044-90cd-48c6-857a-c8a5cf060a33": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1792121703952,
+      "endedAt": 1792121703960,
+      "files": {
+        "footage/sqlite.mp4": {
+          "before": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/ee/ee93b7428a370b7ce8818c7906fa16d483332c0193d87da952cce88b7956f6c2",
+          "after": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/1b/1b3d45e34b6e24177f505f21400473db31d8617219f61177fc2ccc0bbd87ea21"
+        },
+        "index.html": {
+          "before": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/c5/c5fc2001ab23a91c1f100df13855949e0c2481f1b43ceb65f34625df39c00a72",
+          "after": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/bd/bd9eba09d0d851856c7ae08a08080a9958671bb226c308d774a84cca82573ddf"
+        }
+      }
+    }
+  },
+  "checks": {
+    "latest": {
+      "revision": "ac6e3044-90cd-48c6-857a-c8a5cf060a33",
+      "id": "e8413cbc-b86c-4705-8e54-d936a7fdde9f"
+    },
+    "revisions": {
+      "aa06e499-e7a1-4459-99bd-a9bac07fbca2": [
+        {
+          "id": "6d0997ea-d071-4110-8e9c-cc23240225c2",
+          "scope": "project",
+          "metadata": {
+            "ok": true,
+            "browserSkipped": false,
+            "options": {
+              "samples": 9,
+              "atTransitions": false,
+              "maxIssues": 80,
+              "collapseStatic": true,
+              "tolerance": 2,
+              "timeout": 3000,
+              "contrast": true,
+              "strict": false,
+              "snapshots": false,
+              "browserGpuMode": "auto"
+            }
+          },
+          "createdAt": 1792121365384,
+          "contentHash": "8c76a30c399007c17713ab8fe8d4825ebcdc91e83a15fc03443dd46cdc6b1b80",
+          "revision": "aa06e499-e7a1-4459-99bd-a9bac07fbca2",
+          "inputFingerprint": "1c344bcb2c92eb4fcca8d26078e319a508dd170f08807dd0b5225f3f55137caf",
+          "inputScope": "local-project-files",
+          "attribution": "recorded-revision",
+          "status": "cleaned",
+          "cleanedAfterRender": "5d3f11d0-d298-42da-97e7-616063ce0008"
+        },
+        {
+          "id": "112e3dfd-8d74-4bba-a7c1-37aef2de0a49",
+          "scope": "project",
+          "metadata": {
+            "ok": true,
+            "browserSkipped": false,
+            "options": {
+              "samples": 9,
+              "atTransitions": false,
+              "maxIssues": 80,
+              "collapseStatic": true,
+              "tolerance": 2,
+              "timeout": 3000,
+              "contrast": true,
+              "strict": false,
+              "snapshots": false,
+              "browserGpuMode": "auto"
+            }
+          },
+          "createdAt": 1792121393410,
+          "contentHash": "8c76a30c399007c17713ab8fe8d4825ebcdc91e83a15fc03443dd46cdc6b1b80",
+          "revision": "aa06e499-e7a1-4459-99bd-a9bac07fbca2",
+          "inputFingerprint": "1c344bcb2c92eb4fcca8d26078e319a508dd170f08807dd0b5225f3f55137caf",
+          "inputScope": "local-project-files",
+          "attribution": "recorded-revision",
+          "status": "cleaned",
+          "cleanedAfterRender": "5d3f11d0-d298-42da-97e7-616063ce0008"
+        }
+      ],
+      "9618f0e8-4842-498e-b070-bafdea365461": [
+        {
+          "id": "62b139be-a441-49fc-bb54-4c34b97a11c7",
+          "scope": "project",
+          "report": "/Users/ctw/proj/sqlmux/assets/demo/video/.hyperframes/artifacts/checks/62b139be-a441-49fc-bb54-4c34b97a11c7.json",
+          "metadata": {
+            "ok": true,
+            "browserSkipped": false,
+            "options": {
+              "samples": 9,
+              "atTransitions": false,
+              "maxIssues": 80,
+              "collapseStatic": true,
+              "tolerance": 2,
+              "timeout": 3000,
+              "contrast": true,
+              "strict": false,
+              "snapshots": false,
+              "browserGpuMode": "auto"
+            }
+          },
+          "createdAt": 1792121620759,
+          "contentHash": "8c76a30c399007c17713ab8fe8d4825ebcdc91e83a15fc03443dd46cdc6b1b80",
+          "revision": "9618f0e8-4842-498e-b070-bafdea365461",
+          "inputFingerprint": "a66e617525dab7ee5a55fc09bacbfbbebd028a9ed71c390511b953e11efb6ca8",
+          "inputScope": "local-project-files",
+          "attribution": "recorded-revision"
+        }
+      ],
+      "ac6e3044-90cd-48c6-857a-c8a5cf060a33": [
+        {
+          "id": "e8413cbc-b86c-4705-8e54-d936a7fdde9f",
+          "scope": "project",
+          "report": "/Users/ctw/proj/sqlmux/assets/demo/video/.hyperframes/artifacts/checks/e8413cbc-b86c-4705-8e54-d936a7fdde9f.json",
+          "metadata": {
+            "ok": true,
+            "browserSkipped": false,
+            "options": {
+              "samples": 9,
+              "atTransitions": false,
+              "maxIssues": 80,
+              "collapseStatic": true,
+              "tolerance": 2,
+              "timeout": 3000,
+              "contrast": true,
+              "strict": false,
+              "snapshots": false,
+              "browserGpuMode": "auto"
+            }
+          },
+          "createdAt": 1792121727890,
+          "contentHash": "3033a01b1df0a9b6ac8c1071e47bd2c39e63f056872a130dc872c851d6614407",
+          "revision": "ac6e3044-90cd-48c6-857a-c8a5cf060a33",
+          "inputFingerprint": "3fe86d8a5bd4120afe1ae13006426fe880ee4f4b264e6e136ca8604546f377bd",
+          "inputScope": "local-project-files",
+          "attribution": "recorded-revision"
+        }
+      ]
+    },
+    "unversioned": [
+      {
+        "id": "a36d9e73-35ed-4237-b49b-885e5a64ad9e",
+        "scope": "project",
+        "report": "/Users/ctw/proj/sqlmux/assets/demo/video/.hyperframes/artifacts/checks/a36d9e73-35ed-4237-b49b-885e5a64ad9e.json",
+        "metadata": {
+          "ok": true,
+          "browserSkipped": false,
+          "options": {
+            "samples": 9,
+            "atTransitions": false,
+            "maxIssues": 80,
+            "collapseStatic": true,
+            "tolerance": 2,
+            "timeout": 3000,
+            "contrast": true,
+            "strict": false,
+            "snapshots": false,
+            "browserGpuMode": "auto"
+          }
+        },
+        "createdAt": 1792119447088,
+        "contentHash": "ba8683b2bd7254901a73c2a30fa4b901e87121482534452392f6b17dd9f22307",
+        "revision": null,
+        "inputFingerprint": "99cd8f488263a95661554f01721ea706e9d8a290a3bf1840bd7f82c4647dd776",
+        "inputScope": "local-project-files",
+        "attribution": "unversioned"
+      }
+    ]
+  },
+  "snapshots": {
+    "latest": null,
+    "revisions": {},
+    "unversioned": []
+  },
+  "renders": {
+    "latest": {
+      "id": "5d3f11d0-d298-42da-97e7-616063ce0008",
+      "completedAt": 1792121780372,
+      "output": "/Users/ctw/proj/sqlmux/assets/demo/video/renders/sqlmux-tour-cut3.mp4",
+      "status": "completed",
+      "revision": "ac6e3044-90cd-48c6-857a-c8a5cf060a33"
+    },
+    "retainedRevisions": [
+      "ac6e3044-90cd-48c6-857a-c8a5cf060a33",
+      "9618f0e8-4842-498e-b070-bafdea365461"
+    ]
+  },
+  "pendingArtifactCleanup": []
+}

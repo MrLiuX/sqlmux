@@ -1,0 +1,161 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 5,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"title-card\"> is a timeline element that contains nested <h1 id=\"title-name\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#title-card",
+        "dataAttributes": {},
+        "sourceFile": "/Users/ctw/proj/sqlmux/assets/demo/video/index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"title-card\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<div id=\"cap-sqlite\"> is a timeline element that contains nested <p id=\"cap-sqlite-text\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#cap-sqlite",
+        "dataAttributes": {},
+        "sourceFile": "/Users/ctw/proj/sqlmux/assets/demo/video/index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <div id=\"cap-sqlite\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<div id=\"cap-tmux\"> is a timeline element that contains nested <p id=\"cap-tmux-text\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#cap-tmux",
+        "dataAttributes": {},
+        "sourceFile": "/Users/ctw/proj/sqlmux/assets/demo/video/index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <div id=\"cap-tmux\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<div id=\"cap-redis\"> is a timeline element that contains nested <p id=\"cap-redis-text\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#cap-redis",
+        "dataAttributes": {},
+        "sourceFile": "/Users/ctw/proj/sqlmux/assets/demo/video/index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <div id=\"cap-redis\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<section id=\"end-card\"> is a timeline element that contains nested <h2 id=\"end-url\">. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#end-card",
+        "dataAttributes": {},
+        "sourceFile": "/Users/ctw/proj/sqlmux/assets/demo/video/index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <section id=\"end-card\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      }
+    ],
+    "filesScanned": 1
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "duration": 66.8,
+    "samples": [
+      3.711,
+      11.133,
+      18.556,
+      25.978,
+      33.4,
+      40.822,
+      48.244,
+      55.667,
+      63.089
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 0,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      3.711,
+      18.556,
+      33.4,
+      48.244,
+      63.089
+    ],
+    "checked": 13,
+    "passed": 13
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  }
+}

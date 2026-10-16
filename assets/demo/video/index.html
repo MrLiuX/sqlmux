@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #1f1a1a;
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #1f1a1a;
+        color: #f2e9e4;
+        font-family: "JetBrains Mono", monospace;
+      }
+      /* background layer: faint grid + warm glow, shared by every scene */
+      #grid {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(249, 204, 108, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(249, 204, 108, 0.05) 1px, transparent 1px);
+        background-size: 48px 48px;
+      }
+      #glow {
+        position: absolute;
+        width: 1400px;
+        height: 1400px;
+        left: 260px;
+        top: -160px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(249, 204, 108, 0.1), transparent 60%);
+      }
+      .card {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 0 220px;
+      }
+      #title-name {
+        font-size: 200px;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        color: #f9cc6c;
+      }
+      #title-line {
+        margin-top: 24px;
+        font-size: 40px;
+        line-height: 1.4;
+        max-width: 1400px;
+        color: #f2e9e4;
+      }
+      #title-rule,
+      #end-rule {
+        width: 160px;
+        height: 4px;
+        margin: 36px 0 0;
+        background: #f9cc6c;
+      }
+      .footage {
+        position: absolute;
+        left: 160px;
+        top: 40px;
+        width: 1600px;
+        height: 900px;
+        border-radius: 10px;
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+      }
+      .caption {
+        position: absolute;
+        left: 160px;
+        right: 160px;
+        top: 966px;
+        display: flex;
+        justify-content: center;
+      }
+      .caption p {
+        font-size: 44px;
+        font-weight: 700;
+        color: #f2e9e4;
+      }
+      .caption span {
+        color: #f9cc6c;
+      }
+      #end-url {
+        font-size: 84px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: #f9cc6c;
+      }
+      #end-install {
+        margin-top: 48px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .cmd {
+        font-size: 40px;
+        color: #f2e9e4;
+      }
+      .cmd span {
+        color: #a8a29e;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="67.76"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div id="grid"></div>
+      <div id="glow"></div>
+
+      <section id="title-card" class="card clip" data-start="0" data-duration="3.6" data-track-index="1">
+        <h1 id="title-name">sqlmux</h1>
+        <p id="title-line">a terminal database client organised like tmux — PostgreSQL, MySQL, SQLite, Redis</p>
+        <div id="title-rule"></div>
+      </section>
+
+      <video
+        id="clip-sqlite"
+        class="footage"
+        src="footage/sqlite.mp4"
+        data-start="3.5"
+        data-duration="14.68"
+        data-media-start="0.88"
+        data-track-index="0"
+        muted
+        playsinline
+      ></video>
+      <div id="cap-sqlite" class="caption clip" data-start="3.5" data-duration="14.68" data-track-index="2">
+        <p id="cap-sqlite-text">One client for <span>PostgreSQL, MySQL, SQLite and Redis</span></p>
+      </div>
+
+      <video
+        id="clip-tmux"
+        class="footage"
+        src="footage/tmux.mp4"
+        data-start="18.18"
+        data-duration="25.74"
+        data-media-start="0.9"
+        data-track-index="0"
+        muted
+        playsinline
+      ></video>
+      <div id="cap-tmux" class="caption clip" data-start="18.18" data-duration="25.74" data-track-index="2">
+        <p id="cap-tmux-text"><span>tmux inside:</span> sessions, windows, panes, a palette</p>
+      </div>
+
+      <video
+        id="clip-redis"
+        class="footage"
+        src="footage/redis.mp4"
+        data-start="43.92"
+        data-duration="17.87"
+        data-media-start="0.85"
+        data-track-index="0"
+        muted
+        playsinline
+      ></video>
+      <div id="cap-redis" class="caption clip" data-start="43.92" data-duration="17.87" data-track-index="2">
+        <p id="cap-redis-text"><span>Redis too:</span> keys as tables, a console that knows the commands</p>
+      </div>
+
+      <section id="end-card" class="card clip" data-start="61.16" data-duration="6.6" data-track-index="1">
+        <h2 id="end-url">github.com/kackerx/sqlmux</h2>
+        <div id="end-rule"></div>
+        <div id="end-install">
+          <p class="cmd" id="cmd-brew"><span>$ </span>brew install kackerx/tap/sqlmux</p>
+          <p class="cmd" id="cmd-npm"><span>$ </span>npm i -g sqlmux</p>
+          <p class="cmd" id="cmd-go"><span>$ </span>go install github.com/kackerx/sqlmux/cmd/sqlmux@latest</p>
+        </div>
+      </section>
+    </div>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+
+      // ambient: the glow breathes over the whole film
+      tl.fromTo("#glow", { scale: 0.92, opacity: 0.7 }, { scale: 1.08, opacity: 1, duration: 33.88, ease: "sine.inOut", yoyo: true, repeat: 1 }, 0);
+
+      // title card
+      tl.fromTo("#title-name", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: "power3.out" }, 0.2);
+      tl.fromTo("#title-line", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, 0.55);
+      tl.fromTo("#title-rule", { scaleX: 0, transformOrigin: "left center" }, { scaleX: 1, duration: 0.5, ease: "expo.out" }, 0.8);
+      tl.to(["#title-name", "#title-line", "#title-rule"], { opacity: 0, y: -20, duration: 0.35, ease: "power2.in" }, 3.2);
+
+      // footage scenes: fade the clip in, caption rises a beat later and leaves with it
+      [
+        ["#clip-sqlite", "#cap-sqlite-text", 3.5, 18.18],
+        ["#clip-tmux", "#cap-tmux-text", 18.18, 43.92],
+        ["#clip-redis", "#cap-redis-text", 43.92, 61.51],
+      ].forEach(([v, c, s, e]) => {
+        tl.fromTo(v, { opacity: 0, scale: 0.985 }, { opacity: 1, scale: 1, duration: 0.4, ease: "power2.out" }, s);
+        tl.fromTo(c, { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, s + 0.25);
+        tl.to(c, { opacity: 0, duration: 0.3, ease: "power1.in" }, e - 0.35);
+      });
+      // last clip dissolves into the end card
+      tl.to("#clip-redis", { opacity: 0, scale: 0.985, duration: 0.6, ease: "power1.in" }, 61.16);
+
+      // end card
+      tl.fromTo("#end-url", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 61.46);
+      tl.fromTo("#end-rule", { scaleX: 0, transformOrigin: "left center" }, { scaleX: 1, duration: 0.5, ease: "expo.out" }, 61.76);
+      tl.fromTo(".cmd", { x: -24, opacity: 0 }, { x: 0, opacity: 1, duration: 0.4, ease: "power2.out", stagger: 0.18 }, 61.96);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
