@@ -27,6 +27,7 @@
 - 2026-10-16 命令面板的 DDL 预览：鼠标滚轮在预览区上下滚（现在只有 `C-f` / `C-b`，用户自己把 `C-n` / `C-p` 也绑成了滚预览）；像切 pane 一样（用户的 `D-1`）把焦点切进预览区，当成只读视图：nvim 模式下移动、选择、复制（值编辑器 / JSON 视图那套只读编辑器）。
 - 2026-10-16 快速 SQL（`;`）在 Redis 连接上跑命令：面板的 SQL 范围现在在 Redis 连接上没有反应（M16 定的「入口隐藏」），用户要 `;` 后直接打一条 Redis 命令、回复照控制台的规则摆成表；只读 / 危险判定和补全同控制台（§9.8、§13）。
 - 2026-10-16 录演示时发现的小 bug（video-producer 抽帧看到，决策者没复现第二条）：新建 session 时右下角的「Connecting to sqlite…」toast 不消失，切回原 session 后还在；命令面板的 session 行写「1 windows」（英文复数）。签名提示浮层盖住光标上一行是设计（§9.8 / F15.3），不算。
+- 2026-10-16 oss 做首页 README 时发现的（d39d737）：① brew formula（`.github/scripts/tap-formula.sh`）和 npm 包（`npm/sqlmux/package.json`）的描述还是「for PostgreSQL and MySQL」，要列四种引擎；② `go install …@latest` 装的 `--version` 显示 `(none, unknown)`（模块构建没有 vcs 信息），便宜就修；③ `sqlmux keys --format toml` 的注释把 F8.23、M5、§6.6 这类内部编号露给用户了，生成器里去掉（docs/keys.py 现在自己剥）；④ 命令行 `sqlmux redis://host:6379/0` 报 unknown URL，F14.1 只认 postgres:// mysql:// 和文件路径，Redis 用户第一反应就是这么试，加上。
 - M16 定下的第二轮候选：Pub/Sub、MONITOR、Cluster、格子里的 JSON 按格高亮、string 键是 JSON 时直接开值编辑器（见 m16-redis/task.md 末尾）。
 
 ## 发布
