@@ -51,10 +51,11 @@ Wait+Screen /field/
 Sleep 1500ms
 Type "o"
 Type "SET demo:greeting hello EX "
-Sleep 1500ms
+Sleep 2s
 Escape
 Sleep 100ms
 Type "o"
+Enter
 Type "ZRANGE zset:rank 0 -1 WITHSCORES"
 Escape
 Sleep 100ms

@@ -3,3 +3,7 @@
 
 # demo recordings (assets/demo/capture/record.sh)
 assets/demo/capture/renders/
+
+# demo video (assets/demo/video): renders and footage copied from capture/renders
+assets/demo/video/renders/
+assets/demo/video/footage/

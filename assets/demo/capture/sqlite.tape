@@ -41,7 +41,7 @@ Sleep 2s
 Type "s"
 Sleep 600ms
 Type "am"
-Sleep 1200ms
+Sleep 2s
 Escape
 Sleep 100ms
 Escape
