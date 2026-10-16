@@ -1,7 +1,7 @@
 {
   "version": 1,
   "historyId": "67916cf3-0041-472d-92de-721534a0c0ea",
-  "currentRevision": "ac6e3044-90cd-48c6-857a-c8a5cf060a33",
+  "currentRevision": "d46d3c7c-2855-4737-a2af-808233c2bc2a",
   "pendingChanges": false,
   "files": {
     "AGENTS.md": {
@@ -25,8 +25,8 @@
       "content": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/ad/ad5dadeef78a520800a9e5cdd27a92ff5ac37f11b6a07f611b6b52b9f8c79a17"
     },
     "index.html": {
-      "hash": "bd9eba09d0d851856c7ae08a08080a9958671bb226c308d774a84cca82573ddf",
-      "content": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/bd/bd9eba09d0d851856c7ae08a08080a9958671bb226c308d774a84cca82573ddf"
+      "hash": "b57cafaea74220417f43308738ecf2e0b03b62317e9126e65903461e05ab97a1",
+      "content": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/b5/b57cafaea74220417f43308738ecf2e0b03b62317e9126e65903461e05ab97a1"
     },
     "meta.json": {
       "hash": "9af17b3492f37dd4c49ca1b31488036ced3a2d11dcdf0699c0ee70078eee9261",
@@ -106,12 +106,27 @@
           "after": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/bd/bd9eba09d0d851856c7ae08a08080a9958671bb226c308d774a84cca82573ddf"
         }
       }
+    },
+    "d46d3c7c-2855-4737-a2af-808233c2bc2a": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1792122668319,
+      "endedAt": 1792122668320,
+      "files": {
+        "index.html": {
+          "before": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/bd/bd9eba09d0d851856c7ae08a08080a9958671bb226c308d774a84cca82573ddf",
+          "after": "/Users/ctw/.cache/hyperframes/history/67916cf3-0041-472d-92de-721534a0c0ea/blobs/b5/b57cafaea74220417f43308738ecf2e0b03b62317e9126e65903461e05ab97a1"
+        }
+      }
     }
   },
   "checks": {
     "latest": {
-      "revision": "ac6e3044-90cd-48c6-857a-c8a5cf060a33",
-      "id": "e8413cbc-b86c-4705-8e54-d936a7fdde9f"
+      "revision": "d46d3c7c-2855-4737-a2af-808233c2bc2a",
+      "id": "305704f4-dd3c-4fd8-861e-251e1fcf0478"
     },
     "revisions": {
       "aa06e499-e7a1-4459-99bd-a9bac07fbca2": [
@@ -176,7 +191,6 @@
         {
           "id": "62b139be-a441-49fc-bb54-4c34b97a11c7",
           "scope": "project",
-          "report": "/Users/ctw/proj/sqlmux/assets/demo/video/.hyperframes/artifacts/checks/62b139be-a441-49fc-bb54-4c34b97a11c7.json",
           "metadata": {
             "ok": true,
             "browserSkipped": false,
@@ -198,7 +212,9 @@
           "revision": "9618f0e8-4842-498e-b070-bafdea365461",
           "inputFingerprint": "a66e617525dab7ee5a55fc09bacbfbbebd028a9ed71c390511b953e11efb6ca8",
           "inputScope": "local-project-files",
-          "attribution": "recorded-revision"
+          "attribution": "recorded-revision",
+          "status": "cleaned",
+          "cleanedAfterRender": "93f67d77-943b-4532-b02a-2b84a1ccd5e6"
         }
       ],
       "ac6e3044-90cd-48c6-857a-c8a5cf060a33": [
@@ -226,6 +242,35 @@
           "contentHash": "3033a01b1df0a9b6ac8c1071e47bd2c39e63f056872a130dc872c851d6614407",
           "revision": "ac6e3044-90cd-48c6-857a-c8a5cf060a33",
           "inputFingerprint": "3fe86d8a5bd4120afe1ae13006426fe880ee4f4b264e6e136ca8604546f377bd",
+          "inputScope": "local-project-files",
+          "attribution": "recorded-revision"
+        }
+      ],
+      "d46d3c7c-2855-4737-a2af-808233c2bc2a": [
+        {
+          "id": "305704f4-dd3c-4fd8-861e-251e1fcf0478",
+          "scope": "project",
+          "report": "/Users/ctw/proj/sqlmux/assets/demo/video/.hyperframes/artifacts/checks/305704f4-dd3c-4fd8-861e-251e1fcf0478.json",
+          "metadata": {
+            "ok": true,
+            "browserSkipped": false,
+            "options": {
+              "samples": 9,
+              "atTransitions": false,
+              "maxIssues": 80,
+              "collapseStatic": true,
+              "tolerance": 2,
+              "timeout": 3000,
+              "contrast": true,
+              "strict": false,
+              "snapshots": false,
+              "browserGpuMode": "auto"
+            }
+          },
+          "createdAt": 1792122692729,
+          "contentHash": "3e05a3a85dfd4cdc08881d754b2ae6a5fd47db7de44c98806ab1ddac7a70bd75",
+          "revision": "d46d3c7c-2855-4737-a2af-808233c2bc2a",
+          "inputFingerprint": "0feaba5b762676045bd688ecc97bbc69e207cbdbe03559b586848c64ba6d0bb0",
           "inputScope": "local-project-files",
           "attribution": "recorded-revision"
         }
@@ -268,15 +313,15 @@
   },
   "renders": {
     "latest": {
-      "id": "5d3f11d0-d298-42da-97e7-616063ce0008",
-      "completedAt": 1792121780372,
-      "output": "/Users/ctw/proj/sqlmux/assets/demo/video/renders/sqlmux-tour-cut3.mp4",
+      "id": "93f67d77-943b-4532-b02a-2b84a1ccd5e6",
+      "completedAt": 1792122741662,
+      "output": "/Users/ctw/proj/sqlmux/assets/demo/video/renders/sqlmux-tour-cut4.mp4",
       "status": "completed",
-      "revision": "ac6e3044-90cd-48c6-857a-c8a5cf060a33"
+      "revision": "d46d3c7c-2855-4737-a2af-808233c2bc2a"
     },
     "retainedRevisions": [
-      "ac6e3044-90cd-48c6-857a-c8a5cf060a33",
-      "9618f0e8-4842-498e-b070-bafdea365461"
+      "d46d3c7c-2855-4737-a2af-808233c2bc2a",
+      "ac6e3044-90cd-48c6-857a-c8a5cf060a33"
     ]
   },
   "pendingArtifactCleanup": []

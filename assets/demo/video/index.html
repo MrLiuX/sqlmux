@@ -15,14 +15,14 @@
         width: 1920px;
         height: 1080px;
         overflow: hidden;
-        background: #1f1a1a;
+        background: #1e1a1a;
       }
       #root {
         position: relative;
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #1f1a1a;
+        background: #1e1a1a;
         color: #f2e9e4;
         font-family: "JetBrains Mono", monospace;
       }
@@ -31,8 +31,8 @@
         position: absolute;
         inset: 0;
         background-image:
-          linear-gradient(rgba(249, 204, 108, 0.05) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(249, 204, 108, 0.05) 1px, transparent 1px);
+          linear-gradient(rgba(252, 152, 103, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(252, 152, 103, 0.05) 1px, transparent 1px);
         background-size: 48px 48px;
       }
       #glow {
@@ -42,7 +42,7 @@
         left: 260px;
         top: -160px;
         border-radius: 50%;
-        background: radial-gradient(circle, rgba(249, 204, 108, 0.1), transparent 60%);
+        background: radial-gradient(circle, rgba(252, 152, 103, 0.1), transparent 60%);
       }
       .card {
         position: absolute;
@@ -53,10 +53,16 @@
         padding: 0 220px;
       }
       #title-name {
-        font-size: 200px;
-        font-weight: 800;
-        letter-spacing: -0.04em;
-        color: #f9cc6c;
+        display: block;
+        width: 1100px;
+        height: 318px;
+        margin-left: -29px; /* the lockup's viewBox has a 20/760 inset; align its square with the text below */
+      }
+      #end-mark {
+        display: block;
+        width: 132px;
+        height: 132px;
+        margin-bottom: 40px;
       }
       #title-line {
         margin-top: 24px;
@@ -70,7 +76,7 @@
         width: 160px;
         height: 4px;
         margin: 36px 0 0;
-        background: #f9cc6c;
+        background: #fc9867;
       }
       .footage {
         position: absolute;
@@ -95,13 +101,13 @@
         color: #f2e9e4;
       }
       .caption span {
-        color: #f9cc6c;
+        color: #fc9867;
       }
       #end-url {
         font-size: 84px;
         font-weight: 800;
         letter-spacing: -0.02em;
-        color: #f9cc6c;
+        color: #fc9867;
       }
       #end-install {
         margin-top: 48px;
@@ -114,7 +120,7 @@
         color: #f2e9e4;
       }
       .cmd span {
-        color: #a8a29e;
+        color: #a9dc76;
       }
     </style>
   </head>
@@ -131,7 +137,7 @@
       <div id="glow"></div>
 
       <section id="title-card" class="card clip" data-start="0" data-duration="3.6" data-track-index="1">
-        <h1 id="title-name">sqlmux</h1>
+        <svg id="title-name" class="lockup" role="img" aria-label="sqlmux" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 220"><rect x="20" y="20" width="180" height="180" rx="28.8" fill="#312b2b"/><rect x="28.1" y="28.1" width="77.85" height="149.39999999999998" rx="8.1" fill="#393333"/><rect x="114.05" y="28.1" width="77.85" height="70.64999999999999" rx="8.1" fill="#393333"/><rect x="114.05" y="106.85" width="77.85" height="70.64999999999999" rx="8.1" fill="#393333"/><path d="M20 177.5 h180 v-6.300000000000001 a28.8 28.8 0 0 1 -28.8 28.8 h-122.4 a28.8 28.8 0 0 1 -28.8 -28.8 z" fill="#fc9867"/><ellipse cx="67.025" cy="81.39124999999999" rx="19.4625" ry="7.006499999999999" fill="none" stroke="#fc9867" stroke-width="6.300000000000001"/><path d="M47.56250000000001 81.39124999999999 v42.8175 a19.4625 7.006499999999999 0 0 0 38.925 0 v-42.8175" fill="none" stroke="#fc9867" stroke-width="6.300000000000001" stroke-linejoin="round"/><path d="M47.56250000000001 102.79999999999998 a19.4625 7.006499999999999 0 0 0 38.925 0" fill="none" stroke="#fc9867" stroke-width="6.300000000000001"/><line x1="125.72749999999999" y1="49.295" x2="177.49775" y2="49.295" stroke="#c9c4c4" stroke-width="5.3999999999999995" stroke-linecap="round"/><line x1="125.72749999999999" y1="63.425" x2="161.14925" y2="63.425" stroke="#c9c4c4" stroke-width="5.3999999999999995" stroke-linecap="round"/><line x1="125.72749999999999" y1="77.555" x2="177.49775" y2="77.555" stroke="#c9c4c4" stroke-width="5.3999999999999995" stroke-linecap="round"/><text x="128.063" y="145.70749999999998" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, monospace" font-weight="700" font-size="38.8575" fill="#a9dc76">&gt;_</text><text x="234" y="149.6" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, monospace" font-weight="700" font-size="118" fill="#fc9867">sql<tspan fill="#a9dc76">mux</tspan></text></svg>
         <p id="title-line">a terminal database client organised like tmux — PostgreSQL, MySQL, SQLite, Redis</p>
         <div id="title-rule"></div>
       </section>
@@ -182,6 +188,7 @@
       </div>
 
       <section id="end-card" class="card clip" data-start="61.16" data-duration="6.6" data-track-index="1">
+        <svg id="end-mark" class="mark" role="img" aria-label="sqlmux" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><rect x="0" y="0" width="180" height="180" rx="28.8" fill="#312b2b"/><rect x="8.1" y="8.1" width="77.85" height="149.39999999999998" rx="8.1" fill="#393333"/><rect x="94.05" y="8.1" width="77.85" height="70.64999999999999" rx="8.1" fill="#393333"/><rect x="94.05" y="86.85" width="77.85" height="70.64999999999999" rx="8.1" fill="#393333"/><path d="M0 157.5 h180 v-6.300000000000001 a28.8 28.8 0 0 1 -28.8 28.8 h-122.4 a28.8 28.8 0 0 1 -28.8 -28.8 z" fill="#fc9867"/><ellipse cx="47.025" cy="61.391249999999985" rx="19.4625" ry="7.006499999999999" fill="none" stroke="#fc9867" stroke-width="6.300000000000001"/><path d="M27.5625 61.391249999999985 v42.8175 a19.4625 7.006499999999999 0 0 0 38.925 0 v-42.8175" fill="none" stroke="#fc9867" stroke-width="6.300000000000001" stroke-linejoin="round"/><path d="M27.5625 82.79999999999998 a19.4625 7.006499999999999 0 0 0 38.925 0" fill="none" stroke="#fc9867" stroke-width="6.300000000000001"/><line x1="105.72749999999999" y1="29.294999999999995" x2="157.49775" y2="29.294999999999995" stroke="#c9c4c4" stroke-width="5.3999999999999995" stroke-linecap="round"/><line x1="105.72749999999999" y1="43.425" x2="141.14925" y2="43.425" stroke="#c9c4c4" stroke-width="5.3999999999999995" stroke-linecap="round"/><line x1="105.72749999999999" y1="57.55499999999999" x2="157.49775" y2="57.55499999999999" stroke="#c9c4c4" stroke-width="5.3999999999999995" stroke-linecap="round"/><text x="108.06299999999999" y="125.7075" font-family="JetBrains Mono, Menlo, DejaVu Sans Mono, monospace" font-weight="700" font-size="38.8575" fill="#a9dc76">&gt;_</text></svg>
         <h2 id="end-url">github.com/kackerx/sqlmux</h2>
         <div id="end-rule"></div>
         <div id="end-install">
@@ -217,6 +224,7 @@
       tl.to("#clip-redis", { opacity: 0, scale: 0.985, duration: 0.6, ease: "power1.in" }, 61.16);
 
       // end card
+      tl.fromTo("#end-mark", { y: 24, opacity: 0, scale: 0.9 }, { y: 0, opacity: 1, scale: 1, duration: 0.5, ease: "back.out(1.6)" }, 61.3);
       tl.fromTo("#end-url", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 61.46);
       tl.fromTo("#end-rule", { scaleX: 0, transformOrigin: "left center" }, { scaleX: 1, duration: 0.5, ease: "expo.out" }, 61.76);
       tl.fromTo(".cmd", { x: -24, opacity: 0 }, { x: 0, opacity: 1, duration: 0.4, ease: "power2.out", stagger: 0.18 }, 61.96);
