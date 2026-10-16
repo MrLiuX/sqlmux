@@ -1,6 +1,6 @@
 # AGENTS.md
 
-sqlmux：按 tmux 的 session / window / pane 思路组织的终端数据库客户端，Go + Bubble Tea v2，PostgreSQL 和 MySQL。
+sqlmux：按 tmux 的 session / window / pane 思路组织的终端数据库客户端，Go + Bubble Tea v2，PostgreSQL、MySQL、SQLite 和 Redis。
 
 - 设计与决策以 [`specs/tech-design.md`](specs/tech-design.md)（索引，各章在 `specs/design/`）为准：要改设计，先改文档，再写代码。里程碑索引和任务文件的格式在 [`specs/plan.md`](specs/plan.md)，每个里程碑的清单在 `specs/m<N>-<名字>/task.md`。
 - 目录结构见 tech-design §4。增删目录是设计变更，由决策者改 §4。

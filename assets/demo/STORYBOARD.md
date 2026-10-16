@@ -30,4 +30,4 @@ Suggested cut: title card (sqlmux, one line what it is, `brew install kackerx/ta
 ## Handoff
 
 - Video: a `claude --agent video-producer` session in this repo; this file is its brief, the tapes its footage. Composition and renders live under `assets/demo/video/` (renders git-ignored).
-- README / docs: the `oss-maintainer` role embeds the GIF under the first paragraph, writes the quickstart (install → connections.toml → first table), the keys reference from `sqlmux keys --format toml`, and the config reference from `config.toml`'s comments; the reddit post text goes to the user before posting.
+- README / docs: the oss role (`claude -n sqlmux-oss --agent oss-maintainer --effort high`, rules in `specs/roles/oss.md`) embeds the GIF under the first paragraph, writes the quickstart (install → connections.toml → first table), the keys reference from `sqlmux keys --format toml`, and the config reference from `config.toml`'s comments; the reddit post text goes to the user before posting.
