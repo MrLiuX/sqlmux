@@ -35,7 +35,7 @@ Sleep 1500ms
 Type "]"
 Sleep 1200ms
 Type "]"
-Sleep 1200ms
+Sleep 1800ms
 Type "gj"
 Sleep 2s
 Type "s"
