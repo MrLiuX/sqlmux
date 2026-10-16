@@ -6,7 +6,7 @@ sqlmux：按 tmux 的 session / window / pane 思路组织的终端数据库客�
 - 目录结构见 tech-design §4。增删目录是设计变更，由决策者改 §4。
 - 常规操作走 `just`：`just --list` 看全部入口；`just check` 是提交前的全部检查（vet、单测、集成测试、lint、gofmt、tidy）。
 
-## 五个角色、四个工作区
+## 六个角色、四个工作区
 
 | 角色 | 会话名 | 启动命令 | 规则 |
 |---|---|---|---|
@@ -15,12 +15,13 @@ sqlmux：按 tmux 的 session / window / pane 思路组织的终端数据库客�
 | reviewer | `sqlmux-code-reviewer` | `claude -n sqlmux-code-reviewer --agent code-reviewer --effort xhigh` | [`specs/roles/reviewer.md`](specs/roles/reviewer.md) |
 | tester | `sqlmux-test-engineer` | 同上格式，`--agent test-engineer --effort high`，在 `/Users/ctw/proj/sqlmux-e2e` 里起 | [`specs/roles/tester.md`](specs/roles/tester.md) |
 | pruner | `sqlmux-pruner` | `claude -n sqlmux-pruner`，用户按需启动，不是必经步骤 | [`specs/roles/pruner.md`](specs/roles/pruner.md) |
+| oss | `sqlmux-oss` | `claude -n sqlmux-oss --agent oss-maintainer --effort high`，用户按需启动：README、对外文档、演示 GIF、changelog / release note、发版后装一遍、发布帖、issue | [`specs/roles/oss.md`](specs/roles/oss.md) |
 
 **接手会话时先读自己那份角色规则**，别的角色的不用读。agent 定义在 `~/.claude/agents/`，是通用角色，项目特有的东西只写在本文件和角色规则里。
 
 | 工作区 | 使用者 | 分支 |
 |---|---|---|
-| `/Users/ctw/proj/sqlmux` | 决策者、worker、reviewer 的会话都在这里起；只有 worker（修剪期间是 pruner）在这里改代码 | `main` |
+| `/Users/ctw/proj/sqlmux` | 决策者、worker、reviewer、oss 的会话都在这里起；只有 worker（修剪期间是 pruner）在这里改代码，oss 只改 `README.md`、`docs/`、`CHANGELOG.md`、`assets/`（和决策者一样 `git commit --only -- <路径>`） | `main` |
 | `/Users/ctw/proj/sqlmux-e2e` | tester | `e2e` |
 | `/Users/ctw/proj/sqlmux-review` | reviewer 跑测试 | detached |
 | `/Users/ctw/proj/sqlmux-verify` | 决策者编验收版给用户 | detached |
@@ -39,7 +40,7 @@ sqlmux：按 tmux 的 session / window / pane 思路组织的终端数据库客�
 
 **全仓审计**：用户按需让 reviewer 做一次只读的全仓工程质量审计（做法在 `specs/roles/reviewer.md`），每条发现带一个探针，结果发决策者排成一个里程碑（第一次是 M13）。探针和仓库副本放在 worktree 外面（`/Users/ctw/proj/sqlmux-aud/`）：i18n 的单测遍历整个 worktree，未跟踪的 `.go` 副本也会被扫到。
 
-**消息只发四类**：spec 问题（→ 决策者）、退回（reviewer / tester → worker）、批次提测（worker → reviewer → tester）、批次结论（tester → 决策者和 worker）。不发「收到」、抄送、改状态、回报 sha。spec 改了，决策者只给相关角色一行指针（「docs <sha> 改了 §7.8」），reviewer 和 tester 按 commit 里的 spec 工作。
+**消息只发四类**：spec 问题（→ 决策者）、退回（reviewer / tester → worker）、批次提测（worker → reviewer → tester）、批次结论（tester → 决策者和 worker）。oss 多两类：发版后的安装验证结论（oss → 决策者）、issue 里能复现的 bug 和需求（oss → 决策者，决策者转成 feature 或测试用例）。不发「收到」、抄送、改状态、回报 sha。spec 改了，决策者只给相关角色一行指针（「docs <sha> 改了 §7.8」），reviewer 和 tester 按 commit 里的 spec 工作。
 
 ## 通用规则
 
