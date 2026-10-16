@@ -32,9 +32,9 @@ Type "status = 'done'"
 Sleep 800ms
 Enter
 Sleep 1500ms
-Type ">"
+Type "]"
 Sleep 1s
-Type "<"
+Type "["
 Sleep 800ms
 Type "gj"
 Sleep 2s

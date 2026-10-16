@@ -11,7 +11,7 @@ Facts only (AGENTS.md): no speed numbers, no "fastest", no user counts. What sql
 
 | # | Tape | Caption (one line on screen) | What the viewer sees | Status |
 |---|---|---|---|---|
-| 1 | `sqlite.tape` | One client for PostgreSQL, MySQL, SQLite and Redis | `sqlmux sqlite` opens a file; `/` filters the tree, `↵` opens `t_order`; WHERE `status = 'done'`; `>` `<` page; `gj` JSON view; `s` + `am` flash-jumps | recorded, frames checked |
+| 1 | `sqlite.tape` | One client for PostgreSQL, MySQL, SQLite and Redis | `sqlmux sqlite` opens a file; `/` filters the tree, `↵` opens `t_order`; WHERE `status = 'done'`; `]` `[` page (the default keys; `<` / `>` are the user's own binding); `gj` JSON view; `s` + `am` flash-jumps | recorded, frames checked |
 | 2 | `edit.tape` | Edit in place, save as one transaction | PG `t_order`: `i` edits `amount`, `↵` on `status` opens the enum picker, `C-s` saves both rows, toast `Saved 2 row(s)` | written, needs docker (PG) — check the picker and the toast in the frames |
 | 3 | `query.tape` | A vim editor that completes your enums | query pane: typing `where o.status = ` lists the enum values; `SPC ll` formats; `↵` runs; results below; `gj` | written, needs docker |
 | 4 | `tmux.tape` | tmux inside: sessions, windows, panes, a palette | SQLite: `C-p` `@order` opens `t_order` from the palette; `;` runs quick SQL `select count(*) from t_user` in the palette (table completion, result inline); `SPC %` splits, `c` a query, `↵` runs it and the result opens below (three panes); `SPC c` a new window, `SPC n` back; a new session "reports" from the palette, `SPC )` switches back | recorded, frames checked |
