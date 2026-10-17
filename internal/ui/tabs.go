@@ -22,6 +22,9 @@ type Tabs struct {
 	// have none: the result area's log.
 	Close Icon
 	Keep  int
+	// Production is by tab whether it is of a production connection: its title
+	// in that color (F17.9); none for none of them.
+	Production []bool
 	// Scroll is where the bar is scrolled to when the tabs do not fit (F17.1):
 	// the pane's, Draw moves it to bring the current tab in sight when that
 	// or the width has changed since. Nil: not scrolled.
@@ -134,6 +137,9 @@ func (t Tabs) Draw(f *Frame, r uv.Rectangle) {
 			mark, st = "*", uv.Style{Fg: th.Focus, Bg: th.PaneBg}
 		case t.Prev:
 			mark = "-"
+		}
+		if i < len(t.Production) && t.Production[i] {
+			st.Fg = th.Production
 		}
 		num, ic := fmt.Sprintf(" %d:", i+1), t.Icons[i]
 		w := Width(num+n+mark) + 1

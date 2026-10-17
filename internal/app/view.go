@@ -242,14 +242,15 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 		icon, word = a.icons.Result, "result"
 	}
 	b := ui.Block{
-		Num:      a.icons.Number(n),
-		Icon:     icon,
-		Title:    a.label(word),
-		Object:   p.Object(),
-		Focused:  a.win().Focus == p.ID,
-		Zoomed:   a.win().Zoom == p.ID,
-		ZoomIcon: a.icons.Zoom,
-		Pane:     p.ID,
+		Num:        a.icons.Number(n),
+		Icon:       icon,
+		Title:      a.label(word),
+		Object:     p.Object(),
+		Focused:    a.win().Focus == p.ID,
+		Zoomed:     a.win().Zoom == p.ID,
+		ZoomIcon:   a.icons.Zoom,
+		Pane:       p.ID,
+		Production: p.tab().production(),
 	}
 	var tabHints []ui.Hint
 	switch rt := resultOf(p); {
@@ -324,6 +325,7 @@ func (a *App) drawPane(f *ui.Frame, p *Pane, n int, r uv.Rectangle) {
 	for i := range p.Tabs {
 		ic, _ := a.tabIcon(&p.Tabs[i])
 		tabs.Names, tabs.Icons = append(tabs.Names, p.Tabs[i].Name), append(tabs.Icons, ic)
+		tabs.Production = append(tabs.Production, p.Tabs[i].production())
 	}
 	tabs.Draw(f, uv.Rect(in.Min.X, in.Max.Y-1, in.Dx(), 1))
 	if p.tab().landing() { // what it can become (§5「引导页」)
@@ -569,6 +571,9 @@ func (a *App) statusLine() ui.StatusLine {
 	pending.Text += strings.Repeat(" ", max(3-ui.Width(pending.Text), 0))
 	modeColor := [...]color.Color{keymap.Normal: th.Focus, keymap.Visual: th.Keyword, keymap.Insert: th.Warn, keymap.Command: th.Info}[mode]
 	conn := uv.Style{Fg: th.Info, Bg: th.Sep}
+	if c := a.conn(); c != nil && c.Spec.Production { // a production connection says so wherever it is shown (F17.9)
+		conn.Fg = th.Production
+	}
 	s.Right = []ui.Segment{
 		{Runs: iconRuns(ic.Search, bar(th.Info), strings.TrimRight(" "+a.label(a.keys.Hint("palette.open", "global")), " ")+" "), Action: "palette.open"},
 		{Runs: append(iconRuns(ic.Keys, bar(th.FgMuted), " "), pending, ui.Run{Text: " ", Style: bar(th.FgMuted)})},

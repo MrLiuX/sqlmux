@@ -25,6 +25,9 @@ type Source interface {
 	// deletes, updates, inserts, -1 for none; tx is where the connection's
 	// transaction is as it ends, 0 when it never got the connection.
 	Save(ctx context.Context, ch Changes, manual bool) (failed int, tx byte, err error)
+	// Preview is what Save would send for ch, a text each, with the values in:
+	// shown before it goes (§13, F17.10). None when the source cannot say.
+	Preview(ch Changes) []string
 }
 
 // PageQuery is a page as the tab asks for it: the columns Columns gave, a
@@ -118,6 +121,15 @@ func (s SQLTable) Each(ctx context.Context, q PageQuery, head func([]Col) error,
 		// in a transaction of the user's a failed read would fail it all (§10.3)
 		return Guarded(ctx, c, "sqlmux_export", func() error { return Each(ctx, c, sql, head, row) })
 	})
+}
+
+// Preview is the statements Save sends, from the columns the tab knows; none
+// without them.
+func (s SQLTable) Preview(ch Changes) []string {
+	if s.Known.Cols == nil {
+		return nil
+	}
+	return Preview(s.E, s.Schema, s.Name, s.Known.Key(), ch)
 }
 
 func (s SQLTable) Save(ctx context.Context, ch Changes, manual bool) (int, byte, error) {

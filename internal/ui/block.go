@@ -55,6 +55,7 @@ type Block struct {
 	StrictHints bool
 	Focused     bool
 	Zoomed      bool // the pane is zoomed: ZoomIcon after the number, the border in the zoom color (F9.6)
+	Production  bool // the pane is of a production connection: the border in its color, whatever else (F17.9)
 	ZoomIcon    Icon
 	Pane        int
 	// TitleAction makes the drawn title a button (the sidebar's schema, §7.8).
@@ -74,6 +75,9 @@ func (b Block) Draw(f *Frame, r uv.Rectangle) uv.Rectangle {
 	}
 	if b.Zoomed {
 		bc = th.Zoom
+	}
+	if b.Production {
+		bc = th.Production
 	}
 	bs := uv.Style{Fg: bc, Bg: th.PaneBg}
 	border := f.Border.Style(bs)

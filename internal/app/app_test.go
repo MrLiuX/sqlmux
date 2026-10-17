@@ -130,9 +130,12 @@ func sized(w, h int, icons string) *App {
 // (F15.4).
 var tipsInTests = false
 
-// newApp is New with the tips off unless tipsInTests has them on.
+// newApp is New with the tips off unless tipsInTests has them on, and the save
+// with no preview: the saves in the tests are not about what is asked first, the
+// preview's own tests turn it on (F17.10).
 func newApp(c *config.Config, keys *keymap.Map, sess *Session, st *config.State, warning string) *App {
 	c.Tips = c.Tips && tipsInTests
+	c.PreviewSave = false
 	return New(c, keys, sess, st, warning)
 }
 

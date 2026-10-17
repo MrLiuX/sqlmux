@@ -3,9 +3,12 @@ package redis
 import (
 	"errors"
 	"io"
+	"slices"
 	"testing"
 
 	goredis "github.com/redis/go-redis/v9"
+
+	"github.com/kackerx/sqlmux/internal/db"
 )
 
 // The commands are those COMMAND lists with their subcommands, and a line is a
@@ -106,6 +109,29 @@ func TestKeyErr(t *testing.T) {
 		got := keyErr(c.err)
 		if c.same && !errors.Is(got, c.err) || !c.same && !errors.Is(got, ErrNoKey) {
 			t.Errorf("%s: %v", name, got)
+		}
+	}
+}
+
+// The commands of a save, as Preview writes them: a value with a blank quoted, a
+// rename a delete and a set, what a rename keeps said when the changes do not (F17.10).
+func TestDescribe(t *testing.T) {
+	val := func(s string) db.Val { return db.Val{S: s} }
+	row := func(key string, cols ...db.Change) db.Row { return db.Row{Key: []string{key}, Cols: cols} }
+	for _, tc := range []struct {
+		typ  string
+		ch   db.Changes
+		want []string
+	}{
+		{"hash", db.Changes{Deletes: [][]string{{"c"}}, Updates: []db.Row{row("a", db.Change{Name: "value", Val: val("x y")}), row("b", db.Change{Name: "field", Val: val("bee")})}},
+			[]string{"HDEL k c", `HSET k a "x y"`, "HDEL k b", "HSET k bee <its value>"}},
+		{"zset", db.Changes{Updates: []db.Row{row("a", db.Change{Name: "score", Val: val("5")})}}, []string{"ZADD k 5 a"}},
+		{"list", db.Changes{Deletes: [][]string{{"1"}}, Inserts: [][]db.Change{{{Name: "value", Val: val("g")}}}}, []string{"LSET k 1 <deleted>", "LREM k 0 <deleted>", "RPUSH k g"}},
+		{"json", db.Changes{Updates: []db.Row{row("k", db.Change{Name: "value", Val: val("{}")})}}, []string{"JSON.SET k $ {}"}},
+		{"", db.Changes{Deletes: [][]string{{"c"}}}, nil},
+	} {
+		if got := Describe(tc.typ, "k", tc.ch); !slices.Equal(got, tc.want) {
+			t.Errorf("%s: %q, want %q", tc.typ, got, tc.want)
 		}
 	}
 }

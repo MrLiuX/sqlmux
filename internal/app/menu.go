@@ -212,7 +212,7 @@ func (a *App) dropTable() tea.Cmd {
 	if t.View() {
 		title = i18n.T("删除视图 %s，不能撤销：", c.qualified(t))
 	}
-	a.confirm = &confirmBox{text: title + "\n  " + sql, yes: i18n.T("删除"), danger: true, then: func() tea.Cmd {
+	a.confirm = writeBox(c, title+"\n  "+sql, i18n.T("删除"), true, func() tea.Cmd {
 		main := c.Main
 		c.busy++
 		return func() tea.Msg {
@@ -222,7 +222,7 @@ func (a *App) dropTable() tea.Cmd {
 			})
 			return dropped{c, t, err}
 		}
-	}}
+	})
 	return nil
 }
 

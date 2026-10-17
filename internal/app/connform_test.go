@@ -140,7 +140,7 @@ func TestConnFormPasswordElsewhere(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	keychain(t, "ok")
 	a, _ = withSessions()
-	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<Tab><Tab> <Tab><Tab>pass show x<CR>")
+	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<Tab><Tab><Tab> <Tab><Tab>pass show x<CR>")
 	if a.form == nil || a.form.sel != fieldPassword || a.form.err != "password 和 password_cmd 填一个就够了" || connections() != "" {
 		t.Errorf("two sources: form %+v, file:\n%s", a.form, connections())
 	}
@@ -857,5 +857,43 @@ func TestConnFormRedis(t *testing.T) {
 	}
 	if dsnExample["redis"] == "" || defaultPort["redis"] != "6379" {
 		t.Error("no example or port of redis")
+	}
+}
+
+// The form has a switch for production: ticked, read only is ticked with it, and
+// can be unticked; the connection is written so that it reads back as it was
+// made, a writable one saying read_only = false (F17.9, §13).
+func TestConnFormProduction(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	keychain(t, "none")
+	a, _ := withSessions()
+	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab>h<Tab><Tab>u<Tab><Tab>d<Tab><Tab><Space>")
+	if f := a.form; f.sel != fieldProduction || f.fields[fieldProduction].On != 1 || f.fields[fieldReadOnly].On != 1 {
+		t.Fatalf("ticked: sel %d, production %d, read only %d", f.sel, f.fields[fieldProduction].On, f.fields[fieldReadOnly].On)
+	}
+	feed(t, a, "<CR>")
+	if got := connections(); a.form != nil || !strings.Contains(got, "production = true\n") || !strings.Contains(got, "read_only = true\n") {
+		t.Fatalf("saved: form %v, file:\n%s", a.form, got)
+	}
+	if c := a.sess.Conns[len(a.sess.Conns)-1]; c.Spec.Name != "play" || !c.Spec.Production || !c.Spec.ReadOnly {
+		t.Errorf("the connection: %+v", c.Spec)
+	}
+	// writable, in the manager: read_only = false is written
+	feed(t, a, "<C-p>conn.manage<CR>")
+	for range len(a.managed()) - 1 {
+		feed(t, a, "j")
+	}
+	feed(t, a, "<CR>") // into the form of play
+	if f := a.form; f.list || f.fields[fieldProduction].On != 1 || f.fields[fieldReadOnly].On != 1 {
+		t.Fatalf("the form of play: %+v", f)
+	}
+	a.form.sel = fieldReadOnly
+	feed(t, a, "<Space><CR>")
+	got := connections()
+	if !strings.Contains(got, "production = true\nread_only = false\n") && !strings.Contains(got, "read_only = false\nproduction = true\n") {
+		t.Errorf("writable:\n%s", got)
+	}
+	if c, err := config.ReadConnection("play"); err != nil || !c.Production || c.ReadOnly {
+		t.Errorf("read back: %+v %v", c, err)
 	}
 }

@@ -116,8 +116,8 @@ func (a *App) redisQuick(c *Conn, sql string) tea.Cmd {
 		q.ran, q.res, q.err, q.write, q.top, q.left = sql, db.Result{}, i18n.T("%s 是只读连接", c.Spec.Name), false, 0, 0
 		return nil
 	}
-	if a.confirmDangerous && l.Dangerous(sql) {
-		a.confirm = &confirmBox{text: dangerText([]string{sql}), yes: i18n.T("执行"), danger: true, then: func() tea.Cmd { return a.sendQuick(c, sql) }}
+	if (a.confirmDangerous && l.Dangerous(sql)) || (c.Spec.Production && l.Writes(sql)) { // a production connection asks about every write (F17.9)
+		a.confirm = writeBox(c, dangerText([]string{sql}, c.Spec.Production), i18n.T("执行"), true, func() tea.Cmd { return a.sendQuick(c, sql) })
 		return nil
 	}
 	return a.sendQuick(c, sql)

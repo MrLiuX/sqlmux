@@ -34,7 +34,7 @@ var (
 )
 
 // connFields are the keys of a connection, in the order they are written.
-var connFields = []string{"name", "group", "engine", "dsn", "password_cmd", "password_env", "password", "read_only", "ssh", "delimiter"}
+var connFields = []string{"name", "group", "engine", "dsn", "password_cmd", "password_env", "password", "read_only", "production", "ssh", "delimiter"}
 
 func (c Connection) field(key string) any {
 	switch key {
@@ -56,6 +56,8 @@ func (c Connection) field(key string) any {
 		return c.SSH
 	case "delimiter":
 		return c.Delimiter
+	case "production":
+		return c.Production
 	}
 	return c.ReadOnly
 }
@@ -81,6 +83,8 @@ func (c Connection) with(key string, from Connection) Connection {
 		c.SSH = from.SSH
 	case "delimiter":
 		c.Delimiter = from.Delimiter
+	case "production":
+		c.Production = from.Production
 	default:
 		c.ReadOnly = from.ReadOnly
 	}
@@ -135,17 +139,11 @@ func connBlocks(lines []string) []connBlock {
 // findConnection is the block of connection name in lines, and what it says.
 func findConnection(lines []string, name string) (connBlock, Connection, error) {
 	for _, b := range connBlocks(lines) {
-		var f struct {
-			Connection []Connection `toml:"connection"`
-		}
-		if _, err := toml.Decode(strings.Join(lines[b.head:b.end], ""), &f); err == nil && len(f.Connection) == 1 && f.Connection[0].Name == name {
-			return b, f.Connection[0], nil
+		if cs, err := decodeConnections(strings.Join(lines[b.head:b.end], "")); err == nil && len(cs) == 1 && cs[0].Name == name {
+			return b, cs[0], nil
 		}
 	}
-	var f struct {
-		Connection []Connection `toml:"connection"`
-	}
-	if _, err := toml.Decode(strings.Join(lines, ""), &f); err == nil && slices.ContainsFunc(f.Connection, func(c Connection) bool { return c.Name == name }) {
+	if cs, err := decodeConnections(strings.Join(lines, "")); err == nil && slices.ContainsFunc(cs, func(c Connection) bool { return c.Name == name }) {
 		return connBlock{}, Connection{}, errOdd() // there, in lines no block of ours holds whole (a # or a [x] inside a value of lines)
 	}
 	return connBlock{}, Connection{}, fmt.Errorf(i18n.T("%s 里没有叫 %s 的连接"), connectionsPath(), name)
@@ -231,12 +229,15 @@ func editedText(old string, was, c Connection) (text string, got Connection, err
 	}
 	for _, key := range connFields {
 		have, to := was.field(key), c.field(key)
-		if have == to {
+		if have == to && !(key == "read_only" && was.Production != c.Production) { // what read_only stands for when it is not written changes with production
 			continue
 		}
 		want = want.with(key, c)
 		at := lineOfKey(lines, b.head+1, b.last+1, key)
 		zero := to == "" || to == false
+		if key == "read_only" { // a production connection's default is read only: it is writable when it says so
+			zero = to == c.Production
+		}
 		switch line, err := tomlLine(key, to); {
 		case err != nil:
 			return "", Connection{}, err

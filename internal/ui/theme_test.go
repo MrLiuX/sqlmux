@@ -154,3 +154,15 @@ func TestThemeHit(t *testing.T) {
 		t.Errorf("a theme with no search color: %v on %v", got.Fg, got.Bg)
 	}
 }
+
+// The production color is the theme's error when it names none, its own when it does (F17.9).
+func TestProductionColor(t *testing.T) {
+	th, _, unknown, err := ParseTheme("error = \"#112233\"\n", NerdIcons)
+	if err != nil || len(unknown) != 0 || th.Production != th.Error || th.Production == TokyonightStorm.Production {
+		t.Errorf("no production: %v %v %v", th.Production, unknown, err)
+	}
+	th, _, _, err = ParseTheme("error = \"#112233\"\nproduction = \"#445566\"\n", NerdIcons)
+	if err != nil || th.Production != c("#445566") {
+		t.Errorf("production: %v %v", th.Production, err)
+	}
+}

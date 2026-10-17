@@ -440,20 +440,34 @@ func (a *App) conn() *Conn {
 		if n, ok := a.treeNode(); ok {
 			c = n.conn
 		}
-	} else if t := p.tab(); t != nil {
-		switch {
-		case t.Data != nil:
-			c = t.Data.conn
-		case t.Query != nil:
-			c = t.Query.conn
-		case t.Result != nil && t.Result.run != nil:
-			c = t.Result.run.conn
-		}
+	} else {
+		c = p.tab().conn()
 	}
 	if c != nil && c.State == connReady {
 		return c
 	}
 	return a.sess.last
+}
+
+// conn is the connection t is of: a table's, a query's, a result's where it ran;
+// none for a landing page or no tab.
+func (t *Tab) conn() *Conn {
+	switch {
+	case t == nil:
+	case t.Data != nil:
+		return t.Data.conn
+	case t.Query != nil:
+		return t.Query.conn
+	case t.Result != nil && t.Result.run != nil:
+		return t.Result.run.conn
+	}
+	return nil
+}
+
+// production is whether t is of a production connection (§13, F17.9).
+func (t *Tab) production() bool {
+	c := t.conn()
+	return c != nil && c.Spec.Production
 }
 
 // inTx reports whether c's Main is in a transaction, as far as its last

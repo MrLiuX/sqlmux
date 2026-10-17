@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -403,4 +404,123 @@ func pair(r []db.Change, a, b string) (string, string, error) {
 		return "", "", fmt.Errorf("%s", i18n.T("缺少 %s", a))
 	}
 	return x, y, nil
+}
+
+// Preview is the commands Save sends for ch, one text each, from the type the tab
+// knows; none when it knows none. What a command needs of the key that the changes
+// do not say, the value or the score a rename keeps, is written as <its value>.
+// ponytail: made apart from plan, which reads the key as it goes and so cannot be
+// run without it; the integration test holds the two to the same commands.
+func (k Key) Preview(ch db.Changes) []string {
+	return Describe(k.Type, k.Name, ch)
+}
+
+// Describe is the commands plan gives for ch on a key of type typ, as redis-cli
+// reads them.
+func Describe(typ, key string, ch db.Changes) (out []string) {
+	cmd := func(args ...string) {
+		for i, a := range args {
+			if !slices.Contains([]string{"<its value>", "<its score>", "<deleted>"}, a) { // not words of the command but what stands for one
+				args[i] = Quote(a)
+			}
+		}
+		out = append(out, strings.Join(args, " "))
+	}
+	val := func(r db.Row, name, keep string) string { // what a change of column name sets, or keep
+		for _, c := range r.Cols {
+			if c.Name == name {
+				return c.Val.S
+			}
+		}
+		return keep
+	}
+	valueOf := func(r []db.Change, name string) string {
+		for _, c := range r {
+			if c.Name == name && !c.Default {
+				return c.Val.S
+			}
+		}
+		return ""
+	}
+	kept := "<its value>"
+	switch typ {
+	case "string", "ReJSON-RL", "json":
+		for range ch.Deletes {
+			cmd("UNLINK", key)
+		}
+		for _, r := range ch.Updates {
+			for _, c := range r.Cols {
+				if typ == "string" {
+					cmd("SET", key, c.Val.S, "KEEPTTL")
+				} else {
+					cmd("JSON.SET", key, "$", c.Val.S)
+				}
+			}
+		}
+	case "hash":
+		for _, d := range ch.Deletes {
+			cmd("HDEL", key, d[0])
+		}
+		for _, r := range ch.Updates {
+			field, value := r.Key[0], val(r, "value", kept)
+			if rename := val(r, "field", ""); rename != "" && rename != field {
+				cmd("HDEL", key, field)
+				cmd("HSET", key, rename, value)
+			} else {
+				cmd("HSET", key, field, value)
+			}
+		}
+		for _, r := range ch.Inserts {
+			cmd("HSET", key, valueOf(r, "field"), valueOf(r, "value"))
+		}
+	case "list":
+		for _, d := range ch.Deletes {
+			cmd("LSET", key, d[0], "<deleted>")
+		}
+		for _, r := range ch.Updates {
+			for _, c := range r.Cols {
+				cmd("LSET", key, r.Key[0], c.Val.S)
+			}
+		}
+		if len(ch.Deletes) > 0 {
+			cmd("LREM", key, "0", "<deleted>")
+		}
+		for _, r := range ch.Inserts {
+			cmd("RPUSH", key, valueOf(r, "value"))
+		}
+	case "set":
+		for _, d := range ch.Deletes {
+			cmd("SREM", key, d[0])
+		}
+		for _, r := range ch.Updates {
+			for _, c := range r.Cols {
+				cmd("SREM", key, r.Key[0])
+				cmd("SADD", key, c.Val.S)
+			}
+		}
+		for _, r := range ch.Inserts {
+			cmd("SADD", key, valueOf(r, "member"))
+		}
+	case "zset":
+		for _, d := range ch.Deletes {
+			cmd("ZREM", key, d[0])
+		}
+		for _, r := range ch.Updates {
+			member, score := r.Key[0], val(r, "score", "<its score>")
+			if rename := val(r, "member", ""); rename != "" && rename != member {
+				cmd("ZREM", key, member)
+				cmd("ZADD", key, score, rename)
+			} else {
+				cmd("ZADD", key, score, member)
+			}
+		}
+		for _, r := range ch.Inserts {
+			cmd("ZADD", key, valueOf(r, "score"), valueOf(r, "member"))
+		}
+	case "stream":
+		for _, d := range ch.Deletes {
+			cmd("XDEL", key, d[0])
+		}
+	}
+	return out
 }
