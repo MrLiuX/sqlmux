@@ -111,6 +111,9 @@ var alterTitles = map[alterKind]string{
 	dropColumn: i18n.N("删除列…"), dropIndex: i18n.N("删除索引…"),
 }
 
+// alterIcons are their icons in the menu (§7.6).
+var alterIcons = map[alterKind]string{addColumn: "column", addIndex: "index", renameTbl: "rename", dropColumn: "hide", dropIndex: "trash"}
+
 // alter is the action of kind: its statement in a new query on the table's
 // connection, the first placeholder selected (F14.4).
 func (a *App) alter(kind alterKind) tea.Cmd {
@@ -149,7 +152,7 @@ func selectPlaceholder(t *queryTab) {
 func (a *App) alterItems(n node) (items []menuItem) {
 	for _, k := range []alterKind{addColumn, addIndex, renameTbl, dropColumn, dropIndex} {
 		if _, why := alterSQL(n.conn, k, n.table, "", ""); why == "" {
-			items = append(items, menuItem{i18n.T(alterTitles[k]), func() tea.Cmd { return a.alter(k) }})
+			items = append(items, menuItem{i18n.T(alterTitles[k]), alterIcons[k], func() tea.Cmd { return a.alter(k) }})
 		}
 	}
 	return items

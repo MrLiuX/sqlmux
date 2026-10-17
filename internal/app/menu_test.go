@@ -384,7 +384,7 @@ func TestMenuIsAlone(t *testing.T) {
 		t.Error("the wheel does not move the cursor with no menu: the case is not a case")
 	}
 	// a session attached, as one dialed in the background is, takes it down
-	a.menu = &menu{items: []menuItem{{"x", nil}}}
+	a.menu = &menu{items: []menuItem{{"x", "", nil}}}
 	a.attach(a.sess)
 	if a.menu != nil {
 		t.Error("a menu through an attach")
@@ -505,6 +505,8 @@ func TestGoldenTableMenu(t *testing.T) {
 	a.View()
 	rightClickNode(t, a, "t_user")
 	golden.RequireEqual(t, a.render().String())
+	a.icons = ui.ASCIIIcons
+	t.Run("ascii", func(t *testing.T) { golden.RequireEqual(t, a.render().String()) })
 }
 
 // The tree's filter has the keys while it is typed in, the menu opened over
@@ -590,5 +592,45 @@ func TestMenuMoveStopsAtTheEnds(t *testing.T) {
 	feed(t, a, strings.Repeat("k", last+5))
 	if a.menu.sel != 0 {
 		t.Errorf("k past the start: %d", a.menu.sel)
+	}
+}
+
+// Every item of the menus has the icon §7.6 gives it, one a theme's [icon] can
+// name; the tree's menus, a table's, a view's, a query's, a Redis key's, a
+// namespace's and a db's, and the grid's, a cell's and a head's (F16.11).
+func TestMenuItemsHaveIcons(t *testing.T) {
+	want := map[string]string{
+		"打开": "open", "在新 tab 打开": "open", "删除…": "trash", "重命名…": "rename", "删除表…": "trash", "删除视图…": "trash",
+		"改名…": "rename", "设 TTL…": "auto_refresh", "刷新": "refresh",
+		"加列…": "column", "加索引…": "index", "删除列…": "hide", "删除索引…": "trash",
+		"在值编辑器中打开": "edit", "按这个值过滤": "filter", "按这一列排序 ↑": "sort_asc", "按这一列排序 ↓": "sort_desc", "加入排序": "sort_asc",
+		"隐藏这一列": "hide", "复制这一格": "copy", "复制行为 JSON": "copy", "以 JSON 查看": "json", "导出…": "export",
+	}
+	a := menuApp()
+	c := a.sess.Conns[0]
+	ns, _ := a.treeNodes()
+	var menus [][]menuItem
+	for _, n := range ns {
+		if n.kind == nodeTable || n.kind == nodeQueryFile {
+			menus = append(menus, a.menuItems(n))
+		}
+	}
+	redisConn := &Conn{Spec: config.Connection{Engine: "redis"}}
+	for _, n := range []node{{kind: nodeRedisKey, conn: c}, {kind: nodeNamespace, conn: c}, {kind: nodeDatabase, conn: redisConn}} {
+		menus = append(menus, a.menuItems(n))
+	}
+	a2, tab, _ := withRecorder(t)
+	menus = append(menus, a2.columnItems(tab, true), a2.columnItems(tab, false))
+	items := 0
+	for _, m := range menus {
+		for _, it := range m {
+			items++
+			if it.icon != want[it.label] || a.icons.Named(it.icon).Text == "" {
+				t.Errorf("%s: icon %q, want %q", it.label, it.icon, want[it.label])
+			}
+		}
+	}
+	if items < 30 {
+		t.Errorf("only %d items looked at", items)
 	}
 }

@@ -120,11 +120,11 @@ func TestWhereColumnsAfterAnd(t *testing.T) {
 		t.Errorf("and, no blank: %+v", tab.comp.items)
 	}
 	feed(t, a, " ")
-	if tab.comp == nil || len(tab.comp.items) != len(tab.cols.Cols) || tab.comp.items[0].kw {
+	if tab.comp == nil || len(tab.comp.items) != len(tab.cols.Cols) || tab.comp.items[0].kind == kindKeyword {
 		t.Fatalf("and and a blank: the columns: %+v", tab.comp)
 	}
 	feed(t, a, "<BS><BS><BS><BS>or ")
-	if tab.comp == nil || tab.comp.items[0].kw {
+	if tab.comp == nil || tab.comp.items[0].kind == kindKeyword {
 		t.Errorf("or: %+v", tab.comp)
 	}
 	feed(t, a, "<Esc>")
@@ -259,7 +259,9 @@ func TestAcceptIgnoresCase(t *testing.T) {
 // its case; the closing quote that is there already is not put in again (§9.7). The words of a
 // keyword written before the cursor are not put in twice.
 func TestAcceptKeywordSpace(t *testing.T) {
-	kw := func(s string) candidate { return candidate{insert: s, note: "关键字", kw: true, space: true} }
+	kw := func(s string) candidate {
+		return candidate{insert: s, note: "关键字", kind: kindKeyword, space: true}
+	}
 	val := candidate{insert: "null", note: "关键字"}
 	quoted := candidate{insert: "'done'", note: "值"}
 	for _, c := range []struct {

@@ -588,7 +588,7 @@ func TestQueryColumnsAfterBlank(t *testing.T) {
 		t.Errorf("the FROM after the cursor: %v", got)
 	}
 	feed(t, a, "<Esc>ggdGiselect * from t_order where a")
-	if feed(t, a, "<BS> "); c.comp == nil || len(c.comp.items) != len(want) || c.comp.items[0].kw {
+	if feed(t, a, "<BS> "); c.comp == nil || len(c.comp.items) != len(want) || c.comp.items[0].kind == kindKeyword {
 		t.Errorf("after the BS and a blank: %v", labels())
 	}
 	if feed(t, a, "<Esc>"); c.comp != nil {
@@ -799,6 +799,8 @@ func TestGoldenQueryCompletion160x45(t *testing.T) {
 	a, _ := inQuery(t, "", "")
 	feed(t, a, "iselect 1;<CR>select * from t_o")
 	golden.RequireEqual(t, a.render().String())
+	a.icons = ui.ASCIIIcons // a letter each
+	t.Run("ascii", func(t *testing.T) { golden.RequireEqual(t, a.render().String()) })
 }
 
 // What the query draws is the editor's state: the selection by kind,

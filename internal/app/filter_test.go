@@ -311,6 +311,10 @@ func TestGridMenu(t *testing.T) {
 		t.Fatalf("the cell's menu: %v", got)
 	}
 	golden.RequireEqual(t, a.render().String())
+	nerd := a.icons
+	a.icons = ui.ASCIIIcons // no icons in the menu
+	t.Run("ascii", func(t *testing.T) { golden.RequireEqual(t, a.render().String()) })
+	a.icons = nerd
 	// the last item, the ninth, is drawn and takes the selection with 8 j
 	feed(t, a, "jjjjjjjjj")
 	if row := strings.Split(a.render().String(), "\n"); !slices.ContainsFunc(row, func(l string) bool { return strings.Contains(l, "导出…") }) || a.menu.sel != 9 {

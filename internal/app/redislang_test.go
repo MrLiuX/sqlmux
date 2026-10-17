@@ -15,6 +15,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/db/redis"
+	"github.com/kackerx/sqlmux/internal/ui"
 )
 
 // A command is a line: blank lines and # lines are none, a line is cut of the
@@ -474,6 +475,8 @@ func TestGoldenRedisHints(t *testing.T) {
 	feed(t, a, "A")
 	a.queryComplete(c, false)
 	t.Run("keys", func(t *testing.T) { golden.RequireEqual(t, pane()) })
+	a.icons = ui.ASCIIIcons
+	t.Run("keys ascii", func(t *testing.T) { golden.RequireEqual(t, pane()) })
 	feed(t, a, "<Esc>")
 }
 

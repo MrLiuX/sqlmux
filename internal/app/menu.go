@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -27,6 +28,7 @@ type menu struct {
 
 type menuItem struct {
 	label string
+	icon  string // its name in a theme's [icon] (§7.7)
 	run   func() tea.Cmd
 }
 
@@ -37,9 +39,9 @@ func (a *App) menuItems(n node) []menuItem {
 	switch n.kind {
 	case nodeQueryFile:
 		return []menuItem{
-			{i18n.T("打开"), func() tea.Cmd { return a.treeOpen(false) }},
-			{i18n.T("重命名…"), a.renameQueryFile},
-			{i18n.T("删除…"), a.deleteQuery},
+			{i18n.T("打开"), "open", func() tea.Cmd { return a.treeOpen(false) }},
+			{i18n.T("重命名…"), "rename", a.renameQueryFile},
+			{i18n.T("删除…"), "trash", a.deleteQuery},
 		}
 	case nodeTable:
 		drop := i18n.T("删除表…")
@@ -47,23 +49,23 @@ func (a *App) menuItems(n node) []menuItem {
 			drop = i18n.T("删除视图…")
 		}
 		items := []menuItem{
-			{i18n.T("打开"), func() tea.Cmd { return a.treeOpen(false) }},
-			{i18n.T("在新 tab 打开"), func() tea.Cmd { return a.treeOpen(true) }},
-			{drop, a.dropTable},
+			{i18n.T("打开"), "open", func() tea.Cmd { return a.treeOpen(false) }},
+			{i18n.T("在新 tab 打开"), "open", func() tea.Cmd { return a.treeOpen(true) }},
+			{drop, "trash", a.dropTable},
 		}
 		return append(items, a.alterItems(n)...)
 	case nodeRedisKey:
 		return []menuItem{
-			{i18n.T("打开"), func() tea.Cmd { return a.treeOpen(false) }},
-			{i18n.T("删除…"), func() tea.Cmd { return a.deleteRedisKey(n) }},
-			{i18n.T("改名…"), func() tea.Cmd { return a.renameRedisKey(n) }},
-			{i18n.T("设 TTL…"), func() tea.Cmd { return a.ttlKey(n) }},
+			{i18n.T("打开"), "open", func() tea.Cmd { return a.treeOpen(false) }},
+			{i18n.T("删除…"), "trash", func() tea.Cmd { return a.deleteRedisKey(n) }},
+			{i18n.T("改名…"), "rename", func() tea.Cmd { return a.renameRedisKey(n) }},
+			{i18n.T("设 TTL…"), "auto_refresh", func() tea.Cmd { return a.ttlKey(n) }},
 		}
 	case nodeNamespace:
-		return []menuItem{{i18n.T("删除…"), func() tea.Cmd { return a.deleteNamespace(n) }}}
+		return []menuItem{{i18n.T("删除…"), "trash", func() tea.Cmd { return a.deleteNamespace(n) }}}
 	case nodeDatabase:
 		if n.conn.redis() {
-			return []menuItem{{i18n.T("刷新"), func() tea.Cmd { return a.loadKeys(n.conn) }}}
+			return []menuItem{{i18n.T("刷新"), "refresh", func() tea.Cmd { return a.loadKeys(n.conn) }}}
 		}
 	case nodeConn, nodeSchema, nodeGroup, nodeColumn, nodeObjects, nodeIndex, nodeKey, nodeFunc, nodeSequence, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeSep, nodeNote: // no menu
 	}
@@ -113,9 +115,19 @@ func (a *App) menuRun(i int) tea.Cmd {
 func (a *App) drawMenu(f *ui.Frame) {
 	m := a.menu
 	v, w := ui.Complete{Sel: m.sel}, 0
-	for _, it := range m.items {
-		v.Items = append(v.Items, ui.CompleteItem{Text: it.label})
-		w = max(w, ui.Width(it.label)+5) // a border, a blank and the two cells Complete leaves on the right
+	for i, it := range m.items {
+		var icon ui.Icon
+		lead := ""
+		if !a.icons.Labeled { // ascii says it in words alone
+			icon, lead = a.icons.Named(it.icon), a.icons.Named(it.icon).Text+" "
+			fg := a.theme.Dim
+			if i == m.sel { // the picked row's icon is as its text
+				fg = a.theme.Fg
+			}
+			icon.Fg = cmp.Or(icon.Fg, fg)
+		}
+		v.Items = append(v.Items, ui.CompleteItem{Icon: icon, Text: it.label})
+		w = max(w, ui.Width(lead+it.label)+5) // a border, a blank and the two cells Complete leaves on the right
 	}
 	// from the row under the pointer; over it, ending on the row above, when it does not fit below: the node clicked is seen
 	box, rows := ui.CompleteBox(a.window(), m.at, w, len(v.Items), 0, len(v.Items))

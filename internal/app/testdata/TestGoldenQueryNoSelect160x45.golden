@@ -1,14 +1,14 @@
 ┌─ ⓪  doraemon ─────────── « ─┐ ┌─ ① ─────────────────────────────────────────────────────────┐ ┌─ ②  q…  Tx: 自动 ▾ doraemon · doraemon.public ▾  ▶ run  ↵ ─┐
 │  15 tables                 │ │                                                             │ │▶  1 select * from t_order where                             │
-│──────────────────────────────│ │                                                             │ │            ┌────────────────────────────────────────────────┐
-│ ▾  doraemon                 │ │                                                             │ │            │ id                            bigint · t_order │
-│   ▸  agentable              │ │                                                             │ │            │ status                  order_status · t_order │
-│   ▾  public                 │ │                                                             │ │            │ amount                 numeric(10,2) · t_order │
-│     ▾  Tables (14)          │ │                                                             │ │            │ paid                         boolean · t_order │
-│       ▸  agent          124 │ │                                                             │ │            │ meta                           jsonb · t_order │
-│       ▸  agent_version  530 │ │                                                             │ │            │ note                            text · t_order │
-│       ▸  goal            57 │ │                                                             │ │            │ created_at  timestamp with time zone · t_order │
-│       ▸  mt_task        812 │ │                                                             │ │            └────────────────────────────────────────────────┘
+│──────────────────────────────│ │                                                             │ │          ┌──────────────────────────────────────────────────┐
+│ ▾  doraemon                 │ │                                                             │ │          │  id                            bigint · t_order │
+│   ▸  agentable              │ │                                                             │ │          │  status                  order_status · t_order │
+│   ▾  public                 │ │                                                             │ │          │  amount                 numeric(10,2) · t_order │
+│     ▾  Tables (14)          │ │                                                             │ │          │  paid                         boolean · t_order │
+│       ▸  agent          124 │ │                                                             │ │          │  meta                           jsonb · t_order │
+│       ▸  agent_version  530 │ │                                                             │ │          │  note                            text · t_order │
+│       ▸  goal            57 │ │                                                             │ │          │  created_at  timestamp with time zone · t_order │
+│       ▸  mt_task        812 │ │                                                             │ │          └──────────────────────────────────────────────────┘
 │       ▸  mt_task_log    96k │ │                                                             │ │                                                             │
 │       ▸  schema_migrations  │ │                                                             │ │                                                             │
 │       ▸  t_order       6.0k │ │                                                             │ │                                                             │

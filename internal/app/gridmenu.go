@@ -31,10 +31,10 @@ func (a *App) gridMenu(t ui.Target, p uv.Position) {
 	case r != nil && t.Kind == ui.KindCell:
 		a.gridGoto(strings.TrimPrefix(t.Action, "grid.goto "))
 		items = []menuItem{
-			{i18n.T("在值编辑器中打开"), func() tea.Cmd { return a.valueOpen() }},
-			{i18n.T("复制这一格"), func() tea.Cmd { return a.yankGrid(false) }},
-			{i18n.T("以 JSON 查看"), func() tea.Cmd { return a.viewJSON() }},
-			{i18n.T("导出…"), a.exportOpen},
+			{i18n.T("在值编辑器中打开"), "edit", func() tea.Cmd { return a.valueOpen() }},
+			{i18n.T("复制这一格"), "copy", func() tea.Cmd { return a.yankGrid(false) }},
+			{i18n.T("以 JSON 查看"), "json", func() tea.Cmd { return a.viewJSON() }},
+			{i18n.T("导出…"), "export", a.exportOpen},
 		}
 	}
 	if len(items) > 0 {
@@ -48,24 +48,24 @@ func (a *App) gridMenu(t ui.Target, p uv.Position) {
 func (a *App) columnItems(t *dataTab, cell bool) []menuItem {
 	col := t.page.Cols[t.fieldAt(t.col)].Name
 	sort := []menuItem{
-		{i18n.T("按这一列排序 ↑"), func() tea.Cmd { return a.orderOnly(t, col, false) }},
-		{i18n.T("按这一列排序 ↓"), func() tea.Cmd { return a.orderOnly(t, col, true) }},
-		{i18n.T("加入排序"), func() tea.Cmd { return a.orderToggle(t, col) }},
-		{i18n.T("隐藏这一列"), func() tea.Cmd { return a.run("grid.col.hide", 0) }},
+		{i18n.T("按这一列排序 ↑"), "sort_asc", func() tea.Cmd { return a.orderOnly(t, col, false) }},
+		{i18n.T("按这一列排序 ↓"), "sort_desc", func() tea.Cmd { return a.orderOnly(t, col, true) }},
+		{i18n.T("加入排序"), "sort_asc", func() tea.Cmd { return a.orderToggle(t, col) }},
+		{i18n.T("隐藏这一列"), "hide", func() tea.Cmd { return a.run("grid.col.hide", 0) }},
 	}
 	if !cell {
 		return sort
 	}
 	items := []menuItem{
-		{i18n.T("在值编辑器中打开"), func() tea.Cmd { return a.valueOpen() }},
-		{i18n.T("按这个值过滤"), func() tea.Cmd { return a.filterCell() }},
+		{i18n.T("在值编辑器中打开"), "edit", func() tea.Cmd { return a.valueOpen() }},
+		{i18n.T("按这个值过滤"), "filter", func() tea.Cmd { return a.filterCell() }},
 	}
 	items = append(items, sort...)
 	return append(items,
-		menuItem{i18n.T("复制这一格"), func() tea.Cmd { return a.yankGrid(false) }},
-		menuItem{i18n.T("复制行为 JSON"), func() tea.Cmd { return a.yankJSON() }},
-		menuItem{i18n.T("以 JSON 查看"), func() tea.Cmd { return a.viewJSON() }},
-		menuItem{i18n.T("导出…"), a.exportOpen},
+		menuItem{i18n.T("复制这一格"), "copy", func() tea.Cmd { return a.yankGrid(false) }},
+		menuItem{i18n.T("复制行为 JSON"), "copy", func() tea.Cmd { return a.yankJSON() }},
+		menuItem{i18n.T("以 JSON 查看"), "json", func() tea.Cmd { return a.viewJSON() }},
+		menuItem{i18n.T("导出…"), "export", a.exportOpen},
 	)
 }
 

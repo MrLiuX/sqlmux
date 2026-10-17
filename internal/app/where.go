@@ -2,6 +2,7 @@ package app
 
 import (
 	"cmp"
+	"image/color"
 	"math"
 	"slices"
 	"sort"
@@ -33,12 +34,58 @@ type completion struct {
 	top   int  // the first candidate shown, held while the selection is in view (F13.10)
 }
 
+// candKind is what a candidate is, which the icon before it says (F16.11).
+type candKind int
+
+const (
+	kindNone candKind = iota
+	kindKeyword
+	kindValue
+	kindSnippet
+	kindTable
+	kindView
+	kindColumn
+	kindKey     // a Redis key
+	kindCommand // a Redis command
+)
+
+// candIcon is the icon and its color of kind k: the
+// keyword, value and snippet ones those of the code, the others as in the
+// tree (§7.7).
+func (a *App) candIcon(k candKind) ui.Icon {
+	ic, th := a.icons, a.theme
+	var i ui.Icon
+	var fg color.Color
+	switch k {
+	case kindKeyword:
+		i, fg = ic.Keyword, th.Keyword
+	case kindValue:
+		i, fg = ic.Value, th.String
+	case kindSnippet:
+		i, fg = ic.Snippet, th.Info
+	case kindTable:
+		i, fg = ic.Table, th.Func
+	case kindView:
+		i, fg = ic.View, th.Func
+	case kindColumn:
+		i, fg = ic.Column, th.Dim
+	case kindKey:
+		i, fg = ic.Key, th.PK
+	case kindCommand:
+		i, fg = ic.Command, th.Func
+	default:
+		return ui.Icon{}
+	}
+	i.Fg = cmp.Or(i.Fg, fg)
+	return i
+}
+
 type candidate struct {
 	label, insert, note string
 	pos                 []int
-	kw                  bool  // a keyword, not by what the list says of it
-	space               bool  // a word, not a value, a function or a list's item, so the next word comes after a space (§9.7)
-	stops               []int // a snippet: the tabstops, each empty, at these bytes of insert (F15.11)
+	kind                candKind // the icon before it; kindKeyword: a keyword, not by what the list says of it
+	space               bool     // a word, not a value, a function or a list's item, so the next word comes after a space (§9.7)
+	stops               []int    // a snippet: the tabstops, each empty, at these bytes of insert (F15.11)
 }
 
 // whereKeywords are what a condition is made of besides columns (§9.7).
@@ -73,11 +120,11 @@ func (a *App) complete(t *dataTab) {
 		}
 		var cols, kws []candidate
 		for _, c := range t.cols.Cols {
-			cols = append(cols, candidate{label: c.Name, insert: t.conn.ident(c.Name), note: c.Type, space: true})
+			cols = append(cols, candidate{label: c.Name, insert: t.conn.ident(c.Name), note: c.Type, space: true, kind: kindColumn})
 		}
 		for _, k := range whereKeywords {
 			if k != "ilike" || t.conn.eng.Dialect() == sqlkit.PG { // PG's alone
-				kws = append(kws, candidate{label: k, insert: k, note: i18n.T("关键字"), kw: true, space: sqlkit.SpaceAfter(k)})
+				kws = append(kws, candidate{label: k, insert: k, note: i18n.T("关键字"), kind: kindKeyword, space: sqlkit.SpaceAfter(k)})
 			}
 		}
 		if w.WantsColumn { // the column is next, not a keyword
@@ -100,7 +147,7 @@ func valueChoices(col db.Column, d sqlkit.Dialect) (out []candidate) {
 		if len(col.Enum) > 0 {
 			insert = sqlkit.Literal(l, d)
 		}
-		out = append(out, candidate{label: l, insert: insert, note: i18n.T("值")})
+		out = append(out, candidate{label: l, insert: insert, note: i18n.T("值"), kind: kindValue})
 	}
 	return out
 }
@@ -115,16 +162,16 @@ func valueCandidates(col db.Column, kind sqlkit.ValueKind, d sqlkit.Dialect) []c
 	var out []candidate
 	if timeKind(col.Type) != ui.NotTime {
 		if d != sqlkit.SQLite {
-			out = append(out, candidate{label: "now()", insert: "now()", note: i18n.T("值")})
+			out = append(out, candidate{label: "now()", insert: "now()", note: i18n.T("值"), kind: kindValue})
 		}
-		out = append(out, candidate{label: "current_timestamp", insert: "current_timestamp", note: i18n.T("值")})
+		out = append(out, candidate{label: "current_timestamp", insert: "current_timestamp", note: i18n.T("值"), kind: kindValue})
 	}
 	out = append(out, valueChoices(col, d)...)
 	if !col.NotNull && kind != sqlkit.ValueWhere {
-		out = append(out, candidate{label: "null", insert: "null", note: i18n.T("关键字"), kw: true})
+		out = append(out, candidate{label: "null", insert: "null", note: i18n.T("关键字"), kind: kindKeyword})
 	}
 	if kind != sqlkit.ValueWhere && hasDefault(col, kind == sqlkit.ValueInsert) {
-		out = append(out, candidate{label: "default", insert: "default", note: i18n.T("关键字"), kw: true})
+		out = append(out, candidate{label: "default", insert: "default", note: i18n.T("关键字"), kind: kindKeyword})
 	}
 	return out
 }
@@ -214,7 +261,7 @@ func tierOf(pattern, label string) int {
 // (insert in, the list's word is in): those are taken in, not typed again.
 func (c *completion) startOf(text string, cd candidate) int {
 	words := strings.Fields(cd.insert)
-	if !cd.kw || len(words) < 2 {
+	if cd.kind != kindKeyword || len(words) < 2 {
 		return c.start
 	}
 	for n := len(words) - 1; n >= 1; n-- {
@@ -431,18 +478,18 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 			cmds = append(cmds, a.fetchCols(conn, t))
 		}
 		for _, col := range cs.Cols {
-			out = append(out, candidate{label: col.Name, insert: conn.ident(col.Name), note: col.Type + " · " + t.Name, space: true})
+			out = append(out, candidate{label: col.Name, insert: conn.ident(col.Name), note: col.Type + " · " + t.Name, space: true, kind: kindColumn})
 		}
 		return out
 	}
 	tables := func(in string, skip map[tableID]bool) (out []candidate) {
 		for _, t := range conn.Tables {
 			if t.Schema == in && !skip[idOf(t)] {
-				note := i18n.T("表")
+				note, kind := i18n.T("表"), kindTable
 				if t.View() {
-					note = i18n.T("视图")
+					note, kind = i18n.T("视图"), kindView
 				}
-				out = append(out, candidate{label: t.Name, insert: conn.ident(t.Name), note: note, space: true})
+				out = append(out, candidate{label: t.Name, insert: conn.ident(t.Name), note: note, space: true, kind: kind})
 			}
 		}
 		return out
@@ -477,7 +524,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 	var ctes []candidate
 	isCTE := map[string]bool{}
 	for _, n := range c.CTEs {
-		ctes, isCTE[strings.ToLower(n)] = append(ctes, candidate{label: n, insert: conn.ident(n), note: "CTE", space: true}), true
+		ctes, isCTE[strings.ToLower(n)] = append(ctes, candidate{label: n, insert: conn.ident(n), note: "CTE", space: true, kind: kindTable}), true
 	}
 	// setColumns are the columns of the tables an UPDATE names before its SET at
 	// the cursor's depth, a MySQL join's both, each table's in turn
@@ -534,7 +581,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 		var rest []candidate
 		for _, col := range conn.cols[idOf(t)].Cols {
 			if !col.Generated && !slices.ContainsFunc(c.Listed, func(l string) bool { return strings.EqualFold(l, col.Name) }) {
-				rest = append(rest, candidate{label: col.Name, insert: conn.ident(col.Name), note: col.Type})
+				rest = append(rest, candidate{label: col.Name, insert: conn.ident(col.Name), note: col.Type, kind: kindColumn})
 			}
 		}
 		if len(rest) > 1 && c.Prefix == "" {
@@ -542,7 +589,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 			for i, r := range rest {
 				names[i], inserts[i] = r.label, r.insert
 			}
-			rest = append([]candidate{{label: ui.Truncate(strings.Join(names, ", "), 40), insert: strings.Join(inserts, ", "), note: i18n.T("全部 %d 列", len(rest))}}, rest...)
+			rest = append([]candidate{{label: ui.Truncate(strings.Join(names, ", "), 40), insert: strings.Join(inserts, ", "), note: i18n.T("全部 %d 列", len(rest)), kind: kindSnippet}}, rest...)
 		}
 		groups = [][]candidate{rest}
 	case sqlkit.CompInsertRest: // the columns and VALUES of the table, the cursor in the parentheses of the values (F15.11)
@@ -561,7 +608,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 		if len(names) > 0 {
 			insert := "(" + strings.Join(inserts, ", ") + ") values ()"
 			label := "(" + ui.Truncate(strings.Join(names, ", "), 24) + ") values ()"
-			groups = [][]candidate{{{label: label, insert: insert, note: i18n.T("全部 %d 列", len(names)), stops: []int{len(insert) - 1}}}}
+			groups = [][]candidate{{{label: label, insert: insert, note: i18n.T("全部 %d 列", len(names)), stops: []int{len(insert) - 1}, kind: kindSnippet}}}
 		}
 	default:
 		if c.InSet { // an UPDATE's SET: the columns of its tables, no other, none while they are asked for (F15.11)
@@ -590,7 +637,7 @@ func (a *App) sqlComplete(conn *Conn, sql string, pos int, schema string, asked 
 		}
 		var kws []candidate
 		for _, k := range sqlkit.Common(conn.eng.Dialect()) {
-			kws = append(kws, candidate{label: k, insert: k, note: i18n.T("关键字"), kw: true, space: sqlkit.SpaceAfter(k)})
+			kws = append(kws, candidate{label: k, insert: k, note: i18n.T("关键字"), kind: kindKeyword, space: sqlkit.SpaceAfter(k)})
 		}
 		groups = [][]candidate{near, far, append(ctes, tables(schema, named)...), kws}
 		if c.AtStart { // what is typed there is almost always a keyword (F12.6)
@@ -869,8 +916,9 @@ func (a *App) completeView(c *completion, at uv.Position) (ui.Complete, uv.Recta
 	v := ui.Complete{Sel: c.sel}
 	w := 20
 	for _, cd := range c.items {
-		v.Items = append(v.Items, ui.CompleteItem{Text: cd.label, Pos: cd.pos, Note: cd.note})
-		w = max(w, ui.Width(cd.label+"  "+cd.note)+4)
+		icon := a.candIcon(cd.kind)
+		v.Items = append(v.Items, ui.CompleteItem{Icon: icon, Text: cd.label, Pos: cd.pos, Note: cd.note})
+		w = max(w, ui.Width(icon.Text+" "+cd.label+"  "+cd.note)+4)
 	}
 	box, rows := ui.CompleteBox(a.window(), at, w, len(v.Items), 0, ui.CompleteRows)
 	_, c.top = ui.ListView(c.sel, c.top, len(v.Items), rows)

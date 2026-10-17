@@ -35,7 +35,7 @@ func TestNumber(t *testing.T) {
 // A Redis key's type has its icon, by the name TYPE gives it, and each icon is
 // one a theme file's [icon] may name (F16.2, §7.7).
 func TestKeyTypeIcons(t *testing.T) {
-	for typ, name := range map[string]string{"string": "str", "hash": "hash", "list": "list", "set": "set", "zset": "zset", "stream": "stream", "ReJSON-RL": "json"} {
+	for typ, name := range map[string]string{"string": "str", "hash": "hash", "list": "list", "set": "set", "zset": "zset", "stream": "stream", "ReJSON-RL": "jsonview"} {
 		for _, set := range []*Icons{NerdIcons, ASCIIIcons} {
 			ic := set.KeyType(typ)
 			if ic.Text == "" || ic != *set.byName()[name] {

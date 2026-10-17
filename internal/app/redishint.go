@@ -80,14 +80,14 @@ func (a *App) redisComplete(t *queryTab, before string, pos int, manual bool) (*
 	case len(words) == 1 && ok && len(doc.Subs) > 0:
 		var subs []candidate
 		for _, s := range slices.Sorted(maps.Keys(doc.Subs)) {
-			subs = append(subs, candidate{label: strings.ToUpper(s), insert: strings.ToUpper(s), note: doc.Subs[s].Summary, space: true})
+			subs = append(subs, candidate{label: strings.ToUpper(s), insert: strings.ToUpper(s), note: doc.Subs[s].Summary, space: true, kind: kindKeyword})
 		}
 		groups = [][]candidate{subs}
 	case ok:
 		place := doc.At(rest)
 		var toks []candidate
 		for _, tk := range place.Tokens {
-			toks = append(toks, candidate{label: tk, insert: tk, note: i18n.T("参数"), space: true})
+			toks = append(toks, candidate{label: tk, insert: tk, note: i18n.T("参数"), space: true, kind: kindKeyword})
 		}
 		groups = [][]candidate{toks}
 		if place.Leaf != nil && !strings.ContainsAny(partial[:min(len(partial), 1)], `"'`) {
@@ -105,8 +105,12 @@ func (a *App) redisComplete(t *queryTab, before string, pos int, manual bool) (*
 					cmds = append(cmds, a.askHints(t, kind, arg))
 				}
 				var found []candidate
+				ck := kindKey
+				if kind == "fields" {
+					ck = kindColumn
+				}
 				for _, n := range names {
-					found = append(found, candidate{label: n, insert: redis.Quote(n), note: map[string]string{"keys": i18n.T("键"), "fields": i18n.T("字段")}[kind], space: true})
+					found = append(found, candidate{label: n, insert: redis.Quote(n), note: map[string]string{"keys": i18n.T("键"), "fields": i18n.T("字段")}[kind], space: true, kind: ck})
 				}
 				groups = append(groups, found)
 			}
@@ -124,13 +128,13 @@ func (a *App) redisComplete(t *queryTab, before string, pos int, manual bool) (*
 func (c *Conn) commandNames() (out []candidate) {
 	if c.docs != nil {
 		for _, n := range slices.Sorted(maps.Keys(c.docs)) {
-			out = append(out, candidate{label: strings.ToUpper(n), insert: strings.ToUpper(n), note: c.docs[n].Summary, space: true})
+			out = append(out, candidate{label: strings.ToUpper(n), insert: strings.ToUpper(n), note: c.docs[n].Summary, space: true, kind: kindCommand})
 		}
 		return out
 	}
 	for _, n := range slices.Sorted(maps.Keys(c.cmds)) {
 		if !strings.Contains(n, "|") {
-			out = append(out, candidate{label: strings.ToUpper(n), insert: strings.ToUpper(n), space: true})
+			out = append(out, candidate{label: strings.ToUpper(n), insert: strings.ToUpper(n), space: true, kind: kindCommand})
 		}
 	}
 	return out
