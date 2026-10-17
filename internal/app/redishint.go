@@ -166,7 +166,7 @@ func (a *App) askHints(t *queryTab, kind, arg string) tea.Cmd {
 func (a *App) gotHintDue(m hintDue) tea.Cmd {
 	t := m.t
 	c := t.conn
-	if m.seq != t.hintSeq || c.State != connReady || !slices.Contains(a.queries(), t) {
+	if m.seq != t.hintSeq || c.State != connReady || !slices.Contains(a.queries(), t) && (a.palette == nil || a.palette.hint != t) {
 		return nil
 	}
 	meta, limit := c.Meta, a.loadAll
@@ -201,6 +201,9 @@ func (a *App) gotHints(m hintMsg) tea.Cmd {
 		if t.conn == m.conn && t.ed.Mode() == editor.Insert {
 			cmds = append(cmds, a.queryComplete(t, t.wait != nil && t.wait.manual))
 		}
+	}
+	if p := a.palette; p != nil && p.conn == m.conn && p.hint != nil { // the quick SQL's
+		cmds = append(cmds, a.completeSQL())
 	}
 	return tea.Batch(cmds...)
 }

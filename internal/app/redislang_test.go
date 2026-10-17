@@ -311,10 +311,11 @@ func TestPaletteHidesSQLOnlyCommands(t *testing.T) {
 	}
 	c := a.sess.Conns[0]
 	c.Spec.Engine, c.drv, c.eng = "redis", kvDriver{}, nil
-	for _, id := range ids {
-		if has(a, id) {
-			t.Errorf("Redis: %s listed", id)
-		}
+	if has(a, "query.format") {
+		t.Error("Redis: query.format listed")
+	}
+	if !has(a, "palette.sql") { // the quick SQL runs a command there (F17.2)
+		t.Error("Redis: palette.sql not listed")
 	}
 }
 

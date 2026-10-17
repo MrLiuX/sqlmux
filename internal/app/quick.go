@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db/redis"
 	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/sqlkit"
 	"github.com/kackerx/sqlmux/internal/ui"
@@ -80,25 +81,90 @@ func (a *App) runQuick(sql string) tea.Cmd {
 		a.state.SQL = map[string][]string{}
 	}
 	c := p.conn
-	if !c.sql() {
+	if !c.sql() && !c.redis() {
 		return a.showToast(i18n.T("这个连接没有快速 SQL"))
 	}
 	if c.State != connReady { // a layout's other session, still connecting (F6.5)
 		return a.notReady(c)
 	}
-	h := slices.Insert(slices.DeleteFunc(a.state.SQL[c.Spec.Name], func(s string) bool { return s == sql }), 0, sql)
-	a.state.SQL[c.Spec.Name] = h[:min(len(h), quickHistory)]
-	if q := p.quick; sqlkit.IsWrite(sql, c.eng.Dialect()) { // a write is for a query, where running it is the user's own ↵ (F-05)
-		q.ran, q.res, q.err, q.write, q.top, q.left = sql, db.Result{}, "", true, 0, 0
-		return a.saveState()
+	if !c.sql() && !c.cmdsReady { // what writes and what is dangerous is not known yet (§13)
+		return a.showToast(i18n.T("还在读 %s 的命令列表", c.label()))
 	}
+	if !c.sql() && len(c.lang().Stmts(sql)) == 0 { // a blank line, a comment
+		return nil
+	}
+	if c.sql() || !redis.Sensitive(sql) { // a password is not kept (§9.8)
+		h := slices.Insert(slices.DeleteFunc(a.state.SQL[c.Spec.Name], func(s string) bool { return s == sql }), 0, sql)
+		a.state.SQL[c.Spec.Name] = h[:min(len(h), quickHistory)]
+	}
+	if c.sql() {
+		if q := p.quick; sqlkit.IsWrite(sql, c.eng.Dialect()) { // a write is for a query, where running it is the user's own ↵ (F-05)
+			q.ran, q.res, q.err, q.write, q.top, q.left = sql, db.Result{}, "", true, 0, 0
+			return a.saveState()
+		}
+		return tea.Batch(a.saveState(), a.sendQuick(c, sql))
+	}
+	return tea.Batch(a.saveState(), a.redisQuick(c, sql)) // a command goes, as the console's does (F17.2)
+}
+
+// redisQuick is a command typed in the quick SQL of a Redis connection: it goes
+// as a console's line does, kept back on a read-only connection when it writes,
+// asked about when it is dangerous (§13).
+func (a *App) redisQuick(c *Conn, sql string) tea.Cmd {
+	q, l := a.palette.quick, c.lang()
+	if c.readOnly && l.Writes(sql) {
+		q.ran, q.res, q.err, q.write, q.top, q.left = sql, db.Result{}, i18n.T("%s 是只读连接", c.Spec.Name), false, 0, 0
+		return nil
+	}
+	if a.confirmDangerous && l.Dangerous(sql) {
+		a.confirm = &confirmBox{text: dangerText([]string{sql}), yes: i18n.T("执行"), danger: true, then: func() tea.Cmd { return a.sendQuick(c, sql) }}
+		return nil
+	}
+	return a.sendQuick(c, sql)
+}
+
+// quickOn is how c runs the statement of a quick SQL, with what it needs read
+// now, for a goroutine: a SQL connection's Meta, in schema, read only; a Redis
+// connection's Main, as the console's line goes, the reply cut to the rows
+// shown.
+func quickOn(c *Conn, schema string) func(sql string) (db.Result, error) {
+	meta, eng := c.Meta, c.eng
+	if c.sql() {
+		return func(sql string) (db.Result, error) {
+			return eng.Quick(context.Background(), meta, sql, schema, quickRows)
+		}
+	}
+	main, reruns := c.Main, c.lang().Reruns
+	return func(sql string) (res db.Result, err error) {
+		run := main.Run
+		if reruns(sql) {
+			run = main.RunSafe
+		}
+		err = run(context.Background(), func(ctx context.Context, conn db.Conn) error {
+			rs, err := db.ExecEach(ctx, conn, []string{sql}, 0, nil)
+			if len(rs) > 0 {
+				res = rs[0]
+			}
+			return err
+		})
+		if len(res.Rows) > quickRows {
+			res.Rows, res.Truncated = res.Rows[:quickRows], true
+		}
+		return res, err
+	}
+}
+
+// sendQuick sends sql, which is to go, for the palette's quick SQL.
+func (a *App) sendQuick(c *Conn, sql string) tea.Cmd {
+	p := a.palette
 	p.quick.running = sql
 	c.busy++
-	meta, eng, schema := c.Meta, c.eng, c.Schema
-	return tea.Batch(a.saveState(), func() tea.Msg {
-		r, err := eng.Quick(context.Background(), meta, sql, schema, quickRows)
+	schema := c.Schema
+	run := quickOn(c, schema)
+	return func() tea.Msg {
+		r, err := run(sql)
 		return quickMsg{p, c, schema, r, err}
-	})
+	}
 }
 
 // gotQuick shows a quick SQL's answer, if its palette is still open: the
@@ -118,6 +184,9 @@ func (a *App) gotQuick(m quickMsg) tea.Cmd {
 	q.conn, q.schema = m.conn, m.schema
 	if m.err != nil {
 		q.res, q.err = db.Result{Took: m.res.Took}, m.err.Error()
+	}
+	if !m.conn.sql() { // a console's line is in the history; a SQL one is not (§9.8)
+		recordHistory(&run{conn: m.conn}, sql, q.res, q.err)
 	}
 	return nil
 }
@@ -199,11 +268,14 @@ func (a *App) rerunQuick(rt *resultTab) tea.Cmd {
 	if !r.done {
 		return nil
 	}
+	if !r.conn.sql() && !r.conn.lang().Reruns(r.sql) { // a command with an effect is not sent again by an R (§8.7)
+		return a.showToast(i18n.T("这条命令不是只读的，不重跑"))
+	}
 	r.done, r.start = false, time.Now()
 	r.conn.busy++
-	meta, eng, sql, schema := r.conn.Meta, r.conn.eng, r.sql, r.schema
+	sql, quick := r.sql, quickOn(r.conn, r.schema)
 	return tea.Batch(func() tea.Msg {
-		res, err := eng.Quick(context.Background(), meta, sql, schema, quickRows)
+		res, err := quick(sql)
 		return quickRerun{rt, res, err}
 	}, a.runTick(r))
 }
@@ -274,7 +346,16 @@ func (a *App) completeSQL() tea.Cmd {
 		p.asked = map[tableID]bool{}
 	}
 	c := p.conn
-	comp, cmds := a.sqlComplete(c, sql, pos, c.Schema, p.asked, false)
+	var comp *completion
+	var cmds []tea.Cmd
+	if c.sql() {
+		comp, cmds = a.sqlComplete(c, sql, pos, c.Schema, p.asked, false)
+	} else { // a Redis command's (F17.2): the names the server gives are asked for by a tab of no place
+		if p.hint == nil || p.hint.conn != c {
+			p.hint = &queryTab{conn: c}
+		}
+		comp, cmds = a.redisComplete(p.hint, sql[:pos], pos, false)
+	}
 	if comp != nil {
 		comp.start += len(scopes[scope].prefix)
 	}

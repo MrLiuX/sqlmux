@@ -45,6 +45,7 @@ type palette struct {
 	// Quick SQL's (§12).
 	comp  *completion
 	quick *quickSQL
+	hint  *queryTab        // what a Redis command's key and field names are asked for by (F17.2)
 	asked map[tableID]bool // tables whose columns were fetched for completion
 }
 
