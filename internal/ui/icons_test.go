@@ -35,7 +35,7 @@ func TestNumber(t *testing.T) {
 // A Redis key's type has its icon, by the name TYPE gives it, and each icon is
 // one a theme file's [icon] may name (F16.2, §7.7).
 func TestKeyTypeIcons(t *testing.T) {
-	for typ, name := range map[string]string{"string": "str", "hash": "hash", "list": "list", "set": "set", "zset": "zset", "stream": "stream", "ReJSON-RL": "jsonview"} {
+	for typ, name := range map[string]string{"string": "str", "hash": "hash", "list": "list", "set": "set", "zset": "zset", "stream": "stream", "ReJSON-RL": "json"} {
 		for _, set := range []*Icons{NerdIcons, ASCIIIcons} {
 			ic := set.KeyType(typ)
 			if ic.Text == "" || ic != *set.byName()[name] {
@@ -56,5 +56,24 @@ func TestKeyTypeIcons(t *testing.T) {
 			t.Errorf("%s and %s share an icon", typ, other)
 		}
 		seen[NerdIcons.KeyType(typ).Text] = typ
+	}
+}
+
+// A Nerd glyph is one cell wide, those of the supplementary private use area
+// too (F16.11): the completion box and the menus count their width by it.
+func TestIconWidth(t *testing.T) {
+	v := reflect.ValueOf(*NerdIcons)
+	for i := range v.NumField() {
+		if icon, ok := v.Field(i).Interface().(Icon); ok && icon.Text != "" && Width(icon.Text) != 1 {
+			t.Errorf("%s is %d cells", v.Type().Field(i).Name, Width(icon.Text))
+		}
+	}
+}
+
+// The keyword and value glyphs are those of the user's blink.cmp kind_icons
+// (§7.7, F16.11).
+func TestCandidateGlyphs(t *testing.T) {
+	if NerdIcons.Keyword.Text != "\U000f030b" || NerdIcons.Value.Text != "\U000f03a0" || NerdIcons.Snippet.Text != "" {
+		t.Errorf("keyword %+q value %+q snippet %+q", NerdIcons.Keyword.Text, NerdIcons.Value.Text, NerdIcons.Snippet.Text)
 	}
 }

@@ -31,19 +31,20 @@ type Icons struct {
 	MySQL         Icon
 	Redis         Icon
 	// A Redis key's type in the tree (F16.2)
-	Str, Hash, List, Set, ZSet, Stream, JSONView Icon
-	SQLite                                       Icon
-	Search, Keys                                 Icon // status bar: palette entry, pending keys
-	Conn                                         Icon
-	Key                                          Icon // primary key columns
-	Command                                      Icon // palette rows (K-03)
-	Window                                       Icon // the tree's workspace (§7.8)
-	Pane                                         Icon // not drawn since F10.5; a theme file that names it still loads (§7.7)
+	Str, Hash, List, Set, ZSet, Stream, JSON Icon
+	SQLite                                   Icon
+	Search, Keys                             Icon // status bar: palette entry, pending keys
+	Conn                                     Icon
+	Key                                      Icon // primary key columns
+	Command                                  Icon // palette rows (K-03)
+	Window                                   Icon // the tree's workspace (§7.8)
+	Pane                                     Icon // not drawn since F10.5; a theme file that names it still loads (§7.7)
 	// What a completion candidate is, besides the table, the view, the column,
 	// the key and the command that have their own (F16.11)
-	Keyword, Function, Value, Snippet Icon
-	// A right-click menu's items, besides the ones that have their own (F16.11)
-	Open, Edit, Copy, Trash, Rename, Hide, JSON Icon
+	Keyword, Value, Snippet Icon
+	// A right-click menu's items, besides the ones that have their own (F16.11);
+	// "以 JSON 查看" has JSON's
+	Open, Edit, Copy, Trash, Rename, Hide Icon
 	// The query bar's buttons (Q-05) and ORDER's direction; nil Fg: info
 	// and warn (§7.7)
 	Save, Refresh, Transpose Icon
@@ -67,71 +68,69 @@ type Icons struct {
 	Labeled bool
 }
 
-// Nerd Font glyphs, all from the BMP private use area.
+// Nerd Font glyphs, from the private use areas.
 var NerdIcons = &Icons{
-	Schema:      Icon{Text: "\uf0e8"}, // nf-fa-sitemap
-	Table:       Icon{Text: "\uf0ce"}, // nf-fa-table
-	Query:       Icon{Text: "\uf489"}, // nf-oct-terminal
-	Filter:      Icon{Text: "\uf0b0"}, // nf-fa-filter
-	Postgres:    Icon{Text: "\ue76e"}, // nf-dev-postgresql
-	MySQL:       Icon{Text: "\ue704"}, // nf-dev-mysql
-	Redis:       Icon{Text: "\ue76d"}, // nf-dev-redis
-	Str:         Icon{Text: "\uf031"}, // nf-fa-font
-	Hash:        Icon{Text: "\uf292"}, // nf-fa-hashtag
-	List:        Icon{Text: "\uf03a"}, // nf-fa-list
-	Set:         Icon{Text: "\uf009"}, // nf-fa-th_large
-	ZSet:        Icon{Text: "\uf091"}, // nf-fa-trophy
-	Stream:      Icon{Text: "\uf043"}, // nf-fa-tint
-	JSONView:    Icon{Text: "\uf1c9"}, // nf-fa-file_code_o
-	SQLite:      Icon{Text: "\ue7c4"}, // nf-dev-sqllite
-	Search:      Icon{Text: "\uf002"}, // nf-fa-search
-	Keys:        Icon{Text: "\uf11c"}, // nf-fa-keyboard_o
-	Conn:        Icon{Text: "\uf1e6"}, // nf-fa-plug
-	Key:         Icon{Text: "\uf084"}, // nf-fa-key
-	Command:     Icon{Text: "\uf0e7"}, // nf-fa-bolt
-	Window:      Icon{Text: "\uf2d2"}, // nf-fa-window_restore
-	Save:        Icon{Text: "\uf0c7"}, // nf-fa-save
-	Refresh:     Icon{Text: "\uf021"}, // nf-fa-refresh
-	Transpose:   Icon{Text: "\uf0ec"}, // nf-fa-exchange
-	RowAdd:      Icon{Text: "\uf067"}, // nf-fa-plus
-	RowDelete:   Icon{Text: "\uf068"}, // nf-fa-minus
-	AutoRefresh: Icon{Text: "\uf017"}, // nf-fa-clock_o
-	Stop:        Icon{Text: "\uf04d"}, // nf-fa-stop
-	SortAsc:     Icon{Text: "\uf160"}, // nf-fa-sort_amount_asc
-	SortDesc:    Icon{Text: "\uf161"}, // nf-fa-sort_amount_desc
-	View:        Icon{Text: "\uf06e"}, // nf-fa-eye
-	Column:      Icon{Text: "\ueb5f"}, // nf-cod-symbol_field
-	Lock:        Icon{Text: "\uf023"}, // nf-fa-lock
-	Result:      Icon{Text: "\uf022"}, // nf-fa-list_alt
-	Pin:         Icon{Text: "\uf435"}, // nf-oct-pin
-	Export:      Icon{Text: "\uf019"}, // nf-fa-download
-	Close:       Icon{Text: "\uf00d"}, // nf-fa-times
-	Log:         Icon{Text: "\uf0f6"}, // nf-fa-file_text_o
-	Star:        Icon{Text: "\uf005"}, // nf-fa-star
-	Zoom:        Icon{Text: "\uf065"}, // nf-fa-expand
-	History:     Icon{Text: "\uf1da"}, // nf-fa-history
-	Tag:         Icon{Text: "\uf02b"}, // nf-fa-tag
-	Host:        Icon{Text: "\uf233"}, // nf-fa-server
-	Port:        Icon{Text: "\uf1e6"}, // nf-fa-plug
-	User:        Icon{Text: "\uf007"}, // nf-fa-user
-	Database:    Icon{Text: "\uf1c0"}, // nf-fa-database
-	Advanced:    Icon{Text: "\uf013"}, // nf-fa-cog
-	Group:       Icon{Text: "\uf02c"}, // nf-fa-tags
-	Link:        Icon{Text: "\uf0c1"}, // nf-fa-link
-	Index:       Icon{Text: "\uf0dc"}, // nf-fa-sort
-	Func:        Icon{Text: "\uf121"}, // nf-fa-code
-	Sequence:    Icon{Text: "\uf162"}, // nf-fa-sort_numeric_asc
-	Keyword:     Icon{Text: "\ueb62"}, // nf-cod-symbol_keyword
-	Function:    Icon{Text: "\uea8c"}, // nf-cod-symbol_method
-	Value:       Icon{Text: "\ueb5d"}, // nf-cod-symbol_constant
-	Snippet:     Icon{Text: "\ueb66"}, // nf-cod-symbol_snippet
-	Open:        Icon{Text: "\uf115"}, // nf-fa-folder_open_o
-	Edit:        Icon{Text: "\uf040"}, // nf-fa-pencil
-	Copy:        Icon{Text: "\uf0ea"}, // nf-fa-clipboard
-	Trash:       Icon{Text: "\uf1f8"}, // nf-fa-trash
-	Rename:      Icon{Text: "\uf246"}, // nf-fa-i_cursor
-	Hide:        Icon{Text: "\uf070"}, // nf-fa-eye_slash
-	JSON:        Icon{Text: "\ueb0f"}, // nf-cod-json
+	Schema:      Icon{Text: "\uf0e8"},     // nf-fa-sitemap
+	Table:       Icon{Text: "\uf0ce"},     // nf-fa-table
+	Query:       Icon{Text: "\uf489"},     // nf-oct-terminal
+	Filter:      Icon{Text: "\uf0b0"},     // nf-fa-filter
+	Postgres:    Icon{Text: "\ue76e"},     // nf-dev-postgresql
+	MySQL:       Icon{Text: "\ue704"},     // nf-dev-mysql
+	Redis:       Icon{Text: "\ue76d"},     // nf-dev-redis
+	Str:         Icon{Text: "\uf031"},     // nf-fa-font
+	Hash:        Icon{Text: "\uf292"},     // nf-fa-hashtag
+	List:        Icon{Text: "\uf03a"},     // nf-fa-list
+	Set:         Icon{Text: "\uf009"},     // nf-fa-th_large
+	ZSet:        Icon{Text: "\uf091"},     // nf-fa-trophy
+	Stream:      Icon{Text: "\uf043"},     // nf-fa-tint
+	JSON:        Icon{Text: "\uf1c9"},     // nf-fa-file_code_o
+	SQLite:      Icon{Text: "\ue7c4"},     // nf-dev-sqllite
+	Search:      Icon{Text: "\uf002"},     // nf-fa-search
+	Keys:        Icon{Text: "\uf11c"},     // nf-fa-keyboard_o
+	Conn:        Icon{Text: "\uf1e6"},     // nf-fa-plug
+	Key:         Icon{Text: "\uf084"},     // nf-fa-key
+	Command:     Icon{Text: "\uf0e7"},     // nf-fa-bolt
+	Window:      Icon{Text: "\uf2d2"},     // nf-fa-window_restore
+	Save:        Icon{Text: "\uf0c7"},     // nf-fa-save
+	Refresh:     Icon{Text: "\uf021"},     // nf-fa-refresh
+	Transpose:   Icon{Text: "\uf0ec"},     // nf-fa-exchange
+	RowAdd:      Icon{Text: "\uf067"},     // nf-fa-plus
+	RowDelete:   Icon{Text: "\uf068"},     // nf-fa-minus
+	AutoRefresh: Icon{Text: "\uf017"},     // nf-fa-clock_o
+	Stop:        Icon{Text: "\uf04d"},     // nf-fa-stop
+	SortAsc:     Icon{Text: "\uf160"},     // nf-fa-sort_amount_asc
+	SortDesc:    Icon{Text: "\uf161"},     // nf-fa-sort_amount_desc
+	View:        Icon{Text: "\uf06e"},     // nf-fa-eye
+	Column:      Icon{Text: "\ueb5f"},     // nf-cod-symbol_field
+	Lock:        Icon{Text: "\uf023"},     // nf-fa-lock
+	Result:      Icon{Text: "\uf022"},     // nf-fa-list_alt
+	Pin:         Icon{Text: "\uf435"},     // nf-oct-pin
+	Export:      Icon{Text: "\uf019"},     // nf-fa-download
+	Close:       Icon{Text: "\uf00d"},     // nf-fa-times
+	Log:         Icon{Text: "\uf0f6"},     // nf-fa-file_text_o
+	Star:        Icon{Text: "\uf005"},     // nf-fa-star
+	Zoom:        Icon{Text: "\uf065"},     // nf-fa-expand
+	History:     Icon{Text: "\uf1da"},     // nf-fa-history
+	Tag:         Icon{Text: "\uf02b"},     // nf-fa-tag
+	Host:        Icon{Text: "\uf233"},     // nf-fa-server
+	Port:        Icon{Text: "\uf1e6"},     // nf-fa-plug
+	User:        Icon{Text: "\uf007"},     // nf-fa-user
+	Database:    Icon{Text: "\uf1c0"},     // nf-fa-database
+	Advanced:    Icon{Text: "\uf013"},     // nf-fa-cog
+	Group:       Icon{Text: "\uf02c"},     // nf-fa-tags
+	Link:        Icon{Text: "\uf0c1"},     // nf-fa-link
+	Index:       Icon{Text: "\uf0dc"},     // nf-fa-sort
+	Func:        Icon{Text: "\uf121"},     // nf-fa-code
+	Sequence:    Icon{Text: "\uf162"},     // nf-fa-sort_numeric_asc
+	Keyword:     Icon{Text: "\U000f030b"}, // nf-md-key_variant, as blink.cmp's kind_icons in the user's nvim
+	Value:       Icon{Text: "\U000f03a0"}, // nf-md-numeric
+	Snippet:     Icon{Text: "\ueb66"},     // nf-cod-symbol_snippet
+	Open:        Icon{Text: "\uf115"},     // nf-fa-folder_open_o
+	Edit:        Icon{Text: "\uf040"},     // nf-fa-pencil
+	Copy:        Icon{Text: "\uf0ea"},     // nf-fa-clipboard
+	Trash:       Icon{Text: "\uf1f8"},     // nf-fa-trash
+	Rename:      Icon{Text: "\uf246"},     // nf-fa-i_cursor
+	Hide:        Icon{Text: "\uf070"},     // nf-fa-eye_slash
 }
 
 var ASCIIIcons = &Icons{
@@ -146,7 +145,7 @@ var ASCIIIcons = &Icons{
 	Set:         Icon{Text: "t"},
 	ZSet:        Icon{Text: "z"},
 	Stream:      Icon{Text: "x"},
-	JSONView:    Icon{Text: "j"},
+	JSON:        Icon{Text: "j"},
 	SQLite:      Icon{Text: "sq"},
 	Search:      Icon{Text: "~"},
 	Keys:        Icon{Text: "kb"},
@@ -186,7 +185,6 @@ var ASCIIIcons = &Icons{
 	Func:        Icon{Text: "f"},
 	Sequence:    Icon{Text: "n"},
 	Keyword:     Icon{Text: "k"},
-	Function:    Icon{Text: "f"},
 	Value:       Icon{Text: "v"},
 	Snippet:     Icon{Text: "s"},
 	Open:        Icon{Text: "o"},
@@ -195,7 +193,6 @@ var ASCIIIcons = &Icons{
 	Trash:       Icon{Text: "x"},
 	Rename:      Icon{Text: "r"},
 	Hide:        Icon{Text: "-"},
-	JSON:        Icon{Text: "{}"},
 	Labeled:     true,
 }
 
@@ -226,7 +223,7 @@ func (ic *Icons) KeyType(typ string) Icon {
 	case "stream":
 		return ic.Stream
 	case "ReJSON-RL", "json": // TYPE's word, and the tab's
-		return ic.JSONView
+		return ic.JSON
 	}
 	return ic.Key
 }
@@ -260,7 +257,7 @@ func (ic *Icons) byName() map[string]*Icon {
 	return map[string]*Icon{
 		"schema": &ic.Schema, "table": &ic.Table, "query": &ic.Query,
 		"filter": &ic.Filter, "search": &ic.Search, "keys": &ic.Keys, "conn": &ic.Conn,
-		"key": &ic.Key, "postgres": &ic.Postgres, "mysql": &ic.MySQL, "redis": &ic.Redis, "str": &ic.Str, "hash": &ic.Hash, "list": &ic.List, "set": &ic.Set, "zset": &ic.ZSet, "stream": &ic.Stream, "jsonview": &ic.JSONView, "sqlite": &ic.SQLite, "command": &ic.Command, "window": &ic.Window,
+		"key": &ic.Key, "postgres": &ic.Postgres, "mysql": &ic.MySQL, "redis": &ic.Redis, "str": &ic.Str, "hash": &ic.Hash, "list": &ic.List, "set": &ic.Set, "zset": &ic.ZSet, "stream": &ic.Stream, "json": &ic.JSON, "sqlite": &ic.SQLite, "command": &ic.Command, "window": &ic.Window,
 		"save": &ic.Save, "refresh": &ic.Refresh, "transpose": &ic.Transpose,
 		"row_add": &ic.RowAdd, "row_delete": &ic.RowDelete, "auto_refresh": &ic.AutoRefresh, "stop": &ic.Stop,
 		"sort_asc": &ic.SortAsc, "sort_desc": &ic.SortDesc, "view": &ic.View, "column": &ic.Column, "lock": &ic.Lock,
@@ -269,8 +266,8 @@ func (ic *Icons) byName() map[string]*Icon {
 		"tag": &ic.Tag, "host": &ic.Host, "port": &ic.Port, "user": &ic.User, "database": &ic.Database,
 		"advanced": &ic.Advanced, "link": &ic.Link, "group": &ic.Group,
 		"index": &ic.Index, "func": &ic.Func, "sequence": &ic.Sequence,
-		"keyword": &ic.Keyword, "function": &ic.Function, "value": &ic.Value, "snippet": &ic.Snippet,
-		"open": &ic.Open, "edit": &ic.Edit, "copy": &ic.Copy, "trash": &ic.Trash, "rename": &ic.Rename, "hide": &ic.Hide, "json": &ic.JSON,
+		"keyword": &ic.Keyword, "value": &ic.Value, "snippet": &ic.Snippet,
+		"open": &ic.Open, "edit": &ic.Edit, "copy": &ic.Copy, "trash": &ic.Trash, "rename": &ic.Rename, "hide": &ic.Hide,
 	}
 }
 
