@@ -173,3 +173,12 @@ Redis 不塞进 `db.Engine`（那是 SQL 形状的接口：Quote、Arg、Tables�
   行的身份：hash 的 field、set 的 member、list 的 index、zset 的 member、stream 的 ID。写回前的乐观校验同 §10.3：`MULTI` 之前 `WATCH k`，`WATCH` 之后、`MULTI` 之前把要改的格子读回来逐格比 `Old`（WATCH 管不到读页之后、保存之前别人的改动），不符或 `EXEC` 返回 nil（键在 WATCH 后被别人改过）都报「行数据已变化」并重载。没有事务模式切换：Redis 的 MULTI 不是交互式事务，`Conn.Manual` 对它恒为自动。新增行走现有的新增行操作（`HSET` / `SADD` / `ZADD` / `RPUSH`）；string 和 JSON 没有新增行。格子里的 JSON 不按格高亮（`ui.Grid` 按列着色，按格要改绘制和缓存；F16.3 时定不做，第二轮候选），`e` 开值编辑器看排版后的。「以 JSON 查看」（`key.json`，§7.6 的 JSON 视图）：hash 整体变 object、list / set 变数组、zset 变 `[member, score]` 数组、stream 变 `{id, fields}` 数组，只读看，复制为 JSON 同一份。DDL 查看是重建它的命令（`redis.Key.Rebuild`，不在 `Source` 里：`HSET k f v …`、`SET k v EX ttl`，长的截到 `load_all` 并注明），复用 ddlview。二进制值按 §8.1 的占位符。布局文件记 `connection`、`db`、`key`（§14）。导出（`Each`）在 HSCAN / SSCAN 类型上是整键循环，按 `[redis] scan_keys` 同样的预算截断并提示，不另开配置。命令面板的「表」范围在 Redis 连接上这一版不列键（要 SCAN、有预算问题），键只从树和侧栏 `/` 进。
 - **已知上限**：控制台里手敲 `SELECT n` 只改这条 Main 的 db，标题和树不跟着变（`ponytail:` 标出）；HSCAN / SSCAN 翻页只能向前、计数是 `-1`、本地排序不可用；stream 的字段并集按当前页算；`WATCH` 粒度是整个键，别人改了同一个 hash 的另一个 field 也会报「行数据已变化」；RedisJSON 只在装了模块的服务端上（`MODULE LIST`，没有时 JSON 类型不出现）。
 
+### 8.8 外部执行器（exec，M17 F17.7 / F17.8）
+
+本地连不上、只有一条命令行能到的库（用户公司的 prod：PG 经 `doraemonctl exec db` 借 pgAdmin 的 Query Tool 面板，Redis 经 `doraemonctl exec redis` 走 metaknow 的内部接口），用引擎 `exec` 接进来：`dialect` 定 SQL 方言或 Redis，`command` 是 argv 模板。
+
+- **只换传输**：`internal/db/exec` 实现 `db.Conn`（`Exec` / `Query` / `Close`）；`dialect = "postgres"` 时 `postgres.Engine` 的 catalog、分页、`Quote` / `Arg` / `Same` / `Eq` 原样复用，只换 `Connect`（`Engine.Schemas(ctx, c Conn)` 这些本来只认 `Conn`）；`dialect = "redis"` 时树、键 tab 的读和控制台走它，`Query(cmd, args)` 一一对应。
+- **调用**：每条语句一次子进程，`{sql}`（或 `{cmd}` / `{args...}`）替换后执行；`Query` 的 `$n` 参数由 exec 端内联成字面量（字符串按方言加引号，数字、布尔原样，NULL）；`Exec` 按语句拆开逐条调。取消 = 杀子进程；没有断线重连；表单的「测试」跑 `select 1` / `PING`。
+- **输出约定**：stdout 一份 JSON，一条语句一项：`columns`（有序的列名）、`rows`（每行一个数组，值是 JSON 标量或嵌套，嵌套转成文本协议的 JSON 文本）、`n`（受影响或总行数，没有就省略）、`err`（出错时的文本）；Redis 一项就是回复本身（RESP 的 JSON 形）。doraemonctl 的 `-o json` 是第一个实现，对不上的字段由它补（用户自己的工具）。退出码非 0 时 stderr 原文就是错误（面板没开、trans_id 失效这些 doraemonctl 自己会说）。
+- **只读**：`read_only` 对 exec 恒为 true；写回、WATCH、阻塞命令、流式导出都不做。每次查询一次子进程往返（几百毫秒到一两秒），翻一页是 count 加 select 两次，浏览可以接受。
+- **不内置 pgAdmin 的 REST**：那是它的内部接口，版本一变就坏，维护归 doraemonctl。

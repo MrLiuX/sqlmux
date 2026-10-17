@@ -45,7 +45,7 @@
   - **数据库**（M15 F15.1）：layout / last.toml 的表 tab 和 query、state.json 的表键、history.jsonl 的记录都多一个 `db` 字段，和 DSN 里的库一样时省略；旧文件没有这个字段照读，当默认库。
   - **Redis 的键 tab**（M16 F16.3）：layout / last.toml 里 `kind = "key"`，记 `connection`、`db`（数字）、`key`；query 记 `db`（数字，同 PG 的 `db` 字段，对 Redis 是 `SELECT` 的号）；state.json 的键 `连接/db0/键名`（用户的最近使用和展开状态）；history.jsonl 记 `db` 字段（数字，同 PG 的 `db`：和连接默认的 db 一样时省略，`schema` 空；F16.4 验收时定，照实现，原来写 `schema` = `db0`）。旧文件照读。
   - **命令**：`layout.save`「保存布局为…」在状态栏的单行输入里要名字（同 `window.rename`，提示和输入框只占左边、右边照常画模式块，M8 F8.11 起三处统一；面板的输入行是搜索框兼快速 SQL，不再给它加一种模式），`↵` 写 `layouts/<名字>.toml`，同名覆盖，`esc` 放弃；名字含 `/`、以 `.` 开头、或是保留名 `last` 时 toast 拒绝（`last` 指 last.toml，F6.5 审查时定）。`layout.open`「打开布局」是下拉框（同 `theme.switch`），列出 `layouts/*.toml` 和 `last`，选中后替换正在跑的全部 session，有未保存的修改或没提交的事务先按 §10.5 确认（动词「打开」）；确认后在 Update 里同步读布局、建好 session，所有启动连接都在后台连，没有「拨号期间旧 session 还能操作」的窗口（审查时发现那时打的字会丢、还会把旧内容写进新 query 的文件）；第一个 session 的连接连不上也是 toast、tab 留着显示错误页，和别的连接一样；`--layout` 和它共用读布局、建 session 的代码，但启动时连不上照上面「恢复」的规则，M12 F12.5 起也不退出：进界面、节点标失败、toast 错误，`sqlmux <连接名>` 一样（原来在终端里报出来退出，F6.5 复审时定）。启动错误只剩配置本身的问题：TOML 读不了、连接名不存在或重复、主题坏了。
-  - **启动**：`sqlmux` 不带参数时有 `last.toml` 就恢复，没有照默认布局；**命令行直接给库**（M14 F14.1）：位置参数含 `/` 或含 `.`、又不是已有的连接名时当文件路径或 URL（`sqlmux ./x.db`、`sqlmux postgres://…`、`sqlmux mysql://…`），开一个临时连接走默认布局：名字是文件名去扩展名，URL 的是 `<库>@<主机>`（连接名里不能有 `/`：面板的 id 和 state.json 的表键按第一个 `/` 切；没有库名只用主机，都没有用引擎名）；和已有连接同名时保留扩展名（`app.db`），还冲突再加后缀，名字为空或不合连接名规则时用引擎名（state.json、history.jsonl、queries 都按名字记，不能混；审查时定）；不写 connections.toml、密码不存钥匙串、退出不存 `last.toml`；连接管理器里不列它（审查时定：按名字去文件里找会删错、改错真实的连接，表单还会明文显示 URL 里的密码）；它的 session 用 `freeQuery()` 开新编号的 query，不占用户的 `query_1`（之后留在 Queries 列表里，可删）；`DATABASE_URL` 只在 connections.toml 没有连接、又没给位置参数和 `--layout` 时才认（决策者定：很多人 shell 里常年 export 着它，有配置的用户照常恢复 last.toml，不被它劫持；要开它就 `sqlmux "$DATABASE_URL"`）；`sqlmux <连接名>` 用这个连接开默认布局、不恢复 `last`；`sqlmux --layout <名字或路径>` 打开这个布局；连接名和 `--layout` 同时给时报错退出「连接名和 --layout 只能给一个」。`last.toml` 读不了：toast、默认布局，坏文件改名为 `last.toml.broken`。
+  - **启动**：`sqlmux` 不带参数时有 `last.toml` 就恢复，没有照默认布局；**命令行直接给库**（M14 F14.1）：位置参数含 `/` 或含 `.`、又不是已有的连接名时当文件路径或 URL（`sqlmux ./x.db`、`sqlmux postgres://…`、`sqlmux mysql://…`），开一个临时连接走默认布局：名字是文件名去扩展名，URL 的是 `<库>@<主机>`（连接名里不能有 `/`：面板的 id 和 state.json 的表键按第一个 `/` 切；没有库名只用主机，都没有用引擎名）；和已有连接同名时保留扩展名（`app.db`），还冲突再加后缀，名字为空或不合连接名规则时用引擎名（state.json、history.jsonl、queries 都按名字记，不能混；审查时定）；不写 connections.toml、密码不存钥匙串、退出不存 `last.toml`；连接管理器里不列它（审查时定：按名字去文件里找会删错、改错真实的连接，表单还会明文显示 URL 里的密码）；它的 session 用 `freeQuery()` 开新编号的 query，不占用户的 `query_1`（之后留在 Queries 列表里，可删）；`DATABASE_URL` 只在 connections.toml 没有连接、又没给位置参数和 `--layout` 时才认（决策者定：很多人 shell 里常年 export 着它，有配置的用户照常恢复 last.toml，不被它劫持；要开它就 `sqlmux "$DATABASE_URL"`）；`sqlmux <连接名>` 用这个连接开默认布局、不恢复 `last`；位置参数是 `redis://` / `rediss://` URL 时同样开临时 Redis 连接，名字 `<db>@<主机>`（M17 F17.3）；`sqlmux --layout <名字或路径>` 打开这个布局；连接名和 `--layout` 同时给时报错退出「连接名和 --layout 只能给一个」。`last.toml` 读不了：toast、默认布局，坏文件改名为 `last.toml.broken`。
 - **history.jsonl**（M14 F14.2）：路径 `$XDG_DATA_HOME/sqlmux/history.jsonl`，格式和截尾见 §11「查询历史」。
 - **state.json**（M1 F1.5 起）：路径 `$XDG_STATE_HOME/sqlmux/state.json`，读写都在 `config` 包里。
   - 内容：`recent` 是面板的最近使用，记成 `{"kind": "table", "id": "play/public.t_order"}`，kind 为 window / pane / table / command，M5 起表的 id 带连接名，旧的不带连接名的条目读到时丢掉；`queries` 记每个 query 文件最后用的连接和 schema，如 `{"query_1": {"conn": "play", "schema": "public"}}`，换连接或 schema 时写入（M5 F5.11）；`tables` 的键是 `"<连接名>/<schema>.<表>"`（不同连接可能有同名表），每张表下存 history 和 favorites。
@@ -118,11 +118,19 @@ H = "0"
 # connections.toml
 [[connection]]
 name         = "doraemon"
-engine       = "postgres"        # postgres | mysql | sqlite（M14 F14.1；sqlite 的 dsn 是文件路径）| redis（M16；dsn 是 redis:// 或 rediss:// URL，db 号在路径里）
+engine       = "postgres"        # postgres | mysql | sqlite（M14 F14.1；sqlite 的 dsn 是文件路径）| redis（M16；dsn 是 redis:// 或 rediss:// URL，db 号在路径里）| exec（M17；见下面的例子）
 dsn          = "postgres://ctw@localhost:5432/doraemon?sslmode=disable"
 password_cmd = "security find-generic-password -s sqlmux-doraemon -w"
 read_only    = false
+production   = false             # M17 F17.9：true 时警示色、每次写都确认、没写 read_only 就默认只读（§13）
 ssh          = "user@host"       # M15 F15.2：先经这台机器的 ssh 再连 host:port；可选，端口、密钥、ProxyJump 走 ~/.ssh/config
 delimiter    = ":"               # M16，只对 redis：这个连接的命名空间分隔符，盖过 [redis] delimiter
 group        = "prod"            # optional (M10 F10.6)
+
+[[connection]]                   # M17 F17.7 / F17.8：外部执行器——SQL 或 Redis 命令交给一个外部命令跑（§8.8）
+name    = "prod-pg"
+engine  = "exec"
+dialect = "postgres"             # postgres | redis：决定 catalog、分页、引号、补全用哪一套
+command = ["doraemonctl", "exec", "db", "-o", "json", "--no-probe", "{sql}"]   # argv 模板；{sql}（redis 是 {cmd} 和 {args...}）替换后执行
+# read_only 对 exec 恒为 true
 ```
