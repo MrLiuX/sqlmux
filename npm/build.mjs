@@ -41,10 +41,12 @@ for (const [goos, goarch, os, cpu] of platforms) {
     homepage: shell.homepage,
     os: [os],
     cpu: [cpu],
-    files: ["bin"],
+    files: ["bin", "LICENSE"],
   };
+  cpSync(join(here, "..", "LICENSE"), join(dir, "LICENSE")); // MIT asks for the copy to travel with the binary
   writeFileSync(join(dir, "package.json"), JSON.stringify(pkg, null, 2) + "\n");
   shell.optionalDependencies[name] = version;
 }
 cpSync(join(here, "sqlmux"), join(out, "sqlmux"), { recursive: true });
+cpSync(join(here, "..", "LICENSE"), join(out, "sqlmux", "LICENSE"));
 writeFileSync(join(out, "sqlmux", "package.json"), JSON.stringify(shell, null, 2) + "\n");

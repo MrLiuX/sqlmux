@@ -7,7 +7,7 @@ set -eu
 tag=$1 sha=$2 commit=${3:-none} date=${4:-unknown}
 cat <<RUBY
 class Sqlmux < Formula
-  desc "Terminal database client organized like tmux, for PostgreSQL and MySQL"
+  desc "Terminal database client organized like tmux, for PostgreSQL, MySQL, SQLite and Redis"
   homepage "https://github.com/kackerx/sqlmux"
   url "https://github.com/kackerx/sqlmux/archive/refs/tags/${tag}.tar.gz"
   sha256 "${sha}"
@@ -16,7 +16,7 @@ class Sqlmux < Formula
   depends_on "go" => :build
 
   def install
-    ldflags = "-X main.version=v#{version} -X main.commit=${commit} -X main.date=${date}" # std_go_args adds -s -w
+    ldflags = "-s -w -X main.version=v#{version} -X main.commit=${commit} -X main.date=${date}" # std_go_args(ldflags:) adds nothing of its own
     system "go", "build", *std_go_args(ldflags:), "./cmd/sqlmux"
   end
 

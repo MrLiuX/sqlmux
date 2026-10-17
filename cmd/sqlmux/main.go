@@ -11,6 +11,7 @@ import (
 	_ "net/http/pprof" // registers on DefaultServeMux: only served when SQLMUX_PPROF is set
 	"os"
 	"runtime/debug"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -30,13 +31,34 @@ var (
 
 // versionLine is what --version prints: "sqlmux v0.2.1 (3f2a1b9, 2026-10-11T00:06:40Z)".
 // A build without a version of its own takes the module's that Go recorded in
-// info, which is the tag of a `go install ...@v0.2.1`, and is dev with none.
+// info, which is the tag of a `go install ...@v0.2.1`, and is dev with none;
+// without a commit or a date of its own, the revision and the time Go stamped
+// a build made in a checkout with. What is not known is not said (F17.5).
 func versionLine(info *debug.BuildInfo) string {
-	v := version
-	if v == "dev" && info != nil && info.Main.Version != "" && info.Main.Version != "(devel)" {
-		v = info.Main.Version
+	v, c, d := version, commit, date
+	if info != nil {
+		if v == "dev" && info.Main.Version != "" && info.Main.Version != "(devel)" {
+			v = info.Main.Version
+		}
+		for _, s := range info.Settings {
+			switch {
+			case s.Key == "vcs.revision" && c == "none":
+				c = s.Value[:min(len(s.Value), 7)]
+			case s.Key == "vcs.time" && d == "unknown":
+				d = s.Value
+			}
+		}
 	}
-	return fmt.Sprintf("sqlmux %s (%s, %s)", v, commit, date)
+	var known []string
+	for _, s := range []string{c, d} {
+		if s != "none" && s != "unknown" {
+			known = append(known, s)
+		}
+	}
+	if len(known) == 0 {
+		return "sqlmux " + v
+	}
+	return fmt.Sprintf("sqlmux %s (%s)", v, strings.Join(known, ", "))
 }
 
 func main() {

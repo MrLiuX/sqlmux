@@ -244,17 +244,27 @@ func TestStartSessionWithoutConnections(t *testing.T) {
 // recorded, which a `go install ...@v0.2.1` has; dev with neither (F11.1).
 func TestVersionLine(t *testing.T) {
 	defer func(v, c, d string) { version, commit, date = v, c, d }(version, commit, date)
-	mod := func(v string) *debug.BuildInfo { return &debug.BuildInfo{Main: debug.Module{Version: v}} }
+	mod := func(v string, vcs ...string) *debug.BuildInfo {
+		info := &debug.BuildInfo{Main: debug.Module{Version: v}}
+		for i := 0; i+1 < len(vcs); i += 2 {
+			info.Settings = append(info.Settings, debug.BuildSetting{Key: vcs[i], Value: vcs[i+1]})
+		}
+		return info
+	}
+	rev, at := "3f2a1b9c0d4e5f6a7b8c9d0e1f2a3b4c5d6e7f80", "2026-10-11T00:06:40Z"
 	for _, c := range []struct {
 		info *debug.BuildInfo
 		inj  string
 		want string
 	}{
-		{nil, "dev", "sqlmux dev (none, unknown)"},
-		{mod("(devel)"), "dev", "sqlmux dev (none, unknown)"},
-		{mod(""), "dev", "sqlmux dev (none, unknown)"},
-		{mod("v0.2.1"), "dev", "sqlmux v0.2.1 (none, unknown)"},
-		{mod("v0.2.1"), "v0.3.0", "sqlmux v0.3.0 (none, unknown)"}, // ldflags win
+		{nil, "dev", "sqlmux dev"}, // nothing known is not said as none, unknown
+		{mod("(devel)"), "dev", "sqlmux dev"},
+		{mod(""), "dev", "sqlmux dev"},
+		{mod("v0.2.1"), "dev", "sqlmux v0.2.1"},    // go install
+		{mod("v0.2.1"), "v0.3.0", "sqlmux v0.3.0"}, // ldflags win
+		{mod("v0.5.0-0.2026-x-3f2a1b9c0d4e+dirty", "vcs.revision", rev, "vcs.time", at), "dev", "sqlmux v0.5.0-0.2026-x-3f2a1b9c0d4e+dirty (3f2a1b9, " + at + ")"},
+		{mod("(devel)", "vcs.revision", rev), "dev", "sqlmux dev (3f2a1b9)"},
+		{mod("(devel)", "vcs.time", at), "dev", "sqlmux dev (" + at + ")"},
 	} {
 		version, commit, date = c.inj, "none", "unknown"
 		if got := versionLine(c.info); got != c.want {
@@ -264,6 +274,9 @@ func TestVersionLine(t *testing.T) {
 	version, commit, date = "v1.2.3", "abc1234", "2026-10-11T00:06:40Z"
 	if got := versionLine(nil); got != "sqlmux v1.2.3 (abc1234, 2026-10-11T00:06:40Z)" {
 		t.Errorf("injected: %q", got)
+	}
+	if got := versionLine(mod("(devel)", "vcs.revision", rev, "vcs.time", "other")); got != "sqlmux v1.2.3 (abc1234, 2026-10-11T00:06:40Z)" { // the build's own win
+		t.Errorf("injected over vcs: %q", got)
 	}
 	if err := run([]string{"--version"}); err != nil {
 		t.Errorf("--version: %v", err)
