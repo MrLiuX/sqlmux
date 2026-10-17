@@ -6,6 +6,14 @@ All notable changes to sqlmux are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-17
+
+### Added
+
+- Icons in the completion list: each candidate shows its kind (keyword, table, view, column, value, snippet; for Redis: command, subcommand, key, field, token), in the style of nvim-cmp.
+- Icons in the right-click menus of the tree and the table.
+- New icon names a theme can override: `keyword`, `value`, `snippet`, `open`, `edit`, `copy`, `trash`, `rename`, `hide`. They follow `icons`: with `icons = "ascii"`, completion shows a letter per kind and the menus have no icons.
+
 ## [0.5.0] - 2026-10-15
 
 ### Added
@@ -167,7 +175,8 @@ Note: `go install github.com/kackerx/sqlmux/...` does not work for this version 
 - Every key can be rebound per pane type in `keymaps.toml` (`SPC` is the leader). `sqlmux keys` lists every action and `sqlmux keys --check` reports conflicts. Key help (`?`), which-key hints and full mouse support are built in, and `vim = false` gives plain editors and arrow-key navigation.
 - Themes, border styles, Nerd Font or ASCII icons, and an English or Chinese UI (`language = "zh"`).
 
-[Unreleased]: https://github.com/kackerx/sqlmux/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/kackerx/sqlmux/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/kackerx/sqlmux/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/kackerx/sqlmux/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kackerx/sqlmux/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/kackerx/sqlmux/compare/v0.2.2...v0.3.0
