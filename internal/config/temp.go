@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"net/url"
@@ -20,8 +21,8 @@ func IsTarget(arg string, known []string) bool {
 }
 
 // TempConnection is the connection a file or a URL on the command line, or
-// DATABASE_URL, stands for (F14.1): postgres:// or mysql://, else a SQLite
-// file. It is nowhere written, not connections.toml, not the keychain: the
+// DATABASE_URL, stands for (F14.1): postgres://, mysql:// or redis://, else a
+// SQLite file. It is nowhere written, not connections.toml, not the keychain: the
 // password a URL holds stays in it. Its name is the file's without its
 // extension, or <database>@<host>, as a connection's name has to be (no /);
 // one that is taken by a connection of taken, by what the state, the history and
@@ -36,9 +37,9 @@ func TempConnection(target string, taken []string) (Connection, error) {
 		c.Engine, c.DSN = "sqlite", target
 		return named(c, strings.TrimSuffix(base, filepath.Ext(base)), base, taken), nil
 	}
-	engine, ok := map[string]string{"postgres": "postgres", "postgresql": "postgres", "mysql": "mysql"}[scheme]
+	engine, ok := map[string]string{"postgres": "postgres", "postgresql": "postgres", "mysql": "mysql", "redis": "redis", "rediss": "redis"}[scheme]
 	if !ok {
-		return Connection{}, fmt.Errorf(i18n.T("不认识的 URL %s://：只有 postgres://、mysql:// 和 SQLite 的文件"), scheme)
+		return Connection{}, fmt.Errorf(i18n.T("不认识的 URL %s://：只有 postgres://、mysql://、redis:// 和 SQLite 的文件"), scheme)
 	}
 	u, err := url.Parse(target)
 	if ue := (*url.Error)(nil); errors.As(err, &ue) {
@@ -46,6 +47,9 @@ func TempConnection(target string, taken []string) (Connection, error) {
 	}
 	c.Engine, c.DSN = engine, target
 	database, host := strings.TrimPrefix(u.Path, "/"), u.Hostname()
+	if engine == "redis" { // the tree calls the db that (F17.3)
+		database = "db" + cmp.Or(database, "0")
+	}
 	name := strings.Join(slices.DeleteFunc([]string{database, host}, func(s string) bool { return s == "" }), "@")
 	return named(c, name, name, taken), nil
 }

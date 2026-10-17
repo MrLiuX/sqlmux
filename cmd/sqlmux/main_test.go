@@ -327,10 +327,13 @@ func TestTempConnection(t *testing.T) {
 		{configured, "x.db", "", "", "x"},
 		{configured, "./data/x.sqlite", "", "postgres://u@h/other", "x"}, // the argument wins
 		{configured, "postgres://u@h/shop", "", "", "shop@h"},
-		{configured, "prod", "", "mysql://u@h/db", ""},    // a connection's name
-		{configured, "prod.eu", "", "mysql://u@h/db", ""}, // with a dot in it
-		{configured, "", "", "mysql://u@h/db", ""},        // a user with connections has last.toml back
-		{"", "", "", "mysql://u@h/db", "db@h"},            // none configured
+		{configured, "prod", "", "mysql://u@h/db", ""},      // a connection's name
+		{configured, "prod.eu", "", "mysql://u@h/db", ""},   // with a dot in it
+		{configured, "", "", "mysql://u@h/db", ""},          // a user with connections has last.toml back
+		{"", "", "", "mysql://u@h/db", "db@h"},              // none configured
+		{configured, "redis://u@h:6380/2", "", "", "db2@h"}, // F17.3
+		{configured, "redis://h", "", "", "db0@h"},          // no db: db0
+		{configured, "rediss://h/3", "", "", "db3@h"},
 		{"", "", "", "", ""},
 		{"", "", "lay", "mysql://u@h/db", ""}, // a layout asked for is the program's
 	} {
@@ -346,6 +349,9 @@ func TestTempConnection(t *testing.T) {
 	}
 	if _, err := tempConnection("oracle://h/d", "", ""); err == nil {
 		t.Error("no such engine")
+	}
+	if c, err := tempConnection("rediss://:pw@h:6380/3", "", ""); err != nil || c.Engine != "redis" || c.DSN != "rediss://:pw@h:6380/3" || !c.Temp {
+		t.Errorf("a Redis URL: %+v %v", c, err)
 	}
 	// a connections.toml that does not read is its error, not a reason to take a name for a file
 	writeConfig(t, "connections.toml", configured+"\n[[connection]]\nname = \"prod\"\nengine = \"postgres\"\ndsn = \"postgres://h/d\"\n")

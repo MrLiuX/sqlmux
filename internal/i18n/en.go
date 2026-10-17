@@ -51,7 +51,7 @@ var en = map[string]string{
 	"关闭键位帮助":     "Close key help",
 	"再按一次 %s 退出": "Press %s again to quit",
 	"切换 schema":  "Switch schema",
-	"不认识的 URL %s://：只有 postgres://、mysql:// 和 SQLite 的文件": "Unknown URL %s://: only postgres://, mysql:// and SQLite files",
+	"不认识的 URL %s://：只有 postgres://、mysql://、redis:// 和 SQLite 的文件": "Unknown URL %s://: only postgres://, mysql://, redis:// and SQLite files",
 	"%s: 不认识的键 %s": "%s: unknown key(s) %s",
 	"没有读函数定义的权限：要 SHOW_ROUTINE，或是它的 DEFINER": "No permission to read the function's definition: it takes SHOW_ROUTINE, or being its DEFINER",
 	"函数已不存在，按 R 刷新":                          "The function no longer exists: R reloads",
