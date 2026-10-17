@@ -8,7 +8,7 @@
 - **审查节点**：1 = F17.1–F17.6（体验回合，都小，一批审）；2 = F17.9 + F17.10（安全：生产连接、保存前预览）；3 = F17.7 + F17.8（外部执行器）。
 - **不做（留 M18 候选）**：Redis 第二轮（Pub/Sub、MONITOR、Cluster、格子里的 JSON 按格高亮、string 键是 JSON 时直接开值编辑器）；exec 引擎的写回和流式导出。
 
-## F17.1 tab 栏横向滚动 · 状态：todo
+## F17.1 tab 栏横向滚动 · 状态：passed（8baeb8c；e2e 37ebc89）
 
 - **依赖**：无
 - **涉及**：`internal/app`（tab 栏绘制和命中区）、`internal/ui`
@@ -23,7 +23,7 @@
 - [ ] golden：溢出的 tab 栏一屏。
 - [ ] e2e：开 8 个 tab，`8gt` 后标题可见，点 `‹N` 滚回。
 
-## F17.2 快速 SQL 在 Redis 连接上跑命令 · 状态：todo
+## F17.2 快速 SQL 在 Redis 连接上跑命令 · 状态：passed（8baeb8c；e2e 37ebc89）
 
 - **依赖**：F16.4
 - **涉及**：`internal/app`（palette 的 SQL 范围、quicksql）
@@ -38,7 +38,7 @@
 - [ ] 单测：一条命令 → 面板结果；写命令在只读连接被挡；mutation。
 - [ ] e2e：`;` `HGETALL hash:user` 两列；`;` `FLUSHDB` 弹确认；`C-e` 开出的控制台里是这一行。
 
-## F17.3 命令行直接给 `redis://` · 状态：todo
+## F17.3 命令行直接给 `redis://` · 状态：passed（8baeb8c；e2e 37ebc89）
 
 - **依赖**：F16.1
 - **涉及**：`cmd/sqlmux`、`internal/app`（F14.1 的临时连接）
@@ -50,7 +50,7 @@
 - [ ] 单测：URL → 临时连接的名字和 DSN；mutation。
 - [ ] e2e：`sqlmux redis://127.0.0.1:<port>/2` 开出树。
 
-## F17.4 三处小 bug · 状态：todo
+## F17.4 三处小 bug · 状态：passed（8baeb8c；e2e 37ebc89）
 
 - **依赖**：无
 - **涉及**：`internal/app`、`internal/i18n`、`cmd/sqlmux`（keys）
@@ -64,7 +64,7 @@
 - [ ] 单测：keys 输出里 `grep -E '\((F|M)[0-9]|§'` 为空（加进现有的 keys 测试）；复数表驱动。
 - [ ] e2e：新建 session 后 2s 内 toast 消失。
 
-## F17.5 发布元数据 · 状态：todo
+## F17.5 发布元数据 · 状态：passed（8baeb8c；e2e 37ebc89）
 
 - **依赖**：无
 - **涉及**：`.github/scripts/tap-formula.sh`、`npm/sqlmux/package.json`、`cmd/sqlmux/main.go`
@@ -79,7 +79,7 @@
 - [ ] 单测：versionLine 对三种 BuildInfo 的输出表驱动。
 - [ ] 推送后 oss 的安装验证看 `brew info` 的描述。
 
-## F17.6 命令面板的预览区：滚轮和焦点 · 状态：todo
+## F17.6 命令面板的预览区：滚轮和焦点 · 状态：passed（8baeb8c；e2e 37ebc89）
 
 - **依赖**：F9.7
 - **涉及**：`internal/app`（palette）、`internal/ui`（TextView）
@@ -94,7 +94,7 @@
 - [ ] golden：焦点在预览区一屏。
 - [ ] e2e：`C-o` 进预览，`"+yy` 复制一行到假 pbcopy（`yy` 只进 vim 寄存器，同 F3.38 和值编辑器 / JSON 视图；用户自己的 `Y` 映射照样可用；tester 2026-10-18 问，决策者定）。
 
-## F17.7 外部执行器引擎（PG 方言） · 状态：todo
+## F17.7 外部执行器引擎（PG 方言） · 状态：passed（8baeb8c；e2e 37ebc89）
 
 - **依赖**：F16.0（`db.Driver` / `db.Conn`）
 - **涉及**：`internal/db/exec`（新包）、`internal/db/postgres`（`Connect` 可换）、`internal/config`、`internal/app`（连接表单的 engine 多一项）
@@ -112,7 +112,7 @@
 - [ ] e2e：假命令当 `command`，树、表、翻页、query 都通；写语句被只读挡。
 - [ ] 用户在自己机器上用 doraemonctl 浏览 prod 的一张表（这是完成标准，不进 e2e）。
 
-## F17.8 外部执行器引擎（Redis 方言） · 状态：todo
+## F17.8 外部执行器引擎（Redis 方言） · 状态：passed（8baeb8c；e2e 37ebc89）
 
 - **依赖**：F17.7、F16.3
 - **涉及**：`internal/db/exec`、`internal/db/redis`（键 tab 的数据源能跑在 exec 的 Conn 上）
@@ -125,7 +125,7 @@
 - [ ] 单测：假命令回 SCAN / TYPE / HGETALL 的 JSON，树和键 tab 能摆出来；mutation。
 - [ ] e2e：假命令，树和一个 hash 键 tab。
 
-## F17.9 生产连接 · 状态：todo
+## F17.9 生产连接 · 状态：passed（8baeb8c；e2e 37ebc89）
 
 - **依赖**：无
 - **涉及**：`internal/config`、`internal/app`（确认框、边框和状态栏颜色、写入口）、`internal/ui`（主题色 `production`）
@@ -142,7 +142,7 @@
 - [ ] e2e：`production = true` 上保存、`update`、删表都先问，`confirm_dangerous = false` 也问；`n` 什么都不发（抓发出的 SQL）。
 - [ ] oss：README 加 Safety 一节（两层只读、危险语句确认、单事务保存加旧值检查、生产连接、保存前预览、测试在真库上跑、「不是权限边界」）。
 
-## F17.10 保存前预览 · 状态：todo
+## F17.10 保存前预览 · 状态：passed（8baeb8c；e2e 37ebc89）
 
 - **依赖**：M13 的共用保存路径（`internal/db` 的 Save）
 - **涉及**：`internal/app`（保存流程、确认框）、`internal/db`（把生成的语句和参数交出来而不是直接执行）
