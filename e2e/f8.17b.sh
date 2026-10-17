@@ -8,11 +8,11 @@ D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; rm -rf "
 printf '[keys.complete]\n"<C-y>" = "complete.accept"\n' >"$D/k.toml"
 pop() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5 }' | tail -1; }
 items() { local g y; g=($(pop)); [[ -n ${g[0]} ]] || return 0
-  for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed 's/^ *//; s/ *$//'; done; }
+  for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 4)) $((g[0] + g[2] - 2)) $y | sed 's/^ *//; s/ *$//'; done; }
 names() { items | sed 's/  .*//' | tr '\n' '|'; }
 SELECT=#364a82
 sel() { local g y; g=($(pop)); [[ -n ${g[0]} ]] || return 0
-  for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do style_has $((g[0] + g[2] - 2)) $y bg=$SELECT >/dev/null && e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed 's/  .*//; s/^ *//; s/ *$//'; done; }
+  for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do style_has $((g[0] + g[2] - 2)) $y bg=$SELECT >/dev/null && e2e_text $((g[0] + 4)) $((g[0] + g[2] - 2)) $y | sed 's/  .*//; s/^ *//; s/ *$//'; done; }
 line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
 fresh() { key Escape; key Escape; key g g; key d G; key i; }
 

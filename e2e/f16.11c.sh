@@ -21,7 +21,7 @@ import sys
 for l in sys.stdin.read().split("\n"):
     l = l.strip()
     if not l: continue
-    if "" <= l[0] <= "": print("U+%04x %s" % (ord(l[0]), l[1:].strip()))
+    if "\ue000" <= l[0] <= "\uf8ff" or "\U000f0000" <= l[0] <= "\U000ffffd": print("U+%04x %s" % (ord(l[0]), l[1:].strip()))
     else: print("- " + l)'; }
 icon_fg() { local g; g=($(BOX)); e2e_style $((g[0] + 2)) $((g[1] + $1)); }
 rows_are() { local got; got=$(rows); [[ $got == "$1" ]] || { echo "  rows:"; echo "$got" | sed 's/^/    /'; false; }; }
@@ -53,13 +53,13 @@ key C-l; key C-l; key i
 newq "GE"
 check "命令：GET 等前面是 command 图标（U+f0e7），色 func（#7aa2f7）" eval 'has_row "^U\+f0e7 GET " && [[ $(icon_fg 1) == "fg=#7aa2f7 "* ]]' || { rows | head -3; icon_fg 1; }
 newq "CONFIG G"
-check "子命令：CONFIG GET 的 GET 是 keyword 图标（U+eb62），色 keyword（#bb9af7）" eval 'has_row "^U\+eb62 GET " && [[ $(icon_fg 1) == "fg=#bb9af7 "* ]]' || { rows | head -3; icon_fg 1; }
+check "子命令：CONFIG GET 的 GET 是 keyword 图标（U+f030b），色 keyword（#bb9af7）" eval 'has_row "^U\+f030b GET " && [[ $(icon_fg 1) == "fg=#bb9af7 "* ]]' || { rows | head -3; icon_fg 1; }
 newq "GET str:p"
 check "键名：str:plain 前面是 key 图标（U+f084）" eval 'has_row "^U\+f084 str:plain"' || rows
 newq "HGET hash:user a"
 check "HASH 的 field：age 前面是 column 图标（U+eb5f），dim" eval 'has_row "^U\+eb5f age" && [[ $(icon_fg 1) == "fg=#565f89 "* ]]' || { rows | head -3; icon_fg 1; }
 newq "SET zzz 1 N"
-check "参数 token：NX 是 keyword 图标（U+eb62）" eval 'has_row "^U\+eb62 NX"' || rows
+check "参数 token：NX 是 keyword 图标（U+f030b）" eval 'has_row "^U\+f030b NX"' || rows
 newq "GET str:p"; key Tab; key Enter; sleep 0.4
 check "接受键名候选：写进去的是 str:plain，没有图标字符" eval 'e2e_plain | python3 -c "
 import re, sys

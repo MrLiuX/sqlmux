@@ -18,7 +18,7 @@ import sys
 for l in sys.stdin.read().split("\n"):
     l = l.strip()
     if not l: continue
-    if "" <= l[0] <= "": print("U+%04x %s" % (ord(l[0]), l[1:].strip()))
+    if "\ue000" <= l[0] <= "\uf8ff" or "\U000f0000" <= l[0] <= "\U000ffffd": print("U+%04x %s" % (ord(l[0]), l[1:].strip()))
     else: print("- " + l)'; }
 icon_fg() { local g; g=($(BOX)); e2e_style $((g[0] + 2)) $((g[1] + $1)); }
 has_row() { rows | grep -qE "$1" || { echo "  no row /$1/ in:"; rows | sed 's/^/    /'; false; }; }
@@ -28,11 +28,11 @@ start -C "$D/own"; open_table t_v; wait_for 8 settled; key C-l; key C-l; key i
 newq "select * from v_"
 check "视图：v_v 前面是 view 图标（U+f06e），色同树里的视图（#7aa2f7）" eval 'has_row "^U\+f06e v_v " && [[ $(icon_fg 1) == "fg=#7aa2f7 "* ]]' || { rows; icon_fg 1; }
 newq "select * from t_v where ok = "
-check "布尔的值：true / false 前面是 value 图标（U+eb5d），默认色 = fg（string 默认不着色）" eval 'has_row "^U\+eb5d true" && has_row "^U\+eb5d false" && [[ $(icon_fg 1) == "fg=#c0caf5 "* ]]' || { rows; icon_fg 1; }
+check "布尔的值：true / false 前面是 value 图标（U+f03a0），默认色 = fg（string 默认不着色）" eval 'has_row "^U\+f03a0 true" && has_row "^U\+f03a0 false" && [[ $(icon_fg 1) == "fg=#c0caf5 "* ]]' || { rows; icon_fg 1; }
 newq "update t_v set s = "
-check "枚举的值：pending / done 是 value 图标；null 是关键字图标（U+eb62，色 keyword）" eval 'has_row "^U\+eb5d pending" && has_row "^U\+eb5d done" && has_row "^U\+eb62 null" && [[ $(icon_fg 3) == "fg=#bb9af7 "* ]]' || { rows; icon_fg 3; }
+check "枚举的值：pending / done 是 value 图标；null 是关键字图标（U+f030b，色 keyword）" eval 'has_row "^U\+f03a0 pending" && has_row "^U\+f03a0 done" && has_row "^U\+f030b null" && [[ $(icon_fg 3) == "fg=#bb9af7 "* ]]' || { rows; icon_fg 3; }
 newq "update t_v set at = "
-check "时间的值：now() / current_timestamp 是 value 图标" eval 'has_row "^U\+eb5d now\(\)" && has_row "^U\+eb5d current_timestamp"' || rows
+check "时间的值：now() / current_timestamp 是 value 图标" eval 'has_row "^U\+f03a0 now\(\)" && has_row "^U\+f03a0 current_timestamp"' || rows
 newq "select * from t_v where "
 check "条件里的列：五个都是 column 图标（U+eb5f），dim 色" eval '[[ $(rows | grep -c "^U+eb5f ") == 5 && $(icon_fg 2) == "fg=#565f89 "* ]]' || { rows; icon_fg 2; }
 newq "update t_v set s = "; key Tab; key Enter; sleep 0.4

@@ -48,4 +48,4 @@ clear_all() { local i; for ((i = 0; i < 120; i++)); do e2e_keys BSpace; done; sl
 sql() { clear_all; e2e_type ";$1"; sleep 0.4; [[ -n $(pop) ]] && { e2e_keys Escape; sleep 0.2; }; e2e_keys Enter; wait_for 8 eval '[[ -n $(title) && $(title) != "… 行"* ]]'; sleep 0.2; }
 pop() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5 }' | sed -n 2p; }   # 补全列表：面板之后的第二个浮层
 items() { local g y; g=($(pop)); [[ -n ${g[0]} ]] || return 0
-  for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | tr -s ' ' | sed 's/^ //; s/ $//'; done; }
+  for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 4)) $((g[0] + g[2] - 2)) $y | tr -s ' ' | sed 's/^ //; s/ $//'; done; }

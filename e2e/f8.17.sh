@@ -9,12 +9,12 @@ e2e_build || exit 1
 paste() { t set-buffer -b e2e -- "$1"; t paste-buffer -r -p -b e2e -t t; sleep 0.4; }
 pop() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5 }' | tail -1; }
 items() { local g y; g=($(pop)); [[ -n ${g[0]} ]] || return 0
-  for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed 's/^ *//; s/ *$//'; done; }
+  for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 4)) $((g[0] + g[2] - 2)) $y | sed 's/^ *//; s/ *$//'; done; }
 names() { items | sed 's/  .*//' | tr '\n' '|'; }
 names_are() { [[ $(names) == "$1" ]] || { echo "  candidates: '$(names)', want '$1'"; false; }; }
 none() { [[ -z $(pop) ]] || { echo "  popup: $(names)"; false; }; }
 sel() { local g y; g=($(pop)); [[ -n ${g[0]} ]] || return 0   # 选中那一行的候选名，没有选中项时为空
-  for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do style_has $((g[0] + g[2] - 2)) $y bg=$SELECT >/dev/null && e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed 's/  .*//; s/^ *//; s/ *$//'; done; }
+  for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do style_has $((g[0] + g[2] - 2)) $y bg=$SELECT >/dev/null && e2e_text $((g[0] + 4)) $((g[0] + g[2] - 2)) $y | sed 's/  .*//; s/^ *//; s/ *$//'; done; }
 nosel() { [[ -z $(sel) ]] || { echo "  selected: '$(sel)' of $(names)"; false; }; }
 sel_is() { [[ $(sel) == "$1" ]] || { echo "  selected: '$(sel)', want '$1' of $(names)"; false; }; }
 line() { e2e_text 104 159 $(($1 + 1)) | sed 's/ *$//'; }
@@ -59,7 +59,7 @@ key Tab; sleep 0.3
 check "选中之后照常循环：最后一项再往下回到第一项" eval 'sel_is logged_at'
 
 # ---- 鼠标：悬停选中（没有选中项时也一样），点击接受
-item_y() { local g y; g=($(pop)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do [[ $(e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y) == "$1"* ]] && { echo $y; return; }; done; }
+item_y() { local g y; g=($(pop)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do [[ $(e2e_text $((g[0] + 4)) $((g[0] + g[2] - 2)) $y) == "$1"* ]] && { echo $y; return; }; done; }
 fresh; e2e_type "select * from t_log wher"; sleep 0.6; key Enter; sleep 0.8
 g=($(pop)); e2e_move $((g[0] + 3)) "$(item_y msg)"; sleep 0.4
 check "没有选中项时鼠标悬停在 msg 上：选中它" eval 'sel_is msg'

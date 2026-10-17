@@ -18,7 +18,7 @@ print("".join(c[0] for c in cs).strip() + "|" + "".join(c[0] for c in cs if c[1]
 sig_is() { local got; got=$(sig "$1"); [[ $got == "$2" ]] || { echo "  提示行（光标第 $1 行）'$got'，要 '$2'"; false; }; }
 pop() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5 }' | tail -1; }
 items() { local g y; g=($(pop)); [[ -n ${g[0]} ]] || return 0
-  for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | sed 's/^ *//; s/ *$//'; done; }
+  for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 4)) $((g[0] + g[2] - 2)) $y | sed 's/^ *//; s/ *$//'; done; }
 names() { items | sed 's/  .*//' | tr '\n' '|'; }
 names_are() { [[ $(names) == "$1" ]] || { echo "  candidates: '$(names)', want '$1'"; false; }; }
 fresh() { key Escape; key Escape; key g g; key d G; key i; key Enter; }

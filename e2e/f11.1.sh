@@ -20,7 +20,7 @@ check "没注入、没有 vcs 信息：sqlmux dev (none, unknown)" eval '[[ $("$
 go build -o "$D/dev" ./cmd/sqlmux
 check "没注入、在 git 检出里 go build：版本是 Go 记下的伪版本（v…-<时间>-<12 位 sha>），commit / 日期是 none / unknown（不再读 vcs 信息）" eval 'got=$("$D/dev" --version); [[ $got == "sqlmux v"*"-$(git rev-parse --short=12 HEAD) (none, unknown)" ]] || { echo "  $got"; false; }'
 check "参数多了：退出码 1，usage 里带 [--version]" eval '"$D/inj" a b >/dev/null 2>"$D/err"; [[ $? -eq 1 ]] && grep -qF "usage: sqlmux [--version] [--layout name-or-path] [connection | file | url]" "$D/err"'
-check "README：Releases 页的压缩包名 sqlmux_<version>_<os>_<arch>.tar.gz 和 checksums.txt" eval 'grep -qF "sqlmux_<version>_<os>_<arch>.tar.gz" README.md && grep -q "checksums.txt" README.md'
+check "README：Releases 页和 checksums.txt（oss 重写 README 后不再写压缩包名）" eval 'grep -q "releases" README.md && grep -q "checksums.txt" README.md'
 mkdir -p "$D/h" "$D/c" "$D/s" "$D/d"
 check "--version 不读配置、不建文件：空的 HOME / XDG 目录里跑完仍是空的（没有 connections.toml 也照常输出）" eval 'HOME=$D/h XDG_CONFIG_HOME=$D/c XDG_STATE_HOME=$D/s XDG_DATA_HOME=$D/d "$D/inj" --version >/dev/null && [[ -z $(find "$D/h" "$D/c" "$D/s" "$D/d" -mindepth 1) ]]'
 

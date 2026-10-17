@@ -11,7 +11,7 @@ boxN() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5 }' | sed -n "${1}p"; 
 # items N：第 N 个浮层里每一行「候选|底色」，底色取行尾的留白
 items() { local g y; g=($(boxN "$1")); [[ -n ${g[0]} ]] || return 0
   for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do
-    printf '%s|%s\n' "$(e2e_text $((g[0] + 2)) $((g[0] + g[2] - 2)) $y | awk '{ print $1 }')" "$(e2e_style $((g[0] + g[2] - 2)) $y | grep -oE 'bg=#[0-9a-f]+' | cut -c4-)"; done; }
+    printf '%s|%s\n' "$(e2e_text $((g[0] + 4)) $((g[0] + g[2] - 2)) $y | awk '{ print $1 }')" "$(e2e_style $((g[0] + g[2] - 2)) $y | grep -oE 'bg=#[0-9a-f]+' | cut -c4-)"; done; }
 names() { items "${1:-1}" | cut -d'|' -f1 | tr '\n' ' '; }
 sel() { items "${1:-1}" | awk -F'|' -v c=$SELECT '$2 == c { print $1 }'; }
 sel_is() { [[ $(sel) == "$1" ]] || { echo "  selected '$(sel)', want $1 ($(names))"; false; }; }
