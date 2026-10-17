@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -55,7 +56,7 @@ func TestUpdateConnection(t *testing.T) {
 	c := was
 	c.DSN = "u:p@tcp(other:3306)/stage"
 	got, err := UpdateConnection("stage", was, c)
-	if err != nil || got != c {
+	if err != nil || !reflect.DeepEqual(got, c) {
 		t.Fatalf("a dsn: %+v %v", got, err)
 	}
 	if got, want := readFile(t, path), strings.Replace(editFile, "tcp(h:3306)", "tcp(other:3306)", 1); got != want {
@@ -102,7 +103,7 @@ func TestUpdateConnectionKeepsEditsMadeMeanwhile(t *testing.T) {
 	c := was
 	c.ReadOnly = false
 	got, err := UpdateConnection("a", was, c)
-	if want := (Connection{Name: "a", Engine: "postgres", DSN: "postgres://h/edited", PasswordEnv: "PW"}); err != nil || got != want {
+	if want := (Connection{Name: "a", Engine: "postgres", DSN: "postgres://h/edited", PasswordEnv: "PW"}); err != nil || !reflect.DeepEqual(got, want) {
 		t.Errorf("read back %+v %v, want %+v", got, err, want)
 	}
 	if got, want := readFile(t, path), strings.Replace(disk, "read_only = true\n", "", 1); got != want {
@@ -147,7 +148,7 @@ func TestUpdateConnectionReadsBack(t *testing.T) {
 			t.Errorf("%s: the file changed:\n%s", c.label, readFile(t, path))
 		case !c.odd && err != nil:
 			t.Errorf("%s: %v", c.label, err)
-		case !c.odd && got != c.to:
+		case !c.odd && !reflect.DeepEqual(got, c.to):
 			t.Errorf("%s: read back %+v, want %+v", c.label, got, c.to)
 		}
 	}
@@ -595,7 +596,7 @@ func TestProductionConnection(t *testing.T) {
 	was := cs[0]
 	c := was
 	c.ReadOnly = false
-	if got, err := UpdateConnection("a", was, c); err != nil || got != c {
+	if got, err := UpdateConnection("a", was, c); err != nil || !reflect.DeepEqual(got, c) {
 		t.Fatalf("a writable: %+v %v", got, err)
 	}
 	if got := readFile(t, path); !strings.Contains(got, "production = true\nread_only = false\n\n[[connection]]\nname = \"b\"") {
@@ -604,7 +605,7 @@ func TestProductionConnection(t *testing.T) {
 	// and read only again: its line goes, the default says it
 	was = c
 	c.ReadOnly = true
-	if got, err := UpdateConnection("a", was, c); err != nil || got != c {
+	if got, err := UpdateConnection("a", was, c); err != nil || !reflect.DeepEqual(got, c) {
 		t.Fatalf("a read only: %+v %v", got, err)
 	}
 	if got := readFile(t, path); strings.Contains(got, "name = \"a\"\nengine = \"postgres\"\ndsn = \"postgres://h/a\"\nproduction = true\nread_only") {
@@ -614,13 +615,13 @@ func TestProductionConnection(t *testing.T) {
 	was = cs[2]
 	c = was
 	c.Production, c.ReadOnly = true, true
-	if got, err := UpdateConnection("c", was, c); err != nil || got != c {
+	if got, err := UpdateConnection("c", was, c); err != nil || !reflect.DeepEqual(got, c) {
 		t.Fatalf("c made production: %+v %v", got, err)
 	}
 	// production off again with the box for read only still ticked: that is said
 	was = c
 	c.Production = false
-	if got, err := UpdateConnection("c", was, c); err != nil || got != c || !got.ReadOnly {
+	if got, err := UpdateConnection("c", was, c); err != nil || !reflect.DeepEqual(got, c) || !got.ReadOnly {
 		t.Fatalf("c not production, read only: %+v %v", got, err)
 	}
 	if got := readFile(t, path); !strings.HasSuffix(got, "dsn = \"postgres://h/c\"\nread_only = true\n") {
@@ -630,7 +631,7 @@ func TestProductionConnection(t *testing.T) {
 	was = cs[1]
 	c = was
 	c.Production = false
-	if got, err := UpdateConnection("b", was, c); err != nil || got != c {
+	if got, err := UpdateConnection("b", was, c); err != nil || !reflect.DeepEqual(got, c) {
 		t.Fatalf("b not production: %+v %v", got, err)
 	}
 }

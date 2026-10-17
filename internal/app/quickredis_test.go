@@ -164,3 +164,29 @@ func TestQuickRedisRowsCut(t *testing.T) {
 		t.Errorf("%d rows, truncated %v", len(q.res.Rows), q.res.Truncated)
 	}
 }
+
+// A command the quick SQL sent is in the history and has the completion forget the
+// names it was told of, whether or not the palette is still there when it answers:
+// it ran (F17.2, §9.8).
+func TestQuickRedisAnsweredAfterTheClose(t *testing.T) {
+	a, _ := redisConsole(t, &execDB{}, someCommands(), "")
+	c := a.sess.Conns[0]
+	c.hints = map[string][]string{"keys\x00us": {"user:1"}}
+	a.confirmDangerous = false
+	feed(t, a, "<C-p>;SET newkey 1")
+	if a.palette.comp != nil {
+		feed(t, a, "<Esc>")
+	}
+	cmd := keys(t, a, "<CR>")
+	feed(t, a, "<Esc>") // the palette goes before the answer comes
+	if a.palette != nil {
+		t.Fatal("the palette is still there")
+	}
+	answerQuickCmds(a, cmd)
+	if hs, _ := config.LoadHistory(); len(hs) != 1 || hs[0].SQL != "SET newkey 1" {
+		t.Errorf("history.jsonl: %+v", hs)
+	}
+	if c.hints != nil {
+		t.Errorf("hints: %v", c.hints)
+	}
+}

@@ -504,7 +504,7 @@ func (a *App) ttlKey(n node) tea.Cmd {
 			}
 		}
 		if c.Spec.Production {
-			a.confirm = writeBox(c, i18n.T("设置键 %s 的 TTL：%s？", nameText(key), cmp.Or(text, "0")), i18n.T("设置"), true, set)
+			a.confirm = writeBox(c, i18n.T("设置键 %s 的 TTL：%s？", nameText(key), cmp.Or(text, i18n.T("不过期"))), i18n.T("设置"), true, set)
 			return nil, false
 		}
 		return set(), false

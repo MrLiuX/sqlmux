@@ -643,8 +643,9 @@ func (a *App) wheel(m tea.Mouse) {
 		return
 	case "palette": // over the result's table, that scrolls; over the preview, that; else the list (F17.6)
 		_, ms := a.paletteMatches()
-		box, rows, area := a.paletteBox(len(ms))
+		_, _, area := a.paletteBox(len(ms))
 		at := uv.Pos(m.X, m.Y)
+		over, _ := ui.HitAt(a.hits, at)
 		switch {
 		case a.quickShows() && at.In(area):
 			q := a.palette.quick
@@ -656,7 +657,7 @@ func (a *App) wheel(m tea.Mouse) {
 			} else {
 				a.scrollPreviewBy(notch * wheelStep)
 			}
-		case at.In(uv.Rect(box.Min.X+1, box.Min.Y+4, box.Dx()-2, rows)): // the list's rows
+		case over.Kind == ui.KindRow: // the list's
 			a.paletteMove(notch * wheelStep)
 		}
 		return

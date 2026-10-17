@@ -113,24 +113,46 @@ func TestKeyErr(t *testing.T) {
 	}
 }
 
-// The commands of a save, as Preview writes them: a value with a blank quoted, a
-// rename a delete and a set, what a rename keeps said when the changes do not (F17.10).
-func TestDescribe(t *testing.T) {
+// The commands of a save, as Preview writes them: plan run on the key as the tab
+// loaded it, each type, a value with a blank quoted, a rename a delete and a set, what
+// a rename keeps said when the changes do not, and none for a type it does not know
+// or a change plan refuses (F17.10).
+func TestKeyPreview(t *testing.T) {
 	val := func(s string) db.Val { return db.Val{S: s} }
+	chg := func(name, old, now string) db.Change { return db.Change{Name: name, Old: val(old), Val: val(now)} }
 	row := func(key string, cols ...db.Change) db.Row { return db.Row{Key: []string{key}, Cols: cols} }
+	add := func(pairs ...string) (r []db.Change) {
+		for i := 0; i < len(pairs); i += 2 {
+			r = append(r, db.Change{Name: pairs[i], Val: val(pairs[i+1])})
+		}
+		return r
+	}
 	for _, tc := range []struct {
 		typ  string
 		ch   db.Changes
 		want []string
 	}{
-		{"hash", db.Changes{Deletes: [][]string{{"c"}}, Updates: []db.Row{row("a", db.Change{Name: "value", Val: val("x y")}), row("b", db.Change{Name: "field", Val: val("bee")})}},
-			[]string{"HDEL k c", `HSET k a "x y"`, "HDEL k b", "HSET k bee <its value>"}},
-		{"zset", db.Changes{Updates: []db.Row{row("a", db.Change{Name: "score", Val: val("5")})}}, []string{"ZADD k 5 a"}},
-		{"list", db.Changes{Deletes: [][]string{{"1"}}, Inserts: [][]db.Change{{{Name: "value", Val: val("g")}}}}, []string{"LSET k 1 <deleted>", "LREM k 0 <deleted>", "RPUSH k g"}},
-		{"json", db.Changes{Updates: []db.Row{row("k", db.Change{Name: "value", Val: val("{}")})}}, []string{"JSON.SET k $ {}"}},
+		{"string", db.Changes{Updates: []db.Row{row("", chg("value", "v", "a b"))}}, []string{`SET k "a b" KEEPTTL`}},
+		{"string", db.Changes{Deletes: [][]string{{}}}, []string{"UNLINK k"}},
+		{"ReJSON-RL", db.Changes{Updates: []db.Row{row("", chg("value", "1", "{}"))}}, []string{"JSON.SET k $ {}"}},
+		{"hash", db.Changes{Deletes: [][]string{{"c"}}, Updates: []db.Row{row("a", chg("value", "1", "x y")), row("b", chg("field", "b", "bee"))}, Inserts: [][]db.Change{add("field", "e", "value", "5")}},
+			[]string{"HDEL k c", `HSET k a "x y"`, "HDEL k b", "HSET k bee <its value>", "HSET k e 5"}},
+		{"hash", db.Changes{Updates: []db.Row{row("b", chg("field", "b", "bee"), chg("value", "2", "BEE"))}}, []string{"HDEL k b", "HSET k bee BEE"}},
+		{"zset", db.Changes{Deletes: [][]string{{"d"}}, Updates: []db.Row{row("a", chg("score", "1", "5")), row("b", chg("member", "b", "B"))}, Inserts: [][]db.Change{add("member", "m", "score", "9")}},
+			[]string{"ZREM k d", "ZADD k 5 a", "ZREM k b", "ZADD k <its score> B", "ZADD k 9 m"}},
+		{"list", db.Changes{Deletes: [][]string{{"1"}}, Updates: []db.Row{row("0", chg("value", "a", "A"))}, Inserts: [][]db.Change{add("value", "g")}},
+			[]string{"LSET k 1 <deleted>", "LSET k 0 A", "LREM k 0 <deleted>", "RPUSH k g"}},
+		{"set", db.Changes{Deletes: [][]string{{"y"}}, Updates: []db.Row{row("x", chg("member", "x", "X"))}, Inserts: [][]db.Change{add("member", "n")}},
+			[]string{"SREM k y", "SREM k x", "SADD k X", "SADD k n"}},
+		{"stream", db.Changes{Deletes: [][]string{{"1-1"}}}, []string{"XDEL k 1-1"}},
+		// what is data is not a placeholder: a member called NaN, a value that reads <its value>
+		{"zset", db.Changes{Deletes: [][]string{{"NaN"}}, Updates: []db.Row{row("NaN", chg("member", "NaN", "n"))}}, []string{"ZREM k NaN", "ZREM k NaN", "ZADD k <its score> n"}},
+		{"hash", db.Changes{Inserts: [][]db.Change{add("field", "f", "value", "<its value>")}}, []string{`HSET k f "<its value>"`}},
 		{"", db.Changes{Deletes: [][]string{{"c"}}}, nil},
+		{"string", db.Changes{Inserts: [][]db.Change{add("value", "x")}}, nil}, // a string has one value: Save says so
+		{"hash", db.Changes{Updates: []db.Row{row("a", db.Change{Name: "value", Val: db.Val{Null: true}})}}, nil},
 	} {
-		if got := Describe(tc.typ, "k", tc.ch); !slices.Equal(got, tc.want) {
+		if got := (Key{Name: "k", Type: tc.typ}).Preview(tc.ch); !slices.Equal(got, tc.want) {
 			t.Errorf("%s: %q, want %q", tc.typ, got, tc.want)
 		}
 	}

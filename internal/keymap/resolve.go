@@ -72,7 +72,7 @@ func (m *Map) scopes(c Context, maps bool) []string {
 			ts = append(ts, "keys."+f)
 		}
 	}
-	if (c.Mode == Normal || c.Plain) && c.Overlay != "value" { // the value editor's box is its vim's: no panes, tabs, leader or ? (F12.2)
+	if (c.Mode == Normal || c.Plain) && c.Overlay != "value" && c.Overlay != "palettepreview" { // the value editor's box and the palette's preview are a vim's: no panes, tabs, leader or ? (F12.2, F17.6)
 		ts = append(ts, "keys.normal")
 	}
 	ts = append(ts, "keys.global")

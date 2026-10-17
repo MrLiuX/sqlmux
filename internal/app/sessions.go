@@ -158,14 +158,13 @@ func (a *App) dialSession(name string) tea.Cmd {
 	})
 }
 
-// windowCount is how a session says how many windows it has (F17.4).
-// ponytail: English only, as the rows have always said it; a plural table when
-// the language of the interface gets one
+// windowCount is how a session says how many windows it has: one's own text, the
+// others' a number (F17.4).
 func windowCount(n int) string {
 	if n == 1 {
-		return "1 window"
+		return i18n.T("1 个窗口")
 	}
-	return fmt.Sprintf("%d windows", n)
+	return i18n.T("%d 个窗口", n)
 }
 
 // gotSessionDialed makes the session: every connection there is now, one

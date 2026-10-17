@@ -30,6 +30,10 @@ type Connection struct {
 	Production  bool   `toml:"production,omitempty"` // every write on it is asked about, and it is marked so (§13, F17.9)
 	SSH         string `toml:"ssh,omitempty"`        // "user@host": the server is reached through that machine's ssh (§8.4, F15.2)
 	Delimiter   string `toml:"delimiter,omitempty"`  // redis only: what the tree splits a key's name by, over [redis] delimiter (§7.8, F16.2)
+	// Dialect and Command are an exec connection's (§8.8, F17.7): what the command
+	// runs, postgres, and the command, {sql} where the statement goes in an argument.
+	Dialect string   `toml:"dialect,omitempty"`
+	Command []string `toml:"command,omitempty"`
 	// Temp is a connection of the command line, a file or a URL: written nowhere,
 	// not in the manager (F14.1).
 	Temp bool `toml:"-"`
@@ -37,6 +41,15 @@ type Connection struct {
 	// the DSN names: the child of a connection in the tree (F15.1), written
 	// nowhere.
 	Database string `toml:"-"`
+}
+
+// Kind is the engine whose catalog and commands c speaks: its Engine, or an exec
+// connection's dialect (§8.8).
+func (c Connection) Kind() string {
+	if c.Engine == "exec" {
+		return c.Dialect
+	}
+	return c.Engine
 }
 
 // UnknownKeys are the lines that say which keys of config.toml, and of each
@@ -177,6 +190,11 @@ func decodeConnections(text string) ([]Connection, error) {
 			}
 		}
 	}
+	for i, c := range file.Connection {
+		if c.Engine == "exec" { // read only is all a command is (§8.8)
+			file.Connection[i].ReadOnly = true
+		}
+	}
 	return file.Connection, nil
 }
 
@@ -184,7 +202,7 @@ func decodeConnections(text string) ([]Connection, error) {
 // field at fault: "", "" when nothing does (§14).
 func (c Connection) Check(names []string) (field, problem string) {
 	for _, f := range [][2]string{{"name", c.Name}, {"engine", c.Engine}, {"dsn", c.DSN}} {
-		if f[1] == "" {
+		if f[1] == "" && !(f[0] == "dsn" && c.Engine == "exec") { // a command is no address
 			return f[0], i18n.T("缺少 %s", f[0])
 		}
 	}
@@ -198,8 +216,21 @@ func (c Connection) Check(names []string) (field, problem string) {
 	if c.Group != "" && checkFileName(c.Group) != nil { // the characters of a name (F10.6)
 		return "group", fmt.Sprintf(i18n.T(`group = %q：不能含 / 或 \，也不能以 . 开头`), c.Group)
 	}
-	if !slices.Contains([]string{"postgres", "mysql", "sqlite", "redis"}, c.Engine) {
-		return "engine", fmt.Sprintf(i18n.T("engine = %q：只能是 postgres、mysql、sqlite 或 redis"), c.Engine)
+	if !slices.Contains([]string{"postgres", "mysql", "sqlite", "redis", "exec"}, c.Engine) {
+		return "engine", fmt.Sprintf(i18n.T("engine = %q：只能是 postgres、mysql、sqlite、redis 或 exec"), c.Engine)
+	}
+	if c.Engine == "exec" {
+		place := map[string]string{"postgres": "{sql}", "redis": "{cmd}"}[c.Dialect]
+		switch {
+		case place == "":
+			return "dialect", fmt.Sprintf(i18n.T("dialect = %q：exec 只认 postgres 和 redis"), c.Dialect)
+		case !slices.ContainsFunc(c.Command, func(a string) bool { return strings.Contains(a, place) }):
+			return "command", fmt.Sprintf(i18n.T("exec 的 command 是 argv 数组，里面要有 %s"), place)
+		case c.Dialect == "redis" && !slices.Contains(c.Command, "{args...}"): // as an item of its own: the words go in as many items; else they are dropped
+			return "command", i18n.T("redis 的 command 要有单独一项 {args...}")
+		}
+	} else if c.Dialect != "" || len(c.Command) > 0 {
+		return "command", i18n.T("dialect 和 command 只对 exec 连接有用")
 	}
 	if c.Delimiter != "" && c.Engine != "redis" {
 		return "delimiter", i18n.T("delimiter 只对 redis 连接有用")

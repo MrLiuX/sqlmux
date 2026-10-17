@@ -141,6 +141,9 @@ func TestDangerText(t *testing.T) {
 	if len(lines) != 10 || lines[0] != "这次执行有 10 条危险语句：" || lines[2] != "  delete from t1" || lines[9] != "… 另有 2 条" {
 		t.Fatalf("%q", lines)
 	}
+	if head := strings.SplitN(dangerText(risky[:1], true), "\n", 2)[0]; head != "这次执行有 1 条写语句：" { // a production connection asks about every write
+		t.Errorf("production: %q", head)
+	}
 	for _, i := range []int{1, 3} {
 		if w := ui.Width(strings.TrimPrefix(lines[i], "  ")); !strings.HasSuffix(lines[i], "…") || w < 59 || w > 60 { // a wide rune is not split
 			t.Errorf("a long line is cut to 60 cells: %q is %d", lines[i], w)

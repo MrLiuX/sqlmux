@@ -1,6 +1,7 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -16,7 +17,7 @@ func TestTempConnection(t *testing.T) {
 		"mysql:///tmp/sock":                        {Name: "mysql", Engine: "mysql", DSN: "mysql:///tmp/sock", Temp: true},
 	} {
 		got, err := TempConnection(target, nil)
-		if err != nil || got != want {
+		if err != nil || !reflect.DeepEqual(got, want) {
 			t.Errorf("%s: %+v %v, want %+v", target, got, err, want)
 		}
 		if f, p := got.Check(nil); p != "" {
