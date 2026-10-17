@@ -86,7 +86,7 @@
   - PG 的表格查询走扩展协议，协议本身就拒绝多条语句；MySQL 不开启 `multiStatements`。
   - 发送之前，扫描器如果在顶层发现 `;`，直接提示错误，不发送：在 pane 底部的错误栏显示「WHERE 里不能有 ;」（F3.20 起，此前在内容区第一行）（M3 F3.5 起；在此之前由 PG 的扩展协议报错）。这样可以防止类似 `1=1; drop table t` 的输入连带执行其他语句。
 - **历史 / 收藏**：保存输入原文。
-  - 下拉框的高度（M10 F10.1，用户要看到更多候选）：行数取「data pane 内容区底边放得下的」和「原来的 min(条目数, 8, 窗口剩余)」中的大者，再不超过条目数，所以 pane 矮时不比现在少、可以照旧盖到结果区；下面放不下、上面更宽时翻到输入框上方（CompleteBox 的既有规则，§10.2），同样撑到条目数、在输入框上一行结束，不挡输入；不加配置项。补全列表仍是 8 行（§9.7）。
+  - 下拉框的高度（M10 F10.1，用户要看到更多候选）：行数取「data pane 内容区底边放得下的」和「原来的 min(条目数, 8, 窗口剩余)」中的大者，再不超过条目数，所以 pane 矮时不比现在少、可以照旧盖到结果区；下面放不下、上面更宽时翻到输入框上方（CompleteBox 的既有规则，§10.2），同样撑到条目数、在输入框上一行结束，不挡输入；不加配置项。补全列表仍是 8 行（§9.7）。候选行的布局（M16 F16.11，用户 2026-10-17 要像 nvim-cmp）：左边一列种类图标（`CompleteItem.Icon`，WHERE 历史的 star / history 本来就在这一列；名字和颜色在 §7.7），然后是文字，右边的 dim 说明照旧（列的类型、keyword、Table…）；ascii 下图标是一个字母。
 - **补全**：见 §9.7。
 
 ### 9.7 模糊匹配与补全（query、WHERE）
@@ -160,6 +160,6 @@
 - **执行范围**（§11「Redis 控制台」）：`↵` 跑光标所在行；VISUAL 选区跑选到的每一行；`▶ run` 同 query。每行一条请求，逐条跑，出错就停。
 - **高亮**：命令名（首词，和子命令一起，如 `CONFIG GET`、`JSON.SET`）来自 `COMMAND`（连接时在 `Meta` 上取一次，缓存在 `Conn.Catalog`），用 `keyword` 色；字符串和注释沿用 `sql_string` / `comment`；数字 `number`。认不出的首词不着色。
 - **只读与危险**（§13）：只读连接拦的命令按 §13（`write` / `may_replicate` flag、非 `readonly` 的 `@scripting`、`@admin`、服务端没列出的），ACL 分类 `@dangerous` 的是危险命令；两份名单都来自服务端，不手写；没拿到（没权限执行 COMMAND）时全按写处理。
-- **补全**（F16.5，`COMMAND DOCS`，Redis 7 起；6 没有 DOCS 时只补命令名）：首词位置补命令名（含 `JSON.` 这类模块命令），第二个词位置如果首词有子命令（DOCS 里的 `subcommands`）补子命令；之后按 DOCS 的 `arguments` 定位当前参数：`key` 类型的参数位置在 `Meta` 上 `SCAN 0 MATCH <前缀>* COUNT 1000` 补键名（MATCH 是扫完再筛，COUNT 100 一轮常常一个都筛不出；F16.4 验收时定，照实现）（去抖 150ms，同一个前缀只扫一次；结果按连接缓存，控制台跑过写命令（`lang` 判为写的那条）或树上对这个 db 按 `R` 后清掉重扫，不然 `SET newkey` 之后补过的前缀永远补不出它；F16.4 审查时定）；`HGET` / `HSET` / `HDEL` / `HMGET` 的 field 位置、键已知且长度 ≤ `load_all` 时 `HKEYS`；`oneof` / `pure-token` 的参数位置补那几个 token（`EX` / `PX` / `NX` / `XX`）。排序照 §9.7（F12.6）。签名提示用 F15.3 的浮层：DOCS 的 `arguments` 展开成 `SET key value [NX | XX] [GET] [EX seconds | …]`，当前参数高亮；可选块和 `multiple` 的参数按 DOCS 的 flags 标 `[]` 和 `…`，不做 redis-cli 那种完整的 hint 文法，认不出就整段 dim。
+- **补全**（F16.5，`COMMAND DOCS`，Redis 7 起；6 没有 DOCS 时只补命令名）：首词位置补命令名（含 `JSON.` 这类模块命令），第二个词位置如果首词有子命令（DOCS 里的 `subcommands`）补子命令；之后按 DOCS 的 `arguments` 定位当前参数：`key` 类型的参数位置在 `Meta` 上 `SCAN 0 MATCH <前缀>* COUNT 1000` 补键名（MATCH 是扫完再筛，COUNT 100 一轮常常一个都筛不出；F16.4 验收时定，照实现）（去抖 150ms，同一个前缀只扫一次；结果按连接缓存，控制台跑过写命令（`lang` 判为写的那条）或树上对这个 db 按 `R` 后清掉重扫，不然 `SET newkey` 之后补过的前缀永远补不出它；F16.4 审查时定）；`HGET` / `HSET` / `HDEL` / `HMGET` 的 field 位置、键已知且长度 ≤ `load_all` 时 `HKEYS`；`oneof` / `pure-token` 的参数位置补那几个 token（`EX` / `PX` / `NX` / `XX`）。排序照 §9.7（F12.6）。候选左侧的种类图标同 SQL 的补全框（§7.7，F16.11）。签名提示用 F15.3 的浮层：DOCS 的 `arguments` 展开成 `SET key value [NX | XX] [GET] [EX seconds | …]`，当前参数高亮；可选块和 `multiple` 的参数按 DOCS 的 flags 标 `[]` 和 `…`，不做 redis-cli 那种完整的 hint 文法，认不出就整段 dim。
 - 已知上限：参数定位是线性的，`multiple` 之后的可选 token 定位可能偏；DOCS 没有 `key_specs` 的模块命令不补键名。
 
