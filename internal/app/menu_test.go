@@ -644,8 +644,8 @@ func TestMenuItemsHaveIcons(t *testing.T) {
 func TestMenuIconColors(t *testing.T) {
 	glyph := func(a *App, g string) *uv.Cell {
 		f := a.render()
-		for y := 0; y < f.Bounds().Dy(); y++ {
-			for x := 0; x < f.Bounds().Dx(); x++ {
+		for y := range f.Bounds().Dy() {
+			for x := range f.Bounds().Dx() {
 				if c := f.Buf.CellAt(x, y); c != nil && c.Content == g {
 					return c
 				}
