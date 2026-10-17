@@ -1,14 +1,14 @@
 # M17 体验回合与外部执行器 · 任务清单
 
-- **状态**：**draft**（2026-10-16 决策者起草，等用户定清单；定了改 todo，设计章节随之改）。
+- **状态**：**todo**（2026-10-16 决策者起草；2026-10-17 用户定：加 F17.9 / F17.10 两条安全项，F16.11 做完就开工；设计已写进各章）。
 - **目标**：两件事。一是把 v0.5.0 体验期和做 README / 演示时攒下的意见一次收掉（tab 栏溢出、`;` 跑 Redis 命令、命令行 `redis://`、几处小 bug、发布元数据、面板预览区）；二是「外部执行器」引擎：SQL 和 Redis 命令交给一个外部命令去跑，让本地连不上的库（公司 prod 的 PG 走 pgAdmin、Redis 走 metaknow，都已由 `doraemonctl` 打通）也能在 sqlmux 里浏览。
-- **范围**：§7.8「tab 栏」（滚动）；§12「快速 SQL」（Redis）和「预览」（滚轮、焦点）；§14「启动」（`redis://`）；§4（新包 `internal/db/exec`）、§5「连接缝」（exec 的 `db.Conn`）、§8 新一节「外部执行器」、§14 的 `engine = "exec"`。设计在用户定清单后写进各章，再开工。
+- **范围**：§7.8「tab 栏」（滚动）；§12「快速 SQL」（Redis）和「预览」（滚轮、焦点）；§14「启动」（`redis://`）、`production`、`engine = "exec"`；§13「生产连接」「保存前预览」、§10.3；§4（新包 `internal/db/exec`）、§5「连接缝」、§8.8「外部执行器」。都已写进各章（2026-10-17）。
 - **依赖**：M16 passed（`db.Driver` / `db.Conn` 的接口缝、Redis 的回复摆表和判定）。
 - **完成标准**：节点全过、完整回归绿；用户用 `doraemonctl` 浏览 prod 的一张表和一个键。
-- **审查节点**：1 = F17.1–F17.6（体验回合，都小，一批审）；2 = F17.7 + F17.8（外部执行器）。
+- **审查节点**：1 = F17.1–F17.6（体验回合，都小，一批审）；2 = F17.9 + F17.10（安全：生产连接、保存前预览）；3 = F17.7 + F17.8（外部执行器）。
 - **不做（留 M18 候选）**：Redis 第二轮（Pub/Sub、MONITOR、Cluster、格子里的 JSON 按格高亮、string 键是 JSON 时直接开值编辑器）；exec 引擎的写回和流式导出。
 
-## F17.1 tab 栏横向滚动 · 状态：draft
+## F17.1 tab 栏横向滚动 · 状态：todo
 
 - **依赖**：无
 - **涉及**：`internal/app`（tab 栏绘制和命中区）、`internal/ui`
@@ -23,7 +23,7 @@
 - [ ] golden：溢出的 tab 栏一屏。
 - [ ] e2e：开 8 个 tab，`8gt` 后标题可见，点 `‹N` 滚回。
 
-## F17.2 快速 SQL 在 Redis 连接上跑命令 · 状态：draft
+## F17.2 快速 SQL 在 Redis 连接上跑命令 · 状态：todo
 
 - **依赖**：F16.4
 - **涉及**：`internal/app`（palette 的 SQL 范围、quicksql）
@@ -38,7 +38,7 @@
 - [ ] 单测：一条命令 → 面板结果；写命令在只读连接被挡；mutation。
 - [ ] e2e：`;` `HGETALL hash:user` 两列；`;` `FLUSHDB` 弹确认；`C-e` 开出的控制台里是这一行。
 
-## F17.3 命令行直接给 `redis://` · 状态：draft
+## F17.3 命令行直接给 `redis://` · 状态：todo
 
 - **依赖**：F16.1
 - **涉及**：`cmd/sqlmux`、`internal/app`（F14.1 的临时连接）
@@ -50,7 +50,7 @@
 - [ ] 单测：URL → 临时连接的名字和 DSN；mutation。
 - [ ] e2e：`sqlmux redis://127.0.0.1:<port>/2` 开出树。
 
-## F17.4 三处小 bug · 状态：draft
+## F17.4 三处小 bug · 状态：todo
 
 - **依赖**：无
 - **涉及**：`internal/app`、`internal/i18n`、`cmd/sqlmux`（keys）
@@ -64,7 +64,7 @@
 - [ ] 单测：keys 输出里 `grep -E '\((F|M)[0-9]|§'` 为空（加进现有的 keys 测试）；复数表驱动。
 - [ ] e2e：新建 session 后 2s 内 toast 消失。
 
-## F17.5 发布元数据 · 状态：draft
+## F17.5 发布元数据 · 状态：todo
 
 - **依赖**：无
 - **涉及**：`.github/scripts/tap-formula.sh`、`npm/sqlmux/package.json`、`cmd/sqlmux/main.go`
@@ -79,7 +79,7 @@
 - [ ] 单测：versionLine 对三种 BuildInfo 的输出表驱动。
 - [ ] 推送后 oss 的安装验证看 `brew info` 的描述。
 
-## F17.6 命令面板的预览区：滚轮和焦点 · 状态：draft
+## F17.6 命令面板的预览区：滚轮和焦点 · 状态：todo
 
 - **依赖**：F9.7
 - **涉及**：`internal/app`（palette）、`internal/ui`（TextView）
@@ -94,7 +94,7 @@
 - [ ] golden：焦点在预览区一屏。
 - [ ] e2e：`C-o` 进预览，`yy` 复制一行到假 pbcopy。
 
-## F17.7 外部执行器引擎（PG 方言） · 状态：draft
+## F17.7 外部执行器引擎（PG 方言） · 状态：todo
 
 - **依赖**：F16.0（`db.Driver` / `db.Conn`）
 - **涉及**：`internal/db/exec`（新包）、`internal/db/postgres`（`Connect` 可换）、`internal/config`、`internal/app`（连接表单的 engine 多一项）
@@ -112,7 +112,7 @@
 - [ ] e2e：假命令当 `command`，树、表、翻页、query 都通；写语句被只读挡。
 - [ ] 用户在自己机器上用 doraemonctl 浏览 prod 的一张表（这是完成标准，不进 e2e）。
 
-## F17.8 外部执行器引擎（Redis 方言） · 状态：draft
+## F17.8 外部执行器引擎（Redis 方言） · 状态：todo
 
 - **依赖**：F17.7、F16.3
 - **涉及**：`internal/db/exec`、`internal/db/redis`（键 tab 的数据源能跑在 exec 的 Conn 上）
@@ -124,5 +124,36 @@
 **验收**
 - [ ] 单测：假命令回 SCAN / TYPE / HGETALL 的 JSON，树和键 tab 能摆出来；mutation。
 - [ ] e2e：假命令，树和一个 hash 键 tab。
+
+## F17.9 生产连接 · 状态：todo
+
+- **依赖**：无
+- **涉及**：`internal/config`、`internal/app`（确认框、边框和状态栏颜色、写入口）、`internal/ui`（主题色 `production`）
+- 用户 2026-10-17：reddit 上有人说数据库界面出一次错就是生产数据；补一道「生产连接」。
+
+**开发**（§13「生产连接」、§14）
+- [ ] a. `production = true`：边框、状态栏连接块、tab 标题用 `production` 色（默认同 `error`，主题可覆盖）；连接表单加一个开关。
+- [ ] b. 这个连接上每一次写都先确认（不看 `confirm_dangerous`）：表格保存（走 F17.10 的预览框）、query 判为写的语句、Redis 写命令、树上的删表 / 删键 / 改名 / 设 TTL；确认框标题「<连接名> 是生产连接」。
+- [ ] c. 没写 `read_only` 的生产连接默认只读；命令行 URL 的临时连接没有标记。
+
+**验收**
+- [ ] 单测：生产连接的写入口都经确认（遍历入口表）；默认只读；mutation。
+- [ ] golden：生产连接的边框和状态栏一屏。
+- [ ] e2e：`production = true` 上保存、`update`、删表都先问，`confirm_dangerous = false` 也问；`n` 什么都不发（抓发出的 SQL）。
+- [ ] oss：README 加 Safety 一节（两层只读、危险语句确认、单事务保存加旧值检查、生产连接、保存前预览、测试在真库上跑、「不是权限边界」）。
+
+## F17.10 保存前预览 · 状态：todo
+
+- **依赖**：M13 的共用保存路径（`internal/db` 的 Save）
+- **涉及**：`internal/app`（保存流程、确认框）、`internal/db`（把生成的语句和参数交出来而不是直接执行）
+
+**开发**（§13「保存前预览」、§10.3）
+- [ ] a. 保存流程拆成「生成语句」和「执行」两步；预览框列参数内联后的语句原文（一条一行，超过 20 条折叠「…另 N 条」）和「改 N 行、增 N 行、删 N 行」，`y` / `↵` 执行、`n` / `esc` 回表格、标记都还在；Redis 列命令。
+- [ ] b. `[grid] preview_save = true` 默认开；关掉只剩原来的「含删除行时确认」；生产连接上关不掉。
+
+**验收**
+- [ ] 单测：预览文本和真正执行的语句一致（同一份生成结果）；折叠；mutation。
+- [ ] golden：预览框一屏（含 UPDATE、INSERT、DELETE 各一条）。
+- [ ] e2e：改两格删一行 `C-s` → 预览三行和「改 2 行、删 1 行」，`n` 不发任何写语句，`y` 后库里对；Redis 的 hash 保存预览 `HSET` / `HDEL`。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
