@@ -504,7 +504,10 @@ func (a *App) ttlKey(n node) tea.Cmd {
 			}
 		}
 		if c.Spec.Production {
-			a.confirm = writeBox(c, i18n.T("设置键 %s 的 TTL：%s？", nameText(key), cmp.Or(text, i18n.T("不过期"))), i18n.T("设置"), true, set)
+			if ttl == 0 { // a blank is given as "0"; EXPIRE 0 would delete the key, sqlmux's 0 is no expiry
+				text = i18n.T("不过期")
+			}
+			a.confirm = writeBox(c, i18n.T("设置键 %s 的 TTL：%s？", nameText(key), text), i18n.T("设置"), true, set)
 			return nil, false
 		}
 		return set(), false
