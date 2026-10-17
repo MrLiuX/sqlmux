@@ -31,7 +31,8 @@ import (
 type Pane struct {
 	ID        int // stable; the sidebar is 0
 	Tabs      []Tab
-	Cur, Prev int // tab bar * and - (T-01)
+	Cur, Prev int          // tab bar * and - (T-01)
+	tabScroll ui.TabScroll // where the tab bar is scrolled to when the tabs do not fit; not saved (F17.1)
 }
 
 // Object is the title's "· name" part: the current tab.

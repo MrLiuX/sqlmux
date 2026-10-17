@@ -1,12 +1,14 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/ui"
@@ -295,4 +297,51 @@ func TestConfiguredSidebarWidth(t *testing.T) {
 			t.Errorf("width %d dragged to 50 in %d columns: %d", c.conf, c.w, got)
 		}
 	}
+}
+
+// A pane with more tabs than its bar holds scrolls it: gt and a click on a tab
+// bring the current one in sight, and a click on ‹N or N› scrolls a screen
+// (F17.1).
+func TestTabBarScrolls(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	p := a.focused()
+	for range 9 {
+		a.run("tab.new", 0)
+	}
+	inSight := func() bool {
+		a.View()
+		s := p.tabScroll
+		return s.First <= p.Cur && p.Cur < s.First+s.Shown
+	}
+	for _, k := range []string{"1gt", "8gt", "gT", "10gt"} {
+		feed(t, a, k)
+		if !inSight() {
+			t.Errorf("%s: tab %d is not shown, from %d, %d of them", k, p.Cur+1, p.tabScroll.First, p.tabScroll.Shown)
+		}
+	}
+	feed(t, a, "1gt")
+	a.View()
+	if p.tabScroll.First != 0 || p.tabScroll.Shown >= 10 {
+		t.Fatalf("1gt: %+v", p.tabScroll)
+	}
+	shown := p.tabScroll.Shown
+	click(a, find(t, a, ui.Target{Kind: ui.KindHint, Pane: p.ID, Action: fmt.Sprintf("tab.scroll %d 1", p.ID)}).Min)
+	a.View()
+	if p.tabScroll.First != shown || p.Cur != 0 {
+		t.Errorf("a click on N›: %+v, tab %d", p.tabScroll, p.Cur+1)
+	}
+	click(a, find(t, a, ui.Target{Kind: ui.KindHint, Pane: p.ID, Action: fmt.Sprintf("tab.scroll %d -1", p.ID)}).Min)
+	a.View()
+	if p.tabScroll.First != 0 {
+		t.Errorf("a click on ‹N: %+v", p.tabScroll)
+	}
+}
+
+func TestGoldenTabBarOverflow(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	for range 9 {
+		a.run("tab.new", 0)
+	}
+	feed(t, a, "8gt")
+	golden.RequireEqual(t, a.render().String())
 }

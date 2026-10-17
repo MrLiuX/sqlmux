@@ -136,6 +136,17 @@ func init() {
 			a.focusPane(id)
 			return a.closeTabAsking(p, i)
 		}},
+		// "tab.scroll <pane> <dir>" is a click on a tab bar's ‹N or N›: a screen
+		// of tabs toward them (F17.1); Draw puts it right
+		"tab.scroll": {Run: func(a *App, args Args) tea.Cmd {
+			var id, dir int
+			if _, err := fmt.Sscan(args.Arg, &id, &dir); err == nil {
+				if p := a.win().pane(id); p != nil {
+					p.tabScroll.First += dir * max(p.tabScroll.Shown, 1)
+				}
+			}
+			return nil
+		}},
 		// :wq (§11): a table's changes are saved first, and it closes once
 		// they are; a query is written by closing it anyway.
 		"tab.save.close": {Title: i18n.N("保存并关闭 tab"), Run: func(a *App, _ Args) tea.Cmd {

@@ -22,6 +22,90 @@ type Tabs struct {
 	// have none: the result area's log.
 	Close Icon
 	Keep  int
+	// Scroll is where the bar is scrolled to when the tabs do not fit (F17.1):
+	// the pane's, Draw moves it to bring the current tab in sight when that
+	// or the width has changed since. Nil: not scrolled.
+	Scroll *TabScroll
+}
+
+// TabScroll is a tab bar's scroll: the first tab shown, and what it was
+// when the current tab was brought in sight, so that a click on ‹N or N›
+// scrolls without being undone; Shown is how many tabs the last Draw showed.
+type TabScroll struct {
+	First, Cur, Room, Shown int
+}
+
+// tabWidth is how wide tab i draws: the blank, its number, icon, name and mark,
+// and the blank after it.
+func (t Tabs) tabWidth(i int) int {
+	mark := ""
+	switch i {
+	case t.Cur:
+		mark = "*"
+	case t.Prev:
+		mark = "-"
+	}
+	w := Width(fmt.Sprintf(" %d:", i+1)+t.Names[i]+mark) + 1
+	if ic := t.Icons[i]; ic.Text != "" {
+		w += Width(ic.Text) + 1
+	}
+	return w
+}
+
+// window is the tabs from first to last that fit in room columns, with the
+// ‹N before them and the │ N› after when there are some out of sight: at least
+// the tab at first, cut at the edge if it is wider than room.
+func (t Tabs) window(first, room int) (last int) {
+	n := len(t.Names)
+	left := 0
+	if first > 0 {
+		left = Width(fmt.Sprintf("‹%d", first))
+	}
+	sum := make([]int, n+1) // sum[i+1]: the tabs first..i and the │ between
+	for i := first; i < n; i++ {
+		sum[i+1] = sum[i] + t.tabWidth(i)
+		if i > first {
+			sum[i+1]++
+		}
+	}
+	for last = n - 1; last > first; last-- {
+		right := 0
+		if last < n-1 {
+			right = 1 + Width(fmt.Sprintf(" %d› ", n-1-last)) // the │ before it
+		}
+		if left+sum[last+1]+right <= room {
+			break
+		}
+	}
+	return last
+}
+
+// scrolled is the first and last tab to draw in room columns: those that fit
+// with the ‹N and N› for the others, the current one among them when it
+// has just changed (or the room), the first the scroll's otherwise.
+func (t Tabs) scrolled(room int) (first, last int) {
+	n := len(t.Names)
+	if n == 0 {
+		return 0, -1
+	}
+	s := t.Scroll
+	if s == nil {
+		s = &TabScroll{}
+	}
+	first = min(max(s.First, 0), n-1)
+	if s.Cur != t.Cur || s.Room != room {
+		first = min(first, t.Cur)
+		for t.window(first, room) < t.Cur {
+			first++
+		}
+		s.Cur, s.Room = t.Cur, room
+	}
+	for first > 0 && t.window(first-1, room) == n-1 { // the room after the last tab is for the ones before it
+		first--
+	}
+	last = t.window(first, room)
+	s.First, s.Shown = first, last-first+1
+	return first, last
 }
 
 func (t Tabs) Draw(f *Frame, r uv.Rectangle) {
@@ -29,9 +113,18 @@ func (t Tabs) Draw(f *Frame, r uv.Rectangle) {
 	base := uv.Style{Fg: th.Dim, Bg: th.Bg}
 	f.Fill(r, base)
 	x, y := r.Min.X, r.Min.Y
+	plus := 0 // the │ and the + after the tabs
+	if !t.NoNew {
+		plus = 4
+	}
+	first, last := t.scrolled(r.Dx() - plus)
+	if first > 0 {
+		x = t.arrow(f, x, y, r.Max.X, fmt.Sprintf("‹%d", first), -1)
+	}
 	took := false // the last tab's × has the cell after it: the │'s
-	for i, n := range t.Names {
-		if i > 0 && !took {
+	for i := first; i <= last; i++ {
+		n := t.Names[i]
+		if i > first && !took {
 			x = f.Text(x, y, r.Max.X, "│", uv.Style{Fg: th.Sep, Bg: th.Bg})
 		}
 		took = false
@@ -76,15 +169,22 @@ func (t Tabs) Draw(f *Frame, r uv.Rectangle) {
 		}
 		x = f.Text(x, y, r.Max.X, tail, st)
 	}
+	if last < len(t.Names)-1 {
+		if !took {
+			x = f.Text(x, y, r.Max.X, "│", uv.Style{Fg: th.Sep, Bg: th.Bg})
+		}
+		took = false
+		x = t.arrow(f, x, y, r.Max.X, fmt.Sprintf(" %d› ", len(t.Names)-1-last), 1)
+	}
 	if !t.NoNew {
 		if len(t.Names) > 0 && !took {
 			x = f.Text(x, y, r.Max.X, "│", uv.Style{Fg: th.Sep, Bg: th.Bg})
 		}
-		plus := base
+		plusSt := base
 		if f.Region(uv.Rect(x, y, min(3, r.Max.X-x), 1), Target{Kind: KindHint, Pane: t.Pane, Action: "tab.new"}) {
-			plus.Bg = th.Select
+			plusSt.Bg = th.Select
 		}
-		x = f.Text(x, y, r.Max.X, " + ", plus)
+		x = f.Text(x, y, r.Max.X, " + ", plusSt)
 	}
 
 	// The cell an unmarked last tab's × takes with no + after it is kept
@@ -99,6 +199,16 @@ func (t Tabs) Draw(f *Frame, r uv.Rectangle) {
 	if w := hintRowWidth(t.Hints); w > 0 && x+spare+1+w+1 <= r.Max.X {
 		hintRow(f, r.Max.X-1-w, y, r.Max.X, t.Hints, base, Target{Kind: KindHint, Pane: t.Pane})
 	}
+}
+
+// arrow draws the ‹N or N› of the tabs out of sight at x, a click on it
+// scrolling a screen toward them (dir -1 or 1); the next x.
+func (t Tabs) arrow(f *Frame, x, y, right int, text string, dir int) int {
+	st := uv.Style{Fg: f.Theme.Dim, Bg: f.Theme.Bg}
+	if f.Region(uv.Rect(x, y, min(Width(text), right-x), 1), Target{Kind: KindHint, Pane: t.Pane, Action: fmt.Sprintf("tab.scroll %d %d", t.Pane, dir)}) {
+		st.Bg = f.Theme.Select
+	}
+	return f.Text(x, y, right, text, st)
 }
 
 // hintRow draws "Key Label" items from x, " · " between them, each clickable
