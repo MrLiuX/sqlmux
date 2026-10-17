@@ -65,7 +65,7 @@ func TestLoadConnectionErrors(t *testing.T) {
 		"":                               "里面没有 [[connection]]",
 		"[[connection]]\nname = \"a\"\n": "第 1 个连接：缺少 engine",
 		"[[connection]]\nengine = \"postgres\"\n":                                       "第 1 个连接：缺少 name",
-		"[[connection]]\nname = \"a\"\nengine = \"oracle\"\ndsn = \"x\"\n":              `第 1 个连接：engine = "oracle"：只能是 postgres、mysql、sqlite 或 redis`,
+		"[[connection]]\nname = \"a\"\nengine = \"oracle\"\ndsn = \"x\"\n":              `第 1 个连接：engine = "oracle"：只能是 postgres、mysql、sqlite、redis 或 exec`,
 		"[[connection]]\nname = \"a/b\"\nengine = \"postgres\"\ndsn = \"x\"\n":          `第 1 个连接：name = "a/b"：不能含 / 或 \，也不能以 . 开头`,
 		"[[connection]]\nname = 'a\\b'\nengine = \"postgres\"\ndsn = \"x\"\n":           `第 1 个连接：name = "a\\b"：不能含 / 或 \，也不能以 . 开头`,
 		"[[connection]]\nname = \"..\"\nengine = \"postgres\"\ndsn = \"x\"\n":           `第 1 个连接：name = ".."：不能含 / 或 \，也不能以 . 开头`,
@@ -231,5 +231,28 @@ func TestRedisConnection(t *testing.T) {
 	}
 	if got := readFile(t, connectionsPath()); !strings.Contains(got, "delimiter = \":\"\n") || strings.Contains(got, `"/"`) {
 		t.Errorf("rewritten:\n%s", got)
+	}
+}
+
+// An exec connection is a command and the dialect it speaks, with no dsn; it is read
+// only whatever is written; the keys are for it alone (F17.7, §8.8).
+func TestExecConnectionConfig(t *testing.T) {
+	good := "[[connection]]\nname = \"prod\"\nengine = \"exec\"\ndialect = \"postgres\"\ncommand = [\"doraemonctl\", \"exec\", \"db\", \"--sql={sql}\"]\n"
+	connectionsFile(t, good+"read_only = false\n")
+	cs, _, err := LoadConnections("")
+	if err != nil || len(cs) != 1 || !cs[0].ReadOnly || cs[0].Dialect != "postgres" || len(cs[0].Command) != 4 || cs[0].Command[3] != "--sql={sql}" || cs[0].DSN != "" {
+		t.Fatalf("%+v %v", cs, err)
+	}
+	for body, want := range map[string]string{
+		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ncommand = [\"x\", \"{sql}\"]\n":                               "dialect",
+		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ndialect = \"mysql\"\ncommand = [\"x\", \"{sql}\"]\n":          "dialect",
+		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ndialect = \"postgres\"\ncommand = [\"x\"]\n":                  "command",
+		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ndialect = \"postgres\"\n":                                     "command",
+		"[[connection]]\nname = \"p\"\nengine = \"postgres\"\ndsn = \"postgres://h/d\"\ncommand = [\"x\", \"{sql}\"]\n": "command",
+	} {
+		connectionsFile(t, body)
+		if _, _, err := LoadConnections(""); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: %v, want a word of %s", body, err, want)
+		}
 	}
 }

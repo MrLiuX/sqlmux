@@ -37,7 +37,7 @@ func (c *Conn) worker(conn db.Conn, from config.Connection, meta bool) *db.Worke
 		cn, _, err := connectTo(ctx, spec, meta || from.ReadOnly)
 		return cn, err
 	}
-	w.Broken = drivers[from.Engine].Broken
+	w.Broken = driverOf(from).Broken
 	w.Notify = func(e db.Event) { Send(connEvent{c, meta, e}) }
 	return w
 }

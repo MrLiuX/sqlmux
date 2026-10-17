@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -350,7 +351,7 @@ func TestConnManagerPlainPasswordClearsOtherSources(t *testing.T) {
 	a.form.fields[fieldPassword].Input = ui.Input{Text: "plain", Pos: 5}
 	feed(t, a, "<C-s>")
 	got, err := config.ReadConnection("second")
-	if want := (config.Connection{Name: "second", Engine: "mysql", DSN: "u:p@tcp(m:3306)/s", ReadOnly: true, Password: "plain"}); err != nil || got != want {
+	if want := (config.Connection{Name: "second", Engine: "mysql", DSN: "u:p@tcp(m:3306)/s", ReadOnly: true, Password: "plain"}); err != nil || !reflect.DeepEqual(got, want) {
 		t.Errorf("the file says %+v, %v", got, err)
 	}
 	if !strings.Contains(a.toast, "明文") {

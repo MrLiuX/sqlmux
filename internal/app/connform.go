@@ -5,6 +5,7 @@ import (
 	"context"
 	"net"
 	"net/url"
+	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -79,7 +80,9 @@ var dsnExample = map[string]string{"postgres": "postgres://user:pass@host:5432/d
 // managed are the connections the manager lists: those of connections.toml,
 // not one of the command line, which is nowhere to find, edit or delete (F14.1).
 func (a *App) managed() []*Conn {
-	return slices.DeleteFunc(slices.Clone(a.sess.Conns), func(c *Conn) bool { return c.Spec.Temp })
+	// ponytail: an exec connection is written in connections.toml; the form has no
+	// field for its command, so the manager does not list it (F17.7)
+	return slices.DeleteFunc(slices.Clone(a.sess.Conns), func(c *Conn) bool { return c.Spec.Temp || c.Spec.Engine == "exec" })
 }
 
 // specs are the connections the manager lists, as connections.toml says them.
@@ -558,7 +561,7 @@ func testConn(spec config.Connection, password string) (string, error) {
 			return "", err
 		}
 	}
-	conn, _, err := drivers[spec.Engine].Connect(tunneled(ctx, spec), spec.DSN, password, true)
+	conn, _, err := driverOf(spec).Connect(tunneled(ctx, spec), spec.DSN, password, true)
 	if err != nil {
 		return "", err
 	}
@@ -674,7 +677,7 @@ func (a *App) saveEditedConn() tea.Cmd {
 	secrets.Delete(saved.Name)
 	rest := saved // the name and the group are the tree's at once, they are no news
 	rest.Name, rest.Group = was.Name, was.Group
-	changed, told := rest != was, false
+	changed, told := !reflect.DeepEqual(rest, was), false
 	for _, s := range a.sessions {
 		for _, conn := range s.conns() {
 			if conn.Spec.Name != was.Name {

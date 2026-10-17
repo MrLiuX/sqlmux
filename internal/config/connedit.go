@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -269,7 +270,7 @@ func editedText(old string, was, c Connection) (text string, got Connection, err
 		return "", Connection{}, err
 	}
 	i := slices.IndexFunc(conns, func(o Connection) bool { return o.Name == c.Name })
-	if i < 0 || conns[i] != want {
+	if i < 0 || !reflect.DeepEqual(conns[i], want) {
 		return "", Connection{}, errOdd()
 	}
 	return text, conns[i], nil

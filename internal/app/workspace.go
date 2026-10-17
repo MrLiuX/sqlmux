@@ -16,6 +16,7 @@ import (
 
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
+	dbexec "github.com/kackerx/sqlmux/internal/db/exec"
 	"github.com/kackerx/sqlmux/internal/db/mysql"
 	"github.com/kackerx/sqlmux/internal/db/postgres"
 	"github.com/kackerx/sqlmux/internal/db/redis"
@@ -404,7 +405,7 @@ func (c *Conn) dialect() sqlkit.Dialect {
 // setDriver makes c's driver, and its engine when it is a SQL one, what spec
 // names.
 func (c *Conn) setDriver(spec config.Connection) {
-	c.drv = drivers[spec.Engine]
+	c.drv = driverOf(spec)
 	c.eng, _ = c.drv.(db.Engine)
 	c.readOnly = spec.ReadOnly
 }
@@ -426,6 +427,15 @@ func (c *Conn) liveSpec() config.Connection {
 
 // drivers are the servers connections.toml names (§8.1, §5「连接缝」).
 var drivers = map[string]db.Driver{"postgres": postgres.Engine{}, "mysql": mysql.Engine{}, "sqlite": sqlite.Engine{}, "redis": redis.Driver{}}
+
+// driverOf is the driver of spec's engine: an exec connection's is the engine of its
+// dialect over its command (§8.8).
+func driverOf(spec config.Connection) db.Driver {
+	if spec.Engine == "exec" {
+		return dbexec.Engine{Engine: postgres.Engine{}, Command: spec.Command}
+	}
+	return drivers[spec.Engine]
+}
 
 func (a *App) win() *Window { return a.sess.Windows[a.sess.Active] }
 
@@ -830,7 +840,7 @@ func connectTo(ctx context.Context, spec config.Connection, readOnly bool) (db.C
 			return nil, db.Info{}, err
 		}
 	}
-	c, info, err := drivers[spec.Engine].Connect(tunneled(ctx, spec), dsn, pw.(string), readOnly)
+	c, info, err := driverOf(spec).Connect(tunneled(ctx, spec), dsn, pw.(string), readOnly)
 	if err != nil {
 		secrets.Delete(spec.Name)
 	}
