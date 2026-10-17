@@ -163,7 +163,17 @@ key y; sleep 1.2
 check "y：TTL 设上了（100 秒以内）" eval '(( $(rc ttl str:plain) > 0 && $(rc ttl str:plain) <= 100 ))'
 rclick 10 "$y"; sleep 0.5; menu_click "设 TTL…"; sleep 0.8; key Enter; sleep 0.8
 check "rdp：设 TTL 留空（不过期）：确认写「不过期」" eval 'confirm_open && box_has "rdp 是生产连接" && box_has "不过期"' || { e2e_plain | sed -n 12,26p | cut -c20-150; false; }
-key n; sleep 0.5
+key y; sleep 1.2
+check "y：留空 = PERSIST，TTL 没有了（redis-cli ttl 是 -1）" eval '[[ $(rc ttl str:plain) == -1 ]] || { rc ttl str:plain; false; }'
+rc expire str:plain 500 >/dev/null
+rclick 10 "$y"; sleep 0.5; menu_click "设 TTL…"; sleep 0.8; for i in 1 2 3 4 5; do key BSpace; done; e2e_type "0"; key Enter; sleep 0.8
+check "rdp：设 TTL 输入 0：确认也写「不过期」" eval 'confirm_open && box_has "rdp 是生产连接" && box_has "不过期" && ! box_has "TTL：0？"' || { e2e_plain | sed -n 12,26p | cut -c20-150; false; }
+key y; sleep 1.2
+check "y：输入 0 也是 PERSIST（ttl -1）" eval '[[ $(rc ttl str:plain) == -1 ]] || { rc ttl str:plain; false; }'
+rclick 10 "$y"; sleep 0.5; menu_click "设 TTL…"; sleep 0.8; for i in 1 2 3 4 5; do key BSpace; done; e2e_type "60"; key Enter; sleep 0.8
+check "rdp：设 TTL 输入 60：确认写「TTL：60」" eval 'confirm_open && box_has "rdp 是生产连接" && box_has "TTL：60"' || { e2e_plain | sed -n 12,26p | cut -c20-150; false; }
+key y; sleep 1.2
+check "y：EXPIRE 60（ttl 在 1 到 60 之间）" eval '(( $(rc ttl str:plain) > 0 && $(rc ttl str:plain) <= 60 ))' || { rc ttl str:plain; false; }
 ny=$(nth_row '^[▸▾] +hash( |$)'); rclick 10 "$ny"; sleep 0.5; menu_click "删除…"; sleep 0.8
 check "rdp：树上删命名空间：标题「rdp 是生产连接」，列出要删的命名空间" eval 'confirm_open && box_has "rdp 是生产连接" && box_has "hash"' || { e2e_plain | sed -n 12,26p | cut -c20-150; false; }
 key n; sleep 0.5
