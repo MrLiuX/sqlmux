@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"image/color"
 	"io"
 	"slices"
 	"strings"
@@ -632,5 +633,42 @@ func TestMenuItemsHaveIcons(t *testing.T) {
 	}
 	if items < 30 {
 		t.Errorf("only %d items looked at", items)
+	}
+	if a.icons.Named("json") != a.icons.KeyType("ReJSON-RL") { // the menu's JSON is the key type's, and keeps its name
+		t.Error("json is not the Redis key type's icon")
+	}
+}
+
+// The icon of a menu item is dim, as is, and as the text on the row picked; the
+// color a theme gives it is its own on either (F16.11, §7.7).
+func TestMenuIconColors(t *testing.T) {
+	glyph := func(a *App, g string) *uv.Cell {
+		f := a.render()
+		for y := range f.Bounds().Dy() {
+			for x := range f.Bounds().Dx() {
+				if c := f.Buf.CellAt(x, y); c != nil && c.Content == g {
+					return c
+				}
+			}
+		}
+		t.Fatalf("no %q drawn", g)
+		return nil
+	}
+	a := menuApp()
+	rightClickNode(t, a, "t_user")
+	if got := glyph(a, a.icons.Open.Text).Style.Fg; got != a.theme.Fg { // 打开, picked
+		t.Errorf("picked: %v, want the text's %v", got, a.theme.Fg)
+	}
+	if got := glyph(a, a.icons.Trash.Text).Style.Fg; got != a.theme.Dim { // 删除表…, not
+		t.Errorf("not picked: %v, want dim %v", got, a.theme.Dim)
+	}
+	themed := *a.icons
+	themed.Open.Fg, themed.Trash.Fg = color.RGBA{R: 1, A: 255}, color.RGBA{G: 1, A: 255}
+	a.icons = &themed
+	if got := glyph(a, a.icons.Open.Text).Style.Fg; got != themed.Open.Fg {
+		t.Errorf("picked, themed: %v", got)
+	}
+	if got := glyph(a, a.icons.Trash.Text).Style.Fg; got != themed.Trash.Fg {
+		t.Errorf("not picked, themed: %v", got)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
@@ -107,6 +108,16 @@ func TestRedisCandidateKinds(t *testing.T) {
 	a, c := redisConsole(t, &execDB{}, someCommands(), "")
 	conn := a.sess.Conns[0]
 	conn.docs, conn.hints = someDocs(), map[string][]string{"keys\x00us": {"user:1"}, "fields\x00h": {"field1"}}
+	defer func() { // a server with no DOCS: the names COMMAND lists
+		conn.docs = nil
+		c.ed.Load("g")
+		feed(t, a, "A")
+		a.queryComplete(c, false)
+		if c.comp == nil || c.comp.items[0].label != "GET" || c.comp.items[0].kind != kindCommand {
+			t.Errorf("without DOCS: %+v", c.comp)
+		}
+		feed(t, a, "<Esc>")
+	}()
 	for _, tc := range []struct {
 		typed, label string
 		want         candKind
@@ -125,5 +136,43 @@ func TestRedisCandidateKinds(t *testing.T) {
 			t.Errorf("%q: %s is not kind %d", tc.typed, tc.label, tc.want)
 		}
 		feed(t, a, "<Esc>")
+	}
+}
+
+// The WHERE input's list: columns, keywords and a column's values (F16.11).
+func TestWhereCandidateKinds(t *testing.T) {
+	for _, tc := range []struct {
+		typed, label string
+		want         candKind
+	}{
+		{"stat", "status", kindColumn}, {"id > 5 an", "and", kindKeyword}, {"status = ", "pending", kindValue},
+	} {
+		a, tab, _ := withRecorder(t)
+		feed(t, a, "/"+tc.typed)
+		i := -1
+		if tab.comp != nil {
+			i = slices.IndexFunc(tab.comp.items, func(it candidate) bool { return it.label == tc.label })
+		}
+		if i < 0 || tab.comp.items[i].kind != tc.want {
+			t.Errorf("%q: %s is not kind %d", tc.typed, tc.label, tc.want)
+		}
+	}
+}
+
+// What a value can be: now() and the time's words are values, NULL and DEFAULT
+// keywords; a CTE is offered as a table (F16.11).
+func TestValueAndCTECandidateKinds(t *testing.T) {
+	col := db.Column{Name: "at", Type: "timestamp with time zone", Default: "now()"}
+	for label, want := range map[string]candKind{"now()": kindValue, "current_timestamp": kindValue, "null": kindKeyword, "default": kindKeyword} {
+		got := valueCandidates(col, sqlkit.ValueInsert, sqlkit.PG)
+		i := slices.IndexFunc(got, func(cd candidate) bool { return cd.label == label })
+		if i < 0 || got[i].kind != want {
+			t.Errorf("%s: %v", label, got)
+		}
+	}
+	a, _ := inQuery(t, "", "")
+	ordersCatalog(a)
+	if k := kindsAt(a, a.sess.Conns[0], "with cte as (select 1) select * from ct")["cte"]; k != kindTable {
+		t.Errorf("a CTE is kind %d", k)
 	}
 }
