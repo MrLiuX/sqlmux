@@ -178,7 +178,7 @@ Redis 不塞进 `db.Engine`（那是 SQL 形状的接口：Quote、Arg、Tables�
 本地连不上、只有一条命令行能到的库（用户公司的 prod：PG 经 `doraemonctl exec db` 借 pgAdmin 的 Query Tool 面板，Redis 经 `doraemonctl exec redis` 走 metaknow 的内部接口），用引擎 `exec` 接进来：`dialect` 定 SQL 方言或 Redis，`command` 是 argv 模板。
 
 - **只换传输**：`internal/db/exec` 实现 `db.Conn`（`Exec` / `Query` / `Close`）；`dialect = "postgres"` 时 `postgres.Engine` 的 catalog、分页、`Quote` / `Arg` / `Same` / `Eq` 原样复用，只换 `Connect`（`Engine.Schemas(ctx, c Conn)` 这些本来只认 `Conn`）；`dialect = "redis"` 时树、键 tab 的读和控制台走它，`Query(cmd, args)` 一一对应。
-- **调用**：每条语句一次子进程，`{sql}`（或 `{cmd}` / `{args...}`）替换后执行；`Query` 的 `$n` 参数由 exec 端内联成字面量（字符串按方言加引号，数字、布尔原样，NULL）；`Exec` 按语句拆开逐条调。取消 = 杀子进程；没有断线重连；表单的「测试」跑 `select 1` / `PING`。
+- **调用**：每条语句一次子进程，`{sql}`（或 `{cmd}` / `{args...}`）替换后执行；`Query` 的 `$n` 参数由 exec 端内联成字面量（字符串按方言加引号，数字、布尔原样，NULL）；`Exec` 按语句拆开逐条调。取消 = 杀子进程；没有断线重连。exec 连接只在 connections.toml 里手写，连接管理器不列它（表单没有 `command` / `dialect` 字段；删、改名也在文件里做），连通性在连接时验：PG 跑一次 `select current_database()`，Redis 跑一次 `PING`，失败时 stderr 原文就是错误（F17.7 审查时定）。
 - **输出约定**：stdout 一份 JSON，一条语句一项：`columns`（有序的列名）、`rows`（每行一个数组，值是 JSON 标量或嵌套，嵌套转成文本协议的 JSON 文本）、`n`（受影响或总行数，没有就省略）、`err`（出错时的文本）；Redis 一项就是回复本身（RESP 的 JSON 形）。doraemonctl 的 `-o json` 是第一个实现，对不上的字段由它补（用户自己的工具）。退出码非 0 时 stderr 原文就是错误（面板没开、trans_id 失效这些 doraemonctl 自己会说）。
-- **只读**：`read_only` 对 exec 恒为 true；写回、WATCH、阻塞命令、流式导出都不做。每次查询一次子进程往返（几百毫秒到一两秒），翻一页是 count 加 select 两次，浏览可以接受。
+- **只读**：`read_only` 对 exec 恒为 true；写回、WATCH、阻塞命令、流式导出都不做。每次查询一次子进程往返（几百毫秒到一两秒），PG 翻一页是 count 加 select 两次，浏览可以接受；**Redis 的树在 exec 方言下不对每个键发 `TYPE`**（§8.7 的树是一批 SCAN 后 pipeline 发 TYPE，exec 一条命令一次子进程，一批 1000 个键就是 1000 次），键节点一律画通用的 `key` 图标，打开键 tab 时再 `TYPE`（键 tab 本来就要读类型）；`scan_keys` 预算照旧（F17.8 审查时定）。
 - **不内置 pgAdmin 的 REST**：那是它的内部接口，版本一变就坏，维护归 doraemonctl。

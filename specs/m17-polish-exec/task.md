@@ -104,7 +104,7 @@
 - [ ] a. 配置：`engine = "exec"`、`dialect = "postgres"`、`command = ["doraemonctl", "exec", "db", "-o", "json", "--no-probe", "{sql}"]`（argv 模板，`{sql}` 被整条语句替换；多条语句多次调用）；`read_only` 强制为 true。
 - [ ] b. `exec.Conn` 实现 `db.Conn`：`Query` 把 `$n` 参数内联成字面量（字符串按 PG 规则加引号、数字和布尔原样、NULL）后调用命令；`Exec` 按语句拆开逐条调用；`Close` 无事。输出的 JSON 约定写在 §8：顶层一条语句一项，`columns`（有序）、`rows`（值是 JSON 标量或嵌套，嵌套转文本）、`n`、`err`；doraemonctl 的 `-o json` 是第一个实现，字段对不上的部分由 doraemonctl 补（用户自己的工具）。
 - [ ] c. `postgres.Engine` 的 catalog、分页、`Quote` / `Arg` / `Same` / `Eq` 照用，只换 `Connect`；`Info` 用 `select version()`；`Broken` / `ErrorOf` 按命令的退出码和 stderr。
-- [ ] d. 取消：杀掉子进程；断线重连不适用（每次都是新进程）；表单的「测试」跑 `select 1`。
+- [ ] d. 取消：杀掉子进程；断线重连不适用（每次都是新进程）；exec 连接只在 connections.toml 手写、连接管理器不列（删、改名也在文件里），连通性在连接时验（`select current_database()` / `PING`），审查时定。
 - [ ] e. 错误：命令的 stderr 原文进错误栏（面板没开、trans_id 失效这些 doraemonctl 自己会说）。
 
 **验收**
@@ -119,7 +119,7 @@
 
 **开发**（§8「外部执行器」）
 - [ ] a. `dialect = "redis"`，`command = ["doraemonctl", "exec", "redis", "-o", "json", "--", "{cmd}", "{args...}"]`；`Query(cmd, args)` 一一对应，回复 JSON 转成控制台已有的回复形状。
-- [ ] b. 树（SCAN / TYPE）、键 tab 的读（HGETALL / LRANGE / …）、控制台都走它；写回、WATCH、阻塞命令不做（只读）；`COMMAND` 拿不到时按 §13 全按写处理。
+- [ ] b. 树（只 SCAN，不对每个键发 TYPE：键节点用通用 `key` 图标，打开键 tab 时再 TYPE；审查时定，一条命令一次子进程）、键 tab 的读（HGETALL / LRANGE / …）、控制台都走它；写回、WATCH、阻塞命令不做（只读）；`COMMAND` 拿不到时按 §13 全按写处理。
 
 **验收**
 - [ ] 单测：假命令回 SCAN / TYPE / HGETALL 的 JSON，树和键 tab 能摆出来；mutation。
