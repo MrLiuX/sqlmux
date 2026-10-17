@@ -163,7 +163,11 @@ leader = "<Space>"
 "<C-y>" = "quicksql.copy"
 "<C-f>" = "palette.preview.down" # the DDL preview of a table (F9.7)
 "<C-b>" = "palette.preview.up"
+"<C-o>" = "palette.preview.focus" # the focus into the preview: a read only text to move in, search, select and copy from (F17.6)
 "<C-e>" = "quicksql.edit"
+
+[keys.palettepreview] # the palette's preview has the focus: its vim keys, and esc to the list (F17.6)
+"<Esc>" = "palette.preview.leave" # NORMAL's, with no search lit, takes the focus back; the editor has it otherwise
 
 [keys.dropdown] # schema, LIMIT and the rest (§6.8): typing goes to the filter, so no j/k
 "<Up>" = "dropdown.up"

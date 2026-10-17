@@ -35,6 +35,7 @@ var tables = []table{
 	{"keys.menu", i18n.N("右键菜单打开时")},
 	{"keys.ddl", i18n.N("表的 DDL 浮窗打开时")},
 	{"keys.palette", i18n.N("命令面板打开时")},
+	{"keys.palettepreview", i18n.N("命令面板的预览区有焦点时：其余键是它的只读编辑器的")},
 	{"keys.conns", i18n.N("连接管理的列表有焦点时")},
 	{"keys.groups", i18n.N("连接表单的 group 字段弹出分组列表时，表单的键在它之后")},
 	{"keys.form", i18n.N("连接表单打开时")},

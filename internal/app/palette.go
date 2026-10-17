@@ -17,6 +17,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/db/redis"
+	"github.com/kackerx/sqlmux/internal/editor"
 	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
@@ -39,6 +40,7 @@ type palette struct {
 	// pvTop is how far the preview is scrolled (F9.7); a selection that moves
 	// to another table, or more typed, has it at the top again.
 	pvTop   int
+	pvEd    *editor.Editor // the preview has the focus: its text in a read only vim (F17.6)
 	fetches context.Context
 	stop    context.CancelFunc
 
@@ -442,7 +444,18 @@ func (a *App) palettePreview() *ui.PalettePreview {
 		return nil
 	}
 	d := c.ddl[idOf(t)]
-	return &ui.PalettePreview{Text: d.text, Err: d.err, Names: a.ddlNames(c, t, d.text), Dialect: c.eng.Dialect(), Top: a.palette.pvTop}
+	return a.withEditor(&ui.PalettePreview{Text: d.text, Err: d.err, Names: a.ddlNames(c, t, d.text), Dialect: c.eng.Dialect(), Top: a.palette.pvTop})
+}
+
+// withEditor is pv with the editor that has its text, when the preview has the
+// focus (F17.6).
+func (a *App) withEditor(pv *ui.PalettePreview) *ui.PalettePreview {
+	if ed := a.palette.pvEd; ed != nil && pv.Err == "" {
+		q := a.textView(ed, ui.ValuePane, false)
+		q.Colors = ui.SQLColors(a.theme, pv.Text, pv.Dialect, pv.Names)
+		pv.Edit = &q
+	}
+	return pv
 }
 
 // queryPreviewRows and queryPreviewBytes are how much of a query file the
@@ -492,7 +505,7 @@ func (a *App) queryPreview() *ui.PalettePreview {
 		pv.Dialect = c.eng.Dialect()
 		pv.Names, _ = a.sqlNames(c, text, schema, nil)
 	}
-	return pv
+	return a.withEditor(pv)
 }
 
 // ddlNames are the names in t's DDL text the catalog knows, for their colors:
@@ -528,12 +541,91 @@ func (a *App) scrollablePreview() (*ui.PalettePreview, int) {
 // scrollPreview is C-f (d 1) and C-b (-1) over the preview: half its rows,
 // from where it is held now, to the ends and no further (F9.7).
 func (a *App) scrollPreview(d int) {
-	pv, rows := a.scrollablePreview()
-	if pv == nil {
-		return
+	if _, rows := a.scrollablePreview(); rows > 0 {
+		a.scrollPreviewBy(d * max(rows/2, 1))
 	}
-	v := ui.TextView{Text: pv.Text, Top: pv.Top}
-	a.palette.pvTop = v.Scroll(rows, d*max(rows/2, 1))
+}
+
+// scrollPreviewBy scrolls the preview by n rows, to the ends and no further:
+// the wheel's (F17.6).
+func (a *App) scrollPreviewBy(n int) {
+	if pv, rows := a.scrollablePreview(); pv != nil {
+		a.palette.pvTop = ui.TextView{Text: pv.Text, Top: pv.Top}.Scroll(rows, n)
+	}
+}
+
+// previewEd is the editor that has the preview's text, when the preview has the
+// focus and is shown: a selection that moved off what it showed, a window with no
+// room for it, take the focus back to the list (F17.6).
+func (a *App) previewEd() *editor.Editor {
+	p := a.palette
+	if p == nil || p.pvEd == nil {
+		return nil
+	}
+	if pv, rows := a.previewWindow(); pv == nil || pv.Err != "" || rows <= 0 {
+		p.pvEd = nil
+	}
+	return p.pvEd
+}
+
+// previewRect is where the preview draws its text (ui.Palette.Draw).
+func (a *App) previewRect() uv.Rectangle {
+	_, ms := a.paletteMatches()
+	box, _, grid := a.paletteBox(len(ms))
+	return uv.Rect(box.Min.X+2, grid.Min.Y, box.Dx()-4, grid.Dy())
+}
+
+// previewSize gives the editor the size of the preview's area, which H M L, C-d and
+// the scrolling go by.
+func (a *App) previewSize(ed *editor.Editor) {
+	a.sizeEditor(ed, ui.Query{Lines: ed.Lines()}.TextArea(a.previewRect()))
+}
+
+// previewFocus is palette.preview.focus: the preview's text in a read only editor,
+// which has the keys, as a JSON view's has (F17.6); none where the preview is
+// not shown or is an error.
+func (a *App) previewFocus() {
+	p := a.palette
+	if pv, rows := a.previewWindow(); p.pvEd == nil && pv != nil && pv.Err == "" && rows > 0 {
+		ed := editor.New("")
+		ed.ReadOnly = true
+		ed.Load(pv.Text)
+		ed.SetPlain(a.plain)
+		p.pvEd = ed
+		a.previewSize(ed)
+	}
+}
+
+// previewKey gives key k, which no binding of the palette's preview took, to
+// its editor: esc in NORMAL, with no search lit, takes the focus back to the list,
+// and so does :q (F17.6).
+func (a *App) previewKey(k keymap.Key) tea.Cmd {
+	p, ed := a.palette, a.previewEd()
+	if ed == nil {
+		return nil
+	}
+	a.previewSize(ed)
+	var did func(editor.Effect) tea.Cmd
+	did = func(eff editor.Effect) tea.Cmd {
+		return a.roDid(eff, func(text string, pt editor.ClipPut) tea.Cmd {
+			if p.pvEd != ed {
+				return nil
+			}
+			return did(ed.PutClip(text, pt))
+		}, func(c string) tea.Cmd {
+			if c = strings.TrimSpace(c); c == "q" || c == "q!" {
+				return a.previewLeave()
+			}
+			return a.showToast(i18n.T("不支持的命令：%s", c))
+		})
+	}
+	return a.roKey(ed, k, false, a.previewLeave, did)
+}
+
+// previewLeave takes the focus back to the list.
+func (a *App) previewLeave() tea.Cmd {
+	a.palette.pvEd = nil
+	return nil
 }
 
 // wantDDL times the preview: the selection moved to a table whose DDL is
@@ -556,7 +648,7 @@ func (a *App) wantDDL() tea.Cmd {
 	if id == p.preview {
 		return nil
 	}
-	p.preview, p.pvTop = id, 0 // another table or query, or none: the top
+	p.preview, p.pvTop, p.pvEd = id, 0, nil // another table or query, or none: the top, and the list has the focus again
 	if !ok {
 		return nil
 	}

@@ -640,13 +640,23 @@ func (a *App) wheel(m tea.Mouse) {
 	case "keyhelp": // a notch a row (§6.5)
 		a.scrollKeyHelp(notch, false)
 		return
-	case "palette": // over the result's table: that scrolls
-		if a.quickShows() {
-			_, ms := a.paletteMatches()
-			if _, _, area := a.paletteBox(len(ms)); uv.Pos(m.X, m.Y).In(area) {
-				q := a.palette.quick
-				q.top, q.left, _, _ = a.quickView(q).Grid.Scroll(area, down*wheelStep, right)
+	case "palette": // over the result's table, that scrolls; over the preview, that; else the list (F17.6)
+		_, ms := a.paletteMatches()
+		box, rows, area := a.paletteBox(len(ms))
+		at := uv.Pos(m.X, m.Y)
+		switch {
+		case a.quickShows() && at.In(area):
+			q := a.palette.quick
+			q.top, q.left, _, _ = a.quickView(q).Grid.Scroll(area, down*wheelStep, right)
+		case !a.quickShows() && at.In(area):
+			if ed := a.previewEd(); ed != nil {
+				a.previewSize(ed)
+				ed.Scroll(notch * wheelStep)
+			} else {
+				a.scrollPreviewBy(notch * wheelStep)
 			}
+		case at.In(uv.Rect(box.Min.X+1, box.Min.Y+4, box.Dx()-2, rows)): // the list's rows
+			a.paletteMove(notch * wheelStep)
 		}
 		return
 	default: // the others are modal: the panes under them are not for the wheel (F13.7)
@@ -766,6 +776,9 @@ func (a *App) typeInto(k keymap.Key) tea.Cmd {
 	case "keyhelp":
 		return a.keyHelpKey(k)
 	case "palette":
+		if a.previewEd() != nil { // the preview has the focus: its vim (F17.6)
+			return a.previewKey(k)
+		}
 		return a.paletteKey(k)
 	case "sessions": // a name typed in place
 		if a.sessList.rename != nil {
@@ -894,6 +907,9 @@ func (a *App) overlayContext(ov string) keymap.Context {
 	case "value":
 		return keymap.Context{Overlay: "value", Mode: vimMode(a.value.ed.Mode()), Plain: a.plain}
 	case "palette":
+		if ed := a.previewEd(); ed != nil { // the preview's vim, and esc (F17.6)
+			return keymap.Context{Overlay: "palettepreview", Mode: vimMode(ed.Mode()), Plain: a.plain}
+		}
 		if a.palette.comp != nil { // the palette's keys under the list's: its ↵ and esc see to the list first (§9.7)
 			return keymap.Context{Overlay: "complete", Under: "palette", Focus: []string{"input"}, Mode: keymap.Command}
 		}

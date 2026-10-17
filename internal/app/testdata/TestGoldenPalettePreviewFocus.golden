@@ -1,0 +1,45 @@
+┌─ ⓪  doraemon ─────────── « ─┐ ┌─ ① ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  15 tables                 │ │                                                                                                                             │
+│──────────────────────────────│ │                                                                                                                             │
+│ ▾  doraemon                 │ │                                                                                                                             │
+│   ▸  agentable              │ │                                                                                                                             │
+│   ▾  public                 │ │                                                                                                                             │
+│     ▾  Tables (14)          │ │                                                                                                                             │
+│       ▸  agent          124┌─ 命令面板 ───────────────────────────────────────────────────────────────────────────────────────┐                             │
+│       ▸  agent_version  530│  所有   会话 $   窗口·Pane %   窗口 &   Tab #   表 @   命令 >   SQL ;                            │                             │
+│       ▸  goal            57│  @t_order                                                                                       │                             │
+│       ▸  mt_task        812│──────────────────────────────────────────────────────────────────────────────────────────────────│                             │
+│       ▸  mt_task_log    96k│  t_order       doraemon.public                                                               表 │                             │
+│       ▸  schema_migrations │  t_order_item  doraemon.public                                                               表 │                             │
+│       ▸  t_order       1.2m│──────────────────────────────────────────────────────────────────────────────────────────────────│                             │
+│       ▸  t_order_item  3.4m│    1 create table public.t_order (                                                               │                             │
+│       ▸  t_payment     410k│    2   id bigint not null default nextval('t_order_id_seq'::regclass),                           │                             │
+│       ▸  t_refund       12k│    3   user_id bigint not null,                                                                  │                             │
+│       ▸  t_sku         8.1k│    4   status order_status not null default 'pending'::order_status,                             │                             │
+│       ▸  t_user         38k│    5   amount numeric(10,2) not null,                                                            │                             │
+│       ▸  t_user_address 52k│    6   paid boolean,                                                                             │                             │
+│       ▸  t_user_profile 38k│    7   meta jsonb,                                                                               │                             │
+│        Views (0)           │    8   raw json,                                                                                 │                             │
+│ ▾  工作区                  │    9   note text,                                                                                │                             │
+│      data                  │   10   created_at timestamp with time zone not null default now(),                               │                             │
+│ ▾  Queries                 │   11   deleted_at timestamp with time zone,                                                      │                             │
+│                             │   12   constraint t_order_pkey PRIMARY KEY (id),                                                 │                             │
+│                             │──────────────────────────────────────────────────────────────────────────────────────────────────│                             │
+│                             │ ↑/↓ 移动 · C-b/C-f 滚动预览 · Tab/S-Tab 范围 · esc 关闭                                   ↵ 打开 │                             │
+│                             └──────────────────────────────────────────────────────────────────────────────────────────────────┘                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│                              │ │                                                                                                                             │
+│──────────────────────────────│ │                                                                                                                             │
+│ j/k move · ↵ open            │ │ +                                                                                                                           │
+└──────────────────────────────┘ └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ doraemon ▾  0: data*                                                                                             ·     doraemon · pg@localhost:5432  NORMAL 

@@ -41,7 +41,8 @@ type PalettePreview struct {
 	Text, Err string
 	Names     SQLNames
 	Dialect   sqlkit.Dialect
-	Top       int // the rows scrolled past (F9.7)
+	Top       int    // the rows scrolled past (F9.7)
+	Edit      *Query // the preview has the focus: a read only editor in its place (F17.6)
 }
 
 // Lines is how many rows p takes whole.
@@ -203,7 +204,14 @@ func (p Palette) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 		if pv.Err != "" {
 			v.Text, v.Colors = strings.ReplaceAll(pv.Err, "\n", " "), nil
 		}
-		v.Draw(f, uv.Rect(x0, grid.Min.Y, x1-x0, grid.Dy()), bg)
+		area := uv.Rect(x0, grid.Min.Y, x1-x0, grid.Dy())
+		if pv.Edit != nil && pv.Err == "" {
+			if c := pv.Edit.Draw(f, area); c.X >= 0 {
+				cursor = c
+			}
+		} else {
+			v.Draw(f, area, bg)
+		}
 		y = grid.Max.Y
 	}
 	if r := p.Result; r != nil {
