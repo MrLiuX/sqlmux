@@ -186,7 +186,7 @@
 - [ ] 单测：DSN 是 `/2`、keyspace 有 0 / 1 / 3 时顺序 0 1 2 3、db2 展开；mutation。
 - [ ] e2e：树里的顺序。
 
-## F16.11 补全框和右键菜单的图标 · 状态：todo
+## F16.11 补全框和右键菜单的图标 · 状态：passed（b0251d0；e2e 191d3fd）
 
 - **依赖**：无（`ui.CompleteItem.Icon` 现成，WHERE 历史已在用）
 - **涉及**：`internal/ui`（complete、menu 的绘制）、`internal/app`（候选和菜单项带图标）、`internal/ui/icons`（新图标名）、主题的图标覆盖
