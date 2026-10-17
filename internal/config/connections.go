@@ -226,6 +226,8 @@ func (c Connection) Check(names []string) (field, problem string) {
 			return "dialect", fmt.Sprintf(i18n.T("dialect = %q：exec 只认 postgres 和 redis"), c.Dialect)
 		case !slices.ContainsFunc(c.Command, func(a string) bool { return strings.Contains(a, place) }):
 			return "command", fmt.Sprintf(i18n.T("exec 的 command 是 argv 数组，里面要有 %s"), place)
+		case c.Dialect == "redis" && !slices.Contains(c.Command, "{args...}"): // as an item of its own: the words go in as many items; else they are dropped
+			return "command", i18n.T("redis 的 command 要有单独一项 {args...}")
 		}
 	} else if c.Dialect != "" || len(c.Command) > 0 {
 		return "command", i18n.T("dialect 和 command 只对 exec 连接有用")

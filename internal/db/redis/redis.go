@@ -29,11 +29,16 @@ type quiet struct{}
 func (quiet) Printf(context.Context, string, ...any) {}
 
 // Conn is one connection to a server.
-type Conn struct{ c *goredis.Client }
+type Conn struct {
+	c       *goredis.Client
+	untyped bool // Scan leaves the keys' types out: each would be a run of a command
+}
 
 // NewConn is the connection of a client that something other than a server on the
-// network answers, as exec's command is (§8.8).
-func NewConn(c *goredis.Client) *Conn { return &Conn{c: c} }
+// network answers, as exec's command is (§8.8): each request is a run of the
+// command, so a scan does not ask for the type of every key (the tab asks for its
+// own key's when it opens).
+func NewConn(c *goredis.Client) *Conn { return &Conn{c: c, untyped: true} }
 
 // Driver is db.Driver for Redis (§5「连接缝」): no Engine, nothing in it is
 // SQL.

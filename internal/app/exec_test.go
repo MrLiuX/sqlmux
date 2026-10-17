@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -46,6 +47,9 @@ func TestExecConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.take(d)
+	if slices.Contains(a.managed(), c) { // written in connections.toml, not listed in the manager (§8.8)
+		t.Error("the manager lists an exec connection")
+	}
 	if c.Addr != "sh" || c.DB != "shop" || !c.sql() || !c.readOnly || c.redis() {
 		t.Fatalf("dialed: addr %q db %q sql %v read only %v", c.Addr, c.DB, c.sql(), c.readOnly)
 	}

@@ -30,6 +30,7 @@ case "$cmd" in
 PING) echo '"PONG"' ;;
 TYPE) echo '"hash"' ;;
 HGETALL) echo '{"zeta":"1","alpha":"two words","n":3}' ;;
+DBSIZE) echo 2 ;;
 SCAN) echo '["0",["user:1","user:2"]]' ;;
 GET) echo null ;;
 STRLEN) echo 12 ;;
@@ -186,5 +187,32 @@ func TestKeyTabOverACommand(t *testing.T) {
 	}
 	if got["alpha"] != "two words" || got["n"] != "3" || got["zeta"] != "1" {
 		t.Errorf("rows %v", got)
+	}
+}
+
+// The tree's scan over a command asks no TYPE: each would be a run, a thousand to a batch;
+// the keys come with no type, and the tab of one asks its own when it opens (F17.8).
+func TestScanOverACommandAsksNoType(t *testing.T) {
+	argv, log := fakeRedis(t)
+	ctx := context.Background()
+	c, _, err := RedisDriver{Command: argv}.Connect(ctx, "", "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	s, err := redis.Scan(ctx, c, "user:*", 100)
+	if err != nil || len(s.Keys) != 2 || s.Keys[0] != (redis.KeyInfo{Name: "user:1"}) || s.Keys[1].Type != "" {
+		t.Fatalf("scan: %+v %v", s, err)
+	}
+	if b, _ := os.ReadFile(log); strings.Contains(strings.ToLower(string(b)), "type") {
+		t.Errorf("the scan ran TYPE:\n%s", b)
+	}
+	w := db.NewWorker(c)
+	cols, err := (redis.Key{Meta: w, Main: w, Name: "user:1"}).Columns(ctx) // the tab: no type known yet
+	if err != nil || len(cols.Cols) != 2 || cols.Cols[0].Name != "field" {
+		t.Errorf("the tab's columns: %+v %v", cols, err)
+	}
+	if b, _ := os.ReadFile(log); !strings.Contains(strings.ToLower(string(b)), "type user:1") {
+		t.Errorf("the tab did not ask TYPE:\n%s", b)
 	}
 }

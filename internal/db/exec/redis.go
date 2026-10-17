@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -162,22 +161,11 @@ func (s *respServer) run(ctx context.Context, req []string) (any, error) {
 			args = append(args, strings.ReplaceAll(a, "{cmd}", req[0]))
 		}
 	}
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-	var out bytes.Buffer
-	var errOut tail
-	cmd.Stdout, cmd.Stderr = &out, &errOut
-	cmd.WaitDelay = 500 * time.Millisecond
-	err := cmd.Run()
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
+	out, err := runCommand(ctx, args)
 	if err != nil {
-		if msg := strings.TrimSpace(errOut.buf.String()); msg != "" {
-			return nil, errors.New(msg)
-		}
-		return nil, fmt.Errorf("%s: %w", args[0], err)
+		return nil, err
 	}
-	dec := json.NewDecoder(&out)
+	dec := json.NewDecoder(bytes.NewReader(out))
 	dec.UseNumber()
 	v, err := ordered(dec)
 	if err != nil {

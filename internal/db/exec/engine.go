@@ -55,6 +55,11 @@ func (Engine) ErrorOf(err error) db.ServerError {
 	return db.ServerError{Severity: "ERROR", Message: err.Error()}
 }
 
+// Databases lists none: the command reaches the one database it is made for, and
+// the DSN that would name another is not used.
+// ponytail: a command that can reach several is one connection each
+func (Engine) Databases(context.Context, db.Conn) ([]string, error) { return nil, nil }
+
 // UseSchema does nothing: the next run would not have it.
 // ponytail: a query's unqualified names go to the search_path the command
 // connects with; qualify them, or let the command set it

@@ -27,6 +27,9 @@ case "$sql" in
 *"select current_database()"*) echo '[{"columns":["a","b"],"rows":[["shop","\"$user\", public"]]}]' ;;
 *"from pg_namespace n where"*) echo '[{"columns":["nspname","cs"],"rows":[["public","public"],["sales","public"]]}]' ;;
 *"from pg_class c join pg_namespace"*) echo '[{"columns":["n","r","t","k"],"rows":[["public","orders",12,"r"],["public","v_orders",-1,"v"]]}]' ;;
+*pg_database*) echo '[{"columns":["datname"],"rows":[["shop"],["other"]]}]' ;;
+*tagged*) echo '[{"n":3}]' ;;
+*bigerr*) head -c 10000 /dev/zero | tr '\000' a >&2; echo END >&2; exit 1 ;;
 *stderr*) echo "the panel is not open" >&2; exit 3 ;;
 *itemerr*) echo '[{"err":"relation does not exist"}]' ;;
 *notjson*) echo 'hello' ;;
@@ -88,14 +91,20 @@ func TestInline(t *testing.T) {
 		{"select 'it''s $1', $1", "select 'it''s $1', 'x'", []db.Val{{S: "x"}}},
 		{"select $10, $1", "select 'j', 'a'", []db.Val{{S: "a"}, {}, {}, {}, {}, {}, {}, {}, {}, {S: "j"}}},
 		{"select $$x$$, $1", "select $$x$$, 'a'", []db.Val{{S: "a"}}}, // a $$ is no parameter's
+		{"select $q$ $1 $q$, $$ $1 $$, $1", "select $q$ $1 $q$, $$ $1 $$, 'a'", []db.Val{{S: "a"}}},
+		{`select E'it\'s $1', $1`, `select E'it\'s $1', 'a'`, []db.Val{{S: "a"}}},
+		{"select $ 1, $1", "select $ 1, 'a'", []db.Val{{S: "a"}}},                               // a $ and a number apart are two things
+		{"select /* a /* $1 */ $1 */ $1", "select /* a /* $1 */ $1 */ 'a'", []db.Val{{S: "a"}}}, // PG's comments nest
 	} {
 		got, err := Inline(c.sql, c.args, sqlkit.PG)
 		if err != nil || got != c.want {
 			t.Errorf("%q: %q %v, want %q", c.sql, got, err, c.want)
 		}
 	}
-	if _, err := Inline("select $2", []db.Val{{S: "a"}}, sqlkit.PG); err == nil {
-		t.Error("a parameter with no argument")
+	for _, sql := range []string{"select $2", "select $0"} {
+		if _, err := Inline(sql, []db.Val{{S: "a"}}, sqlkit.PG); err == nil {
+			t.Errorf("%s: a parameter with no argument", sql)
+		}
 	}
 }
 
@@ -130,6 +139,25 @@ func TestExec(t *testing.T) {
 	}
 }
 
+// A statement that writes has no columns and says how many rows it hit; an item that
+// says err is that error on a single query as it is on Exec; what a command says on
+// stderr is its last 4 KB (F17.7).
+func TestQueryTagErrAndStderrTail(t *testing.T) {
+	argv, _ := fake(t)
+	c, _ := New(argv, sqlkit.PG)
+	ctx := context.Background()
+	if r, err := c.Query(ctx, "update tagged"); err != nil || r.Tag != "3" || r.Affected != 3 || len(r.Cols) != 0 {
+		t.Errorf("no columns: %+v %v", r, err)
+	}
+	var ce Error
+	if _, err := c.Query(ctx, "select itemerr"); !errors.As(err, &ce) || ce.Msg != "relation does not exist" {
+		t.Errorf("an item's err: %v", err)
+	}
+	if _, err := c.Query(ctx, "select bigerr"); !errors.As(err, &ce) || len(ce.Msg) > 4096 || !strings.HasSuffix(ce.Msg, "aaaEND") {
+		t.Errorf("stderr: %d bytes, ends %q", len(ce.Msg), ce.Msg[max(0, len(ce.Msg)-8):])
+	}
+}
+
 // Cancelling kills the run, as a request's cancel does (F17.7).
 func TestCancelKillsTheRun(t *testing.T) {
 	argv, _ := fake(t)
@@ -160,6 +188,9 @@ func TestEngineOverACommand(t *testing.T) {
 	ts, err := e.Tables(ctx, c)
 	if err != nil || len(ts) != 2 || ts[0].Name != "orders" || ts[0].Rows != 12 || !ts[1].View() {
 		t.Errorf("tables %+v %v", ts, err)
+	}
+	if dbs, err := e.Databases(ctx, c); err != nil || len(dbs) != 0 { // the command is made for the one it reaches, which another name would not change
+		t.Errorf("databases %v %v", dbs, err)
 	}
 	if err := e.UseSchema(ctx, c, "sales", ""); err != nil {
 		t.Errorf("UseSchema: %v", err)

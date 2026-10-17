@@ -248,11 +248,13 @@ func TestExecConnectionConfig(t *testing.T) {
 		t.Fatalf("redis dialect: %+v %v", cs, err)
 	}
 	for body, want := range map[string]string{
-		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ncommand = [\"x\", \"{sql}\"]\n":                               "dialect",
-		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ndialect = \"mysql\"\ncommand = [\"x\", \"{sql}\"]\n":          "dialect",
-		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ndialect = \"postgres\"\ncommand = [\"x\"]\n":                  "command",
-		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ndialect = \"postgres\"\n":                                     "command",
-		"[[connection]]\nname = \"p\"\nengine = \"postgres\"\ndsn = \"postgres://h/d\"\ncommand = [\"x\", \"{sql}\"]\n": "command",
+		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ncommand = [\"x\", \"{sql}\"]\n":                                "dialect",
+		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ndialect = \"mysql\"\ncommand = [\"x\", \"{sql}\"]\n":           "dialect",
+		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ndialect = \"postgres\"\ncommand = [\"x\"]\n":                   "command",
+		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ndialect = \"postgres\"\n":                                      "command",
+		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ndialect = \"redis\"\ncommand = [\"x\", \"{cmd}\"]\n":           "{args...}",
+		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ndialect = \"redis\"\ncommand = [\"x\", \"{cmd} {args...}\"]\n": "{args...}",
+		"[[connection]]\nname = \"p\"\nengine = \"postgres\"\ndsn = \"postgres://h/d\"\ncommand = [\"x\", \"{sql}\"]\n":  "command",
 	} {
 		connectionsFile(t, body)
 		if _, _, err := LoadConnections(""); err == nil || !strings.Contains(err.Error(), want) {

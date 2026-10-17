@@ -67,13 +67,20 @@ func scanKeys(ctx context.Context, cl *goredis.Client, match string, budget int,
 
 // Scan reads the keys of the db c is on that match the glob match until the
 // cursor comes round or budget keys are read; the type of each batch comes in
-// one pipeline (§8.7「树」). The keys are in the order they are read.
+// one pipeline (§8.7「树」), not on a connection that is a command (§8.8). The
+// keys are in the order they are read.
 func Scan(ctx context.Context, c db.Conn, match string, budget int) (s Scanned, err error) {
 	err = Use(ctx, c, func(cl *goredis.Client) (err error) {
 		if s.Total, err = cl.DBSize(ctx).Result(); err != nil {
 			return err
 		}
 		s.Complete, err = scanKeys(ctx, cl, match, budget, func(batch []string) error {
+			if Of(c).untyped { // KeyInfo.Type "": the generic key icon
+				for _, k := range batch {
+					s.Keys = append(s.Keys, KeyInfo{Name: k})
+				}
+				return nil
+			}
 			types, err := typesOf(ctx, cl, batch)
 			for i, k := range batch[:len(types)] {
 				s.Keys = append(s.Keys, KeyInfo{k, types[i]})

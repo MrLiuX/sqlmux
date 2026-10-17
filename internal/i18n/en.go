@@ -614,4 +614,6 @@ var en = map[string]string{
 	"{key} 显示或隐藏侧栏":                        "{key} shows or hides the sidebar",
 	"{key} 新建 window，一件事一个 window":         "{key} opens a window: one window for one task",
 	"{key} 切换或新建 session":                  "{key} switches or creates a session",
+
+	"redis 的 command 要有单独一项 {args...}": "the command of a redis exec needs {args...} as an item of its own",
 }

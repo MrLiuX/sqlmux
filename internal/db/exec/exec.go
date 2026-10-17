@@ -82,13 +82,11 @@ func (t *tail) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// run is one run of the command for statement sql, its output parsed.
-func (c *Conn) run(ctx context.Context, sql string) ([]item, error) {
-	args := make([]string, len(c.argv))
-	for i, a := range c.argv {
-		args[i] = strings.ReplaceAll(a, Placeholder, sql)
-	}
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+// runCommand is one run of argv: what it printed on stdout. A run that ends in
+// error is what it said on stderr, or how it ended; a cancel kills it and is the
+// error whatever it said.
+func runCommand(ctx context.Context, argv []string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	var out bytes.Buffer
 	var errOut tail
 	cmd.Stdout, cmd.Stderr = &out, &errOut
@@ -101,9 +99,22 @@ func (c *Conn) run(ctx context.Context, sql string) ([]item, error) {
 		if msg := strings.TrimSpace(errOut.buf.String()); msg != "" {
 			return nil, Error{msg}
 		}
-		return nil, Error{fmt.Sprintf("%s: %v", args[0], err)}
+		return nil, Error{fmt.Sprintf("%s: %v", argv[0], err)}
 	}
-	return parse(out.Bytes())
+	return out.Bytes(), nil
+}
+
+// run is one run of the command for statement sql, its output parsed.
+func (c *Conn) run(ctx context.Context, sql string) ([]item, error) {
+	args := make([]string, len(c.argv))
+	for i, a := range c.argv {
+		args[i] = strings.ReplaceAll(a, Placeholder, sql)
+	}
+	out, err := runCommand(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	return parse(out)
 }
 
 // parse reads the output of a run: an array of items, or one item alone.
@@ -215,63 +226,29 @@ func (c *Conn) Query(ctx context.Context, sql string, args ...db.Val) (db.Result
 
 func (c *Conn) Close() error { return nil }
 
-// Inline is sql with each $n, outside what is quoted or a comment, written as the
-// literal of args[n-1]: a string in the dialect's quotes, NULL for a null.
-// ponytail: a $$ quote of PG is not told from other text beyond its tag, and E'…'
-// strings are read as plain ones; the statements the catalog makes have neither
+// Inline is sql with each $n, where it is code and not in a string, an identifier or
+// a comment (sqlkit.Scan tells), written as the literal of args[n-1]: a string in the
+// dialect's quotes, NULL for a null.
 func Inline(sql string, args []db.Val, d sqlkit.Dialect) (string, error) {
 	var b strings.Builder
-	for i := 0; i < len(sql); {
-		c := sql[i]
-		switch {
-		case c == '\'' || c == '"' || c == '`':
-			j := i + 1
-			for j < len(sql) {
-				if sql[j] == c {
-					if j+1 < len(sql) && sql[j+1] == c { // doubled: the quote itself
-						j += 2
-						continue
-					}
-					break
-				}
-				j++
-			}
-			j = min(j+1, len(sql))
-			b.WriteString(sql[i:j])
-			i = j
-		case c == '-' && strings.HasPrefix(sql[i:], "--"):
-			j := strings.IndexByte(sql[i:], '\n')
-			if j < 0 {
-				j = len(sql) - i
-			}
-			b.WriteString(sql[i : i+j])
-			i += j
-		case c == '/' && strings.HasPrefix(sql[i:], "/*"):
-			j := strings.Index(sql[i:], "*/")
-			if j < 0 {
-				j = len(sql) - i - 2
-			}
-			b.WriteString(sql[i : i+j+2])
-			i += j + 2
-		case c == '$' && i+1 < len(sql) && sql[i+1] >= '0' && sql[i+1] <= '9':
-			j := i + 1
-			for j < len(sql) && sql[j] >= '0' && sql[j] <= '9' {
-				j++
-			}
-			n, _ := strconv.Atoi(sql[i+1 : j])
-			if n < 1 || n > len(args) {
-				return "", fmt.Errorf(i18n.T("$%d 没有对应的参数"), n)
-			}
-			if a := args[n-1]; a.Null {
-				b.WriteString("NULL")
-			} else {
-				b.WriteString(sqlkit.Literal(a.S, d))
-			}
-			i = j
-		default:
-			b.WriteByte(c)
-			i++
+	toks, last := sqlkit.Scan(sql, d), 0
+	for i, t := range toks { // $ is an operator of its own, the number right after it (no blank is a token between) the parameter's
+		if t.Kind != sqlkit.Op || sql[t.Start:t.End] != "$" || i+1 == len(toks) || toks[i+1].Kind != sqlkit.Number {
+			continue
 		}
+		num := toks[i+1]
+		n, err := strconv.Atoi(sql[num.Start:num.End])
+		if err != nil || n < 1 || n > len(args) {
+			return "", fmt.Errorf(i18n.T("$%d 没有对应的参数"), n)
+		}
+		b.WriteString(sql[last:t.Start])
+		if a := args[n-1]; a.Null {
+			b.WriteString("NULL")
+		} else {
+			b.WriteString(sqlkit.Literal(a.S, d))
+		}
+		last = num.End
 	}
+	b.WriteString(sql[last:])
 	return b.String(), nil
 }
