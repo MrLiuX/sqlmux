@@ -4,27 +4,28 @@ Run from assets/demo/capture after ./record.sh shots/... ; needs ffmpeg, rsvg-co
 import base64, os, subprocess, tempfile
 from xml.sax.saxutils import escape
 
-TILES = [  # grid order: (tape name, caption)
-    ("where", "WHERE with completion and history"),
-    ("order", "Sort by many columns"),
-    ("complete", "Completion and field hints"),
-    ("panes", "Panes: the same table twice"),
-    ("flash", "Flash jump"),
-    ("json", "JSON view"),
-    ("edit", "Edit a cell, save as one transaction"),
-    ("select", "Select rows, act on them"),
-    ("whichkey", "which-key"),
+TILES = [  # grid order: (tape name, caption, crop w:h:x:y in the 1200x676 frame, picked by hand around the feature)
+    ("where", "WHERE with completion and history", "1104:482:78:16"),
+    ("order", "Sort by many columns", "860:483:78:16"),
+    ("complete", "Completion and field hints", "850:340:78:16"),
+    ("panes", "Panes: the same table twice", "1112:590:74:16"),
+    ("flash", "Flash jump", "1010:564:74:16"),
+    ("json", "JSON view", "860:483:74:16"),
+    ("edit", "Edit a cell, save as one transaction", "1104:562:74:16"),
+    ("select", "Select rows, act on them", "1026:454:74:16"),
+    ("whichkey", "which-key", "920:368:14:256"),
 ]
-W, H, GAP, CAP = 778, 438, 16, 52  # tile (16:9 of the 1200x676 frame), gutter, caption band
+W, H, GAP, CAP = 778, 438, 16, 52  # tile box (16:9), gutter, caption band
 OUT = "../../features.png"
 
 tmp = tempfile.mkdtemp()
 parts = []
-for i, (name, cap) in enumerate(TILES):
+for i, (name, cap, crop) in enumerate(TILES):
     png = f"{tmp}/{name}.png"
-    # last frame, cropped to 16:9 and scaled with lanczos so rsvg embeds it 1:1
+    # last frame, cropped, fitted into the box (lanczos) and padded with the background, so rsvg embeds it 1:1
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-sseof", "-0.3", "-i", f"renders/shots/{name}.mp4",
-                    "-frames:v", "1", "-update", "1", "-vf", f"crop=1200:675:0:0,scale={W}:{H}:flags=lanczos", png], check=True)
+                    "-frames:v", "1", "-update", "1", "-vf", f"crop={crop},scale={W}:{H}:force_original_aspect_ratio=decrease:flags=lanczos,"
+                    f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=0x1e1a1a", png], check=True)
     x, y = GAP + (i % 3) * (W + GAP), GAP + (i // 3) * (H + CAP + GAP)
     data = base64.b64encode(open(png, "rb").read()).decode()
     parts.append(f'<image x="{x}" y="{y}" width="{W}" height="{H}" href="data:image/png;base64,{data}"/>')

@@ -2,7 +2,7 @@
 Output renders/shots/whichkey.mp4
 Set Shell zsh
 Set FontFamily "Maple Mono NF CN"
-Set FontSize 16
+Set FontSize 20
 Set Width 1200
 Set Height 676
 Set Padding 12
@@ -16,6 +16,8 @@ Sleep 500ms
 Ctrl+l
 Sleep 200ms
 Type " x"
+Sleep 600ms
+Type " b"
 Sleep 600ms
 Ctrl+p
 Sleep 600ms
