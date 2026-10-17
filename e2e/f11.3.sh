@@ -19,7 +19,7 @@ js() { node -e "const p = JSON.parse(require('fs').readFileSync(process.argv[1],
 check "build.mjs 没有参数：退出码 2 和用法" eval 'node npm/build.mjs 2>"$D/err"; [[ $? -eq 2 ]] && grep -q usage "$D/err"'
 mkdir -p "$D/few"; cp dist/sqlmux_${v}_darwin_arm64.tar.gz "$D/few/"
 check "build.mjs 缺一个平台的压缩包：失败并说是哪个平台" eval 'node npm/build.mjs $TAG "$D/few" "$D/few-out" 2>"$D/few-err"; [[ $? -ne 0 ]] && grep -q "darwin_amd64\|linux_" "$D/few-err"'
-check "build.mjs 在路径带空格的目录里也能出包" eval 'mkdir -p "$D/with space" && cp -R npm "$D/with space/npm" && node "$D/with space/npm/build.mjs" $TAG dist "$D/sp out" && [[ -x "$D/sp out/sqlmux-$os-$cpu/bin/sqlmux" && -f "$D/sp out/sqlmux/bin/sqlmux.js" ]]'
+check "build.mjs 在路径带空格的目录里也能出包" eval 'mkdir -p "$D/with space" && cp -R npm "$D/with space/npm" && cp LICENSE "$D/with space/LICENSE" && node "$D/with space/npm/build.mjs" $TAG dist "$D/sp out" && [[ -x "$D/sp out/sqlmux-$os-$cpu/bin/sqlmux" && -f "$D/sp out/sqlmux/bin/sqlmux.js" ]]'
 node npm/build.mjs "$TAG" dist "$D/out" || exit 1
 check "做出五个包：sqlmux 和四个 sqlmux-<os>-<cpu>" eval '[[ $(ls "$D/out" | tr "\n" " ") == "sqlmux sqlmux-darwin-arm64 sqlmux-darwin-x64 sqlmux-linux-arm64 sqlmux-linux-x64 " ]]'
 check "tag 带不带 v 结果一样（version 都是 ${v}）" eval 'node npm/build.mjs "${v}" dist "$D/out2" && [[ $(js "$D/out2/sqlmux/package.json" p.version) == ${v} && $(js "$D/out/sqlmux/package.json" p.version) == ${v} ]]'
@@ -36,8 +36,10 @@ for pl in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
   check "子包 ${pl}：bin/sqlmux 可执行、是这个平台的二进制" eval 'f=$(file $P/bin/sqlmux); [[ -x $P/bin/sqlmux ]] && case ${pl} in darwin-arm64) [[ $f == *"Mach-O"*arm64* ]];; darwin-x64) [[ $f == *"Mach-O"*x86_64* ]];; linux-arm64) [[ $f == *"ELF"*aarch64* ]];; linux-x64) [[ $f == *"ELF"*x86-64* ]];; esac'
 done
 packfiles() { (cd "$1" && npm pack --dry-run --json 2>/dev/null) | node -e 'const p = JSON.parse(require("fs").readFileSync(0, "utf8")); console.log(p[0].files.map((f) => f.path).sort().join(" "))'; }
-check "npm pack：壳包只有 package.json 和 bin/sqlmux.js" eval '[[ $(packfiles $S) == "bin/sqlmux.js package.json" ]] || { packfiles $S; false; }'
-check "npm pack：子包只有 package.json 和 bin/sqlmux" eval '[[ $(packfiles $D/out/sqlmux-$os-$cpu) == "bin/sqlmux package.json" ]]'
+check "npm pack：壳包只有 LICENSE、package.json 和 bin/sqlmux.js（F17.5）" eval '[[ $(packfiles $S) == "LICENSE bin/sqlmux.js package.json" ]] || { packfiles $S; false; }'
+check "npm pack：子包只有 LICENSE、package.json 和 bin/sqlmux（F17.5）" eval '[[ $(packfiles $D/out/sqlmux-$os-$cpu) == "LICENSE bin/sqlmux package.json" ]]'
+check "五个包里都有 LICENSE，和仓库根的一样（MIT 要附副本，F17.5）" eval 'for d in sqlmux sqlmux-darwin-arm64 sqlmux-darwin-x64 sqlmux-linux-arm64 sqlmux-linux-x64; do cmp -s LICENSE "$D/out/$d/LICENSE" || { echo "  $d: LICENSE missing or different"; exit 1; }; done'
+check "壳包的 package.json：files 有 LICENSE，description 写四种引擎（F17.5）" eval '[[ $(js $S/package.json "p.files.join()") == "bin,LICENSE" && $(js $S/package.json "p.description") == *"PostgreSQL, MySQL, SQLite and Redis" ]]'
 
 # ---- 装、跑
 mkdir -p "$D/tgz"; for d in "$S" "$D/out/sqlmux-$os-$cpu"; do (cd "$d" && npm pack --pack-destination "$D/tgz" >/dev/null 2>&1); done
