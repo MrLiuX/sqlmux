@@ -10,17 +10,17 @@
 │       ▸  goal            57 │ │                                                             │ │                                                             │
 │       ▸  mt_task        812 │ │                                                             │ │                                                             │
 │       ▸  mt_task_log    96k │ │                                                             │ │                                                             │
-│       ▸  schema_migrations  │ │                                                             │ │                                                             │
-│       ▸  t_order       1.2m┌─ 连接 ───────────────────────────────────────────────────────────────────────────────────────────┐                             │
-│       ▸  t_order_item  3.4m│  doraemon               │          name far                                                    │                             │
-│       ▸  t_payment     410k│  新建                   │         group                                                        │                             │
-│       ▸  t_refund       12k│                          │        engine  postgres │ mysql │ sqlite │ redis                     │                             │
-│       ▸  t_sku         8.1k│                          │          host                                                        │                             │
-│       ▸  t_user         38k│                          │          port 5432                                                   │                             │
-│       ▸  t_user_address 52k│                          │          user                                                        │                             │
-│       ▸  t_user_profile 38k│                          │      password                                                        │                             │
-│        Views (0)           │                          │      database                                                        │                             │
-│ ▾  工作区                  │                          │     read_only [ ]                                                    │                             │
+│       ▸  schema_migrations ┌─ 连接 ───────────────────────────────────────────────────────────────────────────────────────────┐                             │
+│       ▸  t_order       1.2m│  doraemon               │          name far                                                    │                             │
+│       ▸  t_order_item  3.4m│  新建                   │         group                                                        │                             │
+│       ▸  t_payment     410k│                          │        engine  postgres │ mysql │ sqlite │ redis                     │                             │
+│       ▸  t_refund       12k│                          │          host                                                        │                             │
+│       ▸  t_sku         8.1k│                          │          port 5432                                                   │                             │
+│       ▸  t_user         38k│                          │          user                                                        │                             │
+│       ▸  t_user_address 52k│                          │      password                                                        │                             │
+│       ▸  t_user_profile 38k│                          │      database                                                        │                             │
+│        Views (0)           │                          │     read_only [ ]                                                    │                             │
+│ ▾  工作区                  │                          │    production [ ]                                                    │                             │
 │   ▾  data                  │                          │          高级 ▾                                                      │                             │
 │       ②  query_1           │                          │           dsn postgres://u@127.0.0.1:1/d?connect_timeout=1           │                             │
 │ ▾  Queries                 │                          │  password_cmd xx                                                     │                             │

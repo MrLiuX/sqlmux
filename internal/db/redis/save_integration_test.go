@@ -5,10 +5,13 @@ package redis
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	goredis "github.com/redis/go-redis/v9"
 
 	"github.com/kackerx/sqlmux/internal/db"
 )
@@ -316,5 +319,52 @@ func TestKeySaveNamesTheChangeThatFailed(t *testing.T) {
 	failed, _, err := k.Save(ctx, db.Changes{Updates: []db.Row{upd("a", chg("score", "1", "2"))}, Inserts: [][]db.Change{add("member", "b", "score", "not a number")}}, false)
 	if failed != 1 || err == nil || !strings.Contains(err.Error(), "float") {
 		t.Errorf("failed %d: %v", failed, err)
+	}
+}
+
+// What Preview shows is what plan sends: the same commands, each type, written as
+// redis-cli reads them (F17.10). Not the ones that hold something the changes do not
+// say: a list's sentinel, the value a rename keeps.
+func TestKeyPreviewIsWhatPlanSends(t *testing.T) {
+	ctx := context.Background()
+	dsn := OwnDB(t)
+	c := connectTo(t, dsn)
+	for _, cmd := range []string{"SET s v", "HSET h a 1 b 2 c 3", "RPUSH l a b c", "SADD set x y", "ZADD z 1 a 2 b", "XADD st 1-1 f v"} {
+		if _, err := c.Exec(ctx, cmd, 0); err != nil {
+			t.Fatal(cmd, err)
+		}
+	}
+	for _, tc := range []struct {
+		typ, key string
+		ch       db.Changes
+	}{
+		{"string", "s", db.Changes{Updates: []db.Row{upd("s", chg("value", "v", "w"))}}},
+		{"hash", "h", db.Changes{Deletes: [][]string{{"c"}}, Updates: []db.Row{upd("a", chg("value", "1", "ONE")), upd("b", chg("field", "b", "bee"), chg("value", "2", "BEE"))}, Inserts: [][]db.Change{add("field", "e", "value", "x y")}}},
+		{"list", "l", db.Changes{Updates: []db.Row{upd("0", chg("value", "a", "A"))}, Inserts: [][]db.Change{add("value", "g")}}},
+		{"set", "set", db.Changes{Deletes: [][]string{{"y"}}, Updates: []db.Row{upd("x", chg("member", "x", "X"))}, Inserts: [][]db.Change{add("member", "n")}}},
+		{"zset", "z", db.Changes{Deletes: [][]string{{"b"}}, Updates: []db.Row{upd("a", chg("score", "1", "5"), chg("member", "a", "A"))}, Inserts: [][]db.Change{add("member", "m", "score", "9")}}},
+		{"stream", "st", db.Changes{Deletes: [][]string{{"1-1"}}}},
+	} {
+		var steps []step
+		err := Use(ctx, c, func(cl *goredis.Client) error {
+			return cl.Watch(ctx, func(tx *goredis.Tx) (err error) {
+				steps, err = plan(ctx, tx, tc.typ, tc.key, tc.ch)
+				return err
+			}, tc.key)
+		})
+		if err != nil {
+			t.Fatalf("%s: %v", tc.typ, err)
+		}
+		var sent []string
+		for _, s := range steps {
+			var words []string
+			for _, a := range s.args {
+				words = append(words, Quote(fmt.Sprint(a)))
+			}
+			sent = append(sent, strings.Join(words, " "))
+		}
+		if got := Describe(tc.typ, tc.key, tc.ch); !slices.Equal(got, sent) {
+			t.Errorf("%s:\npreviewed %q\nsent      %q", tc.typ, got, sent)
+		}
 	}
 }

@@ -179,7 +179,7 @@ func (a *App) source(t *dataTab, known db.Columns) db.Source {
 	}
 	c := t.conn
 	if c.redis() {
-		return redis.Key{Meta: c.Meta, Main: c.Main, Name: t.table.Name, LoadAll: a.loadAll, ScanKeys: a.scanKeys, ReadOnly: c.readOnly}
+		return redis.Key{Meta: c.Meta, Main: c.Main, Name: t.table.Name, LoadAll: a.loadAll, ScanKeys: a.scanKeys, ReadOnly: c.readOnly, Type: t.keyType()}
 	}
 	return db.SQLTable{E: c.eng, Schema: t.table.Schema, Name: t.table.Name, Meta: c.Meta, Main: c.Main, Known: known, ReadOnly: c.readOnly}
 }
@@ -1072,4 +1072,14 @@ func colType(t string) ui.ColType {
 		return ui.ColTime
 	}
 	return ui.ColOther
+}
+
+// keyType is the type of the key a key tab shows, as the last page said, "" before it.
+func (t *dataTab) keyType() string {
+	for _, at := range t.info {
+		if at.Name == "type" {
+			return at.Value
+		}
+	}
+	return ""
 }

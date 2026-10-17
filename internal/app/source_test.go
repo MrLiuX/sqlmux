@@ -13,8 +13,9 @@ import (
 // cursor, which says how many came before it; it cannot count and sorts by
 // nothing, and takes no new row.
 type fakeSource struct {
-	n     int
-	asked []db.PageQuery // what Page was asked
+	n       int
+	asked   []db.PageQuery // what Page was asked
+	preview []string       // what Preview says a save sends
 }
 
 func (f *fakeSource) Columns(context.Context) (db.Columns, error) {
@@ -41,6 +42,8 @@ func (f *fakeSource) Each(context.Context, db.PageQuery, func([]db.Col) error, f
 }
 
 func (f *fakeSource) Save(context.Context, db.Changes, bool) (int, byte, error) { return -1, 0, nil }
+
+func (f *fakeSource) Preview(db.Changes) []string { return f.preview }
 
 // A table tab over a Source that pages by cursor (F16.0): the cursor of each
 // page seen is kept, ] and [ and PAGE go by them and no further than the

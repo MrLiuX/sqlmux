@@ -346,3 +346,12 @@ func TestParseRedis(t *testing.T) {
 		t.Errorf("a misspelt key: %v", c.Unknown)
 	}
 }
+
+// A save shows its statements first unless [grid] preview_save says it does not (F17.10).
+func TestPreviewSave(t *testing.T) {
+	for toml, want := range map[string]bool{"": true, "[grid]\npreview_save = true\n": true, "[grid]\npreview_save = false\n": false} {
+		if c, err := Parse(toml); err != nil || c.PreviewSave != want {
+			t.Errorf("%q: %v %v", toml, c != nil && c.PreviewSave, err)
+		}
+	}
+}

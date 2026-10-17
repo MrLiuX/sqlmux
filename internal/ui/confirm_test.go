@@ -47,3 +47,21 @@ func TestConfirmDangerTitle(t *testing.T) {
 		t.Errorf("no danger: %q", got)
 	}
 }
+
+// More lines than the screen has room for are cut with a … where the last would
+// be, none drawn past the box (F17.10).
+func TestConfirmCutsWhatDoesNotFit(t *testing.T) {
+	var lines []string
+	for i := range 30 {
+		lines = append(lines, "statement "+strings.Repeat("x", i%3)+" "+string(rune('a'+i%26)))
+	}
+	f := NewFrame(60, 12, TokyonightStorm)
+	Confirm{Text: strings.Join(lines, "\n"), YesKey: "y", Yes: "Save", NoKey: "n", No: "Cancel"}.Draw(f, uv.Rect(0, 0, 60, 12))
+	out := f.String()
+	if !strings.Contains(out, "…") || !strings.Contains(out, "statement") || strings.Contains(out, lines[29]) || !strings.Contains(out, "Save") {
+		t.Errorf("the box:\n%s", out)
+	}
+	if n := len(strings.Split(out, "\n")); n != 12 {
+		t.Errorf("%d rows", n)
+	}
+}

@@ -57,6 +57,7 @@ const (
 	fieldPassword
 	fieldDatabase
 	fieldReadOnly
+	fieldProduction
 	fieldAdvanced
 	fieldDSN
 	fieldPasswordCmd
@@ -66,7 +67,7 @@ const (
 // connFields are the form's rows by the names they carry, which are the
 // toml keys they write (§14).
 var connFields = []string{fieldName: "name", fieldGroup: "group", fieldEngine: "engine", fieldHost: "host", fieldPort: "port", fieldUser: "user",
-	fieldPassword: "password", fieldDatabase: "database", fieldReadOnly: "read_only", fieldAdvanced: "", fieldDSN: "dsn", fieldPasswordCmd: "password_cmd", fieldSSH: "ssh"}
+	fieldPassword: "password", fieldDatabase: "database", fieldReadOnly: "read_only", fieldProduction: "production", fieldAdvanced: "", fieldDSN: "dsn", fieldPasswordCmd: "password_cmd", fieldSSH: "ssh"}
 
 // defaultPort is the port of an engine's server.
 var defaultPort = map[string]string{"postgres": "5432", "mysql": "3306", "redis": "6379"} // none for SQLite
@@ -99,6 +100,7 @@ func blankFields() []ui.FormField {
 	fs[fieldAdvanced].Label = i18n.T("高级")
 	fs[fieldEngine].Kind, fs[fieldEngine].Choices = ui.FormSegments, []string{"postgres", "mysql", "sqlite", "redis"}
 	fs[fieldReadOnly].Kind = ui.FormCheck
+	fs[fieldProduction].Kind = ui.FormCheck
 	fs[fieldAdvanced].Kind = ui.FormFold
 	fs[fieldPassword].Mask = true
 	fs[fieldPort].Input = ui.Input{Text: defaultPort["postgres"], Pos: len(defaultPort["postgres"])}
@@ -151,6 +153,9 @@ func (a *App) selectConn(i int) {
 	text(fieldDatabase, database)
 	if c.ReadOnly {
 		f.fields[fieldReadOnly].On = 1
+	}
+	if c.Production {
+		f.fields[fieldProduction].On = 1
 	}
 	f.fields[fieldAdvanced].On = 1
 	text(fieldDSN, c.DSN)
@@ -276,6 +281,9 @@ func (a *App) formKey(k keymap.Key) {
 	case ui.FormCheck, ui.FormFold:
 		if k == "<Space>" {
 			fd.On = 1 - fd.On
+			if f.sel == fieldProduction && fd.On == 1 { // a production connection is read only to begin with (§13)
+				f.fields[fieldReadOnly].On = 1
+			}
 		}
 	}
 }
@@ -436,13 +444,14 @@ func (a *App) formConn() (config.Connection, bool) {
 		c = *f.was
 		c.Name, c.Group, c.Engine, c.DSN = text(fieldName), text(fieldGroup), fs[fieldEngine].Choices[fs[fieldEngine].On], text(fieldDSN)
 		c.PasswordCmd, c.ReadOnly, c.SSH = text(fieldPasswordCmd), fs[fieldReadOnly].On == 1, text(fieldSSH)
+		c.Production = fs[fieldProduction].On == 1
 		for _, s := range a.specs() {
 			if s.Name != f.was.Name {
 				names = append(names, s.Name)
 			}
 		}
 	} else {
-		c = config.Connection{Name: text(fieldName), Group: text(fieldGroup), Engine: fs[fieldEngine].Choices[fs[fieldEngine].On], DSN: "-", ReadOnly: fs[fieldReadOnly].On == 1}
+		c = config.Connection{Name: text(fieldName), Group: text(fieldGroup), Engine: fs[fieldEngine].Choices[fs[fieldEngine].On], DSN: "-", ReadOnly: fs[fieldReadOnly].On == 1, Production: fs[fieldProduction].On == 1}
 		if f.advanced() {
 			c.PasswordCmd, c.SSH = text(fieldPasswordCmd), text(fieldSSH)
 		}
@@ -798,7 +807,7 @@ func (a *App) formView() ui.Form {
 		del = i18n.T("删除")
 	}
 	icons := []ui.Icon{fieldName: ic.Tag, fieldGroup: ic.Group, fieldEngine: ic.Engine(fields[fieldEngine].Choices[fields[fieldEngine].On]), fieldHost: ic.Host,
-		fieldPort: ic.Port, fieldUser: ic.User, fieldPassword: ic.Key, fieldDatabase: ic.Database, fieldReadOnly: ic.Lock,
+		fieldPort: ic.Port, fieldUser: ic.User, fieldPassword: ic.Key, fieldDatabase: ic.Database, fieldReadOnly: ic.Lock, fieldProduction: ic.Stop,
 		fieldAdvanced: ic.Advanced, fieldDSN: ic.Link, fieldPasswordCmd: ic.Query, fieldSSH: ic.Link}
 	for i := range fields {
 		fields[i].Icon = icons[i]

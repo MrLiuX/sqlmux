@@ -28,6 +28,7 @@ type Key struct {
 	LoadAll    int // the length a hash, set or zset is read whole up to ([redis] load_all)
 	ScanKeys   int // the entries an export of one that is longer reads, as a db's scan reads keys
 	ReadOnly   bool
+	Type       string // the key's type as the tab knows it, which Preview writes its commands by
 }
 
 // ErrNoKey is a key that is not there, or has another type than it had.

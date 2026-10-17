@@ -137,7 +137,7 @@ func TestDangerText(t *testing.T) {
 	}
 	risky[0] = "  drop table " + strings.Repeat("long_", 30)
 	risky[2] = "delete from " + strings.Repeat("表", 40)
-	lines := strings.Split(dangerText(risky), "\n")
+	lines := strings.Split(dangerText(risky, false), "\n")
 	if len(lines) != 10 || lines[0] != "这次执行有 10 条危险语句：" || lines[2] != "  delete from t1" || lines[9] != "… 另有 2 条" {
 		t.Fatalf("%q", lines)
 	}

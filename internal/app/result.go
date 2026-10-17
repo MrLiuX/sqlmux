@@ -241,21 +241,21 @@ func (a *App) runSQL(t *queryTab, conn *Conn, schema, name, sql string, base, ve
 			return nil
 		}
 	}
-	if a.confirmDangerous {
+	if a.confirmDangerous || conn.Spec.Production { // a production connection asks about every write (F17.9)
 		var risky []string
 		for _, s := range stmts {
-			if text := sql[s.Start:s.End]; l.Dangerous(text) {
+			if text := sql[s.Start:s.End]; (a.confirmDangerous && l.Dangerous(text)) || (conn.Spec.Production && l.Writes(text)) {
 				risky = append(risky, text)
 			}
 		}
 		if len(risky) > 0 { // no run is begun, no log line made, till the answer is yes (§13)
 			asked := t.conn // a connection that lands meanwhile may take the query over
-			a.confirm = &confirmBox{text: dangerText(risky), yes: i18n.T("执行"), danger: true, then: func() tea.Cmd {
+			a.confirm = writeBox(conn, dangerText(risky, conn.Spec.Production), i18n.T("执行"), true, func() tea.Cmd {
 				if t.conn != asked {
 					return a.showToast(i18n.T("确认时 query 换了连接，没有执行"))
 				}
 				return a.startRun(t, conn, schema, name, sql, base, ver, stmts) // the overlay had the keys: nothing began a run meanwhile
-			}}
+			})
 			return nil
 		}
 	}
@@ -272,8 +272,12 @@ const (
 // dangerText is the confirm box over a run with the dangerous statements
 // risky: how many, each with its white space (lines, tabs) squeezed to a
 // space and cut to a width, and how many more there are than it lists (§13).
-func dangerText(risky []string) string {
-	lines := []string{i18n.T("这次执行有 %d 条危险语句：", len(risky))}
+func dangerText(risky []string, production bool) string {
+	head := i18n.T("这次执行有 %d 条危险语句：", len(risky))
+	if production { // every write, not the dangerous ones alone (F17.9)
+		head = i18n.T("这次执行有 %d 条写语句：", len(risky))
+	}
+	lines := []string{head}
 	for _, s := range risky[:min(len(risky), dangerousListed)] {
 		lines = append(lines, "  "+ui.Truncate(strings.Join(strings.Fields(s), " "), dangerousWidth))
 	}

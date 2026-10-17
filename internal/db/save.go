@@ -97,31 +97,14 @@ func Guarded(ctx context.Context, c Conn, name string, f func() error) error {
 // neither the rows hit nor the loaded values; its INSERT leaves a DEFAULT
 // column out, as ours does since F14.1.
 func Save(ctx context.Context, w *Worker, e Engine, schema, table string, keyCols []string, ch Changes, manual bool) (failed int, tx byte, err error) {
-	type stmt struct {
-		sql  string
-		args []Val
-		miss error // when it hits no row
-	}
-	var stmts []stmt
-	for _, k := range ch.Deletes {
-		sql, args := remove(e, schema, table, keyCols, k)
-		stmts = append(stmts, stmt{sql, args, ErrGone})
-	}
-	for _, r := range ch.Updates {
-		sql, args := update(e, schema, table, keyCols, r)
-		stmts = append(stmts, stmt{sql, args, ErrStale})
-	}
-	for _, r := range ch.Inserts {
-		sql, args := insert(e, schema, table, r)
-		stmts = append(stmts, stmt{sql, args, ErrNotInserted})
-	}
+	stmts := Statements(e, schema, table, keyCols, ch)
 	failed = -1
 	committing := false // the COMMIT of the save's own transaction is out
 	err = w.Run(ctx, func(ctx context.Context, c Conn) error {
 		defer func() { tx = TxStatus(c) }()
 		write := func() error {
 			for i, s := range stmts {
-				res, err := c.Query(ctx, s.sql, s.args...)
+				res, err := c.Query(ctx, s.SQL, s.Args...)
 				if err == nil && res.Affected != 1 {
 					err = s.miss
 				}
@@ -165,6 +148,59 @@ func Save(ctx context.Context, w *Worker, e Engine, schema, table string, keyCol
 	return failed, tx, err
 }
 
+// Stmt is one statement of a save: its SQL with the placeholders e writes, its
+// arguments, and what it is when it hits no row.
+type Stmt struct {
+	SQL  string
+	Args []Val
+	miss error
+}
+
+// Statements is what Save sends for ch, in its order: the DELETEs, then the
+// UPDATEs, then the INSERTs (§10.3).
+func Statements(e Engine, schema, table string, keyCols []string, ch Changes) []Stmt {
+	var stmts []Stmt
+	build := func(miss error, f func(arg func(Val) string) string) {
+		args, arg := argsOf(e)
+		sql := f(arg)
+		stmts = append(stmts, Stmt{sql, *args, miss})
+	}
+	for _, k := range ch.Deletes {
+		build(ErrGone, func(arg func(Val) string) string { return remove(e, schema, table, keyCols, k, arg) })
+	}
+	for _, r := range ch.Updates {
+		build(ErrStale, func(arg func(Val) string) string { return update(e, schema, table, keyCols, r, arg) })
+	}
+	for _, r := range ch.Inserts {
+		build(ErrNotInserted, func(arg func(Val) string) string { return insert(e, schema, table, r, arg) })
+	}
+	return stmts
+}
+
+// Preview is the statements of Statements with each argument written in as a
+// literal, one text each: what a save shows before it sends them (§13, F17.10).
+// They are made by the same code, with the arguments put in instead of
+// numbered, so what is read is what goes.
+func Preview(e Engine, schema, table string, keyCols []string, ch Changes) []string {
+	lit := func(v Val) string {
+		if v.Null {
+			return "NULL"
+		}
+		return sqlkit.Literal(v.S, e.Dialect())
+	}
+	var out []string
+	for _, k := range ch.Deletes {
+		out = append(out, remove(e, schema, table, keyCols, k, lit))
+	}
+	for _, r := range ch.Updates {
+		out = append(out, update(e, schema, table, keyCols, r, lit))
+	}
+	for _, r := range ch.Inserts {
+		out = append(out, insert(e, schema, table, r, lit))
+	}
+	return out
+}
+
 // keyWhere is what finds a row by its row identity's values, arg taking
 // each value in.
 func keyWhere(e Engine, keyCols, key []string, arg func(Val) string) []string {
@@ -176,7 +212,7 @@ func keyWhere(e Engine, keyCols, key []string, arg func(Val) string) []string {
 }
 
 // argsOf is a statement's arguments, and what puts each one in as e
-// writes them.
+// writes them: Preview puts them in as literals.
 func argsOf(e Engine) (*[]Val, func(Val) string) {
 	var args []Val
 	return &args, func(v Val) string {
@@ -185,10 +221,9 @@ func argsOf(e Engine) (*[]Val, func(Val) string) {
 	}
 }
 
-// remove is the DELETE of the row with key, and its arguments.
-func remove(e Engine, schema, table string, keyCols, key []string) (string, []Val) {
-	args, arg := argsOf(e)
-	return "delete from " + e.Quote(schema, table) + " where " + strings.Join(keyWhere(e, keyCols, key, arg), " and "), *args
+// remove is the DELETE of the row with key, arg writing in each value.
+func remove(e Engine, schema, table string, keyCols, key []string, arg func(Val) string) string {
+	return "delete from " + e.Quote(schema, table) + " where " + strings.Join(keyWhere(e, keyCols, key, arg), " and ")
 }
 
 // DefaultRow is the INSERT of a row of every column's DEFAULT, as PG's
@@ -201,10 +236,9 @@ func DefaultRow(e Engine, schema, table string, kw func(string) string) string {
 	return kw("insert into") + " " + e.Quote(schema, table) + " " + kw("default values")
 }
 
-// insert is the INSERT of a row with cols set, and its arguments; with
-// none set, every column's DEFAULT (§10.6).
-func insert(e Engine, schema, table string, cols []Change) (string, []Val) {
-	args, arg := argsOf(e)
+// insert is the INSERT of a row with cols set; with none set, every column's
+// DEFAULT (§10.6).
+func insert(e Engine, schema, table string, cols []Change, arg func(Val) string) string {
 	var names, vals []string
 	for _, c := range cols {
 		if !c.Default { // left out, a column takes its DEFAULT: SQLite has no keyword for it in a VALUES
@@ -212,16 +246,15 @@ func insert(e Engine, schema, table string, cols []Change) (string, []Val) {
 		}
 	}
 	if len(names) == 0 {
-		return DefaultRow(e, schema, table, func(s string) string { return s }), nil
+		return DefaultRow(e, schema, table, func(s string) string { return s })
 	}
-	return "insert into " + e.Quote(schema, table) + " (" + strings.Join(names, ", ") + ") values (" + strings.Join(vals, ", ") + ")", *args
+	return "insert into " + e.Quote(schema, table) + " (" + strings.Join(names, ", ") + ") values (" + strings.Join(vals, ", ") + ")"
 }
 
-// update is r's UPDATE and its arguments, all text: the changed columns
-// must still hold what was loaded, as e's Same tells (§10.3).
-func update(e Engine, schema, table string, keyCols []string, r Row) (string, []Val) {
+// update is r's UPDATE, its values all text: the changed columns must still
+// hold what was loaded, as e's Same tells (§10.3).
+func update(e Engine, schema, table string, keyCols []string, r Row, arg func(Val) string) string {
 	var sets []string
-	args, arg := argsOf(e)
 	for _, c := range r.Cols {
 		v := "DEFAULT"
 		if !c.Default {
@@ -238,5 +271,5 @@ func update(e Engine, schema, table string, keyCols []string, r Row) (string, []
 		}
 	}
 	return "update " + e.Quote(schema, table) + " set " + strings.Join(sets, ", ") +
-		" where " + strings.Join(where, " and "), *args
+		" where " + strings.Join(where, " and ")
 }

@@ -65,7 +65,10 @@ type Config struct {
 	// GridDesc is `[grid] order = "desc"` and GridTranspose `[grid]
 	// transpose`: what a table opened anew starts with (§14).
 	GridDesc, GridTranspose bool
-	theme                   string // the name Parse read; Load finds the theme, as it touches the disk
+	// PreviewSave is `[grid] preview_save`: a save shows the statements first
+	// (§13, F17.10); a production connection's does whatever it says.
+	PreviewSave bool
+	theme       string // the name Parse read; Load finds the theme, as it touches the disk
 
 	// Leader and Bindings are keymaps.toml's raw [keys] and [map.*]
 	// entries; the keymap package gives them meaning.
@@ -83,7 +86,7 @@ type Config struct {
 }
 
 func Default() *Config {
-	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "en", Border: uv.NormalBorder(), Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 500, HistoryMax: 1000, Hints: true, Tips: true, RedisDelimiter: ":", RedisScanKeys: 10000, RedisLoadAll: 5000, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true, GridFullWidth: 22, TreeWidth: 32}
+	return &Config{Theme: ui.TokyonightStorm, Icons: ui.NerdIcons, BaseIcons: ui.NerdIcons, ThemeName: "tokyonight-storm", Language: "en", Border: uv.NormalBorder(), Vim: true, Timeoutlen: 1000, TabWidth: 2, ResultHeight: 0.4, MaxRows: 500, HistoryMax: 1000, Hints: true, Tips: true, RedisDelimiter: ":", RedisScanKeys: 10000, RedisLoadAll: 5000, PreviewSave: true, KeywordCase: "lower", AutoPairs: true, ConfirmDangerous: true, GridFullWidth: 22, TreeWidth: 32}
 }
 
 // Dir is $XDG_CONFIG_HOME/sqlmux, falling back to ~/.config/sqlmux on every
@@ -168,6 +171,7 @@ func Parse(data string) (*Config, error) {
 			FullWidth *int    `toml:"full_width"`
 			Order     *string `toml:"order"`
 			Transpose *bool   `toml:"transpose"`
+			Preview   *bool   `toml:"preview_save"`
 		} `toml:"grid"`
 		Keys any `toml:"keys"`
 		Map  any `toml:"map"`
@@ -294,6 +298,9 @@ func Parse(data string) (*Config, error) {
 	}
 	if raw.Grid.Transpose != nil {
 		c.GridTranspose = *raw.Grid.Transpose
+	}
+	if raw.Grid.Preview != nil {
+		c.PreviewSave = *raw.Grid.Preview
 	}
 	return c, nil
 }

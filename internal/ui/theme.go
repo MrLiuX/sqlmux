@@ -36,6 +36,7 @@ type Theme struct {
 	Yank                             color.Color // a yank's flash, bg text on it (§7.3)
 	Search, SearchCurrent            color.Color // the matches of an editor's search, and the one the cursor is in, bg text on them (F15.9); a theme that has none gets its visual and its yank
 	Zoom                             color.Color // the border of the pane zoomed (F9.6); a theme that has none gets its warn
+	Production                       color.Color // a production connection's border, status block and tab titles (F17.9); a theme that has none gets its error
 }
 
 var TokyonightStorm = &Theme{
@@ -60,6 +61,8 @@ var TokyonightStorm = &Theme{
 	Yank:   c("#e0af68"),
 	Search: c("#c8793a"), SearchCurrent: c("#e0af68"),
 	Zoom: c("#e0af68"),
+
+	Production: c("#f7768e"),
 }
 
 // Themes are the built-in themes by name.
@@ -138,6 +141,9 @@ func ParseTheme(data string, icons *Icons) (th *Theme, ic *Icons, unknown []stri
 	if _, ok := raw["zoom"]; !ok {
 		th.Zoom = th.Warn // as the theme has it, not as tokyonight-storm's
 	}
+	if _, ok := raw["production"]; !ok {
+		th.Production = th.Error
+	}
 	for _, k := range md.Undecoded() { // e.g. `bg` inside an [icon] entry
 		told := slices.Contains(unknown, k[0]) || len(k) > 2 && k[0] == "icon" && slices.Contains(unknown, "icon."+k[1])
 		if !told { // not `section.key` of a section, nor `icon.name.key` of an icon, that is told already
@@ -176,7 +182,7 @@ func (th *Theme) tokens() map[string]*color.Color {
 		"match": &th.Match,
 
 		"sql_table": &th.SQLTable, "sql_column": &th.SQLColumn, "sql_operator": &th.SQLOperator,
-		"yank": &th.Yank, "zoom": &th.Zoom,
+		"yank": &th.Yank, "zoom": &th.Zoom, "production": &th.Production,
 		"search": &th.Search, "search_current": &th.SearchCurrent,
 	}
 }

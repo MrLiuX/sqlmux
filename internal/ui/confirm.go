@@ -36,6 +36,9 @@ func (c Confirm) Draw(f *Frame, screen uv.Rectangle) {
 		no = " " + c.NoKey + " " + c.No + " "
 		buttons += 1 + Width(no)
 	}
+	if room := screen.Dy() - 4; len(lines) > room && room > 1 { // what the box cannot hold is said so, not drawn past it
+		lines = append(lines[:room-1], "…")
+	}
 	w := Width(lines[0])
 	for _, l := range lines[1:] {
 		w = max(w, Width(l))

@@ -574,3 +574,78 @@ func TestConnectionSSH(t *testing.T) {
 		t.Fatalf("appended:\n%s", got)
 	}
 }
+
+// A production connection that does not say read_only is read only; read_only =
+// false, written, makes it writable; what the form does with the two switches is
+// written so that it reads back, and a block of the file is never encoded again
+// (F17.9, §13).
+func TestProductionConnection(t *testing.T) {
+	path := connectionsFile(t, oneConn+"production = true\n\n[[connection]]\nname = \"b\"\nengine = \"mysql\"\ndsn = \"u@tcp(h)/b\"\nproduction = true\nread_only = false\n\n[[connection]]\nname = \"c\"\nengine = \"postgres\"\ndsn = \"postgres://h/c\"\n")
+	cs, _, err := LoadConnections("")
+	if err != nil || len(cs) != 3 {
+		t.Fatalf("%+v %v", cs, err)
+	}
+	if !cs[0].Production || !cs[0].ReadOnly || !cs[1].Production || cs[1].ReadOnly || cs[2].Production || cs[2].ReadOnly {
+		t.Errorf("a: %+v, b: %+v, c: %+v", cs[0], cs[1], cs[2])
+	}
+	if c, err := ReadConnection("a"); err != nil || !c.ReadOnly {
+		t.Errorf("ReadConnection a: %+v %v", c, err)
+	}
+	// a made writable: read_only = false is written
+	was := cs[0]
+	c := was
+	c.ReadOnly = false
+	if got, err := UpdateConnection("a", was, c); err != nil || got != c {
+		t.Fatalf("a writable: %+v %v", got, err)
+	}
+	if got := readFile(t, path); !strings.Contains(got, "production = true\nread_only = false\n\n[[connection]]\nname = \"b\"") {
+		t.Errorf("a writable:\n%s", got)
+	}
+	// and read only again: its line goes, the default says it
+	was = c
+	c.ReadOnly = true
+	if got, err := UpdateConnection("a", was, c); err != nil || got != c {
+		t.Fatalf("a read only: %+v %v", got, err)
+	}
+	if got := readFile(t, path); strings.Contains(got, "name = \"a\"\nengine = \"postgres\"\ndsn = \"postgres://h/a\"\nproduction = true\nread_only") {
+		t.Errorf("a read only:\n%s", got)
+	}
+	// c is production now, the form's switch for read only still on: read only
+	was = cs[2]
+	c = was
+	c.Production, c.ReadOnly = true, true
+	if got, err := UpdateConnection("c", was, c); err != nil || got != c {
+		t.Fatalf("c made production: %+v %v", got, err)
+	}
+	// production off again with the box for read only still ticked: that is said
+	was = c
+	c.Production = false
+	if got, err := UpdateConnection("c", was, c); err != nil || got != c || !got.ReadOnly {
+		t.Fatalf("c not production, read only: %+v %v", got, err)
+	}
+	if got := readFile(t, path); !strings.HasSuffix(got, "dsn = \"postgres://h/c\"\nread_only = true\n") {
+		t.Errorf("c:\n%s", got)
+	}
+	// b: production off, and read_only = false stays what it was said to be
+	was = cs[1]
+	c = was
+	c.Production = false
+	if got, err := UpdateConnection("b", was, c); err != nil || got != c {
+		t.Fatalf("b not production: %+v %v", got, err)
+	}
+}
+
+// A production connection added, writable, says so, and reads back as it was made.
+func TestAppendProductionConnection(t *testing.T) {
+	connectionsFile(t, oneConn)
+	for _, ro := range []bool{false, true} {
+		c := Connection{Name: map[bool]string{false: "w", true: "r"}[ro], Engine: "postgres", DSN: "postgres://h/x", Production: true, ReadOnly: ro}
+		if err := AppendConnection(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cs, _, err := LoadConnections("")
+	if err != nil || len(cs) != 3 || cs[1].ReadOnly || !cs[2].ReadOnly || !cs[1].Production || !cs[2].Production {
+		t.Errorf("%+v %v", cs, err)
+	}
+}

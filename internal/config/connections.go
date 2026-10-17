@@ -26,9 +26,10 @@ type Connection struct {
 	PasswordCmd string `toml:"password_cmd,omitempty"`
 	PasswordEnv string `toml:"password_env,omitempty"`
 	Password    string `toml:"password,omitempty"`
-	ReadOnly    bool   `toml:"read_only,omitempty"` // §13, from F5.3
-	SSH         string `toml:"ssh,omitempty"`       // "user@host": the server is reached through that machine's ssh (§8.4, F15.2)
-	Delimiter   string `toml:"delimiter,omitempty"` // redis only: what the tree splits a key's name by, over [redis] delimiter (§7.8, F16.2)
+	ReadOnly    bool   `toml:"read_only,omitempty"`  // §13, from F5.3; a production connection that does not say it is read only (decodeConnections)
+	Production  bool   `toml:"production,omitempty"` // every write on it is asked about, and it is marked so (§13, F17.9)
+	SSH         string `toml:"ssh,omitempty"`        // "user@host": the server is reached through that machine's ssh (§8.4, F15.2)
+	Delimiter   string `toml:"delimiter,omitempty"`  // redis only: what the tree splits a key's name by, over [redis] delimiter (§7.8, F16.2)
 	// Temp is a connection of the command line, a file or a URL: written nowhere,
 	// not in the manager (F14.1).
 	Temp bool `toml:"-"`
@@ -137,12 +138,11 @@ func LoadConnections(name string) (conns []Connection, start int, err error) {
 // parseConnections is the connections text, the file at path, holds, each
 // checked.
 func parseConnections(path, text string) ([]Connection, error) {
-	var file struct {
-		Connection []Connection `toml:"connection"`
-	}
-	if _, err := toml.Decode(text, &file); err != nil {
+	conns, err := decodeConnections(text)
+	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	file := struct{ Connection []Connection }{conns}
 	if len(file.Connection) == 0 {
 		return nil, noConnections(fmt.Sprintf(i18n.T("%s: 里面没有 [[connection]]"), path))
 	}
@@ -152,6 +152,30 @@ func parseConnections(path, text string) ([]Connection, error) {
 			return nil, fmt.Errorf(i18n.T("%s: 第 %d 个连接：%s"), path, i+1, p)
 		}
 		names = append(names, c.Name)
+	}
+	return file.Connection, nil
+}
+
+// decodeConnections reads the [[connection]]s of text. A production one that does
+// not write read_only is read only: read_only = false has to be written (§13).
+func decodeConnections(text string) ([]Connection, error) {
+	var file struct {
+		Connection []Connection `toml:"connection"`
+	}
+	if _, err := toml.Decode(text, &file); err != nil {
+		return nil, err
+	}
+	var raw struct {
+		Connection []struct {
+			ReadOnly *bool `toml:"read_only"`
+		} `toml:"connection"`
+	}
+	if _, err := toml.Decode(text, &raw); err == nil && len(raw.Connection) == len(file.Connection) {
+		for i, c := range file.Connection {
+			if c.Production && raw.Connection[i].ReadOnly == nil {
+				file.Connection[i].ReadOnly = true
+			}
+		}
 	}
 	return file.Connection, nil
 }
@@ -204,6 +228,9 @@ func appendText(c Connection) (string, error) {
 		return "", err
 	}
 	text := b.String()
+	if c.Production && !c.ReadOnly { // the default is read only: writable is said
+		text += "read_only = false\n"
+	}
 	if len(old) > 0 {
 		if old[len(old)-1] != '\n' {
 			text = "\n" + text

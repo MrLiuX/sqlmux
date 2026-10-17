@@ -425,10 +425,10 @@ func (a *App) deleteRedisKey(n node) tea.Cmd {
 			return keyDone{c, i18n.T("已删除键 %s", nameText(key)), err, key, ""}
 		}
 	}
-	if !a.confirmDangerous {
+	if !a.confirmDangerous && !c.Spec.Production {
 		return del()
 	}
-	a.confirm = &confirmBox{text: i18n.T("删除键 %s？", nameText(key)), yes: i18n.T("删除"), danger: true, then: del}
+	a.confirm = writeBox(c, i18n.T("删除键 %s？", nameText(key)), i18n.T("删除"), true, del)
 	return nil
 }
 
@@ -441,6 +441,10 @@ func (a *App) renameRedisKey(n node) tea.Cmd {
 	}
 	a.askName = &nameAsk{label: i18n.T("新名字："), in: ui.Input{Text: key, Pos: len(key)}, done: func(a *App, to string) (tea.Cmd, bool) {
 		if to == "" || to == key {
+			return nil, false
+		}
+		if c.Spec.Production {
+			a.confirm = writeBox(c, i18n.T("把键 %s 改名为 %s？", nameText(key), nameText(to)), i18n.T("改名"), true, func() tea.Cmd { return a.renameTo(c, key, to, false) })
 			return nil, false
 		}
 		return a.renameTo(c, key, to, false), false
@@ -474,9 +478,9 @@ type keyExists struct {
 
 func (a *App) gotKeyExists(m keyExists) {
 	m.conn.busy--
-	a.confirm = &confirmBox{text: i18n.T("%s 已经有了，覆盖它？", nameText(m.to)), yes: i18n.T("覆盖"), danger: true, then: func() tea.Cmd {
+	a.confirm = writeBox(m.conn, i18n.T("%s 已经有了，覆盖它？", nameText(m.to)), i18n.T("覆盖"), true, func() tea.Cmd {
 		return a.renameTo(m.conn, m.key, m.to, true)
-	}}
+	})
 }
 
 // ttlKey is the menu's 设 TTL: seconds, or a duration, or nothing to have it
@@ -491,12 +495,19 @@ func (a *App) ttlKey(n node) tea.Cmd {
 		if !ok {
 			return a.showToast(i18n.T("TTL 要是秒数或 90m、1h30m 这样的时长")), true
 		}
-		main := c.Main
-		c.busy++
-		return func() tea.Msg {
-			err := main.Run(context.Background(), func(ctx context.Context, conn db.Conn) error { return redis.SetTTL(ctx, conn, key, ttl) })
-			return keyDone{c, i18n.T("%s 的 TTL 已设", nameText(key)), err, key, ""}
-		}, false
+		set := func() tea.Cmd {
+			main := c.Main
+			c.busy++
+			return func() tea.Msg {
+				err := main.Run(context.Background(), func(ctx context.Context, conn db.Conn) error { return redis.SetTTL(ctx, conn, key, ttl) })
+				return keyDone{c, i18n.T("%s 的 TTL 已设", nameText(key)), err, key, ""}
+			}
+		}
+		if c.Spec.Production {
+			a.confirm = writeBox(c, i18n.T("设置键 %s 的 TTL：%s？", nameText(key), cmp.Or(text, "0")), i18n.T("设置"), true, set)
+			return nil, false
+		}
+		return set(), false
 	}}
 	return nil
 }
@@ -584,9 +595,9 @@ func (a *App) gotNamespaceFound(m namespaceFound) tea.Cmd {
 			return keyDone{conn: c, say: say, err: err}
 		}
 	}
-	if !a.confirmDangerous {
+	if !a.confirmDangerous && !c.Spec.Production {
 		return del()
 	}
-	a.confirm = &confirmBox{text: i18n.T("删除 %d 个键？", len(m.keys)) + "\n  " + nameText(m.space) + "*", yes: i18n.T("删除"), danger: true, then: del}
+	a.confirm = writeBox(c, i18n.T("删除 %d 个键？", len(m.keys))+"\n  "+nameText(m.space)+"*", i18n.T("删除"), true, del)
 	return nil
 }

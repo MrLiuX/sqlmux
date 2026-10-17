@@ -714,6 +714,9 @@ func (a *App) save() tea.Cmd {
 // is as it was, the marks and the changes there. closing is :wq's: the tab
 // closes once the save lands.
 func (a *App) saveTab(t *dataTab, closing bool) tea.Cmd {
+	if t.changes() > 0 && !t.saving && (a.previewSave || t.conn.Spec.Production) { // the statements first, on a production connection whatever the setting says (§13, F17.10)
+		return a.askSave(t, closing)
+	}
 	if n := len(t.deleted); n > 0 && a.confirmDangerous && !t.saving {
 		text := i18n.T("将删除 %d 行，确定保存？", n)
 		if other := t.changes() - n; other > 0 {
@@ -725,6 +728,38 @@ func (a *App) saveTab(t *dataTab, closing bool) tea.Cmd {
 	return a.sendSave(t, closing)
 }
 
+// previewListed is how many statements a save's preview lists, the rest said as
+// a count.
+const previewListed = 20
+
+// askSave is the question before a save (§13, F17.10): the statements it would
+// send, as the source writes them with their values in, one a line, and how many
+// rows it changes, adds and deletes; ↵ or y sends them, n or esc leaves the
+// table as it is, the marks and the changes there.
+func (a *App) askSave(t *dataTab, closing bool) tea.Cmd {
+	_, ch := a.changesOf(t)
+	var counts []string
+	if n := len(ch.Updates); n > 0 {
+		counts = append(counts, i18n.T("改 %d 行", n))
+	}
+	if n := len(ch.Inserts); n > 0 {
+		counts = append(counts, i18n.T("增 %d 行", n))
+	}
+	if n := len(ch.Deletes); n > 0 {
+		counts = append(counts, i18n.T("删 %d 行", n))
+	}
+	lines := []string{i18n.T("保存到 %s：%s", t.table.Name, strings.Join(counts, i18n.T("、")))}
+	stmts := a.source(t, t.cols).Preview(ch)
+	for _, s := range stmts[:min(len(stmts), previewListed)] {
+		lines = append(lines, "  "+strings.NewReplacer("\r", "", "\n", "⏎", "\t", " ").Replace(s))
+	}
+	if len(stmts) > previewListed {
+		lines = append(lines, i18n.T("  …另 %d 条", len(stmts)-previewListed))
+	}
+	a.confirm = writeBox(t.conn, strings.Join(lines, "\n"), i18n.T("保存"), false, func() tea.Cmd { return a.sendSave(t, closing) })
+	return nil
+}
+
 // sendSave is the save of tab t, its changes taken as they are now.
 func (a *App) sendSave(t *dataTab, closing bool) tea.Cmd {
 	if t.changes() == 0 {
@@ -734,6 +769,22 @@ func (a *App) sendSave(t *dataTab, closing bool) tea.Cmd {
 		t.closing = t.closing || closing
 		return nil
 	}
+	m, ch := a.changesOf(t)
+	t.saving, t.closing = true, closing
+	t.conn.busy++
+	t.out++
+	src, manual := a.source(t, t.cols), t.conn.Manual
+	return func() tea.Msg {
+		start := time.Now()
+		m.failed, m.tx, m.err = src.Save(context.Background(), ch, manual)
+		m.took = time.Since(start)
+		return m
+	}
+}
+
+// changesOf is what a save of tab t takes of it as it is now: the message that
+// will answer, with what was sent, and the changes for the source (§10.3).
+func (a *App) changesOf(t *dataTab) (saveMsg, db.Changes) {
 	m := saveMsg{tab: t, sent: maps.Clone(t.edits), dels: slices.Sorted(maps.Keys(t.deleted)), adds: slices.Clone(t.added)}
 	byRow := map[string]bool{}
 	for k := range m.sent {
@@ -765,16 +816,7 @@ func (a *App) sendSave(t *dataTab, closing bool) tea.Cmd {
 		}
 		ch.Inserts = append(ch.Inserts, cols)
 	}
-	t.saving, t.closing = true, closing
-	t.conn.busy++
-	t.out++
-	src, manual := a.source(t, t.cols), t.conn.Manual
-	return func() tea.Msg {
-		start := time.Now()
-		m.failed, m.tx, m.err = src.Save(context.Background(), ch, manual)
-		m.took = time.Since(start)
-		return m
-	}
+	return m, ch
 }
 
 // gotSave shows how the save went: saved or cancelled on the query bar's
