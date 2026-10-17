@@ -42,6 +42,7 @@ width = 32                             # sidebar width in columns, borders inclu
 full_width = 22                        # columns up to this width are never squeezed
 order      = "asc"                     # asc | desc: the default sort of a table you open
 transpose  = false                     # open tables transposed
+preview_save = true                    # C-s shows the statements before running them (always on for production connections)
 
 [query]
 max_rows    = 500                      # rows a query keeps per page of a result
@@ -63,6 +64,7 @@ engine   = "postgres"                  # postgres | mysql | sqlite | redis
 dsn      = "postgres://me@localhost:5432/app?sslmode=disable"
 password_cmd = "security find-generic-password -s sqlmux-local -w"
 read_only = false                      # refuse writes on this connection
+production = false                     # warning color, confirm every write, read-only unless read_only = false is written
 group     = "dev"                      # optional: a labelled section in the tree
 ssh       = "me@bastion"               # optional: connect through this machine
 ```
@@ -75,6 +77,7 @@ DSN per engine:
 | `mysql` | `user@tcp(host:3306)/db` or `mysql://user@host:3306/db` |
 | `sqlite` | a file path; `~` is expanded, `?mode=ro` and other query parameters pass through; a missing file is not created |
 | `redis` | `redis://user@host:6379/0` or `rediss://…`; the number is the database. See [Redis](redis.md) |
+| `exec` | no `dsn`: `dialect` and `command`, see [External commands](#external-commands-engine--exec) |
 
 Where the password comes from, first one set wins:
 
@@ -89,7 +92,29 @@ The connection form (`+` at the top of the sidebar, or *New connection…* in th
 
 `${VAR}` inside `dsn` or `password` is replaced from the environment, so `dsn = "${DATABASE_URL}"` works.
 
+`production = true` marks a connection whose data matters: its borders, status bar block and tab titles use the `production` theme color, every write asks first (table saves, write statements, Redis write commands, deletes and renames in the tree), and it is read-only unless `read_only = false` is written as well. See [Safety](../README.md#safety).
+
 `ssh = "user@host"` runs `ssh -W host:port user@host` for each connection; the port, key and `ProxyJump` come from `~/.ssh/config`, and no local port is opened. ssh cannot ask for a password or passphrase here, so `ssh-add` the key first. It does not apply to SQLite or to connections given on the command line.
+
+### External commands (`engine = "exec"`)
+
+For a database you can only reach through a command-line tool, sqlmux can run every statement through that command instead of a driver. Such a connection is always read-only, and is written by hand (the connection form and manager don't list it).
+
+```toml
+[[connection]]
+name    = "prod-pg"
+engine  = "exec"
+dialect = "postgres"                 # postgres | redis: which catalog, paging, quoting and completion to use
+command = ["mytool", "query", "--json", "{sql}"]          # {sql} is replaced by one statement
+
+[[connection]]
+name    = "prod-cache"
+engine  = "exec"
+dialect = "redis"
+command = ["mytool", "redis", "--json", "--", "{cmd}", "{args...}"]   # {cmd} the command, {args...} its arguments
+```
+
+The command runs once per statement (cancelling kills it) and prints JSON on stdout: for SQL, one item per statement with `columns` (ordered names), `rows` (an array per row; nested values are shown as JSON text), `n` (affected or total rows, optional) and `err` (the error text, if any); for Redis, the reply itself. A non-zero exit makes its stderr the error. sqlmux checks the connection with `select current_database()` or `PING` when it connects.
 
 ## Command line
 
@@ -97,7 +122,7 @@ The connection form (`+` at the top of the sidebar, or *New connection…* in th
 sqlmux                      # restore the layout you quit from (or the default one)
 sqlmux local                # open the connection named local
 sqlmux ./app.db             # open a SQLite file
-sqlmux postgres://me@localhost/app   # or mysql://…: a temporary connection, not saved anywhere
+sqlmux postgres://me@localhost/app   # or mysql://…, redis://…: a temporary connection, not saved anywhere
 sqlmux --layout work        # open layouts/work.toml (or a path)
 sqlmux keys                 # list every action and its keys
 sqlmux keys --format toml   # a complete keymaps.toml to start from
@@ -148,7 +173,7 @@ text = "T"
 fg   = "#fc9867"
 ```
 
-Color tokens: `bg`, `pane_bg`, `fg`, `fg_muted`, `dim`, `border`, `focus`, `warn`, `zoom`, `match`, `cursor`, `cursor_blur`, `select`, `row`, `row_alt`, `visual`, `selected`, `search`, `search_current`, `yank`, `edited_bg`, `error`, `error_bg`, `info`, `bar`, `sep`; SQL text: `keyword`, `sql_string`, `comment`, `sql_table`, `sql_column`, `sql_operator`; grid values by column type: `number`, `string`, `time`, `bool`, `json`, `pk`, `func`.
+Color tokens: `production` (production connections, defaults to `error`), `bg`, `pane_bg`, `fg`, `fg_muted`, `dim`, `border`, `focus`, `warn`, `zoom`, `match`, `cursor`, `cursor_blur`, `select`, `row`, `row_alt`, `visual`, `selected`, `search`, `search_current`, `yank`, `edited_bg`, `error`, `error_bg`, `info`, `bar`, `sep`; SQL text: `keyword`, `sql_string`, `comment`, `sql_table`, `sql_column`, `sql_operator`; grid values by column type: `number`, `string`, `time`, `bool`, `json`, `pk`, `func`.
 
 Icon names: `schema`, `table`, `view`, `column`, `key`, `index`, `func`, `sequence`, `query`, `result`, `log`, `conn`, `postgres`, `mysql`, `sqlite`, `redis`, `str`, `hash`, `list`, `set`, `zset`, `stream`, `json`, `window`, `pane`, `filter`, `search`, `keys`, `command`, `save`, `refresh`, `transpose`, `row_add`, `row_delete`, `auto_refresh`, `stop`, `sort_asc`, `sort_desc`, `lock`, `pin`, `export`, `close`, `star`, `history`, `zoom`, `tag`, `host`, `port`, `user`, `database`, `advanced`, `link`, `group`; completion kinds: `keyword`, `value`, `snippet`; right-click menus: `open`, `edit`, `copy`, `trash`, `rename`, `hide` (the menu's *View as JSON* uses `json`). With `icons = "ascii"`, completion shows a letter per kind and menus show no icons.
 

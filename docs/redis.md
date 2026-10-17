@@ -4,7 +4,7 @@ sqlmux opens Redis 6.0 or newer next to your SQL databases: a key browser in the
 
 ## Connect
 
-Redis connections go in `~/.config/sqlmux/connections.toml` (or the connection form); `sqlmux redis://…` on the command line is not supported.
+`sqlmux redis://localhost:6379/0` opens a server straight from the command line, without saving anything. To keep a connection, add it to `~/.config/sqlmux/connections.toml` (or use the connection form):
 
 ```toml
 [[connection]]
@@ -54,6 +54,10 @@ A query tab on a Redis connection is a console: one command per line, quoted lik
 - The database dropdown in the console's title switches databases; typing `SELECT n` in the console only changes that one connection.
 - Commands run on a read-only connection are refused when the server's `COMMAND INFO` marks them as writes; commands the server marks `@dangerous` ask first (`confirm_dangerous`).
 
+## Quick commands
+
+`;` on a Redis connection runs one command in the palette, with the console's completion and its read-only and dangerous-command checks; the reply shows as a table under it. `C-t` opens the reply as a result tab, `C-e` moves the command into a console.
+
 ## Not yet
 
-Cluster, Sentinel, Pub/Sub and `MONITOR` are not supported. The palette's table scope and quick SQL (`;`) do not work on Redis connections; open keys from the tree.
+Cluster, Sentinel, Pub/Sub and `MONITOR` are not supported. The palette's table scope does not list Redis keys; open them from the tree.

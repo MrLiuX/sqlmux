@@ -6,6 +6,30 @@ All notable changes to sqlmux are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - unreleased
+
+### Added
+
+- **Production connections**: `production = true` on a connection draws it in a warning color (theme key `production`), asks before every write (table saves, write statements, Redis write commands, deletes, renames and TTL changes in the tree) even with `confirm_dangerous = false`, and makes it read-only unless `read_only = false` is written too. The connection form has a switch for it.
+- **Preview before save**: `C-s` / `:w` on a table first shows the statements it will run, values inlined (up to 20, then "… N more"), and how many rows change, are added and are deleted; `y` runs them, `n` goes back with your edits kept. Redis keys list their commands. On by default; `[grid] preview_save = false` turns it off, except on production connections.
+- **External commands**: `engine = "exec"` with `dialect = "postgres"` or `"redis"` runs each statement through a command you name (`command = [..., "{sql}"]`) that prints JSON, for databases you can only reach through a CLI tool. Always read-only. See the configuration docs.
+- Quick SQL (`;`) on a Redis connection runs one Redis command, with the console's completion and checks.
+- `sqlmux redis://…` (and `rediss://`) opens a Redis server from the command line, like `postgres://` and `mysql://`.
+- The tab bar scrolls when the tabs don't fit: the current tab stays in view, and `‹N` / `N›` at the ends show (and scroll to) the hidden ones.
+- The command palette's preview scrolls with the mouse wheel, and `C-o` moves the focus into it as a read-only text with vim movement, search, selection and copy; `esc` goes back to the list.
+
+### Fixed
+
+- The "Connecting to …" toast of a new session no longer stays after the connection is up.
+- The palette says "1 window", not "1 windows".
+- `sqlmux keys --format toml` no longer prints internal spec references in its comments.
+- `sqlmux --version` from `go install` shows the module version instead of `(none, unknown)`.
+- The Homebrew formula and the npm package describe all four engines; the npm packages include the MIT license; the Homebrew build is stripped, so its binary is smaller.
+
+### Changed
+
+- Saving a table now shows the preview first. To save straight away as before, set `[grid] preview_save = false` in `config.toml`.
+
 ## [0.5.1] - 2026-10-17
 
 ### Added
@@ -176,6 +200,7 @@ Note: `go install github.com/kackerx/sqlmux/...` does not work for this version 
 - Themes, border styles, Nerd Font or ASCII icons, and an English or Chinese UI (`language = "zh"`).
 
 [Unreleased]: https://github.com/kackerx/sqlmux/compare/v0.5.1...HEAD
+[0.6.0]: https://github.com/kackerx/sqlmux/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/kackerx/sqlmux/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/kackerx/sqlmux/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kackerx/sqlmux/compare/v0.3.0...v0.4.0

@@ -11,12 +11,11 @@ with tempfile.TemporaryDirectory() as cfg:
                          check=True, capture_output=True, text=True).stdout
 version = subprocess.run([binary, "--version"], check=True, capture_output=True, text=True).stdout.split()[1]
 
-refs = re.compile(r"\s*\((?:[FM]\d[\d.]*|§[\d.]+)(?:,\s*(?:[FM]\d[\d.]*|§[\d.]+))*\)")  # internal spec refs
 line = re.compile(r'^# ("(?:[^"\\]|\\.)*") = ("(?:[^"\\]|\\.)*")(?:  # (.*))?$')
 scopes, about, leader = [], "", ""
 for s in out.splitlines():
     if m := re.match(r"^\[keys\.(\w+)\]$", s):
-        scopes.append((m[1], refs.sub("", about), {}))
+        scopes.append((m[1], about, {}))
     elif s.startswith("# leader = "):
         leader = json.loads(s.split(" = ", 1)[1])
     elif (m := line.match(s)) and scopes:

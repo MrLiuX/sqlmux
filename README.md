@@ -55,6 +55,20 @@ The [quickstart](docs/quickstart.md) goes from here to editing your first row.
 - **Every key can be rebound**, per pane type, plus vim-style maps (`J = "5j"`). `vim = false` gives plain editors and arrow keys.
 - Passwords from the OS keychain, a command (`pass`, `op`, …) or an environment variable; SSH tunnels through `~/.ssh/config`; read-only connections; manual transactions; themes; Nerd Font or ASCII icons; English or Chinese UI.
 
+## Safety
+
+sqlmux edits live databases, so it has guards against mistakes. They are not a permission boundary: for production data, connect with a read-only database account.
+
+- **Read-only connections** (`read_only = true`) are enforced twice. sqlmux refuses a whole run if any statement in it writes or would lift read-only, and the session is read-only on the server too (PostgreSQL `default_transaction_read_only = on`, MySQL `SET SESSION TRANSACTION READ ONLY`). Redis has no server-side switch, so there it is sqlmux's check alone, based on the server's `COMMAND INFO`; use ACLs (`-@write`) to really restrict it.
+- **Dangerous statements ask first**: `DELETE` or `UPDATE` without `WHERE`, `TRUNCATE`, `DROP`, and Redis commands the server marks `@dangerous` (`confirm_dangerous`, on by default).
+- **Saves are one transaction**, and each `UPDATE` carries the old values of the cells you changed: if someone changed that row after you loaded it, the save rolls back and names the row.
+- **Preview before save**: `C-s` first shows the exact statements, values inlined, with the counts of changed, added and deleted rows (`[grid] preview_save`, on by default).
+- **Production connections** (`production = true`) are drawn in a warning color, ask before every write (even with `confirm_dangerous` off; the save preview cannot be turned off there), and are read-only unless you also write `read_only = false`.
+- **No silent re-runs**: after a dropped connection, a statement that may have reached the server is never re-run on its own; only requests that never left are retried.
+- **Tested on real databases**: the integration tests run in CI against PostgreSQL 17, MySQL 8.4, SQLite and Redis Stack 7.4, not mocks.
+
+The checks read the SQL text, so a write hidden inside a function or procedure (`select my_func()`) is not caught by sqlmux; the server-side read-only, or the account's privileges, still are.
+
 ## Keys and configuration
 
 - [Keys](docs/keys.md): every action and its default keys. `sqlmux keys` prints the same list, and `?` in any pane shows the keys that work there.

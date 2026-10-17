@@ -26,6 +26,7 @@ The fastest way is a SQLite file or a URL on the command line. Nothing is writte
 sqlmux ./app.db
 sqlmux "postgres://me@localhost:5432/app?sslmode=disable"
 sqlmux "mysql://me@localhost:3306/app"
+sqlmux "redis://localhost:6379/0"
 ```
 
 No database at hand? Make one:
