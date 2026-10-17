@@ -119,12 +119,11 @@ func (a *App) drawMenu(f *ui.Frame) {
 		var icon ui.Icon
 		lead := ""
 		if !a.icons.Labeled { // ascii says it in words alone
-			icon, lead = a.icons.Named(it.icon), a.icons.Named(it.icon).Text+" "
-			fg := a.theme.Dim
-			if i == m.sel { // the picked row's icon is as its text
-				fg = a.theme.Fg
+			icon = a.icons.Named(it.icon)
+			lead = icon.Text + " "
+			if i == m.sel { // dim, as Complete draws an icon of no color, but the picked row's is as its text
+				icon.Fg = cmp.Or(icon.Fg, a.theme.Fg)
 			}
-			icon.Fg = cmp.Or(icon.Fg, fg)
 		}
 		v.Items = append(v.Items, ui.CompleteItem{Icon: icon, Text: it.label})
 		w = max(w, ui.Width(lead+it.label)+5) // a border, a blank and the two cells Complete leaves on the right
