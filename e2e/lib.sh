@@ -237,7 +237,7 @@ grid_y() { e2e_plain | awk '/┼/ { print NR; exit }'; }
 open_table() { e2e_keys C-p; sleep 0.3; e2e_type "@$1"; sleep 0.3; e2e_keys Enter; wait_for 5 eval '[[ -n $(grid_y) && $(e2e_plain | head -1) == *" $1 ─"* ]]'; }
 # noicon: drop the nerd-font icons (U+Exxx / U+Fxxx) and the space after each: " 1:<table> t_order* " → " 1:t_order* " (F3.7 tab bars;
 # F5.4's engine icons, postgres U+E76E / mysql U+E704, sit in U+Exxx).
-noicon() { LC_ALL=C sed $'s/[\xee\xef][\x80-\xbf][\x80-\xbf] //g'; }
+noicon() { LC_ALL=C sed $'s/[\xee\xef][\x80-\xbf][\x80-\xbf] //g; s/\xf3[\x80-\xbf][\x80-\xbf][\x80-\xbf] //g'; }
 focused() { e2e_panes | awk '$6 == 1 && $1 != "-" { print $1 }'; }   # the focused pane's number (a folded strip or the palette box has none)
 # Panes and their tab bars (any layout). geom N: pane N's "X Y W H"; the tab bar is its content's last row.
 geom() { e2e_panes | awk -v n="$1" '$1 == n { print $2, $3, $4, $5 }'; }
