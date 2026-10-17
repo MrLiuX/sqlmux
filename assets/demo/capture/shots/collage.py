@@ -5,15 +5,15 @@ import base64, os, subprocess, tempfile
 from xml.sax.saxutils import escape
 
 TILES = [  # grid order: (tape name, caption, crop w:h:x:y in the 1200x676 frame, picked by hand around the feature)
-    ("where", "WHERE with completion and history", "1104:482:78:16"),
+    ("where", "WHERE with completion and history", "1108:482:78:16"),
     ("order", "Sort by many columns", "860:483:78:16"),
-    ("complete", "Completion and field hints", "850:340:78:16"),
+    ("complete", "Completion and field hints", "1112:520:74:16"),
     ("panes", "Panes: the same table twice", "1112:590:74:16"),
-    ("flash", "Flash jump", "1010:564:74:16"),
+    ("flash", "Flash jump", "1112:564:74:16"),
     ("json", "JSON view", "860:483:74:16"),
     ("edit", "Edit a cell, save as one transaction", "1104:562:74:16"),
-    ("select", "Select rows, act on them", "1026:454:74:16"),
-    ("whichkey", "which-key", "920:368:14:256"),
+    ("select", "Select rows, act on them", "1112:454:74:16"),
+    ("whichkey", "which-key", "1176:476:12:148"),
 ]
 W, H, GAP, CAP = 778, 438, 16, 52  # tile box (16:9), gutter, caption band
 OUT = "../../features.png"
