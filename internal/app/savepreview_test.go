@@ -178,12 +178,14 @@ func TestProductionWritesAreAsked(t *testing.T) {
 	b.ttlKey(key)
 	b.askName.done(b, "60")
 	asked(b, "ttl")
-	b.ttlKey(key)
-	b.askName.done(b, "") // blank is no expiry, which EXPIRE 0 would not be
-	if !strings.Contains(b.confirm.text, "：不过期？") {
-		t.Errorf("a blank TTL: %q", b.confirm.text)
+	for _, typed := range []string{"<CR>", "0<CR>"} { // blank and 0 are no expiry, which EXPIRE 0 would not be
+		b.ttlKey(key)
+		feed(t, b, typed)
+		if b.confirm == nil || !strings.Contains(b.confirm.text, "：不过期？") {
+			t.Errorf("TTL %q: %+v", typed, b.confirm)
+		}
+		b.confirm = nil
 	}
-	b.confirm = nil
 	b.gotNamespaceFound(namespaceFound{conn: c, space: "ns:", keys: []string{"ns:1", "ns:2"}})
 	asked(b, "delete namespace")
 	b.palette = &palette{conn: c, quick: &quickSQL{}}
