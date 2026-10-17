@@ -436,6 +436,8 @@ var en = map[string]string{
 	"%d–%d+ 行 · %s":    "%d–%d+ rows · %s",
 	"%s 是只读连接，整次都没有执行": "%s is a read-only connection, nothing was run",
 	"%s：读不到命令列表（%s），命令都按写命令处理": "%s: the list of commands cannot be read (%s), every command is taken for a write",
+	"1 个窗口":            "1 window",
+	"%d 个窗口":           "%d windows",
 	"改 %d 行":           "%d rows changed",
 	"增 %d 行":           "%d rows added",
 	"删 %d 行":           "%d rows deleted",

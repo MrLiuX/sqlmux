@@ -47,8 +47,12 @@ func TempConnection(target string, taken []string) (Connection, error) {
 	}
 	c.Engine, c.DSN = engine, target
 	database, host := strings.TrimPrefix(u.Path, "/"), u.Hostname()
-	if engine == "redis" { // the tree calls the db that (F17.3)
-		database = "db" + cmp.Or(database, "0")
+	if engine == "redis" { // the db it connects to, as the tree names it: the query's over the path's, as go-redis reads them (F17.3)
+		n := cmp.Or(u.Query().Get("db"), database)
+		if v, err := strconv.Atoi(n); err == nil {
+			n = strconv.Itoa(v)
+		}
+		database = "db" + cmp.Or(n, "0")
 	}
 	name := strings.Join(slices.DeleteFunc([]string{database, host}, func(s string) bool { return s == "" }), "@")
 	return named(c, name, name, taken), nil

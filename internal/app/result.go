@@ -319,6 +319,17 @@ func (a *App) startRun(t *queryTab, conn *Conn, schema, name, sql string, base, 
 	return tea.Batch(func() tea.Msg { return mainRun(r, texts, maxRows, manual, resets) }, a.runTick(r))
 }
 
+// mainRunner is the way a request of the statements texts goes on Main: one in
+// which every statement is known to have no effect to repeat, a lost connection
+// is dialed again and the request runs again, sent or not; any other is not run
+// twice (§8.7).
+func mainRunner(main *db.Worker, l lang, texts ...string) func(context.Context, func(context.Context, db.Conn) error) error {
+	if slices.ContainsFunc(texts, func(text string) bool { return !l.Reruns(text) }) {
+		return main.Run
+	}
+	return main.RunSafe
+}
+
 // mainRun runs texts in r's connection's Main, as one request: schema first
 // on search_path, a statement at a time, each committing on its own, in the
 // manual mode in a transaction begun before one when there is none. resets
@@ -328,10 +339,7 @@ func (a *App) startRun(t *queryTab, conn *Conn, schema, name, sql string, base, 
 func mainRun(r *run, texts []string, maxRows int, manual, resets bool) runDone {
 	s, l := r.conn, r.lang
 	m := runDone{r: r}
-	run := s.Main.Run
-	if !slices.ContainsFunc(texts, func(text string) bool { return !l.Reruns(text) }) { // every one is known to have no effect to repeat: a lost connection is dialed again and the request runs again, sent or not (§8.7)
-		run = s.Main.RunSafe
-	}
+	run := mainRunner(s.Main, l, texts...)
 	m.err = run(context.Background(), func(ctx context.Context, c db.Conn) error {
 		defer func() { m.tx = db.TxStatus(c) }()
 		var err error
@@ -485,9 +493,7 @@ func (a *App) gotRun(m runDone) tea.Cmd {
 			tabs = append(tabs, Tab{Name: r.label(len(tabs) + 1), Result: rt})
 		}
 		ddl = ddl || r.conn.lang().DDL(stmt)
-		if !r.conn.sql() && r.lang.Writes(stmt) { // the names the completion was told of may be others now (§9.8)
-			r.conn.hints = nil
-		}
+		r.conn.forgetHints(stmt)
 	}
 	if m.err != nil {
 		s := r.stmts[len(m.rs)]

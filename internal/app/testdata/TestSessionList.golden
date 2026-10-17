@@ -6,8 +6,8 @@
 │   ▾  public                 │ │                                                             │ │                                                             │
 │     ▾  Tables (14)          │ │                                                             │ │                                                             │
 │       ▸  agent          124┌─ session ────────────────────────────────────────────────────────────────────────────────────────┐                             │
-│       ▸  agent_version  530│ doraemon  1 window                                                                               │                             │
-│       ▸  goal            57│ report  2 windows                                                                                │                             │
+│       ▸  agent_version  530│ doraemon  1 个窗口                                                                               │                             │
+│       ▸  goal            57│ report  2 个窗口                                                                                 │                             │
 │       ▸  mt_task        812│   0: data                                                                                        │                             │
 │       ▸  mt_task_log    96k│   1: logs                                                                                        │                             │
 │       ▸  schema_migrations └──────────────────────────────────────────────────────────────────────────────────────────────────┘                             │

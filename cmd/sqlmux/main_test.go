@@ -366,6 +366,9 @@ func TestTempConnection(t *testing.T) {
 		{configured, "redis://u@h:6380/2", "", "", "db2@h"}, // F17.3
 		{configured, "redis://h", "", "", "db0@h"},          // no db: db0
 		{configured, "rediss://h/3", "", "", "db3@h"},
+		{configured, "redis://h:6379?db=3", "", "", "db3@h"},   // the query's db is the one go-redis connects to
+		{configured, "redis://h:6379/1?db=3", "", "", "db3@h"}, // and over the path's
+		{configured, "redis://h/02", "", "", "db2@h"},          // as a number, as the tree names it
 		{"", "", "", "", ""},
 		{"", "", "lay", "mysql://u@h/db", ""}, // a layout asked for is the program's
 	} {

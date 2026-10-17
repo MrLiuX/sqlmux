@@ -627,7 +627,7 @@ func TestNewSessionToastGoesWhenConnected(t *testing.T) {
 }
 
 func TestWindowCount(t *testing.T) {
-	for n, want := range map[int]string{0: "0 windows", 1: "1 window", 2: "2 windows", 11: "11 windows"} {
+	for n, want := range map[int]string{0: "0 个窗口", 1: "1 个窗口", 2: "2 个窗口", 11: "11 个窗口"} {
 		if got := windowCount(n); got != want {
 			t.Errorf("%d: %q", n, got)
 		}

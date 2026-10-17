@@ -144,7 +144,7 @@ func TestPaletteTogglesAndRecent(t *testing.T) {
 	}
 	feed(t, a, "<Esc><C-p>split<Down><CR><C-p>")
 	// the split also left the zoom: OFF; then the session
-	if rows := rowsOf(a); !strings.HasPrefix(rows[0], "pane.split.right=") || rows[1] != "pane.zoom=OFF" || rows[2] != "1 window=" {
+	if rows := rowsOf(a); !strings.HasPrefix(rows[0], "pane.split.right=") || rows[1] != "pane.zoom=OFF" || rows[2] != "1 个窗口=" {
 		t.Errorf("recent first, then by id: %v", rows[:3])
 	}
 }

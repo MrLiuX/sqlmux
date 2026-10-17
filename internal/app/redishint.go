@@ -140,6 +140,14 @@ func (c *Conn) commandNames() (out []candidate) {
 	return out
 }
 
+// forgetHints drops the names the completion was told of when stmt, a command of a
+// Redis connection that ran, writes: they may be others now (§9.8).
+func (c *Conn) forgetHints(stmt string) {
+	if !c.sql() && c.lang().Writes(stmt) {
+		c.hints = nil
+	}
+}
+
 // hintDue is a completion that waited for the typing to stop (§9.8): it asks if
 // it is still the last, hintMsg is what the server answered.
 type hintDue struct {

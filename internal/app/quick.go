@@ -134,13 +134,9 @@ func quickOn(c *Conn, schema string) func(sql string) (db.Result, error) {
 			return eng.Quick(context.Background(), meta, sql, schema, quickRows)
 		}
 	}
-	main, reruns := c.Main, c.lang().Reruns
+	main, l := c.Main, c.lang()
 	return func(sql string) (res db.Result, err error) {
-		run := main.Run
-		if reruns(sql) {
-			run = main.RunSafe
-		}
-		err = run(context.Background(), func(ctx context.Context, conn db.Conn) error {
+		err = mainRunner(main, l, sql)(context.Background(), func(ctx context.Context, conn db.Conn) error {
 			rs, err := db.ExecEach(ctx, conn, []string{sql}, 0, nil)
 			if len(rs) > 0 {
 				res = rs[0]
@@ -171,22 +167,28 @@ func (a *App) sendQuick(c *Conn, sql string) tea.Cmd {
 // result goes with the palette (§12). Cancelled, the last result stays.
 func (a *App) gotQuick(m quickMsg) tea.Cmd {
 	m.conn.busy--
-	if m.p != a.palette {
-		return nil
-	}
 	q := m.p.quick
 	sql := q.running
 	q.running = ""
-	if errors.Is(m.err, context.Canceled) {
+	canceled := errors.Is(m.err, context.Canceled)
+	if !m.conn.sql() && !canceled { // it ran, whether or not the palette is still there to see it
+		errText := ""
+		if m.err != nil {
+			errText = m.err.Error()
+		}
+		recordHistory(&run{conn: m.conn}, sql, m.res, errText) // a console's line is in the history; a SQL one is not (§9.8)
+		m.conn.forgetHints(sql)
+	}
+	if m.p != a.palette {
+		return nil
+	}
+	if canceled {
 		return a.showToast(i18n.T("查询已取消"))
 	}
 	q.ran, q.res, q.err, q.write, q.top, q.left = sql, m.res, "", false, 0, 0
 	q.conn, q.schema = m.conn, m.schema
 	if m.err != nil {
 		q.res, q.err = db.Result{Took: m.res.Took}, m.err.Error()
-	}
-	if !m.conn.sql() { // a console's line is in the history; a SQL one is not (§9.8)
-		recordHistory(&run{conn: m.conn}, sql, q.res, q.err)
 	}
 	return nil
 }

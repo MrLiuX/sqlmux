@@ -1,10 +1,12 @@
 package app
 
 import (
+	"image/color"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/kackerx/sqlmux/internal/editor"
@@ -36,6 +38,13 @@ func TestPalettePreviewFocus(t *testing.T) {
 	if ed == nil || ed.Mode() != editor.Normal || !ed.ReadOnly || a.mode() != keymap.Normal {
 		t.Fatalf("C-o: %+v", ed)
 	}
+	// the keys of the panes under it are none of its: no window, tab, help
+	windows := len(a.sess.Windows)
+	feed(t, a, "<Space>cgt?")
+	if len(a.sess.Windows) != windows || a.keyHelp != nil || p.pvEd != ed {
+		t.Errorf("a key that is the panes': %d windows, help %v", len(a.sess.Windows), a.keyHelp != nil)
+	}
+	feed(t, a, "<Esc>") // the ? was a search of the editor's, which esc puts away
 	feed(t, a, "jjv")
 	if c := ed.Cursor(); c.Line != 2 || ed.Mode() != editor.Visual || p.input.Text != input || p.sel != 0 {
 		t.Errorf("jj v: cursor %+v mode %v input %q sel %d", c, ed.Mode(), p.input.Text, p.sel)
@@ -110,8 +119,9 @@ func TestPalettePreviewFocus(t *testing.T) {
 func TestPalettePreviewWheel(t *testing.T) {
 	a := previewApp(t)
 	_, ms := a.paletteMatches()
-	box, rows, grid := a.paletteBox(len(ms))
-	wheel := func(x, y int, b tea.MouseButton) { a.Update(tea.MouseWheelMsg{X: x, Y: y, Button: b}) }
+	_, rows, grid := a.paletteBox(len(ms))
+	row0 := find(t, a, ui.Target{Kind: ui.KindRow, I: 0}).Min.Add(uv.Pos(3, 0))
+	wheel := func(x, y int, b tea.MouseButton) { a.View(); a.Update(tea.MouseWheelMsg{X: x, Y: y, Button: b}) }
 	wheel(grid.Min.X+3, grid.Min.Y+2, tea.MouseWheelDown)
 	if a.palette.pvTop != wheelStep || a.palette.sel != 0 {
 		t.Errorf("over the preview: top %d, sel %d", a.palette.pvTop, a.palette.sel)
@@ -120,11 +130,11 @@ func TestPalettePreviewWheel(t *testing.T) {
 	if a.palette.pvTop != 0 {
 		t.Errorf("and back: %d", a.palette.pvTop)
 	}
-	wheel(box.Min.X+10, box.Min.Y+4+1, tea.MouseWheelDown)
+	wheel(row0.X, row0.Y, tea.MouseWheelDown)
 	if a.palette.sel != min(wheelStep, len(ms)-1) || len(ms) < 2 || a.palette.pvTop != 0 {
 		t.Errorf("over the list: sel %d, top %d, %d candidates in %d rows", a.palette.sel, a.palette.pvTop, len(ms), rows)
 	}
-	wheel(box.Min.X+10, box.Min.Y+4+1, tea.MouseWheelUp)
+	wheel(row0.X, row0.Y, tea.MouseWheelUp)
 	a.wantDDL()
 	feed(t, a, "<C-o>")
 	ed := a.palette.pvEd
@@ -138,4 +148,36 @@ func TestGoldenPalettePreviewFocus(t *testing.T) {
 	a := previewApp(t)
 	feed(t, a, "<C-o>jj")
 	golden.RequireEqual(t, a.render().String())
+}
+
+// With the focus in the preview the terminal's cursor is the editor's, and the text
+// is in SQL's colors as it is when the list has the focus (F17.6).
+func TestPalettePreviewFocusDrawsCursorAndColors(t *testing.T) {
+	a := previewApp(t)
+	grid := a.previewRect()
+	word := func(f *ui.Frame, from int) (fg color.Color) { // the color of the first "create" in the preview's rows
+		for x := from; x < grid.Max.X-6; x++ {
+			if f.Buf.CellAt(x, grid.Min.Y).Content == "c" && f.Buf.CellAt(x+1, grid.Min.Y).Content == "r" && f.Buf.CellAt(x+5, grid.Min.Y).Content == "e" {
+				return f.Buf.CellAt(x, grid.Min.Y).Style.Fg
+			}
+		}
+		return nil
+	}
+	list := word(a.render(), grid.Min.X)
+	if list == nil || list == a.theme.Fg {
+		t.Fatalf("the keyword is in the plain color in the list's preview: %v", list)
+	}
+	input := a.render().Cursor
+	feed(t, a, "<C-o>")
+	f := a.render()
+	if got := word(f, grid.Min.X); got != list {
+		t.Errorf("focused: the keyword is %v, was %v", got, list)
+	}
+	if f.Cursor == nil || f.Cursor.Y != grid.Min.Y || input == nil || f.Cursor.Y == input.Y {
+		t.Fatalf("the cursor: %v, the input's was %v", f.Cursor, input)
+	}
+	feed(t, a, "jj")
+	if c := a.render().Cursor; c == nil || c.Y != grid.Min.Y+2 {
+		t.Errorf("two lines down: %v", c)
+	}
 }

@@ -9,7 +9,7 @@
 ║       ▸  agent_version  530║  所有   会话 $   窗口·Pane %   窗口 &   Tab #   表 @   命令 >   SQL ;                            ║                             ║
 ║       ▸  goal            57║                                                                                                 ║                             ║
 ║       ▸  mt_task        812║──────────────────────────────────────────────────────────────────────────────────────────────────║                             ║
-║       ▸  mt_task_log    96k║  doraemon                               1 window                                           会话 ║                             ║
+║       ▸  mt_task_log    96k║  doraemon                               1 个窗口                                           会话 ║                             ║
 ║       ▸  schema_migrations ║  0: data                                doraemon                                           窗口 ║                             ║
 ║       ▸  t_order       1.2m║  ⓪ schema                               doraemon › 0: data                                 Pane ║                             ║
 ║       ▸  t_order_item  3.4m║  ① table · t_order                      doraemon › 0: data                                 Pane ║                             ║
