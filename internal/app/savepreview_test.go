@@ -26,32 +26,41 @@ func previewSetup(t *testing.T) (*App, *dataTab, *tagDB) {
 	return a, tab, d
 }
 
-// A save asks first, with the statements it would send as the source writes them
-// and how many rows it changes, adds and deletes: n or esc leaves the table as it
-// is, y sends them (F17.10).
-func TestSavePreview(t *testing.T) {
+// previewAsked is a save of every kind of change, asked: row 1 deleted, a cell of
+// rows 2 and 3 changed, a row added.
+func previewAsked(t *testing.T) (*App, *dataTab, *tagDB) {
+	t.Helper()
 	a, tab, d := previewSetup(t)
 	feed(t, a, "dd")        // row 1 deleted
 	feed(t, a, "jlix<Esc>") // a cell of row 2
 	feed(t, a, "jix<Esc>")  // and the same column of row 3
+	feed(t, a, "olidone<Esc>")
 	a.Update(teaKey("<C-s>"))
+	return a, tab, d
+}
+
+// A save asks first, with the statements it would send as the source writes them
+// and how many rows it changes, adds and deletes: n or esc leaves the table as it
+// is, y sends them (F17.10).
+func TestSavePreview(t *testing.T) {
+	a, tab, d := previewAsked(t)
 	if a.confirm == nil || len(d.sqls) != 0 {
 		t.Fatalf("C-s: confirm %v, sent %q", a.confirm != nil, d.sqls)
 	}
 	lines := strings.Split(a.confirm.text, "\n")
-	if lines[0] != "保存到 t_order：改 2 行、删 1 行" || len(lines) != 4 || a.confirm.yes != "保存" {
+	if lines[0] != "保存到 t_order：改 2 行、增 1 行、删 1 行" || len(lines) != 5 || a.confirm.yes != "保存" {
 		t.Fatalf("the box:\n%s", a.confirm.text)
 	}
-	if !strings.HasPrefix(lines[1], `  delete from "public"."t_order" where "id" = '1'`) || !strings.HasPrefix(lines[2], `  update "public"."t_order" set "status" = '`) || !strings.HasPrefix(lines[3], `  update "public"."t_order" set`) {
+	if !strings.HasPrefix(lines[1], `  delete from "public"."t_order" where "id" = '1'`) || !strings.HasPrefix(lines[2], `  update "public"."t_order" set "status" = '`) || !strings.HasPrefix(lines[3], `  update "public"."t_order" set`) || lines[4] != `  insert into "public"."t_order" ("status") values ('done')` {
 		t.Errorf("the statements:\n%s", a.confirm.text)
 	}
 	feed(t, a, "n")
-	if a.confirm != nil || len(d.sqls) != 0 || tab.saving || len(tab.deleted) != 1 || tab.changes() != 3 {
+	if a.confirm != nil || len(d.sqls) != 0 || tab.saving || len(tab.deleted) != 1 || tab.changes() != 4 {
 		t.Fatalf("n: confirm %v, sent %q, marks %d, changes %d", a.confirm != nil, d.sqls, len(tab.deleted), tab.changes())
 	}
 	a.Update(teaKey("<C-s>"))
 	feed(t, a, "<Esc>")
-	if a.confirm != nil || len(d.sqls) != 0 || tab.changes() != 3 {
+	if a.confirm != nil || len(d.sqls) != 0 || tab.changes() != 4 {
 		t.Fatalf("esc: confirm %v, sent %q", a.confirm != nil, d.sqls)
 	}
 	a.Update(teaKey("<C-s>"))
@@ -60,9 +69,15 @@ func TestSavePreview(t *testing.T) {
 		t.Fatal("↵ sends nothing")
 	}
 	a.Update(cmd())
-	if sent := strings.Join(d.sqls, "\n"); !strings.Contains(sent, "delete from") || strings.Count(sent, "update ") != 2 {
+	if sent := strings.Join(d.sqls, "\n"); !strings.Contains(sent, "delete from") || strings.Count(sent, "update ") != 2 || strings.Count(sent, "insert into") != 1 {
 		t.Errorf("yes: sent %q", d.sqls)
 	}
+}
+
+// The preview box of an UPDATE, an INSERT and a DELETE, a screen of it.
+func TestGoldenSavePreview(t *testing.T) {
+	a, _, _ := previewAsked(t)
+	golden.RequireEqual(t, a.render().String())
 }
 
 // The preview lists 20 statements and says how many more there are; with it off a
@@ -91,6 +106,17 @@ func TestSavePreviewFoldsAndIsOffUnlessProduction(t *testing.T) {
 	a.Update(teaKey("<C-s>"))
 	if a.confirm == nil || !strings.HasPrefix(a.confirm.text, "doraemon 是生产连接\n保存到 ") || !a.confirm.danger {
 		t.Errorf("production: %+v", a.confirm)
+	}
+}
+
+// A statement is one line in the box: a line break is ⏎, a tab a space, a CR gone.
+func TestSavePreviewOneLineEach(t *testing.T) {
+	a, tab, _ := previewSetup(t)
+	tab.src = &fakeSource{n: 3, preview: []string{"insert into t values ('a\nb\r\tc')"}}
+	tab.deleted = map[string]bool{"1": true}
+	a.Update(teaKey("<C-s>"))
+	if lines := strings.Split(a.confirm.text, "\n"); len(lines) != 2 || lines[1] != "  insert into t values ('a⏎b c')" {
+		t.Errorf("%q", lines)
 	}
 }
 
@@ -152,6 +178,12 @@ func TestProductionWritesAreAsked(t *testing.T) {
 	b.ttlKey(key)
 	b.askName.done(b, "60")
 	asked(b, "ttl")
+	b.ttlKey(key)
+	b.askName.done(b, "") // blank is no expiry, which EXPIRE 0 would not be
+	if !strings.Contains(b.confirm.text, "：不过期？") {
+		t.Errorf("a blank TTL: %q", b.confirm.text)
+	}
+	b.confirm = nil
 	b.gotNamespaceFound(namespaceFound{conn: c, space: "ns:", keys: []string{"ns:1", "ns:2"}})
 	asked(b, "delete namespace")
 	b.palette = &palette{conn: c, quick: &quickSQL{}}
@@ -181,7 +213,10 @@ func TestProductionWritesAreAsked(t *testing.T) {
 func TestProductionMarks(t *testing.T) {
 	a := sizedWith(160, 45, userConfig(t, "", ""))
 	loadOrders(t, a, 3)
-	p, th := a.focused(), a.theme
+	th := *a.theme
+	th.Production = color.RGBA{R: 1, G: 2, B: 3, A: 255} // not the error color, which the tab's own marks could be
+	a.theme = &th
+	p := a.focused()
 	colors := func() (border, status, title color.Color) {
 		f := a.render()
 		r := a.layout()[p.ID]

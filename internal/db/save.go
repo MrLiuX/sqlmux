@@ -156,47 +156,50 @@ type Stmt struct {
 	miss error
 }
 
-// Statements is what Save sends for ch, in its order: the DELETEs, then the
-// UPDATEs, then the INSERTs (§10.3).
-func Statements(e Engine, schema, table string, keyCols []string, ch Changes) []Stmt {
-	var stmts []Stmt
-	build := func(miss error, f func(arg func(Val) string) string) {
-		args, arg := argsOf(e)
-		sql := f(arg)
-		stmts = append(stmts, Stmt{sql, *args, miss})
-	}
+// builder is one statement of a save, written by sql with the arguments put in
+// as arg says, and what it is when it hits no row.
+type builder struct {
+	miss error
+	sql  func(arg func(Val) string) string
+}
+
+// builders are the statements of a save for ch, in its order: the DELETEs, then
+// the UPDATEs, then the INSERTs (§10.3). The one place that order is written:
+// Statements numbers the arguments, Preview puts them in.
+func builders(e Engine, schema, table string, keyCols []string, ch Changes) (bs []builder) {
 	for _, k := range ch.Deletes {
-		build(ErrGone, func(arg func(Val) string) string { return remove(e, schema, table, keyCols, k, arg) })
+		bs = append(bs, builder{ErrGone, func(arg func(Val) string) string { return remove(e, schema, table, keyCols, k, arg) }})
 	}
 	for _, r := range ch.Updates {
-		build(ErrStale, func(arg func(Val) string) string { return update(e, schema, table, keyCols, r, arg) })
+		bs = append(bs, builder{ErrStale, func(arg func(Val) string) string { return update(e, schema, table, keyCols, r, arg) }})
 	}
 	for _, r := range ch.Inserts {
-		build(ErrNotInserted, func(arg func(Val) string) string { return insert(e, schema, table, r, arg) })
+		bs = append(bs, builder{ErrNotInserted, func(arg func(Val) string) string { return insert(e, schema, table, r, arg) }})
+	}
+	return bs
+}
+
+// Statements is what Save sends for ch, in its order.
+func Statements(e Engine, schema, table string, keyCols []string, ch Changes) (stmts []Stmt) {
+	for _, b := range builders(e, schema, table, keyCols, ch) {
+		args, arg := argsOf(e)
+		sql := b.sql(arg)
+		stmts = append(stmts, Stmt{sql, *args, b.miss})
 	}
 	return stmts
 }
 
 // Preview is the statements of Statements with each argument written in as a
 // literal, one text each: what a save shows before it sends them (§13, F17.10).
-// They are made by the same code, with the arguments put in instead of
-// numbered, so what is read is what goes.
-func Preview(e Engine, schema, table string, keyCols []string, ch Changes) []string {
+func Preview(e Engine, schema, table string, keyCols []string, ch Changes) (out []string) {
 	lit := func(v Val) string {
 		if v.Null {
 			return "NULL"
 		}
 		return sqlkit.Literal(v.S, e.Dialect())
 	}
-	var out []string
-	for _, k := range ch.Deletes {
-		out = append(out, remove(e, schema, table, keyCols, k, lit))
-	}
-	for _, r := range ch.Updates {
-		out = append(out, update(e, schema, table, keyCols, r, lit))
-	}
-	for _, r := range ch.Inserts {
-		out = append(out, insert(e, schema, table, r, lit))
+	for _, b := range builders(e, schema, table, keyCols, ch) {
+		out = append(out, b.sql(lit))
 	}
 	return out
 }

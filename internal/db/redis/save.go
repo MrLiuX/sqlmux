@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -97,9 +98,25 @@ func (k Key) Save(ctx context.Context, ch db.Changes, _ bool) (failed int, tx by
 	return failed, 'I', err
 }
 
+// reader is what plan reads the key with: a Tx that watches it, or loaded.
+type reader interface {
+	Get(ctx context.Context, key string) *goredis.StringCmd
+	Do(ctx context.Context, args ...any) *goredis.Cmd
+	HExists(ctx context.Context, key, field string) *goredis.BoolCmd
+	HGet(ctx context.Context, key, field string) *goredis.StringCmd
+	LLen(ctx context.Context, key string) *goredis.IntCmd
+	LIndex(ctx context.Context, key string, index int64) *goredis.StringCmd
+	SIsMember(ctx context.Context, key string, member any) *goredis.BoolCmd
+	ZScore(ctx context.Context, key, member string) *goredis.FloatCmd
+	XRange(ctx context.Context, key, start, stop string) *goredis.XMessageSliceCmd
+}
+
+// deletedMark starts the value a list's deleted places hold until the one LREM.
+const deletedMark = "\x00sqlmux-deleted\x00"
+
 // plan reads what the changes need of the key, on tx, which watches it, checks
 // that it is as it was loaded, and gives the commands that make the changes.
-func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (steps []step, err error) {
+func plan(ctx context.Context, tx reader, typ, key string, ch db.Changes) (steps []step, err error) {
 	nd, nu := len(ch.Deletes), len(ch.Updates)
 	at := func(idx int, err error) error { return changeError{idx, err} }
 	cmd := func(owner int, args ...any) { steps = append(steps, step{args, owner}) }
@@ -222,7 +239,7 @@ func plan(ctx context.Context, tx *goredis.Tx, typ, key string, ch db.Changes) (
 		if err != nil {
 			return nil, err
 		}
-		sentinel := "\x00sqlmux-deleted\x00" + strconv.FormatInt(n, 10)
+		sentinel := deletedMark + strconv.FormatInt(n, 10)
 		for i, d := range ch.Deletes {
 			idx, err := strconv.ParseInt(d[0], 10, 64)
 			if err != nil || idx < 0 || idx >= n {
@@ -406,121 +423,124 @@ func pair(r []db.Change, a, b string) (string, string, error) {
 	return x, y, nil
 }
 
-// Preview is the commands Save sends for ch, one text each, from the type the tab
-// knows; none when it knows none. What a command needs of the key that the changes
-// do not say, the value or the score a rename keeps, is written as <its value>.
-// ponytail: made apart from plan, which reads the key as it goes and so cannot be
-// run without it; the integration test holds the two to the same commands.
-func (k Key) Preview(ch db.Changes) []string {
-	return Describe(k.Type, k.Name, ch)
-}
-
-// Describe is the commands plan gives for ch on a key of type typ, as redis-cli
-// reads them.
-func Describe(typ, key string, ch db.Changes) (out []string) {
-	cmd := func(args ...string) {
-		for i, a := range args {
-			if !slices.Contains([]string{"<its value>", "<its score>", "<deleted>"}, a) { // not words of the command but what stands for one
-				args[i] = Quote(a)
-			}
-		}
-		out = append(out, strings.Join(args, " "))
+// Preview is the commands Save sends for ch, one text each, in redis-cli's words:
+// plan run on the key as the tab loaded it (loaded), so what is shown is what is
+// made. None when the tab knows no type, or plan would refuse ch, which Save then
+// says. What the changes do not give, the value or score a rename keeps and a
+// list's deleted places, is <its value>, <its score> and <deleted>.
+// ponytail: a score is NaN where it is not given, which Redis does not take as one.
+func (k Key) Preview(ch db.Changes) (out []string) {
+	steps, err := plan(context.Background(), loaded(ch), k.Type, k.Name, ch)
+	if err != nil {
+		return nil
 	}
-	val := func(r db.Row, name, keep string) string { // what a change of column name sets, or keep
-		for _, c := range r.Cols {
-			if c.Name == name {
-				return c.Val.S
-			}
+	for _, s := range steps {
+		words := make([]string, len(s.args))
+		for i, a := range s.args {
+			words[i] = word(fmt.Sprint(a))
 		}
-		return keep
-	}
-	valueOf := func(r []db.Change, name string) string {
-		for _, c := range r {
-			if c.Name == name && !c.Default {
-				return c.Val.S
-			}
-		}
-		return ""
-	}
-	kept := "<its value>"
-	switch typ {
-	case "string", "ReJSON-RL", "json":
-		for range ch.Deletes {
-			cmd("UNLINK", key)
-		}
-		for _, r := range ch.Updates {
-			for _, c := range r.Cols {
-				if typ == "string" {
-					cmd("SET", key, c.Val.S, "KEEPTTL")
-				} else {
-					cmd("JSON.SET", key, "$", c.Val.S)
-				}
-			}
-		}
-	case "hash":
-		for _, d := range ch.Deletes {
-			cmd("HDEL", key, d[0])
-		}
-		for _, r := range ch.Updates {
-			field, value := r.Key[0], val(r, "value", kept)
-			if rename := val(r, "field", ""); rename != "" && rename != field {
-				cmd("HDEL", key, field)
-				cmd("HSET", key, rename, value)
-			} else {
-				cmd("HSET", key, field, value)
-			}
-		}
-		for _, r := range ch.Inserts {
-			cmd("HSET", key, valueOf(r, "field"), valueOf(r, "value"))
-		}
-	case "list":
-		for _, d := range ch.Deletes {
-			cmd("LSET", key, d[0], "<deleted>")
-		}
-		for _, r := range ch.Updates {
-			for _, c := range r.Cols {
-				cmd("LSET", key, r.Key[0], c.Val.S)
-			}
-		}
-		if len(ch.Deletes) > 0 {
-			cmd("LREM", key, "0", "<deleted>")
-		}
-		for _, r := range ch.Inserts {
-			cmd("RPUSH", key, valueOf(r, "value"))
-		}
-	case "set":
-		for _, d := range ch.Deletes {
-			cmd("SREM", key, d[0])
-		}
-		for _, r := range ch.Updates {
-			for _, c := range r.Cols {
-				cmd("SREM", key, r.Key[0])
-				cmd("SADD", key, c.Val.S)
-			}
-		}
-		for _, r := range ch.Inserts {
-			cmd("SADD", key, valueOf(r, "member"))
-		}
-	case "zset":
-		for _, d := range ch.Deletes {
-			cmd("ZREM", key, d[0])
-		}
-		for _, r := range ch.Updates {
-			member, score := r.Key[0], val(r, "score", "<its score>")
-			if rename := val(r, "member", ""); rename != "" && rename != member {
-				cmd("ZREM", key, member)
-				cmd("ZADD", key, score, rename)
-			} else {
-				cmd("ZADD", key, score, member)
-			}
-		}
-		for _, r := range ch.Inserts {
-			cmd("ZADD", key, valueOf(r, "score"), valueOf(r, "member"))
-		}
-	case "stream":
-		for _, d := range ch.Deletes {
-			cmd("XDEL", key, d[0])
-		}
+		out = append(out, strings.Join(words, " "))
 	}
 	return out
+}
+
+func word(s string) string {
+	switch {
+	case strings.HasPrefix(s, deletedMark):
+		return "<deleted>"
+	case s == "NaN":
+		return "<its score>"
+	case s == keptValue:
+		return s
+	}
+	return Quote(s)
+}
+
+const keptValue = "<its value>"
+
+// loaded is the key as the tab loaded it, as far as the changes tell: the entries
+// they name are there, holding what their old values say; a read with nothing to
+// answer from gets a placeholder.
+type loaded db.Changes
+
+// has is whether the entry name (field, member) is one the changes delete or edit.
+func (l loaded) has(name string) bool {
+	return slices.ContainsFunc(l.Deletes, func(d []string) bool { return d[0] == name }) ||
+		slices.ContainsFunc(l.Updates, func(r db.Row) bool { return r.Key[0] == name })
+}
+
+// old is what column col of the edited row at key held; key "" is any row, col ""
+// any column.
+func (l loaded) old(key, col string) (string, bool) {
+	for _, r := range l.Updates {
+		if key != "" && r.Key[0] != key {
+			continue
+		}
+		for _, c := range r.Cols {
+			if col == "" || c.Name == col {
+				return c.Old.S, true
+			}
+		}
+	}
+	return "", false
+}
+
+func (l loaded) Get(context.Context, string) *goredis.StringCmd {
+	s, _ := l.old("", "")
+	return goredis.NewStringResult(s, nil)
+}
+
+func (l loaded) Do(context.Context, ...any) *goredis.Cmd {
+	s, _ := l.old("", "")
+	return goredis.NewCmdResult(s, nil)
+}
+
+func (l loaded) HExists(_ context.Context, _, field string) *goredis.BoolCmd {
+	return goredis.NewBoolResult(l.has(field), nil)
+}
+
+func (l loaded) HGet(_ context.Context, _, field string) *goredis.StringCmd {
+	v, ok := l.old(field, "value")
+	if !ok {
+		v = keptValue
+	}
+	return goredis.NewStringResult(v, nil)
+}
+
+// LLen is just enough for every index the changes name to be in.
+func (l loaded) LLen(context.Context, string) *goredis.IntCmd {
+	var n int64
+	for _, d := range l.Deletes {
+		i, _ := strconv.ParseInt(d[0], 10, 64)
+		n = max(n, i+1)
+	}
+	for _, r := range l.Updates {
+		i, _ := strconv.ParseInt(r.Key[0], 10, 64)
+		n = max(n, i+1)
+	}
+	return goredis.NewIntResult(n, nil)
+}
+
+func (l loaded) LIndex(_ context.Context, _ string, i int64) *goredis.StringCmd {
+	v, _ := l.old(strconv.FormatInt(i, 10), "")
+	return goredis.NewStringResult(v, nil)
+}
+
+func (l loaded) SIsMember(_ context.Context, _ string, member any) *goredis.BoolCmd {
+	return goredis.NewBoolResult(l.has(fmt.Sprint(member)), nil)
+}
+
+func (l loaded) ZScore(_ context.Context, _, member string) *goredis.FloatCmd {
+	if !l.has(member) {
+		return goredis.NewFloatResult(0, goredis.Nil)
+	}
+	score := math.NaN()
+	if s, ok := l.old(member, "score"); ok {
+		score, _ = strconv.ParseFloat(s, 64)
+	}
+	return goredis.NewFloatResult(score, nil)
+}
+
+func (l loaded) XRange(_ context.Context, _, id, _ string) *goredis.XMessageSliceCmd {
+	return goredis.NewXMessageSliceCmdResult([]goredis.XMessage{{ID: id}}, nil)
 }

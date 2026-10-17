@@ -896,4 +896,12 @@ func TestConnFormProduction(t *testing.T) {
 	if c, err := config.ReadConnection("play"); err != nil || !c.Production || c.ReadOnly {
 		t.Errorf("read back: %+v %v", c, err)
 	}
+	// the switch of a connection that is made: off and on, each saved (the form stays open)
+	for _, on := range []bool{false, true} {
+		a.form.sel = fieldProduction
+		feed(t, a, "<Space><CR>")
+		if c, err := config.ReadConnection("play"); err != nil || c.Production != on {
+			t.Errorf("production switched to %v: %+v %v", on, c, err)
+		}
+	}
 }

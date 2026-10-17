@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"image/color"
 	"reflect"
 	"testing"
 
@@ -105,6 +106,23 @@ func TestBlockIconColorWithZoom(t *testing.T) {
 		}
 		if !got {
 			t.Errorf("zoom icon %q: the icon lost its color", zoom)
+		}
+	}
+}
+
+// A production pane's border is in the production color, a zoomed one's too: production
+// is said over the rest (F17.9).
+func TestBlockProductionBorder(t *testing.T) {
+	th := *TokyonightStorm
+	th.Production = c("#010203") // not the error color it is by default
+	for _, tc := range []struct {
+		zoomed, prod bool
+		want         color.Color
+	}{{false, false, th.Border}, {true, false, th.Zoom}, {false, true, th.Production}, {true, true, th.Production}} {
+		f := NewFrame(30, 3, &th)
+		Block{Num: "1", Title: "data", Zoomed: tc.zoomed, Production: tc.prod}.Draw(f, uv.Rect(0, 0, 30, 3))
+		if got := f.Buf.CellAt(0, 1).Style.Fg; got != tc.want {
+			t.Errorf("zoomed %v production %v: border %v, want %v", tc.zoomed, tc.prod, got, tc.want)
 		}
 	}
 }
