@@ -145,6 +145,9 @@ func TestKeyPreview(t *testing.T) {
 		{"set", db.Changes{Deletes: [][]string{{"y"}}, Updates: []db.Row{row("x", chg("member", "x", "X"))}, Inserts: [][]db.Change{add("member", "n")}},
 			[]string{"SREM k y", "SREM k x", "SADD k X", "SADD k n"}},
 		{"stream", db.Changes{Deletes: [][]string{{"1-1"}}}, []string{"XDEL k 1-1"}},
+		// what is data is not a placeholder: a member called NaN, a value that reads <its value>
+		{"zset", db.Changes{Deletes: [][]string{{"NaN"}}, Updates: []db.Row{row("NaN", chg("member", "NaN", "n"))}}, []string{"ZREM k NaN", "ZREM k NaN", "ZADD k <its score> n"}},
+		{"hash", db.Changes{Inserts: [][]db.Change{add("field", "f", "value", "<its value>")}}, []string{`HSET k f "<its value>"`}},
 		{"", db.Changes{Deletes: [][]string{{"c"}}}, nil},
 		{"string", db.Changes{Inserts: [][]db.Change{add("value", "x")}}, nil}, // a string has one value: Save says so
 		{"hash", db.Changes{Updates: []db.Row{row("a", db.Change{Name: "value", Val: db.Val{Null: true}})}}, nil},

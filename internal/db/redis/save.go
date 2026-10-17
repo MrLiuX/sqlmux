@@ -111,8 +111,14 @@ type reader interface {
 	XRange(ctx context.Context, key, start, stop string) *goredis.XMessageSliceCmd
 }
 
-// deletedMark starts the value a list's deleted places hold until the one LREM.
-const deletedMark = "\x00sqlmux-deleted\x00"
+// deletedMark starts the value a list's deleted places hold until the one LREM; the
+// marks of Preview, of what is not told before the save, start with a NUL too, which
+// no value of a change has (writable): a placeholder is known by where it came from.
+const (
+	deletedMark = "\x00sqlmux-deleted\x00"
+	keptMark    = "\x00its value" // the value a rename keeps
+	scoreMark   = "\x00its score" // the score a rename keeps
+)
 
 // plan reads what the changes need of the key, on tx, which watches it, checks
 // that it is as it was loaded, and gives the commands that make the changes.
@@ -329,7 +335,7 @@ func plan(ctx context.Context, tx reader, typ, key string, ch db.Changes) (steps
 			if err != nil {
 				return nil, miss(owner, err)
 			}
-			score, rename := strconv.FormatFloat(cur, 'g', -1, 64), ""
+			score, rename := scoreText(cur), ""
 			for _, c := range r.Cols {
 				if err := writable(c); err != nil {
 					return nil, at(owner, err)
@@ -381,6 +387,15 @@ func plan(ctx context.Context, tx reader, typ, key string, ch db.Changes) (steps
 	return steps, nil
 }
 
+// scoreText is a score as ZADD takes it; the NaN that loaded says for one it does not
+// know, which no server gives, is scoreMark.
+func scoreText(f float64) string {
+	if math.IsNaN(f) {
+		return scoreMark
+	}
+	return strconv.FormatFloat(f, 'g', -1, 64)
+}
+
 // writable is whether a change's values can be written: a NULL cannot, and the
 // text of bytes is no bytes (§8.1).
 func writable(c db.Change) error {
@@ -428,7 +443,6 @@ func pair(r []db.Change, a, b string) (string, string, error) {
 // made. None when the tab knows no type, or plan would refuse ch, which Save then
 // says. What the changes do not give, the value or score a rename keeps and a
 // list's deleted places, is <its value>, <its score> and <deleted>.
-// ponytail: a score is NaN where it is not given, which Redis does not take as one.
 func (k Key) Preview(ch db.Changes) (out []string) {
 	steps, err := plan(context.Background(), loaded(ch), k.Type, k.Name, ch)
 	if err != nil {
@@ -448,15 +462,13 @@ func word(s string) string {
 	switch {
 	case strings.HasPrefix(s, deletedMark):
 		return "<deleted>"
-	case s == "NaN":
+	case s == keptMark:
+		return "<its value>"
+	case s == scoreMark:
 		return "<its score>"
-	case s == keptValue:
-		return s
 	}
 	return Quote(s)
 }
-
-const keptValue = "<its value>"
 
 // loaded is the key as the tab loaded it, as far as the changes tell: the entries
 // they name are there, holding what their old values say; a read with nothing to
@@ -502,7 +514,7 @@ func (l loaded) HExists(_ context.Context, _, field string) *goredis.BoolCmd {
 func (l loaded) HGet(_ context.Context, _, field string) *goredis.StringCmd {
 	v, ok := l.old(field, "value")
 	if !ok {
-		v = keptValue
+		v = keptMark
 	}
 	return goredis.NewStringResult(v, nil)
 }
