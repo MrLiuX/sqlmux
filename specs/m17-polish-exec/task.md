@@ -72,6 +72,8 @@
 **开发**
 - [ ] a. formula 和 npm 的描述改成四种引擎（和 README 第一句一致）。
 - [ ] b. `go install …@latest` 的 `--version`：没有 ldflags 时用 `debug.ReadBuildInfo` 的模块版本（`v0.5.0`）加 `vcs.revision` / `vcs.time`（有就用），都没有时只打版本不打 `(none, unknown)`。便宜就做，不便宜只做 a。
+- [ ] c. npm 的五个包都带 LICENSE（MIT 要附副本）：`npm/build.mjs` 给每个包 `cpSync` 一份仓库根的 LICENSE，壳包的 `files` 加上它（agmux 的审查 2026-10-17 顺手发现）。
+- [ ] d. brew formula 的 `ldflags` 加 `-s -w`：注释写着 `std_go_args` 会加，实际 brew 的 `go build` 不加，Cellar 里的二进制比 GoReleaser 的大约三成（同上来源）。
 
 **验收**
 - [ ] 单测：versionLine 对三种 BuildInfo 的输出表驱动。
