@@ -243,6 +243,10 @@ func TestExecConnectionConfig(t *testing.T) {
 	if err != nil || len(cs) != 1 || !cs[0].ReadOnly || cs[0].Dialect != "postgres" || len(cs[0].Command) != 4 || cs[0].Command[3] != "--sql={sql}" || cs[0].DSN != "" {
 		t.Fatalf("%+v %v", cs, err)
 	}
+	connectionsFile(t, "[[connection]]\nname = \"r\"\nengine = \"exec\"\ndialect = \"redis\"\ncommand = [\"doraemonctl\", \"exec\", \"redis\", \"--\", \"{cmd}\", \"{args...}\"]\n")
+	if cs, _, err := LoadConnections(""); err != nil || len(cs) != 1 || cs[0].Kind() != "redis" || !cs[0].ReadOnly {
+		t.Fatalf("redis dialect: %+v %v", cs, err)
+	}
 	for body, want := range map[string]string{
 		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ncommand = [\"x\", \"{sql}\"]\n":                               "dialect",
 		"[[connection]]\nname = \"p\"\nengine = \"exec\"\ndialect = \"mysql\"\ncommand = [\"x\", \"{sql}\"]\n":          "dialect",

@@ -31,6 +31,10 @@ func (quiet) Printf(context.Context, string, ...any) {}
 // Conn is one connection to a server.
 type Conn struct{ c *goredis.Client }
 
+// NewConn is the connection of a client that something other than a server on the
+// network answers, as exec's command is (§8.8).
+func NewConn(c *goredis.Client) *Conn { return &Conn{c: c} }
+
 // Driver is db.Driver for Redis (§5「连接缝」): no Engine, nothing in it is
 // SQL.
 type Driver struct{}

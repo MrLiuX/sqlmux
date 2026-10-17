@@ -43,6 +43,15 @@ type Connection struct {
 	Database string `toml:"-"`
 }
 
+// Kind is the engine whose catalog and commands c speaks: its Engine, or an exec
+// connection's dialect (§8.8).
+func (c Connection) Kind() string {
+	if c.Engine == "exec" {
+		return c.Dialect
+	}
+	return c.Engine
+}
+
 // UnknownKeys are the lines that say which keys of config.toml, and of each
 // connection of connections.toml, nothing reads: `readonly` for `read_only`
 // reads a connection that is writable, with no word. The files are the ones
@@ -211,11 +220,12 @@ func (c Connection) Check(names []string) (field, problem string) {
 		return "engine", fmt.Sprintf(i18n.T("engine = %q：只能是 postgres、mysql、sqlite、redis 或 exec"), c.Engine)
 	}
 	if c.Engine == "exec" {
+		place := map[string]string{"postgres": "{sql}", "redis": "{cmd}"}[c.Dialect]
 		switch {
-		case c.Dialect != "postgres":
-			return "dialect", fmt.Sprintf(i18n.T("dialect = %q：exec 只认 postgres"), c.Dialect)
-		case !slices.ContainsFunc(c.Command, func(a string) bool { return strings.Contains(a, "{sql}") }):
-			return "command", i18n.T("exec 的 command 是 argv 数组，里面要有 {sql}")
+		case place == "":
+			return "dialect", fmt.Sprintf(i18n.T("dialect = %q：exec 只认 postgres 和 redis"), c.Dialect)
+		case !slices.ContainsFunc(c.Command, func(a string) bool { return strings.Contains(a, place) }):
+			return "command", fmt.Sprintf(i18n.T("exec 的 command 是 argv 数组，里面要有 %s"), place)
 		}
 	} else if c.Dialect != "" || len(c.Command) > 0 {
 		return "command", i18n.T("dialect 和 command 只对 exec 连接有用")

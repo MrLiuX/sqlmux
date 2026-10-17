@@ -785,7 +785,7 @@ func (a *App) managerView() ui.ConnManager {
 	m := ui.ConnManager{Title: i18n.T("连接"), Sel: f.cur, Top: f.top, ListFocus: f.list, Form: a.formView()}
 	group := ""
 	for _, c := range a.managed() {
-		row := ui.ConnRow{Icon: ic.Engine(c.Spec.Engine), Name: c.Spec.Name}
+		row := ui.ConnRow{Icon: ic.Engine(c.Spec.Kind()), Name: c.Spec.Name}
 		if g := c.Spec.Group; g != group { // a rule where a group begins, as in the tree (F10.6)
 			group, row.Rule, row.Group = g, true, g
 		}

@@ -387,7 +387,7 @@ func (c *Conn) setSpec(spec config.Connection) {
 
 // redis is whether c is a connection to Redis, dialed or not: its db nodes
 // have keys under them, not schemas (F16.2).
-func (c *Conn) redis() bool { return c.Spec.Engine == "redis" }
+func (c *Conn) redis() bool { return c.Spec.Kind() == "redis" }
 
 // sql is whether c is a SQL connection: what is SQL's, a catalog, a query's
 // statements, quick SQL, a WHERE, asks it (§5「连接缝」, F16.1).
@@ -432,6 +432,9 @@ var drivers = map[string]db.Driver{"postgres": postgres.Engine{}, "mysql": mysql
 // dialect over its command (§8.8).
 func driverOf(spec config.Connection) db.Driver {
 	if spec.Engine == "exec" {
+		if spec.Dialect == "redis" {
+			return dbexec.RedisDriver{Command: spec.Command}
+		}
 		return dbexec.Engine{Engine: postgres.Engine{}, Command: spec.Command}
 	}
 	return drivers[spec.Engine]
@@ -833,7 +836,7 @@ func connectTo(ctx context.Context, spec config.Connection, readOnly bool) (db.C
 	dsn := spec.DSN
 	if spec.Database != "" { // a child of the connection in the tree: PG's database, Redis's db (F15.1, F16.2)
 		withDB := postgres.WithDatabase
-		if spec.Engine == "redis" {
+		if spec.Kind() == "redis" {
 			withDB = redis.WithDB
 		}
 		if dsn, err = withDB(dsn, spec.Database); err != nil {

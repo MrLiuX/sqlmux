@@ -334,7 +334,7 @@ func (a *App) dropNote(i int) string {
 
 // connIcon is the connection dropdown's icon for item i, connection i's
 // engine's (§7.8「query 标题」).
-func (a *App) connIcon(i int) ui.Icon { return a.icons.Engine(a.sess.Conns[i].Spec.Engine) }
+func (a *App) connIcon(i int) ui.Icon { return a.icons.Engine(a.sess.Conns[i].Spec.Kind()) }
 
 func (a *App) dropView() ui.Dropdown {
 	v := ui.Dropdown{Search: a.icons.Search, Input: a.drop.input, Typing: true, Mark: -1, Sel: a.drop.sel, Top: a.drop.top}
