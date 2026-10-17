@@ -98,6 +98,15 @@ SH
   # F15.4: the status bar shows a random tip that changes by itself, which would fail its assertions at random; [ui] is a table, so
   # it goes at the END of config.toml. A script's own [ui] section (the one that tests the tips) is left alone.
   grep -qs '^\[ui\]' "$E2E_TMP/config/sqlmux/config.toml" || printf '\n[ui]\ntips = false\n' >>"$E2E_TMP/config/sqlmux/config.toml"
+  # F17.10: a save shows its statements first by default. The older scripts save on purpose, so they get [grid] preview_save = false
+  # unless the script's own config.toml says one; E2E_PREVIEW_SAVE=1 skips it (f17.10 and f17.9 test the box). [grid] is a table, so
+  # the line goes right under its header when there is one, else at the end.
+  [[ -n $E2E_PREVIEW_SAVE ]] || grep -qs '^preview_save' "$E2E_TMP/config/sqlmux/config.toml" || python3 - "$E2E_TMP/config/sqlmux/config.toml" <<'PY'
+import re, sys
+p = sys.argv[1]; s = open(p).read()
+s = re.sub(r"^\[grid\][ \t]*$", "[grid]\npreview_save = false", s, count=1, flags=re.M) if re.search(r"^\[grid\][ \t]*$", s, re.M) else s + "\n[grid]\npreview_save = false\n"
+open(p, "w").write(s)
+PY
   t -f /dev/null set -s extended-keys "$keys" \; new-session -d -s t -x "$w" -y "$h" \
     -e XDG_CONFIG_HOME="$E2E_TMP/config" -e XDG_STATE_HOME="${state:-$E2E_TMP/state}" \
     -e XDG_DATA_HOME="${data:-$E2E_TMP/data}" -e E2E_PATH="${path:-$E2E_TMP/bin:$PATH}" -e COLORTERM=truecolor -e HISTFILE=/dev/null -e E2E_DIR="$E2E_TMP" \
