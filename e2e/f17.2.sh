@@ -67,11 +67,22 @@ key Escape; key Escape; sleep 0.3
 # ---- C-t：结果区里多一个 quick #N tab；C-e：开成控制台（query）tab，里面是这一行
 qs "LRANGE list:queue 0 -1"
 e2e_keys C-t; sleep 1.5; key Escape; sleep 0.6
-check "C-t：结果区里多了 quick #1，五行 first … fifth" eval 'e2e_plain | grep -q "quick #1" && e2e_plain | grep -q "5 行 · " && e2e_plain | grep -q "│ 5 │ fifth"' || e2e_plain | sed -n 22,40p | cut -c30-140
+check "C-t：结果区里多了 quick #1，五行 first … fifth" eval 'e2e_plain | grep -q "quick #1" && e2e_plain | grep -q "5 行 · " && e2e_plain | grep -q "│ 5 │ fifth" || { e2e_plain | sed -n 22,40p | cut -c30-140; false; }'
+# ---- C-t 开出的结果 tab 上 R：只读命令重跑，有副作用的只给 toast
+qs "GET str:plain"; e2e_keys C-t; sleep 1.5; key Escape; sleep 0.6
+rc set str:plain "changed outside" >/dev/null
+e2e_click 60 31; sleep 0.3; key R; sleep 1.5
+check "结果 tab 上 R：只读命令（GET）重跑，格子里是新值 changed outside" eval 'e2e_plain | grep -q "changed outside"' || { e2e_plain | tail -12 | cut -c30-160; false; }
+qs "SET sk 1"; e2e_keys C-t; sleep 1.5; key Escape; sleep 0.6
+rc set sk 2 >/dev/null
+e2e_click 60 31; sleep 0.3; key R; sleep 1.5
+check "结果 tab 上 R：有副作用的命令（SET）不重跑（库里还是 2），给 toast" eval '[[ $(rc get sk) == 2 ]] && ! e2e_plain | grep -q "│ +1 │ OK.*│ +2 │" ' || { rc get sk; e2e_plain | tail -4 | cut -c1-170; false; }
+qs "AUTH hunter2"
 qs "HGETALL hash:user"
 key C-e; sleep 1.5
 check "C-e：开出 query_2（控制台），里面是这一行 HGETALL hash:user，面板关了" eval '! is_open && e2e_plain | grep -q "query_2" && e2e_plain | grep -q "HGETALL hash:user" || { e2e_plain | sed -n 1,3p | cut -c1-170; false; }'
 quit_app
+check "AUTH hunter2 的行不在 history.jsonl 里（没有 hunter2），GET str:plain 在" eval 'f=$(ls "$D/dt"/sqlmux/history.jsonl) && ! grep -qi "hunter2" "$f" && grep -q "\"sql\":\"GET str:plain\"" "$f"' || { grep -i auth "$D/dt"/sqlmux/history.jsonl; false; }
 check "历史：history.jsonl 里有 HGETALL hash:user（db0，不带 db 字段）和 LRANGE list:queue 0 -1" eval 'f=$(ls "$D/dt"/sqlmux/history.jsonl) && grep -q "\"sql\":\"HGETALL hash:user\"" "$f" && grep -q "\"sql\":\"LRANGE list:queue 0 -1\"" "$f" && ! grep -q "\"db\"" "$f" || { tail -4 "$D/dt"/sqlmux/history.jsonl; false; }'
 _e2e_kill
 

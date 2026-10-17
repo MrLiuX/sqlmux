@@ -28,7 +28,7 @@ check "（准备）@t_w：十四张表，第一项 t_w01 选中，预览是它�
 e2e_wheel "$(px)" "$(pick_y 4)" down; sleep 0.5
 check "预览区上滚轮向下：预览往下滚（第一行变成 …），选中项不动（还是 t_w01）" eval '[[ $(pv1) == "…" && $(sel) == t_w01 ]] || { pv1; sel; false; }'
 e2e_wheel "$(px)" "$(pick_y 4)" down; sleep 0.4; e2e_wheel "$(px)" "$(pick_y 4)" down; sleep 0.4
-check "再滚两下：更靠后（第二行的列号变大了）" eval 'preview | sed -n 2p | grep -qE "c(0[7-9]|1[0-9]|2[0-9])"' || preview | head -3
+check "再滚两下：更靠后（第二行的列号变大了）" eval 'preview | sed -n 2p | grep -qE "c(0[7-9]|1[0-9]|2[0-9])" || { preview | head -3; false; }'
 e2e_wheel "$(px)" "$(pick_y 4)" up; sleep 0.4; e2e_wheel "$(px)" "$(pick_y 4)" up; sleep 0.4; e2e_wheel "$(px)" "$(pick_y 4)" up; sleep 0.4
 check "向上滚回去：回到开头，第一行是 create table，选中项没动" eval 'first_is "create table public.t_w01 (" && [[ $(sel) == t_w01 ]]'
 
@@ -50,14 +50,28 @@ check "x 是编辑器的按键（删一个字符都不行：只读），不进�
 e2e_type '"+yy'; sleep 0.8
 check "\"+yy：光标那一行（第三行，  c02 integer,）进了（假）系统剪贴板" eval '[[ $(clip) == "  c02 integer," ]] || { echo "  clip: [$(clip)]"; false; }'
 e2e_type "/c05"; key Enter; sleep 0.5
-check "/c05 ↵：搜索，预览里亮出命中（底行 /c05 [1/1]），光标移到 c05 那一行" eval 'preview | tail -1 | grep -q "/c05" && preview | tail -1 | grep -q "\[1/1\]"' || preview | tail -2
+check "/c05 ↵：搜索，预览里亮出命中（底行 /c05 [1/1]），光标移到 c05 那一行" eval 'preview | tail -1 | grep -q "/c05" && preview | tail -1 | grep -q "\[1/1\]" || { preview | tail -2; false; }'
 key Escape; sleep 0.4
-check "esc（搜索高亮亮着）：先清搜索，还在预览里（编辑器、行号都在）" eval 'editor && ! preview | tail -1 | grep -q "/c05"' || preview | tail -2
+check "esc（搜索高亮亮着）：先清搜索，还在预览里（编辑器、行号都在）" eval 'editor && ! preview | tail -1 | grep -q "/c05" || { preview | tail -2; false; }'
 key Escape; sleep 0.4
 check "再 esc：回列表，预览不再是编辑器（没有行号）" eval '! editor && [[ $(sel) == t_w01 ]]'
 e2e_type x; sleep 0.5
 check "之后打字进输入框（@t_wx），列表过滤掉了（焦点在输入框上）" eval 'input_is "@t_wx"'
 e2e_keys BSpace; sleep 0.8
+
+# ---- 焦点在预览里：:q 回列表；面板底下的 pane / 窗口不被动到；? 是反向搜索
+panes() { e2e_panes | awk '$1 != "-"' | wc -l | tr -d ' '; }
+np=$(panes); tb=$(e2e_plain | tail -2 | head -1 | cut -c1-60)
+e2e_keys C-o; sleep 0.5
+e2e_type ":q"; key Enter; sleep 0.5
+check ":q（预览里的 vim）：回列表，不是关面板，不是编辑器了" eval 'is_open && ! editor && input_is "@t_w"' || { input; editor && echo editor; false; }
+e2e_keys C-o; sleep 0.5
+key Space; e2e_type c; sleep 0.5; key g t; sleep 0.3; key C-h; sleep 0.3; key C-l; sleep 0.3
+check "焦点在预览区：Space c、gt、C-h、C-l 都是预览自己的（vim 里没有这些），面板底下的 pane 数和窗口栏没变，还在预览里" eval '[[ $(panes) == "$np" && $(e2e_plain | tail -2 | head -1 | cut -c1-60) == "$tb" ]] && editor && is_open' || { panes; echo "want $np"; false; }
+e2e_type "?c05"; key Enter; sleep 0.5
+check "? 是 vim 的反向搜索：底行 ?c05，命中亮出来" eval 'preview | tail -1 | grep -qF "?c05"' || { preview | tail -2; false; }
+key Escape; key Escape; sleep 0.5
+check "（收尾）esc esc 回列表" eval '! editor && is_open'
 
 # ---- 焦点在预览里，鼠标移到列表别的一行（悬停选中）：候选换了，预览重载、焦点回列表
 e2e_keys C-o; sleep 0.5

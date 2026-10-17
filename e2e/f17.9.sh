@@ -89,6 +89,9 @@ lite "update t_user set name = 'alice' where id = 1; update t_user set name = 'b
 sstart prod
 open_table t_user; wait_for 8 settled
 check "prod：焦点 pane 的边框、tab 标题、状态栏的连接块都是 production 色（默认同 error，$RED）" eval '[[ $(marks prod) == "$RED $RED $RED" ]] || { marks prod; false; }'
+key Escape; e2e_keys Space; e2e_type z; sleep 0.8
+check "prod：pane 放大（SPC z）时边框也是 production 色" eval '[[ $(marks prod | cut -d" " -f1) == "$RED" ]] || { marks prod; e2e_panes | head -3; false; }'
+e2e_keys Space; e2e_type z; sleep 0.6
 key l; edit zed; key Enter; sleep 0.3; key C-s; sleep 1.5
 check "prod：改一格 C-s：弹框，标题「prod 是生产连接」，正文是预览「保存到 t_user：改 1 行」和语句（preview_save = false 也一样，关不掉），库里还没动" eval 'confirm_open && box_has "prod 是生产连接" && box_has "保存到 t_user：改 1 行" && box_has "update \"main\".\"t_user\" set \"name\" = '"'zed'"'" && [[ $(lite "select name from t_user where id = 1") == alice ]] || { e2e_plain | sed -n 12,28p | cut -c25-150; false; }'
 key n; sleep 0.6
@@ -158,6 +161,13 @@ rclick 10 "$y"; sleep 0.5; menu_click "设 TTL…"; sleep 0.8; e2e_type "100"; k
 check "rdp：设 TTL：先问「设置键 str:plain 的 TTL：100？」" eval 'confirm_open && box_has "rdp 是生产连接" && box_has "TTL：100" || { e2e_plain | sed -n 12,26p | cut -c20-150; false; }'
 key y; sleep 1.2
 check "y：TTL 设上了（100 秒以内）" eval '(( $(rc ttl str:plain) > 0 && $(rc ttl str:plain) <= 100 ))'
+rclick 10 "$y"; sleep 0.5; menu_click "设 TTL…"; sleep 0.8; key Enter; sleep 0.8
+check "rdp：设 TTL 留空（不过期）：确认写「不过期」" eval 'confirm_open && box_has "rdp 是生产连接" && box_has "不过期"' || { e2e_plain | sed -n 12,26p | cut -c20-150; false; }
+key n; sleep 0.5
+ny=$(nth_row '^[▸▾] +hash( |$)'); rclick 10 "$ny"; sleep 0.5; menu_click "删除…"; sleep 0.8
+check "rdp：树上删命名空间：标题「rdp 是生产连接」，列出要删的命名空间" eval 'confirm_open && box_has "rdp 是生产连接" && box_has "hash"' || { e2e_plain | sed -n 12,26p | cut -c20-150; false; }
+key n; sleep 0.5
+check "n：hash 下面的键都还在（hash:user 还在）" eval '[[ $(rc exists hash:user) == 1 ]]'
 rclick 10 "$y"; sleep 0.5; menu_click "删除…"; sleep 0.8; key y; sleep 1.2
 check "删除键 y：键没了" eval '[[ $(rc exists str:plain) == 0 ]]'
 runq "SET newk 1"

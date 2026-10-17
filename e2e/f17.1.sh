@@ -20,6 +20,9 @@ check "三个 tab 放得下：没有 ‹N / N›" eval '[[ $(bar) == "1:t_user �
 for t in t_sku t_log t_kv t_misc t_note; do pal_tab $t; done
 check "八个 tab 放不下：当前（8）在，左边藏了 4 个（‹4），右边没有 ›" eval '[[ $(bar) == "‹4 5:t_log │ 6:t_kv │ 7:t_misc- │ 8:t_note*" ]] || { bar; false; }'
 check "标题是当前 tab 的表" eval '[[ $(title) == *"t_note"* ]]'
+B8=$(bar); tx=$(tab_x 1 "8:"); e2e_move $((tx + 8)) "$(tab_y 1)"; sleep 0.6
+check "悬停在最后一个 tab 上（× 出来的地方）：整条栏不动（‹4 和各 tab 的位置不变，当前 tab 的 * 悬停时是 ×）" eval '[[ $(bar | sed "s/t_note.*/t_note/") == "$(echo "$B8" | sed "s/t_note.*/t_note/")" && $(bar) == "‹4 "* ]] || { bar; echo "want $B8"; false; }'
+e2e_move 5 5; sleep 0.3
 
 key 1 g t
 check "1gt：滚回开头，当前（1）在，右边藏了 5 个（5›），左边没有 ‹" eval '[[ $(bar) == "1:t_user* │ 2:t_order │ 3:t_order_item │ 5›" ]] || { bar; false; }'

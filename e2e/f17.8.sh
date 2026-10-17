@@ -18,6 +18,9 @@ import json, socket, sys
 log, port = sys.argv[1], int(sys.argv[2])
 words = sys.argv[4:] if len(sys.argv) > 3 and sys.argv[3] == "--" else sys.argv[3:]
 with open(log, "a") as f: f.write(" ".join(words) + "\n")
+import os
+if os.path.exists(log + ".deny") and words[0].upper() == "COMMAND":
+    sys.stderr.write("denied: COMMAND is not for you\n"); sys.exit(2)
 if any(w.upper() == "FAILME" for w in words):
     sys.stderr.write("denied: FAILME is not for you\n"); sys.exit(2)
 s = socket.create_connection(("127.0.0.1", port)); rf = s.makefile("rb")
@@ -93,5 +96,23 @@ check "GET FAILME：命令失败（退出码 2）：stderr 原文显示（denied
 runq "DBSIZE"
 check "之后接着跑：DBSIZE → 29（每条命令一个子进程，连接还能用）" eval 'e2e_plain | grep -qE "│ +1 │ 29" || { e2e_plain | tail -8 | cut -c60-170; false; }'
 check "整场假命令收到的命令里：没有任何写命令（SET / DEL / HSET / EXPIRE / RENAME …）" eval '! lg | grep -qiE "^(set|del|hset|hdel|expire|rename|flush|lpush|sadd|zadd) " || { lg | grep -iE "^(set|del|hset|hdel|expire|rename|flush)" | head; false; }'
+quit_app
+_e2e_kill
+
+# ---- SELECT 别的 db：报错，也不交给命令
+e2e_start -C "$D/c" "$E2E_BIN rdx"; wait_for 8 flag_is alternate_on 1; sleep 3
+runq "SELECT 3"
+check "SELECT 3：报「exec 连接只有 db 0」，命令没有收到 SELECT" eval 'e2e_plain | tr -d " \n" | grep -qF "只有db0" || e2e_plain | tr -d " \n" | grep -qiF "db0only"' || { e2e_plain | tail -8 | cut -c60-200; lg | tail -2; false; }
+check "（日志里没有 select）" eval '! lg | grep -qi "^select "'
+quit_app
+_e2e_kill
+
+# ---- COMMAND 被拒：toast「读不到命令列表」，所有命令都按写处理，只读连接上控制台一律不发
+touch "$LOG.deny"; n0=$(lg | wc -l)
+e2e_start -C "$D/c" "$E2E_BIN rdx"; wait_for 8 flag_is alternate_on 1; sleep 1.2
+check "COMMAND 被命令拒了：启动时 toast「读不到命令列表」" eval 'e2e_plain | tr -d " \n" | grep -qF "读不到命令列表"' || { e2e_plain | tail -3 | cut -c1-200; false; }
+sleep 3
+runq "GET str:plain"
+check "之后控制台里连 GET 也不发（所有命令按写处理，rdx 只读）：报「rdx 是只读连接」，命令没收到 GET" eval 'has "rdx 是只读连接" && ! tail -n +$((n0 + 1)) "$LOG" | grep -qi "^get str:plain"' || { e2e_plain | tail -6 | cut -c60-200; lg | tail -3; false; }
 quit_app
 e2e_done
