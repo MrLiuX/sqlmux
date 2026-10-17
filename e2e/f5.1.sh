@@ -39,9 +39,9 @@ setsql() { key Escape; key g g; key d G; key i; paste "$1"; key Escape; key g g;
 start -C "$D/c"; open_table t_order; key 3 j; key l
 check "启动：一个 session doraemon，它的连接有 Meta、Main 两条" eval 'sname_is doraemon && [[ $(conns) == 2 ]]'
 sl
-check "SPC s：session 列表，一行「doraemon  1 windows」，光标在当前 session 上" eval 'slist_open && rows_are "doraemon  1 windows|1;"'
+check "SPC s：session 列表，一行「doraemon  1 个窗口」，光标在当前 session 上" eval 'slist_open && rows_are "doraemon  1 个窗口|1;"'
 key n; sleep 0.4; key Enter
-check "n 再 ↵（F10.2：先要名字，预填 1）：列表关掉，toast「正在连接 doraemon…」" eval '! slist_open && toast_is "正在连接 doraemon…"'
+check "n 再 ↵（F10.2：先要名字，预填 1）：列表关掉（toast「正在连接 doraemon…」连上就消失，F17.4，所以不再看它：慢连接的那条在 f17.4）" eval '! slist_open'
 wait_for 6 eval '[[ $(sname) == 1 ]]'; sleep 0.5
 check "连上之后 attach 新 session：名字 1（最小的没用过的数字），一个 window 0: data*" eval 'sname_is 1 && [[ $(wins) == "0: data*" ]]'
 check "新 session 只有侧栏和一个空 pane ①（引导页），没有 query（F8.18）" eval '[[ $(e2e_panes | awk "\$1 != \"-\" { print \$1 }" | tr "\n" " ") == "0 1 " ]] && [[ $(tabbar 1) != *query* ]] && e2e_plain | grep -q "打开表"'
@@ -53,7 +53,7 @@ check "新 session 连上当前连接并展开（侧栏有 Tables (6)），它�
 # ---- 两个 session 来回切：各自的界面不变
 open_table t_user; key 2 j
 sl
-check "两个 session，光标在当前的 1 上" rows_are "doraemon  1 windows|0;1  1 windows|1;"
+check "两个 session，光标在当前的 1 上" rows_are "doraemon  1 个窗口|0;1  1 个窗口|1;"
 key k; key Enter
 check "k ↵：attach doraemon、列表关掉；它的界面原样：① t_order、光标 4,2，② query_1" eval '! slist_open && sname_is doraemon && [[ $(title1) == *" t_order ─"* ]] && pos_is 4,2 && tabs_are 2 "1:query_1*"'
 e2e_click 3 "$(H)"; sleep 0.4
@@ -65,11 +65,11 @@ check "单击 1 那一行：attach 1、列表关掉；它的界面原样：① t
 key Space; e2e_type c; sleep 0.5
 check "（准备）SPC c：1 有两个 window，当前是新的那个" eval '[[ $(wins) == "0: data  1: data-2*" ]]'
 sl; key k; key Enter; sl; key j; key l
-check "l：展开 1，下面一级是它的两个 window（缩进）" rows_are "doraemon  1 windows|0;1  2 windows|1;  0: data|0;  1: data-2|0;"
+check "l：展开 1，下面一级是它的两个 window（缩进）" rows_are "doraemon  1 个窗口|0;1  2 个窗口|1;  0: data|0;  1: data-2|0;"
 key j; key h
-check "window 行上 h：回到它的 session 行并收起" rows_are "doraemon  1 windows|0;1  2 windows|1;"
+check "window 行上 h：回到它的 session 行并收起" rows_are "doraemon  1 个窗口|0;1  2 个窗口|1;"
 key l; key k; key l
-check "两个都展开：每个 session 都标出它自己的当前 window（focus 色）：doraemon 的 0、1 的 1" eval 'rows_are "doraemon  1 windows|1;  0: data|0;1  2 windows|0;  0: data|0;  1: data-2|0;" && g=($(box)) && style_has $((g[0] + 4)) $((g[1] + 2)) fg=$FOCUS && style_has $((g[0] + 4)) $((g[1] + 5)) fg=$FOCUS && ! style_has $((g[0] + 4)) $((g[1] + 4)) fg=$FOCUS >/dev/null'
+check "两个都展开：每个 session 都标出它自己的当前 window（focus 色）：doraemon 的 0、1 的 1" eval 'rows_are "doraemon  1 个窗口|1;  0: data|0;1  2 个窗口|0;  0: data|0;  1: data-2|0;" && g=($(box)) && style_has $((g[0] + 4)) $((g[1] + 2)) fg=$FOCUS && style_has $((g[0] + 4)) $((g[1] + 5)) fg=$FOCUS && ! style_has $((g[0] + 4)) $((g[1] + 4)) fg=$FOCUS >/dev/null'
 key j; key j; key j; key Enter
 check "停在 1 的 window 0 上 ↵：attach 1 并切到 window 0" eval '! slist_open && sname_is 1 && [[ $(wins) == "0: data*  1: data-2" ]]'
 e2e_keys Space; e2e_type l; sleep 0.4
@@ -79,22 +79,22 @@ check "之后 SPC l 回得去：回到 1 原来的 window 1" eval '[[ $(wins) ==
 sl; e2e_type '$'; sleep 0.3
 check "\$：这一行原地变成输入框，模式 INSERT" eval 'mode_is INSERT && [[ $(srows | sed -n 2p) == 1* ]]'
 clr; e2e_type doraemon; key Enter
-check "改成已有的 doraemon：toast「已有同名 session」，名字不变" eval 'toast_is "已有同名 session" && rows_are "doraemon  1 windows|0;1  2 windows|1;" && sname_is 1'
+check "改成已有的 doraemon：toast「已有同名 session」，名字不变" eval 'toast_is "已有同名 session" && rows_are "doraemon  1 个窗口|0;1  2 个窗口|1;" && sname_is 1'
 e2e_type '$'; clr; key Enter
-check "清空后 ↵：等于放弃，名字不变" rows_are "doraemon  1 windows|0;1  2 windows|1;"
+check "清空后 ↵：等于放弃，名字不变" rows_are "doraemon  1 个窗口|0;1  2 个窗口|1;"
 e2e_type '$'; e2e_type xyz; key Escape
-check "esc：放弃，名字不变，列表还开着" eval 'slist_open && rows_are "doraemon  1 windows|0;1  2 windows|1;" && mode_is COMMAND'
+check "esc：放弃，名字不变，列表还开着" eval 'slist_open && rows_are "doraemon  1 个窗口|0;1  2 个窗口|1;" && mode_is COMMAND'
 e2e_type '$'; clr; e2e_type work; key Enter
-check "改成 work（k 进了输入框，不是上移）：这一行和状态栏的 session 块都变成 work" eval 'rows_are "doraemon  1 windows|0;work  2 windows|1;" && sname_is work'
+check "改成 work（k 进了输入框，不是上移）：这一行和状态栏的 session 块都变成 work" eval 'rows_are "doraemon  1 个窗口|0;work  2 个窗口|1;" && sname_is work'
 key l; key j; e2e_type '$'; sleep 0.3
-check "window 行上 \$：不做事" eval 'mode_is COMMAND && rows_are "doraemon  1 windows|0;work  2 windows|0;  0: data|1;  1: data-2|0;"'
+check "window 行上 \$：不做事" eval 'mode_is COMMAND && rows_are "doraemon  1 个窗口|0;work  2 个窗口|0;  0: data|1;  1: data-2|0;"'
 key h; key Escape
 
 # ---- 面板的会话范围（§12）
 pal '$'
-check "\$ 范围：只列 session，名称是 session 名、所在位置是 window 数、类型标签「会话」；底栏「↵ 切换」" eval '[[ $(kinds) == "会话 " && $(list | cut -d"|" -f1 | tr "\n" ";") == "doraemon  1 windows  会话;work  2 windows  会话;" && $(footer) == *"↵ 切换 " ]] || { echo "  footer: $(footer)"; false; }'
+check "\$ 范围：只列 session，名称是 session 名、所在位置是 window 数、类型标签「会话」；底栏「↵ 切换」" eval '[[ $(kinds) == "会话 " && $(list | cut -d"|" -f1 | tr "\n" ";") == "doraemon  1 个窗口  会话;work  2 个窗口  会话;" && $(footer) == *"↵ 切换 " ]] || { echo "  footer: $(footer)"; false; }'
 clear_input; sleep 0.3
-check "「所有」范围也列 session" eval 'list | grep -q "^doraemon  1 windows  会话|" && list | grep -q "^work  2 windows  会话|"'
+check "「所有」范围也列 session" eval 'list | grep -q "^doraemon  1 个窗口  会话|" && list | grep -q "^work  2 个窗口  会话|"'
 e2e_type '$dor'; sleep 0.3; key Enter
 check "在 doraemon 上 ↵：attach，面板关掉" eval 'closed && sname_is doraemon && [[ $(title1) == *" t_order ─"* ]]'
 pal '$doraemon'; key Enter
@@ -104,15 +104,15 @@ check "在当前 session 上 ↵：只关面板" eval 'closed && sname_is doraem
 sl; new_session 1; sl; new_session 2
 check "再建两个：名字 1、2，库里 4 个 session 共 8 条连接" eval 'sname_is 2 && [[ $(conns) == 8 ]]'
 sl; key k; key x; wait_for 3 eval '[[ $(conns) == 6 ]]'
-check "x 关掉不是当前的 1：列表还开着、光标落到下一行（2），当前还是 2，它的两条连接关掉了" eval 'slist_open && rows_are "doraemon  1 windows|0;work  2 windows|0;2  1 windows|1;" && sname_is 2 && [[ $(conns) == 6 ]]'
+check "x 关掉不是当前的 1：列表还开着、光标落到下一行（2），当前还是 2，它的两条连接关掉了" eval 'slist_open && rows_are "doraemon  1 个窗口|0;work  2 个窗口|0;2  1 个窗口|1;" && sname_is 2 && [[ $(conns) == 6 ]]'
 new_session 1
-check "关掉 1 之后再 n：新 session 又叫 1，排在最后" eval 'sname_is 1 && { sl; rows_are "doraemon  1 windows|0;work  2 windows|0;2  1 windows|0;1  1 windows|1;"; }'
+check "关掉 1 之后再 n：新 session 又叫 1，排在最后" eval 'sname_is 1 && { sl; rows_are "doraemon  1 个窗口|0;work  2 个窗口|0;2  1 个窗口|0;1  1 个窗口|1;"; }'
 key k; key k; key Enter; sl
-check "（准备）attach work，光标在第 2 行" rows_are "doraemon  1 windows|0;work  2 windows|1;2  1 windows|0;1  1 windows|0;"
+check "（准备）attach work，光标在第 2 行" rows_are "doraemon  1 个窗口|0;work  2 个窗口|1;2  1 个窗口|0;1  1 个窗口|0;"
 key x
-check "x 关掉当前的 work：attach 它的上一个 doraemon，列表还开着、光标留在第 2 行" eval 'slist_open && sname_is doraemon && rows_are "doraemon  1 windows|0;2  1 windows|1;1  1 windows|0;"'
+check "x 关掉当前的 work：attach 它的上一个 doraemon，列表还开着、光标留在第 2 行" eval 'slist_open && sname_is doraemon && rows_are "doraemon  1 个窗口|0;2  1 个窗口|1;1  1 个窗口|0;"'
 key k; key x
-check "x 关掉当前的、排第一的 doraemon：attach 它的下一个 2" eval 'slist_open && sname_is 2 && rows_are "2  1 windows|1;1  1 windows|0;"'
+check "x 关掉当前的、排第一的 doraemon：attach 它的下一个 2" eval 'slist_open && sname_is 2 && rows_are "2  1 个窗口|1;1  1 个窗口|0;"'
 
 # ---- 有未保存的修改先确认；关之前把 query 写盘
 key Escape; layout; key C-h; open_table t_user; key l; key Enter; e2e_type x; key Enter   # 2 的 ① t_user 改一格
@@ -120,9 +120,9 @@ key C-l; key i; e2e_type "select 42"; key Escape; cf=$(tabbar 2 | sed 's/^1://; 
 sl; e2e_type x; sleep 0.4
 check "x 关掉有修改的 2：确认框「2 里有 1 处修改未保存，关闭会丢弃。」y 关闭" eval 'e2e_plain | grep -q "│ *2 里有 1 处修改未保存，关闭会丢弃。" && e2e_plain | grep -q "y 关闭   n 取消"'
 key n
-check "n：取消，两个 session 都在" eval '! e2e_plain | grep -q 处修改未保存 && rows_are "2  1 windows|1;1  1 windows|0;"'
+check "n：取消，两个 session 都在" eval '! e2e_plain | grep -q 处修改未保存 && rows_are "2  1 个窗口|1;1  1 个窗口|0;"'
 e2e_type x; sleep 0.3; key y
-check "再按 x、y：关掉 2，attach 1；2 的 query 写了盘" eval 'sname_is 1 && rows_are "1  1 windows|1;" && grep -q "select 42" "$E2E_TMP/data/sqlmux/queries/$cf.sql"'
+check "再按 x、y：关掉 2，attach 1；2 的 query 写了盘" eval 'sname_is 1 && rows_are "1  1 个窗口|1;" && grep -q "select 42" "$E2E_TMP/data/sqlmux/queries/$cf.sql"'
 key x
 check "x 关掉最后一个 session：等于退出，连接都关了" eval 'wait_for 3 exited && wait_for 3 eval "[[ \$(conns) == 0 ]]"'
 
@@ -157,7 +157,7 @@ sl; new_session 1; layout; setsql "select count(*) from t_order"
 e2e_lock t_order; key Enter; key C-h; pal "@t_order"; key Enter; sleep 0.5               # ② 的查询、① 的取数都在等锁
 check "（准备）1 里 query 和表格都在等锁：busy" eval 'sname_is 1 && [[ $(bar) == *busy* ]]'
 sl; e2e_type x; sleep 0.6
-check "x 关掉 1：不另确认，attach doraemon，列表留着，没有「查询已取消」" eval 'slist_open && rows_are "doraemon  1 windows|1;" && ! e2e_plain | grep -q 关闭会 && [[ $(toast_row) != *取消* ]]'
+check "x 关掉 1：不另确认，attach doraemon，列表留着，没有「查询已取消」" eval 'slist_open && rows_are "doraemon  1 个窗口|1;" && ! e2e_plain | grep -q 关闭会 && [[ $(toast_row) != *取消* ]]'
 key Escape; e2e_unlock; sleep 1.5
 check "锁放开、迟到的应答回来：doraemon 里没有提示、没有 busy，布局不变" eval '[[ $(toast_row) != *取消* && $(toast_row) != *"："* && $(bar) != *busy* && $(panes) == "$before" ]] && sname_is doraemon && [[ $(conns "$APP2") == 2 ]]'
 
@@ -171,18 +171,18 @@ key Escape
 # ---- 新 session 连不上：toast，不建
 psql "$SQLMUX_TEST_PG" -qAt -c "alter database sqlmux_e2e_$$ allow_connections false"
 sl; key n; sleep 0.4; key Enter; wait_for 6 eval 'e2e_text 1 160 $(($(H) - 1)) | grep -q "doraemon："'
-check "库不让连：toast「doraemon：<驱动的错误>」，不建 session" eval 'e2e_text 1 160 $(($(H) - 1)) | grep -q "doraemon：.*FATAL: database \"sqlmux_e2e_$$\" is not curr" && sname_is doraemon && { sl; rows_are "doraemon  1 windows|1;"; }'
+check "库不让连：toast「doraemon：<驱动的错误>」，不建 session" eval 'e2e_text 1 160 $(($(H) - 1)) | grep -q "doraemon：.*FATAL: database \"sqlmux_e2e_$$\" is not curr" && sname_is doraemon && { sl; rows_are "doraemon  1 个窗口|1;"; }'
 psql "$SQLMUX_TEST_PG" -qAt -c "alter database sqlmux_e2e_$$ allow_connections true"
 key Escape
 
 # ---- n 建连期间：新加的连接新 session 里也有；建好之后 attach 关掉所有浮层
-# 自建库上的 login 事件触发器让 doraemon（APP2）的每条新连接先睡 3 秒（PG 17），psql 的连接不受影响
+# 自建库上的 login 事件触发器让 doraemon（APP2）的每条新连接先睡 7 秒（填表单要三四秒）（PG 17），psql 的连接不受影响
 psql "$E2E_DB" -q -c "create table public.e2e_slow (secs float)" \
   -c "create function public.e2e_slow_login() returns event_trigger language plpgsql as \$\$ begin if current_setting('application_name') = '$APP2' then perform pg_sleep(coalesce((select max(secs) from public.e2e_slow), 0)); end if; end \$\$" \
-  -c "create event trigger e2e_slow_login on login execute function public.e2e_slow_login()" -c "insert into public.e2e_slow values (3)"
+  -c "create event trigger e2e_slow_login on login execute function public.e2e_slow_login()" -c "insert into public.e2e_slow values (7)"
 sl; key n; sleep 0.4; key Enter; pal ">conn.new"; key Enter; form_dsn late "$SQLMUX_TEST_PG"; key C-p
 check "（准备）建连还没回来：还是 doraemon；建连期间新加了 late；面板开着" eval 'sname_is doraemon && [[ -n $(nrow late) ]] && palette_open'
-wait_for 12 eval '[[ $(sname) == 1 ]]'; sleep 0.5
+wait_for 20 eval '[[ $(sname) == 1 ]]'; sleep 0.5
 check "建连回来 attach 新 session 1：面板关掉（attach 关掉所有浮层）" eval 'sname_is 1 && ! palette_open'
 check "建连期间新加的 late，新 session 1 的树里也有" eval '[[ -n $(nrow late) ]]'
 psql "$E2E_DB" -q -c "delete from public.e2e_slow"

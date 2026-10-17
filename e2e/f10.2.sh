@@ -11,7 +11,7 @@ leader() { e2e_keys Space; e2e_type "$1"; sleep 0.5; }
 cmd() { pal ">$1"; key Enter; }
 clr() { local i; for ((i = 0; i < 30; i++)); do e2e_keys BSpace; done; sleep 0.2; }
 toast_text() { e2e_text 1 160 44; }
-nsess() { leader s; local n; n=$(e2e_plain | grep -cE "[0-9]+ windows"); key Escape; sleep 0.3; echo "$n"; }   # session 列表里有几行
+nsess() { leader s; local n; n=$(e2e_plain | grep -cE "[0-9]+ 个窗口"); key Escape; sleep 0.3; echo "$n"; }   # session 列表里有几行
 
 start
 check "（准备）一个 session doraemon" eval '[[ $(sname) == doraemon ]]'

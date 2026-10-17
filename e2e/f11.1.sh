@@ -16,9 +16,9 @@ go build -ldflags "-X main.version=v1.2.3 -X main.commit=abc1234 -X main.date=20
 check "注入的版本：--version 是 'sqlmux v1.2.3 (abc1234, 2026-10-11)'" eval '[[ $("$D/inj" --version) == "sqlmux v1.2.3 (abc1234, 2026-10-11)" ]]'
 check "-version 同样；一行、退出码 0、stderr 空" eval '[[ $("$D/inj" -version) == "sqlmux v1.2.3 (abc1234, 2026-10-11)" && $("$D/inj" --version | wc -l) -eq 1 ]] && "$D/inj" --version >/dev/null 2>"$D/err"; [[ $? -eq 0 && ! -s $D/err ]]'
 go build -buildvcs=false -o "$D/dev0" ./cmd/sqlmux
-check "没注入、没有 vcs 信息：sqlmux dev (none, unknown)" eval '[[ $("$D/dev0" --version) == "sqlmux dev (none, unknown)" ]]'
+check "没注入、没有 vcs 信息（-buildvcs=false）：sqlmux dev，不打 (none, unknown)（F17.5）" eval '[[ $("$D/dev0" --version) == "sqlmux dev" ]] || { "$D/dev0" --version; false; }'
 go build -o "$D/dev" ./cmd/sqlmux
-check "没注入、在 git 检出里 go build：版本是 Go 记下的伪版本（v…-<时间>-<12 位 sha>），commit / 日期是 none / unknown（不再读 vcs 信息）" eval 'got=$("$D/dev" --version); [[ $got == "sqlmux v"*"-$(git rev-parse --short=12 HEAD) (none, unknown)" ]] || { echo "  $got"; false; }'
+check "没注入、在 git 检出里 go build：版本是 Go 记下的伪版本（v…-<时间>-<12 位 sha>），括号里是 vcs 的 revision 前 7 位和提交时间（F17.5），没有 none / unknown" eval 'got=$("$D/dev" --version); r12=$(git rev-parse --short=12 HEAD); r7=$(git rev-parse HEAD | cut -c1-7); [[ $got =~ ^sqlmux\ v[^\ ]+-$r12\ \($r7,\ [0-9T:-]+Z\)$ ]] || { echo "  $got"; false; }'
 check "参数多了：退出码 1，usage 里带 [--version]" eval '"$D/inj" a b >/dev/null 2>"$D/err"; [[ $? -eq 1 ]] && grep -qF "usage: sqlmux [--version] [--layout name-or-path] [connection | file | url]" "$D/err"'
 check "README：Releases 页和 checksums.txt（oss 重写 README 后不再写压缩包名）" eval 'grep -q "releases" README.md && grep -q "checksums.txt" README.md'
 mkdir -p "$D/h" "$D/c" "$D/s" "$D/d"

@@ -95,10 +95,10 @@ cut_client; runl "DBSIZE"
 check "CLIENT KILL 之后跑 DBSIZE：结果回来（29）" eval '[[ $(rrows | sed -n 2p) == "1 29" ]]' || { rrows | head -3; logline DBSIZE; }
 quit_app; _e2e_kill
 
-# ---- 面板的命令列表：Redis 连接上没有「快速 SQL」和「格式化」，SQL 连接上照旧
+# ---- 面板的命令列表：Redis 连接上有「快速 SQL」（F17.2）、没有「格式化」，SQL 连接上照旧
 sstart rd
 pal ">快速"; sleep 0.5
-check "Redis 连接：面板 >快速 里没有「快速 SQL」" eval '! e2e_plain | grep -q "palette.sql"' || e2e_plain | grep -a 快速
+check "Redis 连接：面板 >快速 里有「快速 SQL」（F17.2 起）" eval 'e2e_plain | grep -q "palette.sql"' || { e2e_plain | grep -a 快速; false; }
 key Escape; sleep 0.3
 pal ">格式化"; sleep 0.5
 check "Redis 连接：面板 >格式化 里没有「格式化整个 query」" eval '! e2e_plain | grep -q "格式化整个 query"' || true

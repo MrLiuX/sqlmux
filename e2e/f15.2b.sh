@@ -152,14 +152,14 @@ sys.exit(1)"; }
 fresh_form() { rm -f "$D/f/connections.toml"; (umask 077; printf '[[connection]]\nname = "viapg"\nengine = "postgres"\ndsn = "%s"\nssh = "me@bastion"\n' "$PGURL" >"$D/f/connections.toml")
   e2e_start -C "$D/f" -P "$D/bin:$PATH" "$E2E_BIN"; wait_for 8 flag_is alternate_on 1; sleep 2; mgr; }
 T="$E2E_TMP"   # 应用写的是 e2e_start 拷贝出来的那份
-fresh_form; tabs 9
+fresh_form; tabs 10
 check "编辑已有的连接：ssh 一行读出 me@bastion" eval '[[ $(ssh_row) == "me@bastion" ]]' || ssh_row
 clear_in; sleep 0.3
 check "清空输入框：ssh 一行是空的" eval '[[ -z $(ssh_row) ]]' || ssh_row
 key C-s; sleep 1
 check "保存：connections.toml 里这个连接没有 ssh 了，其余字段还在" eval '! grep -q "^ssh" "$E2E_TMP/config/sqlmux/connections.toml" && grep -q "^dsn" "$E2E_TMP/config/sqlmux/connections.toml"' || cat "$E2E_TMP/config/sqlmux/connections.toml"
 _e2e_kill
-fresh_form; tabs 9; clear_in; e2e_type "-oProxyCommand=x"; key C-s; sleep 1
+fresh_form; tabs 10; clear_in; e2e_type "-oProxyCommand=x"; key C-s; sleep 1
 err_under_ssh() { e2e_plain | python3 -c '
 import re, sys
 ls = [re.sub("[\ue000-\uf8ff] ?", "", l) for l in sys.stdin.read().split("\n")]

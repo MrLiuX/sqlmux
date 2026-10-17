@@ -107,7 +107,7 @@ sname() { bar | sed 's/^ //; s/ ▾.*//'; }
 startl; open_table t_order; e2e_keys Space; e2e_type s; sleep 0.4; key n; sleep 0.4; key Enter; wait_for 8 eval '[[ $(sname) == 1 ]]'; sleep 1.5; open_table t_user
 quit_all; e2e_stop
 startl; sleep 1.5
-check "两个 session（doraemon 和 1）恢复，当前是退出时的 1，里面开着 t_user" eval '[[ $(sname) == 1 && $(tabbar 1) == *t_user* ]] && e2e_keys Space && e2e_type s && sleep 0.5 && e2e_plain | grep -q "doraemon  1 windows" && e2e_plain | grep -q "1  1 windows"'
+check "两个 session（doraemon 和 1）恢复，当前是退出时的 1，里面开着 t_user" eval '[[ $(sname) == 1 && $(tabbar 1) == *t_user* ]] && e2e_keys Space && e2e_type s && sleep 0.5 && e2e_plain | grep -q "doraemon  1 个窗口" && e2e_plain | grep -q "1  1 个窗口"'
 key Escape
 
 # ---- 审查补的：保留名 last 不能当布局名；--layout 启动时连不上是启动错误（退出），layout.open 里连不上只是 toast

@@ -38,7 +38,7 @@ chmod -R a+rX "$D"
 timeout 1500 docker run --rm --platform linux/amd64 -v "$D:/work:ro" homebrew/brew sh /work/run.sh >"$D/brew.log" 2>&1; rc=$?
 sec() { sed -n "/^== $1\$/,/^== /p" "$D/brew.log" | sed '1d;/^== /d'; }
 check "docker homebrew/brew：brew install --build-from-source 成功（退出码 0）" eval '[[ $rc -eq 0 ]] || { tail -25 "$D/brew.log"; false; }'
-check "sqlmux --version 是 'sqlmux v$v (…)'（ldflags 注入了 tag 的版本）" eval 'sec version | grep -q "^sqlmux v$v ("  || { sec version; false; }'
+check "sqlmux --version 是 'sqlmux v$v'（ldflags 注入了 tag 的版本；脚本没给 commit / 日期，就不打括号，F17.5）" eval 'sec version | grep -qE "^sqlmux v$v( \(.*\))?$" || { sec version; false; }'
 check "brew test 通过" eval 'sec test | grep -qi "error\|fail" && { sec test; false; } || grep -q "^== test" "$D/brew.log"'
 check "brew audit --strict 没有问题（也是对 formula 语法的检查：macOS 自带的 ruby 2.6 读不了 std_go_args(ldflags:)）" eval '! sec audit | grep -q "audit exit" || { sec audit; false; }'
 check "安装在 brew 的 prefix 里、版本 ${v}，uninstall 后命令没了" eval 'sec list | grep -q "^sqlmux $v" && sec uninstall | grep -q "^removed$" && [[ $rc -eq 0 ]]'

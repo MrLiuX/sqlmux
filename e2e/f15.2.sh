@@ -140,7 +140,7 @@ sys.exit(0 if re.search(r'│ +' + sys.argv[1] + r'( |\n)', t) else 1)" "$1"; }
 e2e_start -C "$D/f" -P "$D/bin:$PATH" "$E2E_BIN"; wait_for 8 flag_is alternate_on 1; sleep 2
 mgr
 check "连接管理：高级（展开）里有 ssh 一行，在 password_cmd 之后，现在是空的" eval 'form_has password_cmd && [[ -z $(ssh_row) ]] && ssh_row >/dev/null' || e2e_plain | sed -n 14,30p | cut -c1-140
-tabs 9; e2e_type "me@bastion"; sleep 0.3
+tabs 10; e2e_type "me@bastion"; sleep 0.3
 check "Tab 到 ssh 一项，打 me@bastion，输入框里是它" eval '[[ $(ssh_row) == "me@bastion" ]]' || ssh_row
 key C-s; sleep 1
 check "C-s 保存：connections.toml 里是 ssh = \"me@bastion\"" eval 'grep -qx "ssh = \"me@bastion\"" "$E2E_TMP/config/sqlmux/connections.toml"' 
@@ -155,7 +155,7 @@ key Escape; sleep 0.3
 for bad in "-oProxyCommand=x" "a b"; do
   _e2e_kill; rm -f "$D/f/connections.toml"; (umask 077; printf '[[connection]]\nname = "viapg"\nengine = "postgres"\ndsn = "%s"\n' "$PGURL" >"$D/f/connections.toml")
   e2e_start -C "$D/f" -P "$D/bin:$PATH" "$E2E_BIN"; wait_for 8 flag_is alternate_on 1; sleep 2
-  mgr; tabs 9; e2e_type "$bad"; key C-s; sleep 1
+  mgr; tabs 10; e2e_type "$bad"; key C-s; sleep 1
   check "ssh 写成「$bad」：保存被拒，表单上写「写成 user@host，不能以 - 开头，也不能含空格」" eval 'e2e_plain | grep -qF "写成 user@host，不能以 - 开头"'
   check "被拒之后 connections.toml 没有 ssh（文件没动）" eval '[[ -s "$E2E_TMP/config/sqlmux/connections.toml" ]] && ! grep -q "^ssh" "$E2E_TMP/config/sqlmux/connections.toml"'
 done

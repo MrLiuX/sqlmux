@@ -50,7 +50,7 @@ key Escape; sleep 0.3
 
 # ---- 密码和 password_cmd 都填了：报错；重名时钥匙串不碰
 pal ">conn.new"; key Enter; fill both "$PG_HOST" "$PG_PORT" "$PG_USER" "pw" "$PG_DB"
-for i in 1 2; do key Tab; done; key Space; key Tab; key Tab; e2e_type "echo x"; key Enter; sleep 0.4
+for i in 1 2 3; do key Tab; done; key Space; key Tab; key Tab; e2e_type "echo x"; key Enter; sleep 0.4
 check "password 和 password_cmd 都填了：报错，表单不关，没有存钥匙串" eval 'form_open && [[ -n $(ferr) && ! -e "$E2E_TMP/keychain/sqlmux-both" ]]'
 key Escape; sleep 0.3
 ls "$E2E_TMP/keychain" >"$D/ks1"
@@ -76,14 +76,14 @@ key Escape; sleep 0.3
 
 # ---- 高级：展开填了 dsn、password_cmd 后收起：不生效；dsn 非空时 host / port / user / database 变灰、Tab 跳过
 pal ">conn.new"; key Enter; fill hid "$PG_HOST" "$PG_PORT" "$PG_USER" "" "$PG_DB"
-for i in 1 2; do key Tab; done; key Space; key Tab; e2e_type "postgres://other@elsewhere:1/zzz"; key BTab; key Space; sleep 0.2   # 两下 Tab 到「高级」（原来写的 3 下绕回了 name，这条一直是空检查）
-check "收起「高级」：dsn 那一行不见了" eval '[[ $(frows | sed -n 10p) == "高级 ▸" ]]'
+for i in 1 2 3; do key Tab; done; key Space; key Tab; e2e_type "postgres://other@elsewhere:1/zzz"; key BTab; key Space; sleep 0.2   # 三下 Tab 到「高级」（read_only、production、高级；F17.9 前是两下）
+check "收起「高级」：dsn 那一行不见了" eval '[[ $(frows | sed -n 11p) == "高级 ▸" ]]'
 key Enter; sleep 0.8
 check "收起时里面填的 dsn 不生效：存下来的 dsn 是 host / port / user / database 拼的，不是 elsewhere" eval '! form_open && grep -A3 "name = \"hid\"" "$(CT)" | grep -q "dsn = \"postgres://$PG_USER@$PG_HOST:$PG_PORT/$PG_DB" && ! grep -q elsewhere "$(CT)"'
 pal ">conn.new"; key Enter; e2e_type grey
-for i in 1 2 3 4 5 6 7 8 9; do key Tab; done; key Space; key Tab; e2e_type "postgres://u@h:1/d"; sleep 0.3
-key BTab; key BTab; key BTab; sleep 0.2
-check "高级里 dsn 非空：S-Tab 从 dsn 往回，经过 高级、read_only，跳过变灰的 database / user / port / host，落在 password（password 不变灰）" on_field 6
+for i in 1 2 3 4 5 6 7 8 9 10; do key Tab; done; key Space; key Tab; e2e_type "postgres://u@h:1/d"; sleep 0.3
+key BTab; key BTab; key BTab; key BTab; sleep 0.2
+check "高级里 dsn 非空：S-Tab 从 dsn 往回，经过 高级、production、read_only，跳过变灰的 database / user / port / host，落在 password（password 不变灰）" on_field 6
 key Escape; sleep 0.3
 
 # ---- 没有钥匙串工具时明文回退：F7.5 起不 chmod 已有的文件（权限不变），新建的文件仍是 0600

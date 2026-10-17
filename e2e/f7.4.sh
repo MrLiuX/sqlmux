@@ -13,12 +13,13 @@ read -r PG_USER PG_PW PG_HOST PG_PORT PG_DB < <(python3 -c 'import sys, urllib.p
 box() { e2e_panes | awk '$1 == "-" { print $2, $3, $4, $5; exit }'; }
 frows() { local g y; g=($(box)); for ((y = g[1] + 1; y < g[1] + g[3] - 1; y++)); do e2e_text $((g[0] + 28)) $((g[0] + g[2] - 2)) "$y" | noicon | sed 's/^ *//; s/ *$//'; done; }   # 每行前面有字段的图标，noicon 去掉
 form_open() { e2e_plain | grep -q "┌─ 连接"; }
-field_y() { local g; g=($(box)); echo $(( g[1] + 1 + $1 )); }              # N：0 name 1 group 2 engine 3 host 4 port 5 user 6 password 7 database 8 read_only 9 高级（展开后 10 dsn 11 password_cmd）
+field_y() { local g; g=($(box)); echo $(( g[1] + 1 + $1 )); }              # N：0 name 1 group 2 engine 3 host 4 port 5 user 6 password 7 database 8 read_only 9 production 10 高级（展开后 11 dsn 12 password_cmd；F17.9 在 read_only 后加了 production）
 # on_field N：焦点在第 N 个字段上：输入框有终端光标；engine（1）、高级（8）是开关，光标隐藏；read_only（7）的值是 select 底
 ro_x() { e2e_find "[" "$(field_y 8)" | cut -d" " -f1; }                       # read_only 的 [ ] 开关的列（标签列的宽度会随字段名变）
 on_field() { local g; g=($(box)); case $1 in
-  2|9) [[ $(e2e_flag cursor_flag) == 0 ]] || { echo "  cursor visible on a switch ($1)"; false; } ;;
+  2|10) [[ $(e2e_flag cursor_flag) == 0 ]] || { echo "  cursor visible on a switch ($1)"; false; } ;;
   8) style_has "$(ro_x)" "$(field_y 8)" bg=#364a82 ;;
+  9) style_has "$(ro_x)" "$(field_y 9)" bg=#364a82 ;;
   *) [[ $(( $(e2e_flag cursor_y) + 1 )) == $(field_y "$1") ]] || { echo "  cursor on row $(( $(e2e_flag cursor_y) + 1 )), field $1 is on $(field_y "$1")"; false; } ;;
   esac; }
 fsep() { local g y; g=($(box)); for ((y = g[1] + 1; y < g[1] + g[3]; y++)); do [[ $(e2e_text $((g[0] + 28)) $((g[0] + 30)) $y) == "───" ]] && { echo "$y"; return; }; done; }
@@ -35,7 +36,7 @@ toast_row() { e2e_text 1 "$(e2e_flag pane_width)" $(( $(H) - 1 )); }
 E2E_NOCONN=1 e2e_start "$E2E_BIN"; wait_for 6 flag_is alternate_on 1; sleep 1.5
 check "没有 connections.toml 启动：界面出来（不退出），表单自动打开" eval 'running && form_open'
 check "树里是一行「还没有连接，按 ＋ 新建」" eval 'e2e_plain | sed -n 1,6p | grep -q "还没有连接，按"'
-check "表单：分字段 name / group / engine / host / port 5432 / user / password / database / read_only [ ] / 高级 ▸，底栏有保存、取消和键位提示" eval '[[ $(frows | sed -n 1,10p | tr -s " " | tr "\n" ";") == "name;group;engine postgres │ mysql │ sqlite │ redis;host;port 5432;user;password;database;read_only [ ];高级 ▸;" ]] && frows | tail -1 | grep -q "Tab 下一项 · ↵ 保存 · esc 取消" && frows | tail -1 | grep -q "\[ 保存 \] \[ 测试 \] \[ 取消 \]"'
+check "表单：分字段 name / group / engine / host / port 5432 / user / password / database / read_only [ ] / production [ ] / 高级 ▸，底栏有保存、取消和键位提示" eval '[[ $(frows | sed -n 1,11p | tr -s " " | tr "\n" ";") == "name;group;engine postgres │ mysql │ sqlite │ redis;host;port 5432;user;password;database;read_only [ ];production [ ];高级 ▸;" ]] && frows | tail -1 | grep -q "Tab 下一项 · ↵ 保存 · esc 取消" && frows | tail -1 | grep -q "\[ 保存 \] \[ 测试 \] \[ 取消 \]"'
 check "光标在 name 上" on_field 0
 key Escape; sleep 0.3
 check "esc 关掉表单，没有连接也能用（面板能打开）" eval '! form_open && running && { e2e_keys C-p; sleep 0.4; palette_open; }'
@@ -93,24 +94,28 @@ key Escape; sleep 0.3
 
 # ---- 开关：read_only 上 space；高级展开后 dsn / password_cmd；S-Tab 从 name 绕回高级
 pal ">conn.new"; key Enter; key BTab
-check "S-Tab 从 name 绕回最后一个字段「高级」" on_field 9
+check "S-Tab 从 name 绕回最后一个字段「高级」" on_field 10
 key Tab
 check "Tab 从「高级」绕回 name" on_field 0
 for i in 1 2 3 4 5 6 7 8; do key Tab; done
 check "Tab 八次到 read_only（值是 select 底）" on_field 8
 key Space
 check "read_only 上 space：切成 [x]" eval '[[ $(frows | sed -n 9p) == "read_only [x]" ]]'
-key Tab; key Space
-check "「高级」上 space：展开（▾），多出 dsn 和 password_cmd 两行" eval '[[ $(frows | sed -n 10p) == "高级 ▾" ]] && frows | grep -qE "^dsn( |$)" && frows | grep -qx "password_cmd"'
 key Tab
-check "Tab：到 dsn（输入框有光标）" on_field 10
+check "Tab：到 production（F17.9），值是 select 底" on_field 9
+key Space
+check "production 上 space：切成 [x]（read_only 本来就是 [x]，勾上 production 会顺手勾只读）" eval '[[ $(frows | sed -n 10p) == "production [x]" && $(frows | sed -n 9p) == "read_only [x]" ]]'
+key Tab; key Space
+check "「高级」上 space：展开（▾），多出 dsn 和 password_cmd 两行" eval '[[ $(frows | sed -n 11p) == "高级 ▾" ]] && frows | grep -qE "^dsn( |$)" && frows | grep -qx "password_cmd"'
+key Tab
+check "Tab：到 dsn（输入框有光标）" on_field 11
 key Escape; sleep 0.3
 
 # ---- 高级里直接填 dsn（host / port / user / database 不参与）：保存追加一段，原文一字不动、末尾没换行的最后一行补了换行
 read -r NOPW PW < <(python3 -c 'import sys, urllib.parse as u; p = u.urlsplit(sys.argv[1]); print(p._replace(netloc=p.netloc.replace(":" + p.password + "@", "@")).geturl(), p.password)' "$SQLMUX_TEST_PG")
 DSN2="$NOPW&application_name=$APP2"
 pal ">conn.new"; key Enter; e2e_type extra
-for i in 1 2 3 4 5 6 7 8; do key Tab; done; key Space; key Tab; key Space
+for i in 1 2 3 4 5 6 7 8; do key Tab; done; key Space; key Tab; key Tab; key Space
 key Tab; e2e_type "$DSN2"; key Tab; e2e_type "echo \"$PW\""; key BTab; key BTab; key BTab; sleep 0.2
 key Enter; sleep 0.4
 check "↵ 保存：表单关掉；原来的内容一字不差留在前面（注释、末尾没换行的最后一行补了换行）" eval '! form_open && n=$(wc -c < "$D/orig.toml") && cmp -s <(head -c $n "$(CT)") "$D/orig.toml" && [[ $(tail -c +$((n + 1)) "$(CT)" | head -c 1 | xxd -p) == 0a ]]'

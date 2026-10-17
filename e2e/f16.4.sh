@@ -186,7 +186,7 @@ quit_app
 check "历史：history.jsonl 里记着跑过的命令（GET marker3、SELECT 3），db3 子连接上跑的那条带 \"db\":\"3\"，db0 的不带 db（默认库不写）" eval 'f=$(ls "$D/dt"/sqlmux/history.jsonl) && grep -q "\"sql\":\"SELECT 3\"" "$f" && [[ $(grep -c "\"sql\":\"GET marker3\"" "$f") == 3 ]] && [[ $(grep -c "\"db\":\"3\"" "$f") == 1 ]]' || { tail -4 "$D/dt"/sqlmux/history.jsonl; }
 _e2e_kill
 
-# ---- 非 SQL 连接上：gq 无事、格式化和（对象）DDL 的命令不列、快速 SQL 说没有
+# ---- 非 SQL 连接上：gq 无事、格式化和（对象）DDL 的命令不列（快速 SQL 自 F17.2 起能跑命令）
 reseed; sstart rd
 key C-l; key i; e2e_type "  get   str:plain  "; key Escape; sleep 0.3; key g q; sleep 0.6
 check "gq：什么都没发生（文字原样，没有格式化成别的样子）" eval 'e2e_plain | sed -n 2p | grep -q "▶  1   get   str:plain"' || e2e_plain | sed -n 2p
@@ -194,10 +194,10 @@ pal ">格式化"; sleep 0.5
 check "命令面板里没有「格式化整个 query」" eval '! e2e_plain | grep -q "格式化整个 query"' || true
 key Escape; sleep 0.3
 pal ">快速"; sleep 0.5
-check "命令面板 > 里没有「快速 SQL」（非 SQL 连接上面板里不列，task F16.4 f）" eval '! e2e_plain | grep -q "palette.sql"' || e2e_plain | grep -a "快速"
+check "命令面板 > 里有「快速 SQL」（F17.2 起 Redis 连接上也有，原来 F16.4 f 是隐藏的）" eval 'e2e_plain | grep -q "palette.sql"' || { e2e_plain | grep -a "快速"; false; }
 key Escape; sleep 0.3
-pal ";select 1"; key Enter; sleep 1
-check "面板的 SQL（快速 SQL）范围里执行：toast「这个连接没有快速 SQL」" eval '[[ $(toast) == *"这个连接没有快速 SQL"* ]]' || toast
+pal ";GET str:plain"; sleep 1; [[ -n $(pop) ]] && { key Escape; sleep 0.3; }; key Enter; sleep 1.5
+check "面板的 SQL（快速 SQL）范围里执行 GET str:plain：结果区是 hello（F17.2 起 Redis 连接上能跑命令，原来是 toast「这个连接没有快速 SQL」）" eval 'e2e_plain | grep -q "│ 1 │ hello"' || { e2e_plain | tail -12 | cut -c30-150; false; }
 key Escape; sleep 0.3
 quit_app; _e2e_kill
 

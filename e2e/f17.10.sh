@@ -12,7 +12,7 @@ D=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-cfg.XXXXXX"); trap 'e2e_stop; redis_st
 DB=$D/shop.db; sqlite3 "$DB" <"$E2E_ROOT/testdata/seed/sqlite.sql"
 sqlite3 "$DB" "create table t_many (id integer primary key, v text); with recursive n(i) as (select 1 union all select i + 1 from n where i < 30) insert into t_many select i, 'v' || i from n"
 lite() { sqlite3 "$DB" "$1"; }
-NL=$(printf '\n')
+NL=$'\n'
 mkdir -p "$D/c"; (umask 077; printf '[[connection]]\nname = "shop"\nengine = "sqlite"\ndsn = "%s"\n' "$DB" >"$D/c/connections.toml")
 edit() { key Enter; e2e_type "$1"; sleep 0.3; }
 box_open() { e2e_plain | grep -q "y 保存   n 取消"; }
