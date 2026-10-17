@@ -80,6 +80,25 @@ func TestKeysTOMLDefaultEnglish(t *testing.T) {
 	}
 }
 
+// The reference's comments are for the user: they name no feature or section of
+// the design, in either language (F17.4).
+func TestKeysTOMLHasNoInternalRefs(t *testing.T) {
+	refs := regexp.MustCompile(`[（(]\s*[FM]\d|§|[（(]\s*S-\d`)
+	for _, lang := range []string{"en", "zh"} {
+		writeConfig(t, "config.toml", "language = \""+lang+"\"\n")
+		for _, format := range []string{"toml", "md"} {
+			var out, errb bytes.Buffer
+			if code := keysCmd([]string{"--format", format}, &out, &errb); code != 0 {
+				t.Fatalf("%s %s: exit %d", lang, format, code)
+			}
+			if m := refs.FindString(out.String()); m != "" {
+				i := strings.Index(out.String(), m)
+				t.Errorf("%s %s: %q in %.80q", lang, format, m, out.String()[max(i-40, 0):])
+			}
+		}
+	}
+}
+
 func TestKeysFormats(t *testing.T) {
 	writeConfig(t, "keymaps.toml", "[keys.grid]\nx = \"\"\n")
 	for format, want := range map[string]string{"md": "| global | `C-p` | palette.open |", "toml": "[keys.grid]"} {

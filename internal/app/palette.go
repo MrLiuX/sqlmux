@@ -151,7 +151,7 @@ func (a *App) paletteScope() (scope int, query string) {
 func (a *App) paletteItems() []paletteItem {
 	var items []paletteItem
 	for i, s := range a.sessions {
-		items = append(items, paletteItem{itemSession, strconv.Itoa(i), a.icons.Conn, s.Name, fmt.Sprintf("%d windows", len(s.Windows))})
+		items = append(items, paletteItem{itemSession, strconv.Itoa(i), a.icons.Conn, s.Name, windowCount(len(s.Windows))})
 	}
 	for wi, w := range a.sess.Windows {
 		name := fmt.Sprintf("%d: %s", wi, w.Name)

@@ -31,35 +31,35 @@ type table struct{ name, when string }
 // it (§6.5).
 var tables = []table{
 	{"keys.confirm", i18n.N("确认框打开时")},
-	{"keys.value", i18n.N("值编辑器浮窗打开时：C-s 写回并关闭，其余是它的 vim（F12.2）")},
-	{"keys.menu", i18n.N("右键菜单打开时（F8.23、F12.3）")},
-	{"keys.ddl", i18n.N("表的 DDL 浮窗打开时（F9.8）")},
+	{"keys.value", i18n.N("值编辑器浮窗打开时：C-s 写回并关闭，其余是它的 vim")},
+	{"keys.menu", i18n.N("右键菜单打开时")},
+	{"keys.ddl", i18n.N("表的 DDL 浮窗打开时")},
 	{"keys.palette", i18n.N("命令面板打开时")},
-	{"keys.conns", i18n.N("连接管理的列表有焦点时（F8.16）")},
-	{"keys.groups", i18n.N("连接表单的 group 字段弹出分组列表时，表单的键在它之后（F10.6）")},
-	{"keys.form", i18n.N("连接表单打开时（M5）")},
-	{"keys.jump", i18n.N("flash 式跳转进行中：其余可打印字符进模式，标签字母跳转（F10.8）")},
+	{"keys.conns", i18n.N("连接管理的列表有焦点时")},
+	{"keys.groups", i18n.N("连接表单的 group 字段弹出分组列表时，表单的键在它之后")},
+	{"keys.form", i18n.N("连接表单打开时")},
+	{"keys.jump", i18n.N("flash 式跳转进行中：其余可打印字符进模式，标签字母跳转")},
 	{"keys.where", i18n.N("WHERE 的历史 / 收藏下拉打开时")},
-	{"keys.order", i18n.N("ORDER 列表打开时（F12.9）")},
+	{"keys.order", i18n.N("ORDER 列表打开时")},
 	{"keys.cols", i18n.N("COLS 列表打开时")},
 	{"keys.dropdown", i18n.N("LIMIT 等下拉框打开时")},
-	{"keys.sessions", i18n.N("session 列表打开时（M5）")},
+	{"keys.sessions", i18n.N("session 列表打开时")},
 	{"keys.complete", i18n.N("补全列表弹出时（↵、esc 由输入框处理）")},
-	{"keys.newrow", i18n.N("编辑还没保存的新行的格时，叠在选项 / 分段浮层之上（F3.33）")},
+	{"keys.newrow", i18n.N("编辑还没保存的新行的格时，叠在选项 / 分段浮层之上")},
 	{"keys.options", i18n.N("非时间列的单元格，选项浮层展开、而且有选项时")},
 	{"keys.segments", i18n.N("时间列的单元格，分段浮层展开时")},
 	{"keys.keyhelp", i18n.N("? 键位帮助打开时")},
-	{"keys.cell", i18n.N("编辑单元格时（M2）")},
+	{"keys.cell", i18n.N("编辑单元格时")},
 	{"keys.input", i18n.N("任何输入框里")},
-	{"keys.wherenormal", i18n.N("WHERE 输入框在 NORMAL 下（F3.39）")},
-	{"keys.select", i18n.N("表格有选中的记录、或在 VISUAL 扩选时，叠在 grid / result 之上；它的键是完整绑定，不等 timeoutlen（F10.7）")},
-	{"keys.result", i18n.N("结果区，叠在 grid 之上（M3）")},
+	{"keys.wherenormal", i18n.N("WHERE 输入框在 NORMAL 下")},
+	{"keys.select", i18n.N("表格有选中的记录、或在 VISUAL 扩选时，叠在 grid / result 之上；它的键是完整绑定，不等 timeoutlen")},
+	{"keys.result", i18n.N("结果区，叠在 grid 之上")},
 	{"keys.grid", i18n.N("焦点在表格（NORMAL）")},
 	{"keys.tree", i18n.N("焦点在 schema 树（NORMAL）")},
-	{"keys.jsonview", i18n.N("grid 的 JSON 视图（F14.5）：其余键是它的只读编辑器的")},
-	{"keys.queryinsert", i18n.N("query 在 INSERT 下（F14.2）")},
-	{"keys.query", i18n.N("query 的 NORMAL / VISUAL（M3）")},
-	{"keys.landing", i18n.N("引导页：新 tab、没有 tab 的 pane（M3）")},
+	{"keys.jsonview", i18n.N("grid 的 JSON 视图：其余键是它的只读编辑器的")},
+	{"keys.queryinsert", i18n.N("query 在 INSERT 下")},
+	{"keys.query", i18n.N("query 的 NORMAL / VISUAL")},
+	{"keys.landing", i18n.N("引导页：新 tab、没有 tab 的 pane")},
 	{"keys.normal", i18n.N("NORMAL 模式，焦点在任何 pane")},
 	{"keys.global", i18n.N("任何时候，输入框里也生效")},
 	{"map.query.normal", ""},
@@ -333,7 +333,7 @@ func mdEscape(s string) string { return strings.ReplaceAll(s, "|", `\|`) }
 
 // whenPlainQuery is keys.query's note with vim = false, where the query
 // has no NORMAL and the Ctrl keys reach its editor (§6.9).
-var whenPlainQuery = i18n.N("query 的编辑器，只有 Ctrl 开头的键生效，C-h 除外，它是退格（F6.6）；NORMAL / VISUAL 是 vim 模式的")
+var whenPlainQuery = i18n.N("query 的编辑器，只有 Ctrl 开头的键生效，C-h 除外，它是退格；NORMAL / VISUAL 是 vim 模式的")
 
 // TOML renders the effective keymap as a whole keymaps.toml (`sqlmux keys
 // --format toml`, §6.7): every scope, with its defaults commented out, so
@@ -394,7 +394,7 @@ func (m *Map) TOML(titles map[string]string) string {
 			fmt.Fprintf(&b, "[%s]\n%s\n", t, strings.Join(lines, "\n"))
 		}
 	}
-	b.WriteString(i18n.T("\n# 用户映射（§6.6）：键 → 一串键（noremap）。[map.normal] 所有 pane 通用，下面这种只在表格里生效\n# [map.grid.normal]\n# \"J\" = \"5j\"\n"))
+	b.WriteString(i18n.T("\n# 用户映射：键 → 一串键（noremap）。[map.normal] 所有 pane 通用，下面这种只在表格里生效\n# [map.grid.normal]\n# \"J\" = \"5j\"\n"))
 	return b.String()
 }
 

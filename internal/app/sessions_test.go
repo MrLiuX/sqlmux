@@ -600,3 +600,36 @@ func TestAskNameKeepsModeBlock(t *testing.T) {
 		}
 	}
 }
+
+// The toast that says a session is being connected goes when it is, and another
+// toast that came meanwhile stays (F17.4).
+func TestNewSessionToastGoesWhenConnected(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a := sized(160, 45, "nerd")
+	spec := a.sess.Conns[0].Spec
+	answer := func() {
+		a.Update(sessionDialed{name: "1", spec: spec, d: dialed{main: noDB{}, meta: noDB{}, spec: spec}})
+	}
+	a.dialSession("1")
+	if a.toast != "正在连接 doraemon…" {
+		t.Fatalf("toast %q", a.toast)
+	}
+	if answer(); a.toast != "" || a.sess.Name != "1" {
+		t.Errorf("connected: toast %q", a.toast)
+	}
+	a.dialSession("2")
+	a.showToast("something else")
+	spec2 := spec
+	a.Update(sessionDialed{name: "2", spec: spec2, d: dialed{main: noDB{}, meta: noDB{}, spec: spec2}})
+	if a.toast != "something else" {
+		t.Errorf("another toast: %q", a.toast)
+	}
+}
+
+func TestWindowCount(t *testing.T) {
+	for n, want := range map[int]string{0: "0 windows", 1: "1 window", 2: "2 windows", 11: "11 windows"} {
+		if got := windowCount(n); got != want {
+			t.Errorf("%d: %q", n, got)
+		}
+	}
+}

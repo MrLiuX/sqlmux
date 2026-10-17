@@ -158,9 +158,22 @@ func (a *App) dialSession(name string) tea.Cmd {
 	})
 }
 
+// windowCount is how a session says how many windows it has (F17.4).
+// ponytail: English only, as the rows have always said it; a plural table when
+// the language of the interface gets one
+func windowCount(n int) string {
+	if n == 1 {
+		return "1 window"
+	}
+	return fmt.Sprintf("%d windows", n)
+}
+
 // gotSessionDialed makes the session: every connection there is now, one
 // the form added meanwhile too (§7.8).
 func (a *App) gotSessionDialed(m sessionDialed) tea.Cmd {
+	if a.toast == toastLine(i18n.T("正在连接 %s…", m.spec.Name)) { // it is done: the first session says nothing of it (F17.4)
+		a.toast = ""
+	}
 	if m.err != nil {
 		return a.showToast(i18n.T("%s：%s", m.spec.Name, m.err))
 	}
@@ -257,7 +270,7 @@ func (a *App) sessionsView() ui.SessionList {
 	l := a.sessList
 	v := ui.SessionList{Sel: l.sel, Top: l.top}
 	for i, r := range a.sessionRows() {
-		row := ui.SessionRow{Name: r.s.Name, Note: fmt.Sprintf("%d windows", len(r.s.Windows)), Current: r.s == a.sess}
+		row := ui.SessionRow{Name: r.s.Name, Note: windowCount(len(r.s.Windows)), Current: r.s == a.sess}
 		if r.win >= 0 {
 			row = ui.SessionRow{Window: true, Name: fmt.Sprintf("%d: %s", r.win, r.s.Windows[r.win].Name), Current: r.win == r.s.Active} // each session's own, as tmux's
 		}
