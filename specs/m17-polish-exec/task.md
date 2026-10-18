@@ -171,34 +171,34 @@
 - [x] e2e：假命令每批 1000 行截断，4000 张表的树全部列出；query 里的截断提示出现。
 - [x] 决策者用 doraemonctl 在 staging 上看 `public` 的表列齐（真路径，不进 e2e）。
 
-## F17.12 exec 连接的数据库层 · 状态：todo
+## F17.12 exec 连接的数据库层 · 状态：passed（52847da；e2e 5676885）
 
 - **依赖**：F17.7
 - **涉及**：`internal/db/exec`、`internal/app`（树）
 - 用户 2026-10-18 验收 prod-pg：PG 的第一级应该是库、第二级才是 schema，exec 连接也要统一。doraemonctl 的 `exec db` 只到 `doraemon` 一个库（探针写死），所以列一个。
 
 **开发**（§7.8「数据库节点」、§8.8）
-- [ ] a. `exec.Engine.Databases` 返回连接时 `select current_database()` 的那一个名字；树上是一个数据库节点，默认展开，它是默认库、走连接本身的 Conn（F15.1 的「DSN 里的库」那条路），表 tab 标题不带库名。
+- [x] a. `exec.Engine.Databases` 返回连接时 `select current_database()` 的那一个名字；树上是一个数据库节点，默认展开，它是默认库、走连接本身的 Conn（F15.1 的「DSN 里的库」那条路），表 tab 标题不带库名。
 
 **验收**
-- [ ] 单测：假命令回 `current_database()` = `doraemon` → `Databases` 是 `["doraemon"]`；mutation。
-- [ ] e2e：假命令的 exec 连接树是 连接 → doraemon → schema → Tables，query 标题 `doraemon.public`；Redis 方言不变。
+- [x] 单测：假命令回 `current_database()` = `doraemon` → `Databases` 是 `["doraemon"]`；mutation。
+- [x] e2e：假命令的 exec 连接树是 连接 → doraemon → schema → Tables，query 标题 `doraemon.public`；Redis 方言不变。
 
-## F17.13 库 / schema 的勾选 · 状态：todo
+## F17.13 库 / schema 的勾选 · 状态：passed（52847da；e2e 5676885）
 
 - **依赖**：F15.1（数据库层）、F10.3（COLS 浮层）
 - **涉及**：`internal/app`（树、右键菜单、面板命令、浮层）、`internal/config`（两个字段、写回）、`internal/db/postgres` / `mysql`（catalog 查询按 schema 过滤）、i18n
 - 用户 2026-10-18 验收时提（截图是 DataGrip 数据源的「架构」）：连接和库上要有右键菜单，勾选显示和加载哪些库 / schema，节点尾注 `2/7`。prod 的 `agentable` 有 2428 张表，不勾就不拉。
 
 **开发**（§7.8「库 / schema 的勾选」「右键菜单」、§8.3、§14）
-- [ ] a. 配置：connections.toml 的 `databases`（PG）、`schemas`（PG 写 `库.schema`，MySQL 写名字）；没写 = 全部；DSN 里的库固定勾选。浮层关闭时有改动就写回（只改这条连接的这两个字段，保留文件里其他内容和注释，同 `AppendConnection` / `RenameConnection` 的写法）。
-- [ ] b. catalog：`Databases` 列表按 `databases` 过滤后再上树（列表本身仍是全部）；Tables / Views / Functions / Sequences 的查询加 `n.nspname in (…)`，MySQL 同样按 schema 过滤；没勾的库不拨号。
-- [ ] c. 浮层：复用 COLS 的列表浮层和 `[keys.cols]` 的键，标题「库」/「schema」，每行 `[x] 名字`，schema 行尾注已加载的表数（没加载的空）；`esc` 关闭，有改动才写回并重载这个库的 catalog（连接节点的「选择库…」重载整个连接）。
-- [ ] d. 入口：树的右键菜单（连接节点：PG「选择库…」、MySQL「选择 schema…」；PG 数据库节点「选择 schema…」）和命令面板的同名命令（作用于光标所在节点）；Action `tree.pick`，默认不绑键。
-- [ ] e. 尾注：收窄了的连接 / 库节点名后面 `dim` 的 `勾了的/总数`，放不下不画。query 的 schema 下拉、补全、面板 `@` 范围只认加载的。
+- [x] a. 配置：connections.toml 的 `databases`（PG）、`schemas`（PG 写 `库.schema`，MySQL 写名字）；没写 = 全部；DSN 里的库固定勾选。浮层关闭时有改动就写回（只改这条连接的这两个字段，保留文件里其他内容和注释，同 `AppendConnection` / `RenameConnection` 的写法）。
+- [x] b. catalog：`Databases` 列表按 `databases` 过滤后再上树（列表本身仍是全部）；Tables / Views / Functions / Sequences 的查询加 `n.nspname in (…)`，MySQL 同样按 schema 过滤；没勾的库不拨号。
+- [x] c. 浮层：复用 COLS 的列表浮层和 `[keys.cols]` 的键，标题「库」/「schema」，每行 `[x] 名字`，schema 行尾注已加载的表数（没加载的空）；`esc` 关闭，有改动才写回并重载这个库的 catalog（连接节点的「选择库…」重载整个连接）。
+- [x] d. 入口：树的右键菜单（连接节点：PG「选择库…」、MySQL「选择 schema…」；PG 数据库节点「选择 schema…」）和命令面板的同名命令（作用于光标所在节点）；Action `tree.pick`，默认不绑键。
+- [x] e. 尾注：收窄了的连接 / 库节点名后面 `dim` 的 `勾了的/总数`，放不下不画。query 的 schema 下拉、补全、面板 `@` 范围只认加载的。
 
 **验收**
-- [ ] 单测：配置的读写（往返保留其他字段和注释）；catalog 查询带 `in (…)`（PG 和 MySQL 集成测试各一条：勾一个 schema 只回它的表）；mutation。
-- [ ] e2e：PG 连接 `D` 上右键「选择库…」只勾 doraemon → 树只剩它、尾注 `1/N`；doraemon 上「选择 schema…」只勾 public → agentable 不列、面板 `@` 搜不到它的表、query 下拉只有 public；connections.toml 里出现两行；重启后还是这样；取消勾选回到全部、尾注消失；MySQL 连接上「选择 schema…」同样；exec 的假命令连接上勾 schema 后 Tables 查询带 `in`。
+- [x] 单测：配置的读写（往返保留其他字段和注释）；catalog 查询带 `in (…)`（PG 和 MySQL 集成测试各一条：勾一个 schema 只回它的表）；mutation。
+- [x] e2e：PG 连接 `D` 上右键「选择库…」只勾 doraemon → 树只剩它、尾注 `1/N`；doraemon 上「选择 schema…」只勾 public → agentable 不列、面板 `@` 搜不到它的表、query 下拉只有 public；connections.toml 里出现两行；重启后还是这样；取消勾选回到全部、尾注消失；MySQL 连接上「选择 schema…」同样；exec 的假命令连接上勾 schema 后 Tables 查询带 `in`。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
