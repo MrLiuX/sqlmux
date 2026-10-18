@@ -223,7 +223,48 @@ func (c *Conn) Query(ctx context.Context, sql string, args ...db.Val) (db.Result
 	if items[0].Err != "" {
 		return db.Result{}, Error{items[0].Err}
 	}
-	return result(items[0], 0, time.Since(start)), nil
+	it, err := c.whole(ctx, text, items[0])
+	if err != nil {
+		return db.Result{}, err
+	}
+	return result(it, 0, time.Since(start)), nil
+}
+
+// maxPaged is how many rows whole reads before it leaves a statement truncated.
+var maxPaged = 100000
+
+// whole is the item of statement sql, which the command cut at some rows, with the rest
+// of the rows: the statement is run again as a page of itself, the size of the first cut
+// from the rows read, until a page is short; at maxPaged rows it stays truncated. A page
+// as long as the first is taken as cut too, whatever the command says: it cannot tell
+// the end from its own wall (staging's pgAdmin, 1000 rows). Only the statements sqlmux
+// sends (the catalog, a page, a count) come here: a user's query stays cut, and says so
+// (§8.8, F17.11).
+// ponytail: the rows come in the order the subselect gives them, which PG keeps for an
+// ORDER BY inside it in practice and does not promise
+func (c *Conn) whole(ctx context.Context, sql string, it item) (item, error) {
+	size := len(it.Rows)
+	for it.Truncated && size > 0 && len(it.Rows) < maxPaged {
+		page := fmt.Sprintf("select * from (%s) as sqlmux_page limit %d offset %d", strings.TrimRight(sql, "; \t\r\n"), size, len(it.Rows))
+		items, err := c.run(ctx, page)
+		if err != nil {
+			return item{}, err
+		}
+		if len(items) == 0 {
+			break
+		}
+		next := items[0]
+		if next.Err != "" {
+			return item{}, Error{next.Err}
+		}
+		it.Rows = append(it.Rows, next.Rows...)
+		if len(next.Rows) == 0 { // nothing came: it says it is cut, stuck, and stays cut; it says nothing, that was the end
+			it.Truncated = next.Truncated
+			break
+		}
+		it.Truncated = next.Truncated || len(next.Rows) == size
+	}
+	return it, nil
 }
 
 func (c *Conn) Close() error { return nil }

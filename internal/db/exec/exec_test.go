@@ -28,6 +28,16 @@ case "$sql" in
 *"from pg_namespace n where"*) echo '[{"columns":["nspname","cs"],"rows":[["public","public"],["sales","public"]]}]' ;;
 *"from pg_class c join pg_namespace"*) echo '[{"columns":["n","r","t","k"],"rows":[["public","orders",12,"r"],["public","v_orders",-1,"v"]]}]' ;;
 *pg_database*) echo '[{"columns":["datname"],"rows":[["shop"],["other"]]}]' ;;
+*seven*) off=0; case "$sql" in *"offset "*) off=${sql##*offset } ;; esac
+  n=0; rows=; i=$off; while [ $i -lt 7 ] && [ $n -lt 3 ]; do i=$((i+1)); n=$((n+1)); rows="$rows${rows:+,}[$i]"; done
+  cut=false; [ $i -lt 7 ] && cut=true
+  echo "[{\"columns\":[\"x\"],\"rows\":[$rows],\"truncated\":$cut}]" ;;
+*six*) off=0; case "$sql" in *"offset "*) off=${sql##*offset } ;; esac
+  n=0; rows=; i=$off; while [ $i -lt 6 ] && [ $n -lt 3 ]; do i=$((i+1)); n=$((n+1)); rows="$rows${rows:+,}[$i]"; done
+  cut=false; [ $off = 0 ] && cut=true # only the first says it is cut, as pgAdmin's wall does
+  echo "[{\"columns\":[\"x\"],\"rows\":[$rows],\"truncated\":$cut}]" ;;
+*stuck*) case "$sql" in *offset*) echo '[{"columns":["x"],"rows":[],"truncated":true}]' ;; *) echo '[{"columns":["x"],"rows":[[1],[2],[3]],"truncated":true}]' ;; esac ;;
+*endless*) echo '[{"columns":["x"],"rows":[[1],[2],[3]],"truncated":true}]' ;;
 *tagged*) echo '[{"n":3}]' ;;
 *cut*) echo '[{"columns":["x"],"rows":[[1],[2]],"truncated":true,"extra":{"a":1}}]' ;;
 *bigerr*) head -c 10000 /dev/zero | tr '\000' a >&2; echo END >&2; exit 1 ;;
@@ -165,14 +175,55 @@ func TestCommandTruncated(t *testing.T) {
 	argv, _ := fake(t)
 	c, _ := New(argv, sqlkit.PG)
 	ctx := context.Background()
-	if r, err := c.Query(ctx, "select cut"); err != nil || !r.Truncated || len(r.Rows) != 2 {
-		t.Errorf("truncated: %+v %v", r, err)
-	}
-	if rs, err := c.Exec(ctx, "select cut", 0); err != nil || len(rs) != 1 || !rs[0].Truncated {
+	if rs, err := c.Exec(ctx, "select cut", 0); err != nil || len(rs) != 1 || !rs[0].Truncated || len(rs[0].Rows) != 2 {
 		t.Errorf("truncated on Exec: %+v %v", rs, err)
 	}
 	if r, err := c.Query(ctx, "select plain"); err != nil || r.Truncated {
 		t.Errorf("not truncated: %+v %v", r, err)
+	}
+}
+
+// A statement sqlmux sends that the command cut is run on as pages of itself, the cut's
+// size, from the rows read, until one is not cut, and the rows are one result; a user's
+// statements (Exec) are not paged and say they are cut; at the cap it stays cut (F17.11).
+func TestQueryPagesWhatIsCut(t *testing.T) {
+	argv, log := fake(t)
+	c, _ := New(argv, sqlkit.PG)
+	ctx := context.Background()
+	r, err := c.Query(ctx, "select x from seven;")
+	var got []string
+	for _, row := range r.Rows {
+		got = append(got, row[0].S)
+	}
+	if err != nil || strings.Join(got, "") != "1234567" || r.Truncated {
+		t.Fatalf("rows %v truncated %v: %v", got, r.Truncated, err)
+	}
+	sent := ran(t, log)
+	if len(sent) != 3 || sent[1] != "select * from (select x from seven) as sqlmux_page limit 3 offset 3" || !strings.HasSuffix(sent[2], "limit 3 offset 6") {
+		t.Errorf("sent %q", sent)
+	}
+	// a page as long as the cut says nothing of being cut: the end is a short page, or an empty one
+	for _, tc := range []struct{ sql, want string }{{"select x from six", "123456"}} {
+		r, err := c.Query(ctx, tc.sql)
+		var got []string
+		for _, row := range r.Rows {
+			got = append(got, row[0].S)
+		}
+		if err != nil || strings.Join(got, "") != tc.want || r.Truncated {
+			t.Errorf("%s: rows %v truncated %v: %v", tc.sql, got, r.Truncated, err)
+		}
+	}
+	rs, err := c.Exec(ctx, "select x from seven", 0)
+	if err != nil || len(rs) != 1 || len(rs[0].Rows) != 3 || !rs[0].Truncated || len(ran(t, log)) != 7 {
+		t.Errorf("Exec: %+v %v, %d runs in all", rs, err, len(ran(t, log)))
+	}
+	if r, err := c.Query(ctx, "select stuck"); err != nil || len(r.Rows) != 3 || !r.Truncated { // a page with no rows ends it
+		t.Errorf("an empty page: %d rows, truncated %v, %v", len(r.Rows), r.Truncated, err)
+	}
+	defer func(n int) { maxPaged = n }(maxPaged)
+	maxPaged = 7
+	if r, err := c.Query(ctx, "select endless"); err != nil || len(r.Rows) != 9 || !r.Truncated {
+		t.Errorf("at the cap: %d rows, truncated %v, %v", len(r.Rows), r.Truncated, err)
 	}
 }
 
