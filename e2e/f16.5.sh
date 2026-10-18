@@ -39,7 +39,7 @@ check "GET ␣：提示「GET key」，亮的是 key" eval '[[ $(sig_text) == "G
 typed "ZADD zset:rank 1 "
 check "ZADD zset:rank 1 ␣：提示行里有 ZADD key、score、member，亮的是「score member …」那一组" eval '[[ $(sig_text) == *"[NX | XX] [GT | LT] [CH] [INCR] score member …" && $(sig_lit) == "score member …" ]]' || { sig_text; sig_lit; }
 typed "SET k v "
-check "SET k v ␣：提示行从 COMMAND DOCS 展开可选参数：「SET key value [NX | XX] [GET] …」，亮的是 [NX | XX]" eval '[[ $(sig_text) == "SET key value [NX | XX] [GET] …" && $(sig_lit) == "[NX | XX]" ]]' || sig_text
+check "SET k v ␣：提示行从 COMMAND DOCS 展开可选参数（Redis 8.10 起 SET 多了 IFEQ 等，所以提示行长了会从左边截成 …，只看里面有「[NX | XX」），亮的是 [NX | XX …" eval '[[ $(sig_text) == *"[NX | XX"* && $(sig_lit) == "[NX | XX"* ]] || { echo "TEXT[$(sig_text)] LIT[$(sig_lit)]"; false; }'
 typed 'GET "unclosed'
 check "引号里面：不乱，提示行还是「GET key」" eval '[[ $(sig_text) == "GET key" ]]' || sig_text
 
