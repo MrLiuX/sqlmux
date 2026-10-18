@@ -1584,8 +1584,10 @@ func (a *App) quitTab() tea.Cmd {
 // pickedSchemas is the schemas of all that the connection's schemas setting names for
 // database db (PG writes `db.schema`; MySQL's are plain names, pg false), nil for all
 // when it names none: what the catalog's queries are limited to (F17.13).
-// ponytail: a database with none of its schemas picked reads as all of them
-func pickedSchemas(setting []string, pg bool, db string, all []string) []string {
+// the schema keep, which names go to, is always one of them.
+// ponytail: a database with none of its schemas picked reads as all of them; and with
+// databases `my` and `my.db`, an entry `my.db.x` is read as `my`'s too
+func pickedSchemas(setting []string, pg bool, db string, all []string, keep string) []string {
 	var mine []string
 	for _, e := range setting {
 		if !pg {
@@ -1597,7 +1599,7 @@ func pickedSchemas(setting []string, pg bool, db string, all []string) []string 
 	if len(mine) == 0 {
 		return nil
 	}
-	return slices.DeleteFunc(slices.Clone(all), func(s string) bool { return !slices.Contains(mine, s) })
+	return slices.DeleteFunc(slices.Clone(all), func(s string) bool { return s != keep && !slices.Contains(mine, s) })
 }
 
 // pickedDatabases is the databases of all that the connection's databases setting names,

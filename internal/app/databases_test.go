@@ -29,8 +29,12 @@ type fakePG struct {
 	mu    sync.Mutex
 	dials []string   // the database of each Connect
 	only  [][]string // the schemas each Tables was asked for (F17.13)
-	// schemas are what the server says it has, public alone when nil
-	schemas []string
+	fonly [][]string // and Functions
+	sonly [][]string // and Sequences
+	// schemas are what the server says it has, public alone when nil; noCurrent is that
+	// no schema of the search_path exists (current_schema() is NULL)
+	schemas   []string
+	noCurrent bool
 }
 
 func (f *fakePG) Connect(_ context.Context, dsn, _ string, _ bool) (db.Conn, db.Info, error) {
@@ -42,16 +46,32 @@ func (f *fakePG) Connect(_ context.Context, dsn, _ string, _ bool) (db.Conn, db.
 	return noDB{}, db.Info{Addr: "u@h:1", Database: name}, nil
 }
 func (f *fakePG) Schemas(context.Context, db.Conn) ([]string, string, error) {
-	if f.schemas != nil {
-		return f.schemas, "public", nil
+	current := "public"
+	if f.noCurrent {
+		current = ""
 	}
-	return []string{"public"}, "public", nil
+	if f.schemas != nil {
+		return f.schemas, current, nil
+	}
+	return []string{"public"}, current, nil
 }
 func (f *fakePG) Tables(_ context.Context, _ db.Conn, only []string) ([]db.Table, error) {
 	f.mu.Lock()
 	f.only = append(f.only, only)
 	f.mu.Unlock()
 	return []db.Table{{Schema: "public", Name: "t_x", Rows: 1}}, nil
+}
+func (f *fakePG) Functions(_ context.Context, _ db.Conn, only []string) ([]db.Function, error) {
+	f.mu.Lock()
+	f.fonly = append(f.fonly, only)
+	f.mu.Unlock()
+	return nil, nil
+}
+func (f *fakePG) Sequences(_ context.Context, _ db.Conn, only []string) ([]db.Sequence, error) {
+	f.mu.Lock()
+	f.sonly = append(f.sonly, only)
+	f.mu.Unlock()
+	return nil, nil
 }
 func (*fakePG) Databases(context.Context, db.Conn) ([]string, error) {
 	return []string{"alpha", "base", "zeta"}, nil

@@ -106,8 +106,12 @@ type catalogMsg struct {
 	err     error
 }
 
-// catalogAll is what the server has to pick from.
-type catalogAll struct{ schemas, dbs []string }
+// catalogAll is what the server has to pick from, and the schema that stays picked: the
+// one names without a schema go to (F17.13).
+type catalogAll struct {
+	schemas, dbs []string
+	keep         string
+}
 
 // loadCatalog reads c's schemas and every schema's tables on its Meta; a
 // table's columns wait until it is opened (§8.4).
@@ -122,7 +126,12 @@ func (a *App) loadCatalog(c *Conn) tea.Cmd {
 		if err != nil {
 			return catalogMsg{conn: c, err: err}
 		}
-		schemas := pickedSchemas(root.Schemas, root.Kind() != "mysql", name, all) // the picked ones are all that is read (F17.13)
+		pg := root.Kind() != "mysql"
+		keep := current // MySQL's is the DSN's database, PG's the first of the search_path, public when none is there
+		if pg && keep == "" {
+			keep = "public"
+		}
+		schemas := pickedSchemas(root.Schemas, pg, name, all, keep) // the picked ones are all that is read (F17.13)
 		tables, err := eng.Tables(ctx, meta, schemas)
 		if err != nil {
 			return catalogMsg{conn: c, err: err}
@@ -140,7 +149,7 @@ func (a *App) loadCatalog(c *Conn) tea.Cmd {
 		if schemas != nil {
 			loaded = schemas
 		}
-		return catalogMsg{conn: c, schemas: loaded, current: current, tables: tables, funcs: funcs, seqs: seqs, dbs: dbs, all: catalogAll{all, allDBs}, err: err}
+		return catalogMsg{conn: c, schemas: loaded, current: current, tables: tables, funcs: funcs, seqs: seqs, dbs: dbs, all: catalogAll{all, allDBs, keep}, err: err}
 	}
 }
 
