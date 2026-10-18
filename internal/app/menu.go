@@ -67,7 +67,10 @@ func (a *App) menuItems(n node) []menuItem {
 		if n.conn.redis() {
 			return []menuItem{{i18n.T("刷新"), "refresh", func() tea.Cmd { return a.loadKeys(n.conn) }}}
 		}
-	case nodeConn, nodeSchema, nodeGroup, nodeColumn, nodeObjects, nodeIndex, nodeKey, nodeFunc, nodeSequence, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeSep, nodeNote: // no menu
+		return a.pickItem(n)
+	case nodeConn:
+		return a.pickItem(n)
+	case nodeSchema, nodeGroup, nodeColumn, nodeObjects, nodeIndex, nodeKey, nodeFunc, nodeSequence, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeSep, nodeNote: // no menu
 	}
 	return nil
 }

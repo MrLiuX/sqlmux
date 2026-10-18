@@ -247,6 +247,9 @@ type Conn struct {
 	// tree opens one, by name.
 	Databases []string
 	dbs       map[string]*Conn
+	// all are the schemas and databases the server has, of which Schemas and Databases
+	// are those picked to load (F17.13)
+	all catalogAll
 	// scan is what the scan of a Redis db read (F16.2); what the tree's filter
 	// asked the server for is each window's own: treeState.found
 	scan   *keyScan
@@ -1576,4 +1579,32 @@ func (a *App) quitTab() tea.Cmd {
 		return sweep()
 	}
 	return a.closeTabThen(p, p.Cur, sweep)
+}
+
+// pickedSchemas is the schemas of all that the connection's schemas setting names for
+// database db (PG writes `db.schema`; MySQL's are plain names, pg false), nil for all
+// when it names none: what the catalog's queries are limited to (F17.13).
+// ponytail: a database with none of its schemas picked reads as all of them
+func pickedSchemas(setting []string, pg bool, db string, all []string) []string {
+	var mine []string
+	for _, e := range setting {
+		if !pg {
+			mine = append(mine, e)
+		} else if s, ok := strings.CutPrefix(e, db+"."); ok {
+			mine = append(mine, s)
+		}
+	}
+	if len(mine) == 0 {
+		return nil
+	}
+	return slices.DeleteFunc(slices.Clone(all), func(s string) bool { return !slices.Contains(mine, s) })
+}
+
+// pickedDatabases is the databases of all that the connection's databases setting names,
+// with the one it is dialed to, which is always there; all when it names none (F17.13).
+func pickedDatabases(setting []string, dsn string, all []string) []string {
+	if len(setting) == 0 {
+		return all
+	}
+	return slices.DeleteFunc(slices.Clone(all), func(d string) bool { return d != dsn && !slices.Contains(setting, d) })
 }

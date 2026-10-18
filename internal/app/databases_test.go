@@ -27,7 +27,10 @@ import (
 type fakePG struct {
 	db.Engine
 	mu    sync.Mutex
-	dials []string // the database of each Connect
+	dials []string   // the database of each Connect
+	only  [][]string // the schemas each Tables was asked for (F17.13)
+	// schemas are what the server says it has, public alone when nil
+	schemas []string
 }
 
 func (f *fakePG) Connect(_ context.Context, dsn, _ string, _ bool) (db.Conn, db.Info, error) {
@@ -38,10 +41,16 @@ func (f *fakePG) Connect(_ context.Context, dsn, _ string, _ bool) (db.Conn, db.
 	f.mu.Unlock()
 	return noDB{}, db.Info{Addr: "u@h:1", Database: name}, nil
 }
-func (*fakePG) Schemas(context.Context, db.Conn) ([]string, string, error) {
+func (f *fakePG) Schemas(context.Context, db.Conn) ([]string, string, error) {
+	if f.schemas != nil {
+		return f.schemas, "public", nil
+	}
 	return []string{"public"}, "public", nil
 }
-func (*fakePG) Tables(context.Context, db.Conn) ([]db.Table, error) {
+func (f *fakePG) Tables(_ context.Context, _ db.Conn, only []string) ([]db.Table, error) {
+	f.mu.Lock()
+	f.only = append(f.only, only)
+	f.mu.Unlock()
 	return []db.Table{{Schema: "public", Name: "t_x", Rows: 1}}, nil
 }
 func (*fakePG) Databases(context.Context, db.Conn) ([]string, error) {

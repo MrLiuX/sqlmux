@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -24,7 +25,7 @@ func TestSchemas(t *testing.T) {
 // Partitions are left out, their parent listed; views and materialized
 // views are in (§8.4).
 func TestTables(t *testing.T) {
-	ts, err := pg.Tables(context.Background(), connect(t, true))
+	ts, err := pg.Tables(context.Background(), connect(t, true), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +299,7 @@ func TestFunctionsAndSequences(t *testing.T) {
 	}
 	defer c.Close()
 	ctx := context.Background()
-	fs, err := pg.Functions(ctx, c)
+	fs, err := pg.Functions(ctx, c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,7 +314,7 @@ func TestFunctionsAndSequences(t *testing.T) {
 	if err != nil || !strings.HasPrefix(def, "CREATE OR REPLACE FUNCTION public.fn_greet(who text, times integer)") || !strings.HasSuffix(def, ";") {
 		t.Errorf("def %q %v", def, err)
 	}
-	ss, err := pg.Sequences(ctx, c)
+	ss, err := pg.Sequences(ctx, c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,7 +354,7 @@ func TestObjectsOwnWays(t *testing.T) {
 	if ks, err = pg.Keys(ctx, c, "public", "ord_p"); err != nil || len(ks) != 1 || strings.Join(ks[0].Cols, ",") != "y,x" {
 		t.Errorf("primary key %+v %v", ks, err)
 	}
-	fs, err := pg.Functions(ctx, c)
+	fs, err := pg.Functions(ctx, c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,5 +375,41 @@ func TestObjectsOwnWays(t *testing.T) {
 	}
 	if def, err := pg.FunctionDef(ctx, c, own); err == nil {
 		t.Errorf("a dropped function has a definition: %q", def)
+	}
+}
+
+// A pick of schemas limits the queries of the catalog to them: tables, functions and
+// sequences of the one asked for only; none asked for is none; nil is all (F17.13).
+func TestCatalogOfPickedSchemas(t *testing.T) {
+	ctx, c := context.Background(), connect(t, true)
+	ts, err := pg.Tables(ctx, c, []string{"agentable"})
+	if err != nil || len(ts) != 3 {
+		t.Fatalf("agentable: %v %v", ts, err)
+	}
+	for _, tb := range ts {
+		if tb.Schema != "agentable" {
+			t.Errorf("a table of %s", tb.Schema)
+		}
+	}
+	if none, err := pg.Tables(ctx, c, []string{}); err != nil || len(none) != 0 {
+		t.Errorf("none: %v %v", none, err)
+	}
+	if odd, err := pg.Tables(ctx, c, []string{"it's", "public"}); err != nil || len(odd) == 0 { // a name is a literal, quoted
+		t.Errorf("a quote in a name: %v %v", odd, err)
+	}
+	if fs, err := pg.Functions(ctx, c, []string{"agentable"}); err != nil || len(fs) != 1 || fs[0].Schema != "agentable" {
+		t.Errorf("functions of agentable: %v %v", fs, err)
+	}
+	if fs, err := pg.Functions(ctx, c, []string{"public"}); err != nil || slices.ContainsFunc(fs, func(f db.Function) bool { return f.Schema != "public" }) {
+		t.Errorf("functions of public: %v %v", fs, err)
+	}
+	if ss, err := pg.Sequences(ctx, c, []string{"agentable"}); err != nil {
+		t.Errorf("sequences: %v %v", ss, err)
+	} else {
+		for _, q := range ss {
+			if q.Schema != "agentable" {
+				t.Errorf("a sequence of %s", q.Schema)
+			}
+		}
 	}
 }

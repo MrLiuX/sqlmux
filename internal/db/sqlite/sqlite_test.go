@@ -116,7 +116,7 @@ func TestCatalog(t *testing.T) {
 	if err != nil || !slices.Equal(ss, []string{"main"}) || cur != "main" {
 		t.Fatalf("schemas %v %q %v", ss, cur, err)
 	}
-	ts, err := e.Tables(ctx, c)
+	ts, err := e.Tables(ctx, c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,7 +447,7 @@ func TestObjects(t *testing.T) {
 			t.Errorf("%s: %q, want %q", table, got, want)
 		}
 	}
-	if fs, err := e.Functions(ctx, c); err != nil || fs != nil {
+	if fs, err := e.Functions(ctx, c, nil); err != nil || fs != nil {
 		t.Errorf("functions %v %v", fs, err)
 	}
 }
@@ -704,7 +704,7 @@ func TestTriggerValuesAndShadows(t *testing.T) {
 	if r, err := (Engine{}).Quick(context.Background(), w, "values (1), (2), (3)", "main", 2); err != nil || len(r.Rows) != 2 || !r.Truncated { // read whole, no LIMIT to syntax-error, and cut at the end
 		t.Errorf("values: %d rows %v %v", len(r.Rows), r.Truncated, err)
 	}
-	ts, _ := (Engine{}).Tables(context.Background(), c)
+	ts, _ := (Engine{}).Tables(context.Background(), c, nil)
 	for _, tb := range ts {
 		if strings.HasPrefix(tb.Name, "ft_") {
 			t.Errorf("a shadow table: %s", tb.Name)

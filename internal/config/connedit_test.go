@@ -650,3 +650,52 @@ func TestAppendProductionConnection(t *testing.T) {
 		t.Errorf("%+v %v", cs, err)
 	}
 }
+
+// databases and schemas are written as lists in the block, the rest of the file as it
+// was, a comment above it included; read back they are what was written; cleared, their
+// lines go (F17.13).
+func TestUpdateConnectionPicks(t *testing.T) {
+	path := connectionsFile(t, editFile)
+	was := Connection{Name: "play", Engine: "postgres", DSN: "postgres://localhost/play?sslmode=disable"}
+	c := was
+	c.Databases, c.Schemas = []string{"play", "other"}, []string{"play.public", "play.sales"}
+	got, err := UpdateConnection("play", was, c)
+	if err != nil || !reflect.DeepEqual(got, c) {
+		t.Fatalf("add: %+v %v", got, err)
+	}
+	text := readFile(t, path)
+	if !strings.Contains(text, "databases = [\"play\", \"other\"]\n") || !strings.Contains(text, "schemas = [\"play.public\", \"play.sales\"]\n") || !strings.Contains(text, "# the one for play\n[[connection]]\nname = \"play\"        # not a seed\n") || !strings.Contains(text, "# staging, read only\n[[connection]]\nname = \"stage\"") {
+		t.Errorf("the file:\n%s", text)
+	}
+	if r, err := ReadConnection("play"); err != nil || !reflect.DeepEqual(r.Schemas, c.Schemas) || !reflect.DeepEqual(r.Databases, c.Databases) {
+		t.Errorf("read back: %+v %v", r, err)
+	}
+	c2 := c
+	c2.Schemas = []string{"play.public"} // one rewritten in place, the other as it was
+	if _, err := UpdateConnection("play", c, c2); err != nil || strings.Count(readFile(t, path), "schemas = ") != 1 || !strings.Contains(readFile(t, path), "databases = [\"play\", \"other\"]\n") {
+		t.Errorf("change: %v\n%s", err, readFile(t, path))
+	}
+	if _, err := UpdateConnection("play", c2, was); err != nil || readFile(t, path) != editFile {
+		t.Errorf("cleared: %v\n%s", err, readFile(t, path))
+	}
+}
+
+// databases is for a postgres connection, schemas for it and for MySQL; the others have no
+// such level.
+func TestPicksCheck(t *testing.T) {
+	for _, tc := range []struct {
+		c    Connection
+		want string
+	}{
+		{Connection{Name: "a", Engine: "postgres", DSN: "x", Databases: []string{"a"}, Schemas: []string{"a.public"}}, ""},
+		{Connection{Name: "a", Engine: "mysql", DSN: "x", Schemas: []string{"a"}}, ""},
+		{Connection{Name: "a", Engine: "mysql", DSN: "x", Databases: []string{"a"}}, "databases"},
+		{Connection{Name: "a", Engine: "sqlite", DSN: "x", Schemas: []string{"a"}}, "schemas"},
+		{Connection{Name: "a", Engine: "redis", DSN: "x", Schemas: []string{"a"}}, "schemas"},
+		{Connection{Name: "a", Engine: "exec", Dialect: "postgres", Command: []string{"x", "{sql}"}, Schemas: []string{"a.public"}}, ""},
+	} {
+		if field, _ := tc.c.Check(nil); field != tc.want {
+			t.Errorf("%+v: field %q, want %q", tc.c, field, tc.want)
+		}
+	}
+}

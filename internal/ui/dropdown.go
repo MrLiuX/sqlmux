@@ -9,7 +9,8 @@ import (
 // Dropdown picks from a list under a filter input (§8.6, §7.8): the one-pick
 // dropdowns (schema, LIMIT), and with Checks or Icons the COLS and ORDER lists.
 type Dropdown struct {
-	Search   Icon // leads the input
+	Title    string // on the top border; "" for none (the pick lists of F17.13)
+	Search   Icon   // leads the input
 	Input    Input
 	Typing   bool     // the input has the keys: its cursor shows
 	Items    []string // what passes the filter
@@ -66,6 +67,9 @@ func (d Dropdown) Draw(f *Frame, box uv.Rectangle, rows int) uv.Position {
 	f.Fill(box, bg)
 	border := f.Border.Style(uv.Style{Fg: th.Focus, Bg: th.PaneBg})
 	border.Draw(f.Buf, box)
+	if d.Title != "" {
+		f.Text(box.Min.X+2, box.Min.Y, box.Max.X-2, " "+d.Title+" ", uv.Style{Fg: th.Focus, Bg: th.PaneBg})
+	}
 	x0, x1, y := box.Min.X+2, box.Max.X-2, box.Min.Y+1
 	x := f.Text(x0, y, x1, d.Search.Text, d.Search.On(uv.Style{Fg: th.Info, Bg: th.PaneBg}))
 	cx := x1 - Width(d.Count)

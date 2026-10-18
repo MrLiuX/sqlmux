@@ -23,7 +23,7 @@ func (Engine) Schemas(context.Context, db.Conn) (schemas []string, current strin
 // Tables lists the file's tables and views by name, but SQLite's own
 // (sqlite_sequence, sqlite_stat1…) and the shadow tables of a virtual one, an
 // FTS5's; SQLite keeps no row counts.
-func (Engine) Tables(ctx context.Context, c db.Conn) ([]db.Table, error) {
+func (Engine) Tables(ctx context.Context, c db.Conn, _ []string) ([]db.Table, error) {
 	r, err := c.Query(ctx, `
 select name, type from sqlite_schema
 where type in ('table', 'view') and name not like 'sqlite\_%' escape '\'
@@ -224,6 +224,6 @@ func (Engine) Keys(ctx context.Context, c db.Conn, _, table string) ([]db.Key, e
 func (Engine) Databases(context.Context, db.Conn) ([]string, error) { return nil, nil }
 
 // Functions, Sequences and FunctionDef are none: SQLite has no stored functions or sequences.
-func (Engine) Functions(context.Context, db.Conn) ([]db.Function, error)         { return nil, nil }
-func (Engine) Sequences(context.Context, db.Conn) ([]db.Sequence, error)         { return nil, nil }
-func (Engine) FunctionDef(context.Context, db.Conn, db.Function) (string, error) { return "", nil }
+func (Engine) Functions(context.Context, db.Conn, []string) ([]db.Function, error) { return nil, nil }
+func (Engine) Sequences(context.Context, db.Conn, []string) ([]db.Sequence, error) { return nil, nil }
+func (Engine) FunctionDef(context.Context, db.Conn, db.Function) (string, error)   { return "", nil }

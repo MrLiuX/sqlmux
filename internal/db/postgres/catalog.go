@@ -11,6 +11,7 @@ import (
 
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // Catalog queries (§8.4), checked against lazysql's and pgtui's: pg_catalog
@@ -51,11 +52,11 @@ func (Engine) Databases(ctx context.Context, c db.Conn) ([]string, error) {
 // Tables lists every schema's tables, views, materialized views, foreign
 // tables and partitioned tables, by schema and name. Partitions are left
 // out: their parent stands for them.
-func (Engine) Tables(ctx context.Context, c db.Conn) ([]db.Table, error) {
+func (Engine) Tables(ctx context.Context, c db.Conn, only []string) ([]db.Table, error) {
 	r, err := c.Query(ctx, `
 select n.nspname, c.relname, c.reltuples, c.relkind
 from pg_class c join pg_namespace n on n.oid = c.relnamespace
-where c.relkind in ('r', 'p', 'v', 'm', 'f') and not c.relispartition and `+userSchema+`
+where c.relkind in ('r', 'p', 'v', 'm', 'f') and not c.relispartition and `+userSchema+db.SchemaIn("n.nspname", only, sqlkit.PG)+`
 order by 1, 2`)
 	if err != nil {
 		return nil, err
@@ -327,11 +328,11 @@ order by con.contype <> 'p', con.conname`, db.Val{S: schema}, db.Val{S: table})
 // but those an extension brings and aggregates, procedures and window
 // functions (prokind f); the ID is the OID, which pg_get_functiondef takes
 // (F14.3). Args are pg_get_function_identity_arguments's.
-func (Engine) Functions(ctx context.Context, c db.Conn) ([]db.Function, error) {
+func (Engine) Functions(ctx context.Context, c db.Conn, only []string) ([]db.Function, error) {
 	r, err := c.Query(ctx, `
 select n.nspname, p.proname, pg_get_function_identity_arguments(p.oid), p.oid::text
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-where p.prokind = 'f' and `+userSchema+`
+where p.prokind = 'f' and `+userSchema+db.SchemaIn("n.nspname", only, sqlkit.PG)+`
   and not exists (select from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')
 order by 1, 2, 3`)
 	if err != nil {
@@ -346,11 +347,11 @@ order by 1, 2, 3`)
 
 // Sequences lists every schema's sequences, those a serial or identity
 // column owns too.
-func (Engine) Sequences(ctx context.Context, c db.Conn) ([]db.Sequence, error) {
+func (Engine) Sequences(ctx context.Context, c db.Conn, only []string) ([]db.Sequence, error) {
 	r, err := c.Query(ctx, `
 select n.nspname, cl.relname
 from pg_class cl join pg_namespace n on n.oid = cl.relnamespace
-where cl.relkind = 'S' and `+userSchema+`
+where cl.relkind = 'S' and `+userSchema+db.SchemaIn("n.nspname", only, sqlkit.PG)+`
 order by 1, 2`)
 	if err != nil {
 		return nil, err

@@ -137,7 +137,7 @@ func TestFunctions(t *testing.T) {
 	c := connect(t, true) // the shared database: the seed made the functions as root
 	cfg, _ := Config(IntegrationDSN(t), "")
 	ctx := context.Background()
-	fs, err := my.Functions(ctx, c)
+	fs, err := my.Functions(ctx, c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestFunctions(t *testing.T) {
 	if err != nil || !strings.Contains(def, "CREATE DEFINER=") || !strings.Contains(def, "FUNCTION `fn_greet`") || !strings.HasSuffix(def, ";") {
 		t.Errorf("def %q %v", def, err)
 	}
-	if ss, err := my.Sequences(ctx, c); err != nil || ss != nil {
+	if ss, err := my.Sequences(ctx, c, nil); err != nil || ss != nil {
 		t.Errorf("sequences %v %v", ss, err)
 	}
 }

@@ -254,7 +254,7 @@ func TestCancelKillsTheRun(t *testing.T) {
 // The engine is PG's over the command: its catalog queries are the ones the tree makes,
 // and where the connection landed is what the first run said (F17.7).
 func TestEngineOverACommand(t *testing.T) {
-	argv, _ := fake(t)
+	argv, log := fake(t)
 	e := Engine{Engine: postgres.Engine{}, Command: argv}
 	ctx := context.Background()
 	c, info, err := e.Connect(ctx, "", "", false)
@@ -265,9 +265,15 @@ func TestEngineOverACommand(t *testing.T) {
 	if err != nil || strings.Join(schemas, " ") != "public sales" || current != "public" {
 		t.Errorf("schemas %v %q %v", schemas, current, err)
 	}
-	ts, err := e.Tables(ctx, c)
+	ts, err := e.Tables(ctx, c, nil)
 	if err != nil || len(ts) != 2 || ts[0].Name != "orders" || ts[0].Rows != 12 || !ts[1].View() {
 		t.Errorf("tables %+v %v", ts, err)
+	}
+	if _, err := e.Tables(ctx, c, []string{"sales", "it's"}); err != nil { // the picked schemas go into the query
+		t.Errorf("picked tables: %v", err)
+	}
+	if sent := strings.Join(ran(t, log), "\n"); !strings.Contains(sent, `and n.nspname in ('sales', 'it''s')`) {
+		t.Errorf("the statements: %q", sent)
 	}
 	if dbs, err := e.Databases(ctx, c); err != nil || len(dbs) != 1 || dbs[0] != "shop" { // the one it is on, not the server's list: the command reaches that one
 		t.Errorf("databases %v %v", dbs, err)

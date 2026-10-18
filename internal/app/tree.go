@@ -102,8 +102,12 @@ type catalogMsg struct {
 	funcs   []db.Function
 	seqs    []db.Sequence
 	dbs     []string
+	all     catalogAll // the schemas and the databases the server has, picked or not (F17.13)
 	err     error
 }
+
+// catalogAll is what the server has to pick from.
+type catalogAll struct{ schemas, dbs []string }
 
 // loadCatalog reads c's schemas and every schema's tables on its Meta; a
 // table's columns wait until it is opened (§8.4).
@@ -111,26 +115,32 @@ func (a *App) loadCatalog(c *Conn) tea.Cmd {
 	if !c.sql() { // a key-value server's catalog is its keys (F16.2), and its commands
 		return tea.Batch(a.loadCommands(c), a.loadKeys(c))
 	}
-	meta, eng := c.Meta, c.eng
+	meta, eng, root, name, own := c.Meta, c.eng, c.root().Spec, c.DB, c.Spec.Database == ""
 	return func() tea.Msg {
 		ctx := context.Background()
-		schemas, current, err := eng.Schemas(ctx, meta)
+		all, current, err := eng.Schemas(ctx, meta)
 		if err != nil {
 			return catalogMsg{conn: c, err: err}
 		}
-		tables, err := eng.Tables(ctx, meta)
+		schemas := pickedSchemas(root.Schemas, root.Kind() != "mysql", name, all) // the picked ones are all that is read (F17.13)
+		tables, err := eng.Tables(ctx, meta, schemas)
 		if err != nil {
 			return catalogMsg{conn: c, err: err}
 		}
 		// ponytail: functions and sequences are no reason to lose the tables: a
 		// read of them that fails shows none
-		funcs, _ := eng.Functions(ctx, meta)
-		seqs, _ := eng.Sequences(ctx, meta)
-		var dbs []string // a database's own connection lists none: the DSN's does (F15.1)
-		if c.Spec.Database == "" {
-			dbs, _ = eng.Databases(ctx, meta)
+		funcs, _ := eng.Functions(ctx, meta, schemas)
+		seqs, _ := eng.Sequences(ctx, meta, schemas)
+		var dbs, allDBs []string // a database's own connection lists none: the DSN's does (F15.1)
+		if own {
+			allDBs, _ = eng.Databases(ctx, meta)
+			dbs = pickedDatabases(root.Databases, name, allDBs)
 		}
-		return catalogMsg{conn: c, schemas: schemas, current: current, tables: tables, funcs: funcs, seqs: seqs, dbs: dbs, err: err}
+		loaded := all
+		if schemas != nil {
+			loaded = schemas
+		}
+		return catalogMsg{conn: c, schemas: loaded, current: current, tables: tables, funcs: funcs, seqs: seqs, dbs: dbs, all: catalogAll{all, allDBs}, err: err}
 	}
 }
 
@@ -144,6 +154,7 @@ func (a *App) gotCatalog(m catalogMsg) tea.Cmd {
 	}
 	c := m.conn
 	c.Schemas, c.Tables, c.funcs, c.seqs, c.Databases = m.schemas, m.tables, m.funcs, m.seqs, m.dbs
+	c.all = m.all
 	// home stays once set, while there: what Meta's current one is moves
 	// with MySQL's USE in a quick SQL, and the tree keeps what is open (§7.8)
 	if !slices.Contains(c.Schemas, c.home) {
@@ -463,6 +474,11 @@ func (a *App) treeNodes() (ns []node, matches int) {
 		if c.readOnly { // dim after the name, as … (§7.8)
 			cn.Aside = ic.Lock.Text
 		}
+		if c.Spec.Kind() == "mysql" { // its schemas are what is picked; a PG connection's databases
+			cn.Note, cn.NoteFg = pickedNote(len(c.Schemas), len(c.all.schemas)), th.Dim
+		} else {
+			cn.Note, cn.NoteFg = pickedNote(len(c.Databases), len(c.all.dbs)), th.Dim
+		}
 		switch c.State {
 		case connConnecting:
 			cn.Aside = strings.TrimSpace(cn.Aside + " …")
@@ -497,8 +513,13 @@ func (a *App) treeNodes() (ns []node, matches int) {
 				if dc.scan != nil {
 					note = ui.Magnitude(float64(dc.scan.total))
 				}
+			} else {
+				note = pickedNote(len(dc.Schemas), len(dc.all.schemas))
 			}
 			dn := node{id: dbNode(c, name), kind: nodeDatabase, conn: dc, TreeNode: ui.TreeNode{Depth: 1, Branch: true, Open: dc.State == connReady && open(dbNode(c, name), dc == c), Icon: ic.Database, IconFg: th.Info, Text: text, Note: note, NoteFg: th.Border}}
+			if !dc.redis() {
+				dn.NoteFg = th.Dim
+			}
 			switch dc.State {
 			case connConnecting:
 				dn.Aside = "…"
@@ -874,4 +895,14 @@ func (a *App) openTarget() *Pane {
 		}
 	}
 	return recent
+}
+
+// pickedNote is what ends the name of a connection or a database whose databases or
+// schemas are picked, picked/all, dim; none when it lists them all or the server's
+// list is not known (F17.13).
+func pickedNote(picked, all int) string {
+	if all == 0 || picked >= all {
+		return ""
+	}
+	return fmt.Sprintf("%d/%d", picked, all)
 }

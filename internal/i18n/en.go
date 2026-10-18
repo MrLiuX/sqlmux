@@ -616,4 +616,13 @@ var en = map[string]string{
 	"{key} 切换或新建 session":                  "{key} switches or creates a session",
 
 	"redis 的 command 要有单独一项 {args...}": "the command of a redis exec needs {args...} as an item of its own",
+	"这个节点没有可选的库或 schema":               "this node has no databases or schemas to pick",
+	"没有可选的": "nothing to pick",
+	"先展开它，读到目录之后才能选":             "open it first: the pick needs the catalog read",
+	"选择库 / schema…":              "Pick databases / schemas…",
+	"选择库…":                       "Pick databases…",
+	"选择 schema…":                 "Pick schemas…",
+	"库":                          "Databases",
+	"databases 只对 postgres 连接有用": "databases is for postgres connections",
+	"databases 和 schemas 只对 postgres 和 mysql 连接有用": "databases and schemas are for postgres and mysql connections",
 }

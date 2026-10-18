@@ -234,7 +234,7 @@ func TestSchemas(t *testing.T) {
 
 // Views and tables, a partitioned one once; a view has no row count.
 func TestTables(t *testing.T) {
-	ts, err := my.Tables(context.Background(), connect(t, true))
+	ts, err := my.Tables(context.Background(), connect(t, true), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -441,6 +441,31 @@ func TestLiteralRoundTrip(t *testing.T) {
 		}
 		if r, err := c.Query(ctx, "select s from t_lit order by n desc limit 1"); err != nil || r.Rows[0][0].S != s {
 			t.Errorf("%q came back %v, %v", s, r.Rows, err)
+		}
+	}
+}
+
+// A pick of schemas limits the catalog's queries to them (F17.13).
+func TestTablesOfPickedSchemas(t *testing.T) {
+	ts, err := my.Tables(context.Background(), connect(t, true), []string{"agentable"})
+	if err != nil || len(ts) == 0 {
+		t.Fatalf("agentable: %v %v", ts, err)
+	}
+	for _, tb := range ts {
+		if tb.Schema != "agentable" {
+			t.Errorf("a table of %s", tb.Schema)
+		}
+	}
+	if none, err := my.Tables(context.Background(), connect(t, true), []string{}); err != nil || len(none) != 0 {
+		t.Errorf("none: %v %v", none, err)
+	}
+	if fs, err := my.Functions(context.Background(), connect(t, true), []string{"agentable"}); err != nil {
+		t.Errorf("functions: %v %v", fs, err)
+	} else {
+		for _, f := range fs {
+			if f.Schema != "agentable" {
+				t.Errorf("a function of %s", f.Schema)
+			}
 		}
 	}
 }

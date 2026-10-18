@@ -143,8 +143,10 @@ type Engine interface {
 	// connect to; nil for an engine whose databases are its schemas or that
 	// has none (§5, §8.4).
 	Databases(ctx context.Context, c Conn) ([]string, error)
-	// Tables lists every schema's tables and views by schema and name.
-	Tables(ctx context.Context, c Conn) ([]Table, error)
+	// Tables lists every schema's tables and views by schema and name; only
+	// names the schemas it asks of, nil for all (F17.13), as it does for
+	// Functions and Sequences.
+	Tables(ctx context.Context, c Conn, only []string) ([]Table, error)
 	// TableColumns reads a table's columns, its primary key and the unique
 	// indexes that can stand in for it (§10.1).
 	TableColumns(ctx context.Context, c Conn, schema, table string) (Columns, error)
@@ -155,8 +157,8 @@ type Engine interface {
 	// makes it; nil for what the engine has none of (§8.4, F14.3).
 	Indexes(ctx context.Context, c Conn, schema, table string) ([]Index, error)
 	Keys(ctx context.Context, c Conn, schema, table string) ([]Key, error)
-	Functions(ctx context.Context, c Conn) ([]Function, error)
-	Sequences(ctx context.Context, c Conn) ([]Sequence, error)
+	Functions(ctx context.Context, c Conn, only []string) ([]Function, error)
+	Sequences(ctx context.Context, c Conn, only []string) ([]Sequence, error)
 	FunctionDef(ctx context.Context, c Conn, f Function) (string, error)
 	// Quick runs one statement that reads, in a read-only transaction on
 	// w, schema first, keeping maxRows rows (§12).
@@ -182,4 +184,21 @@ type ServerError struct {
 	Severity, Code, Message string
 	More                    []string
 	Position                int
+}
+
+// SchemaIn is the condition that column col, a schema's name, is one of only, written
+// to follow a where's others: the catalog's queries ask for the schemas picked
+// (F17.13); "" for nil, all of them.
+func SchemaIn(col string, only []string, d sqlkit.Dialect) string {
+	if only == nil {
+		return ""
+	}
+	if len(only) == 0 { // none picked: nothing
+		return " and false"
+	}
+	lits := make([]string, len(only))
+	for i, n := range only {
+		lits[i] = sqlkit.Literal(n, d)
+	}
+	return " and " + col + " in (" + strings.Join(lits, ", ") + ")"
 }

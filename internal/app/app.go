@@ -501,8 +501,13 @@ func (a *App) click(p uv.Position) tea.Cmd {
 	case ui.KindNumber:
 		a.jumpToPane(keymap.Key(strconv.Itoa(t.I)))
 	case ui.KindBackdrop: // outside an overlay: close it; outside a confirm box: no
+		var picked tea.Cmd
+		if a.cols != nil {
+			picked = a.closeCols()
+		}
 		a.whichKey, a.paneNumbers, a.palette, a.drop, a.cols, a.confirm, a.keyHelp, a.sessList, a.menu, a.ddl = false, false, nil, nil, nil, nil, nil, nil, nil, nil
 		a.res.Reset()
+		return picked
 	case ui.KindSegment:
 		if a.form != nil {
 			a.formSegment(t.Pane, t.I)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // Catalog queries (§8.4), over information_schema as lazysql's
@@ -33,11 +34,11 @@ func (Engine) Schemas(ctx context.Context, c db.Conn) (schemas []string, current
 // view has no row count. Partitions are no tables of their own.
 // ponytail: TABLE_ROWS is cached for information_schema_stats_expiry, a
 // day by default, so counts lag behind; ANALYZE TABLE refreshes them
-func (Engine) Tables(ctx context.Context, c db.Conn) ([]db.Table, error) {
+func (Engine) Tables(ctx context.Context, c db.Conn, only []string) ([]db.Table, error) {
 	r, err := c.Query(ctx, `
 select table_schema, table_name, coalesce(table_rows, -1), table_type
 from information_schema.tables
-where table_schema `+userSchema+`
+where table_schema `+userSchema+db.SchemaIn("table_schema", only, sqlkit.MySQL)+`
 order by 1, 2`)
 	if err != nil {
 		return nil, err
@@ -280,14 +281,14 @@ order by constraint_name, ordinal_position`, db.Val{S: schema}, db.Val{S: table}
 // Functions lists every database's functions by database and name, with the
 // parameters as `name type, …`; not the procedures (F14.3). A function is
 // its database and name, the ID is its name.
-func (Engine) Functions(ctx context.Context, c db.Conn) ([]db.Function, error) {
+func (Engine) Functions(ctx context.Context, c db.Conn, only []string) ([]db.Function, error) {
 	r, err := c.Query(ctx, `
 select r.routine_schema, r.routine_name,
        coalesce((select group_concat(concat(p.parameter_name, ' ', p.dtd_identifier) order by p.ordinal_position separator ', ')
                  from information_schema.parameters p
                  where p.specific_schema = r.routine_schema and p.specific_name = r.specific_name and p.ordinal_position > 0), '')
 from information_schema.routines r
-where r.routine_type = 'FUNCTION' and r.routine_schema `+userSchema+`
+where r.routine_type = 'FUNCTION' and r.routine_schema `+userSchema+db.SchemaIn("r.routine_schema", only, sqlkit.MySQL)+`
 order by 1, 2`)
 	if err != nil {
 		return nil, err
@@ -303,7 +304,7 @@ order by 1, 2`)
 func (Engine) Databases(context.Context, db.Conn) ([]string, error) { return nil, nil }
 
 // Sequences is none: MySQL has no sequences.
-func (Engine) Sequences(context.Context, db.Conn) ([]db.Sequence, error) { return nil, nil }
+func (Engine) Sequences(context.Context, db.Conn, []string) ([]db.Sequence, error) { return nil, nil }
 
 // FunctionDef is f's CREATE FUNCTION as SHOW CREATE FUNCTION gives it.
 func (e Engine) FunctionDef(ctx context.Context, c db.Conn, f db.Function) (string, error) {

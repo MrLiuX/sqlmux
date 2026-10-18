@@ -72,7 +72,7 @@ func TestReconnectReads(t *testing.T) {
 	ctx := context.Background()
 	w, events := redialing(t, IntegrationDSN(t), true)
 	kill(t, w)
-	tables, err := pg.Tables(ctx, w)
+	tables, err := pg.Tables(ctx, w, nil)
 	if err != nil || len(tables) == 0 {
 		t.Fatalf("catalog: %d tables, %v", len(tables), err)
 	}

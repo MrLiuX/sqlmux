@@ -23,8 +23,9 @@ type colsMenu struct {
 	tab      *dataTab
 	pane     *Pane
 	filter   ui.Input
-	typing   bool // the filter has the keys
-	order    bool // the ORDER list
+	typing   bool      // the filter has the keys
+	order    bool      // the ORDER list
+	pick     *pickMenu // a tree node's databases or schemas, in this list's place (F17.13)
 	sel, top int
 }
 
@@ -54,6 +55,11 @@ func (a *App) openCols(order bool) {
 // colsMatches is the columns that pass the filter, in COLS's order; Index is
 // the column's in the page's.
 func (a *App) colsMatches() []ui.Match {
+	if p := a.cols.pick; p != nil {
+		ms := ui.Filter(a.cols.filter.Text, p.names)
+		slices.SortFunc(ms, func(x, y ui.Match) int { return x.Index - y.Index })
+		return ms
+	}
 	t := a.cols.tab
 	o := t.ordered()
 	names := make([]string, len(o))
@@ -71,6 +77,14 @@ func (a *App) colsMatches() []ui.Match {
 // colsBox is where v, the list as drawn, opens: under the COLS chip.
 func (a *App) colsBox(v ui.Dropdown) (uv.Rectangle, int) {
 	m := a.cols
+	if m.pick != nil { // under the tree's top, where the node is
+		r := bodyRect(a.layout()[m.pane.ID])
+		w := 30
+		for i, n := range m.pick.names {
+			w = max(w, ui.Width(n+"  "+m.pick.note(i))+10)
+		}
+		return v.Box(a.window(), uv.Rect(r.Min.X, r.Min.Y, 1, 1), min(w, r.Dx()+2))
+	}
 	w := 30
 	for _, c := range m.tab.page.Cols {
 		w = max(w, ui.Width(c.Name+"  "+m.tab.typeOf(c.Name))+10) // box, key, borders, padding
@@ -94,6 +108,9 @@ func (a *App) colsMove(d int) {
 // with the filter on it does nothing, the list not being all there (F10.3).
 func (a *App) colsShift(d int) {
 	m := a.cols
+	if m.pick != nil {
+		return
+	}
 	t := m.tab
 	o := t.ordered()
 	if j := m.sel + d; m.filter.Text != "" || m.sel >= len(o) || j < 0 || j >= len(o) {
@@ -113,6 +130,12 @@ func (a *App) colsShift(d int) {
 
 // colsToggle shows or hides the column at row i of the list.
 func (a *App) colsToggle(i int) {
+	if p := a.cols.pick; p != nil {
+		if ms := a.colsMatches(); i < len(ms) {
+			p.set(ms[i].Index, !p.on[ms[i].Index])
+		}
+		return
+	}
 	if ms := a.colsMatches(); i < len(ms) {
 		name := a.cols.tab.page.Cols[ms[i].Index].Name
 		a.colsSet(func(n string) bool { return n == name }, a.cols.tab.hidden[name])
@@ -125,6 +148,12 @@ func (a *App) colsSetAll(show bool) { a.colsSet(func(string) bool { return true 
 // colsSet shows or hides the listed columns which, and moves the cursor off
 // a column it hides.
 func (a *App) colsSet(which func(name string) bool, show bool) {
+	if p := a.cols.pick; p != nil {
+		for _, m := range a.colsMatches() {
+			p.set(m.Index, show)
+		}
+		return
+	}
 	t := a.cols.tab
 	at := t.fieldAt(t.col)
 	for _, m := range a.colsMatches() {
@@ -135,13 +164,24 @@ func (a *App) colsSet(which func(name string) bool, show bool) {
 	t.col = t.nearestShown(at)
 }
 
-// colsEsc clears the filter, and when there is none, closes the list (Q-04).
-func (a *App) colsEsc() {
+// colsEsc clears the filter, and when there is none, closes the list (Q-04); a pick
+// list that closes with a change is the command that writes it and loads again.
+func (a *App) colsEsc() tea.Cmd {
 	if a.cols.filter.Text != "" {
 		a.cols.filter, a.cols.sel, a.cols.top = ui.Input{}, 0, 0
-		return
+		return nil
 	}
+	return a.closeCols()
+}
+
+// closeCols closes the list.
+func (a *App) closeCols() tea.Cmd {
+	m := a.cols
 	a.cols = nil
+	if m != nil && m.pick != nil {
+		return a.applyPick(m.pick)
+	}
+	return nil
 }
 
 // colsFilterKey edits the filter; ↵ and esc give the keys back to the list,
@@ -160,6 +200,9 @@ func (a *App) colsFilterKey(k keymap.Key) {
 
 func (a *App) colsView() ui.Dropdown {
 	m := a.cols
+	if m.pick != nil {
+		return a.pickView()
+	}
 	t := m.tab
 	ms := a.colsMatches()
 	v := ui.Dropdown{

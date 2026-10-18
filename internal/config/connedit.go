@@ -35,7 +35,7 @@ var (
 )
 
 // connFields are the keys of a connection, in the order they are written.
-var connFields = []string{"name", "group", "engine", "dsn", "password_cmd", "password_env", "password", "read_only", "production", "ssh", "delimiter"}
+var connFields = []string{"name", "group", "engine", "dsn", "password_cmd", "password_env", "password", "read_only", "production", "ssh", "delimiter", "databases", "schemas"}
 
 func (c Connection) field(key string) any {
 	switch key {
@@ -59,6 +59,10 @@ func (c Connection) field(key string) any {
 		return c.Delimiter
 	case "production":
 		return c.Production
+	case "databases":
+		return c.Databases
+	case "schemas":
+		return c.Schemas
 	}
 	return c.ReadOnly
 }
@@ -86,6 +90,10 @@ func (c Connection) with(key string, from Connection) Connection {
 		c.Delimiter = from.Delimiter
 	case "production":
 		c.Production = from.Production
+	case "databases":
+		c.Databases = from.Databases
+	case "schemas":
+		c.Schemas = from.Schemas
 	default:
 		c.ReadOnly = from.ReadOnly
 	}
@@ -230,12 +238,12 @@ func editedText(old string, was, c Connection) (text string, got Connection, err
 	}
 	for _, key := range connFields {
 		have, to := was.field(key), c.field(key)
-		if have == to && !(key == "read_only" && was.Production != c.Production) { // what read_only stands for when it is not written changes with production
+		if reflect.DeepEqual(have, to) && !(key == "read_only" && was.Production != c.Production) { // what read_only stands for when it is not written changes with production
 			continue
 		}
 		want = want.with(key, c)
 		at := lineOfKey(lines, b.head+1, b.last+1, key)
-		zero := to == "" || to == false
+		zero := to == "" || to == false || reflect.ValueOf(to).Kind() == reflect.Slice && reflect.ValueOf(to).Len() == 0
 		if key == "read_only" { // a production connection's default is read only: it is writable when it says so
 			zero = to == c.Production
 		}

@@ -34,6 +34,11 @@ type Connection struct {
 	// runs, postgres, and the command, {sql} where the statement goes in an argument.
 	Dialect string   `toml:"dialect,omitempty"`
 	Command []string `toml:"command,omitempty"`
+	// Databases and Schemas are what the tree lists and loads of the server when they
+	// are not all of it (F17.13): the databases (PG), and the schemas, `db.schema`
+	// for PG and a name for MySQL; none: all. The DSN's database is always there.
+	Databases []string `toml:"databases,omitempty"`
+	Schemas   []string `toml:"schemas,omitempty"`
 	// Temp is a connection of the command line, a file or a URL: written nowhere,
 	// not in the manager (F14.1).
 	Temp bool `toml:"-"`
@@ -231,6 +236,12 @@ func (c Connection) Check(names []string) (field, problem string) {
 		}
 	} else if c.Dialect != "" || len(c.Command) > 0 {
 		return "command", i18n.T("dialect 和 command 只对 exec 连接有用")
+	}
+	if (len(c.Databases) > 0 || len(c.Schemas) > 0) && (c.Kind() == "redis" || c.Kind() == "sqlite") {
+		return "schemas", i18n.T("databases 和 schemas 只对 postgres 和 mysql 连接有用")
+	}
+	if len(c.Databases) > 0 && c.Kind() != "postgres" {
+		return "databases", i18n.T("databases 只对 postgres 连接有用")
 	}
 	if c.Delimiter != "" && c.Engine != "redis" {
 		return "delimiter", i18n.T("delimiter 只对 redis 连接有用")

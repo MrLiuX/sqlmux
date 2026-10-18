@@ -249,7 +249,14 @@ func init() {
 		"tree.open.tab": {Title: i18n.N("打开"), Run: func(a *App, _ Args) tea.Cmd { return a.treeOpen(true) }},
 		"tree.filter":   {Title: i18n.N("过滤"), Run: do(func(a *App, _ Args) { a.treeFilter() })},
 		"tree.refresh":  {Title: i18n.N("刷新表列表"), Run: func(a *App, _ Args) tea.Cmd { return a.refreshTree() }},
-		"tree.delete":   {Title: i18n.N("删除 query 文件、表、视图"), Run: func(a *App, _ Args) tea.Cmd { return a.treeDelete() }},
+		"tree.pick": {Title: i18n.N("选择库 / schema…"), Run: func(a *App, _ Args) tea.Cmd {
+			n, ok := a.treeNode()
+			if !ok {
+				return a.showToast(i18n.T("这个节点没有可选的库或 schema"))
+			}
+			return a.openPick(n)
+		}},
+		"tree.delete": {Title: i18n.N("删除 query 文件、表、视图"), Run: func(a *App, _ Args) tea.Cmd { return a.treeDelete() }},
 		// Keys inside the dropdowns and the COLS list (§6.8): untitled, like the palette's.
 		"grid.ddl.column": {Title: i18n.N("列的定义"), Run: func(a *App, _ Args) tea.Cmd { return a.openDDL(true) }},
 		"grid.value":      {Title: i18n.N("在值编辑器中打开"), Run: func(a *App, _ Args) tea.Cmd { return a.valueOpen() }},
@@ -408,12 +415,12 @@ func init() {
 		"order.up":          {Title: i18n.N("上移"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { a.colsMove(-1); return nil })},
 		"order.down":        {Title: i18n.N("下移"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { a.colsMove(1); return nil })},
 		"order.filter":      {Title: i18n.N("过滤列"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { a.cols.typing = true; return nil })},
-		"order.close":       {Title: i18n.N("关闭 ORDER"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { a.colsEsc(); return nil })},
+		"order.close":       {Title: i18n.N("关闭 ORDER"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { return a.colsEsc() })},
 		"order.toggle":      {Title: i18n.N("加入 / 翻转排序"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { return a.orderToggleSel() })},
 		"order.remove":      {Title: i18n.N("移出排序"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { return a.orderRemove() })},
 		"order.clear":       {Title: i18n.N("清空排序"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { return a.orderClear() })},
 		"order.only":        {Title: i18n.N("只按这一列排序"), Local: true, Run: when(inOrder, func(a *App) tea.Cmd { return a.orderPick(a.cols.sel) })},
-		"cols.close":        {Title: i18n.N("关闭 COLS"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { a.colsEsc(); return nil })},
+		"cols.close":        {Title: i18n.N("关闭 COLS"), Local: true, Run: when(inCols, func(a *App) tea.Cmd { return a.colsEsc() })},
 		"pane.error.close": {Title: i18n.N("关闭错误栏"), Run: func(a *App, args Args) tea.Cmd { // "pane.error.close <id>" is its ×
 			p := a.focused()
 			if id, err := strconv.Atoi(args.Arg); err == nil {
