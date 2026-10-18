@@ -89,17 +89,14 @@ func (a *App) openPick(n node) tea.Cmd {
 		names, loaded, p.fixed = cmpOr(c.all.dbs, c.Databases), c.Databases, c.DB
 	}
 	p.names = slices.Clone(names)
+	if !dbs && slices.Contains(p.names, c.all.keep) { // the schema names go to stays picked, as the database does
+		p.fixed = c.all.keep
+	}
 	for _, t := range c.Tables {
 		p.tables[t.Schema]++
 	}
 	for _, name := range p.names {
 		p.on = append(p.on, slices.Contains(loaded, name) || name == p.fixed)
-	}
-	if !dbs && slices.Contains(p.names, c.all.keep) { // the schema names go to stays picked, as the database does
-		p.fixed = c.all.keep
-	}
-	for i, name := range p.names {
-		p.on[i] = p.on[i] || name == p.fixed
 	}
 	p.was = slices.Clone(p.on)
 	if len(p.names) == 0 {
