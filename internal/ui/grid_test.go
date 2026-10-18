@@ -527,3 +527,30 @@ func TestGridColEdges(t *testing.T) {
 		}
 	}
 }
+
+// The cell that can be dragged is the │ drawn between two heads: the region is on it, the
+// one on its left is still the head's (F17.14).
+func TestGridColEdgeIsTheBar(t *testing.T) {
+	g := testGrid()
+	g.Heads, g.Pane = true, 1
+	f := NewFrame(60, 12, TokyonightStorm)
+	g.Draw(f, uv.Rect(0, 0, 60, 12))
+	head := strings.Split(f.Buf.String(), "\n")[0]
+	bars := sepCols(head)
+	if len(bars) < 3 {
+		t.Fatalf("the head: %q", head)
+	}
+	// bars[0] is the label column's; the next two are after columns 0 and 1
+	for i, c := range []int{0, 1} {
+		at := bars[i+1]
+		if got, _ := HitAt(f.Hits, uv.Pos(at, 0)); got.Kind != KindColEdge || got.I != c {
+			t.Errorf("the │ at %d: %+v, want the edge of column %d", at, got, c)
+		}
+		if got, _ := HitAt(f.Hits, uv.Pos(at-1, 0)); got.Kind != KindHead || got.I != c {
+			t.Errorf("left of it: %+v, want the head of column %d", got, c)
+		}
+	}
+	if got, _ := HitAt(f.Hits, uv.Pos(bars[0], 0)); got.Kind == KindColEdge {
+		t.Errorf("the label column's │ is an edge: %+v", got)
+	}
+}
