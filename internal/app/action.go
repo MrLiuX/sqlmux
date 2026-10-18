@@ -560,7 +560,10 @@ func init() {
 			}
 			return nil
 		}},
-		"grid.filter.cell": {Title: i18n.N("按这个值过滤"), Run: func(a *App, _ Args) tea.Cmd { return a.filterCell() }},
+		"grid.col.wider":    {Title: i18n.N("加宽这一列"), Run: do(func(a *App, args Args) { a.resizeCol(max(args.Count, 1)) })},
+		"grid.col.narrower": {Title: i18n.N("收窄这一列"), Run: do(func(a *App, args Args) { a.resizeCol(-max(args.Count, 1)) })},
+		"grid.col.fit":      {Title: i18n.N("列宽回到自动"), Run: do(func(a *App, _ Args) { a.fitCols() })},
+		"grid.filter.cell":  {Title: i18n.N("按这个值过滤"), Run: func(a *App, _ Args) tea.Cmd { return a.filterCell() }},
 		"grid.order.toggle": {Title: i18n.N("切换排序方向"), Run: func(a *App, _ Args) tea.Cmd {
 			if t := dataOf(a.focused()); t != nil && t.page.Cols != nil {
 				return a.toggleOrder(t)

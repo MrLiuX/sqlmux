@@ -109,6 +109,7 @@ type App struct {
 	mouse       uv.Position  // pointer, for hover styles
 	drag        *handle      // the split border being dragged
 	dragTree    bool         // the sidebar's edge is being dragged
+	dragCol     *colDrag     // a column's width is being dragged by its head's edge (F17.14)
 	exporting   map[any]bool // the tabs with an export going on (F12.4)
 	shiftClick  bool         // the left click being handled had Shift down (a column head's: add to the sorting)
 	dragText    int          // the pane whose query text is being selected by dragging; 0 for none
@@ -243,7 +244,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // not redraw them; the tick that is due brings the right ones.
 func (a *App) stillOver(msg tea.Msg) bool {
 	m, ok := msg.(tea.MouseMotionMsg)
-	if !ok || a.drag != nil || a.dragTree || a.dragText != 0 || a.dragWhere != 0 {
+	if !ok || a.drag != nil || a.dragTree || a.dragCol != nil || a.dragText != 0 || a.dragWhere != 0 {
 		return false
 	}
 	if t, _ := ui.HitAt(a.hits, a.mouse); t.Kind == ui.KindRow {
@@ -372,6 +373,9 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.dragTree {
 			a.win().TreeW = treeWidth(a.mouse.X, a.w)
 		}
+		if a.dragCol != nil {
+			a.dragColTo(a.mouse.X)
+		}
 		switch {
 		case a.dragText == ui.ValuePane && a.value != nil:
 			n, v := a.valueAt(a.mouse)
@@ -395,7 +399,7 @@ func (a *App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case tea.MouseReleaseMsg:
-		a.drag, a.dragTree, a.dragText, a.dragWhere = nil, false, 0, 0
+		a.drag, a.dragTree, a.dragCol, a.dragText, a.dragWhere = nil, false, nil, 0, 0
 	case tea.MouseClickMsg:
 		a.jump = nil // a click goes where it is, the jump over (F10.8)
 		switch m := msg.Mouse(); m.Button {
@@ -613,6 +617,8 @@ func (a *App) click(p uv.Position) tea.Cmd {
 		}
 	case ui.KindTreeEdge:
 		a.dragTree = true
+	case ui.KindColEdge:
+		a.startColDrag(t.Pane, t.I, p.X)
 	case ui.KindBorder:
 		for _, h := range a.win().Root.handles(a.mainArea()) {
 			if h.idx == t.I {

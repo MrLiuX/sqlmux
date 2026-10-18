@@ -19,6 +19,9 @@ type GridCol struct {
 	Type ColType
 	Sort Icon // the way it is sorted by: after the name, in warn; none when its Text is empty (F12.7)
 	Rank int  // its place among several columns sorted by, 1 on; 0 for no number
+	// Width is the width it was set to by hand, 0 for the automatic one: drawn as it is,
+	// not squeezed, not capped, not by its values (F17.14); a turned grid has none
+	Width int
 }
 
 // ColType is the class of a column's values: it picks their color, and
@@ -289,12 +292,15 @@ func (v view) widths(room int) []int {
 	for c := range v.cols {
 		heads[c] = Width(v.head(c))
 		ws[c] = min(max(heads[c], widest[c]), maxColWidth)
+		if w := v.fixedWidth(c); w > 0 {
+			ws[c] = w
+		}
 		total += ws[c]
 	}
 	if total > room && !v.g.Transpose {
 		var wide, want, floor []int // the columns that give way, and what they wish and keep at least
 		for c, w := range ws {
-			if w > v.g.FullWidth {
+			if w > v.g.FullWidth && v.fixedWidth(c) == 0 {
 				wide, want, floor = append(wide, c), append(want, w), append(floor, max(heads[c], v.g.FullWidth))
 				total -= w
 			}
@@ -303,6 +309,20 @@ func (v view) widths(room int) []int {
 			ws[wide[i]] = w
 		}
 	}
+	return ws
+}
+
+// fixedWidth is the width screen column c was set to by hand, 0 for none.
+func (v view) fixedWidth(c int) int {
+	if v.g.Transpose || c >= len(v.g.Cols) {
+		return 0
+	}
+	return v.g.Cols[c].Width
+}
+
+// ColWidths is the width each column is drawn at in area (§7.6, F17.14).
+func (g Grid) ColWidths(area uv.Rectangle) []int {
+	_, ws, _ := g.view().layout(area)
 	return ws
 }
 
@@ -475,6 +495,9 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 		default:
 			if g.Heads {
 				f.Region(uv.Rect(cellX(i)-1, y, ws[c]+2, 1).Intersect(area), Target{Kind: KindHead, Pane: g.Pane, I: c})
+				if c+1 < v.cols { // the │ between it and the next: drag to set its width (F17.14)
+					f.Region(uv.Rect(cellX(i)+ws[c]+1, y, 1, 1).Intersect(area), Target{Kind: KindColEdge, Pane: g.Pane, I: c})
+				}
 			}
 			f.Text(cellX(i), y, right, h, name)
 			if mark != "" {

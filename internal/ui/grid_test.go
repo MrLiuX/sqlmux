@@ -454,3 +454,76 @@ func TestGridSortMarks(t *testing.T) {
 		t.Errorf("turned, the heads are the records' numbers and no marks: %q", h)
 	}
 }
+
+// A column set to a width by hand is drawn at it: not squeezed, not capped at 40, not by
+// its values; the others are sized as before, the room it takes not given to them; a
+// turned grid has none (F17.14).
+func TestGridFixedWidths(t *testing.T) {
+	grid := func(fixed int, transpose bool) view {
+		g := Grid{FullWidth: 20, Transpose: transpose, Cols: []GridCol{{Name: "a"}, {Name: "b", Width: fixed}, {Name: "c"}}}
+		g.Rows = vals([]string{strings.Repeat("x", 30), strings.Repeat("y", 30), strings.Repeat("z", 30)})
+		return g.view()
+	}
+	for _, c := range []struct {
+		name string
+		v    view
+		room int
+		want []int
+	}{
+		{"none: as before", grid(0, false), 200, []int{30, 30, 30}},
+		{"wider than the cap, room enough", grid(55, false), 200, []int{30, 55, 30}},
+		{"narrower than its values", grid(5, false), 200, []int{30, 5, 30}},
+		{"1 at least is what is asked", grid(1, false), 200, []int{30, 1, 30}},
+		{"no room: the others give way, it does not", grid(50, false), 100, []int{25, 50, 25}}, // the 50 it keeps, the other two share the rest
+		{"turned: no widths by hand", grid(5, true), 200, nil},
+	} {
+		got := c.v.widths(c.room)
+		if c.want == nil {
+			if slices.Contains(got, 5) {
+				t.Errorf("%s: %v", c.name, got)
+			}
+			continue
+		}
+		if !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+	turned := Grid{Transpose: true, Cols: []GridCol{{Name: "a", Width: 5}, {Name: "b"}}, Rows: vals([]string{"1", "22"}, []string{"3", "4"})}
+	if ws := turned.view().widths(200); slices.Contains(ws, 5) {
+		t.Errorf("turned: %v", ws)
+	}
+	g := Grid{Cols: []GridCol{{Name: "a", Width: 7}, {Name: "b"}}, Rows: vals([]string{"1", "22"})}
+	if ws := g.ColWidths(uv.Rect(0, 0, 80, 10)); ws[0] != 7 || ws[1] != 2 {
+		t.Errorf("ColWidths %v", ws)
+	}
+}
+
+// Between two heads there is a │ to drag, not after the last one, nor beside the row
+// numbers (F17.14).
+func TestGridColEdges(t *testing.T) {
+	g := testGrid()
+	g.Heads, g.Pane = true, 1
+	f := NewFrame(60, 12, TokyonightStorm)
+	g.Draw(f, uv.Rect(0, 0, 60, 12))
+	var edges []int
+	for _, h := range f.Hits {
+		if h.Target.Kind == KindColEdge {
+			edges = append(edges, h.Target.I)
+			if h.Rect.Dx() != 1 || h.Rect.Min.Y != 0 {
+				t.Errorf("an edge is one cell in the head row: %v", h.Rect)
+			}
+		}
+	}
+	slices.Sort(edges)
+	if !slices.Equal(edges, []int{0, 1}) {
+		t.Errorf("edges of columns %v, want 0 and 1 of 3", edges)
+	}
+	g.Transpose = true
+	f = NewFrame(60, 12, TokyonightStorm)
+	g.Draw(f, uv.Rect(0, 0, 60, 12))
+	for _, h := range f.Hits {
+		if h.Target.Kind == KindColEdge {
+			t.Error("an edge in a turned grid")
+		}
+	}
+}

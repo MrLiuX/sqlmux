@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -40,7 +41,8 @@ type gridState struct {
 	row, col  int       // the cursor
 	top, left int       // the first record and field shown
 	transpose bool
-	jv        *jsonView // the JSON view, when it is in the table's place (F14.5)
+	colWidth  map[string]int // the columns set to a width by hand, by name (F17.14)
+	jv        *jsonView      // the JSON view, when it is in the table's place (F14.5)
 	// the records marked with m, or by VISUAL from anchor to the cursor, by
 	// position among the rows shown (F10.7); a new page or row puts them back.
 	// unset: the range takes records out of the marked ones (F12.12)
@@ -308,6 +310,9 @@ func (a *App) gotPage(m pageMsg) tea.Cmd {
 	t.colOrder = slices.DeleteFunc(t.colOrder, func(name string) bool { // a column that is gone (F10.3)
 		return !slices.ContainsFunc(t.page.Cols, func(c db.Col) bool { return c.Name == name })
 	})
+	maps.DeleteFunc(t.colWidth, func(name string, _ int) bool { // and its width (F17.14)
+		return !slices.ContainsFunc(t.page.Cols, func(c db.Col) bool { return c.Name == name })
+	})
 	t.row = max(min(t.row, len(t.shownRows())-1), 0)
 	if t.wantRec > 0 {
 		t.goRec(t.wantRec - 1)
@@ -517,7 +522,7 @@ func (a *App) grid(p *Pane, t *dataTab) ui.Grid {
 	shown := t.shownCols()
 	for _, i := range shown {
 		name := t.page.Cols[i].Name
-		col := ui.GridCol{Name: name, PK: slices.Contains(t.cols.PK, name), Type: colType(t.typeOf(name))}
+		col := ui.GridCol{Name: name, PK: slices.Contains(t.cols.PK, name), Type: colType(t.typeOf(name)), Width: t.colWidth[name]}
 		if at := slices.IndexFunc(t.shown.order, func(o db.OrderCol) bool { return o.Col == name }); at >= 0 { // not the default, which every table's id would show
 			col.Sort = a.icons.SortAsc
 			if t.shown.order[at].Desc {
@@ -861,7 +866,7 @@ func (a *App) resultGrid(p *Pane, t *resultTab) ui.Grid {
 		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Yank: a.gridFlash(p), Selected: t.marked, Ranged: t.ranged(), FlashNums: a.flashNums(p), Widest: t.widestCache(),
 	}
 	for _, c := range t.page.Cols {
-		g.Cols = append(g.Cols, ui.GridCol{Name: c.Name, Type: colType(c.Type)})
+		g.Cols = append(g.Cols, ui.GridCol{Name: c.Name, Type: colType(c.Type), Width: t.colWidth[c.Name]})
 	}
 	return g
 }
@@ -1082,4 +1087,56 @@ func (t *dataTab) keyType() string {
 		}
 	}
 	return ""
+}
+
+// resizeCol is C-w > and C-w < (F17.14): the column the cursor is on is set to the width
+// it is drawn at, d columns wider or narrower, 1 at least, and stays that wide; a turned
+// grid has no columns to set.
+func (a *App) resizeCol(d int) {
+	s, g, area, ok := a.gridOf(a.focused())
+	if !ok || s.transpose || s.col >= len(g.Cols) {
+		return
+	}
+	a.setColWidth(s, g.Cols[s.col].Name, g.ColWidths(area)[s.col]+d)
+}
+
+// setColWidth sets the column called name to w columns, 1 at least.
+func (a *App) setColWidth(s *gridState, name string, w int) {
+	if s.colWidth == nil {
+		s.colWidth = map[string]int{}
+	}
+	s.colWidth[name] = max(w, 1)
+}
+
+// fitCols is C-w =: every column of the focused grid is automatic again.
+func (a *App) fitCols() {
+	if s, _, _, ok := a.gridOf(a.focused()); ok {
+		s.colWidth = nil
+	}
+}
+
+// colDrag is a column's width being dragged by its head's right edge (F17.14): the width
+// it had and where the pointer was when it was pressed.
+type colDrag struct {
+	pane, col int
+	name      string
+	w0, x0    int
+}
+
+// startColDrag begins the drag of a column by its edge, pressed at column x of the screen.
+func (a *App) startColDrag(pane, col, x int) {
+	a.focusPane(pane)
+	s, g, area, ok := a.gridOf(a.win().pane(pane))
+	if !ok || s.transpose || col >= len(g.Cols) {
+		return
+	}
+	a.dragCol = &colDrag{pane: pane, col: col, name: g.Cols[col].Name, w0: g.ColWidths(area)[col], x0: x}
+}
+
+// dragColTo follows the pointer: the column is as wide as it was and the pointer moved.
+func (a *App) dragColTo(x int) {
+	d := a.dragCol
+	if s, _, _, ok := a.gridOf(a.win().pane(d.pane)); ok {
+		a.setColWidth(s, d.name, d.w0+x-d.x0)
+	}
 }

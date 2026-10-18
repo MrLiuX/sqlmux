@@ -69,16 +69,17 @@ type LayoutTab struct {
 	DB         string `toml:"db,omitempty"` // not the DSN's database (F15.1)
 	Schema     string `toml:"schema,omitempty"`
 	// a table's
-	Table     string      `toml:"table,omitempty"`
-	Where     string      `toml:"where,omitempty"`
-	Order     LayoutOrder `toml:"order,omitempty"`
-	Desc      bool        `toml:"desc,omitempty"` // the default order turned; a layout of before F12.1 has the direction of its one column here
-	Limit     int         `toml:"limit,omitempty"`
-	Page      int         `toml:"page,omitempty"`       // from 0
-	Cols      []string    `toml:"cols,omitempty"`       // the columns COLS hides
-	OrderCols []string    `toml:"order_cols,omitempty"` // the columns in the order COLS puts them (F10.3)
-	Transpose bool        `toml:"transpose,omitempty"`
-	Key       string      `toml:"key,omitempty"` // a key's name, Kind "key"; its db is DB (F16.3)
+	Table     string         `toml:"table,omitempty"`
+	Where     string         `toml:"where,omitempty"`
+	Order     LayoutOrder    `toml:"order,omitempty"`
+	Desc      bool           `toml:"desc,omitempty"` // the default order turned; a layout of before F12.1 has the direction of its one column here
+	Limit     int            `toml:"limit,omitempty"`
+	Page      int            `toml:"page,omitempty"`       // from 0
+	Cols      []string       `toml:"cols,omitempty"`       // the columns COLS hides
+	OrderCols []string       `toml:"order_cols,omitempty"` // the columns in the order COLS puts them (F10.3)
+	ColWidths map[string]int `toml:"col_widths,omitempty"` // the columns set to a width by hand (F17.14)
+	Transpose bool           `toml:"transpose,omitempty"`
+	Key       string         `toml:"key,omitempty"` // a key's name, Kind "key"; its db is DB (F16.3)
 	// a query's: the name of its file; N is what layouts of before
 	// M8 F8.11 say, query_<n>
 	Name string `toml:"name,omitempty"`

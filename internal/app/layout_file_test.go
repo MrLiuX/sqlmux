@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -63,7 +64,7 @@ func table(conn, schema, name string) config.LayoutTab {
 // not the one the focus last named.
 func TestLayoutRoundTrip(t *testing.T) {
 	order := config.LayoutTab{Kind: "table", Connection: "doraemon", Schema: "public", Table: "t_order", Where: "id > 5", Order: config.LayoutOrder{{Col: "amount", Desc: true}, {Col: "id"}},
-		Limit: 500, Page: 2, Cols: []string{"meta", "note"}, OrderCols: []string{"note", "id", "amount"}, Transpose: true}
+		Limit: 500, Page: 2, Cols: []string{"meta", "note"}, OrderCols: []string{"note", "id", "amount"}, ColWidths: map[string]int{"note": 30, "id": 4}, Transpose: true}
 	want := &config.Layout{Version: 1, Active: 1, Sessions: []config.LayoutSession{
 		{Name: "one", Connection: "doraemon", Active: 1, Windows: []config.LayoutWindow{
 			{
@@ -768,5 +769,16 @@ table = "items"
 		if len(w.Root.Leaves()) != c.panes || tabs != c.panes || said != c.warns || c.panes > 1 && w.Root.Split != c.dir {
 			t.Errorf("%s: %d panes with %d tabs, %d said (%q), split %v", c.name, len(w.Root.Leaves()), tabs, said, r.Warnings, w.Root.Split)
 		}
+	}
+}
+
+// A width in the file that is none, 0 or less, is not one (F17.14).
+func TestLayoutRestoresOnlyWidths(t *testing.T) {
+	tab := table("doraemon", "public", "t_order")
+	tab.ColWidths = map[string]int{"id": 0, "note": -3, "amount": 7}
+	r := restoredFrom(t, oneWindow(config.LayoutWindow{Name: "a", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{tab}}}}))
+	d := r.Sessions[0].Windows[0].pane(1).Tabs[0].Data
+	if d == nil || !maps.Equal(d.colWidth, map[string]int{"amount": 7}) {
+		t.Errorf("widths %v", d.colWidth)
 	}
 }

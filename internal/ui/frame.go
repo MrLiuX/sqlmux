@@ -35,6 +35,7 @@ const (
 	KindSegment                  // a segment of a form's switch (Pane: its field, I: the segment)
 	KindConn                     // a row of the connection manager's list (I: its index)
 	KindHead                     // a table's column head (I: the column's index among those shown): click sorts by it (§7.6)
+	KindColEdge                  // the │ right of a column head (I: the column): drag to set the column's width (F17.14)
 )
 
 // Target is what a click on a hit region resolves to. Targets compare with

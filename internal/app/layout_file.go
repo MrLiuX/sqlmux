@@ -2,6 +2,7 @@ package app
 
 import (
 	"cmp"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -88,6 +89,7 @@ func paneLayout(p *Pane) config.LayoutPane {
 			}
 			slices.Sort(lt.Cols)
 			lt.OrderCols = slices.Clone(d.colOrder)
+			lt.ColWidths = maps.Clone(d.colWidth)
 			if d.table.Kind == "k" { // its pages go by cursors, which a new start has none of: the first
 				lt.Kind, lt.Key, lt.Table, lt.Page = "key", d.table.Name, "", 0
 			}
@@ -278,6 +280,14 @@ func (s *Session) restoreTab(lt config.LayoutTab, used map[string]bool) (tb Tab,
 		}
 		d.transpose = lt.Transpose
 		d.colOrder = slices.Clone(lt.OrderCols)
+		for name, w := range lt.ColWidths {
+			if w > 0 { // typed by hand it may be anything
+				if d.colWidth == nil {
+					d.colWidth = map[string]int{}
+				}
+				d.colWidth[name] = w
+			}
+		}
 		return Tab{Name: c.tabName(d.table), Data: d}, ""
 	}
 	cname := lt.QueryName()

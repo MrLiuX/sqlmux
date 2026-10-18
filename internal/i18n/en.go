@@ -625,4 +625,7 @@ var en = map[string]string{
 	"库":                          "Databases",
 	"databases 只对 postgres 连接有用": "databases is for postgres connections",
 	"databases 和 schemas 只对 postgres 和 mysql 连接有用": "databases and schemas are for postgres and mysql connections",
+	"加宽这一列":  "Widen this column",
+	"收窄这一列":  "Narrow this column",
+	"列宽回到自动": "Column widths back to automatic",
 }
