@@ -223,23 +223,28 @@ func (c *Conn) Query(ctx context.Context, sql string, args ...db.Val) (db.Result
 	if items[0].Err != "" {
 		return db.Result{}, Error{items[0].Err}
 	}
-	it, err := c.whole(ctx, text, items[0])
-	if err != nil {
-		return db.Result{}, err
+	it := items[0]
+	if ctx.Value(noPaging{}) == nil {
+		if it, err = c.whole(ctx, text, it); err != nil {
+			return db.Result{}, err
+		}
 	}
 	return result(it, 0, time.Since(start)), nil
 }
+
+// noPaging is a context value: the statement of this Query is a user's, which stays cut.
+type noPaging struct{}
 
 // maxPaged is how many rows whole reads before it leaves a statement truncated.
 var maxPaged = 100000
 
 // whole is the item of statement sql, which the command cut at some rows, with the rest
 // of the rows: the statement is run again as a page of itself, the size of the first cut
-// from the rows read, until a page is short; at maxPaged rows it stays truncated. A page
-// as long as the first is taken as cut too, whatever the command says: it cannot tell
-// the end from its own wall (staging's pgAdmin, 1000 rows). Only the statements sqlmux
-// sends (the catalog, a page, a count) come here: a user's query stays cut, and says so
-// (§8.8, F17.11).
+// from the rows read, for as long as a page is as long as the first: a short page or an
+// empty one is the end, whatever it says of being cut, for the command cannot tell its
+// wall from the end (staging's pgAdmin, 1000 rows). At maxPaged rows it stays truncated.
+// Only the statements sqlmux sends (the catalog, a page, a count) come here: a user's
+// query stays cut, and says so (§8.8, F17.11).
 // ponytail: the rows come in the order the subselect gives them, which PG keeps for an
 // ORDER BY inside it in practice and does not promise
 func (c *Conn) whole(ctx context.Context, sql string, it item) (item, error) {
@@ -251,18 +256,14 @@ func (c *Conn) whole(ctx context.Context, sql string, it item) (item, error) {
 			return item{}, err
 		}
 		if len(items) == 0 {
+			it.Truncated = false
 			break
 		}
-		next := items[0]
-		if next.Err != "" {
-			return item{}, Error{next.Err}
+		if items[0].Err != "" {
+			return item{}, Error{items[0].Err}
 		}
-		it.Rows = append(it.Rows, next.Rows...)
-		if len(next.Rows) == 0 { // nothing came: it says it is cut, stuck, and stays cut; it says nothing, that was the end
-			it.Truncated = next.Truncated
-			break
-		}
-		it.Truncated = next.Truncated || len(next.Rows) == size
+		it.Rows = append(it.Rows, items[0].Rows...)
+		it.Truncated = len(items[0].Rows) == size
 	}
 	return it, nil
 }

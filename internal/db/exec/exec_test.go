@@ -36,6 +36,7 @@ case "$sql" in
   n=0; rows=; i=$off; while [ $i -lt 6 ] && [ $n -lt 3 ]; do i=$((i+1)); n=$((n+1)); rows="$rows${rows:+,}[$i]"; done
   cut=false; [ $off = 0 ] && cut=true # only the first says it is cut, as pgAdmin's wall does
   echo "[{\"columns\":[\"x\"],\"rows\":[$rows],\"truncated\":$cut}]" ;;
+*shortcut*) case "$sql" in *offset*) echo '[{"columns":["x"],"rows":[[4]],"truncated":true}]' ;; *) echo '[{"columns":["x"],"rows":[[1],[2],[3]],"truncated":true}]' ;; esac ;;
 *stuck*) case "$sql" in *offset*) echo '[{"columns":["x"],"rows":[],"truncated":true}]' ;; *) echo '[{"columns":["x"],"rows":[[1],[2],[3]],"truncated":true}]' ;; esac ;;
 *endless*) echo '[{"columns":["x"],"rows":[[1],[2],[3]],"truncated":true}]' ;;
 *tagged*) echo '[{"n":3}]' ;;
@@ -217,8 +218,17 @@ func TestQueryPagesWhatIsCut(t *testing.T) {
 	if err != nil || len(rs) != 1 || len(rs[0].Rows) != 3 || !rs[0].Truncated || len(ran(t, log)) != 7 {
 		t.Errorf("Exec: %+v %v, %d runs in all", rs, err, len(ran(t, log)))
 	}
-	if r, err := c.Query(ctx, "select stuck"); err != nil || len(r.Rows) != 3 || !r.Truncated { // a page with no rows ends it
+	if r, err := c.Query(ctx, "select stuck"); err != nil || len(r.Rows) != 3 || r.Truncated { // an empty page ends it, whatever it says
 		t.Errorf("an empty page: %d rows, truncated %v, %v", len(r.Rows), r.Truncated, err)
+	}
+	if r, err := c.Query(ctx, "select shortcut"); err != nil || len(r.Rows) != 4 || r.Truncated { // a short page ends it, whatever it says
+		t.Errorf("a short page: %d rows, truncated %v, %v", len(r.Rows), r.Truncated, err)
+	}
+	// a user's statement in the quick SQL is one run, cut and saying so
+	e := Engine{Engine: postgres.Engine{}, Command: argv}
+	before := len(ran(t, log))
+	if r, err := e.Quick(ctx, db.NewWorker(c), "select x from seven", "", 100); err != nil || len(r.Rows) != 3 || !r.Truncated || len(ran(t, log)) != before+1 {
+		t.Errorf("quick: %d rows, truncated %v, %d runs, %v", len(r.Rows), r.Truncated, len(ran(t, log))-before, err)
 	}
 	defer func(n int) { maxPaged = n }(maxPaged)
 	maxPaged = 7
