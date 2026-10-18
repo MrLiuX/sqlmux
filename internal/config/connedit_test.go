@@ -675,7 +675,12 @@ func TestUpdateConnectionPicks(t *testing.T) {
 	if _, err := UpdateConnection("play", c, c2); err != nil || strings.Count(readFile(t, path), "schemas = ") != 1 || !strings.Contains(readFile(t, path), "databases = [\"play\", \"other\"]\n") {
 		t.Errorf("change: %v\n%s", err, readFile(t, path))
 	}
-	if _, err := UpdateConnection("play", c2, was); err != nil || readFile(t, path) != editFile {
+	empty := c2
+	empty.Schemas = []string{} // a list emptied, not nil: the line goes as it does for nil
+	if _, err := UpdateConnection("play", c2, empty); err != nil || strings.Count(readFile(t, path), "schemas = ") != 0 {
+		t.Errorf("emptied: %v\n%s", err, readFile(t, path))
+	}
+	if _, err := UpdateConnection("play", empty, was); err != nil || readFile(t, path) != editFile {
 		t.Errorf("cleared: %v\n%s", err, readFile(t, path))
 	}
 }

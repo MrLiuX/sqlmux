@@ -91,13 +91,21 @@ func (c Connection) with(key string, from Connection) Connection {
 	case "production":
 		c.Production = from.Production
 	case "databases":
-		c.Databases = from.Databases
+		c.Databases = nilIfEmpty(from.Databases)
 	case "schemas":
-		c.Schemas = from.Schemas
+		c.Schemas = nilIfEmpty(from.Schemas)
 	default:
 		c.ReadOnly = from.ReadOnly
 	}
 	return c
+}
+
+// nilIfEmpty is how a list with nothing in it reads back from the file: nil.
+func nilIfEmpty(l []string) []string {
+	if len(l) == 0 {
+		return nil
+	}
+	return l
 }
 
 // connBlock is a block's lines in a file split into them: start the first of

@@ -127,6 +127,15 @@ func TestPickSchemas(t *testing.T) {
 	if i := slices.IndexFunc(ns, func(n node) bool { return n.kind == nodeDatabase && n.Text == "base" }); ns[i].Note != "1/"+strconv.Itoa(len(c.all.schemas)) {
 		t.Errorf("the database's note %q", ns[i].Note)
 	}
+	// all of them again: the line goes
+	treeTo(t, a, "base")
+	a.run("tree.pick", 0)
+	feed(t, a, "a")
+	_, cmd = a.Update(teaKey("<Esc>"))
+	answered(a, cmd)
+	if got := connectionsText(t); strings.Contains(got, "base.public") || !strings.Contains(got, `schemas = ["zeta.sales"]`) {
+		t.Errorf("all picked again:\n%s", got)
+	}
 	// nothing changed: nothing is written and nothing is read
 	before, reads := connectionsText(t), len(f.only)
 	treeTo(t, a, "base")
