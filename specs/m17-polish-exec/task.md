@@ -163,11 +163,12 @@
 - 2026-10-18 和 doraemonctl 的会话对口径（它加 `-o sqlmux`）：退出码「数组出得来就是 0、逐条错在 err 里」和现有实现一致；行可能被命令截断、带 `truncated: true`。
 
 **开发**（§8.8）
-- [ ] a. 一项带 `truncated: true` 时把这条的 `Result` 标成已截断（同 `maxRows` 截断的那条路，界面照旧提示）；多出来的字段忽略（现在就是）。
+- [ ] a. 一项带 `truncated: true` 时：exec 的 Conn 把这条语句包成 `select * from (<sql>) as sqlmux_page limit 1000 offset <已收行数>` 接着跑，直到一轮不再截断，行拼成一份（上限 100000 行，超过标成已截断）；决策者在 staging 实测 `agentable` 有 4144 张表，不翻的话 `public` 一张都列不出。用户 query 的语句（Exec 那条路）不翻，标已截断照 AutoLimit 提示。多出来的字段忽略（现在就是）。
 - [ ] b. 配置检查和 i18n 文案里的示例 argv 改成 §14 的（`-o sqlmux`、`--max-rows 1000`，redis `--no-parse`，不带 `--no-probe`）。
 
 **验收**
-- [ ] 单测：`truncated: true` → 结果已截断；没有这个字段不变；mutation。
-- [ ] e2e：假命令回 `truncated: true`，表格的截断提示出现。
+- [ ] 单测：假命令每次最多回 3 行并标 `truncated`，`Query` 拼出全部 7 行且发出的语句带 `limit 3 offset 3` / `offset 6`；`Exec` 不翻、标已截断；没有这个字段不变；mutation。
+- [ ] e2e：假命令每批 1000 行截断，4000 张表的树全部列出；query 里的截断提示出现。
+- [ ] 决策者用 doraemonctl 在 staging 上看 `public` 的表列齐（真路径，不进 e2e）。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
