@@ -1,4 +1,4 @@
-# nvim NVIM v0.12.4, by go generate from cases.txt
+# nvim NVIM v0.12.6, by go generate from cases.txt
 
 ## h
 select id █from t

@@ -95,6 +95,12 @@ func (a *App) openPick(n node) tea.Cmd {
 	for _, name := range p.names {
 		p.on = append(p.on, slices.Contains(loaded, name) || name == p.fixed)
 	}
+	if !dbs && slices.Contains(p.names, c.all.keep) { // the schema names go to stays picked, as the database does
+		p.fixed = c.all.keep
+	}
+	for i, name := range p.names {
+		p.on[i] = p.on[i] || name == p.fixed
+	}
 	p.was = slices.Clone(p.on)
 	if len(p.names) == 0 {
 		return a.showToast(i18n.T("没有可选的"))
@@ -157,6 +163,9 @@ func (a *App) applyPick(p *pickMenu) tea.Cmd {
 		if b {
 			picked = append(picked, p.names[i])
 		}
+	}
+	if len(picked) == 0 { // none to keep: nothing is written
+		return nil
 	}
 	all := len(picked) == len(p.names)
 	root := p.conn.root()

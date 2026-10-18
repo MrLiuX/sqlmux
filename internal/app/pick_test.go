@@ -1,6 +1,7 @@
 package app
 
 import (
+	"image/color"
 	"os"
 	"path/filepath"
 	"slices"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/kackerx/sqlmux/internal/config"
@@ -22,8 +24,9 @@ func pickSetup(t *testing.T) (*App, *Conn, *fakePG) {
 	if err := config.AppendConnection(config.Connection{Name: c.Spec.Name, Engine: "postgres", DSN: "postgres://u@h/base"}); err != nil {
 		t.Fatal(err)
 	}
-	c.all = catalogAll{schemas: slices.Clone(c.Schemas), dbs: slices.Clone(c.Databases)}
 	f.schemas = slices.Clone(c.Schemas)
+	c.all = catalogAll{}
+	answered(a, a.loadCatalog(c)) // what the server has is what the load says, not set by hand
 	return a, c, f
 }
 
@@ -41,6 +44,9 @@ func connectionsText(t *testing.T) string {
 // tree, the connection saying how many are shown; all on again is no line (F17.13).
 func TestPickDatabases(t *testing.T) {
 	a, c, _ := pickSetup(t)
+	if !slices.Equal(c.all.dbs, []string{"alpha", "base", "zeta"}) || len(c.all.schemas) == 0 || c.all.keep != "public" {
+		t.Fatalf("what the load read: %+v", c.all)
+	}
 	if ns, _ := a.treeNodes(); ns[0].Note != "" { // all of them: no note
 		t.Errorf("the connection's note %q before any is left out", ns[0].Note)
 	}
@@ -117,8 +123,10 @@ func TestPickSchemas(t *testing.T) {
 	if got := connectionsText(t); !strings.Contains(got, `schemas = ["zeta.sales", "base.public"]`) {
 		t.Errorf("the file:\n%s", got)
 	}
-	if last := f.only[len(f.only)-1]; !slices.Equal(last, []string{"public"}) {
-		t.Errorf("the catalog was asked for %v", f.only)
+	for name, asked := range map[string][][]string{"tables": f.only, "functions": f.fonly, "sequences": f.sonly} {
+		if last := asked[len(asked)-1]; !slices.Equal(last, []string{"public"}) {
+			t.Errorf("the catalog's %s were asked for %v", name, asked)
+		}
 	}
 	if got := treeTexts(a); strings.Contains(got, "agentable") || !strings.Contains(got, "public") {
 		t.Errorf("the tree:\n%s", got)
@@ -154,15 +162,17 @@ func TestPickedSchemasAndDatabases(t *testing.T) {
 		setting []string
 		pg      bool
 		db      string
+		keep    string
 		want    []string
 	}{
-		{nil, true, "d", nil},
-		{[]string{"d.a", "e.b", "d.c"}, true, "d", []string{"a", "c"}},
-		{[]string{"e.b"}, true, "d", nil}, // none of d's: all of d's
-		{[]string{"my.db.a"}, true, "my.db", []string{"a"}},
-		{[]string{"b"}, false, "", []string{"b"}},
+		{nil, true, "d", "a", nil},
+		{[]string{"d.a", "e.b", "d.c"}, true, "d", "", []string{"a", "c"}},
+		{[]string{"e.b"}, true, "d", "b", nil}, // none of d's: all of d's
+		{[]string{"my.db.a"}, true, "my.db", "", []string{"a"}},
+		{[]string{"b"}, false, "", "", []string{"b"}},
+		{[]string{"d.c"}, true, "d", "a", []string{"a", "c"}}, // the schema names go to stays, written or not
 	} {
-		if got := pickedSchemas(tc.setting, tc.pg, tc.db, all); !slices.Equal(got, tc.want) || (got == nil) != (tc.want == nil) {
+		if got := pickedSchemas(tc.setting, tc.pg, tc.db, all, tc.keep); !slices.Equal(got, tc.want) || (got == nil) != (tc.want == nil) {
 			t.Errorf("%v in %q: %v, want %v", tc.setting, tc.db, got, tc.want)
 		}
 	}
@@ -184,7 +194,8 @@ func TestGoldenPick(t *testing.T) {
 }
 
 // "选择 schema…" on a MySQL connection lists its schemas (its databases) and writes plain
-// names (F17.13).
+// names; A leaves the DSN's database, which cannot go off, and the connection says 1/N
+// (F17.13).
 func TestPickMySQLSchemas(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	a, c, f := withDatabases(t)
@@ -192,14 +203,18 @@ func TestPickMySQLSchemas(t *testing.T) {
 	if err := config.AppendConnection(config.Connection{Name: c.Spec.Name, Engine: "mysql", DSN: "u:p@tcp(h:3306)/base"}); err != nil {
 		t.Fatal(err)
 	}
-	c.all = catalogAll{schemas: slices.Clone(c.Schemas)}
 	f.schemas = slices.Clone(c.Schemas)
+	answered(a, a.loadCatalog(c))
 	treeTo(t, a, c.Spec.Name)
 	a.run("tree.pick", 0)
-	if p := a.cols.pick; p == nil || p.dbs || !slices.Equal(p.names, c.Schemas) {
+	p := a.cols.pick
+	if p == nil || p.dbs || !slices.Equal(p.names, c.Schemas) || p.fixed != "public" {
 		t.Fatalf("the list: %+v", a.cols)
 	}
-	feed(t, a, "A/public<CR><Space><Esc>")
+	feed(t, a, "A")
+	if on := slices.Index(p.on, true); on != slices.Index(p.names, "public") || slices.Contains(p.on[on+1:], true) {
+		t.Fatalf("A leaves %v", p.on)
+	}
 	_, cmd := a.Update(teaKey("<Esc>"))
 	answered(a, cmd)
 	if got := connectionsText(t); !strings.Contains(got, `schemas = ["public"]`) {
@@ -207,6 +222,152 @@ func TestPickMySQLSchemas(t *testing.T) {
 	}
 	if last := f.only[len(f.only)-1]; !slices.Equal(last, []string{"public"}) {
 		t.Errorf("the catalog was asked for %v", f.only)
+	}
+	if ns, _ := a.treeNodes(); ns[0].Note != "1/"+strconv.Itoa(len(c.all.schemas)) {
+		t.Errorf("the connection's note %q", ns[0].Note)
+	}
+}
+
+// The schema names go to is always loaded, whatever the setting names; and a list that
+// is left with none, which only happens with no such schema, writes nothing (F17.13).
+func TestPickKeepsTheDefaultSchema(t *testing.T) {
+	a, c, f := pickSetup(t)
+	c.Spec.Schemas = []string{"base.agentable"}
+	answered(a, a.loadCatalog(c))
+	if last := f.only[len(f.only)-1]; !slices.Equal(last, []string{"agentable", "public"}) {
+		t.Errorf("the setting names agentable: asked for %v", last)
+	}
+	before := connectionsText(t)
+	treeTo(t, a, "base")
+	a.run("tree.pick", 0)
+	p := a.cols.pick
+	p.fixed, p.on = "", make([]bool, len(p.names)) // nothing to keep, nothing on
+	if _, cmd := a.Update(teaKey("<Esc>")); cmd != nil || connectionsText(t) != before {
+		t.Errorf("a list with none on writes (%v)", cmd != nil)
+	}
+}
+
+// PG with no schema of the search_path there keeps public.
+func TestPickKeepsPublicWhenThereIsNoCurrentSchema(t *testing.T) {
+	a, c, f := pickSetup(t)
+	f.noCurrent = true
+	answered(a, a.loadCatalog(c))
+	if c.all.keep != "public" {
+		t.Errorf("keep %q", c.all.keep)
+	}
+}
+
+// Every session's connection of the name takes the pick, not the one it was made in alone.
+func TestPickReachesEverySession(t *testing.T) {
+	a, c, _ := pickSetup(t)
+	other := newConn(c.Spec)
+	a.sessions = append(a.sessions, bareSession("s2", []*Conn{other}, other))
+	treeTo(t, a, c.Spec.Name)
+	a.run("tree.pick", 0)
+	feed(t, a, "<Space>")
+	_, cmd := a.Update(teaKey("<Esc>"))
+	answered(a, cmd)
+	if !slices.Equal(other.Spec.Databases, []string{"base", "zeta"}) || !slices.Equal(c.Spec.Databases, []string{"base", "zeta"}) {
+		t.Errorf("the other session's: %v, this one's: %v", other.Spec.Databases, c.Spec.Databases)
+	}
+}
+
+// A connection of the command line is in no file: the pick is in memory and writes none.
+func TestPickOfATempConnection(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	a, c, _ := withDatabases(t)
+	c.Spec.Temp = true
+	answered(a, a.loadCatalog(c))
+	treeTo(t, a, c.Spec.Name)
+	a.run("tree.pick", 0)
+	feed(t, a, "<Space>")
+	_, cmd := a.Update(teaKey("<Esc>"))
+	answered(a, cmd)
+	if _, err := os.Stat(filepath.Join(config.Dir(), "connections.toml")); err == nil {
+		t.Error("a file was written")
+	}
+	if !slices.Equal(c.Spec.Databases, []string{"base", "zeta"}) {
+		t.Errorf("the connection: %v", c.Spec.Databases)
+	}
+}
+
+// A schema row ends in how many of its tables are loaded, which is for a schema that was
+// loaded when the list opened, not one that is only on now.
+func TestPickNoteIsOfWhatIsLoaded(t *testing.T) {
+	a, c, _ := pickSetup(t)
+	treeTo(t, a, "base")
+	a.run("tree.pick", 0)
+	p := a.cols.pick
+	pub, ag := slices.Index(p.names, "public"), slices.Index(p.names, "agentable")
+	if p.note(pub) != "1" || p.note(ag) != "1" && p.note(ag) != "0" {
+		t.Fatalf("loaded: %q %q", p.note(pub), p.note(ag))
+	}
+	feed(t, a, "A") // only public stays: written, loaded again
+	_, cmd := a.Update(teaKey("<Esc>"))
+	answered(a, cmd)
+	treeTo(t, a, "base")
+	a.run("tree.pick", 0)
+	p = a.cols.pick
+	p.set(ag, true) // agentable is on now, not loaded
+	if p.note(ag) != "" || p.note(pub) != "1" {
+		t.Errorf("notes %q %q", p.note(ag), p.note(pub))
+	}
+	_ = c
+}
+
+// A click outside the list closes it as esc does: the change is written.
+func TestPickClosesOnAClickOutside(t *testing.T) {
+	a, c, _ := pickSetup(t)
+	treeTo(t, a, c.Spec.Name)
+	a.run("tree.pick", 0)
+	feed(t, a, "<Space>") // alpha off
+	a.View()
+	_, cmd := a.Update(tea.MouseClickMsg{X: a.w - 1, Y: a.h - 1, Button: tea.MouseLeft})
+	if a.cols != nil {
+		t.Fatal("the list stays")
+	}
+	answered(a, cmd)
+	if got := connectionsText(t); !strings.Contains(got, `databases = ["base", "zeta"]`) {
+		t.Errorf("the file:\n%s", got)
+	}
+}
+
+// COLS's keys that move a column mean nothing in a pick list: no table behind it, no
+// panic, nothing moves.
+func TestPickIgnoresColumnMoves(t *testing.T) {
+	a, c, _ := pickSetup(t)
+	treeTo(t, a, c.Spec.Name)
+	a.run("tree.pick", 0)
+	names := slices.Clone(a.cols.pick.names)
+	feed(t, a, "J")
+	feed(t, a, "K")
+	if a.cols == nil || !slices.Equal(a.cols.pick.names, names) {
+		t.Errorf("after J K: %+v", a.cols)
+	}
+}
+
+// What has not read its catalog has nothing to pick from: it says so.
+func TestPickNeedsTheCatalog(t *testing.T) {
+	a, c, _ := pickSetup(t)
+	c.State = connIdle
+	treeTo(t, a, c.Spec.Name)
+	a.run("tree.pick", 0)
+	if a.cols != nil || a.toast == "" {
+		t.Errorf("list %v, toast %q", a.cols != nil, a.toast)
+	}
+}
+
+// The note of a database is dim: the border color of a Redis db's size would be another.
+func TestPickNoteColor(t *testing.T) {
+	a, c, _ := pickSetup(t)
+	th := *a.theme
+	th.Dim, th.Border = color.RGBA{R: 1, G: 2, B: 3, A: 255}, color.RGBA{R: 9, G: 8, B: 7, A: 255}
+	a.theme = &th
+	c.Schemas = c.Schemas[:1] // narrowed: the database says 1/N
+	ns, _ := a.treeNodes()
+	i := slices.IndexFunc(ns, func(n node) bool { return n.kind == nodeDatabase && n.Text == "base" })
+	if ns[i].Note == "" || ns[i].NoteFg != th.Dim {
+		t.Errorf("note %q in %v, want dim %v", ns[i].Note, ns[i].NoteFg, th.Dim)
 	}
 }
 
