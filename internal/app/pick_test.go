@@ -209,3 +209,22 @@ func TestPickMySQLSchemas(t *testing.T) {
 		t.Errorf("the catalog was asked for %v", f.only)
 	}
 }
+
+// The last schemas line of a block goes when all are picked again: the one that was
+// written is the one that is taken out.
+func TestPickSchemasThenAll(t *testing.T) {
+	a, _, _ := pickSetup(t)
+	for _, keys := range []string{"A/public<CR><Space><Esc>", "a"} {
+		treeTo(t, a, "base")
+		a.run("tree.pick", 0)
+		feed(t, a, keys)
+		_, cmd := a.Update(teaKey("<Esc>"))
+		answered(a, cmd)
+	}
+	if got := connectionsText(t); strings.Contains(got, "schemas") {
+		t.Errorf("the file:\n%s", got)
+	}
+	if got := treeTexts(a); !strings.Contains(got, "agentable") {
+		t.Errorf("the tree:\n%s", got)
+	}
+}
