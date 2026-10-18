@@ -5,7 +5,7 @@
 - **范围**：§7.8「tab 栏」（滚动）；§12「快速 SQL」（Redis）和「预览」（滚轮、焦点）；§14「启动」（`redis://`）、`production`、`engine = "exec"`；§13「生产连接」「保存前预览」、§10.3；§4（新包 `internal/db/exec`）、§5「连接缝」、§8.8「外部执行器」。都已写进各章（2026-10-17）。
 - **依赖**：M16 passed（`db.Driver` / `db.Conn` 的接口缝、Redis 的回复摆表和判定）。
 - **完成标准**：节点全过、完整回归绿；用户用 `doraemonctl` 浏览 prod 的一张表和一个键。
-- **审查节点**：1 = F17.1–F17.6（体验回合，都小，一批审）；2 = F17.9 + F17.10（安全：生产连接、保存前预览）；3 = F17.7 + F17.8（外部执行器）。
+- **审查节点**：1 = F17.1–F17.6（体验回合，都小，一批审）；2 = F17.9 + F17.10（安全：生产连接、保存前预览）；3 = F17.7 + F17.8（外部执行器）；4 = F17.11（和 doraemonctl 对口径后的补丁，2026-10-18）。
 - **不做（留 M18 候选）**：Redis 第二轮（Pub/Sub、MONITOR、Cluster、格子里的 JSON 按格高亮、string 键是 JSON 时直接开值编辑器）；exec 引擎的写回和流式导出。
 
 ## F17.1 tab 栏横向滚动 · 状态：passed（8baeb8c；e2e 37ebc89）
@@ -155,5 +155,19 @@
 - [ ] 单测：预览文本和真正执行的语句一致（同一份生成结果）；折叠；mutation。
 - [ ] golden：预览框一屏（含 UPDATE、INSERT、DELETE 各一条）。
 - [ ] e2e：改两格删一行 `C-s` → 预览三行和「改 2 行、删 1 行」，`n` 不发任何写语句，`y` 后库里对；Redis 的 hash 保存预览 `HSET` / `HDEL`。
+
+## F17.11 exec 认 `truncated`、示例 argv 对齐 doraemonctl · 状态：todo
+
+- **依赖**：F17.7
+- **涉及**：`internal/db/exec`、§8.8 / §14 的示例
+- 2026-10-18 和 doraemonctl 的会话对口径（它加 `-o sqlmux`）：退出码「数组出得来就是 0、逐条错在 err 里」和现有实现一致；行可能被命令截断、带 `truncated: true`。
+
+**开发**（§8.8）
+- [ ] a. 一项带 `truncated: true` 时把这条的 `Result` 标成已截断（同 `maxRows` 截断的那条路，界面照旧提示）；多出来的字段忽略（现在就是）。
+- [ ] b. 配置检查和 i18n 文案里的示例 argv 改成 §14 的（`-o sqlmux`、`--max-rows 1000`，redis `--no-parse`，不带 `--no-probe`）。
+
+**验收**
+- [ ] 单测：`truncated: true` → 结果已截断；没有这个字段不变；mutation。
+- [ ] e2e：假命令回 `truncated: true`，表格的截断提示出现。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。

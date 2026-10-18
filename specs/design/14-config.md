@@ -131,6 +131,6 @@ group        = "prod"            # optional (M10 F10.6)
 name    = "prod-pg"
 engine  = "exec"
 dialect = "postgres"             # postgres | redis：决定 catalog、分页、引号、补全用哪一套
-command = ["doraemonctl", "exec", "db", "-o", "json", "--no-probe", "{sql}"]   # argv 模板；{sql}（redis 是 {cmd} 和 {args...}）替换后执行
+command = ["doraemonctl", "exec", "db", "-e", "prod", "-o", "sqlmux", "--max-rows", "1000", "{sql}"]   # argv 模板；{sql}（redis 是 {cmd} 和 {args...}，加 --no-parse）替换后执行；不带 --no-probe（探针挡的是面板连错库）
 # read_only 对 exec 恒为 true
 ```
