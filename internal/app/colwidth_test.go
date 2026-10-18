@@ -131,3 +131,47 @@ func TestColWidthInResult(t *testing.T) {
 		t.Errorf("C-w =: %v", rt.colWidth)
 	}
 }
+
+// The column follows the pointer as it is dragged: after each move the frame is drawn again
+// and the │ is where the pointer is, not reused from before it moved (F17.14).
+func TestColWidthDragFollowsThePointer(t *testing.T) {
+	a := wide(200, 45)
+	loadOrders(t, a, 3)
+	id := a.focused().ID
+	edge := find(t, a, ui.Target{Kind: ui.KindColEdge, Pane: id, I: 1})
+	a.Update(tea.MouseClickMsg{X: edge.Min.X, Y: edge.Min.Y, Button: tea.MouseLeft})
+	a.Update(tea.MouseMotionMsg{X: edge.Min.X, Y: edge.Min.Y}) // the pointer is known to be here
+	a.View()
+	if a.stillOver(tea.MouseMotionMsg{X: edge.Min.X, Y: edge.Min.Y}) { // a move that crosses no region still changes what the frame shows
+		t.Error("a pointer moving with a column dragged is taken for no change")
+	}
+	for _, dx := range []int{1, 3, 6} {
+		a.View()
+		a.Update(tea.MouseMotionMsg{X: edge.Min.X + dx, Y: edge.Min.Y})
+		if a.reuse {
+			t.Fatalf("after a move of %d the last frame is reused", dx)
+		}
+		if got := find(t, a, ui.Target{Kind: ui.KindColEdge, Pane: id, I: 1}); got.Min.X != edge.Min.X+dx {
+			t.Errorf("moved %d: the │ is at %d, want %d", dx, got.Min.X, edge.Min.X+dx)
+		}
+	}
+	a.Update(tea.MouseReleaseMsg{X: edge.Min.X + 6, Y: edge.Min.Y, Button: tea.MouseLeft})
+}
+
+// Dragging the edge of a grid in another pane takes the focus there, as a click on its head
+// does.
+func TestColWidthDragFocusesItsPane(t *testing.T) {
+	a := sized(160, 45, "nerd")
+	loadOrders(t, a, 3)
+	grid := a.focused().ID
+	a.win().focus(2) // the query's pane
+	if a.focused().ID == grid {
+		t.Fatal("no other pane")
+	}
+	edge := find(t, a, ui.Target{Kind: ui.KindColEdge, Pane: grid, I: 0})
+	a.Update(tea.MouseClickMsg{X: edge.Min.X, Y: edge.Min.Y, Button: tea.MouseLeft})
+	if a.focused().ID != grid {
+		t.Errorf("focus is in pane %d, want %d", a.focused().ID, grid)
+	}
+	a.Update(tea.MouseReleaseMsg{X: edge.Min.X, Y: edge.Min.Y, Button: tea.MouseLeft})
+}
