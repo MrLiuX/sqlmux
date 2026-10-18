@@ -69,6 +69,7 @@ func (Engine) UseSchema(context.Context, db.Conn, string, string) error { return
 // command is read only (§8.8). At most maxRows rows come back, Truncated when
 // there were more.
 func (Engine) Quick(ctx context.Context, w *db.Worker, sql, _ string, maxRows int) (r db.Result, err error) {
+	ctx = context.WithValue(ctx, noPaging{}, true) // a user's statement is not paged: it says it is cut (F17.11)
 	err = w.RunSafe(ctx, func(ctx context.Context, c db.Conn) (err error) {
 		start := time.Now()
 		r, err = c.Query(ctx, sql)
