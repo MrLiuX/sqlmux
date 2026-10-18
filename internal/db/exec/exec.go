@@ -63,6 +63,8 @@ type item struct {
 	Rows    [][]any  `json:"rows"`
 	N       *int64   `json:"n"`
 	Err     string   `json:"err"`
+	// Truncated is that the command cut the rows: the result says so, as one cut at maxRows does.
+	Truncated bool `json:"truncated"`
 }
 
 // tail keeps the last 4 KB written to it: what the command says on stderr is short
@@ -156,7 +158,7 @@ func val(v any) db.Val {
 
 // result is item it as a db.Result, at most maxRows rows of it (0: all).
 func result(it item, maxRows int, took time.Duration) db.Result {
-	r := db.Result{Took: took}
+	r := db.Result{Took: took, Truncated: it.Truncated}
 	for _, c := range it.Columns {
 		r.Cols = append(r.Cols, db.Col{Name: c})
 	}

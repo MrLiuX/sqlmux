@@ -29,6 +29,7 @@ case "$sql" in
 *"from pg_class c join pg_namespace"*) echo '[{"columns":["n","r","t","k"],"rows":[["public","orders",12,"r"],["public","v_orders",-1,"v"]]}]' ;;
 *pg_database*) echo '[{"columns":["datname"],"rows":[["shop"],["other"]]}]' ;;
 *tagged*) echo '[{"n":3}]' ;;
+*cut*) echo '[{"columns":["x"],"rows":[[1],[2]],"truncated":true,"extra":{"a":1}}]' ;;
 *bigerr*) head -c 10000 /dev/zero | tr '\000' a >&2; echo END >&2; exit 1 ;;
 *stderr*) echo "the panel is not open" >&2; exit 3 ;;
 *itemerr*) echo '[{"err":"relation does not exist"}]' ;;
@@ -155,6 +156,23 @@ func TestQueryTagErrAndStderrTail(t *testing.T) {
 	}
 	if _, err := c.Query(ctx, "select bigerr"); !errors.As(err, &ce) || len(ce.Msg) > 4096 || !strings.HasSuffix(ce.Msg, "aaaEND") {
 		t.Errorf("stderr: %d bytes, ends %q", len(ce.Msg), ce.Msg[max(0, len(ce.Msg)-8):])
+	}
+}
+
+// An item the command says is truncated is a truncated result, whatever maxRows is; one
+// that says nothing of it is not; a field it does not know is ignored (F17.11).
+func TestCommandTruncated(t *testing.T) {
+	argv, _ := fake(t)
+	c, _ := New(argv, sqlkit.PG)
+	ctx := context.Background()
+	if r, err := c.Query(ctx, "select cut"); err != nil || !r.Truncated || len(r.Rows) != 2 {
+		t.Errorf("truncated: %+v %v", r, err)
+	}
+	if rs, err := c.Exec(ctx, "select cut", 0); err != nil || len(rs) != 1 || !rs[0].Truncated {
+		t.Errorf("truncated on Exec: %+v %v", rs, err)
+	}
+	if r, err := c.Query(ctx, "select plain"); err != nil || r.Truncated {
+		t.Errorf("not truncated: %+v %v", r, err)
 	}
 }
 
