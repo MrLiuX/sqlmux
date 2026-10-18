@@ -121,6 +121,15 @@ func TestColWidthInResult(t *testing.T) {
 	press(t, a, "<CR>")
 	a.win().focus(a.win().Result.ID)
 	before := widthsOf(t, a)
+	edge := find(t, a, ui.Target{Kind: ui.KindColEdge, Pane: a.focused().ID, I: 0}) // the edge of a result's head, dragged
+	a.Update(tea.MouseClickMsg{X: edge.Min.X, Y: edge.Min.Y, Button: tea.MouseLeft})
+	a.Update(tea.MouseMotionMsg{X: edge.Min.X + 4, Y: edge.Min.Y})
+	a.Update(tea.MouseReleaseMsg{X: edge.Min.X + 4, Y: edge.Min.Y, Button: tea.MouseLeft})
+	if got := resultOf(a.focused()).colWidth["a"]; got != before[0]+4 {
+		t.Errorf("dragged: %d from %v", got, before)
+	}
+	feed(t, a, "<C-w>=")
+	before = widthsOf(t, a)
 	feed(t, a, "<C-w>>")
 	rt := resultOf(a.focused())
 	if got := widthsOf(t, a); got[0] != before[0]+1 || rt.colWidth["a"] != before[0]+1 {

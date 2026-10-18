@@ -517,7 +517,7 @@ func (a *App) keyInfo(t *dataTab) []ui.Chip {
 func (a *App) grid(p *Pane, t *dataTab) ui.Grid {
 	g := ui.Grid{
 		Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose, FullWidth: a.fullWidth, First: t.shown.pageNo * t.shown.limit,
-		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Selected: t.marked, Ranged: t.ranged(), FlashNums: a.flashNums(p), Widest: t.widestCache(), Heads: true,
+		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Selected: t.marked, Ranged: t.ranged(), FlashNums: a.flashNums(p), Widest: t.widestCache(), Heads: true, Edges: true,
 	}
 	shown := t.shownCols()
 	for _, i := range shown {
@@ -863,7 +863,7 @@ func (a *App) gridOf(p *Pane) (s *gridState, g ui.Grid, area uv.Rectangle, ok bo
 func (a *App) resultGrid(p *Pane, t *resultTab) ui.Grid {
 	g := ui.Grid{
 		Rows: t.page.Rows, Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose, FullWidth: a.fullWidth,
-		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Yank: a.gridFlash(p), Selected: t.marked, Ranged: t.ranged(), FlashNums: a.flashNums(p), Widest: t.widestCache(),
+		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Yank: a.gridFlash(p), Selected: t.marked, Ranged: t.ranged(), FlashNums: a.flashNums(p), Widest: t.widestCache(), Edges: true,
 	}
 	for _, c := range t.page.Cols {
 		g.Cols = append(g.Cols, ui.GridCol{Name: c.Name, Type: colType(c.Type), Width: t.colWidth[c.Name]})

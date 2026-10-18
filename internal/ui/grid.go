@@ -59,6 +59,7 @@ type Grid struct {
 	Changed   map[int]bool    // records with changes: numbers in warn, Failed first (§10.1)
 	Edit      *Input          // the current cell's edit, drawn over it (§10.1)
 	Heads     bool            // the column heads are click targets: a table's, which has an ORDER (F12.3)
+	Edges     bool            // the │ between two heads is a drag handle for the width: a table's and a result's (F17.14)
 	EditMenu  bool            // the edit has options: a ▾ at its right shows or hides them (§10.2)
 	EditBad   bool            // the edit is no value of its column: an error wavy line under it (§10.7)
 
@@ -495,9 +496,9 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 		default:
 			if g.Heads {
 				f.Region(uv.Rect(cellX(i)-1, y, ws[c]+2, 1).Intersect(area), Target{Kind: KindHead, Pane: g.Pane, I: c})
-				if c+1 < v.cols { // the │ between it and the next: drag to set its width (F17.14)
-					f.Region(uv.Rect(cellX(i)+ws[c]+1, y, 1, 1).Intersect(area), Target{Kind: KindColEdge, Pane: g.Pane, I: c})
-				}
+			}
+			if g.Edges && c+1 < v.cols { // the │ between it and the next: drag to set its width (F17.14)
+				f.Region(uv.Rect(cellX(i)+ws[c]+1, y, 1, 1).Intersect(area), Target{Kind: KindColEdge, Pane: g.Pane, I: c})
 			}
 			f.Text(cellX(i), y, right, h, name)
 			if mark != "" {

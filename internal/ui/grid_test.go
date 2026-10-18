@@ -502,7 +502,7 @@ func TestGridFixedWidths(t *testing.T) {
 // numbers (F17.14).
 func TestGridColEdges(t *testing.T) {
 	g := testGrid()
-	g.Heads, g.Pane = true, 1
+	g.Heads, g.Edges, g.Pane = true, true, 1
 	f := NewFrame(60, 12, TokyonightStorm)
 	g.Draw(f, uv.Rect(0, 0, 60, 12))
 	var edges []int
@@ -532,7 +532,7 @@ func TestGridColEdges(t *testing.T) {
 // one on its left is still the head's (F17.14).
 func TestGridColEdgeIsTheBar(t *testing.T) {
 	g := testGrid()
-	g.Heads, g.Pane = true, 1
+	g.Heads, g.Edges, g.Pane = true, true, 1
 	f := NewFrame(60, 12, TokyonightStorm)
 	g.Draw(f, uv.Rect(0, 0, 60, 12))
 	head := strings.Split(f.Buf.String(), "\n")[0]
@@ -552,5 +552,32 @@ func TestGridColEdgeIsTheBar(t *testing.T) {
 	}
 	if got, _ := HitAt(f.Hits, uv.Pos(bars[0], 0)); got.Kind == KindColEdge {
 		t.Errorf("the label column's │ is an edge: %+v", got)
+	}
+}
+
+// A grid whose heads are not click targets (a result's) still has the edges to drag; one that
+// says it has none has none (F17.14).
+func TestGridEdgesWithoutHeads(t *testing.T) {
+	count := func(g Grid) (heads, edges int) {
+		f := NewFrame(60, 12, TokyonightStorm)
+		g.Draw(f, uv.Rect(0, 0, 60, 12))
+		for _, h := range f.Hits {
+			switch h.Target.Kind {
+			case KindHead:
+				heads++
+			case KindColEdge:
+				edges++
+			}
+		}
+		return heads, edges
+	}
+	g := testGrid()
+	g.Pane, g.Edges = 1, true
+	if heads, edges := count(g); heads != 0 || edges != 2 {
+		t.Errorf("a result's: %d heads, %d edges", heads, edges)
+	}
+	g.Edges = false
+	if heads, edges := count(g); heads != 0 || edges != 0 {
+		t.Errorf("neither: %d heads, %d edges", heads, edges)
 	}
 }
