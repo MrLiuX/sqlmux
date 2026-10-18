@@ -55,10 +55,17 @@ func (Engine) ErrorOf(err error) db.ServerError {
 	return db.ServerError{Severity: "ERROR", Message: err.Error()}
 }
 
-// Databases lists none: the command reaches the one database it is made for, and
-// the DSN that would name another is not used.
-// ponytail: a command that can reach several is one connection each
-func (Engine) Databases(context.Context, db.Conn) ([]string, error) { return nil, nil }
+// Databases lists the one the command is on, as current_database() says: the tree has
+// the database level as any PG connection does (F17.12); another database is another
+// connection, for the command reaches the one it is made for.
+// ponytail: a command that can reach several is one connection each, until {db} (§8.8)
+func (Engine) Databases(ctx context.Context, c db.Conn) ([]string, error) {
+	r, err := c.Query(ctx, "select current_database()")
+	if err != nil || len(r.Rows) != 1 || len(r.Rows[0]) != 1 {
+		return nil, err
+	}
+	return []string{r.Rows[0][0].S}, nil
+}
 
 // UseSchema does nothing: the next run would not have it.
 // ponytail: a query's unqualified names go to the search_path the command

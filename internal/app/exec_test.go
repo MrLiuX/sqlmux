@@ -20,7 +20,8 @@ func fakeExec(t *testing.T) config.Connection {
 	dir := t.TempDir()
 	script := `#!/bin/sh
 case "$1" in
-*"select current_database()"*) echo '[{"columns":["a","b"],"rows":[["shop","public"]]}]' ;;
+*current_setting*) echo '[{"columns":["a","b"],"rows":[["shop","public"]]}]' ;;
+*"select current_database()"*) echo '[{"columns":["current_database"],"rows":[["shop"]]}]' ;;
 *"from pg_namespace n where"*) echo '[{"columns":["nspname","cs"],"rows":[["public","public"]]}]' ;;
 *"from pg_class c join pg_namespace"*) echo '[{"columns":["n","r","t","k"],"rows":[["public","orders",12,"r"]]}]' ;;
 *"from pg_proc p"*|*"cl.relkind = 'S'"*) echo '[{"columns":[],"rows":[]}]' ;;
@@ -57,8 +58,11 @@ func TestExecConnection(t *testing.T) {
 	if !ok || m.err != nil || len(m.tables) != 1 || m.tables[0].Name != "orders" {
 		t.Fatalf("catalog: %+v", m)
 	}
+	if len(m.dbs) != 1 || m.dbs[0] != "shop" { // the database level, as any PG connection has (F17.12)
+		t.Errorf("databases %v", m.dbs)
+	}
 	a.Update(m)
-	if !strings.Contains(treeTexts(a), "orders") {
+	if !strings.Contains(treeTexts(a), "orders") || !strings.Contains(treeTexts(a), "shop") {
 		t.Errorf("the tree:\n%s", treeTexts(a))
 	}
 	q.ed.Load("select x from t")

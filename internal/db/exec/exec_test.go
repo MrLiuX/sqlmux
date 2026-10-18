@@ -24,7 +24,8 @@ func fake(t *testing.T) (argv []string, log string) {
 sql="$1"
 printf '%s\n' "$sql" >> "` + log + `"
 case "$sql" in
-*"select current_database()"*) echo '[{"columns":["a","b"],"rows":[["shop","\"$user\", public"]]}]' ;;
+*current_setting*) echo '[{"columns":["a","b"],"rows":[["shop","\"$user\", public"]]}]' ;;
+*"select current_database()"*) echo '[{"columns":["current_database"],"rows":[["shop"]]}]' ;;
 *"from pg_namespace n where"*) echo '[{"columns":["nspname","cs"],"rows":[["public","public"],["sales","public"]]}]' ;;
 *"from pg_class c join pg_namespace"*) echo '[{"columns":["n","r","t","k"],"rows":[["public","orders",12,"r"],["public","v_orders",-1,"v"]]}]' ;;
 *pg_database*) echo '[{"columns":["datname"],"rows":[["shop"],["other"]]}]' ;;
@@ -268,7 +269,7 @@ func TestEngineOverACommand(t *testing.T) {
 	if err != nil || len(ts) != 2 || ts[0].Name != "orders" || ts[0].Rows != 12 || !ts[1].View() {
 		t.Errorf("tables %+v %v", ts, err)
 	}
-	if dbs, err := e.Databases(ctx, c); err != nil || len(dbs) != 0 { // the command is made for the one it reaches, which another name would not change
+	if dbs, err := e.Databases(ctx, c); err != nil || len(dbs) != 1 || dbs[0] != "shop" { // the one it is on, not the server's list: the command reaches that one
 		t.Errorf("databases %v %v", dbs, err)
 	}
 	if err := e.UseSchema(ctx, c, "sales", ""); err != nil {
