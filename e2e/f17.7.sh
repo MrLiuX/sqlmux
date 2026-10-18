@@ -22,6 +22,8 @@ if "FAILME" in sql:
     sys.stderr.write("boom: no panel is open\n"); sys.exit(3)
 if "SLEEPY" in sql:
     import time; time.sleep(30)
+if "TRUNCATED" in sql:
+    print(json.dumps([{"columns": ["a"], "rows": [["1"], ["2"], ["3"]], "n": 3, "truncated": True, "extra": {"x": 1}}])); sys.exit(0)
 if "ITEMERR" in sql:
     print(json.dumps([{"err": "ERROR: item says no"}])); sys.exit(0)
 p = subprocess.run(["psql", dsn, "-X", "-q", "--csv", "-P", "null=\\N", "-c", sql], capture_output=True, text=True)
@@ -72,6 +74,16 @@ runq "select 'ITEMERR'"
 check "输出里的 item 带 err：原文显示（ERROR: item says no）" eval 'has "item says no" || { e2e_plain | tail -8 | cut -c60-200; false; }'
 runq "select null::int as n, 'x' as t"
 check "NULL 是 NULL（JSON null，画成 <null>）" eval 'has "<null>" || { e2e_plain | tail -8 | cut -c60-200; false; }'
+runq "select 'TRUNCATED'"
+check "命令回 truncated: true（行被命令截断）：结果标成已截断，标题是「3+ 行」（和 maxRows 截断的同一条路）" eval 'e2e_plain | grep -qE "3\+ 行"' || { e2e_plain | sed -n 1,44p | cut -c30-170 | command grep -n "行\|truncat" ; false; }
+runq "select 1 as a union all select 2 union all select 3"
+check "对照：没有 truncated 的 3 行结果，标题是「3 行」，没有加号" eval 'e2e_plain | grep -qE "[^0-9+]3 行" && ! e2e_plain | grep -qE "3\+ 行"' || { e2e_plain | command grep -n "行" | cut -c30-170 | head; false; }
+pal ";select 'TRUNCATED'"; sleep 1; [[ -n $(pop) ]] && { key Escape; sleep 0.3; }; key Enter; sleep 2
+check "快速 SQL（面板）：同一条回 truncated: true，结果区标题「3+ 行」；带不认识的字段 extra 不影响结果（三行都在）" eval 'title_like "^3\\+ 行" && [[ $(grid | tr "\n" /) == "1/2/3/" ]]' || { title; grid; false; }
+key Escape; sleep 0.3
+pal ";select 1 as a union all select 2 union all select 3"; sleep 1; [[ -n $(pop) ]] && { key Escape; sleep 0.3; }; key Enter; sleep 2
+check "快速 SQL 对照：去掉 truncated 的同样三行，标题「3 行」没有加号" eval 'title_like "^3 行" && ! title | grep -q "+"' || { title; false; }
+key Escape; sleep 0.3
 
 # ---- 取消 = 杀子进程
 runq "select 'SLEEPY'" 1.5
