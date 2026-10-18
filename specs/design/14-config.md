@@ -126,6 +126,8 @@ production   = false             # M17 F17.9：true 时警示色、每次写都�
 ssh          = "user@host"       # M15 F15.2：先经这台机器的 ssh 再连 host:port；可选，端口、密钥、ProxyJump 走 ~/.ssh/config
 delimiter    = ":"               # M16，只对 redis：这个连接的命名空间分隔符，盖过 [redis] delimiter
 group        = "prod"            # optional (M10 F10.6)
+databases    = ["doraemon"]      # M17 F17.13，只对 postgres：树只列这些库；没写 = 全部。树上「选择库…」写回这里
+schemas      = ["doraemon.public"]   # M17 F17.13：树只列、catalog 只加载这些 schema；postgres 写 库.schema，mysql 写 schema 名；没写 = 全部非系统 schema。「选择 schema…」写回这里
 
 [[connection]]                   # M17 F17.7 / F17.8：外部执行器——SQL 或 Redis 命令交给一个外部命令跑（§8.8）
 name    = "prod-pg"

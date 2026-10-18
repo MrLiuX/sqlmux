@@ -4,8 +4,8 @@
 - **目标**：两件事。一是把 v0.5.0 体验期和做 README / 演示时攒下的意见一次收掉（tab 栏溢出、`;` 跑 Redis 命令、命令行 `redis://`、几处小 bug、发布元数据、面板预览区）；二是「外部执行器」引擎：SQL 和 Redis 命令交给一个外部命令去跑，让本地连不上的库（公司 prod 的 PG 走 pgAdmin、Redis 走 metaknow，都已由 `doraemonctl` 打通）也能在 sqlmux 里浏览。
 - **范围**：§7.8「tab 栏」（滚动）；§12「快速 SQL」（Redis）和「预览」（滚轮、焦点）；§14「启动」（`redis://`）、`production`、`engine = "exec"`；§13「生产连接」「保存前预览」、§10.3；§4（新包 `internal/db/exec`）、§5「连接缝」、§8.8「外部执行器」。都已写进各章（2026-10-17）。
 - **依赖**：M16 passed（`db.Driver` / `db.Conn` 的接口缝、Redis 的回复摆表和判定）。
-- **完成标准**：节点全过、完整回归绿；用户用 `doraemonctl` 浏览 prod 的一张表和一个键。
-- **审查节点**：1 = F17.1–F17.6（体验回合，都小，一批审）；2 = F17.9 + F17.10（安全：生产连接、保存前预览）；3 = F17.7 + F17.8（外部执行器）；4 = F17.11（和 doraemonctl 对口径后的补丁，2026-10-18）。
+- **完成标准**：节点全过、完整回归绿；用户用 `doraemonctl` 浏览 prod 的一张表和一个键（2026-10-18 改：键那半等 metaknow 的 `/internal/cache` 改成返回结构化回复，用户定现在不改后端，不挡 M17；§8.8 已知上限）。
+- **审查节点**：1 = F17.1–F17.6（体验回合，都小，一批审）；2 = F17.9 + F17.10（安全：生产连接、保存前预览）；3 = F17.7 + F17.8（外部执行器）；4 = F17.11（和 doraemonctl 对口径后的补丁，2026-10-18）；5 = F17.12 + F17.13（用户 2026-10-18 验收 prod 时提：exec 的库层、库 / schema 勾选）。
 - **不做（留 M18 候选）**：Redis 第二轮（Pub/Sub、MONITOR、Cluster、格子里的 JSON 按格高亮、string 键是 JSON 时直接开值编辑器）；exec 引擎的写回和流式导出。
 
 ## F17.1 tab 栏横向滚动 · 状态：passed（8baeb8c；e2e 37ebc89）
@@ -170,5 +170,35 @@
 - [x] 单测：假命令每次最多回 3 行、只有第一批标 `truncated`，`Query` 拼出全部 7 行且发出的语句带 `limit 3 offset 3` / `offset 6`；`Exec` 不翻、标已截断；没有这个字段不变；mutation。
 - [x] e2e：假命令每批 1000 行截断，4000 张表的树全部列出；query 里的截断提示出现。
 - [x] 决策者用 doraemonctl 在 staging 上看 `public` 的表列齐（真路径，不进 e2e）。
+
+## F17.12 exec 连接的数据库层 · 状态：todo
+
+- **依赖**：F17.7
+- **涉及**：`internal/db/exec`、`internal/app`（树）
+- 用户 2026-10-18 验收 prod-pg：PG 的第一级应该是库、第二级才是 schema，exec 连接也要统一。doraemonctl 的 `exec db` 只到 `doraemon` 一个库（探针写死），所以列一个。
+
+**开发**（§7.8「数据库节点」、§8.8）
+- [ ] a. `exec.Engine.Databases` 返回连接时 `select current_database()` 的那一个名字；树上是一个数据库节点，默认展开，它是默认库、走连接本身的 Conn（F15.1 的「DSN 里的库」那条路），表 tab 标题不带库名。
+
+**验收**
+- [ ] 单测：假命令回 `current_database()` = `doraemon` → `Databases` 是 `["doraemon"]`；mutation。
+- [ ] e2e：假命令的 exec 连接树是 连接 → doraemon → schema → Tables，query 标题 `doraemon.public`；Redis 方言不变。
+
+## F17.13 库 / schema 的勾选 · 状态：todo
+
+- **依赖**：F15.1（数据库层）、F10.3（COLS 浮层）
+- **涉及**：`internal/app`（树、右键菜单、面板命令、浮层）、`internal/config`（两个字段、写回）、`internal/db/postgres` / `mysql`（catalog 查询按 schema 过滤）、i18n
+- 用户 2026-10-18 验收时提（截图是 DataGrip 数据源的「架构」）：连接和库上要有右键菜单，勾选显示和加载哪些库 / schema，节点尾注 `2/7`。prod 的 `agentable` 有 2428 张表，不勾就不拉。
+
+**开发**（§7.8「库 / schema 的勾选」「右键菜单」、§8.3、§14）
+- [ ] a. 配置：connections.toml 的 `databases`（PG）、`schemas`（PG 写 `库.schema`，MySQL 写名字）；没写 = 全部；DSN 里的库固定勾选。浮层关闭时有改动就写回（只改这条连接的这两个字段，保留文件里其他内容和注释，同 `AppendConnection` / `RenameConnection` 的写法）。
+- [ ] b. catalog：`Databases` 列表按 `databases` 过滤后再上树（列表本身仍是全部）；Tables / Views / Functions / Sequences 的查询加 `n.nspname in (…)`，MySQL 同样按 schema 过滤；没勾的库不拨号。
+- [ ] c. 浮层：复用 COLS 的列表浮层和 `[keys.cols]` 的键，标题「库」/「schema」，每行 `[x] 名字`，schema 行尾注已加载的表数（没加载的空）；`esc` 关闭，有改动才写回并重载这个库的 catalog（连接节点的「选择库…」重载整个连接）。
+- [ ] d. 入口：树的右键菜单（连接节点：PG「选择库…」、MySQL「选择 schema…」；PG 数据库节点「选择 schema…」）和命令面板的同名命令（作用于光标所在节点）；Action `tree.pick`，默认不绑键。
+- [ ] e. 尾注：收窄了的连接 / 库节点名后面 `dim` 的 `勾了的/总数`，放不下不画。query 的 schema 下拉、补全、面板 `@` 范围只认加载的。
+
+**验收**
+- [ ] 单测：配置的读写（往返保留其他字段和注释）；catalog 查询带 `in (…)`（PG 和 MySQL 集成测试各一条：勾一个 schema 只回它的表）；mutation。
+- [ ] e2e：PG 连接 `D` 上右键「选择库…」只勾 doraemon → 树只剩它、尾注 `1/N`；doraemon 上「选择 schema…」只勾 public → agentable 不列、面板 `@` 搜不到它的表、query 下拉只有 public；connections.toml 里出现两行；重启后还是这样；取消勾选回到全部、尾注消失；MySQL 连接上「选择 schema…」同样；exec 的假命令连接上勾 schema 后 Tables 查询带 `in`。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
