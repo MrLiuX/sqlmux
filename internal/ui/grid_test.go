@@ -562,10 +562,10 @@ func TestGridEdgesWithoutHeads(t *testing.T) {
 		f := NewFrame(60, 12, TokyonightStorm)
 		g.Draw(f, uv.Rect(0, 0, 60, 12))
 		for _, h := range f.Hits {
-			switch h.Target.Kind {
-			case KindHead:
+			if h.Target.Kind == KindHead {
 				heads++
-			case KindColEdge:
+			}
+			if h.Target.Kind == KindColEdge {
 				edges++
 			}
 		}
