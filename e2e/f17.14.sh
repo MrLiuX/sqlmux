@@ -129,4 +129,15 @@ key 2; key C-w; key '>'
 check "结果 tab 上 2 C-w >：status 宽 2 列，id 没动" eval 'cw_is 2 $((R0 + 2))'
 key C-w; key '='
 check "结果 tab 上 C-w =：回到自动" eval 'cw_is 2 $R0'
+R1=$(cw 1)
+X=$(sx 1)
+e2e_down "$X" "$HY"; e2e_drag_to $((X + 5)) "$HY"; sleep 0.4
+check "结果 tab 的表头：按住拖 5 列，还没松开 id 右边的 │ 已经在 +5" eval '[[ $(sx 1) == $((X + 5)) ]] || { echo "  sep at $(sx 1), want $((X + 5)) ($(head_))"; false; }'
+e2e_up $((X + 5)) "$HY"; sleep 0.5
+check "松开：id 宽 +5，status amount 两列还在，不当成排序点击" eval 'cw_is 1 $((R1 + 5)) && [[ $(head_) == *status*amount* ]]'
+key C-w; key '='
+check "拖过之后 C-w =：回到自动" eval 'cw_is 1 $R1'
+HB=$(head_); SX=$(( $(sx 1) - 3 ))
+e2e_click "$SX" "$HY"; sleep 0.6
+check "点结果 tab 的表头（列名上）不排序：表头一个字没变" eval '[[ $(head_) == "$HB" ]] || { echo "  [$HB] -> [$(head_)]"; false; }'
 e2e_done
