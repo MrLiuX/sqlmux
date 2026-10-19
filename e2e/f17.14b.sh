@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F17.14 手动列宽的细节（specs/m17-polish-exec/task.md F17.14；tech-design §7.8「列宽」3）
 # 定宽列不随内容变（翻页）、窗口变窄时不被挤；拖动中跟手；在另一个 pane 里拖焦点切过去；
-# 转置视图里 > 不动；键位帮助里有 > < = 三条、没有 C-w 一组；C-w 没吃掉输入框里原有的删词。只读，用共用库的 t_order。
+# 转置视图里 > 不动；WHERE 输入框和单元格编辑里能打 < = >；键位帮助里有 > < = 三条、没有 C-w 一组；C-w 没吃掉输入框里原有的删词。只读，用共用库的 t_order。
 . "$(dirname "$0")/lib.sh"
 SOLO=1
 e2e_build || exit 1
@@ -19,6 +19,7 @@ for seg in t.split('│')[1:-1]:
 "; }
 cw() { cell "$1" w; }
 sx() { cell "$1" x; }
+widths() { local n; for n in 1 2 3 4 5; do echo -n "$n=$(cw $n) "; done; }
 cw_is() { local got; got=$(cw "$1"); [[ $got == "$2" ]] || { echo "  $1: $got wide, want $2 ($(head_))"; false; }; }
 
 start; open_table t_order; wait_for 8 settled
@@ -54,6 +55,16 @@ check "接着往回拖到 +1：│ 跟着回来" eval '[[ $(sx 2) == $((X + 1)) 
 e2e_up $((X + 1)) "$Y"; sleep 0.4
 check "松开：定在 +1" eval '[[ $(sx 2) == $((X + 1)) ]]'
 key '='
+
+# ---- 裸键 > < = 不抢输入：WHERE 输入框、单元格编辑里能打进这三个字符，列宽不变
+key g g; key 0; W1=$(widths)
+key /; e2e_type 'a<b=c>d'; sleep 0.4
+check "WHERE 输入框：打 a<b=c>d，输入框里是这串字" eval '[[ $(where_in) == *"a<b=c>d"* ]] || { echo "  [$(where_in)]"; false; }'
+key Escape; key Escape; sleep 0.4
+check "（关掉补全框后）列宽不变" eval '[[ $(widths) == "$W1" ]] || { echo "  [$(widths)] want [$W1]"; false; }'
+key i; sleep 0.4; e2e_type '<>='; sleep 0.4
+check "单元格编辑：打 <>=，格子里有这三个字符，列宽不变" eval 'e2e_plain | grep -qF "<>=" && [[ $(widths) == "$W1" ]] || { echo "  [$(widths)] want [$W1]"; false; }'
+key Escape; key Escape; sleep 0.3
 
 # ---- 两个 pane：在右边那个 pane 的表头上拖，焦点切过去，宽度照样变（不是第一个 pane 的那份）
 two_panes; key C-l; open_table t_user; wait_for 8 settled; key C-h
