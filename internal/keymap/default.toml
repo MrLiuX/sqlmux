@@ -79,9 +79,9 @@ leader = "<Space>"
 "O" = "grid.value" # the same
 "fv" = "grid.filter.cell" # the f group: what is done with this cell or column (F12.11)
 "fc" = "grid.col.hide"
-"<C-w>>" = "grid.col.wider" # as vim's window keys: one column wider or narrower, the others as they were; C-w = back to automatic (F17.14)
-"<C-w><" = "grid.col.narrower"
-"<C-w>=" = "grid.col.fit"
+">" = "grid.col.wider" # the column the cursor is on one wider or narrower (a count: that many), the others as they were; = back to automatic (F17.14)
+"<" = "grid.col.narrower"
+"=" = "grid.col.fit"
 "fe" = "grid.export"
 "]" = "grid.page.next"
 "[" = "grid.page.prev"

@@ -1089,7 +1089,7 @@ func (t *dataTab) keyType() string {
 	return ""
 }
 
-// resizeCol is C-w > and C-w < (F17.14): the column the cursor is on is set to the width
+// resizeCol is > and < (F17.14): the column the cursor is on is set to the width
 // it is drawn at, d columns wider or narrower, 1 at least, and stays that wide; a turned
 // grid has no columns to set.
 func (a *App) resizeCol(d int) {
@@ -1108,7 +1108,7 @@ func (a *App) setColWidth(s *gridState, name string, w int) {
 	s.colWidth[name] = max(w, 1)
 }
 
-// fitCols is C-w =: every column of the focused grid is automatic again.
+// fitCols is =: every column of the focused grid is automatic again.
 func (a *App) fitCols() {
 	if s, _, _, ok := a.gridOf(a.focused()); ok {
 		s.colWidth = nil

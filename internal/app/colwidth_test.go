@@ -20,38 +20,38 @@ func widthsOf(t *testing.T, a *App) []int {
 	return g.ColWidths(area)
 }
 
-// C-w > and C-w < set the column the cursor is on to its drawn width plus or minus the
-// count, 1 at least, the others as they were; C-w = gives them all back to automatic
+// > and < set the column the cursor is on to its drawn width plus or minus the
+// count, 1 at least, the others as they were; = gives them all back to automatic
 // (F17.14).
 func TestColWidthKeys(t *testing.T) {
 	a := wide(200, 45)
 	tab := loadOrders(t, a, 3)
 	feed(t, a, "ll") // amount
 	before := widthsOf(t, a)
-	feed(t, a, "3<C-w>>")
+	feed(t, a, "3>")
 	got := widthsOf(t, a)
 	if got[2] != before[2]+3 || !slices.Equal(got[:2], before[:2]) || !slices.Equal(got[3:], before[3:]) {
-		t.Fatalf("3 C-w >: %v from %v", got, before)
+		t.Fatalf("3 >: %v from %v", got, before)
 	}
-	feed(t, a, "<C-w><")
+	feed(t, a, "<")
 	if got := widthsOf(t, a); got[2] != before[2]+2 {
-		t.Errorf("C-w <: %v", got)
+		t.Errorf("<: %v", got)
 	}
-	feed(t, a, "99<C-w><")
+	feed(t, a, "99<")
 	if got := widthsOf(t, a); got[2] != 1 {
 		t.Errorf("down to 1: %v", got)
 	}
-	feed(t, a, "<C-w>>")
+	feed(t, a, ">")
 	if got := widthsOf(t, a); got[2] != 2 {
 		t.Errorf("up again from 1: %v", got)
 	}
-	feed(t, a, "l<C-w>>") // another column: the first one stays
+	feed(t, a, "l>") // another column: the first one stays
 	if tab.colWidth["amount"] != 2 || tab.colWidth["paid"] == 0 {
 		t.Errorf("widths by name: %v", tab.colWidth)
 	}
-	feed(t, a, "<C-w>=")
+	feed(t, a, "=")
 	if tab.colWidth != nil || !slices.Equal(widthsOf(t, a), before) {
-		t.Errorf("C-w =: %v, %v", tab.colWidth, widthsOf(t, a))
+		t.Errorf("=: %v, %v", tab.colWidth, widthsOf(t, a))
 	}
 }
 
@@ -61,14 +61,14 @@ func TestColWidthKeys(t *testing.T) {
 func TestColWidthSurvives(t *testing.T) {
 	a := wide(200, 45)
 	tab := loadOrders(t, a, 3)
-	feed(t, a, "ll<C-w>>")
+	feed(t, a, "ll>")
 	set := tab.colWidth["amount"]
 	feed(t, a, "fc") // hides amount
 	feed(t, a, "gca<Esc>")
 	if tab.colWidth["amount"] != set {
 		t.Errorf("hidden and shown again: %v", tab.colWidth)
 	}
-	feed(t, a, "T<C-w>>") // turned: nothing to set
+	feed(t, a, "T>") // turned: nothing to set
 	if tab.colWidth["amount"] != set || len(tab.colWidth) != 1 {
 		t.Errorf("turned: %v", tab.colWidth)
 	}
@@ -128,16 +128,16 @@ func TestColWidthInResult(t *testing.T) {
 	if got := resultOf(a.focused()).colWidth["a"]; got != before[0]+4 {
 		t.Errorf("dragged: %d from %v", got, before)
 	}
-	feed(t, a, "<C-w>=")
+	feed(t, a, "=")
 	before = widthsOf(t, a)
-	feed(t, a, "<C-w>>")
+	feed(t, a, ">")
 	rt := resultOf(a.focused())
 	if got := widthsOf(t, a); got[0] != before[0]+1 || rt.colWidth["a"] != before[0]+1 {
 		t.Errorf("%v from %v", got, before)
 	}
-	feed(t, a, "<C-w>=")
+	feed(t, a, "=")
 	if rt.colWidth != nil {
-		t.Errorf("C-w =: %v", rt.colWidth)
+		t.Errorf("=: %v", rt.colWidth)
 	}
 }
 
