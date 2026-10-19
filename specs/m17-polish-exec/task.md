@@ -1,6 +1,6 @@
 # M17 体验回合与外部执行器 · 任务清单
 
-- **状态**：**验收中，F17.14 改键待审**（2026-10-19：六个节点 F17.1–F17.14 全 passed，验收版 7d5ea0b；2026-10-18：五个节点 F17.1–F17.13 全 passed，验收版 52847da；2026-10-16 决策者起草；2026-10-17 用户定：加 F17.9 / F17.10 两条安全项，F16.11 做完就开工；设计已写进各章）。
+- **状态**：**开发完成，等用户验收**（2026-10-19：六个节点 F17.1–F17.14 全 passed，验收版 cb86eb0；2026-10-18：五个节点 F17.1–F17.13 全 passed，验收版 52847da；2026-10-16 决策者起草；2026-10-17 用户定：加 F17.9 / F17.10 两条安全项，F16.11 做完就开工；设计已写进各章）。
 - **目标**：两件事。一是把 v0.5.0 体验期和做 README / 演示时攒下的意见一次收掉（tab 栏溢出、`;` 跑 Redis 命令、命令行 `redis://`、几处小 bug、发布元数据、面板预览区）；二是「外部执行器」引擎：SQL 和 Redis 命令交给一个外部命令去跑，让本地连不上的库（公司 prod 的 PG 走 pgAdmin、Redis 走 metaknow，都已由 `doraemonctl` 打通）也能在 sqlmux 里浏览。
 - **范围**：§7.8「tab 栏」（滚动）；§12「快速 SQL」（Redis）和「预览」（滚轮、焦点）；§14「启动」（`redis://`）、`production`、`engine = "exec"`；§13「生产连接」「保存前预览」、§10.3；§4（新包 `internal/db/exec`）、§5「连接缝」、§8.8「外部执行器」。都已写进各章（2026-10-17）。
 - **依赖**：M16 passed（`db.Driver` / `db.Conn` 的接口缝、Redis 的回复摆表和判定）。
@@ -201,7 +201,7 @@
 - [x] 单测：配置的读写（往返保留其他字段和注释）；catalog 查询带 `in (…)`（PG 和 MySQL 集成测试各一条：勾一个 schema 只回它的表）；mutation。
 - [x] e2e：PG 连接 `D` 上右键「选择库…」只勾 doraemon → 树只剩它、尾注 `1/N`；doraemon 上「选择 schema…」只勾 public → agentable 不列、面板 `@` 搜不到它的表、query 下拉只有 public；connections.toml 里出现两行；重启后还是这样；取消勾选回到全部、尾注消失；MySQL 连接上「选择 schema…」同样；exec 的假命令连接上勾 schema 后 Tables 查询带 `in`。
 
-## F17.14 手动列宽 · 状态：passed（7d5ea0b；e2e 8a867a3；e 的改键待审）
+## F17.14 手动列宽 · 状态：passed（cb86eb0；e2e 40c58aa）
 
 - **依赖**：F10.3（`order_cols` 的存法）
 - **涉及**：`internal/ui`（列宽计算）、`internal/app`（表格键、表头拖动、布局文件）、`internal/keymap/default.toml`、i18n
@@ -211,7 +211,7 @@
 - [x] a. `grid.col.wider` / `grid.col.narrower`（默认 `C-w >` / `C-w <`，次数前缀，一次 1 列；e 改成 `>` / `<`）：光标所在列定为当前显示宽度 ± N，定宽列不参与比例收缩、不随内容变、不受 40 上限；最窄 1 列。`grid.col.fit`（`C-w =`）清掉这个 tab 的全部定宽。
 - [x] b. 定宽按列名记在 tab 上，布局文件 `col_widths = {列名 = 宽}`，同 `order_cols` 的读写；COLS 隐藏再恢复不丢；转置视图不用；结果 tab 同样。
 - [x] c. 鼠标：表头行上两列之间的分隔符按住左右拖，松开时左边那列定宽为拖到的宽度（复用 pane 边界拖动的按下 / 移动 / 松开），拖到 1 列为止；行号列不能拖。
-- [ ] e. 改默认键（用户 2026-10-19 试过后定）：`>` = `grid.col.wider`、`<` = `grid.col.narrower`、`=` = `grid.col.fit`，`C-w` 那三个不留；`default.toml`、键位帮助、docs/keys.md 跟着（docs 归 oss，发版前重生成）。e2e 的 f17.14 / f17.14b 换键。
+- [x] e. 改默认键（用户 2026-10-19 试过后定）：`>` = `grid.col.wider`、`<` = `grid.col.narrower`、`=` = `grid.col.fit`，`C-w` 那三个不留；`default.toml`、键位帮助、docs/keys.md 跟着（docs 归 oss，发版前重生成）。e2e 的 f17.14 / f17.14b 换键。
 - [x] d. 修复（tester 2026-10-19 发现）：结果 tab（快速 SQL `C-t` 开的、query 的结果）的表头分隔符拖不动，`internal/ui/grid.go` 只在 `Heads` 为真时画拖动区，而只有表格 tab 设了它。§7.8 写的是「结果 tab 同样」：结果 tab 也要能拖（表头点击排序照旧只在表格 tab）。e2e 补一条：结果 tab 上拖 5 列。
 
 **验收**
