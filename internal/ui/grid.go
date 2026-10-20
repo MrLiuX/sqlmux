@@ -493,12 +493,12 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 				h = Truncate(g.header(g.Cols[c]), max(ws[c]-Width(mark)-1, 0))
 			}
 		}
+		if g.Edges && c+1 < v.cols { // the │ between two columns, turned two records: drag to set the width (F17.14, F17.15)
+			f.Region(uv.Rect(cellX(i)+ws[c]+1, y, 1, 1).Intersect(area), Target{Kind: KindColEdge, Pane: g.Pane, I: c})
+		}
 		switch {
 		case g.Transpose:
 			rowNo(uv.Rect(cellX(i)-1, y, ws[c]+2, 1), c)
-			if g.Edges && c+1 < v.cols { // the │ between two records (F17.15)
-				f.Region(uv.Rect(cellX(i)+ws[c]+1, y, 1, 1).Intersect(area), Target{Kind: KindColEdge, Pane: g.Pane, I: c})
-			}
 			st := num(c == cc, th.PaneBg)
 			st.Fg = g.recColor(th, c, st.Fg)
 			g.markNumber(f, &st, uv.Rect(cellX(i)-1, y, ws[c]+2, 1).Intersect(area), c)
@@ -506,9 +506,6 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 		default:
 			if g.Heads {
 				f.Region(uv.Rect(cellX(i)-1, y, ws[c]+2, 1).Intersect(area), Target{Kind: KindHead, Pane: g.Pane, I: c})
-			}
-			if g.Edges && c+1 < v.cols { // the │ between it and the next: drag to set its width (F17.14)
-				f.Region(uv.Rect(cellX(i)+ws[c]+1, y, 1, 1).Intersect(area), Target{Kind: KindColEdge, Pane: g.Pane, I: c})
 			}
 			f.Text(cellX(i), y, right, h, name)
 			if mark != "" {

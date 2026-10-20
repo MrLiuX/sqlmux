@@ -1098,20 +1098,26 @@ func (a *App) resizeCol(d int) {
 	if !ok {
 		return
 	}
-	ws := g.ColWidths(area)
+	i := s.col
 	if s.transpose {
-		if s.row >= 0 && s.row < len(ws) {
-			s.transposeWidth = max(ws[s.row]+d, 1)
-		}
-		return
+		i = s.row
 	}
-	if s.col < len(g.Cols) {
-		a.setColWidth(s, g.Cols[s.col].Name, ws[s.col]+d)
+	if ws := g.ColWidths(area); i < len(ws) { // a turned grid with no records has none
+		name := ""
+		if !s.transpose {
+			name = g.Cols[i].Name
+		}
+		a.setColWidth(s, name, ws[i]+d)
 	}
 }
 
-// setColWidth sets the column called name to w columns, 1 at least.
+// setColWidth sets the column called name to w columns, 1 at least; turned, it is every
+// record's width and name is not read.
 func (a *App) setColWidth(s *gridState, name string, w int) {
+	if s.transpose {
+		s.transposeWidth = max(w, 1)
+		return
+	}
 	if s.colWidth == nil {
 		s.colWidth = map[string]int{}
 	}
@@ -1149,12 +1155,12 @@ func (a *App) startColDrag(pane, col, x int) {
 	name, n := "", len(g.Rows) // turned, the columns are the records, with one width (F17.15)
 	if !s.transpose {
 		n = len(g.Cols)
-		if col < n {
-			name = g.Cols[col].Name
-		}
 	}
 	if col >= n {
 		return
+	}
+	if !s.transpose {
+		name = g.Cols[col].Name
 	}
 	a.dragCol = &colDrag{pane: pane, col: col, name: name, w0: g.ColWidths(area)[col], x0: x}
 }
@@ -1163,10 +1169,6 @@ func (a *App) startColDrag(pane, col, x int) {
 func (a *App) dragColTo(x int) {
 	d := a.dragCol
 	if s, _, _, ok := a.gridOf(a.win().pane(d.pane)); ok {
-		if s.transpose {
-			s.transposeWidth = max(d.w0+x-d.x0, 1)
-			return
-		}
 		a.setColWidth(s, d.name, d.w0+x-d.x0)
 	}
 }
