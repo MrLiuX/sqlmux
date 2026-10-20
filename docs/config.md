@@ -65,6 +65,8 @@ dsn      = "postgres://me@localhost:5432/app?sslmode=disable"
 password_cmd = "security find-generic-password -s sqlmux-local -w"
 read_only = false                      # refuse writes on this connection
 production = false                     # warning color, confirm every write, read-only unless read_only = false is written
+databases = ["app"]                    # postgres: the databases the tree lists; unset = all
+schemas   = ["app.public"]             # the schemas listed and loaded: "db.schema" on postgres, the name on mysql; unset = all non-system ones
 group     = "dev"                      # optional: a labelled section in the tree
 ssh       = "me@bastion"               # optional: connect through this machine
 ```
@@ -92,6 +94,8 @@ The connection form (`+` at the top of the sidebar, or *New connection…* in th
 
 `${VAR}` inside `dsn` or `password` is replaced from the environment, so `dsn = "${DATABASE_URL}"` works.
 
+`databases` and `schemas` narrow a big server to what you use: databases not listed are not connected to, schemas not listed are not loaded (their tables don't show in the tree, the palette or completion). The database in the DSN is always included. *Pick databases…* / *Pick schemas…* in the tree's right-click menu (or the palette) edit them for you and keep the rest of the file.
+
 `production = true` marks a connection whose data matters: its borders, status bar block and tab titles use the `production` theme color, every write asks first (table saves, write statements, Redis write commands, deletes and renames in the tree), and it is read-only unless `read_only = false` is written as well. See [Safety](../README.md#safety).
 
 `ssh = "user@host"` runs `ssh -W host:port user@host` for each connection; the port, key and `ProxyJump` come from `~/.ssh/config`, and no local port is opened. ssh cannot ask for a password or passphrase here, so `ssh-add` the key first. It does not apply to SQLite or to connections given on the command line.
@@ -114,7 +118,7 @@ dialect = "redis"
 command = ["mytool", "redis", "--json", "--", "{cmd}", "{args...}"]   # {cmd} the command, {args...} its arguments
 ```
 
-The command runs once per statement (cancelling kills it) and prints JSON on stdout: for SQL, one item per statement with `columns` (ordered names), `rows` (an array per row; nested values are shown as JSON text), `n` (affected or total rows, optional) and `err` (the error text, if any); for Redis, the reply itself. A non-zero exit makes its stderr the error. sqlmux checks the connection with `select current_database()` or `PING` when it connects.
+The command runs once per statement (cancelling kills it) and prints JSON on stdout: for SQL, one item per statement with `columns` (ordered names), `rows` (an array per row; nested values are shown as JSON text), `n` (affected or total rows, optional), `err` (the error text, if any) and `truncated` (`true` when the command cut the rows short: sqlmux then pages through its own queries with `limit` / `offset`, and marks your own statements as truncated); for Redis, the reply itself. A non-zero exit makes its stderr the error. sqlmux checks the connection with `select current_database()` or `PING` when it connects.
 
 ## Command line
 

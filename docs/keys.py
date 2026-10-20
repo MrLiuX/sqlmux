@@ -34,7 +34,7 @@ def code(k):
 print(f"""# Keys
 
 Every default key of sqlmux {version}, generated from `sqlmux keys --format toml` by `docs/keys.py`; do not edit by hand.
-The leader is `{leader}`. Keys use vim notation (`<C-p>` is Ctrl+P, `<CR>` Enter, `<Leader>c` the leader then `c`).
+The leader is `{leader}`. Keys use vim notation (`<C-p>` is Ctrl+P, `<CR>` Enter, `<lt>` the `<` key, `<Leader>c` the leader then `c`).
 An action with no key runs from the command palette (`<C-p>`, then `>`), or bind it yourself in `keymaps.toml`:
 see [Configuration](config.md#keymapstoml).
 """)

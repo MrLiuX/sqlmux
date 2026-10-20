@@ -1,7 +1,7 @@
 # Keys
 
-Every default key of sqlmux v0.5.0, generated from `sqlmux keys --format toml` by `docs/keys.py`; do not edit by hand.
-The leader is `<Space>`. Keys use vim notation (`<C-p>` is Ctrl+P, `<CR>` Enter, `<Leader>c` the leader then `c`).
+Every default key of sqlmux v0.6.0, generated from `sqlmux keys --format toml` by `docs/keys.py`; do not edit by hand.
+The leader is `<Space>`. Keys use vim notation (`<C-p>` is Ctrl+P, `<CR>` Enter, `<lt>` the `<` key, `<Leader>c` the leader then `c`).
 An action with no key runs from the command palette (`<C-p>`, then `>`), or bind it yourself in `keymaps.toml`:
 see [Configuration](config.md#keymapstoml).
 
@@ -153,6 +153,7 @@ The focus on the schema tree (NORMAL)
 | `s` | `jump.start` | Jump to a character on the screen |
 | `:` | `palette.open` | Command palette |
 | `;` | `palette.sql` | Quick SQL |
+| — | `tree.pick` | Pick databases / schemas… |
 
 ## grid
 
@@ -188,6 +189,9 @@ The focus on the grid (NORMAL)
 | `*`, `fv` | `grid.filter.cell` | Filter by this value |
 | `e`, `O` | `grid.value` | Open in the value editor |
 | `fc` | `grid.col.hide` | Hide this column |
+| `>` | `grid.col.wider` | Widen this column |
+| `<lt>` | `grid.col.narrower` | Narrow this column |
+| `=` | `grid.col.fit` | Column widths back to automatic |
 | `]` | `grid.page.next` | Next page |
 | `[` | `grid.page.prev` | Previous page |
 | `s` | `jump.start` | Jump to a character on the screen |
@@ -428,6 +432,14 @@ While the connection manager's list has the keys
 | `<C-t>` | `form.test` | Test connection |
 | `<Esc>` | `conns.close` | Close |
 
+## palettepreview
+
+While the palette's preview has the focus: the rest is its read only editor's
+
+| Keys | Action | What it does |
+|---|---|---|
+| `<Esc>` | `palette.preview.leave` | Back to the list |
+
 ## palette
 
 While the palette is open
@@ -444,6 +456,7 @@ While the palette is open
 | `<C-y>` | `quicksql.copy` | Copy result |
 | `<C-f>` | `palette.preview.down` | Scroll the preview down |
 | `<C-b>` | `palette.preview.up` | Scroll the preview up |
+| `<C-o>` | `palette.preview.focus` | Focus the preview |
 | `<C-e>` | `quicksql.edit` | Edit in a query |
 
 ## ddl

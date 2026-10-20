@@ -6,7 +6,7 @@ All notable changes to sqlmux are listed here. The format follows
 
 ## [Unreleased]
 
-## [0.6.0] - unreleased
+## [0.6.0] - 2026-10-20
 
 ### Added
 
@@ -16,6 +16,9 @@ All notable changes to sqlmux are listed here. The format follows
 - Quick SQL (`;`) on a Redis connection runs one Redis command, with the console's completion and checks.
 - `sqlmux redis://…` (and `rediss://`) opens a Redis server from the command line, like `postgres://` and `mysql://`.
 - The tab bar scrolls when the tabs don't fit: the current tab stays in view, and `‹N` / `N›` at the ends show (and scroll to) the hidden ones.
+- **Column widths**: `>` / `<` widen or narrow the column under the cursor (with a count, `3>`), `=` puts every column back to automatic; or drag the separator between two headers. Set widths are kept per tab and in layouts, on table and result tabs.
+- **Pick databases and schemas**: right-click a connection (*Pick databases…*, MySQL *Pick schemas…*) or a PostgreSQL database (*Pick schemas…*), or *Pick databases / schemas…* in the palette, and tick which ones the tree shows and loads; the node then shows `2/7`. Saved as `databases` / `schemas` in `connections.toml`.
+- External-command connections page through output their command cut short (`truncated: true`), and a PostgreSQL one shows its database as a level in the tree, like any PostgreSQL connection.
 - The command palette's preview scrolls with the mouse wheel, and `C-o` moves the focus into it as a read-only text with vim movement, search, selection and copy; `esc` goes back to the list.
 
 ### Fixed
