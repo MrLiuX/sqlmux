@@ -2,8 +2,10 @@
 
 <img src="assets/logo/sqlmux-light.png" alt="sqlmux" width="380">
 
-**A terminal database client organized the way tmux is: sessions, windows, panes and tabs.**<br>
-PostgreSQL, MySQL, SQLite and Redis. vim keys everywhere, the mouse too.
+**If you live in tmux and vim,<br>your database client should too.**
+
+sqlmux works the tmux way: sessions, windows, panes and tabs, with vim keys everywhere.<br>
+PostgreSQL, MySQL, SQLite and Redis.
 
 [![Release](https://img.shields.io/github/v/release/kackerx/sqlmux)](https://github.com/kackerx/sqlmux/releases)
 [![CI](https://github.com/kackerx/sqlmux/actions/workflows/ci.yml/badge.svg)](https://github.com/kackerx/sqlmux/actions/workflows/ci.yml)
