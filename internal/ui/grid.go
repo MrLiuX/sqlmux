@@ -60,8 +60,11 @@ type Grid struct {
 	Edit      *Input          // the current cell's edit, drawn over it (§10.1)
 	Heads     bool            // the column heads are click targets: a table's, which has an ORDER (F12.3)
 	Edges     bool            // the │ between two heads is a drag handle for the width: a table's and a result's (F17.14)
-	EditMenu  bool            // the edit has options: a ▾ at its right shows or hides them (§10.2)
-	EditBad   bool            // the edit is no value of its column: an error wavy line under it (§10.7)
+	// TransposeWidth is the width every record is drawn at when the grid is turned, 0 for
+	// each its own (F17.15)
+	TransposeWidth int
+	EditMenu       bool // the edit has options: a ▾ at its right shows or hides them (§10.2)
+	EditBad        bool // the edit is no value of its column: an error wavy line under it (§10.7)
 
 	// Rows added and marked for deletion (§10.6): numbered + in warn and
 	// − in error; an added one's cells not set dim, a deleted one dim and
@@ -313,9 +316,13 @@ func (v view) widths(room int) []int {
 	return ws
 }
 
-// fixedWidth is the width screen column c was set to by hand, 0 for none.
+// fixedWidth is the width screen column c was set to by hand, 0 for none: a column's own,
+// turned one width for all the records.
 func (v view) fixedWidth(c int) int {
-	if v.g.Transpose || c >= len(v.g.Cols) {
+	if v.g.Transpose {
+		return v.g.TransposeWidth
+	}
+	if c >= len(v.g.Cols) {
 		return 0
 	}
 	return v.g.Cols[c].Width
@@ -489,6 +496,9 @@ func (g Grid) Draw(f *Frame, area uv.Rectangle) uv.Position {
 		switch {
 		case g.Transpose:
 			rowNo(uv.Rect(cellX(i)-1, y, ws[c]+2, 1), c)
+			if g.Edges && c+1 < v.cols { // the │ between two records (F17.15)
+				f.Region(uv.Rect(cellX(i)+ws[c]+1, y, 1, 1).Intersect(area), Target{Kind: KindColEdge, Pane: g.Pane, I: c})
+			}
 			st := num(c == cc, th.PaneBg)
 			st.Fg = g.recColor(th, c, st.Fg)
 			g.markNumber(f, &st, uv.Rect(cellX(i)-1, y, ws[c]+2, 1).Intersect(area), c)

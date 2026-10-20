@@ -37,12 +37,13 @@ type Tab struct {
 // result tab's. Positions are the data's, transposed or not, among the
 // columns it shows.
 type gridState struct {
-	page      db.Result // the rows on screen
-	row, col  int       // the cursor
-	top, left int       // the first record and field shown
-	transpose bool
-	colWidth  map[string]int // the columns set to a width by hand, by name (F17.14)
-	jv        *jsonView      // the JSON view, when it is in the table's place (F14.5)
+	page           db.Result // the rows on screen
+	row, col       int       // the cursor
+	top, left      int       // the first record and field shown
+	transpose      bool
+	colWidth       map[string]int // the columns set to a width by hand, by name (F17.14)
+	transposeWidth int            // the width every record is drawn at when it is turned, 0 for each its own (F17.15)
+	jv             *jsonView      // the JSON view, when it is in the table's place (F14.5)
 	// the records marked with m, or by VISUAL from anchor to the cursor, by
 	// position among the rows shown (F10.7); a new page or row puts them back.
 	// unset: the range takes records out of the marked ones (F12.12)
@@ -517,7 +518,7 @@ func (a *App) keyInfo(t *dataTab) []ui.Chip {
 func (a *App) grid(p *Pane, t *dataTab) ui.Grid {
 	g := ui.Grid{
 		Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose, FullWidth: a.fullWidth, First: t.shown.pageNo * t.shown.limit,
-		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Selected: t.marked, Ranged: t.ranged(), FlashNums: a.flashNums(p), Widest: t.widestCache(), Heads: true, Edges: true,
+		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Selected: t.marked, Ranged: t.ranged(), FlashNums: a.flashNums(p), Widest: t.widestCache(), Heads: true, Edges: true, TransposeWidth: t.transposeWidth,
 	}
 	shown := t.shownCols()
 	for _, i := range shown {
@@ -863,7 +864,7 @@ func (a *App) gridOf(p *Pane) (s *gridState, g ui.Grid, area uv.Rectangle, ok bo
 func (a *App) resultGrid(p *Pane, t *resultTab) ui.Grid {
 	g := ui.Grid{
 		Rows: t.page.Rows, Row: t.row, Col: t.col, Top: t.top, Left: t.left, Transpose: t.transpose, FullWidth: a.fullWidth,
-		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Yank: a.gridFlash(p), Selected: t.marked, Ranged: t.ranged(), FlashNums: a.flashNums(p), Widest: t.widestCache(), Edges: true,
+		Focused: a.win().Focus == p.ID, Key: a.icons.Key, Pane: p.ID, Yank: a.gridFlash(p), Selected: t.marked, Ranged: t.ranged(), FlashNums: a.flashNums(p), Widest: t.widestCache(), Edges: true, TransposeWidth: t.transposeWidth,
 	}
 	for _, c := range t.page.Cols {
 		g.Cols = append(g.Cols, ui.GridCol{Name: c.Name, Type: colType(c.Type), Width: t.colWidth[c.Name]})
@@ -1091,13 +1092,22 @@ func (t *dataTab) keyType() string {
 
 // resizeCol is > and < (F17.14): the column the cursor is on is set to the width
 // it is drawn at, d columns wider or narrower, 1 at least, and stays that wide; a turned
-// grid has no columns to set.
+// grid has the one width for every record, the cursor's now (F17.15).
 func (a *App) resizeCol(d int) {
 	s, g, area, ok := a.gridOf(a.focused())
-	if !ok || s.transpose || s.col >= len(g.Cols) {
+	if !ok {
 		return
 	}
-	a.setColWidth(s, g.Cols[s.col].Name, g.ColWidths(area)[s.col]+d)
+	ws := g.ColWidths(area)
+	if s.transpose {
+		if s.row >= 0 && s.row < len(ws) {
+			s.transposeWidth = max(ws[s.row]+d, 1)
+		}
+		return
+	}
+	if s.col < len(g.Cols) {
+		a.setColWidth(s, g.Cols[s.col].Name, ws[s.col]+d)
+	}
 }
 
 // setColWidth sets the column called name to w columns, 1 at least.
@@ -1108,9 +1118,15 @@ func (a *App) setColWidth(s *gridState, name string, w int) {
 	s.colWidth[name] = max(w, 1)
 }
 
-// fitCols is =: every column of the focused grid is automatic again.
+// fitCols is =: every column of the focused grid is automatic again; turned, the
+// records are, the columns' own widths kept for when it is turned back (F17.15).
 func (a *App) fitCols() {
-	if s, _, _, ok := a.gridOf(a.focused()); ok {
+	s, _, _, ok := a.gridOf(a.focused())
+	switch {
+	case !ok:
+	case s.transpose:
+		s.transposeWidth = 0
+	default:
 		s.colWidth = nil
 	}
 }
@@ -1127,16 +1143,30 @@ type colDrag struct {
 func (a *App) startColDrag(pane, col, x int) {
 	a.focusPane(pane)
 	s, g, area, ok := a.gridOf(a.win().pane(pane))
-	if !ok || s.transpose || col >= len(g.Cols) {
+	if !ok {
 		return
 	}
-	a.dragCol = &colDrag{pane: pane, col: col, name: g.Cols[col].Name, w0: g.ColWidths(area)[col], x0: x}
+	name, n := "", len(g.Rows) // turned, the columns are the records, with one width (F17.15)
+	if !s.transpose {
+		n = len(g.Cols)
+		if col < n {
+			name = g.Cols[col].Name
+		}
+	}
+	if col >= n {
+		return
+	}
+	a.dragCol = &colDrag{pane: pane, col: col, name: name, w0: g.ColWidths(area)[col], x0: x}
 }
 
 // dragColTo follows the pointer: the column is as wide as it was and the pointer moved.
 func (a *App) dragColTo(x int) {
 	d := a.dragCol
 	if s, _, _, ok := a.gridOf(a.win().pane(d.pane)); ok {
+		if s.transpose {
+			s.transposeWidth = max(d.w0+x-d.x0, 1)
+			return
+		}
 		a.setColWidth(s, d.name, d.w0+x-d.x0)
 	}
 }

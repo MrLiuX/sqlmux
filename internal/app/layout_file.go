@@ -90,6 +90,7 @@ func paneLayout(p *Pane) config.LayoutPane {
 			slices.Sort(lt.Cols)
 			lt.OrderCols = slices.Clone(d.colOrder)
 			lt.ColWidths = maps.Clone(d.colWidth)
+			lt.TransposeWidth = d.transposeWidth
 			if d.table.Kind == "k" { // its pages go by cursors, which a new start has none of: the first
 				lt.Kind, lt.Key, lt.Table, lt.Page = "key", d.table.Name, "", 0
 			}
@@ -280,6 +281,7 @@ func (s *Session) restoreTab(lt config.LayoutTab, used map[string]bool) (tb Tab,
 		}
 		d.transpose = lt.Transpose
 		d.colOrder = slices.Clone(lt.OrderCols)
+		d.transposeWidth = max(lt.TransposeWidth, 0) // typed by hand it may be anything
 		for name, w := range lt.ColWidths {
 			if w > 0 { // typed by hand it may be anything
 				if d.colWidth == nil {

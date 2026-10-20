@@ -518,13 +518,44 @@ func TestGridColEdges(t *testing.T) {
 	if !slices.Equal(edges, []int{0, 1}) {
 		t.Errorf("edges of columns %v, want 0 and 1 of 3", edges)
 	}
-	g.Transpose = true
+	g.Transpose = true // the records are the columns: an edge between each two of the 4
 	f = NewFrame(60, 12, TokyonightStorm)
 	g.Draw(f, uv.Rect(0, 0, 60, 12))
+	edges = nil
 	for _, h := range f.Hits {
 		if h.Target.Kind == KindColEdge {
-			t.Error("an edge in a turned grid")
+			edges = append(edges, h.Target.I)
 		}
+	}
+	slices.Sort(edges)
+	if !slices.Equal(edges, []int{0, 1, 2}) {
+		t.Errorf("edges of a turned grid: %v, want 0, 1 and 2 of 4 records", edges)
+	}
+}
+
+// Turned, one width is every record's when it is set, and the columns' own are not used;
+// not set, each is as it was (F17.15).
+func TestGridTransposeWidth(t *testing.T) {
+	g := Grid{Transpose: true, FullWidth: 20, Cols: []GridCol{{Name: "a", Width: 9}, {Name: "b"}}, Rows: vals([]string{"1", "22"}, []string{"333", strings.Repeat("x", 30)}, []string{"4", "5"})}
+	auto := g.view().widths(200)
+	if len(auto) != 3 || auto[1] != 30 {
+		t.Fatalf("auto: %v", auto)
+	}
+	g.TransposeWidth = 7
+	if ws := g.view().widths(200); !reflect.DeepEqual(ws, []int{7, 7, 7}) {
+		t.Errorf("set: %v, auto was %v", ws, auto)
+	}
+	if ws := g.view().widths(5); !reflect.DeepEqual(ws, []int{7, 7, 7}) { // not squeezed
+		t.Errorf("no room: %v", ws)
+	}
+	g.TransposeWidth = 45 // past the 40 an automatic one stops at
+	if ws := g.view().widths(200); ws[0] != 45 {
+		t.Errorf("past the cap: %v", ws)
+	}
+	g.Transpose = false
+	g.TransposeWidth = 7
+	if ws := g.view().widths(200); ws[0] != 9 { // the columns' own when it is not turned
+		t.Errorf("not turned: %v", ws)
 	}
 }
 
