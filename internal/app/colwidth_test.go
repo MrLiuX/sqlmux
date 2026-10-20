@@ -140,6 +140,40 @@ func TestColWidthInResult(t *testing.T) {
 	if rt.colWidth != nil {
 		t.Errorf("=: %v", rt.colWidth)
 	}
+	feed(t, a, ">")
+	own := maps.Clone(rt.colWidth)
+	feed(t, a, "T3>") // turned: the one width of the records, drawn as set
+	if rt.transposeWidth == 0 {
+		t.Fatal("> turned: no width of the records")
+	}
+	for _, w := range widthsOf(t, a) {
+		if w != rt.transposeWidth {
+			t.Errorf("turned: drawn %v, set %d", widthsOf(t, a), rt.transposeWidth)
+		}
+	}
+	feed(t, a, "=")
+	if rt.transposeWidth != 0 || !maps.Equal(rt.colWidth, own) {
+		t.Errorf("turned =: records %d, columns %v, want %v", rt.transposeWidth, rt.colWidth, own)
+	}
+}
+
+// A turned grid with no record (a WHERE that matches none) has no width to start from: >, <
+// and = leave it as it was (F17.15).
+func TestColWidthTransposedEmpty(t *testing.T) {
+	a := wide(200, 45)
+	tab := loadOrders(t, a, 3)
+	feed(t, a, "T4>")
+	set := tab.transposeWidth
+	_, cols, page := ordersTable(0)
+	a.Update(pageMsg{tab: tab, seq: tab.seq, cols: cols, page: page})
+	feed(t, a, "3>2<")
+	if tab.transposeWidth != set {
+		t.Errorf("> < with no record: %d, was %d", tab.transposeWidth, set)
+	}
+	feed(t, a, "=")
+	if tab.transposeWidth != 0 {
+		t.Errorf("=: %d", tab.transposeWidth)
+	}
 }
 
 // The column follows the pointer as it is dragged: after each move the frame is drawn again
@@ -196,9 +230,13 @@ func TestColWidthTransposed(t *testing.T) {
 	own := maps.Clone(tab.colWidth)
 	feed(t, a, "T")
 	before := widthsOf(t, a)
+	feed(t, a, "l") // the second record: drawn wider than the first, the width > and < start from
+	if before[1] == before[0] {
+		t.Fatalf("records drawn alike: %v", before)
+	}
 	feed(t, a, "3>")
 	got := widthsOf(t, a)
-	if tab.transposeWidth != before[0]+3 {
+	if tab.transposeWidth != before[1]+3 {
 		t.Fatalf("3 >: width %d from %v", tab.transposeWidth, before)
 	}
 	for _, w := range got {
@@ -207,7 +245,7 @@ func TestColWidthTransposed(t *testing.T) {
 		}
 	}
 	feed(t, a, "3<")
-	if tab.transposeWidth != before[0] {
+	if tab.transposeWidth != before[1] {
 		t.Errorf("3 <: %d", tab.transposeWidth)
 	}
 	feed(t, a, "99<")
