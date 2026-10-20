@@ -4,8 +4,7 @@
 
 **If you live in tmux and vim,<br>your database client should too.**
 
-sqlmux works the tmux way: sessions, windows, panes and tabs, with vim keys everywhere.<br>
-PostgreSQL, MySQL, SQLite and Redis.
+sqlmux is that client, made for the way you already work.
 
 [![Release](https://img.shields.io/github/v/release/kackerx/sqlmux)](https://github.com/kackerx/sqlmux/releases)
 [![CI](https://github.com/kackerx/sqlmux/actions/workflows/ci.yml/badge.svg)](https://github.com/kackerx/sqlmux/actions/workflows/ci.yml)
