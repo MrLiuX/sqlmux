@@ -37,6 +37,7 @@
 ## M18 候选
 
 - 2026-10-19 用户：Windows（issue #1「Windows support?」、reddit 有人改了点就能跑）。优先级不高，目标是在 Windows Terminal 的 PowerShell / cmd 下能正常简单使用，实在不好做的不做；WSL 就是 Linux，现在的 linux 二进制在里面体验一致，README 先这么写。决策者 2026-10-18 交叉编译过：只有 `internal/config/state.go` 的 `syscall.Flock` 编不过（拆成两个 build tag 文件，Windows 用 `LockFileEx`）；运行时三处 `exec.Command("sh", "-c", …)`（`password_cmd`、`$EDITOR` 开 query、`gq` 的 formatprg）收成一个按平台选 shell 的 helper，Windows 走 `%COMSPEC% /c`；剪贴板写有 OSC 52 兜底、读没有；钥匙串本来只 macOS；SSH 隧道靠系统 OpenSSH；配置路径留 `~/.config/sqlmux`。发布：goreleaser 加 windows/amd64、npm 加 win32 子包、CI 加 `GOOS=windows go build` 和一个 windows runner 跑单测；e2e 不覆盖，没有 Windows 机器，靠用户反馈。
+- 2026-10-20 用户：SQL Server 引擎（reddit 评论有人问），排在 Windows 之后、两个一起做——用户群重合，Windows 跑不了就没意义。决策者的评估：用量仍是前四（企业、.NET），服务端 2017 起有 Linux 和官方 Docker 镜像，不绑 Windows；Azure Data Studio 2026 年初退役，终端客户端有空档。做法和 M14 的 SQLite 引擎一个量级：`microsoft/go-mssqldb`（纯 Go，database/sql），catalog 查 `sys.schemas` / `sys.tables`，分页 `OFFSET … FETCH`（必须带 ORDER BY），标识符 `[name]`，参数 `@p1`，`GO` 批分隔符进语句拆分器，类型 datetime2 / datetimeoffset / uniqueidentifier / money，默认 TLS（本地镜像 `TrustServerCertificate`）；连接管理、事务、取消、表格编辑是共用层。测试环境：官方镜像只有 amd64，这台 Apple Silicon 要靠 Docker 的 Rosetta，CI 的 Linux runner 没问题；凭记忆拿不准的（取消语义、datetimeoffset 的文本格式）照规矩写最小集成测试在真库上验。
 
 ## 发布
 
