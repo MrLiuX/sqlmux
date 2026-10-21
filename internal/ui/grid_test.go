@@ -533,27 +533,27 @@ func TestGridColEdges(t *testing.T) {
 	}
 }
 
-// Turned, one width is every record's when it is set, and the columns' own are not used;
-// not set, each is as it was (F17.15).
+// Turned, a record set to a width is drawn at it, the others each as they were, and the
+// columns' own widths are not used (F17.15).
 func TestGridTransposeWidth(t *testing.T) {
 	g := Grid{Transpose: true, FullWidth: 20, Cols: []GridCol{{Name: "a", Width: 9}, {Name: "b"}}, Rows: vals([]string{"1", "22"}, []string{"333", strings.Repeat("x", 30)}, []string{"4", "5"})}
 	auto := g.view().widths(200)
 	if len(auto) != 3 || auto[1] != 30 {
 		t.Fatalf("auto: %v", auto)
 	}
-	g.TransposeWidth = 7
-	if ws := g.view().widths(200); !reflect.DeepEqual(ws, []int{7, 7, 7}) {
+	g.RecordWidths = map[int]int{1: 7}
+	if ws := g.view().widths(200); !reflect.DeepEqual(ws, []int{auto[0], 7, auto[2]}) {
 		t.Errorf("set: %v, auto was %v", ws, auto)
 	}
-	if ws := g.view().widths(5); !reflect.DeepEqual(ws, []int{7, 7, 7}) { // not squeezed
+	if ws := g.view().widths(5); !reflect.DeepEqual(ws, []int{auto[0], 7, auto[2]}) { // not squeezed
 		t.Errorf("no room: %v", ws)
 	}
-	g.TransposeWidth = 45 // past the 40 an automatic one stops at
+	g.RecordWidths = map[int]int{0: 45} // past the 40 an automatic one stops at
 	if ws := g.view().widths(200); ws[0] != 45 {
 		t.Errorf("past the cap: %v", ws)
 	}
 	g.Transpose = false
-	g.TransposeWidth = 7
+	g.RecordWidths = map[int]int{0: 7}
 	if ws := g.view().widths(200); ws[0] != 9 { // the columns' own when it is not turned
 		t.Errorf("not turned: %v", ws)
 	}

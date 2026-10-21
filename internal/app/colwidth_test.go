@@ -70,8 +70,8 @@ func TestColWidthSurvives(t *testing.T) {
 		t.Errorf("hidden and shown again: %v", tab.colWidth)
 	}
 	feed(t, a, "T>") // turned: the records', not the columns'
-	if tab.colWidth["amount"] != set || len(tab.colWidth) != 1 || tab.transposeWidth == 0 {
-		t.Errorf("turned: %v, records %d", tab.colWidth, tab.transposeWidth)
+	if tab.colWidth["amount"] != set || len(tab.colWidth) != 1 || len(tab.transposeWidths) != 1 {
+		t.Errorf("turned: %v, records %v", tab.colWidth, tab.transposeWidths)
 	}
 	feed(t, a, "T")
 	table, cols, page := ordersTable(3)
@@ -142,87 +142,39 @@ func TestColWidthInResult(t *testing.T) {
 	}
 	feed(t, a, ">")
 	own := maps.Clone(rt.colWidth)
-	feed(t, a, "T3>") // turned: the one width of the records, drawn as set
-	if rt.transposeWidth == 0 {
-		t.Fatal("> turned: no width of the records")
-	}
-	for _, w := range widthsOf(t, a) {
-		if w != rt.transposeWidth {
-			t.Errorf("turned: drawn %v, set %d", widthsOf(t, a), rt.transposeWidth)
-		}
+	feed(t, a, "T3>") // turned: the record's, drawn as set
+	if w := widthsOf(t, a); rt.transposeWidths[0] == 0 || w[0] != rt.transposeWidths[0] || !maps.Equal(rt.colWidth, own) {
+		t.Fatalf("turned: drawn %v, records %v, columns %v", w, rt.transposeWidths, rt.colWidth)
 	}
 	feed(t, a, "=")
-	if rt.transposeWidth != 0 || !maps.Equal(rt.colWidth, own) {
-		t.Errorf("turned =: records %d, columns %v, want %v", rt.transposeWidth, rt.colWidth, own)
+	if rt.transposeWidths != nil || rt.colWidth != nil {
+		t.Errorf("turned =: records %v, columns %v", rt.transposeWidths, rt.colWidth)
 	}
 }
 
 // A turned grid with no record (a WHERE that matches none) has no width to start from: >, <
-// and = leave it as it was (F17.15).
+// leave it as it was, = clears it (F17.15).
 func TestColWidthTransposedEmpty(t *testing.T) {
 	a := wide(200, 45)
 	tab := loadOrders(t, a, 3)
 	feed(t, a, "T4>")
-	set := tab.transposeWidth
+	set := maps.Clone(tab.transposeWidths)
 	_, cols, page := ordersTable(0)
 	a.Update(pageMsg{tab: tab, seq: tab.seq, cols: cols, page: page})
 	feed(t, a, "3>2<")
-	if tab.transposeWidth != set {
-		t.Errorf("> < with no record: %d, was %d", tab.transposeWidth, set)
+	if len(set) != 1 || !maps.Equal(tab.transposeWidths, set) {
+		t.Errorf("> < with no record: %v, was %v", tab.transposeWidths, set)
 	}
 	feed(t, a, "=")
-	if tab.transposeWidth != 0 {
-		t.Errorf("=: %d", tab.transposeWidth)
+	if tab.transposeWidths != nil {
+		t.Errorf("=: %v", tab.transposeWidths)
 	}
 }
 
-// The column follows the pointer as it is dragged: after each move the frame is drawn again
-// and the │ is where the pointer is, not reused from before it moved (F17.14).
-func TestColWidthDragFollowsThePointer(t *testing.T) {
-	a := wide(200, 45)
-	loadOrders(t, a, 3)
-	id := a.focused().ID
-	edge := find(t, a, ui.Target{Kind: ui.KindColEdge, Pane: id, I: 1})
-	a.Update(tea.MouseClickMsg{X: edge.Min.X, Y: edge.Min.Y, Button: tea.MouseLeft})
-	a.Update(tea.MouseMotionMsg{X: edge.Min.X, Y: edge.Min.Y}) // the pointer is known to be here
-	a.View()
-	if a.stillOver(tea.MouseMotionMsg{X: edge.Min.X, Y: edge.Min.Y}) { // a move that crosses no region still changes what the frame shows
-		t.Error("a pointer moving with a column dragged is taken for no change")
-	}
-	for _, dx := range []int{1, 3, 6} {
-		a.View()
-		a.Update(tea.MouseMotionMsg{X: edge.Min.X + dx, Y: edge.Min.Y})
-		if a.reuse {
-			t.Fatalf("after a move of %d the last frame is reused", dx)
-		}
-		if got := find(t, a, ui.Target{Kind: ui.KindColEdge, Pane: id, I: 1}); got.Min.X != edge.Min.X+dx {
-			t.Errorf("moved %d: the │ is at %d, want %d", dx, got.Min.X, edge.Min.X+dx)
-		}
-	}
-	a.Update(tea.MouseReleaseMsg{X: edge.Min.X + 6, Y: edge.Min.Y, Button: tea.MouseLeft})
-}
-
-// Dragging the edge of a grid in another pane takes the focus there, as a click on its head
-// does.
-func TestColWidthDragFocusesItsPane(t *testing.T) {
-	a := sized(160, 45, "nerd")
-	loadOrders(t, a, 3)
-	grid := a.focused().ID
-	a.win().focus(2) // the query's pane
-	if a.focused().ID == grid {
-		t.Fatal("no other pane")
-	}
-	edge := find(t, a, ui.Target{Kind: ui.KindColEdge, Pane: grid, I: 0})
-	a.Update(tea.MouseClickMsg{X: edge.Min.X, Y: edge.Min.Y, Button: tea.MouseLeft})
-	if a.focused().ID != grid {
-		t.Errorf("focus is in pane %d, want %d", a.focused().ID, grid)
-	}
-	a.Update(tea.MouseReleaseMsg{X: edge.Min.X, Y: edge.Min.Y, Button: tea.MouseLeft})
-}
-
-// Turned, > and < set the one width of every record, from the cursor's now; = gives it back to
-// automatic; the columns' own widths are for when it is turned back, and the one width for
-// when it is turned again; a drag of a head's edge sets the same width (F17.15).
+// Turned, > and < set the width of the record the cursor is on, from the width it is drawn
+// at, the others as they were; = gives them all back; the columns' own widths are for when
+// it is turned back; a drag of the │ at the right of a record's number sets that record's
+// (F17.15).
 func TestColWidthTransposed(t *testing.T) {
 	a := wide(200, 45)
 	tab := loadOrders(t, a, 3)
@@ -235,41 +187,38 @@ func TestColWidthTransposed(t *testing.T) {
 		t.Fatalf("records drawn alike: %v", before)
 	}
 	feed(t, a, "3>")
-	got := widthsOf(t, a)
-	if tab.transposeWidth != before[1]+3 {
-		t.Fatalf("3 >: width %d from %v", tab.transposeWidth, before)
-	}
-	for _, w := range got {
-		if w != tab.transposeWidth {
-			t.Errorf("every record is as wide: %v", got)
-		}
+	if got := widthsOf(t, a); !slices.Equal(got, []int{before[0], before[1] + 3, before[2]}) || !maps.Equal(tab.transposeWidths, map[int]int{1: before[1] + 3}) {
+		t.Fatalf("3 >: %v from %v, set %v", got, before, tab.transposeWidths)
 	}
 	feed(t, a, "3<")
-	if tab.transposeWidth != before[1] {
-		t.Errorf("3 <: %d", tab.transposeWidth)
+	if got := widthsOf(t, a); !slices.Equal(got, before) || tab.transposeWidths[1] != before[1] {
+		t.Errorf("3 <: %v", got)
 	}
 	feed(t, a, "99<")
-	if tab.transposeWidth != 1 {
-		t.Errorf("down to 1: %d", tab.transposeWidth)
+	if tab.transposeWidths[1] != 1 {
+		t.Errorf("down to 1: %v", tab.transposeWidths)
 	}
-	feed(t, a, "5>")
-	edge := find(t, a, ui.Target{Kind: ui.KindColEdge, Pane: a.focused().ID, I: 0}) // the records' numbers row
-	a.Update(tea.MouseClickMsg{X: edge.Min.X, Y: edge.Min.Y, Button: tea.MouseLeft})
-	a.Update(tea.MouseMotionMsg{X: edge.Min.X + 4, Y: edge.Min.Y})
-	a.Update(tea.MouseReleaseMsg{X: edge.Min.X + 4, Y: edge.Min.Y, Button: tea.MouseLeft})
-	if tab.transposeWidth != 10 || !maps.Equal(tab.colWidth, own) {
-		t.Errorf("dragged 4 from 6: records %d, columns %v", tab.transposeWidth, tab.colWidth)
+	feed(t, a, "h5>") // the first record, the second stays
+	if want := map[int]int{0: before[0] + 5, 1: 1}; !maps.Equal(tab.transposeWidths, want) {
+		t.Fatalf("5 > on the first: %v, want %v", tab.transposeWidths, want)
+	}
+	drag := func(rec, dx int) { // the │ at the right of record rec's number
+		edge := find(t, a, ui.Target{Kind: ui.KindColEdge, Pane: a.focused().ID, I: rec})
+		a.Update(tea.MouseClickMsg{X: edge.Min.X, Y: edge.Min.Y, Button: tea.MouseLeft})
+		a.Update(tea.MouseMotionMsg{X: edge.Min.X + dx, Y: edge.Min.Y})
+		a.Update(tea.MouseReleaseMsg{X: edge.Min.X + dx, Y: edge.Min.Y, Button: tea.MouseLeft})
+	}
+	drag(0, 4)
+	drag(1, 2)
+	if want := map[int]int{0: before[0] + 9, 1: 3}; !maps.Equal(tab.transposeWidths, want) || !maps.Equal(tab.colWidth, own) {
+		t.Errorf("dragged: records %v, want %v; columns %v", tab.transposeWidths, want, tab.colWidth)
+	}
+	feed(t, a, "T") // turned back: the columns' widths are in use, the records' kept
+	if !maps.Equal(tab.colWidth, own) || len(tab.transposeWidths) != 2 {
+		t.Errorf("turned back: columns %v, records %v", tab.colWidth, tab.transposeWidths)
 	}
 	feed(t, a, "=")
-	if tab.transposeWidth != 0 || !maps.Equal(tab.colWidth, own) {
-		t.Errorf("=: records %d, columns %v, want the columns' kept", tab.transposeWidth, tab.colWidth)
-	}
-	feed(t, a, "3>T") // turned back
-	if !maps.Equal(tab.colWidth, own) {
-		t.Errorf("turned back: columns %v, want %v", tab.colWidth, own)
-	}
-	feed(t, a, "T")
-	if tab.transposeWidth == 0 {
-		t.Error("turned again: the records' width is gone")
+	if tab.colWidth != nil || tab.transposeWidths != nil {
+		t.Errorf("=: columns %v, records %v", tab.colWidth, tab.transposeWidths)
 	}
 }

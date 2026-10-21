@@ -89,3 +89,20 @@ func TestQueryJSONOrder(t *testing.T) {
 		t.Errorf("written as %s", out)
 	}
 }
+
+// The records' widths are a table of number = width, typed by hand as inline too; the one
+// width of before F17.15 c is not read (F17.15).
+func TestLayoutTransposeWidths(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "l.toml")
+	text := "version = 1\n[[session]]\nname = \"1\"\nconnection = \"c\"\n[[session.window]]\nname = \"w\"\n[[session.window.pane]]\nid = 1\n[[session.window.pane.tab]]\nkind = \"table\"\ntable = \"t\"\ntranspose_width = 12\ntranspose_widths = {2 = 9, 5 = 30}\n"
+	if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l, err := LoadLayout(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := l.Sessions[0].Windows[0].Panes[0].Tabs[0].TransposeWidths; !reflect.DeepEqual(got, map[string]int{"2": 9, "5": 30}) {
+		t.Errorf("widths %v", got)
+	}
+}

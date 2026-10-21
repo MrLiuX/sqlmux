@@ -64,7 +64,7 @@ func table(conn, schema, name string) config.LayoutTab {
 // not the one the focus last named.
 func TestLayoutRoundTrip(t *testing.T) {
 	order := config.LayoutTab{Kind: "table", Connection: "doraemon", Schema: "public", Table: "t_order", Where: "id > 5", Order: config.LayoutOrder{{Col: "amount", Desc: true}, {Col: "id"}},
-		Limit: 500, Page: 2, Cols: []string{"meta", "note"}, OrderCols: []string{"note", "id", "amount"}, ColWidths: map[string]int{"note": 30, "id": 4}, TransposeWidth: 12, Transpose: true}
+		Limit: 500, Page: 2, Cols: []string{"meta", "note"}, OrderCols: []string{"note", "id", "amount"}, ColWidths: map[string]int{"note": 30, "id": 4}, TransposeWidths: map[string]int{"1": 12, "3": 5}, Transpose: true}
 	want := &config.Layout{Version: 1, Active: 1, Sessions: []config.LayoutSession{
 		{Name: "one", Connection: "doraemon", Active: 1, Windows: []config.LayoutWindow{
 			{
@@ -772,14 +772,15 @@ table = "items"
 	}
 }
 
-// A width in the file that is none, 0 or less, is not one (F17.14).
+// A width in the file that is none, 0 or less, is not one, nor a record that is no number
+// (F17.14, F17.15).
 func TestLayoutRestoresOnlyWidths(t *testing.T) {
 	tab := table("doraemon", "public", "t_order")
 	tab.ColWidths = map[string]int{"id": 0, "note": -3, "amount": 7}
-	tab.TransposeWidth = -2
+	tab.TransposeWidths = map[string]int{"0": 5, "x": 6, "2": -2, "3": 8} // a number from 1, and a width
 	r := restoredFrom(t, oneWindow(config.LayoutWindow{Name: "a", Layout: leafNode(1), Panes: []config.LayoutPane{{ID: 1, Tabs: []config.LayoutTab{tab}}}}))
 	d := r.Sessions[0].Windows[0].pane(1).Tabs[0].Data
-	if d == nil || !maps.Equal(d.colWidth, map[string]int{"amount": 7}) || d.transposeWidth != 0 {
-		t.Errorf("widths %v", d.colWidth)
+	if d == nil || !maps.Equal(d.colWidth, map[string]int{"amount": 7}) || !maps.Equal(d.transposeWidths, map[int]int{2: 8}) {
+		t.Errorf("widths %v, records %v", d.colWidth, d.transposeWidths)
 	}
 }

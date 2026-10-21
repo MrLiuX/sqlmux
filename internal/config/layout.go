@@ -78,10 +78,11 @@ type LayoutTab struct {
 	Cols      []string       `toml:"cols,omitempty"`       // the columns COLS hides
 	OrderCols []string       `toml:"order_cols,omitempty"` // the columns in the order COLS puts them (F10.3)
 	ColWidths map[string]int `toml:"col_widths,omitempty"` // the columns set to a width by hand (F17.14)
-	// TransposeWidth is the width of the records when the table is turned (F17.15)
-	TransposeWidth int    `toml:"transpose_width,omitempty"`
-	Transpose      bool   `toml:"transpose,omitempty"`
-	Key            string `toml:"key,omitempty"` // a key's name, Kind "key"; its db is DB (F16.3)
+	// TransposeWidths is the width of the records set by hand when the table is turned, by
+	// number on the page from 1 (F17.15); a key of TOML is text
+	TransposeWidths map[string]int `toml:"transpose_widths,omitempty"`
+	Transpose       bool           `toml:"transpose,omitempty"`
+	Key             string         `toml:"key,omitempty"` // a key's name, Kind "key"; its db is DB (F16.3)
 	// a query's: the name of its file; N is what layouts of before
 	// M8 F8.11 say, query_<n>
 	Name string `toml:"name,omitempty"`

@@ -60,11 +60,11 @@ type Grid struct {
 	Edit      *Input          // the current cell's edit, drawn over it (§10.1)
 	Heads     bool            // the column heads are click targets: a table's, which has an ORDER (F12.3)
 	Edges     bool            // the │ between two heads is a drag handle for the width: a table's and a result's (F17.14)
-	// TransposeWidth is the width every record is drawn at when the grid is turned, 0 for
-	// each its own (F17.15)
-	TransposeWidth int
-	EditMenu       bool // the edit has options: a ▾ at its right shows or hides them (§10.2)
-	EditBad        bool // the edit is no value of its column: an error wavy line under it (§10.7)
+	// RecordWidths is the width each record was set to when the grid is turned, by record
+	// (its index on the page), the others each their own (F17.15)
+	RecordWidths map[int]int
+	EditMenu     bool // the edit has options: a ▾ at its right shows or hides them (§10.2)
+	EditBad      bool // the edit is no value of its column: an error wavy line under it (§10.7)
 
 	// Rows added and marked for deletion (§10.6): numbered + in warn and
 	// − in error; an added one's cells not set dim, a deleted one dim and
@@ -317,10 +317,10 @@ func (v view) widths(room int) []int {
 }
 
 // fixedWidth is the width screen column c was set to by hand, 0 for none: a column's own,
-// turned one width for all the records.
+// turned its record's.
 func (v view) fixedWidth(c int) int {
 	if v.g.Transpose {
-		return v.g.TransposeWidth
+		return v.g.RecordWidths[c]
 	}
 	if c >= len(v.g.Cols) {
 		return 0

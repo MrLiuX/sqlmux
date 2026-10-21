@@ -5,6 +5,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -90,7 +91,12 @@ func paneLayout(p *Pane) config.LayoutPane {
 			slices.Sort(lt.Cols)
 			lt.OrderCols = slices.Clone(d.colOrder)
 			lt.ColWidths = maps.Clone(d.colWidth)
-			lt.TransposeWidth = d.transposeWidth
+			for rec, w := range d.transposeWidths {
+				if lt.TransposeWidths == nil {
+					lt.TransposeWidths = map[string]int{}
+				}
+				lt.TransposeWidths[strconv.Itoa(rec+1)] = w
+			}
 			if d.table.Kind == "k" { // its pages go by cursors, which a new start has none of: the first
 				lt.Kind, lt.Key, lt.Table, lt.Page = "key", d.table.Name, "", 0
 			}
@@ -281,7 +287,14 @@ func (s *Session) restoreTab(lt config.LayoutTab, used map[string]bool) (tb Tab,
 		}
 		d.transpose = lt.Transpose
 		d.colOrder = slices.Clone(lt.OrderCols)
-		d.transposeWidth = max(lt.TransposeWidth, 0) // typed by hand it may be anything
+		for no, w := range lt.TransposeWidths {
+			if rec, err := strconv.Atoi(no); err == nil && rec > 0 && w > 0 { // typed by hand it may be anything
+				if d.transposeWidths == nil {
+					d.transposeWidths = map[int]int{}
+				}
+				d.transposeWidths[rec-1] = w
+			}
+		}
 		for name, w := range lt.ColWidths {
 			if w > 0 { // typed by hand it may be anything
 				if d.colWidth == nil {
