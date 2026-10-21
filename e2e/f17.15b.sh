@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # F17.15 转置视图列宽的细节（specs/m17-polish-exec/task.md F17.15；tech-design §7.8「列宽」3「转置视图」）
-# 起点是光标所在那条记录当前画的宽度（长值的那条上 3> 是它的宽度 + 3，不是第一条的）；点转置后的记录号跳到那条记录、
+# 只改光标所在那条记录，起点是它当前画的宽度（长值的那条上 3> 是它的宽度 + 3，第一条不动）；点转置后的记录号跳到那条记录、
 # 点非转置的表头仍排序（分隔符的命中区没抢它们）；转置的表一条记录都没有时 > < = 不出事；结果 tab 转置后同样能调。只读，用共用库。
 . "$(dirname "$0")/lib.sh"
 SOLO=1
@@ -33,11 +33,11 @@ W1=$(cw 1); W2=$(cw 2)
 echo "  t_log records: $W1 $W2 ($(head_))"
 check "（准备）第 2 条记录比第 1 条宽（自动宽度各取各的）" eval '[[ -n $W1 && -n $W2 && $W2 -gt $W1 ]]'
 key l; key 3; key '>'
-check "光标在第 2 条（长值）上 3>：统一宽度是它的 +3，第 1 条也是" eval 'cw_is 2 $((W2 + 3)) && cw_is 1 $((W2 + 3))'
+check "光标在第 2 条（长值）上 3>：第 2 条是它的 +3，第 1 条没动" eval 'cw_is 2 $((W2 + 3)) && cw_is 1 $W1'
 key '='
 check "=：回到各自的自动宽度" eval 'cw_is 1 $W1 && cw_is 2 $W2'
 key h; key 3; key '>'
-check "光标在第 1 条上 3>：统一宽度是第 1 条的 +3（不是第 2 条的）" eval 'cw_is 1 $((W1 + 3)) && cw_is 2 $((W1 + 3))'
+check "光标在第 1 条上 3>：第 1 条是它的 +3，第 2 条没动（还是长值那条自己的宽度）" eval 'cw_is 1 $((W1 + 3)) && cw_is 2 $W2'
 key '='
 
 # ---- 转置的表一条记录都没有：> < = 不出事
@@ -69,10 +69,10 @@ e2e_keys C-t; sleep 1.5; key Escape; sleep 0.6
 e2e_click 60 31; sleep 0.4
 G=($(geom 2)); HY=$((G[1] + 1))
 key T; sleep 0.6; key 0   # 0: the first record, where the width starts from
-R0=$(cw 1)
+R0=$(cw 1); R2=$(cw 2)
 check "（准备）结果 tab 转置：记录列有宽度" eval '[[ -n $R0 && $R0 -gt 2 ]]'
 key 3; key '>'
-check "结果 tab 转置后 3>：每个记录列 +3" eval 'cw_is 1 $((R0 + 3)) && cw_is 2 $((R0 + 3))'
+check "结果 tab 转置后 3>：第 1 条 +3，第 2 条没动" eval 'cw_is 1 $((R0 + 3)) && cw_is 2 $R2'
 key '='
 check "结果 tab 转置后 =：回自动" eval 'cw_is 1 $R0'
 unset HY
