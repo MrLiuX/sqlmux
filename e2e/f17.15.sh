@@ -111,10 +111,23 @@ check "= 后再存：布局文件里没有 transpose_widths 和 col_widths 的�
 # ---- 退出重启（不给 --layout）
 key g g; key 0; key 5; key '>'
 e2e_type ":"; sleep 0.3; e2e_type qa; key Enter; sleep 1.2
+check "退出时写的 last.toml 里 transpose_widths 的键是本页序号：1 = $((A + 5 - 2))" eval 'f=$(find "$D/st2" -name last.toml | head -1); grep -q "transpose_widths" "$f" && grep -qE "^ *1 *= *$((A + 5 - 2))$" "$f" || { echo "  $f"; grep -n "transpose\|^ *[0-9] *=" "$f"; false; }'
 e2e_start -C "$D/c" -S "$D/st2" -D "$D/data2" "$E2E_BIN"; wait_for 6 flag_is alternate_on 1; sleep 2; wait_for 8 settled
 [[ $(head_) == *id* ]] && { key T; sleep 0.6; }
 check "重启后（转置）第 1 条是 +5，别的没动" eval 'recs_are $((A + 5)) $A $A'
 key '='
+
+# ---- = 不分视图：转置里按 = 之后转回去，非转置的 col_widths 也没了
+key 3; key '>'
+key T; sleep 0.5; key g g; key 0; key l; key l; key 2; key '>'
+check "（准备）转置第 1 条 +3；非转置 status +2" eval 'cw_is 3 $((ST + 2))'
+key T; sleep 0.6
+check "（准备）再转置：第 1 条 +3" eval 'recs_are $((A + 3)) $A $A'
+key '='
+check "转置里按 =：第 1 条回到自动" eval 'recs_are $A $A $A'
+key T; sleep 0.5
+check "转回非转置：status 的定宽也没了（= 不分视图）" eval 'cw_is 3 $ST'
+key T; sleep 0.5
 
 # ---- 鼠标：记录 N 右边的 │ 拖的是记录 N
 X=$(sx 1); Y=$(hy)
