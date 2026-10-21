@@ -6,6 +6,12 @@ All notable changes to sqlmux are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-21
+
+### Added
+
+- Column widths in the transposed view (`T`): `>` / `<` widen or narrow the record under the cursor (with a count), dragging the separator to the right of a record's header does the same, and `=` puts every width back to automatic, in both views. Widths are kept per tab and in layouts (`transpose_widths`, by the record's number on the page); the widths of the normal view are left as they are.
+
 ## [0.6.0] - 2026-10-20
 
 ### Added
@@ -202,7 +208,8 @@ Note: `go install github.com/kackerx/sqlmux/...` does not work for this version 
 - Every key can be rebound per pane type in `keymaps.toml` (`SPC` is the leader). `sqlmux keys` lists every action and `sqlmux keys --check` reports conflicts. Key help (`?`), which-key hints and full mouse support are built in, and `vim = false` gives plain editors and arrow-key navigation.
 - Themes, border styles, Nerd Font or ASCII icons, and an English or Chinese UI (`language = "zh"`).
 
-[Unreleased]: https://github.com/kackerx/sqlmux/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/kackerx/sqlmux/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/kackerx/sqlmux/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/kackerx/sqlmux/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/kackerx/sqlmux/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/kackerx/sqlmux/compare/v0.4.0...v0.5.0
