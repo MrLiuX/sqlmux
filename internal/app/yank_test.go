@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"testing"
 
@@ -132,10 +133,15 @@ func TestYankFlashQuery(t *testing.T) {
 // when there is none or it fails (F3.38).
 func TestClipTools(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "clip")
+	write, paste := []string{"sh", "-c", "cat > " + f}, []string{"cat", f}
+	if runtime.GOOS == "windows" { // no sh: powershell is the exact write and paste
+		write = []string{"powershell", "-NoProfile", "-Command", "[IO.File]::WriteAllText('" + f + "', [Console]::In.ReadToEnd())"}
+		paste = []string{"powershell", "-NoProfile", "-Command", "[Console]::Out.Write([IO.File]::ReadAllText('" + f + "'))"}
+	}
 	clipTools = []clipTool{
 		{"", []string{"sqlmux-no-such-copy"}, []string{"sqlmux-no-such-paste"}},
 		{"SQLMUX_NO_SUCH_DISPLAY", []string{"true"}, []string{"true"}},
-		{"", []string{"sh", "-c", "cat > " + f}, []string{"cat", f}},
+		{"", write, paste},
 	}
 	defer func() { clipTools = nil }()
 	if msg := clipCopy("a\tb\n")(); msg != nil {
@@ -147,6 +153,25 @@ func TestClipTools(t *testing.T) {
 	clipTools[2] = clipTool{"", []string{"false"}, []string{"false"}}
 	if clipCopy("x")() != tea.SetClipboard("x")() || clipPaste() != tea.ReadClipboard() {
 		t.Error("a failing tool is not OSC 52")
+	}
+}
+
+// The windows row is in the table on windows only, and its read's \r\n
+// lines are normalized (F18.3).
+func TestClipWindowsRow(t *testing.T) {
+	has := slices.ContainsFunc(clipTable(), func(t clipTool) bool {
+		return len(t.copy) > 0 && t.copy[0] == "clip"
+	})
+	if has != (runtime.GOOS == "windows") {
+		t.Errorf("the clip row is there: %v", has)
+	}
+	if runtime.GOOS != "windows" { // the read below needs cmd
+		return
+	}
+	clipTools = []clipTool{{"", []string{"cmd", "/c", "rem"}, []string{"cmd", "/c", "echo a\tb"}}}
+	defer func() { clipTools = nil }()
+	if msg := clipPaste(); msg != (tea.ClipboardMsg{Content: "a\tb\n", Selection: 'c'}) { // echo ends the line with \r\n
+		t.Errorf("pasted %#v", msg)
 	}
 }
 
