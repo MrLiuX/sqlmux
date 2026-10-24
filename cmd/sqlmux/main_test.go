@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -298,7 +299,9 @@ func TestStartNotes(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(data, "sqlmux", "consoles"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(filepath.Join(data, "sqlmux"), 0o500); err != nil { // consoles cannot move to queries
+	if runtime.GOOS == "windows" { // chmod on a directory blocks nothing there; a file held open does
+		blockRename(t, filepath.Join(data, "sqlmux", "consoles"))
+	} else if err := os.Chmod(filepath.Join(data, "sqlmux"), 0o500); err != nil { // consoles cannot move to queries
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(filepath.Join(data, "sqlmux"), 0o700) })

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -153,8 +154,13 @@ func TestSecretCached(t *testing.T) {
 	pw, _ := u.User.Password()
 	u.User = url.User(u.User.Username())
 	runs := filepath.Join(t.TempDir(), "runs")
+	counts := "echo >> " + runs + "; printf " // sh's echo counts a run, printf gives the password bare
 	spec := func(pw string) config.Connection {
-		return config.Connection{Name: "play", Engine: "postgres", DSN: u.String(), PasswordCmd: "echo >> " + runs + "; printf " + pw}
+		cmd := counts + pw
+		if runtime.GOOS == "windows" { // no sh: cmd's echo, set /p without the newline
+			cmd = "echo.>>" + runs + "& <nul set /p=" + pw + "& exit 0"
+		}
+		return config.Connection{Name: "play", Engine: "postgres", DSN: u.String(), PasswordCmd: cmd}
 	}
 	count := func() int { b, _ := os.ReadFile(runs); return strings.Count(string(b), "\n") }
 	secrets.Clear() // another test's play

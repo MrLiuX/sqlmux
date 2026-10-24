@@ -450,7 +450,7 @@ var en = map[string]string{
 	"设置键 %s 的 TTL：%s？": "Set the TTL of key %s to %s?",
 	"设置":               "Set",
 	"还在读 %s 的命令列表":     "Still reading the commands of %s",
-	"这条命令不是只读的，不重跑":    "This command is not read only, it is not sent again",
+	"这条命令不是只读的，不重跑": "This command is not read only, it is not sent again",
 	"参数":               "argument",
 	"键":                "key",
 	"字段":               "field",

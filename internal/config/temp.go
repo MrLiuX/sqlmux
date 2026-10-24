@@ -30,6 +30,9 @@ func IsTarget(arg string, known []string) bool {
 // valid is the engine's. Temp says it is not for the manager to list.
 func TempConnection(target string, taken []string) (Connection, error) {
 	scheme, _, isURL := strings.Cut(target, "://")
+	if len(scheme) == 1 { // one letter before :// is a windows drive, not a scheme
+		isURL = false
+	}
 	c := Connection{Temp: true}
 	if !isURL {
 		path, _, _ := strings.Cut(target, "?")

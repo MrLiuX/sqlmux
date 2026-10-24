@@ -15,6 +15,9 @@ func TestTempConnection(t *testing.T) {
 		"postgresql://localhost/app":               {Name: "app@localhost", Engine: "postgres", DSN: "postgresql://localhost/app", Temp: true},
 		"mysql://root@127.0.0.1:3306/":             {Name: "127.0.0.1", Engine: "mysql", DSN: "mysql://root@127.0.0.1:3306/", Temp: true},
 		"mysql:///tmp/sock":                        {Name: "mysql", Engine: "mysql", DSN: "mysql:///tmp/sock", Temp: true},
+		`C:\data\a.db`:                             {Name: "a", Engine: "sqlite", DSN: `C:\data\a.db`, Temp: true}, // a windows drive is not a scheme
+		`D:/x.db`:                                  {Name: "x", Engine: "sqlite", DSN: `D:/x.db`, Temp: true},
+		`c://y.db`:                                 {Name: "y", Engine: "sqlite", DSN: `c://y.db`, Temp: true}, // one letter before :// is a drive too
 	} {
 		got, err := TempConnection(target, nil)
 		if err != nil || !reflect.DeepEqual(got, want) {

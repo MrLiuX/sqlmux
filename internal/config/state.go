@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -131,10 +132,16 @@ func (q *Query) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// StateDir is $XDG_STATE_HOME/sqlmux, falling back to ~/.local/state/sqlmux (§14).
+// StateDir is $XDG_STATE_HOME/sqlmux, falling back to ~/.local/state/sqlmux,
+// %LOCALAPPDATA%\sqlmux on windows (§14).
 func StateDir() string {
 	if d := os.Getenv("XDG_STATE_HOME"); d != "" {
 		return filepath.Join(d, "sqlmux")
+	}
+	if runtime.GOOS == "windows" {
+		if d, err := os.UserCacheDir(); err == nil {
+			return filepath.Join(d, "sqlmux")
+		}
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".local", "state", "sqlmux")

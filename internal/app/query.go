@@ -2,10 +2,11 @@ package app
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -429,8 +430,14 @@ func (a *App) external() tea.Cmd {
 	if err := t.flush(); err != nil {
 		return a.saveFailed(err)
 	}
-	ed := cmp.Or(os.Getenv("VISUAL"), os.Getenv("EDITOR"), "vi")
-	c := exec.Command("sh", "-c", ed+` "$1"`, "sh", t.path)
+	fallback := "vi"
+	if runtime.GOOS == "windows" {
+		fallback = "notepad"
+	}
+	ed := cmp.Or(os.Getenv("VISUAL"), os.Getenv("EDITOR"), fallback)
+	// the path is quoted into the line: sh's "$1" trick has no windows shape,
+	// and a path holding a quote is a known limit (§14)
+	c := config.ShellCommand(context.Background(), ed+` "`+t.path+`"`)
 	return tea.ExecProcess(c, func(err error) tea.Msg { return externalDone{t, err} })
 }
 
