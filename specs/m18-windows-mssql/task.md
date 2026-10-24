@@ -5,6 +5,7 @@
 - **范围**：§4（`internal/db/mssql`）、§7.8「剪贴板」（Windows 的工具）、§8.1「SQL Server」、§8.5（`OFFSET … FETCH`）、§9（方言 `MSSQL`、`GO` 分批）、§14「Windows」「`engine = "mssql"`」、§15（`SQLMUX_TEST_MSSQL`、Windows runner）。都已写进各章（2026-10-24）。
 - **依赖**：M17 完成（v0.6.1）。
 - **完成标准**：节点全过；Windows 主机上 `go test ./...` 全绿、CI 的 windows job 绿；用户在 Windows Terminal 里用 Releases 的 zip 装一遍、浏览 SQL Server 容器里的一张表并改一格保存；Mac 上完整回归绿（含 SQL Server 的 e2e）。
+- **总则（用户 2026-10-24）**：M18 是加平台和引擎，不是改架构。macOS / Linux 上已发布的 v0.6.1 行为一字不变：非 Windows 的代码路径只允许「换一个等价的共用 helper」这类零行为差异的改动（reviewer 对每个 commit 看 Unix 侧的 diff，能不碰的不碰，碰了的要说明为什么等价）；Windows 专有的实现放 `_windows.go` / `//go:build` 文件或 `runtime.GOOS` 分支，不改包的边界和 §4 的目录；SQL Server 是 §8.1 的第五个引擎，按已有引擎的接口接入，不为它改 `db` 层的接口和共用的分页 / 保存 / 读循环，要改先问决策者。每个节点 tester 在分支头跑 Mac 的全量 e2e 回归，一条清单外失败就退回。节点 1 的反例：F18.2 把 Unix 侧的 `"$1"` 也改成了拼字符串，reviewer 退回。
 - **审查节点**：1 = F18.1–F18.3（Windows 编译、路径与子进程、剪贴板；PR #3 重做后是这一批的第一个 commit）；2 = F18.4 + F18.5（发布与 CI、Windows 的验收方式）；3 = F18.6（SQL Server 引擎）；4 = F18.7（SQL Server 的 e2e、文档）。
 - **不做（留候选）**：`%APPDATA%` 以外的 Windows 惯例（注册表、安装器、scoop / winget 包）；老 conhost；Windows 上跑 e2e（没有 tmux，见 F18.5）；SQL Server 的 Windows 集成认证（`trusted_connection`，纯 Go 驱动在非 Windows 上没有）、Always Encrypted、`DELIMITER` 式的存储过程体；exec 批多条语句、`{db}` 占位符、Redis 第二轮（见 plan.md「M18 候选」余下的）；测试里用 `/bin/sh` 脚本当假工具的那些（`internal/db/exec` 的两个假服务、keychain 失败路径、`FakeSSH`，后者拼 PATH 用 `:` 在 Windows 上也不对）在 Windows 上按包或用例 skip，不改写成跨平台（win-worker 2026-10-24 问；CI 的 windows job 不带集成标签，不受影响）。
 
