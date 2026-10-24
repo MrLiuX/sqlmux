@@ -32,7 +32,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 
 ---
 
-## F18.1 Windows 编译与文件锁 · 状态：passed（ab1db18；e2e 531ddb9）
+## F18.1 Windows 编译与文件锁 · 状态：passed（ab1db18；e2e 4de8825）
 
 - **依赖**：无
 - **涉及**：`internal/config`（state.json 的锁）、`internal/db`（ssh 测试）、`go.mod`
@@ -47,7 +47,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - [ ] 单测：现有的 state.json 多进程写测试（`beforeRename`）在 Windows 上跑过（两个进程排队，文件不坏）；mutation（Windows 上把 `LockFileEx` 的标志改掉 / 去掉 unlock，测试要红）。
 - [ ] `GOOS=windows go vet ./...` 在 Mac 上零报告（reviewer 跑）；win-worker 贴 Windows 上 `go test ./...` 的汇总。
 
-## F18.2 Windows 的路径与子进程 · 状态：passed（ab1db18；e2e 531ddb9）
+## F18.2 Windows 的路径与子进程 · 状态：passed（ab1db18；e2e 4de8825）
 
 - **依赖**：F18.1
 - **涉及**：`internal/config`（目录、`password_cmd`、sqlite 路径）、`internal/app`（`$EDITOR` 开 query 文件、`gq` 的 formatprg）
@@ -64,7 +64,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - [ ] 单测：helper 在两种 GOOS 下的 argv（表驱动，`runtime.GOOS` 分支各一条）；目录函数在 Windows 上的返回（`XDG` 设 / 不设）；`Kind("C:\\a.db")` 是 sqlite、`Kind("postgres://…")` 不变；文件名替换一条表驱动用例（`hash:big`、`a/b`、带 `*`）；TestKeyTabViews 的导出段两个平台都跑；mutation。
 - [ ] win-worker 手测：Windows Terminal 里 `password_cmd = "echo secret"` 能连；`C-o` 用 notepad 开 query 文件、关掉回来内容刷新；`sqlmux C:\path\x.db` 能开；配置文件生成在 `%APPDATA%\sqlmux`。贴截图或文字到 PR。
 
-## F18.3 Windows 的剪贴板 · 状态：passed（ab1db18；e2e 531ddb9）
+## F18.3 Windows 的剪贴板 · 状态：passed（ab1db18；e2e 4de8825）
 
 - **依赖**：无
 - **涉及**：`internal/app/yank.go`
