@@ -390,8 +390,12 @@ func clipTable() []clipTool {
 		{"DISPLAY", []string{"xclip", "-i", "-selection", "clipboard"}, []string{"xclip", "-o", "-selection", "clipboard"}},
 		{"DISPLAY", []string{"xsel", "-i", "-b"}, []string{"xsel", "-o", "-b"}},
 	}
-	if runtime.GOOS == "windows" {
-		tools = append(tools, clipTool{"", []string{"clip"}, []string{"powershell", "-NoProfile", "-Command", "Get-Clipboard", "-Raw"}})
+	if runtime.GOOS == "windows" { // both PowerShell with UTF-8 said out loud: clip reads the console code page, bare Get-Clipboard writes OEM and ends with a CRLF (§7.8)
+		tools = append(tools, clipTool{
+			"",
+			[]string{"powershell", "-NoProfile", "-Command", "[Console]::InputEncoding=[Text.Encoding]::UTF8;Set-Clipboard -Value ([Console]::In.ReadToEnd())"},
+			[]string{"powershell", "-NoProfile", "-Command", "[Console]::OutputEncoding=[Text.Encoding]::UTF8;[Console]::Out.Write((Get-Clipboard -Raw))"},
+		})
 	}
 	return tools
 }

@@ -156,17 +156,29 @@ func TestClipTools(t *testing.T) {
 	}
 }
 
-// The windows row is in the table on windows only, and its read's \r\n
-// lines are normalized (F18.3).
+// The windows row is in the table on windows only, its argv the spec's
+// two PowerShell commands, and its read's \r\n lines are normalized (§7.8,
+// F18.3).
 func TestClipWindowsRow(t *testing.T) {
-	has := slices.ContainsFunc(clipTable(), func(t clipTool) bool {
-		return len(t.copy) > 0 && t.copy[0] == "clip"
+	rows := slices.DeleteFunc(slices.Clone(clipTable()), func(t clipTool) bool {
+		return len(t.copy) == 0 || t.copy[0] != "powershell"
 	})
-	if has != (runtime.GOOS == "windows") {
-		t.Errorf("the clip row is there: %v", has)
-	}
-	if runtime.GOOS != "windows" { // the read below needs cmd
+	if runtime.GOOS != "windows" {
+		if len(rows) != 0 {
+			t.Errorf("the powershell rows are there on %s", runtime.GOOS)
+		}
 		return
+	}
+	if len(rows) != 1 {
+		t.Fatalf("the windows rows: %d", len(rows))
+	}
+	want := clipTool{
+		"",
+		[]string{"powershell", "-NoProfile", "-Command", "[Console]::InputEncoding=[Text.Encoding]::UTF8;Set-Clipboard -Value ([Console]::In.ReadToEnd())"},
+		[]string{"powershell", "-NoProfile", "-Command", "[Console]::OutputEncoding=[Text.Encoding]::UTF8;[Console]::Out.Write((Get-Clipboard -Raw))"},
+	}
+	if !slices.Equal(rows[0].copy, want.copy) || !slices.Equal(rows[0].paste, want.paste) {
+		t.Errorf("the windows row:\n got %#v\nwant %#v", rows[0], want)
 	}
 	clipTools = []clipTool{{"", []string{"cmd", "/c", "rem"}, []string{"cmd", "/c", "echo a\tb"}}}
 	defer func() { clipTools = nil }()
