@@ -20,10 +20,11 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - **每个 commit 自己保证 `just check` 全绿**，在 Windows 上和 Mac 上一样。Windows 上要装的（都是命令行能装的，`winget` / `go install`）：
   - `just`（`winget install Casey.Just`）；
   - `golangci-lint` v2.14.0（`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`，justfile 校验版本号）；
-  - `gofmt` 随 Go；Go 版本按 `go.mod`（1.26.3，更新的也行）；
+  - Go 用 `go.mod` 的版本：`go env -w GOTOOLCHAIN=go1.26.3`（gofmt 跟 toolchain 走，1.27 的 gofmt 改了 `en.go` 的对齐，CI 用 1.26.3 就红）；
   - Docker Desktop（WSL2 后端）跑 `just db-up`：PG 17、MySQL 8.4、Redis 的集成测试和 M18 新加的 SQL Server 容器都在它上面；端口和 Mac 一样（55432 / 53306 / 56379 / 51433）；
   - `gh`（`winget install GitHub.cli`）发 PR 评论；Python 3 只有 e2e 要，Windows 上不跑 e2e；
   - 没有 tmux：e2e 不在 Windows 上跑，由 Mac 上的 tester 跑（F18.5 定了 Windows 的验收方式）。
+- **送审前 PR 的 CI 要绿**（lint、test、integration 三个 job；节点 1 送审时 run 40095854251 三个都红）：Windows 上的 `just check` 编不到 `//go:build !windows` 的文件（`_other_test.go` 桩的 revive 报告）、跑不到 unix 分支的用例（`C:\data\a.db` 在 unix 上的判定），只能靠 CI 补；推了分支等 `gh pr checks 3 --watch` 全绿再评论送审。
 - **路径和平台的坑**：测试里拼路径用 `filepath.Join`，不写 `/`；`0o600` 这类权限位在 Windows 上没有 group / other 位，断言按 PR #3 的做法加 `runtime.GOOS` 守卫；`syscall` 的 Unix 符号（`Flock`、`Kill`、`SIGWINCH`）只能在 `//go:build !windows` 的文件里出现；子进程一律经 F18.2 的 helper，不直接 `exec.Command("sh", …)`；`os.Rename` 覆盖已有文件在 Windows 上可以，但目标文件被别的进程打开着会失败（state.json 的锁已经保证一次一个写者）。
 - **已有依赖直接用，不重写**（AGENTS.md）：Windows 的系统调用用 `golang.org/x/sys/windows`（已在 `go.mod` 里，间接依赖转直接），不用 `syscall.NewLazyDLL` 手写 `LockFileEx`。
 - **spec 问题**：win-worker 没法给决策者发消息，写在 PR 评论里、标「spec 问题」，用户转给决策者；答复也回在 PR 里。
@@ -52,7 +53,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - 三处 `exec.Command("sh", "-c", …)` 在 Windows 上没有 sh；配置目录落在 `~/.config` 不是 Windows 惯例；sqlite 的 `C:\x.db` 会被当成 URL 的 scheme。
 
 **开发**（§14「Windows」）
-- [ ] a. 子进程：`config` 包一个 helper `ShellCommand(ctx, line string) *exec.Cmd`（名字 worker 定）：非 Windows `sh -c <line>`，Windows `%COMSPEC% /c <line>`（没设 `COMSPEC` 用 `cmd`）。三处调用都改走它；`$EDITOR` 那处原来用 `sh -c 'ed "$1"' sh path` 传位置参数，Windows 没有，改成把路径用引号拼进命令行（路径里有引号的不处理，已知上限）。`VISUAL` / `EDITOR` 没设时 Windows 默认 `notepad`，不是 `vi`。
+- [ ] a. 子进程：`config` 包一个 helper `ShellCommand(ctx, line string) *exec.Cmd`（名字 worker 定）：非 Windows `sh -c <line>`，Windows `%COMSPEC% /c <line>`（没设 `COMSPEC` 用 `cmd`）。三处调用都改走它；`$EDITOR` 那处原来用 `sh -c 'ed "$1"' sh path` 传位置参数，Windows 没有，**只在 Windows 上**改成把路径用引号拼进命令行（路径里有引号或 `%…%` 的不处理，已知上限），非 Windows 保留 `"$1"`——路径拼进 `sh -c` 会被 shell 展开（`cost$HOME`、反引号，reviewer 2026-10-24 探针）。Windows 上 helper 用 `SysProcAttr.CmdLine` 把整行原样交给 cmd，os/exec 默认的引号转义 cmd 不认。`VISUAL` / `EDITOR` 没设时 Windows 默认 `notepad`，不是 `vi`。
 - [ ] b. 目录：`XDG_*` 设了照旧优先；没设时 Windows 用 `%APPDATA%\sqlmux`（配置）和 `%LOCALAPPDATA%\sqlmux`（data 和 state，history.jsonl、state.json、布局文件），`os.UserConfigDir` / `os.UserCacheDir` 给的就是这两个；非 Windows 不变。
 - [ ] c. sqlite 的 DSN：`C:\…` / `D:/…` 这种一个字母加冒号的是盘符不是 scheme（`Kind` 的判断加一条）；`~` 展开用 `os.UserHomeDir`，Windows 上就是用户目录；路径分隔符两种都认。
 - [ ] d. 钥匙串：`hostOS != "darwin"` 的分支（明文或 `password_cmd`）在 Windows 上照旧，不接 Credential Manager（候选）。
@@ -69,11 +70,11 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - 写剪贴板已有 OSC 52 兜底，Windows Terminal 支持；读（`"+p`）没有工具就不行。
 
 **开发**（§7.8「剪贴板」）
-- [ ] a. `clipTools` 加 Windows 一行：写 `clip`，读 `powershell -NoProfile -Command Get-Clipboard -Raw`（只在 `runtime.GOOS == "windows"` 时加入；读回来的 `\r\n` 换成 `\n`）。其余不动。
+- [ ] a. `clipTools` 加 Windows 一行（只在 `runtime.GOOS == "windows"` 时加入），两条都是显式 UTF-8 的 PowerShell、直接走 argv：写 `powershell -NoProfile -Command [Console]::InputEncoding=[Text.Encoding]::UTF8;Set-Clipboard -Value ([Console]::In.ReadToEnd())`，读 `powershell -NoProfile -Command [Console]::OutputEncoding=[Text.Encoding]::UTF8;[Console]::Out.Write((Get-Clipboard -Raw))`，读回来的 `\r\n` 换成 `\n`。不用 `clip`（按控制台代码页读，UTF-8 中文乱码）、不用裸的 `Get-Clipboard -Raw`（OEM 代码页输出，末尾多一个 CRLF 让 `"+p` 把一个词贴成整行）。其余不动。
 
 **验收**
 - [ ] 单测：Windows 下工具表多这一行、非 Windows 不变；`\r\n` 的归一；mutation。
-- [ ] win-worker 手测：表格里 `"+y` 后别的程序能贴出来；外面复制一段文字，query 里 `"+p` 贴进来。
+- [ ] win-worker 手测：表格里 `"+y` 后别的程序能贴出来；外面复制一段文字，query 里 `"+p` 贴进来；「中文 abc」两个方向各一次不乱码；外面复制单个词后 `"+p` 贴在行内，不是新起一行。
 
 ## F18.4 发布与 CI · 状态：todo
 
