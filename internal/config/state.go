@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/kackerx/sqlmux/internal/db"
@@ -263,11 +262,11 @@ func lockFile(path string) (unlock func(), err error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+	if err := flockExclusive(f); err != nil {
 		f.Close()
 		return nil, err
 	}
-	return func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN); f.Close() }, nil
+	return func() { _ = funlockExclusive(f); f.Close() }, nil
 }
 
 // beforeRename is the test that kills a write between the temp file and the
