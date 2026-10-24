@@ -6,7 +6,7 @@
 - **依赖**：M17 完成（v0.6.1）。
 - **完成标准**：节点全过；Windows 主机上 `go test ./...` 全绿、CI 的 windows job 绿；用户在 Windows Terminal 里用 Releases 的 zip 装一遍、浏览 SQL Server 容器里的一张表并改一格保存；Mac 上完整回归绿（含 SQL Server 的 e2e）。
 - **审查节点**：1 = F18.1–F18.3（Windows 编译、路径与子进程、剪贴板；PR #3 重做后是这一批的第一个 commit）；2 = F18.4 + F18.5（发布与 CI、Windows 的验收方式）；3 = F18.6（SQL Server 引擎）；4 = F18.7（SQL Server 的 e2e、文档）。
-- **不做（留候选）**：`%APPDATA%` 以外的 Windows 惯例（注册表、安装器、scoop / winget 包）；老 conhost；Windows 上跑 e2e（没有 tmux，见 F18.5）；SQL Server 的 Windows 集成认证（`trusted_connection`，纯 Go 驱动在非 Windows 上没有）、Always Encrypted、`DELIMITER` 式的存储过程体；exec 批多条语句、`{db}` 占位符、Redis 第二轮（见 plan.md「M18 候选」余下的）。
+- **不做（留候选）**：`%APPDATA%` 以外的 Windows 惯例（注册表、安装器、scoop / winget 包）；老 conhost；Windows 上跑 e2e（没有 tmux，见 F18.5）；SQL Server 的 Windows 集成认证（`trusted_connection`，纯 Go 驱动在非 Windows 上没有）、Always Encrypted、`DELIMITER` 式的存储过程体；exec 批多条语句、`{db}` 占位符、Redis 第二轮（见 plan.md「M18 候选」余下的）；测试里用 `/bin/sh` 脚本当假工具的那些（`internal/db/exec` 的两个假服务、keychain 失败路径、`FakeSSH`，后者拼 PATH 用 `:` 在 Windows 上也不对）在 Windows 上按包或用例 skip，不改写成跨平台（win-worker 2026-10-24 问；CI 的 windows job 不带集成标签，不受影响）。
 
 ---
 
@@ -56,9 +56,10 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - [ ] b. 目录：`XDG_*` 设了照旧优先；没设时 Windows 用 `%APPDATA%\sqlmux`（配置）和 `%LOCALAPPDATA%\sqlmux`（data 和 state，history.jsonl、state.json、布局文件），`os.UserConfigDir` / `os.UserCacheDir` 给的就是这两个；非 Windows 不变。
 - [ ] c. sqlite 的 DSN：`C:\…` / `D:/…` 这种一个字母加冒号的是盘符不是 scheme（`Kind` 的判断加一条）；`~` 展开用 `os.UserHomeDir`，Windows 上就是用户目录；路径分隔符两种都认。
 - [ ] d. 钥匙串：`hostOS != "darwin"` 的分支（明文或 `password_cmd`）在 Windows 上照旧，不接 Credential Manager（候选）。
+- [ ] e. 导出的文件名（§7.8「导出」，win-worker 2026-10-24 问）：`<表名>` / 键名里 Windows 不允许的字符（`<` `>` `:` `"` `/` `\` `|` `?` `*` 和控制字符）在所有平台都换成 `_`，`hash:big` 导出成 `hash_big.csv`；改在拼文件名的那一处，不按 `runtime.GOOS` 分支。随节点 1 的审查退回一起改。
 
 **验收**
-- [ ] 单测：helper 在两种 GOOS 下的 argv（表驱动，`runtime.GOOS` 分支各一条）；目录函数在 Windows 上的返回（`XDG` 设 / 不设）；`Kind("C:\\a.db")` 是 sqlite、`Kind("postgres://…")` 不变；mutation。
+- [ ] 单测：helper 在两种 GOOS 下的 argv（表驱动，`runtime.GOOS` 分支各一条）；目录函数在 Windows 上的返回（`XDG` 设 / 不设）；`Kind("C:\\a.db")` 是 sqlite、`Kind("postgres://…")` 不变；文件名替换一条表驱动用例（`hash:big`、`a/b`、带 `*`）；TestKeyTabViews 的导出段两个平台都跑；mutation。
 - [ ] win-worker 手测：Windows Terminal 里 `password_cmd = "echo secret"` 能连；`C-o` 用 notepad 开 query 文件、关掉回来内容刷新；`sqlmux C:\path\x.db` 能开；配置文件生成在 `%APPDATA%\sqlmux`。贴截图或文字到 PR。
 
 ## F18.3 Windows 的剪贴板 · 状态：todo
