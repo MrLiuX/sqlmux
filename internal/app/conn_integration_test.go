@@ -154,11 +154,10 @@ func TestSecretCached(t *testing.T) {
 	pw, _ := u.User.Password()
 	u.User = url.User(u.User.Username())
 	runs := filepath.Join(t.TempDir(), "runs")
-	counts := "echo >> " + runs + "; printf " // sh's echo counts a run, printf gives the password bare
 	spec := func(pw string) config.Connection {
-		cmd := counts + pw
-		if runtime.GOOS == "windows" { // no sh: cmd's echo, set /p without the newline
-			cmd = "echo.>>" + runs + "& <nul set /p=" + pw + "& exit 0"
+		cmd := "echo >> " + runs + "; printf " + pw // sh's echo counts a run, printf gives the password bare
+		if runtime.GOOS == "windows" {              // no sh: cmd's echo, set /p without the newline, the run log quoted
+			cmd = `echo.>>"` + runs + `"& <nul set /p=` + pw + `& exit 0`
 		}
 		return config.Connection{Name: "play", Engine: "postgres", DSN: u.String(), PasswordCmd: cmd}
 	}

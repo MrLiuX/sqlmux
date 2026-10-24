@@ -14,13 +14,15 @@ import (
 )
 
 // prgOf is the formatprg config line: the unix program, or its windows
-// equivalent where the line has no sh syntax.
+// equivalent where the line has no sh syntax; a " of the program is
+// escaped, the line sits inside TOML's.
 func prgOf(t *testing.T, unix, windows string) string {
 	t.Helper()
-	if runtime.GOOS != "windows" {
-		return `formatprg = "` + unix + `"`
+	prg := unix
+	if runtime.GOOS == "windows" {
+		prg = windows
 	}
-	return `formatprg = "` + windows + `"`
+	return `formatprg = "` + strings.ReplaceAll(prg, `"`, `\"`) + `"`
 }
 
 // upperPS is a powershell file uppercasing what is on its stdin byte for
@@ -31,7 +33,7 @@ func upperPS(t *testing.T) string {
 	if err := os.WriteFile(path, []byte("$t = [Console]::In.ReadToEnd().ToUpper(); [Console]::Out.Write($t)"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return "powershell -NoProfile -ExecutionPolicy Bypass -File " + filepath.ToSlash(path)
+	return `powershell -NoProfile -ExecutionPolicy Bypass -File "` + filepath.ToSlash(path) + `"` // " quotes: -File does not read '
 }
 
 // gqIn presses keys in query c, the last starting a format, and

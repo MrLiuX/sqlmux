@@ -480,3 +480,19 @@ type queryOnly struct {
 func (q *queryOnly) Query(context.Context, string, ...db.Val) (db.Result, error) {
 	return q.res, nil
 }
+
+// A name holding a character a windows file name cannot hold exports with
+// each of them an underscore, on every platform (§7.6, F18.2e).
+func TestFileSafeName(t *testing.T) {
+	for name, want := range map[string]string{
+		"hash:big":      "hash_big",
+		"a/b":           "a_b",
+		"a*b":           "a_b",
+		`a<b>c"d|e?f\g`: "a_b_c_d_e_f_g",
+		"ctrl\x00x":     "ctrl_x",
+	} {
+		if got := fileSafeName(name); got != want {
+			t.Errorf("%q: %q, want %q", name, got, want)
+		}
+	}
+}

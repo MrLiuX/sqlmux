@@ -199,7 +199,7 @@ func (a *App) export(src exportSrc, at int) tea.Cmd {
 	if all && src.all != nil {
 		base = src.all.base
 	}
-	f, path, err := createExport(fileSafe.Replace(base) + ext)
+	f, path, err := createExport(fileSafeName(base) + ext)
 	if err != nil {
 		return a.showToast(err.Error())
 	}
@@ -268,8 +268,21 @@ func (a *App) gotExport(m exportDone) tea.Cmd {
 }
 
 // fileSafe keeps a table's name, which anyone with CREATE rights chose, from
-// naming a place: it is the file's, in the current directory.
-var fileSafe = strings.NewReplacer("/", "_", "\\", "_")
+// naming a place, or holding a character a windows file name cannot: every
+// one of those is the file's, as an underscore, on every platform —
+// hash:big exports as hash_big.csv (§7.6, F18.2e).
+var fileSafe = strings.NewReplacer("<", "_", ">", "_", ":", "_", `"`, "_", "/", "_", "\\", "_", "|", "_", "?", "_", "*", "_")
+
+// fileSafeName is fileSafe's name with the control characters a windows
+// file name cannot hold underscored too.
+func fileSafeName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return '_'
+		}
+		return r
+	}, fileSafe.Replace(name))
+}
 
 // createExport makes the file name, or name-2, name-3 before the extension
 // when there is one already, which is not touched; it is made with the

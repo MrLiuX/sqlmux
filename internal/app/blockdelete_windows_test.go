@@ -9,9 +9,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// holdOpen keeps the file at path open without FILE_SHARE_DELETE: os.Remove
-// of it fails while it is, windows's undeletable file.
-func holdOpen(t *testing.T, path string) {
+// blockDelete makes the query file at path one os.Remove cannot take: a
+// handle open without FILE_SHARE_DELETE, windows's undeletable file.
+func blockDelete(t *testing.T, path string) {
 	t.Helper()
 	p, err := windows.UTF16PtrFromString(filepath.Clean(path))
 	if err != nil {

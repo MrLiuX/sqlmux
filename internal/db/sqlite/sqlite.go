@@ -47,7 +47,7 @@ func Path(spec string) (path, query string, err error) {
 		if err != nil {
 			return "", "", err
 		}
-		path = filepath.Join(home, rest)
+		path = home + rest
 	}
 	path, err = filepath.Abs(path)
 	return path, query, err

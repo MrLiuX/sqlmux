@@ -2,11 +2,9 @@ package app
 
 import (
 	"cmp"
-	"context"
 	"errors"
 	"fmt"
 	"os"
-	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -421,7 +419,8 @@ type externalDone struct {
 }
 
 // external opens the focused query's file in $VISUAL, $EDITOR or vi
-// (§11), written first; what it holds after is one undo step.
+// (notepad on windows) (§11), written first; what it holds after is one
+// undo step.
 func (a *App) external() tea.Cmd {
 	t := queryOf(a.focused())
 	if t == nil {
@@ -430,15 +429,7 @@ func (a *App) external() tea.Cmd {
 	if err := t.flush(); err != nil {
 		return a.saveFailed(err)
 	}
-	fallback := "vi"
-	if runtime.GOOS == "windows" {
-		fallback = "notepad"
-	}
-	ed := cmp.Or(os.Getenv("VISUAL"), os.Getenv("EDITOR"), fallback)
-	// the path is quoted into the line: sh's "$1" trick has no windows shape,
-	// and a path holding a quote is a known limit (§14)
-	c := config.ShellCommand(context.Background(), ed+` "`+t.path+`"`)
-	return tea.ExecProcess(c, func(err error) tea.Msg { return externalDone{t, err} })
+	return tea.ExecProcess(editorCmd(t.path), func(err error) tea.Msg { return externalDone{t, err} })
 }
 
 func (a *App) gotExternal(msg externalDone) tea.Cmd {

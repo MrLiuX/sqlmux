@@ -2,29 +2,28 @@ package config
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"runtime"
-	"slices"
 	"testing"
 )
 
-// ShellCommand's argv is sh -c on unix, %COMSPEC% /c on windows, cmd when
-// the variable is not set (§14).
-func TestShellCommand(t *testing.T) {
-	t.Setenv("COMSPEC", `C:\windows\system32\cmd.exe`)
-	line := "echo hi"
-	got := ShellCommand(context.Background(), line).Args
-	want := []string{"sh", "-c", line}
+// A command line holding a quoted path with a space runs as written (§14):
+// a password_cmd reading a file under a directory with a space in its name.
+func TestShellCommandQuotedPath(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "a b")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	f := filepath.Join(dir, "pw.txt")
+	if err := os.WriteFile(f, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	line := `cat "` + f + `"`
 	if runtime.GOOS == "windows" {
-		want = []string{`C:\windows\system32\cmd.exe`, "/c", line}
+		line = `type "` + f + `"`
 	}
-	if !slices.Equal(got, want) {
-		t.Errorf("argv %v, want %v", got, want)
-	}
-	if runtime.GOOS != "windows" {
-		return
-	}
-	t.Setenv("COMSPEC", "")
-	if got := ShellCommand(context.Background(), line).Args; !slices.Equal(got, []string{"cmd", "/c", line}) {
-		t.Errorf("without COMSPEC: argv %v", got)
+	if out, err := ShellCommand(context.Background(), line).Output(); string(out) != "secret" || err != nil {
+		t.Errorf("%s: %q %v", line, out, err)
 	}
 }
