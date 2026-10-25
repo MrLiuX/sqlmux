@@ -106,7 +106,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 **验收**
 - [ ] tester 在 Windows 主机上跑过 a 和 b，结论里附 ConPTY 截屏的文字。a 的 `go test ./...` 在 ssh 会话里跑（PATH 没有 Git 的 `usr\bin`，比 CI runner 和 win-worker 的终端更干净）要全绿：formatprg 用 `printf` / `tr` 的两个测试（TestQueryFormatAll、TestPlainQueryFormat）在 `exec.LookPath` 找不到命令时 `t.Skip`，同「不做」里 sh 脚本假工具的处理（tester 2026-10-25 退回）。
 
-## F18.6 SQL Server 引擎 · 状态：todo
+## F18.6 SQL Server 引擎 · 状态：passed（b829217；e2e 3187934）
 
 - **依赖**：节点 1 过（win-worker 在 Windows 上做，容器在它那台机器上）
 - **涉及**：`internal/db/mssql`（新包，§4）、`internal/db`、`internal/sqlkit`（Dialect）、`internal/config`、`internal/app`（树、表单、`workspace.go` 的 `engines`）、`docker-compose.yml`、`testdata/seed/mssql.sql`、`.github/workflows/ci.yml`
