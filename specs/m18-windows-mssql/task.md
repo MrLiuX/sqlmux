@@ -106,7 +106,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 **验收**
 - [ ] tester 在 Windows 主机上跑过 a 和 b，结论里附 ConPTY 截屏的文字。a 的 `go test ./...` 在 ssh 会话里跑（PATH 没有 Git 的 `usr\bin`，比 CI runner 和 win-worker 的终端更干净）要全绿：formatprg 用 `printf` / `tr` 的两个测试（TestQueryFormatAll、TestPlainQueryFormat）在 `exec.LookPath` 找不到命令时 `t.Skip`，同「不做」里 sh 脚本假工具的处理（tester 2026-10-25 退回）。
 
-## F18.6 SQL Server 引擎 · 状态：passed（b829217；e2e 3187934）；追加 j 待修
+## F18.6 SQL Server 引擎 · 状态：passed（b829217；e2e 3187934）；j passed（af641a9；e2e 23fff6d）
 
 - **依赖**：节点 1 过（win-worker 在 Windows 上做，容器在它那台机器上）
 - **涉及**：`internal/db/mssql`（新包，§4）、`internal/db`、`internal/sqlkit`（Dialect）、`internal/config`、`internal/app`（树、表单、`workspace.go` 的 `engines`）、`docker-compose.yml`、`testdata/seed/mssql.sql`、`.github/workflows/ci.yml`
@@ -124,14 +124,14 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - [ ] i. 测试环境：`docker-compose.yml` 加 `mssql`（`mcr.microsoft.com/mssql/server:2022-latest`，`platform: linux/amd64`，端口 51433，`ACCEPT_EULA=Y`，`MSSQL_SA_PASSWORD=Sqlmux!2026`，healthcheck 用镜像自带的 `/opt/mssql-tools18/bin/sqlcmd -C`）和一个一次性的 `mssql-seed` 服务（同一镜像，等健康后 `sqlcmd -C -i /seed/mssql.sql` 灌 `testdata/seed/mssql.sql`，和 PG / MySQL 一样只在数据卷为空时）；seed 内容对照 `mysql.sql`（同样的表和行，类型换成 T-SQL 的）；集成测试用 `SQLMUX_TEST_MSSQL`（`sqlserver://sa:Sqlmux!2026@localhost:51433?database=sqlmux&TrustServerCertificate=true`），没设就 skip；CI 的 integration job 用 `services` 起同一镜像加一步 seed。Mac 上这个镜像要 Rosetta，Mac 的 worker / reviewer 直接连 Windows 主机的容器（Tailscale 地址，用户给）。
 
 - [ ] j. **追加修复**（tester 2026-10-25 写 F18.7 e2e 时发现，PR #3 评论 6397659833）：`Same` 返回的三臂 `A or B or C` 没有括号，`save.go` 用 `and` 接在主键条件后面，WHERE 成了 `(pk and A) or B or C`——旧值在表里有重复时影响行数 ≠ 1 回滚（t_order 改 amount / status / user_id 都存不了），旧值被别人改掉而另一行恰好还是这个旧值时会改到别的行。修法：`Same` 整个包括号，单测同步；补两条集成测试（重复值的列保存成功且只动一行；旧值被改且另一行有该旧值时报行已变化、另一行不动）。在 windows-compat 上一个 commit，reviewer 单独审这一个，tester 复测 f18.7b。
-- 已知上限（不修）：query 里没写完的 `select 1 +` 报的是追加的 `OFFSET … FETCH` 的错（153），不是用户语句本身的语法错；PG / MySQL 追加 LIMIT 时同类输入恰好仍报语法错。记在 §9.4。
+- 已知上限（不修）：默认排序规则不分大小写，别人把 `user_3` 改成 `USER_3` 时保存不报「行已变化」直接覆盖（MySQL 按字节比会报；tester 2026-10-25）——同 b 条「分大小写的排序规则是已知上限」的反面，精确比较要在 `Same` 的文本臂加 `COLLATE Latin1_General_BIN2`，留候选。query 里没写完的 `select 1 +` 报的是追加的 `OFFSET … FETCH` 的错（153），不是用户语句本身的语法错；PG / MySQL 追加 LIMIT 时同类输入恰好仍报语法错。记在 §9.4。
 
 **验收**
 - [ ] 单测：方言（`GO` 分批、`[name]` 引号、`N'…'`）、`Quote` / `Arg` / `Same` / `Eq`、分页语句的拼法；mutation。
 - [ ] 集成测试（`SQLMUX_TEST_MSSQL`，和 PG / MySQL 同一组用例）：catalog、各类型的文本、取消、只读拦截、乐观校验、唯一索引作行标识、无主键表只读、库列表、`GO` 分批。
 - [ ] win-worker 贴 Windows 上集成测试的汇总；reviewer 在 Mac 上连 Windows 主机的容器跑一遍。
 
-## F18.7 SQL Server 的 e2e 与文档 · 状态：todo
+## F18.7 SQL Server 的 e2e 与文档 · 状态：a passed（af641a9；e2e 23fff6d，46 条）；b 待 oss
 
 - **依赖**：F18.6
 - **涉及**：`e2e/`（tester）、`docs/`、`README.md`（oss）
