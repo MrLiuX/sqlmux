@@ -43,15 +43,16 @@ func (p *pickMenu) note(i int) string {
 }
 
 // pickable is whether n has a list of databases or schemas to pick from, and which:
-// a PG connection its databases, a MySQL one and a PG database its schemas.
+// a PG or SQL Server connection its databases, a MySQL one and a database of
+// PG's or SQL Server's its schemas.
 func pickable(n node) (dbs, ok bool) {
 	switch {
-	case n.kind == nodeConn && n.conn.Spec.Kind() == "postgres":
-		return true, true
 	case n.kind == nodeConn && n.conn.Spec.Kind() == "mysql":
 		return false, true
+	case n.kind == nodeConn && (n.conn.Spec.Kind() == "postgres" || n.conn.Spec.Kind() == "mssql"):
+		return true, true
 	case n.kind == nodeDatabase:
-		return false, n.conn.Spec.Kind() == "postgres"
+		return false, n.conn.Spec.Kind() == "postgres" || n.conn.Spec.Kind() == "mssql"
 	}
 	return false, false
 }
