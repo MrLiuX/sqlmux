@@ -51,3 +51,31 @@ services:
     volumes: ["./testdata/seed/redis.txt:/seed/redis.txt:ro"]
     entrypoint: ["sh", "-c", "[ \"$$(redis-cli -h redis exists seed:done)\" = 1 ] || redis-cli -h redis < /seed/redis.txt"]
     restart: "no"
+
+  # F18.6, on 51433. The image is amd64 only: on an arm64 Mac it wants
+  # Rosetta, and the Mac's worker, reviewer and tester use the Windows
+  # host's container over Tailscale instead of this one.
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: Sqlmux!2026
+    ports: ["51433:1433"]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'select 1' || exit 1"]
+      interval: 3s
+      retries: 40
+      start_period: 20s
+
+  mssql-seed: # once: sqlmux being in the server's databases means the seed ran
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    depends_on:
+      mssql: {condition: service_healthy}
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: Sqlmux!2026
+    volumes: ["./testdata/seed/mssql.sql:/seed/mssql.sql:ro"]
+    entrypoint: ["/bin/bash", "-c", "q=\"/opt/mssql-tools18/bin/sqlcmd -C -b -W -S mssql -U sa -P $$MSSQL_SA_PASSWORD -h -1\"; [ \"$$($$q -Q 'set nocount on; select count(*) from sys.databases where name = ''sqlmux''')\" = 1 ] || $$q -i /seed/mssql.sql"]
+    restart: "no"
