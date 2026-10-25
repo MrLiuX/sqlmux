@@ -11,7 +11,7 @@ export SQLMUX_TEST_REDIS := env("SQLMUX_TEST_REDIS", "redis://localhost:56379/0"
 default:
     @just --list
 
-# GoReleaser's config is valid and builds the four binaries into dist/ (needs goreleaser)
+# GoReleaser's config is valid and builds the six binaries into dist/ (needs goreleaser)
 release-check:
     goreleaser check
     goreleaser build --snapshot --clean
