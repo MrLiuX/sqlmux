@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kackerx/sqlmux/internal/db"
 )
@@ -220,6 +221,7 @@ func TestResultPageAsARunIs(t *testing.T) {
 	rt := resultOf(p)
 	rt.transpose = true
 	arrived := rt.arrived
+	time.Sleep(2 * time.Millisecond) // the rerun's arrival has to read after this: a coarse clock reads equal
 
 	// busy from the request to the page
 	conn.Manual, conn.tx = true, 'T' // what it was; the server says it is 'I' now
