@@ -150,6 +150,16 @@ func TestAutoLimitMSSQL(t *testing.T) {
 			t.Errorf("%q: %q, ok %v, want the OFFSET/FETCH", s, got, ok)
 		}
 	}
+	// a column named top, a for_x: the other dialects' words, their LIMIT as
+	// it was (§9.4, F18.6)
+	for _, d := range []Dialect{PG, MySQL, SQLite} {
+		for _, s := range []string{"select top from scores", "select id, top from scores where top > 3", "select a from t where for_x = 1"} {
+			got, ok := AutoLimit(s, d, 101, 0)
+			if !ok || !strings.Contains(got, "\nLIMIT 101") {
+				t.Errorf("%d %q: %q, ok %v, want the LIMIT", d, s, got, ok)
+			}
+		}
+	}
 }
 
 // A procedure that goes without its EXEC is the EXEC the words take it for

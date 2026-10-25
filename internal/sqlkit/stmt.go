@@ -447,6 +447,7 @@ func AutoLimit(s string, d Dialect, n, offset int) (out string, pageable bool) {
 	pageable = true
 	var orders bool          // a top-level ORDER BY, which a T-SQL OFFSET must have
 	var distinct, setop bool // a top-level DISTINCT or set operator, whose select list an ORDER BY (SELECT NULL) is not in
+	var topw, forout bool    // a TOP clause, a FOR JSON or XML, which an OFFSET cannot stand in
 	for j := lo; j <= hi; j++ {
 		switch w := lower(s, ts, j); {
 		case depth[j] != top:
@@ -456,10 +457,10 @@ func AutoLimit(s string, d Dialect, n, offset int) (out string, pageable bool) {
 			pageable = false
 		case w == "order" && j < hi && lower(s, ts, j+1) == "by":
 			orders = true
-		case w == "top": // 10741: TOP and OFFSET cannot share a statement (§9.4, F18.6)
-			return s, false
-		case w == "for" && j < hi && (lower(s, ts, j+1) == "json" || lower(s, ts, j+1) == "xml"): // a syntax error after
-			return s, false
+		case w == "top":
+			topw = true
+		case w == "for" && j < hi && (lower(s, ts, j+1) == "json" || lower(s, ts, j+1) == "xml"):
+			forout = true
 		case w == "distinct":
 			distinct = true
 		case w == "union" || w == "intersect" || w == "except":
@@ -467,10 +468,11 @@ func AutoLimit(s string, d Dialect, n, offset int) (out string, pageable bool) {
 		}
 	}
 	if d == MSSQL {
-		// a DISTINCT's or a set operation's rows, the ORDER BY they would
-		// take must be in the select list: 145 and 104 — those run as they
-		// are, the rows capped (§9.4, F18.6)
-		if !pageable || (distinct || setop) && !orders {
+		// what an OFFSET cannot stand in, the statement runs as it is, the
+		// rows capped (§9.4, F18.6): a TOP's (10741), a FOR JSON's or FOR
+		// XML's (a syntax error); and a DISTINCT's or a set operation's
+		// without an ORDER BY of its own (145 and 104, the select list's)
+		if !pageable || topw || forout || (distinct || setop) && !orders {
 			return s, false
 		}
 		suffix := "\nOFFSET " + strconv.Itoa(offset) + " ROWS FETCH NEXT " + strconv.Itoa(n) + " ROWS ONLY"
