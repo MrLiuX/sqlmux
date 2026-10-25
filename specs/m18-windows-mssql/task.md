@@ -15,7 +15,7 @@
 
 Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-worker**），它在 Tailscale 网络里，和 Mac 上的四个会话不通消息；SQL Server 那半默认也由它做（容器在它那台机器上，x86，Docker Desktop 跑官方 amd64 镜像不用模拟），Mac 上的 worker 只做合并、打 tag、推送。规则和 `specs/roles/worker.md` 一样，差异如下：
 
-- **分支**：win-worker 在 `windows-compat` 分支上做（已有 PR #3，draft），不直接提交 `main`。每到一个审查节点把分支 rebase 到 `origin/main` 后推送，在 PR 里留一条评论「节点 N 已送审：<范围>，重点 …」。reviewer 在 Mac 上审 `origin/main..origin/windows-compat`（`/Users/ctw/proj/sqlmux-review` 里 fetch 后 detach 到分支头），退回写成 PR 评论；tester 同样。过了的节点由 Mac 上的 worker `git merge --ff-only` 进 `main`（不要 merge commit；rebase 过的分支才能 ff），决策者填状态。审查开始后不要 force-push 改写已送审的 commit，修复另起 commit。
+- **分支**：win-worker 在 `windows-compat` 分支上做（已有 PR #3，draft），不直接提交 `main`。每到一个审查节点把分支 rebase 到 `origin/main` 后推送，在 PR 里留一条评论「节点 N 已送审：<范围>，重点 …」。reviewer 在 Mac 上审 `origin/main..origin/windows-compat`（`/Users/ctw/proj/sqlmux-review` 里 fetch 后 detach 到分支头），退回写成 PR 评论；tester 同样。过了的节点由 Mac 上的 worker 合进 `main`：`origin/main` 没推、分支 rebase 不到 Mac 本地的 main，所以就是普通的 `git merge origin/windows-compat`（节点 1 用 rebase 重放 docs 的办法把 e2e 的 sha 也带乱了，节点 2 起允许 merge commit，GitHub 合 PR 也是 merge commit），决策者填状态。审查开始后不要 force-push 改写已送审的 commit，修复另起 commit。
 - **git 身份**：作者身份由仓库 git 配置决定，和 Mac 一致：`git config user.name kackerx`、`git config user.email 55371516+kackerx@users.noreply.github.com`（PR #3 的 commit 是 `win-setup <setup@local>`，重做时改掉）。commit 说明英文，前缀 `F18.<序号>:`（PR #3 的 `windows:` 不合规矩），不加 `Co-Authored-By` 之类的署名行。
 - **行尾**：`git config core.autocrlf false`，仓库文件一律 LF（F18.4 起由 `.gitattributes` 的 `* text=auto eol=lf` 固定，§15）；Windows 上写的新文件也是 LF（编辑器设一下）。i18n 的单测遍历整个工作区的 `.go` 文件，CRLF 或工作区里多出来的 `.go` 副本都会让它失败——PR #3 说明里「en.go 存在未被引用的中文键」多半是这个，重新 clone 后再跑一次，还红就把输出贴到 PR。
 - **每个 commit 自己保证 `just check` 全绿**，在 Windows 上和 Mac 上一样。Windows 上要装的（都是命令行能装的，`winget` / `go install`）：
@@ -77,7 +77,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - [ ] 单测：Windows 下工具表多这一行、非 Windows 不变；`\r\n` 的归一；mutation。
 - [ ] win-worker 手测：表格里 `"+y` 后别的程序能贴出来；外面复制一段文字，query 里 `"+p` 贴进来；「中文 abc」两个方向各一次不乱码；外面复制单个词后 `"+p` 贴在行内，不是新起一行。
 
-## F18.4 发布与 CI · 状态：todo
+## F18.4 发布与 CI · 状态：passed（d40e054；e2e dc008b1）
 
 - **依赖**：F18.1–F18.3
 - **涉及**：`.goreleaser.yaml`、`npm/build.mjs`、`.github/workflows/ci.yml`、`.github/workflows/release.yml`（npm job 要多下 `*.zip`，reviewer 2026-10-25 重放发现）、`README.md`（归 oss）
@@ -92,7 +92,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - [ ] `just release-check`（或等价的 goreleaser `--snapshot`）六个目标都编过；CI 三个 job 加 windows job 绿。
 - [ ] 发版后 oss 的安装验证多一条：用户在 Windows 上用 zip 和 `npx` 各装一次看 `--version`。
 
-## F18.5 Windows 的验收方式 · 状态：todo
+## F18.5 Windows 的验收方式 · 状态：passed（d40e054；e2e dc008b1）
 
 - **依赖**：F18.1–F18.3
 - **涉及**：`e2e/`（Mac 的 tester）、`specs/roles/tester.md` 不改（这里写清就够）
