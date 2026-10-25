@@ -220,8 +220,8 @@ func TestResultPageAsARunIs(t *testing.T) {
 	a.win().focus(p.ID)
 	rt := resultOf(p)
 	rt.transpose = true
+	rt.arrived = rt.arrived.Add(-time.Second) // a coarse clock (windows) reads the page's arrival equal to the run's
 	arrived := rt.arrived
-	time.Sleep(2 * time.Millisecond) // the rerun's arrival has to read after this: a coarse clock reads equal
 
 	// busy from the request to the page
 	conn.Manual, conn.tx = true, 'T' // what it was; the server says it is 'I' now
