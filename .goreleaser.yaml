@@ -1,4 +1,4 @@
-# tech-design §15「发布与分发」: a v* tag builds the four binaries, the
+# tech-design §15「发布与分发」: a v* tag builds the six binaries, the
 # archives, checksums.txt and the changelog of the GitHub Release
 # (.github/workflows/release.yml). OSS GoReleaser only.
 version: 2
