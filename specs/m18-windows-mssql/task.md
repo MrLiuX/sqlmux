@@ -80,12 +80,12 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 ## F18.4 发布与 CI · 状态：todo
 
 - **依赖**：F18.1–F18.3
-- **涉及**：`.goreleaser.yaml`、`npm/build.mjs`、`.github/workflows/ci.yml`、`README.md`（归 oss）
+- **涉及**：`.goreleaser.yaml`、`npm/build.mjs`、`.github/workflows/ci.yml`、`.github/workflows/release.yml`（npm job 要多下 `*.zip`，reviewer 2026-10-25 重放发现）、`README.md`（归 oss）
 
 **开发**（§15）
 - [ ] a. goreleaser 加 `windows` 的 `amd64` 和 `arm64`，Windows 的压缩包用 zip（`format_overrides`），二进制名 `sqlmux.exe`；文件头部注释的「four binaries」改成六个（win-worker 2026-10-25 问，随这一批改）。
-- [ ] b. npm 壳包加 `win32-x64`、`win32-arm64` 两个平台包（`build.mjs` 的表加两行，壳的启动脚本认 `.exe`）。
-- [ ] c. CI 加一个 `windows-latest` 的 job：`go build ./...` 和 `go test ./...`（不跑集成测试、不跑 lint；lint 在 ubuntu 上跑一次就够）。
+- [ ] b. npm 壳包加 `win32-x64`、`win32-arm64` 两个平台包（`build.mjs` 的表加两行，壳的启动脚本认 `.exe`）。`release.yml` 的 npm job 跑在 ubuntu 上：`gh release download` 除 `*.tar.gz` 再下 `*.zip`；`build.mjs` 解 zip 用 `unzip`（GNU tar 不认 zip，ubuntu-latest 和 macOS 都自带 unzip），tar.gz 照旧 tar。
+- [ ] c. CI 加一个 `windows-latest` 的 job：`go vet ./...`、`go build ./...` 和 `go test ./...`（不跑集成测试、不跑 lint；lint 在 ubuntu 上跑一次就够，`_windows.go` 只有这一步 vet 看得到）。
 - [ ] d. README 加「Windows」一小节（oss 做）：Windows Terminal + PowerShell / cmd，装法三条（Releases 的 zip、`go install`、npm），WSL 等于 Linux，老 conhost 不支持，Nerd Font 同样要装。
 
 **验收**
