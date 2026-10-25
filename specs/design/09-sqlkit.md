@@ -46,7 +46,7 @@
 - 对 SELECT、WITH…SELECT、TABLE、VALUES 这类读语句：顶层没有 LIMIT 或 FETCH 时，先去掉末尾的 `;`，再追加 `\nLIMIT n`（query 为 `max_rows + 1`，快速 SQL 为 101）。前面加换行，防止语句末尾的 `--` 注释把 LIMIT 注释掉。多取一行是为了判断是否还有更多，界面上显示 `100+`。
 - 不用子查询包一层来加 LIMIT，因为 MySQL 可能丢掉派生表里的 ORDER BY。
 - 其他语句由 `Exec` 的 `maxRows` 截断。
-- **SQL Server**（M18 F18.6，reviewer 2026-10-25 在真库上实测）：追加的是 `OFFSET 0 ROWS FETCH NEXT n ROWS ONLY`（没有 ORDER BY 先补 `ORDER BY (SELECT NULL)`，§8.5）。几类语句和 OFFSET 不相容，按「语句自带 LIMIT」处理——不追加、不分页、靠 `maxRows` 截断：顶层带 `TOP` 的（10741：TOP 和 OFFSET 不能同用）、带 `FOR JSON` / `FOR XML` 的（语法错）、顶层有 `DISTINCT` 或集合运算（UNION / INTERSECT / EXCEPT）且自己没有 ORDER BY 的（145 / 104：ORDER BY 项必须在选择列表里）。不用 `ORDER BY 1` 兜底，它会改结果顺序；不用子查询包一层（同上一条）。`count(*)`、CTE、自带 ORDER BY 的照常追加。Quick（快速 SQL）同样走 AutoLimit，4M 行的交叉连接不能读满超时。
+- **SQL Server**（M18 F18.6，reviewer 2026-10-25 在真库上实测）：追加的是 `OFFSET 0 ROWS FETCH NEXT n ROWS ONLY`（没有 ORDER BY 先补 `ORDER BY (SELECT NULL)`，§8.5）。几类语句和 OFFSET 不相容，按「语句自带 LIMIT」处理——不追加、不分页、靠 `maxRows` 截断：顶层带 `TOP` 的（10741：TOP 和 OFFSET 不能同用）、带 `FOR JSON` / `FOR XML` 的（语法错）、顶层有 `DISTINCT` 或集合运算（UNION / INTERSECT / EXCEPT）且自己没有 ORDER BY 的（145 / 104：ORDER BY 项必须在选择列表里）。不用 `ORDER BY 1` 兜底，它会改结果顺序；不用子查询包一层（同上一条）。`count(*)`、CTE、自带 ORDER BY 的照常追加。已知上限：没写完的语句（`select 1 +`）报的是追加的 FETCH 的错（153），不是语句本身的语法错。Quick（快速 SQL）同样走 AutoLimit，4M 行的交叉连接不能读满超时。
 
 ### 9.5 格式化（C-03 gq）
 

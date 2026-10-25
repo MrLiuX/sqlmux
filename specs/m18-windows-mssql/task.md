@@ -106,7 +106,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 **验收**
 - [ ] tester 在 Windows 主机上跑过 a 和 b，结论里附 ConPTY 截屏的文字。a 的 `go test ./...` 在 ssh 会话里跑（PATH 没有 Git 的 `usr\bin`，比 CI runner 和 win-worker 的终端更干净）要全绿：formatprg 用 `printf` / `tr` 的两个测试（TestQueryFormatAll、TestPlainQueryFormat）在 `exec.LookPath` 找不到命令时 `t.Skip`，同「不做」里 sh 脚本假工具的处理（tester 2026-10-25 退回）。
 
-## F18.6 SQL Server 引擎 · 状态：passed（b829217；e2e 3187934）
+## F18.6 SQL Server 引擎 · 状态：passed（b829217；e2e 3187934）；追加 j 待修
 
 - **依赖**：节点 1 过（win-worker 在 Windows 上做，容器在它那台机器上）
 - **涉及**：`internal/db/mssql`（新包，§4）、`internal/db`、`internal/sqlkit`（Dialect）、`internal/config`、`internal/app`（树、表单、`workspace.go` 的 `engines`）、`docker-compose.yml`、`testdata/seed/mssql.sql`、`.github/workflows/ci.yml`
@@ -122,6 +122,9 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - [ ] g. 类型与文本（§8.1）：以集成测试为准，拿不准的不猜：`datetime2` / `datetime` / `datetimeoffset` / `date` / `time` 的文本形式、`uniqueidentifier`（驱动的 `mssql.UniqueIdentifier`，显示标准 GUID 文本）、`bit` 显示 `true` / `false`、`money` / `decimal` 按文本、`varbinary` / `image` 走 `<binary N bytes>`、`xml` 和 `nvarchar(max)` 按文本；值编辑器和保存的回写（`Same` 的比较）每种各一条集成测试。
 - [ ] h. 连接表单的 engine 段加 mssql（host / port 默认 1433 / database / user / password / read_only / production）；树：连接 → 库 → schema → Tables / Views / Functions / Sequences，同 PG。
 - [ ] i. 测试环境：`docker-compose.yml` 加 `mssql`（`mcr.microsoft.com/mssql/server:2022-latest`，`platform: linux/amd64`，端口 51433，`ACCEPT_EULA=Y`，`MSSQL_SA_PASSWORD=Sqlmux!2026`，healthcheck 用镜像自带的 `/opt/mssql-tools18/bin/sqlcmd -C`）和一个一次性的 `mssql-seed` 服务（同一镜像，等健康后 `sqlcmd -C -i /seed/mssql.sql` 灌 `testdata/seed/mssql.sql`，和 PG / MySQL 一样只在数据卷为空时）；seed 内容对照 `mysql.sql`（同样的表和行，类型换成 T-SQL 的）；集成测试用 `SQLMUX_TEST_MSSQL`（`sqlserver://sa:Sqlmux!2026@localhost:51433?database=sqlmux&TrustServerCertificate=true`），没设就 skip；CI 的 integration job 用 `services` 起同一镜像加一步 seed。Mac 上这个镜像要 Rosetta，Mac 的 worker / reviewer 直接连 Windows 主机的容器（Tailscale 地址，用户给）。
+
+- [ ] j. **追加修复**（tester 2026-10-25 写 F18.7 e2e 时发现，PR #3 评论 6397659833）：`Same` 返回的三臂 `A or B or C` 没有括号，`save.go` 用 `and` 接在主键条件后面，WHERE 成了 `(pk and A) or B or C`——旧值在表里有重复时影响行数 ≠ 1 回滚（t_order 改 amount / status / user_id 都存不了），旧值被别人改掉而另一行恰好还是这个旧值时会改到别的行。修法：`Same` 整个包括号，单测同步；补两条集成测试（重复值的列保存成功且只动一行；旧值被改且另一行有该旧值时报行已变化、另一行不动）。在 windows-compat 上一个 commit，reviewer 单独审这一个，tester 复测 f18.7b。
+- 已知上限（不修）：query 里没写完的 `select 1 +` 报的是追加的 `OFFSET … FETCH` 的错（153），不是用户语句本身的语法错；PG / MySQL 追加 LIMIT 时同类输入恰好仍报语法错。记在 §9.4。
 
 **验收**
 - [ ] 单测：方言（`GO` 分批、`[name]` 引号、`N'…'`）、`Quote` / `Arg` / `Same` / `Eq`、分页语句的拼法；mutation。
