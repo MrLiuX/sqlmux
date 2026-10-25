@@ -145,7 +145,6 @@ func TestFormatPrg(t *testing.T) {
 	if text(c) != "SELECT A FROM T" {
 		t.Errorf("%q", text(c))
 	}
-	sqlkit.FormatTimeout = 5 * time.Second
 	a, c = inQuery(t, prgOf(t, "echo 'no good' >&2; echo second >&2; exit 3", "echo no good 1>&2&exit 3"), "")
 	a.queryDid(c, c.ed.Load("select a from t"))
 	gqIn(t, a, "gqq")
