@@ -30,13 +30,14 @@ goto() { key g g; key 0; [[ $2 -gt 1 ]] && key $(($2 - 1)) j; local n; n=$(e2e_t
 saves() { local q s; s=$(printf '\xef\x83\x87'); q=$(qbar); q=${q#*"$s"}; q=${q%%[!\ 0-9]*}; echo $q; }
 
 start -x 200 -C "$D/b"; sleep 2
+N999=$(ms "select count(*) from t_order where amount = 9.99"); N299=$(ms "select count(*) from t_order where amount = 2.99")   # 这两个值在表里不止一行
 open_table t_order; wait_for 8 settled
 # ---- 编辑保存：decimal（别的行也有这个值：2.99 在表里不止一行）、bit、nvarchar
 goto amount 2; key Enter; e2e_type 9.99; key Enter
 goto paid 1; key Enter; e2e_type false; sleep 0.3; key Enter
 check "第 2 行 amount 改 9.99、第 1 行 paid（bit）下拉选 false：两处修改" eval '[[ $(saves) == 2 && $(cell paid 1) == false* ]] || { echo "  saves $(saves) paid $(cell paid 1) / $(qbar)"; false; }'
 key C-s; wait_for 8 eval '[[ $(qbar) == *已保存* || -n $(errbar 1) ]]'; sleep 0.4
-check "C-s：「已保存 2 行」，库里 id 2 的 amount 是 9.99、id 1 的 paid 是 0，只动了这两行（amount = 9.99 的行除了 id 2 和原有的 id 9 没有别的）" eval '[[ $(qbar) == *"已保存 2 行"* && $(ms "select cast(amount as varchar(20)) from t_order where id = 2") == 9.99 && $(ms "select cast(paid as varchar(2)) from t_order where id = 1") == 0 && $(ms "select count(*) from t_order where amount = 9.99") == 2 && $(ms "select count(*) from t_order where amount = 2.99") == 0 ]] || { echo "  $(qbar) / $(errbar 1)"; false; }'
+check "C-s：「已保存 2 行」，库里 id 2 的 amount 是 9.99、id 1 的 paid 是 0，只动了这两行（amount = 9.99 的行多一行、2.99 的少一行）" eval '[[ $(qbar) == *"已保存 2 行"* && $(ms "select cast(amount as varchar(20)) from t_order where id = 2") == 9.99 && $(ms "select cast(paid as varchar(2)) from t_order where id = 1") == 0 && $(ms "select count(*) from t_order where amount = 9.99") == $((N999 + 1)) && $(ms "select count(*) from t_order where amount = 2.99") == $((N299 - 1)) ]] || { echo "  $(qbar) / $(errbar 1) / amount2=$(ms "select cast(amount as varchar(20)) from t_order where id = 2") paid1=[$(ms "select cast(paid as varchar(2)) from t_order where id = 1")] n9.99=$(ms "select count(*) from t_order where amount = 9.99") n2.99=$(ms "select count(*) from t_order where amount = 2.99")"; false; }'
 wait_for 5 eval '[[ -z $(saves) ]]'; sleep 0.5
 goto status 3; key Enter; sleep 0.3; e2e_type queued; sleep 0.3; key Enter; key C-s; wait_for 8 eval '[[ $(qbar) == *已保存* || -n $(errbar 1) ]]'; sleep 0.4
 check "status（check 约束的 nvarchar，值在表里重复上千次）改一行：只改这一行（id 3），其余 failed 的行不动" eval '[[ $(qbar) == *"已保存 1 行"* && $(ms "select count(*) from t_order where status = '"'"'failed'"'"'") == 1499 && $(ms "select status from t_order where id = 3") == queued ]] || { echo "  $(qbar) / $(errbar 1) / failed rows: $(ms "select count(*) from t_order where status = '"'"'failed'"'"'")"; false; }'
