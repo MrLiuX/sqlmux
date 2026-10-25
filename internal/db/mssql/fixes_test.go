@@ -125,6 +125,60 @@ func TestSaveEachType(t *testing.T) {
 	}
 }
 
+// The optimistic check catches a row changed under the grid (§10.3,
+// F18.6): Old as the grid read it, another session writes another value,
+// the save says so — and one that did not change goes in.
+// ponytail: a text column whose value is all of 'true' or 'false' slips it
+// when another session made it '1' or '0' — the bit's third arm reads it
+// as the bit's, the last case here
+func TestStaleCaught(t *testing.T) {
+	dsn := OwnDB(t)
+	w, e := workerOf(t, dsn), Engine{}
+	ctx := context.Background()
+	for i, c := range []struct {
+		typ, was, other, set string
+		goes                 bool // the save goes in, the row having changed all the same
+	}{
+		{"int", "5", "1", "7", false},
+		{"int", "0", "0", "7", true},
+		{"bigint", "-3", "1", "7", false},
+		{"decimal(5,2)", "2.50", "1.00", "7", false},
+		{"varchar(10)", "'true'", "'1'", "x", true},
+		{"varchar(10)", "'yes'", "'1'", "x", false},
+		{"bit", "1", "0", "false", false},
+		{"bit", "1", "1", "false", true},
+	} {
+		tab := fmt.Sprintf("zz_s%d", i)
+		if _, err := w.Query(ctx, fmt.Sprintf("create table dbo.%s (id int primary key, v %s)", tab, c.typ)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Query(ctx, fmt.Sprintf("insert into dbo.%s values (1, %s)", tab, c.was)); err != nil {
+			t.Fatal(err)
+		}
+		r, err := w.Query(ctx, "select v from dbo."+tab)
+		if err != nil {
+			t.Fatal(err)
+		}
+		old := r.Rows[0][0]
+		if _, err := w.Query(ctx, fmt.Sprintf("update dbo.%s set v = %s", tab, c.other)); err != nil { // someone else
+			t.Fatal(err)
+		}
+		ch := db.Changes{Updates: []db.Row{{Key: []string{"1"}, Cols: []db.Change{
+			{Name: "v", Val: db.Val{S: c.set}, Old: old},
+		}}}}
+		failed, _, err := db.Save(ctx, w, e, "dbo", tab, []string{"id"}, ch, false)
+		if c.goes {
+			if failed != -1 || err != nil {
+				t.Errorf("%s read %q then %s: failed %d, err %v, want the save in", c.typ, old.S, c.other, failed, err)
+			}
+			continue
+		}
+		if failed != 0 || !errors.Is(err, db.ErrStale) {
+			t.Errorf("%s read %q then %s: failed %d, err %v, want the row changed", c.typ, old.S, c.other, failed, err)
+		}
+	}
+}
+
 // The catalog's types are the column's, not the type's defaults, and the
 // DDL is what the columns say (§8.4, F18.6).
 func TestColumnTypes(t *testing.T) {

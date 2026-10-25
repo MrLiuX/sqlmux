@@ -270,9 +270,6 @@ func cellText(v any, col columnMeta) db.Val {
 // shows by their size, and an export as 0x and its hex (§8.1).
 var bytesTypes = map[string]bool{"binary": true, "varbinary": true, "image": true, "rowversion": true, "timestamp": true}
 
-// hexCellOf is a value as a file has it: a type that holds bytes as 0x and
-// its hex, as T-SQL writes a literal, not the grid's placeholder, which is
-// no data (F12.4).
 // hexCellOf is a value as a file has it: cellOf, but a type that holds
 // bytes as 0x and its hex, as T-SQL writes a literal, not the grid's
 // placeholder, which is no data (F12.4).
@@ -372,13 +369,16 @@ func (Engine) Eq(col, arg string) string { return col + " = " + arg }
 // its parts, a money's four decimals — against what was read; the second
 // arm takes the types that take no style, an xml's; the third a bit's,
 // which the server writes 1 and 0 but the grid shows true and false, the
-// spec's word: the argument as a bit, and back as text, the column's own
-// text against it — a datetime to a bit is a conversion the server forbids,
-// so the column stays on its text (F18.6, §10.3).
+// spec's word — the column's own text against the 1 or 0 the argument says
+// only when it says true or false, every other value no case for (F18.6,
+// §10.3).
+// ponytail: a text column whose value is all of 'true' or 'false' slips the
+// check when another session made it '1' or '0' — the third arm reads it
+// as the bit's
 func (Engine) Same(col, arg string) string {
 	return "try_convert(nvarchar(max), " + col + ", 126) = " + arg +
 		" or try_convert(nvarchar(max), " + col + ") = " + arg +
-		" or try_convert(nvarchar(max), " + col + ", 126) = convert(nvarchar(max), try_convert(bit, " + arg + "))"
+		" or try_convert(nvarchar(max), " + col + ", 126) = case " + arg + " when 'true' then '1' when 'false' then '0' end"
 }
 
 // Begin is the statement that starts a transaction (§10.3, F18.6).
