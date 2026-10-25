@@ -116,5 +116,5 @@ jobs:
           PGPASSWORD=sqlmux psql -h localhost -U sqlmux -d sqlmux -v ON_ERROR_STOP=1 -f testdata/seed/pg.sql
           mysql -h 127.0.0.1 -uroot -psqlmux sqlmux < testdata/seed/mysql.sql
           docker run -i --rm --network host redis/redis-stack-server:7.4.0-v3 redis-cli -h 127.0.0.1 < testdata/seed/redis.txt
-          docker run -i --rm --network host mcr.microsoft.com/mssql/server:2022-latest /opt/mssql-tools18/bin/sqlcmd -C -b -S localhost -U sa -P 'Sqlmux!2026' < testdata/seed/mssql.sql
+          docker run -i --rm --network host --entrypoint /opt/mssql-tools18/bin/sqlcmd mcr.microsoft.com/mssql/server:2022-latest -C -b -S localhost -U sa -P 'Sqlmux!2026' < testdata/seed/mssql.sql
       - run: go test -tags integration ./...
