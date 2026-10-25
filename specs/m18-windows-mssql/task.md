@@ -17,7 +17,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 
 - **分支**：win-worker 在 `windows-compat` 分支上做（已有 PR #3，draft），不直接提交 `main`。每到一个审查节点把分支 rebase 到 `origin/main` 后推送，在 PR 里留一条评论「节点 N 已送审：<范围>，重点 …」。reviewer 在 Mac 上审 `origin/main..origin/windows-compat`（`/Users/ctw/proj/sqlmux-review` 里 fetch 后 detach 到分支头），退回写成 PR 评论；tester 同样。过了的节点由 Mac 上的 worker `git merge --ff-only` 进 `main`（不要 merge commit；rebase 过的分支才能 ff），决策者填状态。审查开始后不要 force-push 改写已送审的 commit，修复另起 commit。
 - **git 身份**：作者身份由仓库 git 配置决定，和 Mac 一致：`git config user.name kackerx`、`git config user.email 55371516+kackerx@users.noreply.github.com`（PR #3 的 commit 是 `win-setup <setup@local>`，重做时改掉）。commit 说明英文，前缀 `F18.<序号>:`（PR #3 的 `windows:` 不合规矩），不加 `Co-Authored-By` 之类的署名行。
-- **行尾**：`git config core.autocrlf false`，仓库文件一律 LF；Windows 上写的新文件也是 LF（编辑器设一下）。i18n 的单测遍历整个工作区的 `.go` 文件，CRLF 或工作区里多出来的 `.go` 副本都会让它失败——PR #3 说明里「en.go 存在未被引用的中文键」多半是这个，重新 clone 后再跑一次，还红就把输出贴到 PR。
+- **行尾**：`git config core.autocrlf false`，仓库文件一律 LF（F18.4 起由 `.gitattributes` 的 `* text=auto eol=lf` 固定，§15）；Windows 上写的新文件也是 LF（编辑器设一下）。i18n 的单测遍历整个工作区的 `.go` 文件，CRLF 或工作区里多出来的 `.go` 副本都会让它失败——PR #3 说明里「en.go 存在未被引用的中文键」多半是这个，重新 clone 后再跑一次，还红就把输出贴到 PR。
 - **每个 commit 自己保证 `just check` 全绿**，在 Windows 上和 Mac 上一样。Windows 上要装的（都是命令行能装的，`winget` / `go install`）：
   - `just`（`winget install Casey.Just`）；
   - `golangci-lint` v2.14.0（`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`，justfile 校验版本号）；
@@ -80,12 +80,12 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 ## F18.4 发布与 CI · 状态：todo
 
 - **依赖**：F18.1–F18.3
-- **涉及**：`.goreleaser.yaml`、`npm/build.mjs`、`.github/workflows/ci.yml`、`README.md`（归 oss）
+- **涉及**：`.goreleaser.yaml`、`npm/build.mjs`、`.github/workflows/ci.yml`、`.github/workflows/release.yml`（npm job 要多下 `*.zip`，reviewer 2026-10-25 重放发现）、`README.md`（归 oss）
 
 **开发**（§15）
-- [ ] a. goreleaser 加 `windows` 的 `amd64` 和 `arm64`，Windows 的压缩包用 zip（`format_overrides`），二进制名 `sqlmux.exe`。
-- [ ] b. npm 壳包加 `win32-x64`、`win32-arm64` 两个平台包（`build.mjs` 的表加两行，壳的启动脚本认 `.exe`）。
-- [ ] c. CI 加一个 `windows-latest` 的 job：`go build ./...` 和 `go test ./...`（不跑集成测试、不跑 lint；lint 在 ubuntu 上跑一次就够）。
+- [ ] a. goreleaser 加 `windows` 的 `amd64` 和 `arm64`，Windows 的压缩包用 zip（`format_overrides`），二进制名 `sqlmux.exe`；文件头部注释的「four binaries」改成六个（win-worker 2026-10-25 问，随这一批改）。
+- [ ] b. npm 壳包加 `win32-x64`、`win32-arm64` 两个平台包（`build.mjs` 的表加两行，壳的启动脚本认 `.exe`）。`release.yml` 的 npm job 跑在 ubuntu 上：`gh release download` 除 `*.tar.gz` 再下 `*.zip`；`build.mjs` 解 zip 用 `unzip`（GNU tar 不认 zip，ubuntu-latest 和 macOS 都自带 unzip），tar.gz 照旧 tar。
+- [ ] c. CI 加一个 `windows-latest` 的 job：`go vet ./...`、`go build ./...` 和 `go test ./...`（不跑集成测试、不跑 lint；lint 在 ubuntu 上跑一次就够，`_windows.go` 只有这一步 vet 看得到）。
 - [ ] d. README 加「Windows」一小节（oss 做）：Windows Terminal + PowerShell / cmd，装法三条（Releases 的 zip、`go install`、npm），WSL 等于 Linux，老 conhost 不支持，Nerd Font 同样要装。
 
 **验收**
@@ -100,11 +100,11 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 
 **开发**
 - [ ] a. tester 从 Mac `ssh` 到 Windows 主机（OpenSSH Server、公钥、默认 shell pwsh，用户准备），在那边 `go test ./...`、编一个二进制。
-- [ ] b. 一个最小的 ConPTY 冒烟脚本（Python `pywinpty` 加 `pyte`，放 `e2e/windows/`，Windows 上跑）：起 sqlmux 连 sqlite 的 demo 文件，发 `j` `k` `↵` `gt` `q`，截屏比几处固定文字（树的连接名、表名、状态栏的 NORMAL）。不求覆盖，只证明键盘和渲染在 ConPTY 上通。
+- [ ] b. 一个最小的 ConPTY 冒烟脚本（Python `pywinpty` 加 `pyte`，放 `e2e/windows/`，Windows 上跑）：起 sqlmux 连 sqlite 的 demo 文件，发 `C-h`（启动焦点在第一个 pane，先到树）、`j` `↵`、`gt`、`:qa`（`q` 在 query 里不是退出），截屏比几处固定文字（树的连接名、表名、状态栏的 NORMAL；tester 2026-10-25 定的按键，脚本 `e2e/windows/smoke.py` 在 e2e 分支）。不求覆盖，只证明键盘和渲染在 ConPTY 上通。
 - [ ] c. 一份给用户的手测清单（WALKTHROUGH 的 Windows 一节，决策者写）：真彩色、鼠标点击和滚轮、图标、`C-c` / `C-z`、`"+y`、窗口缩放、中文宽度。
 
 **验收**
-- [ ] tester 在 Windows 主机上跑过 a 和 b，结论里附 ConPTY 截屏的文字。
+- [ ] tester 在 Windows 主机上跑过 a 和 b，结论里附 ConPTY 截屏的文字。a 的 `go test ./...` 在 ssh 会话里跑（PATH 没有 Git 的 `usr\bin`，比 CI runner 和 win-worker 的终端更干净）要全绿：formatprg 用 `printf` / `tr` 的两个测试（TestQueryFormatAll、TestPlainQueryFormat）在 `exec.LookPath` 找不到命令时 `t.Skip`，同「不做」里 sh 脚本假工具的处理（tester 2026-10-25 退回）。
 
 ## F18.6 SQL Server 引擎 · 状态：todo
 
