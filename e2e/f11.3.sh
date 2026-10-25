@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # F11.3 npm：壳包加平台子包（specs/m11-distribution/task.md F11.3；tech-design §15「发布与分发」）
-# 在打了 tag 的干净 clone 里 goreleaser 出压缩包，npm/build.mjs 做五个包（和 release.yml 的 npm job 同一步），
+# 在打了 tag 的干净 clone 里 goreleaser 出压缩包，npm/build.mjs 做七个包（和 release.yml 的 npm job 同一步），
 # 然后检查包的内容、用 npm（本地、-g、--ignore-scripts）和 pnpm 装本机平台的两个包，跑 sqlmux：--version、退出码和输出透传、
 # 缺子包时的提示、TUI 能开能退能缩放。真发布后的 `npx sqlmux@<tag>` / `pnpm dlx sqlmux` 要 npm 上有包，由决策者在 tag 上确认。
 # 需要 goreleaser（GORELEASER=路径）、node、npm、pnpm；时间在 goreleaser 的编译上（约 1 分钟）。
@@ -21,13 +21,13 @@ mkdir -p "$D/few"; cp dist/sqlmux_${v}_darwin_arm64.tar.gz "$D/few/"
 check "build.mjs 缺一个平台的压缩包：失败并说是哪个平台" eval 'node npm/build.mjs $TAG "$D/few" "$D/few-out" 2>"$D/few-err"; [[ $? -ne 0 ]] && grep -q "darwin_amd64\|linux_" "$D/few-err"'
 check "build.mjs 在路径带空格的目录里也能出包" eval 'mkdir -p "$D/with space" && cp -R npm "$D/with space/npm" && cp LICENSE "$D/with space/LICENSE" && node "$D/with space/npm/build.mjs" $TAG dist "$D/sp out" && [[ -x "$D/sp out/sqlmux-$os-$cpu/bin/sqlmux" && -f "$D/sp out/sqlmux/bin/sqlmux.js" ]]'
 node npm/build.mjs "$TAG" dist "$D/out" || exit 1
-check "做出五个包：sqlmux 和四个 sqlmux-<os>-<cpu>" eval '[[ $(ls "$D/out" | tr "\n" " ") == "sqlmux sqlmux-darwin-arm64 sqlmux-darwin-x64 sqlmux-linux-arm64 sqlmux-linux-x64 " ]]'
+check "做出七个包：sqlmux 和六个 sqlmux-<os>-<cpu>（F18.4：加 win32-arm64、win32-x64）" eval '[[ $(ls "$D/out" | tr "\n" " ") == "sqlmux sqlmux-darwin-arm64 sqlmux-darwin-x64 sqlmux-linux-arm64 sqlmux-linux-x64 sqlmux-win32-arm64 sqlmux-win32-x64 " ]]'
 check "tag 带不带 v 结果一样（version 都是 ${v}）" eval 'node npm/build.mjs "${v}" dist "$D/out2" && [[ $(js "$D/out2/sqlmux/package.json" p.version) == ${v} && $(js "$D/out/sqlmux/package.json" p.version) == ${v} ]]'
 
 # ---- 包的内容
 S=$D/out/sqlmux
 check "壳包：name sqlmux、version ${v}、bin → bin/sqlmux.js、engines node >=18、license MIT" eval '[[ $(js $S/package.json "[p.name, p.version, p.bin.sqlmux, p.engines.node, p.license].join(\" \")") == "sqlmux ${v} bin/sqlmux.js >=18 MIT" ]]'
-check "壳包：optionalDependencies 正好是四个 @kackerx/sqlmux-<os>-<cpu>，版本都是 ${v}，没有 dependencies" eval '[[ $(js $S/package.json "Object.entries(p.optionalDependencies).map(([k, x]) => k + \"@\" + x).sort().join(\" \")") == "@kackerx/sqlmux-darwin-arm64@${v} @kackerx/sqlmux-darwin-x64@${v} @kackerx/sqlmux-linux-arm64@${v} @kackerx/sqlmux-linux-x64@${v}" && $(js $S/package.json "p.dependencies === undefined") == true ]]'
+check "壳包：optionalDependencies 正好是六个 @kackerx/sqlmux-<os>-<cpu>，版本都是 ${v}，没有 dependencies" eval '[[ $(js $S/package.json "Object.entries(p.optionalDependencies).map(([k, x]) => k + \"@\" + x).sort().join(\" \")") == "@kackerx/sqlmux-darwin-arm64@${v} @kackerx/sqlmux-darwin-x64@${v} @kackerx/sqlmux-linux-arm64@${v} @kackerx/sqlmux-linux-x64@${v} @kackerx/sqlmux-win32-arm64@${v} @kackerx/sqlmux-win32-x64@${v}" && $(js $S/package.json "p.dependencies === undefined") == true ]]'
 check "壳包：没有 scripts（不用 postinstall 下载，pnpm 10 / --ignore-scripts 才能用）" eval '[[ $(js $S/package.json "p.scripts === undefined") == true ]]'
 check "壳包：bin/sqlmux.js 带 node shebang、可执行" eval '[[ -x $S/bin/sqlmux.js && $(head -1 $S/bin/sqlmux.js) == "#!/usr/bin/env node" ]]'
 for pl in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
@@ -38,7 +38,13 @@ done
 packfiles() { (cd "$1" && npm pack --dry-run --json 2>/dev/null) | node -e 'const p = JSON.parse(require("fs").readFileSync(0, "utf8")); console.log(p[0].files.map((f) => f.path).sort().join(" "))'; }
 check "npm pack：壳包只有 LICENSE、package.json 和 bin/sqlmux.js（F17.5）" eval '[[ $(packfiles $S) == "LICENSE bin/sqlmux.js package.json" ]] || { packfiles $S; false; }'
 check "npm pack：子包只有 LICENSE、package.json 和 bin/sqlmux（F17.5）" eval '[[ $(packfiles $D/out/sqlmux-$os-$cpu) == "LICENSE bin/sqlmux package.json" ]]'
-check "五个包里都有 LICENSE，和仓库根的一样（MIT 要附副本，F17.5）" eval 'for d in sqlmux sqlmux-darwin-arm64 sqlmux-darwin-x64 sqlmux-linux-arm64 sqlmux-linux-x64; do cmp -s LICENSE "$D/out/$d/LICENSE" || { echo "  $d: LICENSE missing or different"; exit 1; }; done'
+for pl in win32-arm64 win32-x64; do
+  P=$D/out/sqlmux-${pl}
+  check "子包 ${pl}：name、version、os win32 / cpu 只限这一个平台、没有 scripts（F18.4）" eval '[[ $(js $P/package.json "[p.name, p.version, p.os.join(), p.cpu.join(), p.scripts === undefined].join(\" \")") == "@kackerx/sqlmux-${pl} ${v} win32 ${pl#*-} true" ]]'
+  check "子包 ${pl}：bin/sqlmux.exe 是 Windows 的 PE 可执行文件、架构对，npm pack 里只有 LICENSE、package.json、bin/sqlmux.exe" eval 'f=$(file $P/bin/sqlmux.exe); [[ $f == *"PE32+"* ]] && case ${pl} in win32-arm64) [[ $f == *"Aarch64"* || $f == *"ARM64"* ]];; win32-x64) [[ $f == *"x86-64"* ]];; esac && [[ $(packfiles $P) == "LICENSE bin/sqlmux.exe package.json" ]] || { echo "  $f"; packfiles $P; false; }'
+done
+check "壳包的 bin/sqlmux.js 在 win32 上找 sqlmux.exe，别的平台找 sqlmux（F18.4）" eval 'grep -q "win32\" ? \"sqlmux.exe\" : \"sqlmux\"" $S/bin/sqlmux.js'
+check "七个包里都有 LICENSE，和仓库根的一样（MIT 要附副本，F17.5）" eval 'for d in sqlmux sqlmux-darwin-arm64 sqlmux-darwin-x64 sqlmux-linux-arm64 sqlmux-linux-x64 sqlmux-win32-arm64 sqlmux-win32-x64; do cmp -s LICENSE "$D/out/$d/LICENSE" || { echo "  $d: LICENSE missing or different"; exit 1; }; done'
 check "壳包的 package.json：files 有 LICENSE，description 写四种引擎（F17.5）" eval '[[ $(js $S/package.json "p.files.join()") == "bin,LICENSE" && $(js $S/package.json "p.description") == *"PostgreSQL, MySQL, SQLite and Redis" ]]'
 
 # ---- 装、跑
