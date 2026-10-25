@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kackerx/sqlmux/internal/i18n"
 )
@@ -115,7 +114,7 @@ func (s SQLTable) Count(ctx context.Context, filter string) (int64, error) {
 func (s SQLTable) Each(ctx context.Context, q PageQuery, head func([]Col) error, row func([]Val) error) error {
 	sql := Select(s.E, s.query(q))
 	if q.Limit > 0 {
-		sql += fmt.Sprintf(" limit %d offset %d", q.Limit, q.Offset)
+		sql += placeOf(s.E, s.query(q), q.Limit, q.Offset)
 	}
 	return s.reads(q).Run(ctx, func(ctx context.Context, c Conn) error {
 		// in a transaction of the user's a failed read would fail it all (§10.3)

@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
 
 // OrderCol is a column an ORDER sorts by and the way (§7.6, F12.1).
@@ -43,11 +45,26 @@ func (q Query) from(e Engine) string {
 // MySQL connection without multiStatements refuse more, whatever Where
 // holds.
 func Page(ctx context.Context, c Conn, e Engine, q Query) (r Result, next bool, err error) {
-	r, err = c.Query(ctx, Select(e, q)+fmt.Sprintf(" limit %d offset %d", q.Limit+1, q.Offset))
+	r, err = c.Query(ctx, Select(e, q)+placeOf(e, q, q.Limit+1, q.Offset))
 	if next = len(r.Rows) > q.Limit; next {
 		r.Rows = r.Rows[:q.Limit]
 	}
 	return r, next, err
+}
+
+// placeOf is what a page or an export appends for its place: LIMIT and
+// OFFSET, or, an engine of SQL Server's, the OFFSET/FETCH its §8.5 has, and
+// the ORDER BY that goes before it — (SELECT NULL) when neither Order nor
+// Key sorts, a T-SQL OFFSET without one being an error.
+func placeOf(e Engine, q Query, limit, offset int) string {
+	if e.Dialect() == sqlkit.MSSQL {
+		s := fmt.Sprintf(" offset %d rows fetch next %d rows only", offset, limit)
+		if len(q.Order) == 0 && len(q.Key) == 0 {
+			s = " order by (select null)" + s
+		}
+		return s
+	}
+	return fmt.Sprintf(" limit %d offset %d", limit, offset)
 }
 
 // Select is the statement Page asks, with no LIMIT and no OFFSET: every row
@@ -76,9 +93,14 @@ func Select(e Engine, q Query) string {
 }
 
 // Count counts the rows q's condition keeps (§8.5); the caller bounds it
-// with its ctx.
+// with its ctx. SQL Server's is COUNT_BIG, its COUNT an int that overflows
+// on a big table.
 func Count(ctx context.Context, c Conn, e Engine, q Query) (int64, error) {
-	r, err := c.Query(ctx, "select count(*)"+q.from(e))
+	count := "count(*)"
+	if e.Dialect() == sqlkit.MSSQL {
+		count = "count_big(*)"
+	}
+	r, err := c.Query(ctx, "select "+count+q.from(e))
 	if err != nil {
 		return 0, err
 	}
