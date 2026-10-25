@@ -371,14 +371,17 @@ func (Engine) Eq(col, arg string) string { return col + " = " + arg }
 // which the server writes 1 and 0 but the grid shows true and false, the
 // spec's word — the column's own text against the 1 or 0 the argument says
 // only when it says true or false, every other value no case for (F18.6,
-// §10.3).
+// §10.3). The three arms in one pair of parentheses, as SQLite's are: the
+// save's WHERE joins them with and to the row's identity, and an
+// unbracketed or would leave the second and third loose to match any row
+// (F18.6 j).
 // ponytail: a text column whose value is all of 'true' or 'false' slips the
 // check when another session made it '1' or '0' — the third arm reads it
 // as the bit's
 func (Engine) Same(col, arg string) string {
-	return "try_convert(nvarchar(max), " + col + ", 126) = " + arg +
+	return "(try_convert(nvarchar(max), " + col + ", 126) = " + arg +
 		" or try_convert(nvarchar(max), " + col + ") = " + arg +
-		" or try_convert(nvarchar(max), " + col + ", 126) = case " + arg + " when 'true' then '1' when 'false' then '0' end"
+		" or try_convert(nvarchar(max), " + col + ", 126) = case " + arg + " when 'true' then '1' when 'false' then '0' end)"
 }
 
 // Begin is the statement that starts a transaction (§10.3, F18.6).

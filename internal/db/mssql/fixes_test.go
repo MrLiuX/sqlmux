@@ -125,6 +125,50 @@ func TestSaveEachType(t *testing.T) {
 	}
 }
 
+// A save whose old value the table holds more than once still finds its one
+// row (F18.6 j): the arms of Same in their parentheses, the identity and
+// the old value and-ing. And when another session changed the row and the
+// old value lives on in another, the save says the row changed and that
+// other row keeps its value.
+func TestSaveRepeatedOld(t *testing.T) {
+	dsn := OwnDB(t)
+	w, e := workerOf(t, dsn), Engine{}
+	ctx := context.Background()
+	// id 2 and 1002 hold the same amount, as the seed makes them
+	r, err := w.Query(ctx, "select amount from dbo.t_order where id in (2, 1002)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Rows) != 2 || r.Rows[0][0].S != r.Rows[1][0].S {
+		t.Fatalf("the two amounts: %+v", r.Rows)
+	}
+	old := r.Rows[0][0]
+	ch := db.Changes{Updates: []db.Row{{Key: []string{"2"}, Cols: []db.Change{
+		{Name: "amount", Val: db.Val{S: "9.99"}, Old: old},
+	}}}}
+	if failed, _, err := db.Save(ctx, w, e, "dbo", "t_order", []string{"id"}, ch, false); failed != -1 || err != nil {
+		t.Fatalf("the save: failed %d, err %v", failed, err)
+	}
+	r, err = w.Query(ctx, "select amount from dbo.t_order where id in (2, 1002) order by id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Rows[0][0].S != "9.99" || r.Rows[1][0].S != old.S {
+		t.Fatalf("after the save: %q and %q", r.Rows[0][0].S, r.Rows[1][0].S)
+	}
+	// the row changed under it, the old value living on in id 1002
+	if _, err := w.Query(ctx, "update dbo.t_order set amount = 5.55 where id = 2"); err != nil {
+		t.Fatal(err)
+	}
+	if failed, _, err := db.Save(ctx, w, e, "dbo", "t_order", []string{"id"}, ch, false); failed != 0 || !errors.Is(err, db.ErrStale) {
+		t.Fatalf("the stale save: failed %d, err %v", failed, err)
+	}
+	r, err = w.Query(ctx, "select amount from dbo.t_order where id = 1002")
+	if err != nil || r.Rows[0][0].S != old.S {
+		t.Fatalf("the other row: %v, %q", err, r.Rows[0][0].S)
+	}
+}
+
 // The optimistic check catches a row changed under the grid (§10.3,
 // F18.6): Old as the grid read it, another session writes another value,
 // the save says so — and one that did not change goes in.

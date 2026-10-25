@@ -25,8 +25,10 @@ func TestQuoteArgSameEq(t *testing.T) {
 	}
 	// Same is the column's text as the server's try_convert has it, the form
 	// the values were read in; a NULL was read, IS NULL asks for it; a bit's
-	// third arm, the grid's true and false and no other value any case for
-	if same := e.Same("[amount]", "@p2"); same != "try_convert(nvarchar(max), [amount], 126) = @p2 or try_convert(nvarchar(max), [amount]) = @p2 or try_convert(nvarchar(max), [amount], 126) = case @p2 when 'true' then '1' when 'false' then '0' end" {
+	// third arm, the grid's true and false and no other value any case for —
+	// the three arms in one pair of parentheses, the save's WHERE joining
+	// them with and to the row's identity
+	if same := e.Same("[amount]", "@p2"); same != "(try_convert(nvarchar(max), [amount], 126) = @p2 or try_convert(nvarchar(max), [amount]) = @p2 or try_convert(nvarchar(max), [amount], 126) = case @p2 when 'true' then '1' when 'false' then '0' end)" {
 		t.Errorf("same: %q", same)
 	}
 }
