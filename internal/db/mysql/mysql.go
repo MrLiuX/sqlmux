@@ -272,9 +272,10 @@ func (c *Conn) Stream(ctx context.Context, query string, head func([]db.Col) err
 
 // cellOf is the value of a column of type typ, which the driver's text protocol
 // gives as bytes, a non-UTF-8 one told by text; a BIT is its number (§8.1).
-func cellOf(text func(v []byte, typ string) string) func(v any, typ string) db.Val {
-	return func(v any, typ string) db.Val {
+func cellOf(text func(v []byte, typ string) string) func(v any, col *sql.ColumnType) db.Val {
+	return func(v any, col *sql.ColumnType) db.Val {
 		b, _ := v.([]byte)
+		typ := strings.ToLower(col.DatabaseTypeName())
 		switch {
 		case v == nil:
 			return db.Val{Null: true}
