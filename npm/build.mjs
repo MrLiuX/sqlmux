@@ -19,6 +19,8 @@ const platforms = [
   ["darwin", "amd64", "darwin", "x64"],
   ["linux", "arm64", "linux", "arm64"],
   ["linux", "amd64", "linux", "x64"],
+  ["windows", "arm64", "win32", "arm64"],
+  ["windows", "amd64", "win32", "x64"],
 ];
 
 rmSync(out, { recursive: true, force: true });
@@ -27,11 +29,13 @@ shell.version = version;
 shell.optionalDependencies = {};
 for (const [goos, goarch, os, cpu] of platforms) {
   const name = `@kackerx/sqlmux-${os}-${cpu}`;
-  const archive = readdirSync(archives).find((f) => f.endsWith(`_${goos}_${goarch}.tar.gz`));
+  const ext = goos === "windows" ? "zip" : "tar.gz"; // as the archives are (§15)
+  const bin = goos === "windows" ? "sqlmux.exe" : "sqlmux";
+  const archive = readdirSync(archives).find((f) => f.endsWith(`_${goos}_${goarch}.${ext}`));
   if (!archive) throw new Error(`no archive for ${goos}_${goarch} in ${archives}`);
   const dir = join(out, `sqlmux-${os}-${cpu}`);
   mkdirSync(join(dir, "bin"), { recursive: true });
-  execFileSync("tar", ["-xzf", join(archives, archive), "-C", join(dir, "bin"), "sqlmux"]); // keeps its mode
+  execFileSync("tar", ["-xf", join(archives, archive), "-C", join(dir, "bin"), bin]); // bsdtar opens a zip too; keeps its mode
   const pkg = {
     name,
     version,

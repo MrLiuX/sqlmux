@@ -45,6 +45,18 @@ jobs:
           go mod tidy
           git diff --exit-code go.mod go.sum
 
+  windows: # the windows half of the unit tests: no integration (no databases), no lint (§15)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./... # GOOS=windows on this runner
+      - run: go build ./...
+      - run: go test ./...
+
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 20
