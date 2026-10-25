@@ -24,8 +24,9 @@ func TestQuoteArgSameEq(t *testing.T) {
 		t.Errorf("eq: %q", eq)
 	}
 	// Same is the column's text as the server's try_convert has it, the form
-	// the values were read in; a NULL was read, IS NULL asks for it
-	if same := e.Same("[amount]", "@p2"); same != "try_convert(nvarchar(max), [amount], 126) = @p2 or try_convert(nvarchar(max), [amount]) = @p2" {
+	// the values were read in; a NULL was read, IS NULL asks for it; a bit's
+	// third arm, the grid's true and false
+	if same := e.Same("[amount]", "@p2"); same != "try_convert(nvarchar(max), [amount], 126) = @p2 or try_convert(nvarchar(max), [amount]) = @p2 or try_convert(nvarchar(max), [amount], 126) = convert(nvarchar(max), try_convert(bit, @p2))" {
 		t.Errorf("same: %q", same)
 	}
 }
@@ -75,21 +76,21 @@ func TestCellOf(t *testing.T) {
 		{fakeType{"varbinary", 0}, []byte{0xAB, 0xCD}, "<binary 2 bytes>"},
 		{fakeType{"varchar", 0}, []byte("plain"), "plain"},
 	} {
-		if got := cellOf(c.v, c.typ); got.S != c.want || got.Null {
+		if got := cellText(c.v, c.typ); got.S != c.want || got.Null {
 			t.Errorf("%s of %v = %+v, want %q", c.typ.name, c.v, got, c.want)
 		}
 	}
-	if v := cellOf(nil, fakeType{"int", 0}); !v.Null {
+	if v := cellText(nil, fakeType{"int", 0}); !v.Null {
 		t.Errorf("nil: %+v", v)
 	}
 }
 
 // The bytes of an export, as the statement takes them back (F12.4).
 func TestHexCellOf(t *testing.T) {
-	if v := hexCellOf([]byte{0xAB, 0xCD}, fakeType{"varbinary", 0}); v.S != "0xabcd" {
+	if v := cellHexText([]byte{0xAB, 0xCD}, fakeType{"varbinary", 0}); v.S != "0xabcd" {
 		t.Errorf("varbinary: %q", v.S)
 	}
-	if v := hexCellOf(int64(3), fakeType{"int", 0}); v.S != "3" {
+	if v := cellHexText(int64(3), fakeType{"int", 0}); v.S != "3" {
 		t.Errorf("int: %q", v.S)
 	}
 }

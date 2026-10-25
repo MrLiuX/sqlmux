@@ -87,7 +87,7 @@ order by 1, 2`)
 func (Engine) TableColumns(ctx context.Context, c db.Conn, schema, table string) (db.Columns, error) {
 	var out db.Columns
 	r, err := c.Query(ctx, `
-select c.name, ty.name, c.max_length, ty.precision, ty.scale, c.is_nullable, coalesce(dc.definition, cc.definition),
+select c.name, ty.name, c.max_length, c.precision, c.scale, c.is_nullable, coalesce(dc.definition, cc.definition),
        c.is_identity, ic.seed_value, ic.increment_value, c.is_computed
 from sys.columns c
 join sys.types ty on ty.user_type_id = c.user_type_id
@@ -103,13 +103,13 @@ order by c.column_id`, db.Val{S: schema}, db.Val{S: table})
 	}
 	notNull := map[string]bool{}
 	for _, row := range r.Rows {
-		col := db.Column{Name: row[0].S, Type: typeText(row), NotNull: !isTrue(row[5])}
+		col := db.Column{Name: row[0].S, Type: typeText(row[1].S, row[2].S, row[3].S, row[4].S), NotNull: !isTrue(row[5])}
 		notNull[col.Name] = col.NotNull
 		switch {
-		case row[7].S == "1" || row[7].S == "true": // an identity: the server makes the value
+		case isTrue(row[7]): // an identity: the server makes the value
 			col.Generated = true
 			col.Default = "identity(" + numText(row[8]) + ", " + numText(row[9]) + ")"
-		case row[10].S == "1" || row[10].S == "true": // computed
+		case isTrue(row[10]): // computed
 			col.Generated = true
 		case !row[6].Null:
 			col.Default = row[6].S
@@ -135,7 +135,7 @@ join sys.columns c on c.object_id = ic.object_id and c.column_id = ic.column_id
 			ok = ok && notNull[r.Rows[i][2].S]
 		}
 		switch {
-		case r.Rows[i-1][1].S == "1" || r.Rows[i-1][1].S == "true":
+		case isTrue(r.Rows[i-1][1]):
 			out.PK = cols
 		case ok:
 			out.Unique = append(out.Unique, cols)
@@ -152,10 +152,9 @@ join sys.columns c on c.object_id = ic.object_id and c.column_id = ic.column_id
 }
 
 // typeText is a column's type as the server formats it (§8.4): the lengths
-// of the strings and the bytes, the precision and scale of a numeric, the
+// of the strings and the bytes, the precision and scale the column has, the
 // scale of the datetime family that takes one, max where it is max.
-func typeText(row []db.Val) string {
-	name, length := row[1].S, row[2].S
+func typeText(name, length, precision, scale string) string {
 	switch name {
 	case "char", "varchar", "binary", "varbinary":
 		if length == "-1" {
@@ -169,9 +168,9 @@ func typeText(row []db.Val) string {
 		n, _ := strconv.Atoi(length)
 		return name + "(" + strconv.Itoa(n/2) + ")"
 	case "decimal", "numeric":
-		return name + "(" + row[3].S + ", " + row[4].S + ")"
+		return name + "(" + precision + ", " + scale + ")"
 	case "datetime2", "datetimeoffset", "time":
-		return name + "(" + row[4].S + ")"
+		return name + "(" + scale + ")"
 	}
 	return name
 }
@@ -213,16 +212,7 @@ where s.name = @p1 and o.name = @p2`, db.Val{S: schema}, db.Val{S: name})
 		}
 		return r.Rows[0][1].S + ";", nil
 	}
-	cols, err := c.Query(ctx, `
-select c.name, ty.name, c.max_length, ty.precision, ty.scale, c.is_nullable, coalesce(dc.definition, cc.definition), c.is_identity, c.is_computed
-from sys.columns c
-join sys.types ty on ty.user_type_id = c.user_type_id
-join sys.objects o on o.object_id = c.object_id
-join sys.schemas s on s.schema_id = o.schema_id
-left join sys.default_constraints dc on dc.object_id = c.default_object_id
-left join sys.computed_columns cc on cc.object_id = c.object_id and cc.column_id = c.column_id
-where s.name = @p1 and o.name = @p2
-order by c.column_id`, db.Val{S: schema}, db.Val{S: name})
+	cols, err := e.TableColumns(ctx, c, schema, name) // the columns once: the catalog's types, defaults and keys as the grid has them (F18.6)
 	if err != nil {
 		return "", err
 	}
@@ -238,18 +228,18 @@ order by ic.key_ordinal`, db.Val{S: schema}, db.Val{S: name})
 		return "", err
 	}
 	var lines []string
-	for _, row := range cols.Rows {
-		l := "  " + e.Quote(row[0].S) + " " + typeText(row)
-		if !isTrue(row[5]) {
+	for _, col := range cols.Cols {
+		l := "  " + e.Quote(col.Name) + " " + col.Type
+		if col.NotNull {
 			l += " not null"
 		}
 		switch {
-		case row[7].S == "1" || row[7].S == "true":
+		case col.Default != "" && col.Generated && strings.HasPrefix(col.Default, "identity"):
 			l += " identity"
-		case row[8].S == "1" || row[8].S == "true":
+		case col.Generated:
 			// its expression the preview does not repeat
-		case !row[6].Null:
-			l += " default " + row[6].S
+		case col.Default != "":
+			l += " default " + col.Default
 		}
 		lines = append(lines, l)
 	}
@@ -283,7 +273,7 @@ order by i.name, ic.key_ordinal`, db.Val{S: schema}, db.Val{S: table})
 	var out []db.Index
 	for _, row := range r.Rows {
 		if n := len(out); n == 0 || out[n-1].Name != row[0].S {
-			unique := row[1].S == "1" || row[1].S == "true"
+			unique := isTrue(row[1])
 			clustered := ""
 			if row[2].S == "1" {
 				clustered = " clustered"
@@ -300,7 +290,7 @@ order by i.name, ic.key_ordinal`, db.Val{S: schema}, db.Val{S: table})
 			ix.Def += ", "
 		}
 		part := e.Quote(row[3].S)
-		if row[4].S == "1" || row[4].S == "true" {
+		if isTrue(row[4]) {
 			part += " desc"
 		}
 		ix.Def += part

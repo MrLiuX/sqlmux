@@ -115,7 +115,8 @@ func (c *Conn) TxStatus() byte { return c.tx }
 
 // rowWords start the statements that answer with rows; the rest are run for
 // what they hit, as database/sql tells the one or the other. An EXEC may
-// answer with rows: its first set is read.
+// answer with rows: its first set is read — and so may the call that goes
+// without its EXEC, the name first that T-SQL takes for one (§9.2, F18.6).
 var rowWords = map[string]bool{"select": true, "with": true, "exec": true, "execute": true}
 
 // Exec runs sql, one batch: the driver sends several statements whole, and
@@ -136,15 +137,18 @@ func (c *Conn) Query(ctx context.Context, sql string, args ...db.Val) (db.Result
 
 // run runs query, keeping at most maxRows rows (0: all) of every result set
 // it answers with, the rest read and dropped. A cancel of ctx is the
-// attention the driver sends, and the connection stays: SQL Server stops
-// the statement, not the session (§8.3, tried on a real one, F18.6).
+// attention the driver sends — the server stops — and the connection gone
+// with it: the driver closes one whose ctx was cancelled, so the Worker
+// dials for the next request (§8.3, tried on a real one, F18.6).
 func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (rs []db.Result, err error) {
 	if err := ctx.Err(); err != nil { // a cancel finds nothing running yet
 		return nil, err
 	}
 	start := time.Now()
 	word := sqlkit.FirstWord(query, sqlkit.MSSQL)
-	if !rowWords[word] || word == "with" && !sqlkit.IsRead(query, sqlkit.MSSQL) {
+	reads := rowWords[word] && (word != "with" || sqlkit.IsRead(query, sqlkit.MSSQL)) ||
+		sqlkit.BeginsBareExec(query, sqlkit.MSSQL)
+	if !reads {
 		res, err := c.c.ExecContext(ctx, query, args...)
 		if err != nil {
 			return nil, c.noted(query, err)
@@ -166,7 +170,8 @@ func (c *Conn) run(ctx context.Context, query string, args []any, maxRows int) (
 	defer rows.Close()
 	for {
 		var one db.Result
-		if err = readSet(rows, &one, db.Capped(&one, maxRows)); err != nil {
+		if err = db.EachRow(rows, cellOf, func(cols []db.Col) error { one.Cols = cols; return nil },
+			db.Capped(&one, maxRows), func(vals []db.Val) error { one.Rows = append(one.Rows, vals); return nil }); err != nil {
 			break
 		}
 		one.Tag = fmt.Sprintf("%s %d", strings.ToUpper(word), len(one.Rows))
@@ -198,40 +203,11 @@ func (c *Conn) noted(query string, err error) error {
 	return err
 }
 
-// readSet reads the result set rows is on into r: its columns, then each of
-// the rows want says to keep, the others read and dropped.
-func readSet(rows *sql.Rows, r *db.Result, want func() bool) error {
-	ts, err := rows.ColumnTypes()
-	if err != nil {
-		return err
-	}
-	raw, dest, cols := make([]any, len(ts)), make([]any, len(ts)), make([]db.Col, len(ts))
-	for i, t := range ts {
-		cols[i], dest[i] = db.Col{Name: t.Name(), Type: strings.ToLower(t.DatabaseTypeName())}, &raw[i]
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	r.Cols = cols
-	for rows.Next() {
-		if !want() {
-			continue
-		}
-		if err := rows.Scan(dest...); err != nil {
-			return err
-		}
-		vals := make([]db.Val, len(raw))
-		for i, v := range raw {
-			vals[i] = cellOf(v, ts[i])
-		}
-		r.Rows = append(r.Rows, vals)
-	}
-	return rows.Err()
-}
-
 // Stream reads the rows of a statement that answers with them as they come,
 // one at a time, head with the columns first (F12.4). A cancel of ctx is
-// the driver's attention, and the connection stays (§8.3).
+// the driver's attention, and the connection stays: mid-row, the driver
+// drains the cancel's confirmation and the session is good (§8.3, tried on
+// a real one, F18.6).
 func (c *Conn) Stream(ctx context.Context, query string, head func([]db.Col) error, row func([]db.Val) error) (err error) {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -243,56 +219,24 @@ func (c *Conn) Stream(ctx context.Context, query string, head func([]db.Col) err
 		return c.noted(query, err)
 	}
 	defer rows.Close()
-	err = streamSet(rows, head, func() bool { return true }, row)
+	err = db.EachRow(rows, hexCellOf, head, func() bool { return true }, row)
 	if cerr := ctx.Err(); cerr != nil { // cancelled: the rows so far were all of it
 		return cerr
 	}
 	return c.noted(query, err)
 }
 
-// streamSet gives the rows of the result set rows is on to row one at a
-// time, head with the columns first; head or row failing, the rest is left
-// and the statement cancelled by the ctx the caller wrapped (F12.4).
-func streamSet(rows *sql.Rows, head func([]db.Col) error, want func() bool, row func([]db.Val) error) error {
-	ts, err := rows.ColumnTypes()
-	if err != nil {
-		return err
-	}
-	raw, dest, cols := make([]any, len(ts)), make([]any, len(ts)), make([]db.Col, len(ts))
-	for i, t := range ts {
-		cols[i], dest[i] = db.Col{Name: t.Name(), Type: strings.ToLower(t.DatabaseTypeName())}, &raw[i]
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	if err := head(cols); err != nil {
-		return err
-	}
-	for rows.Next() {
-		if !want() {
-			continue
-		}
-		if err := rows.Scan(dest...); err != nil {
-			return err
-		}
-		vals := make([]db.Val, len(raw))
-		for i, v := range raw {
-			vals[i] = hexCellOf(v, ts[i])
-		}
-		if err := row(vals); err != nil {
-			return err
-		}
-	}
-	return rows.Err()
-}
+// cellOf is a value as the grid shows it: what cellText makes of the column
+// it came in (§8.1, F18.6).
+func cellOf(v any, col *sql.ColumnType) db.Val { return cellText(v, col) }
 
-// cellOf is a value as the grid shows it (§8.1): what the driver decoded,
+// cellText is cellOf with the column's own bits: the driver decoded value,
 // as its type's text says — a datetime family's fixed-scale form, which
 // try_convert(nvarchar, the column, 126) reads back the same (F18.6); a bit
 // as true or false; a uniqueidentifier as the standard GUID text the server
 // writes, upper case; a type that holds bytes by its size, whatever the
 // bytes are.
-func cellOf(v any, col columnMeta) db.Val {
+func cellText(v any, col columnMeta) db.Val {
 	typ := strings.ToLower(col.DatabaseTypeName())
 	switch x := v.(type) {
 	case nil:
@@ -314,6 +258,9 @@ func cellOf(v any, col columnMeta) db.Val {
 	case int64:
 		return db.Val{S: strconv.FormatInt(x, 10)}
 	case float64:
+		if typ == "real" { // a 4-byte float: as its own precision has it, or the text the server writes never matches (§10.3, F18.6)
+			return db.Val{S: strconv.FormatFloat(float64(float32(x)), 'g', -1, 32)}
+		}
 		return db.Val{S: strconv.FormatFloat(x, 'g', -1, 64)}
 	}
 	return db.Val{S: fmt.Sprintf("%v", v)}
@@ -326,12 +273,18 @@ var bytesTypes = map[string]bool{"binary": true, "varbinary": true, "image": tru
 // hexCellOf is a value as a file has it: a type that holds bytes as 0x and
 // its hex, as T-SQL writes a literal, not the grid's placeholder, which is
 // no data (F12.4).
-func hexCellOf(v any, col columnMeta) db.Val {
+// hexCellOf is a value as a file has it: cellOf, but a type that holds
+// bytes as 0x and its hex, as T-SQL writes a literal, not the grid's
+// placeholder, which is no data (F12.4).
+func hexCellOf(v any, col *sql.ColumnType) db.Val { return cellHexText(v, col) }
+
+// cellHexText is hexCellOf with the column's own bits (F12.4).
+func cellHexText(v any, col columnMeta) db.Val {
 	typ := strings.ToLower(col.DatabaseTypeName())
 	if b, ok := v.([]byte); ok && bytesTypes[typ] {
 		return db.Val{S: "0x" + hex.EncodeToString(b)}
 	}
-	return cellOf(v, col)
+	return cellText(v, col)
 }
 
 // columnMeta is what a value's column tells of itself: its type, and, for
@@ -354,16 +307,20 @@ func guidOf(b []byte) string {
 }
 
 // timeText is a time the driver decoded as its type's text, the fractional
-// digits the column's scale has, as try_convert(nvarchar, the column, 126)
-// writes it back (F18.6): a datetime2's and a datetimeoffset's T between
-// the parts, a datetimeoffset's zone at the end, a time alone, a date
-// alone. A datetime, which has no scale of its own, keeps its three.
+// digits the column's scale has — a scale of 0 none — as
+// try_convert(nvarchar, the column, 126) writes it back (F18.6): a
+// datetime2's and a datetimeoffset's T between the parts, a datetimeoffset's
+// zone at the end, a time alone, a date alone. A datetime, which has no
+// scale of its own, keeps its three; a smalldatetime keeps none.
 func timeText(t time.Time, typ string, ct columnMeta) string {
 	scale := 7
-	if typ == "datetime" {
+	switch typ {
+	case "datetime":
 		scale = 3
+	case "smalldatetime":
+		scale = 0
 	}
-	if _, s, ok := ct.DecimalSize(); ok && s > 0 {
+	if _, s, ok := ct.DecimalSize(); ok {
 		scale = int(s)
 	}
 	switch typ {
@@ -413,10 +370,15 @@ func (Engine) Eq(col, arg string) string { return col + " = " + arg }
 // Same is the column's text as try_convert(nvarchar(max), the column, 126)
 // has it — the form the values were read in, a datetime family's T between
 // its parts, a money's four decimals — against what was read; the second
-// arm takes the types that take no style, an xml's (F18.6, §10.3).
+// arm takes the types that take no style, an xml's; the third a bit's,
+// which the server writes 1 and 0 but the grid shows true and false, the
+// spec's word: the argument as a bit, and back as text, the column's own
+// text against it — a datetime to a bit is a conversion the server forbids,
+// so the column stays on its text (F18.6, §10.3).
 func (Engine) Same(col, arg string) string {
 	return "try_convert(nvarchar(max), " + col + ", 126) = " + arg +
-		" or try_convert(nvarchar(max), " + col + ") = " + arg
+		" or try_convert(nvarchar(max), " + col + ") = " + arg +
+		" or try_convert(nvarchar(max), " + col + ", 126) = convert(nvarchar(max), try_convert(bit, " + arg + "))"
 }
 
 // Begin is the statement that starts a transaction (§10.3, F18.6).
