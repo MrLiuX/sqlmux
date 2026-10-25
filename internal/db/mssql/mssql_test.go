@@ -5,6 +5,8 @@ package mssql
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -34,13 +36,21 @@ func connectInfo(t *testing.T, readOnly bool) (*Conn, db.Info) {
 // The URL the form composes and the keyword form connect alike; the address
 // is user@host:port, the database the DSN's.
 func TestConnect(t *testing.T) {
-	for _, dsn := range []string{IntegrationDSN(t), "server=localhost,51433;user id=sa;password=Sqlmux!2026;database=sqlmux"} {
+	dsn := IntegrationDSN(t)
+	u, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pw, _ := u.User.Password()
+	// the keyword form the server's tools take, at the port the URL has
+	keyword := fmt.Sprintf("server=%s,%s;user id=%s;password=%s;database=sqlmux", u.Hostname(), u.Port(), u.User.Username(), pw)
+	for _, dsn := range []string{dsn, keyword} {
 		c, info, err := Connect(context.Background(), dsn, "", false)
 		if err != nil {
 			t.Fatalf("%s: %v", dsn, err)
 		}
-		if info.Addr != "sa@localhost:51433" || info.Database != "sqlmux" || info.Path != "" {
-			t.Errorf("%s: %+v", dsn, info)
+		if want := u.User.Username() + "@" + u.Hostname() + ":" + u.Port(); info.Addr != want || info.Database != "sqlmux" || info.Path != "" {
+			t.Errorf("%s: %+v, want the address %s", dsn, info, want)
 		}
 		if c.TxStatus() != 'I' {
 			t.Errorf("%s: tx %c", dsn, c.TxStatus())
