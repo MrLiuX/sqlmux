@@ -134,16 +134,6 @@ func TestFormatPrg(t *testing.T) {
 	}
 }
 
-// zz: the windows job on CI fails this one and says only the text; what
-// the toast and the command really are goes into the message, not committed.
-func TestZZFormatPrgCI(t *testing.T) {
-	prg := prgOf(t, "echo 'no good' >&2; echo second >&2; exit 3", "echo no good 1>&2&exit 3")
-	a, c := inQuery(t, prg, "")
-	a.queryDid(c, c.ed.Load("select a from t"))
-	gqIn(t, a, "gqq")
-	t.Logf("text=%q toast=%q prg=%q", text(c), a.toast, prg)
-}
-
 // A line long enough to scroll the view sideways, gqq'd into lines that need no
 // scroll: the text shows from its first column (F14.8).
 func TestFormatViewFromTheLeft(t *testing.T) {
