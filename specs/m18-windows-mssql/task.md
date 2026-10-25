@@ -100,11 +100,11 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 
 **开发**
 - [ ] a. tester 从 Mac `ssh` 到 Windows 主机（OpenSSH Server、公钥、默认 shell pwsh，用户准备），在那边 `go test ./...`、编一个二进制。
-- [ ] b. 一个最小的 ConPTY 冒烟脚本（Python `pywinpty` 加 `pyte`，放 `e2e/windows/`，Windows 上跑）：起 sqlmux 连 sqlite 的 demo 文件，发 `j` `k` `↵` `gt` `q`，截屏比几处固定文字（树的连接名、表名、状态栏的 NORMAL）。不求覆盖，只证明键盘和渲染在 ConPTY 上通。
+- [ ] b. 一个最小的 ConPTY 冒烟脚本（Python `pywinpty` 加 `pyte`，放 `e2e/windows/`，Windows 上跑）：起 sqlmux 连 sqlite 的 demo 文件，发 `C-h`（启动焦点在第一个 pane，先到树）、`j` `↵`、`gt`、`:qa`（`q` 在 query 里不是退出），截屏比几处固定文字（树的连接名、表名、状态栏的 NORMAL；tester 2026-10-25 定的按键，脚本 `e2e/windows/smoke.py` 在 e2e 分支）。不求覆盖，只证明键盘和渲染在 ConPTY 上通。
 - [ ] c. 一份给用户的手测清单（WALKTHROUGH 的 Windows 一节，决策者写）：真彩色、鼠标点击和滚轮、图标、`C-c` / `C-z`、`"+y`、窗口缩放、中文宽度。
 
 **验收**
-- [ ] tester 在 Windows 主机上跑过 a 和 b，结论里附 ConPTY 截屏的文字。
+- [ ] tester 在 Windows 主机上跑过 a 和 b，结论里附 ConPTY 截屏的文字。a 的 `go test ./...` 在 ssh 会话里跑（PATH 没有 Git 的 `usr\bin`，比 CI runner 和 win-worker 的终端更干净）要全绿：formatprg 用 `printf` / `tr` 的两个测试（TestQueryFormatAll、TestPlainQueryFormat）在 `exec.LookPath` 找不到命令时 `t.Skip`，同「不做」里 sh 脚本假工具的处理（tester 2026-10-25 退回）。
 
 ## F18.6 SQL Server 引擎 · 状态：todo
 
