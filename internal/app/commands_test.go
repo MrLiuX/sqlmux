@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -92,6 +93,9 @@ func TestFocusNext(t *testing.T) {
 // where it was, line and column, clamped when the text got shorter; not in
 // INSERT (F5.16, F8.3).
 func TestQueryFormatAll(t *testing.T) {
+	if _, err := exec.LookPath("printf"); err != nil {
+		t.Skip("the fake formatprg of a segment is printf, and it is not on the PATH")
+	}
 	a, c := inQuery(t, "", "")
 	format := func() {
 		t.Helper()
