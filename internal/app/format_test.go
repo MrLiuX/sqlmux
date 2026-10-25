@@ -1,7 +1,9 @@
 package app
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -113,9 +115,30 @@ func TestFormatDropsAndFails(t *testing.T) {
 	}
 }
 
+// warmPS pays a powershell's first start outside the format's own timeout:
+// loading the CLR, and the runner's scanner going over the exe, can take
+// tens of seconds on a loaded CI runner — a warm start is a fraction of
+// that. If even this does not finish, the format below fails anyway and
+// the log says why.
+func warmPS(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	if err := exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", "exit").Run(); err != nil {
+		t.Logf("powershell warm-up: %v", err)
+	}
+}
+
 // formatprg formats instead: stdin in, stdout out; its stderr's first
-// line when it fails (§9.5).
+// line when it fails (§9.5). The powershell start is paid by warmPS, the
+// timeout itself stays modest.
 func TestFormatPrg(t *testing.T) {
+	warmPS(t)
+	defer func(d time.Duration) { sqlkit.FormatTimeout = d }(sqlkit.FormatTimeout)
+	sqlkit.FormatTimeout = 30 * time.Second
 	a, c := inQuery(t, prgOf(t, "tr a-z A-Z", upperPS(t)), "")
 	a.queryDid(c, c.ed.Load("select a from t"))
 	gqIn(t, a, "gqq")

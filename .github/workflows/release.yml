@@ -81,7 +81,7 @@ jobs:
       - name: the archives of the Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release download "$GITHUB_REF_NAME" --pattern '*.tar.gz' --dir archives
+        run: gh release download "$GITHUB_REF_NAME" --pattern '*.tar.gz' --pattern '*.zip' --dir archives
       - run: node npm/build.mjs "$GITHUB_REF_NAME" archives out
       - name: the binary of this runner says the tag
         run: out/sqlmux-linux-x64/bin/sqlmux --version | grep -F "sqlmux $GITHUB_REF_NAME "

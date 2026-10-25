@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kackerx/sqlmux/internal/db"
 )
@@ -219,6 +220,7 @@ func TestResultPageAsARunIs(t *testing.T) {
 	a.win().focus(p.ID)
 	rt := resultOf(p)
 	rt.transpose = true
+	rt.arrived = rt.arrived.Add(-time.Second) // a coarse clock (windows) reads the page's arrival equal to the run's
 	arrived := rt.arrived
 
 	// busy from the request to the page
