@@ -114,14 +114,18 @@ func TestFormatDropsAndFails(t *testing.T) {
 }
 
 // formatprg formats instead: stdin in, stdout out; its stderr's first
-// line when it fails (§9.5).
+// line when it fails (§9.5). The timeout is relaxed for the first one:
+// a powershell's first start on a CI runner can take seconds of its own.
 func TestFormatPrg(t *testing.T) {
+	defer func(d time.Duration) { sqlkit.FormatTimeout = d }(sqlkit.FormatTimeout)
+	sqlkit.FormatTimeout = 30 * time.Second
 	a, c := inQuery(t, prgOf(t, "tr a-z A-Z", upperPS(t)), "")
 	a.queryDid(c, c.ed.Load("select a from t"))
 	gqIn(t, a, "gqq")
 	if text(c) != "SELECT A FROM T" {
 		t.Errorf("%q", text(c))
 	}
+	sqlkit.FormatTimeout = 5 * time.Second
 	a, c = inQuery(t, prgOf(t, "echo 'no good' >&2; echo second >&2; exit 3", "echo no good 1>&2&exit 3"), "")
 	a.queryDid(c, c.ed.Load("select a from t"))
 	gqIn(t, a, "gqq")
