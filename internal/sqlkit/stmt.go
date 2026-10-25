@@ -222,13 +222,29 @@ func IsRead(s string, d Dialect) bool {
 }
 
 // IsWrite is whether s is a statement IsRead does not take whose first
-// word, past opening parentheses, is a keyword: what quick SQL keeps from
-// the database (§12「写语句」). A word mistyped, selec, is none: the
-// database's read-only transaction answers it with the syntax error.
+// word, past opening parentheses, is a keyword — or, on SQL Server, a name
+// where the EXEC would be (§9.2, F18.6): what quick SQL keeps from the
+// database (§12「写语句」). A word mistyped, selec, is none: the database's
+// read-only transaction answers it with the syntax error.
 func IsWrite(s string, d Dialect) bool {
 	ts, depth := words(s, d)
 	i := first(s, ts)
-	return i < len(ts) && ts[i].Kind == Keyword && !isRead(s, ts, depth)
+	return i < len(ts) && (ts[i].Kind == Keyword || BeginsBareExec(s, d)) && !isRead(s, ts, depth)
+}
+
+// BeginsBareExec is whether statement s starts as a procedure call that
+// goes without its EXEC does (§9.2, F18.6): a name first, where a keyword
+// would be, which T-SQL takes for one. It may write, it may answer with
+// rows, and the words treat it as the EXEC it is: a write, a dangerous
+// one, and one the read branch runs. A save's first word is no keyword of
+// ours, and its transaction is none to run a procedure.
+func BeginsBareExec(s string, d Dialect) bool {
+	if d != MSSQL {
+		return false
+	}
+	ts, _ := words(s, d)
+	i := first(s, ts)
+	return i < len(ts) && ts[i].Kind == Ident && lower(s, ts, i) != "save"
 }
 
 // sessionWords start what IsWrite takes but a read-only connection still
@@ -268,6 +284,9 @@ func BreaksReadOnly(s string, d Dialect) bool {
 			}
 		}
 		return false
+	}
+	if BeginsBareExec(s, d) { // the EXEC that is not written (§9.2, F18.6)
+		return true
 	}
 	if i >= len(ts) || ts[i].Kind != Keyword || isRead(s, ts, depth) {
 		return false
@@ -426,7 +445,8 @@ func AutoLimit(s string, d Dialect, n, offset int) (out string, pageable bool) {
 		lo, hi, top = j+1, hi-1, depth[j]+1
 	}
 	pageable = true
-	var orders bool // a top-level ORDER BY, which a T-SQL OFFSET must have
+	var orders bool          // a top-level ORDER BY, which a T-SQL OFFSET must have
+	var distinct, setop bool // a top-level DISTINCT or set operator, whose select list an ORDER BY (SELECT NULL) is not in
 	for j := lo; j <= hi; j++ {
 		switch w := lower(s, ts, j); {
 		case depth[j] != top:
@@ -436,10 +456,21 @@ func AutoLimit(s string, d Dialect, n, offset int) (out string, pageable bool) {
 			pageable = false
 		case w == "order" && j < hi && lower(s, ts, j+1) == "by":
 			orders = true
+		case w == "top": // 10741: TOP and OFFSET cannot share a statement (§9.4, F18.6)
+			return s, false
+		case w == "for" && j < hi && (lower(s, ts, j+1) == "json" || lower(s, ts, j+1) == "xml"): // a syntax error after
+			return s, false
+		case w == "distinct":
+			distinct = true
+		case w == "union" || w == "intersect" || w == "except":
+			setop = true
 		}
 	}
 	if d == MSSQL {
-		if !pageable { // an OFFSET of its own: a second is an error (§9.4, F18.6)
+		// a DISTINCT's or a set operation's rows, the ORDER BY they would
+		// take must be in the select list: 145 and 104 — those run as they
+		// are, the rows capped (§9.4, F18.6)
+		if !pageable || (distinct || setop) && !orders {
 			return s, false
 		}
 		suffix := "\nOFFSET " + strconv.Itoa(offset) + " ROWS FETCH NEXT " + strconv.Itoa(n) + " ROWS ONLY"

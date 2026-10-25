@@ -60,9 +60,41 @@ func TestStatementsMSSQL(t *testing.T) {
 			t.Errorf("statement %d = %q, want %q", i, texts[i], want[i])
 		}
 	}
-	// the comment above a GO leads the GO, not the statement after it
+	// the Lead is where the comments above a statement are
 	if stmts := Statements("-- a note\ngo\nselect 1", MSSQL); len(stmts) != 1 || stmts[0].Lead != stmts[0].Start {
 		t.Errorf("a note above a GO: %+v", stmts)
+	}
+	// what a GO line is: its own line, its count alone with it, at no depth
+	s = "select 1 go\nselect 2\ngo 2\nselect 3\ngo x\nselect 4\nselect (1 + go) , 5\ngo\nselect 6"
+	stmts = Statements(s, MSSQL)
+	texts = texts[:0]
+	for i, st := range stmts {
+		if i >= len(texts) {
+			texts = append(texts, "")
+		}
+		texts[i] = strings.TrimSpace(s[st.Start:st.End])
+	}
+	want = []string{
+		"select 1 go\nselect 2",                         // the GO on the code's line is no separator, and nothing cuts between
+		"select 3\ngo x\nselect 4\nselect (1 + go) , 5", // go 2 cut; go x is no GO line, a go in the parentheses neither
+		"select 6",
+	}
+	if len(texts) != len(want) {
+		t.Fatalf("go lines: %q", texts)
+	}
+	for i := range want {
+		if texts[i] != want[i] {
+			t.Errorf("statement %d = %q, want %q", i, texts[i], want[i])
+		}
+	}
+	// N'…' is one string token: its ; cuts nothing
+	if stmts := Statements("select N'a;b', 1", MSSQL); len(stmts) != 1 {
+		t.Errorf("N'a;b': %d statements", len(stmts))
+	}
+	// a ] in a [name] doubled: one identifier, and the statement ends where
+	// it ends
+	if stmts := Statements("select [a]]b]; select 1", MSSQL); len(stmts) != 2 {
+		t.Errorf("[a]]b]: %d statements", len(stmts))
 	}
 }
 
@@ -76,7 +108,10 @@ func TestStmtAtMSSQL(t *testing.T) {
 }
 
 // An AutoLimit is the OFFSET/FETCH a T-SQL page takes, the ORDER BY it must
-// have when none is there (§9.4, F18.6).
+// have when none is there (§9.4, F18.6). The statements an OFFSET cannot
+// stand in — a TOP's (10741), a FOR JSON's or FOR XML's (a syntax error),
+// a DISTINCT's or a set operation's without an ORDER BY of its own (145,
+// 104) — come back as they are: self-limited, the rows capped.
 func TestAutoLimitMSSQL(t *testing.T) {
 	s, ok := AutoLimit("select a from t", MSSQL, 100, 0)
 	if want := "select a from t\nORDER BY (SELECT NULL)\nOFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY"; !ok || s != want {
@@ -88,6 +123,47 @@ func TestAutoLimitMSSQL(t *testing.T) {
 	}
 	if s, ok := AutoLimit("select a from t offset 5 rows", MSSQL, 100, 0); ok || s != "select a from t offset 5 rows" {
 		t.Errorf("an offset of its own: %q, ok %v", s, ok)
+	}
+	for _, s := range []string{
+		"select top 3 id from t",
+		"select top 2 id from t order by id",
+		"select top (10) percent id from t",
+		"select id from t for json path",
+		"select id from t for xml raw",
+		"select distinct a from t",
+		"select a from t union select a from u",
+		"select id from t intersect select id from u",
+		"select a from t except select a from u",
+	} {
+		if got, ok := AutoLimit(s, MSSQL, 100, 0); ok || got != s {
+			t.Errorf("%q: %q, ok %v, want it as it is", s, got, ok)
+		}
+	}
+	for _, s := range []string{
+		"select count(*) from t",
+		"with x as (select id from t) select * from x",
+		"select distinct a from t order by a",
+		"select a from t union select a from u order by a",
+	} {
+		got, ok := AutoLimit(s, MSSQL, 100, 0)
+		if !ok || !strings.Contains(got, "OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY") {
+			t.Errorf("%q: %q, ok %v, want the OFFSET/FETCH", s, got, ok)
+		}
+	}
+}
+
+// A procedure that goes without its EXEC is the EXEC the words take it for
+// (§9.2, F18.6): a write, a dangerous one; a save's transaction is not.
+func TestBareExecWords(t *testing.T) {
+	for _, s := range []string{"sp_rename 'dbo.t', 't2'", "dbo.some_proc 1", "sp_help 't'"} {
+		if !BreaksReadOnly(s, MSSQL) || !Dangerous(s, MSSQL) || !IsWrite(s, MSSQL) {
+			t.Errorf("%q: bare exec is a write and a dangerous one", s)
+		}
+	}
+	for _, s := range []string{"save transaction sqlmux_page", "select 1", "exec sp_help 't'"} {
+		if BeginsBareExec(s, MSSQL) {
+			t.Errorf("%q is not one of the name-first calls", s)
+		}
 	}
 }
 
