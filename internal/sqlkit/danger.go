@@ -20,6 +20,8 @@ func dangerous(s string, ts []Token, depth []int, d Dialect) bool {
 	switch lower(s, ts, i) {
 	case "truncate", "drop":
 		return true
+	case "exec", "execute": // T-SQL's runs whatever its procedure says (F18.6)
+		return d == MSSQL
 	case "delete", "update":
 		main = i
 	case "alter":
@@ -74,6 +76,7 @@ func noWhere(s string, ts []Token, depth []int, i int) bool {
 var keeps = map[Dialect]map[string]bool{
 	PG:    {"constraint": true},
 	MySQL: {"constraint": true, "index": true, "key": true, "primary": true, "foreign": true, "check": true},
+	MSSQL: {"constraint": true},
 }
 
 // dropsData is whether the ALTER TABLE at ts[i] drops a column, or on MySQL

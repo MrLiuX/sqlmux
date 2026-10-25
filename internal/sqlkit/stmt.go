@@ -12,25 +12,38 @@ import (
 type Stmt struct{ Start, End, Lead int }
 
 // Statements splits s at each ; outside parentheses (§9.2), the way usql's
-// stmt and psql's lexer do; empty statements are dropped.
+// stmt and psql's lexer do; empty statements are dropped. A MSSQL text is
+// cut at a GO of its own line first (§9.2, F18.6): the GO, its count with
+// it, goes to no statement, none of it to the server.
 // A SQLite trigger's body is one statement, its ;s not cutting it: CREATE
 // [TEMP] TRIGGER … BEGIN, the statements, each ended by a ;, and END, as
 // SQLite's own tokenizer, complete.c's sqlite3_complete, tracks it (F14.1).
 // ponytail: PG 14's BEGIN ATOMIC … END is cut at the ; in its body, as
 // psql tracks and this does not; split such a function by hand. So is a
-// MySQL procedure's, trigger's or event's BEGIN … END, and DELIMITER, the
-// mysql client's, goes to the server as it is (§9.2).
+// MySQL procedure's, trigger's or event's BEGIN … END, a T-SQL procedure's
+// AS BEGIN … END, and DELIMITER, the mysql client's, goes to the server as
+// it is (§9.2).
 func Statements(s string, d Dialect) []Stmt {
 	all := Scan(s, d)
 	ts, depth := meaningful(s, all)
 	var out []Stmt
 	start := -1
-	var words []string // the first words of the statement being read, and what a trigger's body is
-	body, prev := false, ""
+	var words []string                // the first words of the statement being read, and what a trigger's body is
+	body, prev, skip := false, "", -1 // skip is the GO line still to be read past
 	for i, t := range ts {
 		w := strings.ToLower(s[t.Start:t.End])
 		if start < 0 {
 			words, body = words[:0], false
+		}
+		if d == MSSQL && w == "go" && depth[i] == 0 && goLine(ts, i) {
+			if start >= 0 {
+				out = append(out, Stmt{Start: start, End: ts[i-1].End})
+			}
+			start, skip = -1, t.Line
+			continue
+		}
+		if t.Line <= skip {
+			continue
 		}
 		if len(words) < 3 && (t.Kind == Keyword || t.Kind == Ident) {
 			words = append(words, w)
@@ -97,6 +110,20 @@ func isTrigger(words []string) bool {
 		return false
 	}
 	return words[1] == "trigger" || len(words) == 3 && (words[1] == "temp" || words[1] == "temporary") && words[2] == "trigger"
+}
+
+// goLine is whether the GO at ts[i] has a line of its own: no meaningful
+// token before it on the line, and at most its count after (§9.2). The GO
+// of `select 1 go`, on the code's line, stays where it is, a name or an
+// error as the server has it.
+func goLine(ts []Token, i int) bool {
+	if i > 0 && ts[i-1].Line == ts[i].Line {
+		return false
+	}
+	if i+1 < len(ts) && ts[i+1].Line == ts[i].Line {
+		return ts[i+1].Kind == Number && (i+2 >= len(ts) || ts[i+2].Line != ts[i].Line)
+	}
+	return true
 }
 
 // execMarks widens stmts over the /*! before them and the */ after them,
@@ -247,6 +274,9 @@ func BreaksReadOnly(s string, d Dialect) bool {
 	}
 	switch w := lower(s, ts, i); w {
 	case "set":
+		if d == MSSQL { // no read only of the server's to undo, and SET TRANSACTION ISOLATION LEVEL reads (F18.6)
+			return false
+		}
 		for j := i + 1; j < len(ts); j++ { // MySQL's SET sets a list, by commas
 			scope := ""
 			for scopes[lower(s, ts, j)] { // PG takes SET SESSION SESSION …
@@ -396,6 +426,7 @@ func AutoLimit(s string, d Dialect, n, offset int) (out string, pageable bool) {
 		lo, hi, top = j+1, hi-1, depth[j]+1
 	}
 	pageable = true
+	var orders bool // a top-level ORDER BY, which a T-SQL OFFSET must have
 	for j := lo; j <= hi; j++ {
 		switch w := lower(s, ts, j); {
 		case depth[j] != top:
@@ -403,7 +434,19 @@ func AutoLimit(s string, d Dialect, n, offset int) (out string, pageable bool) {
 			return s, false
 		case w == "offset":
 			pageable = false
+		case w == "order" && j < hi && lower(s, ts, j+1) == "by":
+			orders = true
 		}
+	}
+	if d == MSSQL {
+		if !pageable { // an OFFSET of its own: a second is an error (§9.4, F18.6)
+			return s, false
+		}
+		suffix := "\nOFFSET " + strconv.Itoa(offset) + " ROWS FETCH NEXT " + strconv.Itoa(n) + " ROWS ONLY"
+		if !orders {
+			suffix = "\nORDER BY (SELECT NULL)" + suffix
+		}
+		return out + suffix, pageable
 	}
 	out += "\nLIMIT " + strconv.Itoa(n)
 	if offset > 0 {
@@ -492,6 +535,31 @@ func MySQLTx(s string, tx byte) byte {
 		return 'I'
 	}
 	if commitsMySQL(s, ts) {
+		return 'I'
+	}
+	return tx
+}
+
+// MSSQLTx is where a SQL Server session's transaction is after statement s
+// ran in it, tx before, the server telling no client (§8.2): 'T' after a
+// BEGIN, 'I' after a COMMIT or a ROLLBACK of its own, one that names a
+// savepoint or a nested transaction leaving it as it was.
+// ponytail: SET IMPLICIT_TRANSACTIONS ON, and a COMMIT of a procedure's,
+// go by unseen
+func MSSQLTx(s string, tx byte) byte {
+	ts, _ := words(s, MSSQL)
+	w := func(i int) string { return lower(s, ts, i) }
+	switch w(0) {
+	case "begin":
+		return 'T'
+	case "commit", "rollback":
+		i := 1
+		if w(i) == "work" || w(i) == "tran" || w(i) == "transaction" {
+			i++
+		}
+		if w(i) != "" && w(i) != ";" { // a savepoint's or a nested transaction's name
+			return tx
+		}
 		return 'I'
 	}
 	return tx
