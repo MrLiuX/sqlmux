@@ -16,10 +16,15 @@ func Dangerous(s string, d Dialect) bool {
 
 func dangerous(s string, ts []Token, depth []int, d Dialect) bool {
 	i := first(s, ts)
+	if BeginsBareExec(s, d) { // the EXEC that is not written: T-SQL takes the name for it (§9.2, F18.6)
+		return true
+	}
 	main := -1 // the DELETE or UPDATE that is the statement, when it is one
 	switch lower(s, ts, i) {
 	case "truncate", "drop":
 		return true
+	case "exec", "execute": // T-SQL's runs whatever its procedure says (F18.6)
+		return d == MSSQL
 	case "delete", "update":
 		main = i
 	case "alter":
@@ -74,6 +79,7 @@ func noWhere(s string, ts []Token, depth []int, i int) bool {
 var keeps = map[Dialect]map[string]bool{
 	PG:    {"constraint": true},
 	MySQL: {"constraint": true, "index": true, "key": true, "primary": true, "foreign": true, "check": true},
+	MSSQL: {"constraint": true},
 }
 
 // dropsData is whether the ALTER TABLE at ts[i] drops a column, or on MySQL

@@ -71,11 +71,11 @@ var connFields = []string{fieldName: "name", fieldGroup: "group", fieldEngine: "
 	fieldPassword: "password", fieldDatabase: "database", fieldReadOnly: "read_only", fieldProduction: "production", fieldAdvanced: "", fieldDSN: "dsn", fieldPasswordCmd: "password_cmd", fieldSSH: "ssh"}
 
 // defaultPort is the port of an engine's server.
-var defaultPort = map[string]string{"postgres": "5432", "mysql": "3306", "redis": "6379"} // none for SQLite
+var defaultPort = map[string]string{"postgres": "5432", "mysql": "3306", "redis": "6379", "mssql": "1433"} // none for SQLite
 
 // dsnExample is what an empty dsn field shows of each engine, the URL form
 // of both (§8): the driver's own form of MySQL is read as well, not shown.
-var dsnExample = map[string]string{"postgres": "postgres://user:pass@host:5432/db?sslmode=prefer", "mysql": "mysql://user:pass@host:3306/db", "sqlite": "~/data.db?mode=ro", "redis": "redis://user:pass@host:6379/0"}
+var dsnExample = map[string]string{"postgres": "postgres://user:pass@host:5432/db?sslmode=prefer", "mysql": "mysql://user:pass@host:3306/db", "sqlite": "~/data.db?mode=ro", "redis": "redis://user:pass@host:6379/0", "mssql": "sqlserver://user:pass@host:1433?database=db&TrustServerCertificate=true"}
 
 // managed are the connections the manager lists: those of connections.toml,
 // not one of the command line, which is nowhere to find, edit or delete (F14.1).
@@ -101,7 +101,7 @@ func blankFields() []ui.FormField {
 		fs[i].Label = name
 	}
 	fs[fieldAdvanced].Label = i18n.T("高级")
-	fs[fieldEngine].Kind, fs[fieldEngine].Choices = ui.FormSegments, []string{"postgres", "mysql", "sqlite", "redis"}
+	fs[fieldEngine].Kind, fs[fieldEngine].Choices = ui.FormSegments, []string{"postgres", "mysql", "sqlite", "redis", "mssql"}
 	fs[fieldReadOnly].Kind = ui.FormCheck
 	fs[fieldProduction].Kind = ui.FormCheck
 	fs[fieldAdvanced].Kind = ui.FormFold
@@ -338,12 +338,20 @@ func (a *App) fail(i int, why string) tea.Cmd {
 // composeDSN is the dsn of host, port, user and database as a URL, the
 // user's and the database's characters escaped; no password in it (§13).
 func composeDSN(engine, host, port, user, database string) string {
-	u := url.URL{Scheme: engine, Host: net.JoinHostPort(host, port), Path: "/" + database}
+	u := url.URL{Scheme: engine, Host: net.JoinHostPort(host, port)}
 	if user != "" { // a Redis server may have no user to name
 		u.User = url.User(user)
 	}
-	if engine == "postgres" {
+	switch engine {
+	case "mssql": // the database is a query's: the driver's URL form has no path (F18.6)
+		if database != "" {
+			u.RawQuery = "database=" + url.QueryEscape(database)
+		}
+	case "postgres":
+		u.Path = "/" + database
 		u.RawQuery = "sslmode=prefer"
+	default:
+		u.Path = "/" + database
 	}
 	return u.String()
 }
@@ -570,6 +578,8 @@ func testConn(spec config.Connection, password string) (string, error) {
 	switch spec.Engine {
 	case "sqlite":
 		version = "select sqlite_version()"
+	case "mssql": // no version(): the server's number is here (F18.6)
+		version = "select convert(nvarchar(max), serverproperty('ProductVersion'))"
 	case "redis": // PING, then what the server says it is
 		if _, err := conn.Query(ctx, "PING"); err != nil {
 			return "", err
@@ -588,6 +598,8 @@ func testConn(spec config.Connection, password string) (string, error) {
 // 17.11; MySQL's is the number, with its name before it.
 func versionText(engine, v string) string {
 	switch engine {
+	case "mssql":
+		return "SQL Server " + v
 	case "mysql":
 		return "MySQL " + v
 	case "sqlite":

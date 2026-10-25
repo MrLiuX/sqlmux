@@ -119,7 +119,9 @@ generate:
 
 # start PG 17 and MySQL 8.4 of docker-compose.yml, seeded on their first start;
 # Redis is not here (an image that cannot be pulled would fail this): `docker compose up -d redis redis-seed`,
-# or a redis-server --port 56379 given testdata/seed/redis.txt with redis-cli
+# or a redis-server --port 56379 given testdata/seed/redis.txt with redis-cli;
+# SQL Server neither (the Mac wants Rosetta for it): `docker compose up -d mssql mssql-seed`,
+# or the Windows host's container on 51433 (F18.6)
 db-up:
     docker compose up -d --wait postgres mysql
 

@@ -133,7 +133,7 @@ func (w *Worker) RunSafe(ctx context.Context, f func(context.Context, Conn) erro
 func ExecEach(ctx context.Context, c Conn, stmts []string, maxRows int, begin func(stmt string) bool) (rs []Result, err error) {
 	for _, s := range stmts {
 		if begin != nil && TxStatus(c) == 'I' && begin(s) {
-			if _, err := c.Exec(ctx, "begin", 0); err != nil {
+			if _, err := c.Exec(ctx, beginOf(c), 0); err != nil {
 				return rs, err
 			}
 		}

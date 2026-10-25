@@ -17,6 +17,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
 	dbexec "github.com/kackerx/sqlmux/internal/db/exec"
+	"github.com/kackerx/sqlmux/internal/db/mssql"
 	"github.com/kackerx/sqlmux/internal/db/mysql"
 	"github.com/kackerx/sqlmux/internal/db/postgres"
 	"github.com/kackerx/sqlmux/internal/db/redis"
@@ -429,7 +430,7 @@ func (c *Conn) liveSpec() config.Connection {
 }
 
 // drivers are the servers connections.toml names (§8.1, §5「连接缝」).
-var drivers = map[string]db.Driver{"postgres": postgres.Engine{}, "mysql": mysql.Engine{}, "sqlite": sqlite.Engine{}, "redis": redis.Driver{}}
+var drivers = map[string]db.Driver{"postgres": postgres.Engine{}, "mysql": mysql.Engine{}, "sqlite": sqlite.Engine{}, "redis": redis.Driver{}, "mssql": mssql.Engine{}}
 
 // driverOf is the driver of spec's engine: an exec connection's is the engine of its
 // dialect over its command (§8.8).
@@ -839,8 +840,11 @@ func connectTo(ctx context.Context, spec config.Connection, readOnly bool) (db.C
 	dsn := spec.DSN
 	if spec.Database != "" { // a child of the connection in the tree: PG's database, Redis's db (F15.1, F16.2)
 		withDB := postgres.WithDatabase
-		if spec.Kind() == "redis" {
+		switch spec.Kind() {
+		case "redis":
 			withDB = redis.WithDB
+		case "mssql": // the DSN's database parameter (F18.6)
+			withDB = mssql.WithDatabase
 		}
 		if dsn, err = withDB(dsn, spec.Database); err != nil {
 			return nil, db.Info{}, err

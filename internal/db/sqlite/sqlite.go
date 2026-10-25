@@ -237,8 +237,8 @@ func (c *Conn) Stream(ctx context.Context, query string, head func([]db.Col) err
 // cellOf is the text of the value the driver read, in a form: an integer, a
 // REAL (realText), a time as SQLite writes one, a text or a blob as text tells,
 // told by whether the driver read it as TEXT or as a BLOB.
-func cellOf(text func(v []byte, blob bool) string) func(v any, typ string) db.Val {
-	return func(v any, _ string) db.Val {
+func cellOf(text func(v []byte, blob bool) string) func(v any, col *sql.ColumnType) db.Val {
+	return func(v any, _ *sql.ColumnType) db.Val {
 		switch v := v.(type) {
 		case nil:
 			return db.Val{Null: true}
