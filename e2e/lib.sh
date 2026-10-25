@@ -123,6 +123,7 @@ e2e_stop() {
   _e2e_kill
   [[ -n $E2E_DB ]] && PGOPTIONS="-c client_min_messages=warning" psql "$SQLMUX_TEST_PG" -qAt -c "drop database if exists sqlmux_e2e_$$ with (force)"; E2E_DB=
   [[ -n $E2E_MYDB ]] && echo "drop database if exists sqlmux_e2e_$$" | e2e_mysql; E2E_MYDB=
+  [[ -n $E2E_MSDB ]] && echo "drop database if exists [sqlmux_e2e_$$]" | e2e_mssql; E2E_MSDB=
 }
 
 # e2e_own_db: a private copy of the seed, sqlmux_e2e_<pid>, for tests that lock tables or write
@@ -145,6 +146,22 @@ e2e_own_mydb() {
   E2E_MYDB=mysql://${BASH_REMATCH[1]}:${BASH_REMATCH[2]}@${BASH_REMATCH[3]}:${BASH_REMATCH[4]}/sqlmux_e2e_$$
   echo "drop database if exists sqlmux_e2e_$$; create database sqlmux_e2e_$$" | e2e_mysql &&
     python3 -c 'import sys; print(";\n".join(s for s in open(sys.argv[1]).read().split(";\n") if s.strip() and "agentable" not in s and "grant " not in s and "create function" not in s))' "$E2E_ROOT/testdata/seed/mysql.sql" | e2e_mysql "sqlmux_e2e_$$"
+}
+
+# SQL Server (F18.7): SQLMUX_TEST_MSSQL is the DSN of the seeded container (sqlserver://sa:…@host:51433?database=sqlmux&TrustServerCertificate=true),
+# on the Windows host's Docker while M18 is on (no sqlcmd on the Mac). e2e_mssql [DB] runs the stdin's T-SQL in DB (default the shared one,
+# read-only like on the other engines) through e2e/mssqlq.go, GO lines are batch separators, a result goes out a row to a line, tab-separated;
+# e2e_own_msdb makes sqlmux_e2e_<pid> from mssql.sql without its second database (the shared seed's second half) and sets E2E_MSDB, its
+# connections.toml dsn; e2e_stop drops it.
+e2e_msdsn() { python3 -c 'import sys, urllib.parse as u; p = u.urlsplit(sys.argv[1]); q = dict(u.parse_qsl(p.query)); q["database"] = sys.argv[2]; print(p._replace(query=u.urlencode(q)).geturl())' "$SQLMUX_TEST_MSSQL" "$1"; }
+e2e_mssql() {
+  [[ -n $SQLMUX_TEST_MSSQL ]] || { echo "e2e: SQLMUX_TEST_MSSQL is not set" >&2; return 1; }
+  (cd "$E2E_ROOT" && go run e2e/mssqlq.go "$([[ -n $1 ]] && e2e_msdsn "$1" || echo "$SQLMUX_TEST_MSSQL")"); }
+e2e_own_msdb() {
+  local name=sqlmux_e2e_$$
+  E2E_MSDB=$(e2e_msdsn "$name")
+  printf 'drop database if exists [%s]\ngo\ncreate database [%s]\n' "$name" "$name" | e2e_mssql master >/dev/null &&
+    python3 -c 'import sys, re; s = open(sys.argv[1]).read(); s = s[:s.index("-- the second database")]; s = re.sub(r"(?im)^if db_id.*\n", "", s); s = re.sub(r"(?im)^use sqlmux;\n", "", s); print(s)' "$E2E_ROOT/testdata/seed/mssql.sql" | e2e_mssql "$name" >/dev/null
 }
 
 e2e_keys() { t send-keys -t t "$@"; }          # tmux key names: C-c Escape Enter Space ...
@@ -285,7 +302,7 @@ hy() { echo $(( $(grid_y) - 1 )); }                                     # the gr
 # form_dsn NAME DSN [PASSWORD_CMD [mysql]]: with the new-connection form open and the focus on name (M7 F7.4), fill name and
 # engine, open 高级, type the dsn (and the password_cmd), ↵ to save. The scripts that only need a connection added use this.
 form_dsn() { local i; e2e_type "$1"; sleep 0.2
-  if [[ $4 == mysql ]]; then e2e_keys Tab; sleep 0.2; e2e_keys Tab; sleep 0.2; e2e_keys Space; sleep 0.2; e2e_keys BTab; sleep 0.2; e2e_keys BTab; sleep 0.2; fi
+  if [[ $4 == mysql || $4 == mssql ]]; then e2e_keys Tab; sleep 0.2; e2e_keys Tab; sleep 0.2; for i in $(seq $([[ $4 == mssql ]] && echo 4 || echo 1)); do e2e_keys Space; sleep 0.2; done; e2e_keys BTab; sleep 0.2; e2e_keys BTab; sleep 0.2; fi   # the engine field: Space goes postgres, mysql, sqlite, redis, mssql
   for i in 1 2 3 4 5 6 7 8 9 10; do e2e_keys Tab; sleep 0.15; done; e2e_keys Space; sleep 0.2; e2e_keys Tab; sleep 0.2; e2e_type "$2"
   if [[ -n $3 ]]; then e2e_keys Tab; sleep 0.2; e2e_type "$3"; fi
   sleep 0.2; e2e_keys Enter; sleep 0.4; }
