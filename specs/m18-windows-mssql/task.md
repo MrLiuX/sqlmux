@@ -143,7 +143,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 **验收**
 - [ ] 完整回归绿；用户在 Windows Terminal 里连自己容器的 `sqlmux` 库，开 `t_order`、改一格保存、跑一条带 `GO` 的 query。
 
-## F18.8 命令面板预览 query 时当前连接是 Redis 就崩溃 · 状态：todo
+## F18.8 命令面板预览 query 时当前连接是 Redis 就崩溃 · 状态：passed（cc5f8fc；e2e 325fa81）
 
 - **依赖**：无（M12 F12.10 的 query 预览、M16 的 Redis 连接）
 - **涉及**：`internal/app`（palette）
@@ -156,7 +156,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - [ ] 单测：当前连接是 Redis（`eng == nil`）、有一个记下的连接不在 session 里的 query 文件，面板选中它 `View()` 不 panic、预览有文字；mutation。
 - [ ] e2e：Redis 连接上开面板输入 query 名，预览画出来，程序还在。
 
-## F18.9 WHERE 的 `C-r` 下拉在没有历史和收藏时也要开 · 状态：todo
+## F18.9 WHERE 的 `C-r` 下拉在没有历史和收藏时也要开 · 状态：passed（cc5f8fc；e2e 325fa81）
 
 - **依赖**：M8 F8.14、M9 F9.4
 - **涉及**：`internal/app`（where）、`internal/i18n`
@@ -170,7 +170,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - [ ] golden：空历史的下拉。
 - [ ] e2e：新表 `C-r` 出现「没有历史」，`esc` 关；跑过一次 WHERE 后再按列出那一条。
 
-## F18.10 键 tab 的 MATCH 输入框画到了芯片行上 · 状态：todo
+## F18.10 键 tab 的 MATCH 输入框画到了芯片行上 · 状态：passed（cc5f8fc；e2e 325fa81）
 
 - **依赖**：M16 F16.3
 - **涉及**：`internal/ui`（querybar）
@@ -184,7 +184,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - [ ] golden：键 tab 的三行。
 - [ ] e2e：f16.3b 补一条：`/` 后输入 `e*`，MATCH 那一行有 `e*`、光标在它后面（`cursor_at`），芯片行完整。
 
-## F18.11 Redis 树过滤扫描在途时的提示与取消 · 状态：todo
+## F18.11 Redis 树过滤扫描在途时的提示与取消 · 状态：passed（cc5f8fc；e2e 325fa81）
 
 - **依赖**：M16 F16.2
 - **涉及**：`internal/app`（redistree、tree）、`internal/db/redis`（keys）
