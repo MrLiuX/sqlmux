@@ -116,7 +116,7 @@ rclick() { _sgr 2 "$1" "$2" M; _sgr 2 "$1" "$2" m; sleep 0.6; }
 menu_items() { side_all | python3 -c "
 import re, sys
 for l in sys.stdin:
-    m = re.search(r'│ +(打开|删除…?|改名…|设 TTL…|刷新) +│', l)
+    m = re.search(r'│ +(打开|编辑…|删除…?|改名…|设 TTL…|刷新) +│', l)
     if m: print(m.group(1))"; }   # the items of the open menu, one per line
 sstart rd
 expand str
