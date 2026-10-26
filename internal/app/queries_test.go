@@ -13,6 +13,7 @@ import (
 
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/sqlkit"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
@@ -589,4 +590,24 @@ func TestPaletteQueryPreviewPlace(t *testing.T) {
 	if c, schema := a.queryPlace("q_none", nil); c != nil || schema != "" {
 		t.Errorf("no connection at all: %v %q", c, schema)
 	}
+}
+
+// A query's preview on a Redis connection, the current one a query that kept no
+// connection falls back to, has text and no panic: it has no engine (F18.8).
+func TestPaletteQueryPreviewRedis(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a, _ := redisTree(t, someKeys())
+	queryFile(t, "q_redis", "select 1\n")
+	a.run("palette.open", 0)
+	a.palette.input.Text, a.palette.input.Pos = "@q_redis", len("@q_redis")
+	items, ms := a.paletteMatches()
+	for i, m := range ms {
+		if items[m.Index].kind == itemQuery && items[m.Index].id == "q_redis" {
+			a.palette.sel = i
+		}
+	}
+	if pv := a.palettePreview(); pv == nil || pv.Text != "select 1" || pv.Dialect != sqlkit.PG {
+		t.Fatalf("on Redis: %+v", pv)
+	}
+	a.View()
 }
