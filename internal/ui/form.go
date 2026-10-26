@@ -70,10 +70,21 @@ func (fm Form) keysBelow(width int) bool {
 	return len(fm.Hints) > 0 && width-2-used < hintRowWidth(fm.Hints)
 }
 
-// heightIn is the form's rows, its border in: fields, error, rule, buttons,
-// and the keys' row when they go under the buttons, in a form width wide.
+// errLines is Err wrapped to the inside of a form width wide, a line at
+// least: a driver's error, a dial's, is longer than one (F18.13).
+func (fm Form) errLines(width int) []string {
+	var lines []string
+	for _, l := range strings.Split(fm.Err, "\n") {
+		lines = append(lines, strings.Split(ansi.Wrap(l, max(width-2, 1), ""), "\n")...)
+	}
+	return lines
+}
+
+// heightIn is the form's rows, its border in: fields, the error's lines,
+// rule, buttons, and the keys' row when they go under the buttons, in a form
+// width wide.
 func (fm Form) heightIn(width int) int {
-	n := fm.rows() + 5
+	n := fm.rows() + 4 + len(fm.errLines(width))
 	if fm.keysBelow(width) {
 		n++
 	}
@@ -176,7 +187,16 @@ func (fm Form) drawIn(f *Frame, area uv.Rectangle, focus bool) uv.Position {
 	if fm.OK {
 		note.Fg = th.Focus // the theme has no ok token: the green of what is on
 	}
-	f.Text(x0, y, x1, Truncate(fm.Err, x1-x0), note)
+	lines := fm.errLines(area.Dx())
+	below := 0
+	if fm.keysBelow(area.Dx()) {
+		below = 1
+	}
+	n := max(min(len(lines), area.Dy()-fm.rows()-2-below), 1) // a window too low shows the lines that fit
+	for i, l := range lines[:n] {
+		f.Text(x0, y+i, x1, l, note)
+	}
+	y += n - 1
 	f.Text(area.Min.X, y+1, area.Max.X, strings.Repeat("─", area.Dx()), uv.Style{Fg: th.Sep, Bg: th.PaneBg})
 	x, y := x0, y+2
 	for _, b := range fm.buttons() {

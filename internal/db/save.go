@@ -70,16 +70,59 @@ func Guarded(ctx context.Context, c Conn, name string, f func() error) error {
 	if TxStatus(c) == 'I' {
 		return f()
 	}
-	if _, err := c.Query(ctx, "savepoint "+name); err != nil {
+	set, to, release := "savepoint "+name, "rollback to savepoint "+name, "release savepoint "+name
+	if t, ok := saverOf(c); ok {
+		set, to, release = t.Savepoint(name)
+	}
+	if _, err := c.Query(ctx, set); err != nil {
 		return err
 	}
 	if err := f(); err != nil {
-		_, _ = End(ctx, c, "rollback to savepoint "+name)
-		_, _ = End(ctx, c, "release savepoint "+name)
+		_, _ = End(ctx, c, to)
+		if release != "" {
+			_, _ = End(ctx, c, release)
+		}
 		return err
 	}
-	_, err := End(ctx, c, "release savepoint "+name)
+	if release == "" {
+		return nil
+	}
+	_, err := End(ctx, c, release)
 	return err
+}
+
+// TxSaver is a Conn whose transaction wording differs from the default's
+// (§10.3): SQL Server begins with BEGIN TRANSACTION, keeps a savepoint with
+// SAVE TRANSACTION, takes what came after it back with ROLLBACK TRANSACTION,
+// and has no release, its save names standing till the transaction ends
+// (F18.6). The db package's words stand for the rest.
+type TxSaver interface {
+	// Begin is the statement that starts a transaction.
+	Begin() string
+	// Savepoint is name's three statements: to set it, to take back what
+	// came after it, and to release it, "" for none.
+	Savepoint(name string) (set, rollback, release string)
+}
+
+// saverOf is c as a TxSaver, through a counted's Unwrap (§5「连接缝」).
+func saverOf(c Conn) (TxSaver, bool) {
+	if t, ok := c.(TxSaver); ok {
+		return t, true
+	}
+	u, ok := c.(interface{ Unwrap() Conn })
+	if !ok {
+		return nil, false
+	}
+	t, ok := u.Unwrap().(TxSaver)
+	return t, ok
+}
+
+// beginOf is the statement that starts a transaction on c.
+func beginOf(c Conn) string {
+	if t, ok := saverOf(c); ok {
+		return t.Begin()
+	}
+	return "begin"
 }
 
 // Save writes ch to schema.table on w, in e's SQL (§10.3, §10.6): first
@@ -117,7 +160,7 @@ func Save(ctx context.Context, w *Worker, e Engine, schema, table string, keyCol
 		}
 		nested := manual || TxStatus(c) != 'I'
 		if TxStatus(c) == 'I' {
-			if _, err := c.Query(ctx, "begin"); err != nil {
+			if _, err := c.Query(ctx, beginOf(c)); err != nil {
 				_, _ = End(ctx, c, "rollback") // a cancel may land once the server has begun
 				return err
 			}

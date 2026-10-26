@@ -1,6 +1,6 @@
 # tech-design §15「CI」: lint, vet and unit tests, and the integration tests
-# on PG 17 and MySQL 8.4 with testdata/seed loaded. e2e is not run here: it
-# needs a terminal and tmux (AGENTS.md).
+# on PG 17, MySQL 8.4 and SQL Server 2022 with testdata/seed loaded. e2e is
+# not run here: it needs a terminal and tmux (AGENTS.md).
 name: ci
 
 on:
@@ -45,6 +45,18 @@ jobs:
           go mod tidy
           git diff --exit-code go.mod go.sum
 
+  windows: # the windows half of the unit tests: no integration (no databases), no lint (§15)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./... # GOOS=windows on this runner
+      - run: go build ./...
+      - run: go test ./...
+
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -76,10 +88,20 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 2s --health-retries 30
+      mssql: # F18.6; the image is amd64, which this runner is
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: Sqlmux!2026
+        ports: ["1433:1433"]
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -U sa -P Sqlmux!2026 -Q 'select 1'"
+          --health-interval 5s --health-retries 40 --health-start-period 30s
     env:
       SQLMUX_TEST_PG: postgres://sqlmux:sqlmux@localhost:5432/sqlmux?sslmode=disable
       SQLMUX_TEST_MYSQL: sqlmux:sqlmux@tcp(localhost:3306)/sqlmux
       SQLMUX_TEST_REDIS: redis://localhost:6379/0
+      SQLMUX_TEST_MSSQL: 'sqlserver://sa:Sqlmux!2026@localhost:1433?database=sqlmux&TrustServerCertificate=true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -87,10 +109,12 @@ jobs:
           go-version-file: go.mod
       # docker-compose.yml mounts the seeds into the images' init directory;
       # a service container cannot, so they are loaded here, the MySQL one as
-      # root as the image would
+      # root as the image would, and SQL Server's with its own image's sqlcmd,
+      # which makes the sqlmux database the seed starts with (F18.6)
       - name: load the seeds
         run: |
           PGPASSWORD=sqlmux psql -h localhost -U sqlmux -d sqlmux -v ON_ERROR_STOP=1 -f testdata/seed/pg.sql
           mysql -h 127.0.0.1 -uroot -psqlmux sqlmux < testdata/seed/mysql.sql
           docker run -i --rm --network host redis/redis-stack-server:7.4.0-v3 redis-cli -h 127.0.0.1 < testdata/seed/redis.txt
+          docker run -i --rm --network host --entrypoint /opt/mssql-tools18/bin/sqlcmd mcr.microsoft.com/mssql/server:2022-latest -C -b -S localhost -U sa -P 'Sqlmux!2026' < testdata/seed/mssql.sql
       - run: go test -tags integration ./...

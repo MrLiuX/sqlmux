@@ -1,5 +1,5 @@
 // usage: node npm/build.mjs <tag> <dir of the GoReleaser archives> <out dir>
-// Makes the npm packages of a release (F11.3): the four platform packages
+// Makes the npm packages of a release (F11.3): the six platform packages
 // @kackerx/sqlmux-<os>-<arch>, each with the binary of its archive, and the
 // shell package sqlmux that runs it, all at the tag's version.
 import { execFileSync } from "node:child_process";
@@ -19,6 +19,8 @@ const platforms = [
   ["darwin", "amd64", "darwin", "x64"],
   ["linux", "arm64", "linux", "arm64"],
   ["linux", "amd64", "linux", "x64"],
+  ["windows", "arm64", "win32", "arm64"],
+  ["windows", "amd64", "win32", "x64"],
 ];
 
 rmSync(out, { recursive: true, force: true });
@@ -27,11 +29,17 @@ shell.version = version;
 shell.optionalDependencies = {};
 for (const [goos, goarch, os, cpu] of platforms) {
   const name = `@kackerx/sqlmux-${os}-${cpu}`;
-  const archive = readdirSync(archives).find((f) => f.endsWith(`_${goos}_${goarch}.tar.gz`));
+  const ext = goos === "windows" ? "zip" : "tar.gz"; // as the archives are (§15)
+  const bin = goos === "windows" ? "sqlmux.exe" : "sqlmux";
+  const archive = readdirSync(archives).find((f) => f.endsWith(`_${goos}_${goarch}.${ext}`));
   if (!archive) throw new Error(`no archive for ${goos}_${goarch} in ${archives}`);
   const dir = join(out, `sqlmux-${os}-${cpu}`);
   mkdirSync(join(dir, "bin"), { recursive: true });
-  execFileSync("tar", ["-xzf", join(archives, archive), "-C", join(dir, "bin"), "sqlmux"]); // keeps its mode
+  if (ext === "zip") {
+    execFileSync("unzip", ["-o", "-q", join(archives, archive), bin, "-d", join(dir, "bin")]); // GNU tar does not open a zip; unzip is on ubuntu-latest and macOS
+  } else {
+    execFileSync("tar", ["-xf", join(archives, archive), "-C", join(dir, "bin"), bin]); // keeps the binary's mode
+  }
   const pkg = {
     name,
     version,

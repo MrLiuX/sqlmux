@@ -52,14 +52,8 @@ func (a *App) unlessLost(n int, what string, conns []*Conn, verb lostVerb, then 
 			sentences = append(sentences, i18n.T("%s有 %d 处修改未保存，", what, n)+i18n.T(verb.discard))
 		}
 	}
-	var names []string
-	for _, c := range conns {
-		if !slices.Contains(names, c.label()) { // sessions' connections of one name
-			names = append(names, c.label())
-		}
-	}
-	if len(names) > 0 {
-		sentences = append(sentences, i18n.T("%s 有未提交的事务，", strings.Join(names, i18n.T("、")))+i18n.T(verb.rollback))
+	if s := rollbackLine(conns, verb); s != "" {
+		sentences = append(sentences, s)
 	}
 	if len(sentences) == 0 {
 		return then()
@@ -67,6 +61,21 @@ func (a *App) unlessLost(n int, what string, conns []*Conn, verb lostVerb, then 
 	text := strings.Join(sentences, "\n")
 	a.confirm = &confirmBox{text: text, yes: i18n.T(verb.label), then: then}
 	return nil
+}
+
+// rollbackLine is "<names> 有未提交的事务，<verb>会回滚。" for the connections
+// of conns, "" for none.
+func rollbackLine(conns []*Conn, verb lostVerb) string {
+	var names []string
+	for _, c := range conns {
+		if !slices.Contains(names, c.label()) { // sessions' connections of one name
+			names = append(names, c.label())
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return i18n.T("%s 有未提交的事务，", strings.Join(names, i18n.T("、"))) + i18n.T(verb.rollback)
 }
 
 // txConns is the connections of sessions in a transaction.

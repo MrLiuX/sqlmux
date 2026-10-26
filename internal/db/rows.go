@@ -35,8 +35,9 @@ func Capped(r *Result, maxRows int) func() bool {
 // EachRow reads the result in rows: head with its columns, typed as the driver
 // names their types, in lower case, then row with each of the rows want says
 // to keep, the others read and dropped; cell makes a value of what the driver
-// gave for a column of type typ.
-func EachRow(rows *sql.Rows, cell func(v any, typ string) Val, head func([]Col) error, want func() bool, row func([]Val) error) error {
+// gave for a column, whose type tells the engine how the text goes — a
+// datetime's scale say (§8.1, F18.6).
+func EachRow(rows *sql.Rows, cell func(v any, col *sql.ColumnType) Val, head func([]Col) error, want func() bool, row func([]Val) error) error {
 	types, err := rows.ColumnTypes()
 	if err != nil {
 		return err
@@ -57,7 +58,7 @@ func EachRow(rows *sql.Rows, cell func(v any, typ string) Val, head func([]Col) 
 		}
 		vals := make([]Val, len(raw))
 		for i, v := range raw {
-			vals[i] = cell(v, cols[i].Type)
+			vals[i] = cell(v, types[i])
 		}
 		if err := row(vals); err != nil {
 			return err

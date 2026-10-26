@@ -1,3 +1,8 @@
+//go:build !windows
+
+// The fake the engine is tested through is a /bin/sh script; the engine
+// itself runs whatever argv it is given, on windows as anywhere.
+
 package exec
 
 import (
@@ -200,7 +205,7 @@ func TestScanOverACommandAsksNoType(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer c.Close()
-	s, err := redis.Scan(ctx, c, "user:*", 100)
+	s, err := redis.Scan(ctx, c, "user:*", 100, redis.ScanCount)
 	if err != nil || len(s.Keys) != 2 || s.Keys[0] != (redis.KeyInfo{Name: "user:1"}) || s.Keys[1].Type != "" {
 		t.Fatalf("scan: %+v %v", s, err)
 	}

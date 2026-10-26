@@ -4,11 +4,12 @@
 #   rc [redis-cli args…]                      redis-cli on the R server (rca: on the A server, authenticated)
 #   redis_seed                                the seed without its two EVALs into db0 and db1 of the R server (the tree reads all of it)
 #   redis_big N                               the two EVALs, a hash of 6000 fields and 12000 keys, into db N of the R server
+#   redis_slow MS                             a slow proxy in front of the R server (e2e/slowproxy.py, a round trip costs MS ms): SPORT, SPID (F18.11)
 #   redis_stop                                every server the script started; the EXIT trap calls it
 # A machine with no redis-server / redis-cli skips the script (a summary of nothing).
 command -v redis-server >/dev/null && command -v redis-cli >/dev/null || { echo "e2e: no redis-server / redis-cli on this machine, skipped"; echo "== 0 passed, 0 failed"; exit 0; }
 SEED=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/testdata/seed/redis.txt
-RPORT= APORT= RPID= APID= RDIR= ADIR=
+RPORT= APORT= RPID= APID= RDIR= ADIR= SPORT= SPID=
 redis_start() {
   local p=$1 dir port i; shift
   dir=$(mktemp -d "${TMPDIR:-/tmp}/sqlmux-e2e-redis.XXXXXX")
@@ -22,8 +23,15 @@ rc() { redis-cli -p "$RPORT" "$@"; }
 rca() { redis-cli -p "$APORT" -a pw1 --no-auth-warning "$@"; }
 redis_seed() { grep -v '^EVAL' "$SEED" | rc >/dev/null; }
 redis_big() { grep '^EVAL' "$SEED" | rc -n "$1" >/dev/null; }
+redis_slow() {
+  SPORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+  python3 "$(dirname "${BASH_SOURCE[0]}")/slowproxy.py" "$SPORT" "$RPORT" "$1" >"$RDIR/slow.log" 2>&1 & SPID=$!
+  local i; for ((i = 0; i < 50; i++)); do grep -q '^up' "$RDIR/slow.log" 2>/dev/null && return 0; sleep 0.1; done
+  echo "e2e: the slow proxy did not start" >&2; cat "$RDIR/slow.log" >&2; return 1
+}
 redis_stop() {
   local p
+  [[ -n $SPID ]] && { kill "$SPID" 2>/dev/null; wait "$SPID" 2>/dev/null; }; SPID=
   for p in R A; do local pid=${p}PID dir=${p}DIR; [[ -n ${!pid} ]] && { kill "${!pid}" 2>/dev/null; wait "${!pid}" 2>/dev/null; }; [[ -n ${!dir} ]] && rm -rf "${!dir:?}"; done
   RPID= APID= RDIR= ADIR=
 }

@@ -1,4 +1,4 @@
-# tech-design §15「发布与分发」: a v* tag builds the four binaries, the
+# tech-design §15「发布与分发」: a v* tag builds the six binaries, the
 # archives, checksums.txt and the changelog of the GitHub Release
 # (.github/workflows/release.yml). OSS GoReleaser only.
 version: 2
@@ -10,10 +10,10 @@ git:
 builds:
   - id: sqlmux
     main: ./cmd/sqlmux
-    binary: sqlmux
+    binary: sqlmux # goreleaser's own suffix on windows is .exe
     env:
       - CGO_ENABLED=0
-    goos: [darwin, linux] # no Windows: not supported
+    goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
     flags: [-trimpath]
     ldflags:
@@ -22,6 +22,9 @@ builds:
 archives:
   - formats: [tar.gz]
     name_template: "sqlmux_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides: # a windows archive is a zip, what Explorer opens (§15)
+      - goos: windows
+        formats: [zip]
 
 checksum:
   name_template: checksums.txt

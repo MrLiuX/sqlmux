@@ -71,11 +71,11 @@ var connFields = []string{fieldName: "name", fieldGroup: "group", fieldEngine: "
 	fieldPassword: "password", fieldDatabase: "database", fieldReadOnly: "read_only", fieldProduction: "production", fieldAdvanced: "", fieldDSN: "dsn", fieldPasswordCmd: "password_cmd", fieldSSH: "ssh"}
 
 // defaultPort is the port of an engine's server.
-var defaultPort = map[string]string{"postgres": "5432", "mysql": "3306", "redis": "6379"} // none for SQLite
+var defaultPort = map[string]string{"postgres": "5432", "mysql": "3306", "redis": "6379", "mssql": "1433"} // none for SQLite
 
 // dsnExample is what an empty dsn field shows of each engine, the URL form
 // of both (§8): the driver's own form of MySQL is read as well, not shown.
-var dsnExample = map[string]string{"postgres": "postgres://user:pass@host:5432/db?sslmode=prefer", "mysql": "mysql://user:pass@host:3306/db", "sqlite": "~/data.db?mode=ro", "redis": "redis://user:pass@host:6379/0"}
+var dsnExample = map[string]string{"postgres": "postgres://user:pass@host:5432/db?sslmode=prefer", "mysql": "mysql://user:pass@host:3306/db", "sqlite": "~/data.db?mode=ro", "redis": "redis://user:pass@host:6379/0", "mssql": "sqlserver://user:pass@host:1433?database=db&TrustServerCertificate=true"}
 
 // managed are the connections the manager lists: those of connections.toml,
 // not one of the command line, which is nowhere to find, edit or delete (F14.1).
@@ -101,7 +101,7 @@ func blankFields() []ui.FormField {
 		fs[i].Label = name
 	}
 	fs[fieldAdvanced].Label = i18n.T("高级")
-	fs[fieldEngine].Kind, fs[fieldEngine].Choices = ui.FormSegments, []string{"postgres", "mysql", "sqlite", "redis"}
+	fs[fieldEngine].Kind, fs[fieldEngine].Choices = ui.FormSegments, []string{"postgres", "mysql", "sqlite", "redis", "mssql"}
 	fs[fieldReadOnly].Kind = ui.FormCheck
 	fs[fieldProduction].Kind = ui.FormCheck
 	fs[fieldAdvanced].Kind = ui.FormFold
@@ -119,10 +119,12 @@ func (a *App) openConnForm() {
 
 // openConnManager is conn.manage: the manager on the connection in use, the
 // list having the keys (F8.16).
-func (a *App) openConnManager() {
+func (a *App) openConnManager() { a.manage(a.conn()) }
+
+// manage opens the manager on connection c.
+func (a *App) manage(c *Conn) {
 	a.form = &connForm{list: true, groupSel: -1}
-	cur := slices.Index(a.managed(), a.conn())
-	a.selectConn(max(cur, 0))
+	a.selectConn(max(slices.Index(a.managed(), c), 0))
 }
 
 // selectConn selects row i of the list and fills the form from it: for a
@@ -338,12 +340,23 @@ func (a *App) fail(i int, why string) tea.Cmd {
 // composeDSN is the dsn of host, port, user and database as a URL, the
 // user's and the database's characters escaped; no password in it (§13).
 func composeDSN(engine, host, port, user, database string) string {
-	u := url.URL{Scheme: engine, Host: net.JoinHostPort(host, port), Path: "/" + database}
+	u := url.URL{Scheme: engine, Host: net.JoinHostPort(host, port)}
+	if engine == "mssql" { // the driver's URL start; any other it reads as keywords (F18.13)
+		u.Scheme = "sqlserver"
+	}
 	if user != "" { // a Redis server may have no user to name
 		u.User = url.User(user)
 	}
-	if engine == "postgres" {
+	switch engine {
+	case "mssql": // the database is a query's: the driver's URL form has no path (F18.6)
+		if database != "" {
+			u.RawQuery = "database=" + url.QueryEscape(database)
+		}
+	case "postgres":
+		u.Path = "/" + database
 		u.RawQuery = "sslmode=prefer"
+	default:
+		u.Path = "/" + database
 	}
 	return u.String()
 }
@@ -373,41 +386,74 @@ func (a *App) keepConnInSight() {
 	f.top = a.managerView().ScrollTop(a.w)
 }
 
-// connInUse is whether a session has a tab on the connection called name, a
-// result of a run on it, or started with it: its tabs would lose it (F8.16).
-func (a *App) connInUse(name string) bool {
+// connTab is a tab of a session on a connection: pane p of window win, its
+// i-th.
+type connTab struct {
+	win *Window
+	p   *Pane
+	i   int
+}
+
+// tabsOn are the tabs of every session that are on the connection called
+// name: a table of it, a query that runs on it or goes to it once connected,
+// the result of a run on it (F18.12).
+func (a *App) tabsOn(name string) (out []connTab) {
 	on := func(c *Conn) bool { return c != nil && c.Spec.Name == name }
 	for _, s := range a.sessions {
-		if on(s.start) {
-			return true
-		}
-		for _, p := range s.panes() {
-			for _, tb := range p.Tabs {
-				switch {
-				case tb.Data != nil && on(tb.Data.conn), tb.Query != nil && (on(tb.Query.conn) || on(tb.Query.want)),
-					tb.Result != nil && tb.Result.run != nil && on(tb.Result.run.conn):
-					return true
+		for _, w := range s.Windows {
+			if w.Root == nil {
+				continue
+			}
+			for _, p := range w.Root.Leaves() {
+				for i, tb := range p.Tabs {
+					switch {
+					case tb.Data != nil && on(tb.Data.conn), tb.Query != nil && (on(tb.Query.conn) || on(tb.Query.want)),
+						tb.Result != nil && tb.Result.run != nil && on(tb.Result.run.conn):
+						out = append(out, connTab{w, p, i})
+					}
 				}
 			}
 		}
 	}
-	return false
+	return out
 }
 
-// deleteConn is x on the list, or the form's delete: asked first; the block
-// goes from connections.toml, its password from the keychain when it is the
-// one this program put there, the connection from every session, with the
-// tabs closed of it and the password kept for it (F8.16).
+// deleteConn is x on the list, or the form's delete: asked first, saying how
+// many tabs close with it; the queries on it are written, the block goes from
+// connections.toml, its password from the keychain when it is the one this
+// program put there, the connection from every session, with the tabs closed
+// of it as closeTab closes them, but not kept for tab.reopen, and the password
+// kept for it (F8.16, F18.12).
 func (a *App) deleteConn() tea.Cmd {
-	f := a.form
-	if f.was == nil {
-		return nil
+	if f := a.form; f.was != nil {
+		return a.deleteConnection(*f.was)
 	}
-	c := *f.was
-	if a.connInUse(c.Name) {
-		return a.showToast(i18n.T("先关掉用它的 tab"))
+	return nil
+}
+
+// deleteConnection is deleteConn on c, as connections.toml has it: the
+// manager's, or the tree's, where tree.delete and the menu are on a
+// connection (F18.14).
+func (a *App) deleteConnection(c config.Connection) tea.Cmd {
+	text := i18n.T("删除连接 %s？", c.Name)
+	if tabs := a.tabsOn(c.Name); len(tabs) > 0 {
+		text = i18n.T("删除连接 %s？它开着的 %d 个 tab 会一起关掉", c.Name, len(tabs))
+		if n := changed(tabs); n > 0 {
+			text += i18n.T("，其中 %d 个有没保存的修改，会丢", n)
+		}
 	}
-	a.confirm = &confirmBox{text: i18n.T("删除连接 %s？", c.Name), yes: i18n.T("删除"), then: func() tea.Cmd {
+	if line := rollbackLine(a.connsOf(c.Name, (*Conn).inTx), verbClose); line != "" {
+		text += "\n" + line
+	}
+	a.confirm = &confirmBox{text: text, yes: i18n.T("删除"), then: func() tea.Cmd {
+		tabs := a.tabsOn(c.Name)
+		for _, t := range tabs {
+			if q := t.p.Tabs[t.i].Query; q != nil { // before anything goes: a query's text is not lost (§11)
+				if err := q.flush(); err != nil {
+					return a.saveFailed(err)
+				}
+			}
+		}
 		if err := config.DeleteConnection(c.Name); err != nil {
 			return a.showToast(err.Error())
 		}
@@ -415,22 +461,63 @@ func (a *App) deleteConn() tea.Cmd {
 		if err := config.DeletePassword(c.PasswordCmd); err != nil {
 			toast = a.showToast(err.Error())
 		}
-		secrets.Delete(c.Name) // a connection of the name made next asks again
+		secrets.Delete(c.Name)                // a connection of the name made next asks again
+		for k := len(tabs) - 1; k >= 0; k-- { // a pane's last tab first: the ones before keep their places
+			t := tabs[k]
+			dropTab(t.p, t.i)
+			if len(t.p.Tabs) == 0 {
+				t.win.removePane(t.p.ID)
+			}
+		}
+		var ws []*db.Worker // closed in a Cmd: Close waits on what runs
+		for _, o := range a.connsOf(c.Name, func(o *Conn) bool { return o.State == connReady }) {
+			ws = append(ws, o.Main, o.Meta)
+		}
 		for _, s := range a.sessions {
 			s.Conns = slices.DeleteFunc(s.Conns, func(o *Conn) bool { return o.Spec.Name == c.Name })
 			s.closed = slices.DeleteFunc(s.closed, func(t closedTab) bool { return t.conn != nil && t.conn.Spec.Name == c.Name })
+			if s.start != nil && s.start.Spec.Name == c.Name {
+				s.start = nil
+				if len(s.Conns) > 0 {
+					s.start = s.Conns[0]
+				}
+			}
 			if s.last != nil && s.last.Spec.Name == c.Name {
 				s.last = s.start
 			}
 		}
 		a.regroup() // the first of a group gone: the next one is where the group begins
+		a.clampTree()
 		if a.form != nil {
 			a.selectConn(min(a.form.cur, len(a.managed())))
 			a.form.list = true
 		}
-		return toast
+		return tea.Batch(toast, closeWorkers(ws))
 	}}
 	return nil
+}
+
+// connsOf are the connections called name in every session, and the databases
+// of them made so far, that are what is: a transaction going, connected.
+func (a *App) connsOf(name string, is func(*Conn) bool) (out []*Conn) {
+	for _, s := range a.sessions {
+		for _, o := range s.conns() {
+			if o.root().Spec.Name == name && is(o) {
+				out = append(out, o)
+			}
+		}
+	}
+	return out
+}
+
+// changed is how many of tabs are tables with changes not saved.
+func changed(tabs []connTab) (n int) {
+	for _, t := range tabs {
+		if d := t.p.Tabs[t.i].Data; d != nil && d.changes() > 0 {
+			n++
+		}
+	}
+	return n
 }
 
 // formConn is the connection the form says, checked as saving checks the
@@ -570,6 +657,8 @@ func testConn(spec config.Connection, password string) (string, error) {
 	switch spec.Engine {
 	case "sqlite":
 		version = "select sqlite_version()"
+	case "mssql": // no version(): the server's number is here (F18.6)
+		version = "select convert(nvarchar(max), serverproperty('ProductVersion'))"
 	case "redis": // PING, then what the server says it is
 		if _, err := conn.Query(ctx, "PING"); err != nil {
 			return "", err
@@ -588,6 +677,8 @@ func testConn(spec config.Connection, password string) (string, error) {
 // 17.11; MySQL's is the number, with its name before it.
 func versionText(engine, v string) string {
 	switch engine {
+	case "mssql":
+		return "SQL Server " + v
 	case "mysql":
 		return "MySQL " + v
 	case "sqlite":

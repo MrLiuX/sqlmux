@@ -17,6 +17,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
 	dbexec "github.com/kackerx/sqlmux/internal/db/exec"
+	"github.com/kackerx/sqlmux/internal/db/mssql"
 	"github.com/kackerx/sqlmux/internal/db/mysql"
 	"github.com/kackerx/sqlmux/internal/db/postgres"
 	"github.com/kackerx/sqlmux/internal/db/redis"
@@ -429,7 +430,7 @@ func (c *Conn) liveSpec() config.Connection {
 }
 
 // drivers are the servers connections.toml names (§8.1, §5「连接缝」).
-var drivers = map[string]db.Driver{"postgres": postgres.Engine{}, "mysql": mysql.Engine{}, "sqlite": sqlite.Engine{}, "redis": redis.Driver{}}
+var drivers = map[string]db.Driver{"postgres": postgres.Engine{}, "mysql": mysql.Engine{}, "sqlite": sqlite.Engine{}, "redis": redis.Driver{}, "mssql": mssql.Engine{}}
 
 // driverOf is the driver of spec's engine: an exec connection's is the engine of its
 // dialect over its command (§8.8).
@@ -839,8 +840,11 @@ func connectTo(ctx context.Context, spec config.Connection, readOnly bool) (db.C
 	dsn := spec.DSN
 	if spec.Database != "" { // a child of the connection in the tree: PG's database, Redis's db (F15.1, F16.2)
 		withDB := postgres.WithDatabase
-		if spec.Kind() == "redis" {
+		switch spec.Kind() {
+		case "redis":
 			withDB = redis.WithDB
+		case "mssql": // the DSN's database parameter (F18.6)
+			withDB = mssql.WithDatabase
 		}
 		if dsn, err = withDB(dsn, spec.Database); err != nil {
 			return nil, db.Info{}, err
@@ -1249,22 +1253,24 @@ func (a *App) closeTabThen(p *Pane, i int, after func() tea.Cmd) tea.Cmd {
 // the focus, and any zoom ends. The window's last pane besides the result
 // area stays. The result area goes with its tabs, pinned or not, its
 // height kept for the next time (§11).
-func (a *App) removePane(id int) {
-	win := a.win()
-	if win.onlyPane(id) {
+func (a *App) removePane(id int) { a.win().removePane(id) }
+
+// removePane is App.removePane in window w, whichever it is.
+func (w *Window) removePane(id int) {
+	if w.onlyPane(id) {
 		return
 	}
-	if res := win.Result; res != nil && id == res.ID {
+	if res := w.Result; res != nil && id == res.ID {
 		for _, tb := range res.Tabs { // what a run going on took the place of goes too
 			if r := tb.Result.run; r != nil {
 				r.prev = nil
 			}
 		}
-		win.resultRatio, win.Result = win.Root.Ratio, nil // it is the root's lower half
+		w.resultRatio, w.Result = w.Root.Ratio, nil // it is the root's lower half
 	}
-	if root, heir := win.Root.remove(id); root != nil {
-		win.Root, win.Zoom = root, 0
-		win.focus(heir.ID)
+	if root, heir := w.Root.remove(id); root != nil {
+		w.Root, w.Zoom = root, 0
+		w.focus(heir.ID)
 	}
 }
 

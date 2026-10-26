@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
+	"github.com/kackerx/sqlmux/internal/db/mssql"
 	"github.com/kackerx/sqlmux/internal/db/mysql"
 	"github.com/kackerx/sqlmux/internal/db/postgres"
 	"github.com/kackerx/sqlmux/internal/db/sqlite"
@@ -154,7 +156,11 @@ func TestSecretCached(t *testing.T) {
 	u.User = url.User(u.User.Username())
 	runs := filepath.Join(t.TempDir(), "runs")
 	spec := func(pw string) config.Connection {
-		return config.Connection{Name: "play", Engine: "postgres", DSN: u.String(), PasswordCmd: "echo >> " + runs + "; printf " + pw}
+		cmd := "echo >> " + runs + "; printf " + pw // sh's echo counts a run, printf gives the password bare
+		if runtime.GOOS == "windows" {              // no sh: cmd's echo, set /p without the newline, the run log quoted
+			cmd = `echo.>>"` + runs + `"& <nul set /p=` + pw + `& exit 0`
+		}
+		return config.Connection{Name: "play", Engine: "postgres", DSN: u.String(), PasswordCmd: cmd}
 	}
 	count := func() int { b, _ := os.ReadFile(runs); return strings.Count(string(b), "\n") }
 	secrets.Clear() // another test's play
@@ -792,6 +798,33 @@ func connFormTestConnects(t *testing.T, eng, dsn string) {
 	}
 	if len(a.sess.Conns) != 1 {
 		t.Errorf("the tested connection is in the tree: %d", len(a.sess.Conns))
+	}
+}
+
+// The form's own fields, not a dsn, for a SQL Server: the dsn they compose
+// reaches the host and port that were filled in, and the server answers with
+// its version (F18.13).
+func TestConnFormTestConnectsMSSQL(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	u, err := url.Parse(mssql.IntegrationDSN(t))
+	if err != nil || u.User == nil {
+		t.Fatal("SQLMUX_TEST_MSSQL must be a sqlserver:// URL with a user and password")
+	}
+	pw, _ := u.User.Password()
+	a, _ := withSessions()
+	a.openConnForm()
+	f := a.form
+	f.fields[fieldEngine].On = slices.Index(f.fields[fieldEngine].Choices, "mssql")
+	for i, text := range map[int]string{fieldName: "tried", fieldHost: u.Hostname(), fieldPort: u.Port(), fieldUser: u.User.Username(), fieldPassword: pw, fieldDatabase: u.Query().Get("database")} {
+		f.fields[i].Input = ui.Input{Text: text, Pos: len(text)}
+	}
+	_, cmd := a.Update(teaKey("<C-t>"))
+	if cmd == nil {
+		t.Fatalf("not tested: %q", f.err)
+	}
+	a.Update(cmd())
+	if !strings.HasPrefix(f.result, "已连接 · SQL Server ") || f.err != "" {
+		t.Errorf("result %q, err %q", f.result, f.err)
 	}
 }
 

@@ -2,6 +2,7 @@ package app
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -199,6 +200,9 @@ func TestPlainExternalEditor(t *testing.T) {
 // query.format over a selection lays out that, none the statements; both
 // are steps of their own (§6.9, F5.16).
 func TestPlainQueryFormat(t *testing.T) {
+	if _, err := exec.LookPath("tr"); err != nil {
+		t.Skip("the fake formatprg is tr, and it is not on the PATH")
+	}
 	a, c := inQuery(t, "vim = false\nformatprg = \"tr a-z A-Z\"", "")
 	format := func() {
 		t.Helper()

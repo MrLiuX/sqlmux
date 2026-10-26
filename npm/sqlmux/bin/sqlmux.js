@@ -5,9 +5,10 @@
 const { spawnSync } = require("node:child_process");
 
 const name = `@kackerx/sqlmux-${process.platform}-${process.arch}`;
+const exe = process.platform === "win32" ? "sqlmux.exe" : "sqlmux"; // the binary's own name (§15)
 let bin;
 try {
-  bin = require.resolve(`${name}/bin/sqlmux`);
+  bin = require.resolve(`${name}/bin/${exe}`);
 } catch {
   console.error(
     `sqlmux: no binary for ${process.platform}-${process.arch}: ${name} is not installed.\n` +

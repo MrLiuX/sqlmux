@@ -29,7 +29,17 @@ brew install kackerx/tap/sqlmux
 | Homebrew (macOS, Linux) | `brew install kackerx/tap/sqlmux` |
 | npm (no Go needed) | `npm install -g sqlmux`, or `npx sqlmux` to try it |
 | Go 1.26+ | `go install github.com/kackerx/sqlmux/cmd/sqlmux@latest` |
-| Binaries | macOS and Linux, amd64 and arm64, on the [Releases page](https://github.com/kackerx/sqlmux/releases), with `checksums.txt` |
+| Binaries | macOS, Linux and Windows, amd64 and arm64, on the [Releases page](https://github.com/kackerx/sqlmux/releases), with `checksums.txt` |
+
+### Windows
+
+sqlmux runs natively in [Windows Terminal](https://aka.ms/terminal), with PowerShell or cmd. Install it with `npm install -g sqlmux`, with `go install` as above, or from the `sqlmux_<version>_windows_amd64.zip` (or `arm64`) on the Releases page: unzip it and put `sqlmux.exe` on your `PATH`.
+
+- The configuration lives in `%APPDATA%\sqlmux`, history, state and layouts in `%LOCALAPPDATA%\sqlmux` (`XDG_*` variables still win when set).
+- `password_cmd`, the external editor (`C-o`, `notepad` when `EDITOR` is unset) and `formatprg` run through `cmd /c`.
+- There is no keychain support on Windows: the connection form saves the password in `connections.toml`; use `password_cmd` or `password_env` to keep it out of the file.
+- The old console window (conhost) is not supported; use Windows Terminal. Install a Nerd Font there too, or use `icons = "ascii"`.
+- In WSL, sqlmux is the Linux build: install it there as on Linux.
 
 The icons come from a [Nerd Font](https://www.nerdfonts.com/). Without one they show up as boxes: put `icons = "ascii"` in `~/.config/sqlmux/config.toml`.
 
@@ -45,6 +55,7 @@ The [quickstart](docs/quickstart.md) goes from here to editing your first row.
 
 ## Features
 
+- **Five engines in one tree**: PostgreSQL, MySQL, SQLite, SQL Server and Redis, side by side in the same session.
 - **tmux inside.** Sessions, windows, split panes and tabs, with `SPC` as the leader (`SPC %` splits, `SPC c` opens a window, `SPC s` lists sessions). Each session sees all your connections. The layout you quit from comes back next time, and you can save named layouts.
 - **Edit tables in place.** Change cells, add and delete rows, then `C-s` saves everything in one transaction. Enum, boolean and time columns get pickers; long text and JSON open in a value editor.
 - **Table tabs.** A WHERE input with completion, history and favorites; multi-column ORDER, LIMIT, paging, a column picker, transpose, filter by a cell's value, export to CSV or JSON.
@@ -60,13 +71,13 @@ The [quickstart](docs/quickstart.md) goes from here to editing your first row.
 
 sqlmux edits live databases, so it has guards against mistakes. They are not a permission boundary: for production data, connect with a read-only database account.
 
-- **Read-only connections** (`read_only = true`) are enforced twice. sqlmux refuses a whole run if any statement in it writes or would lift read-only, and the session is read-only on the server too (PostgreSQL `default_transaction_read_only = on`, MySQL `SET SESSION TRANSACTION READ ONLY`). Redis has no server-side switch, so there it is sqlmux's check alone, based on the server's `COMMAND INFO`; use ACLs (`-@write`) to really restrict it.
+- **Read-only connections** (`read_only = true`) are enforced twice. sqlmux refuses a whole run if any statement in it writes or would lift read-only, and the session is read-only on the server too (PostgreSQL `default_transaction_read_only = on`, MySQL `SET SESSION TRANSACTION READ ONLY`). SQL Server and Redis have no such session switch, so there it is sqlmux's check alone (for Redis, based on the server's `COMMAND INFO`); use a read-only login or Redis ACLs (`-@write`) to really restrict them.
 - **Dangerous statements ask first**: `DELETE` or `UPDATE` without `WHERE`, `TRUNCATE`, `DROP`, and Redis commands the server marks `@dangerous` (`confirm_dangerous`, on by default).
 - **Saves are one transaction**, and each `UPDATE` carries the old values of the cells you changed: if someone changed that row after you loaded it, the save rolls back and names the row.
 - **Preview before save**: `C-s` first shows the exact statements, values inlined, with the counts of changed, added and deleted rows (`[grid] preview_save`, on by default).
 - **Production connections** (`production = true`) are drawn in a warning color, ask before every write (even with `confirm_dangerous` off; the save preview cannot be turned off there), and are read-only unless you also write `read_only = false`.
 - **No silent re-runs**: after a dropped connection, a statement that may have reached the server is never re-run on its own; only requests that never left are retried.
-- **Tested on real databases**: the integration tests run in CI against PostgreSQL 17, MySQL 8.4, SQLite and Redis Stack 7.4, not mocks.
+- **Tested on real databases**: the integration tests run in CI against PostgreSQL 17, MySQL 8.4, SQL Server 2022, SQLite and Redis Stack 7.4, not mocks.
 
 The checks read the SQL text, so a write hidden inside a function or procedure (`select my_func()`) is not caught by sqlmux; the server-side read-only, or the account's privileges, still are.
 

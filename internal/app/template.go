@@ -94,7 +94,7 @@ func alterSQL(c *Conn, kind alterKind, t db.Table, col, index string) (sql, why 
 		return "alter table " + table + " drop column " + name(col, "<column>") + ";", ""
 	case dropIndex:
 		switch d {
-		case sqlkit.MySQL:
+		case sqlkit.MySQL, sqlkit.MSSQL: // T-SQL's is the ON form too (F18.6)
 			return "drop index " + name(index, "<index>") + " on " + table + ";", ""
 		case sqlkit.SQLite:
 			return "drop index " + name(index, "<index>") + ";", ""

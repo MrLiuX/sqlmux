@@ -11,7 +11,7 @@ export SQLMUX_TEST_REDIS := env("SQLMUX_TEST_REDIS", "redis://localhost:56379/0"
 default:
     @just --list
 
-# GoReleaser's config is valid and builds the four binaries into dist/ (needs goreleaser)
+# GoReleaser's config is valid and builds the six binaries into dist/ (needs goreleaser)
 release-check:
     goreleaser check
     goreleaser build --snapshot --clean
@@ -118,8 +118,10 @@ generate:
     go generate ./internal/editor
 
 # start PG 17 and MySQL 8.4 of docker-compose.yml, seeded on their first start;
-# Redis is not here (an image that cannot be pulled would fail this): `docker compose up -d redis`,
-# or a redis-server --port 56379 given testdata/seed/redis.txt with redis-cli
+# Redis is not here (an image that cannot be pulled would fail this): `docker compose up -d redis redis-seed`,
+# or a redis-server --port 56379 given testdata/seed/redis.txt with redis-cli;
+# SQL Server neither (the Mac wants Rosetta for it): `docker compose up -d mssql mssql-seed`,
+# or the Windows host's container on 51433 (F18.6)
 db-up:
     docker compose up -d --wait postgres mysql
 

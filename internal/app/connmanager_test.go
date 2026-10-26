@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
@@ -164,18 +165,22 @@ func TestConnManagerEdit(t *testing.T) {
 }
 
 // x on the list, or the form's delete, asks, then takes the connection out of
-// the file with its comment and out of every session; one with tabs is
-// refused (F8.16).
+// the file with its comment and out of every session; the question says how
+// many tabs close with it (F8.16, F18.12).
 func TestConnManagerDelete(t *testing.T) {
 	a := managed(t)
 	a.run("conn.manage", 0)
 	feed(t, a, "x")
-	if a.confirm != nil || a.toast != "先关掉用它的 tab" || len(a.sess.Conns) != 2 {
-		t.Fatalf("doraemon has the query: confirm %v, toast %q", a.confirm != nil, a.toast)
+	if a.confirm == nil || a.confirm.text != "删除连接 doraemon？它开着的 1 个 tab 会一起关掉" || len(a.sess.Conns) != 2 {
+		t.Fatalf("doraemon has the query: %+v", a.confirm)
+	}
+	feed(t, a, "n")
+	if queryOf(a.win().pane(2)) == nil || len(a.sess.Conns) != 2 {
+		t.Fatal("no: the query went")
 	}
 	feed(t, a, "jx")
-	if a.confirm == nil || len(a.sess.Conns) != 2 {
-		t.Fatal("not asked")
+	if a.confirm == nil || a.confirm.text != "删除连接 second？" || len(a.sess.Conns) != 2 {
+		t.Fatalf("not asked, with no tab to close: %+v", a.confirm)
 	}
 	feed(t, a, "n")
 	if len(a.sess.Conns) != 2 || strings.Contains(connections(), "# the second") == false {
@@ -242,6 +247,9 @@ func hasHit(a *App, want ui.Target) bool {
 // and only then the old item is taken out; the cached password of both names
 // is dropped (F8.16).
 func TestConnManagerRenameMovesPassword(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the keychain fakes are /bin/sh scripts")
+	}
 	a := managed(t)
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	withOwnPassword(t, a)
@@ -282,6 +290,9 @@ func TestConnManagerRenameMovesPassword(t *testing.T) {
 // A password typed again under the same name replaces the item: it is not
 // taken out after (F8.16).
 func TestConnManagerRetypedPassword(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the keychain fakes are /bin/sh scripts")
+	}
 	a := managed(t)
 	withOwnPassword(t, a)
 	a.run("conn.manage", 0)
@@ -300,6 +311,9 @@ func TestConnManagerRetypedPassword(t *testing.T) {
 // another connection has since been given is found out first, and a
 // keychain that refuses leaves the file as it was (F8.16).
 func TestConnManagerStoresOnlyWhatTheFileTakes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the keychain fakes are /bin/sh scripts")
+	}
 	a := managed(t)
 	a.run("conn.manage", 0)
 	feed(t, a, "j<Tab>")
@@ -499,8 +513,8 @@ func longList(t *testing.T, width int) {
 	if !hasHit(a, ui.Target{Kind: ui.KindConn, I: 0}) || hasHit(a, ui.Target{Kind: ui.KindConn, I: 25}) {
 		t.Fatal("the first rows show, the last do not")
 	}
-	rows := a.managerView().ListRows(a.w)
 	feed(t, a, strings.Repeat("j", 25))
+	rows := a.managerView().ListRows(a.w) // after: the extra connections are not in the file, which the form says, in as many lines as it takes (F18.13)
 	if !hasHit(a, ui.Target{Kind: ui.KindConn, I: 25}) || hasHit(a, ui.Target{Kind: ui.KindConn, I: 25 - rows}) {
 		t.Errorf("scrolled to the selection: rows %d", rows)
 	}
@@ -522,6 +536,9 @@ func longList(t *testing.T, width int) {
 // (one not there is no error), the tabs closed on it, the session's way back
 // to it, the password kept for the name (F8.16).
 func TestConnManagerDeleteTakesWhatIsItsOwn(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the keychain fakes are /bin/sh scripts")
+	}
 	a := managed(t)
 	withOwnPassword(t, a)
 	second := a.sess.Conns[1]
@@ -541,35 +558,99 @@ func TestConnManagerDeleteTakesWhatIsItsOwn(t *testing.T) {
 	}
 }
 
-// A connection is in use by a tab on it, a query that waits for it, the
-// result of a run on it, or being what the session started with (F8.16).
-func TestConnInUse(t *testing.T) {
+// The tabs on a connection are a table of it, a query that runs on it or
+// waits for it, the result of a run on it; being what the session started
+// with is none (F18.12).
+func TestTabsOn(t *testing.T) {
 	a := managed(t)
 	second := a.sess.Conns[1]
-	if a.connInUse("second") {
-		t.Fatal("in use with nothing on it")
+	if len(a.tabsOn("second")) != 0 {
+		t.Fatal("tabs with nothing on it")
 	}
-	if a.sess.start = second; !a.connInUse("second") {
-		t.Error("the start")
+	if a.sess.start = second; len(a.tabsOn("second")) != 0 {
+		t.Error("the start is a tab")
 	}
 	a.sess.start = a.sess.Conns[0]
 	c := queryOf(a.win().pane(2))
-	if c.want = second; !a.connInUse("second") {
+	if c.want = second; len(a.tabsOn("second")) != 1 {
 		t.Error("a query on its way")
 	}
 	c.want = nil
 	tab := loadOrders(t, a, 3)
-	if tab.conn = second; !a.connInUse("second") {
+	if tab.conn = second; len(a.tabsOn("second")) != 1 {
 		t.Error("a table tab")
 	}
 	tab.conn = a.sess.Conns[0]
 	p := a.showResult(a.win())
-	if resultOf(p).run = (&run{conn: second}); !a.connInUse("second") {
+	if resultOf(p).run = (&run{conn: second}); len(a.tabsOn("second")) != 1 {
 		t.Error("a result")
 	}
 	resultOf(p).run = nil
-	if a.connInUse("second") {
-		t.Error("in use with the tabs gone from it")
+	if len(a.tabsOn("second")) != 0 {
+		t.Error("tabs with the tabs gone from it")
+	}
+}
+
+// A connection deleted takes the tabs on it, in every session: a table with
+// changes, a query, the result of a run; the question counts them and the
+// ones with changes, the empty panes go, the others' tabs stay, a session
+// started on it is started on what is left, and the tabs are not for
+// tab.reopen (F18.12).
+func TestConnManagerDeleteClosesTabs(t *testing.T) {
+	a := managed(t)
+	second := a.sess.Conns[1]
+	a.sess.start = second
+	tab := loadOrders(t, a, 3)
+	tab.conn = second
+	tab.deleted = map[string]bool{"1": true}
+	table := a.focused()
+	rp := a.showResult(a.win())
+	resultOf(rp).run = &run{conn: second}
+	other := newConn(second.Spec)
+	s2 := newSession("report", []*Conn{other}, other, a.freeQuery())
+	s2.queries()[0].conn = other
+	a.sessions = append(a.sessions, s2)
+	if n := len(a.tabsOn("second")); n != 3 {
+		t.Fatalf("%d tabs on it", n)
+	}
+	a.run("conn.manage", 0)
+	feed(t, a, "jx")
+	if a.confirm == nil || a.confirm.text != "删除连接 second？它开着的 3 个 tab 会一起关掉，其中 1 个有没保存的修改，会丢" {
+		t.Fatalf("asked %+v", a.confirm)
+	}
+	var closes int
+	second.State, second.Main, second.Meta = connReady, db.NewWorker(closing{n: &closes}), db.NewWorker(closing{n: &closes})
+	q := s2.queries()[0]
+	good := q.path
+	q.path, q.ver = filepath.Join(config.Dir(), "connections.toml", "q.sql"), q.saved+1 // text that cannot be written: a file is no directory
+	feed(t, a, "y")
+	if len(a.tabsOn("second")) != 3 || len(a.sess.Conns) != 2 || !strings.Contains(connections(), "second") || a.toast == "" {
+		t.Fatalf("a query's text not written, and the connection went: tabs %d, toast %q", len(a.tabsOn("second")), a.toast)
+	}
+	q.path = good
+	feed(t, a, "x")
+	if a.confirm == nil {
+		t.Fatal("not asked again")
+	}
+	_, cmd := a.Update(teaKey("y"))
+	if closes != 0 {
+		t.Error("the workers are closed in Update, which waits on what they run")
+	}
+	deliver(a, cmd)
+	if n := len(a.tabsOn("second")); n != 0 || len(a.sess.Conns) != 1 || len(s2.Conns) != 0 {
+		t.Errorf("tabs %d, conns %d and %d", n, len(a.sess.Conns), len(s2.Conns))
+	}
+	if closes != 2 {
+		t.Errorf("the connection's workers are closed: %d closes", closes)
+	}
+	if a.win().pane(table.ID) != nil || a.win().Result != nil || queryOf(a.win().pane(2)) == nil {
+		t.Error("the empty panes stay, or the other connection's query went")
+	}
+	if ps := s2.Windows[0].Root.Leaves(); len(ps) != 1 || len(ps[0].Tabs) != 0 {
+		t.Errorf("the window's only pane is a landing page: %d panes", len(ps))
+	}
+	if a.sess.start != a.sess.Conns[0] || s2.start != nil || len(a.sess.closed) != 0 || strings.Contains(connections(), "second") {
+		t.Errorf("start %v, %v; closed %d", a.sess.start == a.sess.Conns[0], s2.start, len(a.sess.closed))
 	}
 }
 
@@ -647,6 +728,9 @@ func editSecond(t *testing.T, a *App, pw, keys string) {
 // touched: the item the file names keeps its password, a rename makes no new
 // item (F8.16).
 func TestConnManagerUnwritableFileLeavesKeychain(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the keychain fakes are /bin/sh scripts")
+	}
 	for label, keys := range map[string]string{"retyped": "", "renamed": "<C-u>third"} {
 		a := managed(t)
 		withOwnPassword(t, a)
@@ -671,6 +755,9 @@ func TestConnManagerUnwritableFileLeavesKeychain(t *testing.T) {
 // as it is, the typed one replaces it; a command of the user's is not
 // meddled with (F8.16).
 func TestConnManagerPasswordSources(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the keychain fakes are /bin/sh scripts")
+	}
 	a := managed(t)
 	setSecondCmd(t, a, "pass show second")
 	editSecond(t, a, "pw", "")
@@ -709,6 +796,9 @@ func TestConnManagerPasswordSources(t *testing.T) {
 
 // A save of one that is no rename asks nothing of the keychain (F8.16).
 func TestConnManagerNoRenameNoKeychain(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the keychain fakes are /bin/sh scripts")
+	}
 	a := managed(t)
 	withOwnPassword(t, a)
 	_ = os.Remove(filepath.Join(os.Getenv("FAKE"), "log"))
@@ -724,6 +814,9 @@ func TestConnManagerNoRenameNoKeychain(t *testing.T) {
 // A rename of a connection whose item is not in the keychain is refused, and
 // says what to do; a password typed then goes under the new name (F8.16).
 func TestConnManagerRenameMissingItem(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the keychain fakes are /bin/sh scripts")
+	}
 	a := managed(t)
 	withOwnPassword(t, a)
 	_ = os.Remove(filepath.Join(os.Getenv("FAKE"), map[bool]string{true: "svc-sqlmux-second", false: "svc-second"}[runtime.GOOS == "darwin"]))
@@ -747,6 +840,9 @@ func TestConnManagerRenameMissingItem(t *testing.T) {
 // stored, and the password_env a keychain password's file would have is
 // cleared with it (F8.16).
 func TestConnManagerKeychainPassword(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the keychain fakes are /bin/sh scripts")
+	}
 	a := managed(t)
 	file := strings.Replace(managerFile, `dsn = "u:p@tcp(m:3306)/s"`, "dsn = \"u:p@tcp(m:3306)/s\"\n\"password_cmd\" = \"pass show x\"", 1)
 	if err := os.WriteFile(filepath.Join(config.Dir(), "connections.toml"), []byte(file), 0o644); err != nil {
@@ -773,6 +869,9 @@ func TestConnManagerKeychainPassword(t *testing.T) {
 // With no tool for this system's keychain, a rename whose password could be
 // read leaves it where it is: not in the file in plaintext (F8.16).
 func TestConnManagerRenameWithoutTool(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the keychain fakes are /bin/sh scripts")
+	}
 	a := managed(t)
 	host, other := "secret-tool", "security"
 	file, cmd := "svc-sqlmux-second", "security find-generic-password -a sqlmux -s 'sqlmux-second' -w"
@@ -798,6 +897,9 @@ func TestConnManagerRenameWithoutTool(t *testing.T) {
 // A refusal of the keychain to delete says so, whether it is the old item
 // after a rename or a deleted connection's (F8.16).
 func TestConnManagerKeychainDeleteFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the keychain fakes are /bin/sh scripts")
+	}
 	a := managedWith(t, "locked")
 	setSecondCmd(t, a, config.KeychainCmd("second", "pw"))
 	a.run("conn.manage", 0)
@@ -862,7 +964,7 @@ func TestConnManagerDialAfterEdit(t *testing.T) {
 
 	a = managed(t)
 	queryOf(a.win().pane(2)).conn = a.sess.Conns[1]
-	if !a.connInUse("second") {
+	if len(a.tabsOn("second")) != 1 {
 		t.Error("a query on it")
 	}
 }
@@ -885,5 +987,103 @@ func TestConnManagerButtons(t *testing.T) {
 	feed(t, a, "y")
 	if len(a.sess.Conns) != 1 || a.form == nil || !a.form.list {
 		t.Errorf("after: %d connections, list focus %v", len(a.sess.Conns), a.form != nil && a.form.list)
+	}
+}
+
+// dd on a connection in the tree deletes it as the manager does: asked with
+// the tabs it closes, then gone from the tree and the file (F18.14).
+func TestTreeDeleteConn(t *testing.T) {
+	a := managed(t)
+	a.win().focus(0)
+	treeTo(t, a, "doraemon")
+	feed(t, a, "dd")
+	if a.confirm == nil || a.confirm.text != "删除连接 doraemon？它开着的 1 个 tab 会一起关掉" {
+		t.Fatalf("asked %+v", a.confirm)
+	}
+	feed(t, a, "n")
+	treeTo(t, a, "second")
+	feed(t, a, "dd")
+	if a.confirm == nil || a.confirm.text != "删除连接 second？" {
+		t.Fatalf("asked %+v", a.confirm)
+	}
+	feed(t, a, "y")
+	if len(a.sess.Conns) != 1 || strings.Contains(connections(), "second") || strings.Contains(treeTexts(a), "second") {
+		t.Errorf("conns %d, tree:\n%s", len(a.sess.Conns), treeTexts(a))
+	}
+	// one of the command line is in no file: nothing to delete
+	a.sess.Conns[0].Spec.Temp = true
+	treeTo(t, a, "doraemon")
+	if feed(t, a, "dd"); a.confirm != nil {
+		t.Error("asked about a connection that is in no file")
+	}
+}
+
+// The menu of a connection node: the pick where there is one, the manager on
+// it, the delete; a connection of the command line has no file to edit or
+// delete from, an exec one is not in the manager (F18.14).
+func TestMenuConn(t *testing.T) {
+	a := managed(t)
+	a.win().focus(0)
+	rightClickNode(t, a, "second")
+	if got := menuLabels(a); !slices.Equal(got, []string{"选择 schema…", "编辑…", "删除…"}) {
+		t.Fatalf("a MySQL one: %q", got)
+	}
+	edit := a.menu.items[1]
+	a.menu = nil
+	edit.run()
+	if a.form == nil || !a.form.list || fieldText(a, fieldName) != "second" {
+		t.Errorf("the manager is not on second: %+v", a.form)
+	}
+	a.form = nil
+	a.sess.Conns[1].Spec.Engine = "sqlite"
+	rightClickNode(t, a, "second")
+	if got := menuLabels(a); !slices.Equal(got, []string{"编辑…", "删除…"}) {
+		t.Errorf("SQLite: %q", got)
+	}
+	a.menu = nil
+	a.sess.Conns[1].Spec.Engine = "exec"
+	rightClickNode(t, a, "second")
+	if got := menuLabels(a); !slices.Equal(got, []string{"删除…"}) {
+		t.Errorf("exec: %q", got)
+	}
+	a.menu = nil
+	a.sess.Conns[1].Spec.Temp = true
+	rightClickNode(t, a, "second")
+	if got := menuLabels(a); len(got) != 0 {
+		t.Errorf("the command line's: %q", got)
+	}
+}
+
+// A connection with a transaction going, or a database of it, says so in the
+// question, as closing a session does: the delete rolls it back (F18.12).
+func TestConnManagerDeleteSaysTransaction(t *testing.T) {
+	a := managed(t)
+	second := a.sess.Conns[1]
+	a.run("conn.manage", 0)
+	feed(t, a, "jx")
+	if a.confirm == nil || strings.Contains(a.confirm.text, "事务") {
+		t.Fatalf("a transaction said with none going: %+v", a.confirm)
+	}
+	feed(t, a, "n")
+	second.inDB("alpha").tx = 'T'
+	feed(t, a, "x")
+	if a.confirm == nil || a.confirm.text != "删除连接 second？\nsecond/alpha 有未提交的事务，关闭会回滚。" {
+		t.Errorf("asked %+v", a.confirm)
+	}
+}
+
+// Two tabs of the connection in a pane, before another's: only the other's
+// stays, the tabs going last first or their places shift (F18.12).
+func TestConnManagerDeleteTabsOfOnePane(t *testing.T) {
+	a := managed(t)
+	second := a.sess.Conns[1]
+	p := a.win().pane(2)
+	q := p.Tabs[0]
+	p.Tabs = []Tab{{Data: &dataTab{conn: second}}, {Data: &dataTab{conn: second}}, q}
+	p.Cur = 2
+	a.run("conn.manage", 0)
+	feed(t, a, "jxy")
+	if len(p.Tabs) != 1 || p.Tabs[0].Query != q.Query {
+		t.Errorf("left %d tabs, the query kept %v", len(p.Tabs), len(p.Tabs) > 0 && p.Tabs[0].Query == q.Query)
 	}
 }

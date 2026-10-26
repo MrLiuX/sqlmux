@@ -26,21 +26,26 @@ type Scanned struct {
 	Complete bool
 }
 
-// scanCount is the COUNT of each SCAN: a hint of how many keys the server looks
-// at, one round trip each (§8.7).
-const scanCount = 1000
+// ScanCount is the COUNT of each SCAN a db's keys are listed with: a hint of how
+// many keys the server looks at, one round trip each, so the first keys come
+// early; FilterCount is the filter's, which MATCH thins on the server, so it
+// takes fewer round trips (§8.7, F18.11).
+const (
+	ScanCount   = 1000
+	FilterCount = 10000
+)
 
 // scanKeys gives take each batch of the keys of the db cl is on that match the
 // glob match, SCAN by SCAN and never KEYS, until the cursor comes round
 // (complete) or budget keys are given, 0 for no budget. A key SCAN gives twice is
 // once. take stopping it is that error.
-func scanKeys(ctx context.Context, cl *goredis.Client, match string, budget int, take func(keys []string) error) (complete bool, err error) {
+func scanKeys(ctx context.Context, cl *goredis.Client, match string, budget, count int, take func(keys []string) error) (complete bool, err error) {
 	// ponytail: SCAN may give a key twice while the table grows; the keys seen are
 	// kept to drop it, which costs memory as the db is big and has no test, a real
 	// server giving it rarely
 	seen, n := map[string]bool{}, 0
 	for cursor := uint64(0); ; {
-		batch, next, err := cl.Scan(ctx, cursor, match, scanCount).Result()
+		batch, next, err := cl.Scan(ctx, cursor, match, int64(count)).Result()
 		if err != nil {
 			return false, err
 		}
@@ -68,13 +73,13 @@ func scanKeys(ctx context.Context, cl *goredis.Client, match string, budget int,
 // Scan reads the keys of the db c is on that match the glob match until the
 // cursor comes round or budget keys are read; the type of each batch comes in
 // one pipeline (§8.7「树」), not on a connection that is a command (§8.8). The
-// keys are in the order they are read.
-func Scan(ctx context.Context, c db.Conn, match string, budget int) (s Scanned, err error) {
+// keys are in the order they are read; count is the COUNT of each SCAN.
+func Scan(ctx context.Context, c db.Conn, match string, budget, count int) (s Scanned, err error) {
 	err = Use(ctx, c, func(cl *goredis.Client) (err error) {
 		if s.Total, err = cl.DBSize(ctx).Result(); err != nil {
 			return err
 		}
-		s.Complete, err = scanKeys(ctx, cl, match, budget, func(batch []string) error {
+		s.Complete, err = scanKeys(ctx, cl, match, budget, count, func(batch []string) error {
 			if Of(c).untyped { // KeyInfo.Type "": the generic key icon
 				for _, k := range batch {
 					s.Keys = append(s.Keys, KeyInfo{Name: k})
@@ -118,7 +123,7 @@ func typesOf(ctx context.Context, cl *goredis.Client, keys []string) ([]string, 
 // (§8.7). each stopping it is that error.
 func Each(ctx context.Context, c db.Conn, match string, each func(keys []string) error) error {
 	return Use(ctx, c, func(cl *goredis.Client) error {
-		_, err := scanKeys(ctx, cl, match, 0, each)
+		_, err := scanKeys(ctx, cl, match, 0, ScanCount, each)
 		return err
 	})
 }
@@ -204,7 +209,7 @@ func KeyHints(ctx context.Context, c db.Conn, prefix string, want int) (keys []s
 	err = Use(ctx, c, func(cl *goredis.Client) error {
 		var cursor uint64
 		for range hintRounds {
-			batch, next, err := cl.Scan(ctx, cursor, Glob(prefix)+"*", scanCount).Result()
+			batch, next, err := cl.Scan(ctx, cursor, Glob(prefix)+"*", ScanCount).Result()
 			if err != nil {
 				return err
 			}

@@ -1,0 +1,246 @@
+# M18 Windows 与 SQL Server · 任务清单
+
+- **状态**：**todo**（2026-10-24 决策者起草；用户 2026-10-19 定 Windows 排 M18、2026-10-20 定 SQL Server 跟在 Windows 后面一起做；2026-10-24 用户在家里的 Windows 主机上起了一个 agent 并提了 PR #3，这个里程碑由它做 Windows 那半、节点 3 起视情况做 SQL Server）。
+- **目标**：两件事。一是原生 Windows 能正常简单使用：Windows Terminal 里的 PowerShell / cmd 下装得上、跑得起、配置和子进程不出错，发布出 Windows 的包；做不好的地方明说，不硬做（用户：WSL 已经是 Linux，体验一致）。二是 SQL Server 引擎 `mssql`：树、表格、query、编辑、分页都走现有的共用层，只加一个 `internal/db/mssql` 和一个方言。
+- **范围**：§4（`internal/db/mssql`）、§7.8「剪贴板」（Windows 的工具）、§8.1「SQL Server」、§8.5（`OFFSET … FETCH`）、§9（方言 `MSSQL`、`GO` 分批）、§14「Windows」「`engine = "mssql"`」、§15（`SQLMUX_TEST_MSSQL`、Windows runner）。都已写进各章（2026-10-24）。
+- **依赖**：M17 完成（v0.6.1）。
+- **完成标准**：节点全过；Windows 主机上 `go test ./...` 全绿、CI 的 windows job 绿；用户在 Windows Terminal 里用 Releases 的 zip 装一遍、浏览 SQL Server 容器里的一张表并改一格保存；Mac 上完整回归绿（含 SQL Server 的 e2e）。
+- **总则（用户 2026-10-24）**：M18 是加平台和引擎，不是改架构。macOS / Linux 上已发布的 v0.6.1 行为一字不变：非 Windows 的代码路径只允许「换一个等价的共用 helper」这类零行为差异的改动（reviewer 对每个 commit 看 Unix 侧的 diff，能不碰的不碰，碰了的要说明为什么等价）；Windows 专有的实现放 `_windows.go` / `//go:build` 文件或 `runtime.GOOS` 分支，不改包的边界和 §4 的目录；SQL Server 是 §8.1 的第五个引擎，按已有引擎的接口接入，不为它改 `db` 层的接口和共用的分页 / 保存 / 读循环，要改先问决策者。每个节点 tester 在分支头跑 Mac 的全量 e2e 回归，一条清单外失败就退回。节点 1 的反例：F18.2 把 Unix 侧的 `"$1"` 也改成了拼字符串，reviewer 退回。
+- **审查节点**：1 = F18.1–F18.3（Windows 编译、路径与子进程、剪贴板；PR #3 重做后是这一批的第一个 commit）；2 = F18.4 + F18.5（发布与 CI、Windows 的验收方式）；3 = F18.6（SQL Server 引擎）；4 = F18.7（SQL Server 的 e2e、文档）；5 = F18.8–F18.11（用户 2026-10-26 验收第一轮提的，和 Windows / SQL Server 无关，Mac 的 worker 按固定工作流在 `main` 上做，不经 PR #3）；6 = F18.12–F18.14（第二轮，同样 Mac 的 worker 在 `main` 上做）。
+- **不做（留候选）**：`%APPDATA%` 以外的 Windows 惯例（注册表、安装器、scoop / winget 包）；老 conhost；Windows 上跑 e2e（没有 tmux，见 F18.5）；SQL Server 的 Windows 集成认证（`trusted_connection`，纯 Go 驱动在非 Windows 上没有）、Always Encrypted、`DELIMITER` 式的存储过程体；exec 批多条语句、`{db}` 占位符、Redis 第二轮（见 plan.md「M18 候选」余下的）；测试里用 `/bin/sh` 脚本当假工具的那些（`internal/db/exec` 的两个假服务、keychain 失败路径、`FakeSSH`，后者拼 PATH 用 `:` 在 Windows 上也不对）在 Windows 上按包或用例 skip，不改写成跨平台（win-worker 2026-10-24 问；CI 的 windows job 不带集成标签，不受影响）；窗口 ≤ 16 行时 `conn.new` / 连接管理的浮层整个不出现、没有任何反应（tester 2026-10-26 观察，v0.6.1 已如此，§7.8 没写这种高度；要做就是「框取窗口高度只画得下的行」那条的下限，留候选）。
+
+---
+
+## M18 的协作方式：Windows 主机上的 worker
+
+Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-worker**），它在 Tailscale 网络里，和 Mac 上的四个会话不通消息；SQL Server 那半默认也由它做（容器在它那台机器上，x86，Docker Desktop 跑官方 amd64 镜像不用模拟），Mac 上的 worker 只做合并、打 tag、推送。规则和 `specs/roles/worker.md` 一样，差异如下：
+
+- **分支**：win-worker 在 `windows-compat` 分支上做（已有 PR #3，draft），不直接提交 `main`。每到一个审查节点把分支 rebase 到 `origin/main` 后推送，在 PR 里留一条评论「节点 N 已送审：<范围>，重点 …」。reviewer 在 Mac 上审 `origin/main..origin/windows-compat`（`/Users/ctw/proj/sqlmux-review` 里 fetch 后 detach 到分支头），退回写成 PR 评论；tester 同样。过了的节点由 Mac 上的 worker 合进 `main`：`origin/main` 没推、分支 rebase 不到 Mac 本地的 main，所以就是普通的 `git merge origin/windows-compat`（节点 1 用 rebase 重放 docs 的办法把 e2e 的 sha 也带乱了，节点 2 起允许 merge commit，GitHub 合 PR 也是 merge commit），决策者填状态。审查开始后不要 force-push 改写已送审的 commit，修复另起 commit。
+- **git 身份**：作者身份由仓库 git 配置决定，和 Mac 一致：`git config user.name kackerx`、`git config user.email 55371516+kackerx@users.noreply.github.com`（PR #3 的 commit 是 `win-setup <setup@local>`，重做时改掉）。commit 说明英文，前缀 `F18.<序号>:`（PR #3 的 `windows:` 不合规矩），不加 `Co-Authored-By` 之类的署名行。
+- **行尾**：`git config core.autocrlf false`，仓库文件一律 LF（F18.4 起由 `.gitattributes` 的 `* text=auto eol=lf` 固定，§15）；Windows 上写的新文件也是 LF（编辑器设一下）。i18n 的单测遍历整个工作区的 `.go` 文件，CRLF 或工作区里多出来的 `.go` 副本都会让它失败——PR #3 说明里「en.go 存在未被引用的中文键」多半是这个，重新 clone 后再跑一次，还红就把输出贴到 PR。
+- **每个 commit 自己保证 `just check` 全绿**，在 Windows 上和 Mac 上一样。Windows 上要装的（都是命令行能装的，`winget` / `go install`）：
+  - `just`（`winget install Casey.Just`）；
+  - `golangci-lint` v2.14.0（`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`，justfile 校验版本号）；
+  - Go 用 `go.mod` 的版本：`go env -w GOTOOLCHAIN=go1.26.3`（gofmt 跟 toolchain 走，1.27 的 gofmt 改了 `en.go` 的对齐，CI 用 1.26.3 就红）；
+  - Docker Desktop（WSL2 后端）跑 `just db-up`：PG 17、MySQL 8.4、Redis 的集成测试和 M18 新加的 SQL Server 容器都在它上面；端口和 Mac 一样（55432 / 53306 / 56379 / 51433）；
+  - `gh`（`winget install GitHub.cli`）发 PR 评论；Python 3 只有 e2e 要，Windows 上不跑 e2e；
+  - 没有 tmux：e2e 不在 Windows 上跑，由 Mac 上的 tester 跑（F18.5 定了 Windows 的验收方式）。
+- **送审前 PR 的 CI 要绿**（lint、test、integration 三个 job；节点 1 送审时 run 40095854251 三个都红）：Windows 上的 `just check` 编不到 `//go:build !windows` 的文件（`_other_test.go` 桩的 revive 报告）、跑不到 unix 分支的用例（`C:\data\a.db` 在 unix 上的判定），只能靠 CI 补；推了分支等 `gh pr checks 3 --watch` 全绿再评论送审。
+- **路径和平台的坑**：测试里拼路径用 `filepath.Join`，不写 `/`；`0o600` 这类权限位在 Windows 上没有 group / other 位，断言按 PR #3 的做法加 `runtime.GOOS` 守卫；`syscall` 的 Unix 符号（`Flock`、`Kill`、`SIGWINCH`）只能在 `//go:build !windows` 的文件里出现；子进程一律经 F18.2 的 helper，不直接 `exec.Command("sh", …)`；`os.Rename` 覆盖已有文件在 Windows 上可以，但目标文件被别的进程打开着会失败（state.json 的锁已经保证一次一个写者）。
+- **已有依赖直接用，不重写**（AGENTS.md）：Windows 的系统调用用 `golang.org/x/sys/windows`（已在 `go.mod` 里，间接依赖转直接），不用 `syscall.NewLazyDLL` 手写 `LockFileEx`。
+- **spec 问题**：win-worker 没法给决策者发消息，写在 PR 评论里、标「spec 问题」，用户转给决策者；答复也回在 PR 里。
+
+---
+
+## F18.1 Windows 编译与文件锁 · 状态：passed（ab1db18；e2e 4de8825）
+
+- **依赖**：无
+- **涉及**：`internal/config`（state.json 的锁）、`internal/db`（ssh 测试）、`go.mod`
+- 决策者 2026-10-18 交叉编译：只有 `internal/config/state.go` 的 `syscall.Flock` 编不过。PR #3（6632e71）已经做了拆分，按下面的要求重做成一个 commit。
+
+**开发**（§14「Windows」）
+- [ ] a. `lockFile` 拆成 `lock_unix.go`（`//go:build !windows`，原来的 `Flock`，逐字节等价）和 `lock_windows.go`（`//go:build windows`，`golang.org/x/sys/windows` 的 `LockFileEx` / `UnlockFileEx`，`LOCKFILE_EXCLUSIVE_LOCK`、不带 `FAIL_IMMEDIATELY`，阻塞语义同 `LOCK_EX`；锁整个文件的第一个字节就够，两个进程锁同一段才互斥）；`go mod tidy` 把 `x/sys` 转成直接依赖。
+- [ ] b. `internal/db/ssh_test.go` 加 `//go:build !windows`（用了 `syscall.Kill`）；`state_test.go` 两处 `0o600` 断言加 `runtime.GOOS != "windows"` 守卫（PR #3 的做法，保留）。
+- [ ] c. commit 说明 `F18.1: …`，作者 kackerx；PR #3 的说明里列的三个遗留（sqlite 路径、`/bin/sh`、i18n）分别是 F18.2 和「行尾」那条，不在这条里。
+
+**验收**
+- [ ] 单测：现有的 state.json 多进程写测试（`beforeRename`）在 Windows 上跑过（两个进程排队，文件不坏）；mutation（Windows 上把 `LockFileEx` 的标志改掉 / 去掉 unlock，测试要红）。
+- [ ] `GOOS=windows go vet ./...` 在 Mac 上零报告（reviewer 跑）；win-worker 贴 Windows 上 `go test ./...` 的汇总。
+
+## F18.2 Windows 的路径与子进程 · 状态：passed（ab1db18；e2e 4de8825）
+
+- **依赖**：F18.1
+- **涉及**：`internal/config`（目录、`password_cmd`、sqlite 路径）、`internal/app`（`$EDITOR` 开 query 文件、`gq` 的 formatprg）
+- 三处 `exec.Command("sh", "-c", …)` 在 Windows 上没有 sh；配置目录落在 `~/.config` 不是 Windows 惯例；sqlite 的 `C:\x.db` 会被当成 URL 的 scheme。
+
+**开发**（§14「Windows」）
+- [ ] a. 子进程：`config` 包一个 helper `ShellCommand(ctx, line string) *exec.Cmd`（名字 worker 定）：非 Windows `sh -c <line>`，Windows `%COMSPEC% /c <line>`（没设 `COMSPEC` 用 `cmd`）。三处调用都改走它；`$EDITOR` 那处原来用 `sh -c 'ed "$1"' sh path` 传位置参数，Windows 没有，**只在 Windows 上**改成把路径用引号拼进命令行（路径里有引号或 `%…%` 的不处理，已知上限），非 Windows 保留 `"$1"`——路径拼进 `sh -c` 会被 shell 展开（`cost$HOME`、反引号，reviewer 2026-10-24 探针）。Windows 上 helper 用 `SysProcAttr.CmdLine` 把整行原样交给 cmd，os/exec 默认的引号转义 cmd 不认。`VISUAL` / `EDITOR` 没设时 Windows 默认 `notepad`，不是 `vi`。
+- [ ] b. 目录：`XDG_*` 设了照旧优先；没设时 Windows 用 `%APPDATA%\sqlmux`（配置）和 `%LOCALAPPDATA%\sqlmux`（data 和 state，history.jsonl、state.json、布局文件），`os.UserConfigDir` / `os.UserCacheDir` 给的就是这两个；非 Windows 不变。
+- [ ] c. sqlite 的 DSN：`C:\…` / `D:/…` 这种一个字母加冒号的是盘符不是 scheme（`Kind` 的判断加一条）；`~` 展开用 `os.UserHomeDir`，Windows 上就是用户目录；路径分隔符两种都认。
+- [ ] d. 钥匙串：`hostOS != "darwin"` 的分支（明文或 `password_cmd`）在 Windows 上照旧，不接 Credential Manager（候选）。
+- [ ] e. 导出的文件名（§7.8「导出」，win-worker 2026-10-24 问）：`<表名>` / 键名里 Windows 不允许的字符（`<` `>` `:` `"` `/` `\` `|` `?` `*` 和控制字符）在所有平台都换成 `_`，`hash:big` 导出成 `hash_big.csv`；改在拼文件名的那一处，不按 `runtime.GOOS` 分支。随节点 1 的审查退回一起改。
+
+**验收**
+- [ ] 单测：helper 在两种 GOOS 下的 argv（表驱动，`runtime.GOOS` 分支各一条）；目录函数在 Windows 上的返回（`XDG` 设 / 不设）；`Kind("C:\\a.db")` 是 sqlite、`Kind("postgres://…")` 不变；文件名替换一条表驱动用例（`hash:big`、`a/b`、带 `*`）；TestKeyTabViews 的导出段两个平台都跑；mutation。
+- [ ] win-worker 手测：Windows Terminal 里 `password_cmd = "echo secret"` 能连；`C-o` 用 notepad 开 query 文件、关掉回来内容刷新；`sqlmux C:\path\x.db` 能开；配置文件生成在 `%APPDATA%\sqlmux`。贴截图或文字到 PR。
+
+## F18.3 Windows 的剪贴板 · 状态：passed（ab1db18；e2e 4de8825）
+
+- **依赖**：无
+- **涉及**：`internal/app/yank.go`
+- 写剪贴板已有 OSC 52 兜底，Windows Terminal 支持；读（`"+p`）没有工具就不行。
+
+**开发**（§7.8「剪贴板」）
+- [ ] a. `clipTools` 加 Windows 一行（只在 `runtime.GOOS == "windows"` 时加入），两条都是显式 UTF-8 的 PowerShell、直接走 argv：写 `powershell -NoProfile -Command [Console]::InputEncoding=[Text.Encoding]::UTF8;Set-Clipboard -Value ([Console]::In.ReadToEnd())`，读 `powershell -NoProfile -Command [Console]::OutputEncoding=[Text.Encoding]::UTF8;[Console]::Out.Write((Get-Clipboard -Raw))`，读回来的 `\r\n` 换成 `\n`。不用 `clip`（按控制台代码页读，UTF-8 中文乱码）、不用裸的 `Get-Clipboard -Raw`（OEM 代码页输出，末尾多一个 CRLF 让 `"+p` 把一个词贴成整行）。其余不动。
+
+**验收**
+- [ ] 单测：Windows 下工具表多这一行、非 Windows 不变；`\r\n` 的归一；mutation。
+- [ ] win-worker 手测：表格里 `"+y` 后别的程序能贴出来；外面复制一段文字，query 里 `"+p` 贴进来；「中文 abc」两个方向各一次不乱码；外面复制单个词后 `"+p` 贴在行内，不是新起一行。
+
+## F18.4 发布与 CI · 状态：passed（d40e054；e2e dc008b1）
+
+- **依赖**：F18.1–F18.3
+- **涉及**：`.goreleaser.yaml`、`npm/build.mjs`、`.github/workflows/ci.yml`、`.github/workflows/release.yml`（npm job 要多下 `*.zip`，reviewer 2026-10-25 重放发现）、`README.md`（归 oss）
+
+**开发**（§15）
+- [ ] a. goreleaser 加 `windows` 的 `amd64` 和 `arm64`，Windows 的压缩包用 zip（`format_overrides`），二进制名 `sqlmux.exe`；文件头部注释的「four binaries」改成六个（win-worker 2026-10-25 问，随这一批改）。
+- [ ] b. npm 壳包加 `win32-x64`、`win32-arm64` 两个平台包（`build.mjs` 的表加两行，壳的启动脚本认 `.exe`）。`release.yml` 的 npm job 跑在 ubuntu 上：`gh release download` 除 `*.tar.gz` 再下 `*.zip`；`build.mjs` 解 zip 用 `unzip`（GNU tar 不认 zip，ubuntu-latest 和 macOS 都自带 unzip），tar.gz 照旧 tar。
+- [ ] c. CI 加一个 `windows-latest` 的 job：`go vet ./...`、`go build ./...` 和 `go test ./...`（不跑集成测试、不跑 lint；lint 在 ubuntu 上跑一次就够，`_windows.go` 只有这一步 vet 看得到）。
+- [ ] d. README 加「Windows」一小节（oss 做）：Windows Terminal + PowerShell / cmd，装法三条（Releases 的 zip、`go install`、npm），WSL 等于 Linux，老 conhost 不支持，Nerd Font 同样要装。
+
+**验收**
+- [ ] `just release-check`（或等价的 goreleaser `--snapshot`）六个目标都编过；CI 三个 job 加 windows job 绿。
+- [ ] 发版后 oss 的安装验证多一条：用户在 Windows 上用 zip 和 `npx` 各装一次看 `--version`。
+
+## F18.5 Windows 的验收方式 · 状态：passed（d40e054；e2e dc008b1）
+
+- **依赖**：F18.1–F18.3
+- **涉及**：`e2e/`（Mac 的 tester）、`specs/roles/tester.md` 不改（这里写清就够）
+- Windows 没有 tmux，现有的 e2e 脚本跑不了；真正要验的是 Windows Terminal 的 ConPTY 路径。
+
+**开发**
+- [ ] a. tester 从 Mac `ssh` 到 Windows 主机（OpenSSH Server、公钥、默认 shell pwsh，用户准备），在那边 `go test ./...`、编一个二进制。
+- [ ] b. 一个最小的 ConPTY 冒烟脚本（Python `pywinpty` 加 `pyte`，放 `e2e/windows/`，Windows 上跑）：起 sqlmux 连 sqlite 的 demo 文件，发 `C-h`（启动焦点在第一个 pane，先到树）、`j` `↵`、`gt`、`:qa`（`q` 在 query 里不是退出），截屏比几处固定文字（树的连接名、表名、状态栏的 NORMAL；tester 2026-10-25 定的按键，脚本 `e2e/windows/smoke.py` 在 e2e 分支）。不求覆盖，只证明键盘和渲染在 ConPTY 上通。
+- [ ] c. 一份给用户的手测清单（WALKTHROUGH 的 Windows 一节，决策者写）：真彩色、鼠标点击和滚轮、图标、`C-c` / `C-z`、`"+y` / `"+p`、窗口缩放、中文宽度；vim 编辑在真终端里的几处（用户 2026-10-25 问）：中文 IME 在插入模式下的候选框和上屏、`Esc` 的延迟、`C-o` 用 notepad 新写几行回来后没有 `\r`（notepad 对新建文件默认 CRLF，文件加载没有像粘贴那样归一，发现了就是 F18.2 的 bug）、`gq` 的 formatprg 在 Windows 上要自己装工具。
+
+**验收**
+- [ ] tester 在 Windows 主机上跑过 a 和 b，结论里附 ConPTY 截屏的文字。a 的 `go test ./...` 在 ssh 会话里跑（PATH 没有 Git 的 `usr\bin`，比 CI runner 和 win-worker 的终端更干净）要全绿：formatprg 用 `printf` / `tr` 的两个测试（TestQueryFormatAll、TestPlainQueryFormat）在 `exec.LookPath` 找不到命令时 `t.Skip`，同「不做」里 sh 脚本假工具的处理（tester 2026-10-25 退回）。
+
+## F18.6 SQL Server 引擎 · 状态：passed（b829217；e2e 3187934）；j passed（af641a9；e2e 23fff6d）
+
+- **依赖**：节点 1 过（win-worker 在 Windows 上做，容器在它那台机器上）
+- **涉及**：`internal/db/mssql`（新包，§4）、`internal/db`、`internal/sqlkit`（Dialect）、`internal/config`、`internal/app`（树、表单、`workspace.go` 的 `engines`）、`docker-compose.yml`、`testdata/seed/mssql.sql`、`.github/workflows/ci.yml`
+- 用户 2026-10-20 定（reddit 评论有人问）。做法照 M14 的 F14.1：一个新包实现 `db.Engine`，别的都是共用层。
+
+**开发**（§4、§8.1「SQL Server」、§8.5、§9、§14、§15）
+- [ ] a. 驱动 `github.com/microsoft/go-mssqldb`（纯 Go，database/sql）；`engine = "mssql"`，DSN `sqlserver://user:pass@host:1433?database=x`（驱动的 URL 形式原样传，`encrypt` / `TrustServerCertificate` 等参数照传；本地容器要 `TrustServerCertificate=true`）；密码来源同其他引擎；`Info` 用 `SERVERPROPERTY('ProductVersion')`；测试按钮 `SELECT 1`。
+- [ ] b. 方言 `sqlkit.MSSQL`：标识符 `[name]`（也认 `"name"`），字符串 `'…'` 和 `N'…'`，注释同 PG；**分批**：单独成行的 `GO`（大小写不限、后面可带次数）是客户端分隔符，在那里切开、不发给服务端，批内再按 `;` 分句；格式化用 sql-formatter 的 `transactsql`；补全关键字表共用 PG 的（同 SQLite，决策者定）；`CaseInsensitive` 为真（默认排序规则不分大小写；分大小写的排序规则是已知上限）。
+- [ ] c. `Engine`：`Quote` 是 `[s].[t]`，`Arg(n)` 是 `@p<n>`，`Same` / `Eq` 照 MySQL 的形状（`IS NULL` 那条路一样）；`Schemas` 查 `sys.schemas` 去掉 `sys`、`INFORMATION_SCHEMA`、`guest`、`db_*`，current 是 `SCHEMA_NAME()`；`Databases` 查 `sys.databases` 里 `HAS_DBACCESS(name) = 1` 的、去掉 `master` / `tempdb` / `model` / `msdb`，子 Conn 换库同 PG（DSN 的 `database` 参数）；`Tables` 查 `sys.tables` / `sys.views` 加 `sys.dm_db_partition_stats` 的行数估计；`TableColumns` 查 `sys.columns` / `sys.types` / `sys.identity_columns`，主键和唯一索引查 `sys.indexes` / `sys.index_columns`；`Indexes` / `Keys`（`sys.foreign_keys`）/ `Functions`（`sys.objects` 的 FN / IF / TF，`OBJECT_DEFINITION`）/ `Sequences`（`sys.sequences`）；`DDL`：视图和函数用 `OBJECT_DEFINITION`，表没有服务端的 `SHOW CREATE`，按 catalog 拼最小的 `CREATE TABLE`（列、类型、NULL、主键），注明是拼的；`UseSchema` 无事（SQL Server 没有 search_path，`Quick` 和 query 用 `[schema].[table]` 全名，§8.6 的「当前 schema」只影响补全和不带前缀的表名）。
+- [ ] d. 分页与计数（§8.5）：`SELECT … ORDER BY <排序列，没有就 (SELECT NULL)> OFFSET <m> ROWS FETCH NEXT <n> ROWS ONLY`（字面量，不是 `@p`；AutoLimit 同形状，不用 `TOP`），多取一行判断还有没有下一页照旧；计数 `COUNT_BIG(*)`；共用层按 `Dialect()` 分支，事务话术经 `TxSaver` 可选接口（决策者 2026-10-25 答 win-worker 的 spec 问题 1–3）。
+- [ ] e. `Conn`：`Exec` 一批一次（go-mssqldb 一次能发多条语句，多个结果集用 `NextResultSet` 收齐）；`Query` 走参数；`Stream` 同 PG / MySQL 的流式导出；取消把 ctx 给驱动（它发 attention 包），**在真库上验证**取消一条 `WAITFOR DELAY '00:00:10'` 能在 1 秒内回来；连接保不住（驱动随 ctx 关连接），取消算连接丢失、下一请求重拨，用户事务里走「事务已丢失」（§8.1，决策者 2026-10-25 定；`KILL spid` 保连接是候选）；`Broken`：网络错误和 `mssql.Error` 里的连接类错误号；`ErrorOf`：`mssql.Error` 的 `Number` / `Message` / `LineNo`。
+- [ ] f. 只读连接：SQL Server 没有只读事务，和 Redis 一样靠 §13 的应用层拦截（`Dangerous` 判定认 T-SQL 的 `DELETE` / `UPDATE` 无 WHERE、`TRUNCATE`、`DROP`、`ALTER`、`EXEC`）；事务 `BEGIN TRAN` / `COMMIT` / `ROLLBACK` 走共用的 `db.End`。
+- [ ] g. 类型与文本（§8.1）：以集成测试为准，拿不准的不猜：`datetime2` / `datetime` / `datetimeoffset` / `date` / `time` 的文本形式、`uniqueidentifier`（驱动的 `mssql.UniqueIdentifier`，显示标准 GUID 文本）、`bit` 显示 `true` / `false`、`money` / `decimal` 按文本、`varbinary` / `image` 走 `<binary N bytes>`、`xml` 和 `nvarchar(max)` 按文本；值编辑器和保存的回写（`Same` 的比较）每种各一条集成测试。
+- [ ] h. 连接表单的 engine 段加 mssql（host / port 默认 1433 / database / user / password / read_only / production）；树：连接 → 库 → schema → Tables / Views / Functions / Sequences，同 PG。
+- [ ] i. 测试环境：`docker-compose.yml` 加 `mssql`（`mcr.microsoft.com/mssql/server:2022-latest`，`platform: linux/amd64`，端口 51433，`ACCEPT_EULA=Y`，`MSSQL_SA_PASSWORD=Sqlmux!2026`，healthcheck 用镜像自带的 `/opt/mssql-tools18/bin/sqlcmd -C`）和一个一次性的 `mssql-seed` 服务（同一镜像，等健康后 `sqlcmd -C -i /seed/mssql.sql` 灌 `testdata/seed/mssql.sql`，和 PG / MySQL 一样只在数据卷为空时）；seed 内容对照 `mysql.sql`（同样的表和行，类型换成 T-SQL 的）；集成测试用 `SQLMUX_TEST_MSSQL`（`sqlserver://sa:Sqlmux!2026@localhost:51433?database=sqlmux&TrustServerCertificate=true`），没设就 skip；CI 的 integration job 用 `services` 起同一镜像加一步 seed。Mac 上这个镜像要 Rosetta，Mac 的 worker / reviewer 直接连 Windows 主机的容器（Tailscale 地址，用户给）。
+
+- [ ] j. **追加修复**（tester 2026-10-25 写 F18.7 e2e 时发现，PR #3 评论 6397659833）：`Same` 返回的三臂 `A or B or C` 没有括号，`save.go` 用 `and` 接在主键条件后面，WHERE 成了 `(pk and A) or B or C`——旧值在表里有重复时影响行数 ≠ 1 回滚（t_order 改 amount / status / user_id 都存不了），旧值被别人改掉而另一行恰好还是这个旧值时会改到别的行。修法：`Same` 整个包括号，单测同步；补两条集成测试（重复值的列保存成功且只动一行；旧值被改且另一行有该旧值时报行已变化、另一行不动）。在 windows-compat 上一个 commit，reviewer 单独审这一个，tester 复测 f18.7b。
+- 已知上限（不修）：默认排序规则不分大小写，别人把 `user_3` 改成 `USER_3` 时保存不报「行已变化」直接覆盖（MySQL 按字节比会报；tester 2026-10-25）——同 b 条「分大小写的排序规则是已知上限」的反面，精确比较要在 `Same` 的文本臂加 `COLLATE Latin1_General_BIN2`，留候选。query 里没写完的 `select 1 +` 报的是追加的 `OFFSET … FETCH` 的错（153），不是用户语句本身的语法错；PG / MySQL 追加 LIMIT 时同类输入恰好仍报语法错。记在 §9.4。
+
+**验收**
+- [ ] 单测：方言（`GO` 分批、`[name]` 引号、`N'…'`）、`Quote` / `Arg` / `Same` / `Eq`、分页语句的拼法；mutation。
+- [ ] 集成测试（`SQLMUX_TEST_MSSQL`，和 PG / MySQL 同一组用例）：catalog、各类型的文本、取消、只读拦截、乐观校验、唯一索引作行标识、无主键表只读、库列表、`GO` 分批。
+- [ ] win-worker 贴 Windows 上集成测试的汇总；reviewer 在 Mac 上连 Windows 主机的容器跑一遍。
+
+## F18.7 SQL Server 的 e2e 与文档 · 状态：a passed（af641a9；e2e 23fff6d，46 条）；b 待 oss
+
+- **依赖**：F18.6
+- **涉及**：`e2e/`（tester）、`docs/`、`README.md`（oss）
+
+**开发**
+- [ ] a. e2e：照 MySQL 的那组脚本（树、开表、翻页、WHERE、改格保存、query、`GO` 分批、只读连接、库切换）各一份 mssql 的，连接 `mssql`（connections.toml 的测试段加一条，指向 51433）；Mac 上的 tester 连 Windows 主机的容器跑。
+- [ ] b. 文档（oss）：README 的引擎列表加 SQL Server，`docs/config.md` 加 `engine = "mssql"` 的 DSN 例子和 `TrustServerCertificate` 的说明，CHANGELOG 0.7.0。
+
+**验收**
+- [ ] 完整回归绿；用户在 Windows Terminal 里连自己容器的 `sqlmux` 库，开 `t_order`、改一格保存、跑一条带 `GO` 的 query。
+
+## F18.8 命令面板预览 query 时当前连接是 Redis 就崩溃 · 状态：passed（cc5f8fc；e2e 325fa81）
+
+- **依赖**：无（M12 F12.10 的 query 预览、M16 的 Redis 连接）
+- **涉及**：`internal/app`（palette）
+- 用户 2026-10-26 验收时碰到：验收版 `af641a9-m18` 在 Redis 连接上开命令面板、选中一个 query 项，整个程序 panic（`palette.go:505`，`queryPreview` 里 `c.eng.Dialect()` 空指针）。决策者看了代码：`queryPlace` 在 query 记下的连接不在 session 里时退回当前连接，当前连接是 Redis 时 `eng` 为 nil；同一函数里的 `sqlNames` 已经用 `c.sql()` 守住了，只有方言这一处漏了。v0.6.1 就有。
+
+**开发**（§12「query」）
+- [ ] a. `queryPreview` 的方言取 `Conn.dialect()`（§5，Redis 按 PG 的颜色），不直接取 `eng`；顺手 grep `internal/app` 里其他 `.eng.Dialect()` 的调用，凡是连接可能是 Redis 的都换成 `dialect()`，改在共用的那一处。
+
+**验收**
+- [ ] 单测：当前连接是 Redis（`eng == nil`）、有一个记下的连接不在 session 里的 query 文件，面板选中它 `View()` 不 panic、预览有文字；mutation。
+- [ ] e2e：Redis 连接上开面板输入 query 名，预览画出来，程序还在。
+
+## F18.9 WHERE 的 `C-r` 下拉在没有历史和收藏时也要开 · 状态：passed（cc5f8fc；e2e 325fa81）
+
+- **依赖**：M8 F8.14、M9 F9.4
+- **涉及**：`internal/app`（where）、`internal/i18n`
+- 用户 2026-10-26 验收时提：新表上按 `C-r` 什么都不出现，以为坏了；要一个默认界面，空也画「没有历史」。
+
+**开发**（§9.4「WHERE 的 `C-r` 历史 / 收藏下拉」）
+- [ ] a. 历史和收藏都空时下拉照开：列表一行 `dim` 的「没有历史」（i18n），底部提示照画；`↵` / `C-e` / `C-f` 无事，`esc` 关，开始输入后仍是这一行（没有可过滤的）。只改 `histView` 和它的按键守卫，不另做一种浮层。按「都空」判断，不按过滤后为空判断：有历史但被输入的文字过滤光了照 v0.6.1，不画列表、`↵` 关下拉、再按一次执行（reviewer 2026-10-26 问；efaad23 按过滤后为空判断，有历史时也画「没有历史」且 `↵` 不起作用）。
+
+**验收**
+- [ ] 单测：空历史时 `C-r` 后 `t.hist != nil`、视图有「没有历史」一行，`↵` 不执行、不 panic；mutation。
+- [ ] golden：空历史的下拉。
+- [ ] e2e：新表 `C-r` 出现「没有历史」，`esc` 关；跑过一次 WHERE 后再按列出那一条。
+
+## F18.10 键 tab 的 MATCH 输入框画到了芯片行上 · 状态：passed（cc5f8fc；e2e 325fa81）
+
+- **依赖**：M16 F16.3
+- **涉及**：`internal/ui`（querybar）
+- 用户 2026-10-26 验收时提：Redis 键 tab 里按 `/`，MATCH 后面是空的，光标跑到下一行 ORDER 旁边，看不到输入了什么。决策者看了代码：`QueryBar.Draw` 画完信息行后 `r = q.below(r)`，接着调 `InputRect(r)` 又 `below` 一次，输入框和光标落到芯片行，文字被芯片盖住；`ChipRect` / `ButtonRect` / `where.go` 里的 `InputRect(bodyRect)` 都只偏移一次，所以点击和补全的位置是对的、只有画的不对。v0.5.0 起就有，f16.3b 的 e2e 只查了过滤后的行、没查输入框在哪一行。
+
+**开发**（§8.1「键 tab」：信息行、MATCH 输入框、芯片行三行）
+- [ ] a. `Draw` 里只偏移一次：改在共用的那一处，不在 `InputRect` 和 `Draw` 各打一个补丁；SQL 表（没有 Info 行）一个像素都不变，用 golden 证明。
+
+**验收**
+- [ ] 单测：带 Info 的 `QueryBar.Draw` 把 WHERE 的文字画在第二行、光标也在第二行，`InputRect` 和画出来的位置一致；不带 Info 的和改前逐字节相同；mutation。
+- [ ] golden：键 tab 的三行。
+- [ ] e2e：f16.3b 补一条：`/` 后输入 `e*`，MATCH 那一行有 `e*`、光标在它后面（`cursor_at`），芯片行完整。
+
+## F18.11 Redis 树过滤扫描在途时的提示与取消 · 状态：passed（cc5f8fc；e2e 325fa81）
+
+- **依赖**：M16 F16.2
+- **涉及**：`internal/app`（redistree、tree）、`internal/db/redis`（keys）
+- 用户 2026-10-26 验收时提：树上 `/` 输入 `p:employees` 搜不到自己库里 `p:employees:<邮箱>` 的键，期望拼接的全键或模糊都能搜出来。决策者在同一个库（6 万键、往返 57ms）上用验收版复现：匹配本身是对的（`*p:employees*` 找到 346 条），只是一次过滤要 7–14 秒（62 次 `SCAN COUNT 1000` 加 62 次 `TYPE` pipeline），期间连接和 db 节点整个不画、计数 `0/61072`，看起来就是没搜到；每次改过滤文字又排一次整库扫描。
+
+**开发**（§7.8「Redis 的树」、§8.7「树」）
+- [ ] a. 过滤的 SCAN 用 `COUNT 10000`（`redis.Scan` 加一个 count 参数或只给过滤路径的常量，展开 db 的扫描仍是 1000）；`TYPE` 只对匹配到的键发，本来就是。
+- [ ] b. 扫描在途时连接和 db 节点照画不隐藏，db 节点的尾注换成 `dim` 的「搜索中…」，扫完换回 `DBSIZE`；扫完一个都没有才按空处理（隐藏）。`tree.found` 里记一个「在途」状态就够，不另做一种节点。
+- [ ] c. 过滤文字一变（`filterSeq` 变）就取消在途的扫描：`findKeys` 的 ctx 跟着 `filterSeq`，旧扫描的结果照旧丢弃，但不再排队跑完；`esc` 清空过滤文字也是「变」，同一个调用取消（reviewer 2026-10-26 问）。取消的 ctx 是每个窗口自己的：窗口 A 改过滤不能取消窗口 B 在途的扫描（reviewer 的探针：B 停在「搜索中…」不再发新扫描）。
+
+**验收**
+- [ ] 集成：6 万键的私有 db 上过滤 `*p:employees*`，`SCAN` 次数 ≤ 8（实测 6 次；`DBSIZE` 一次和每批一次 `TYPE` pipeline 不计，不把 `TYPE` 并进 SCAN 的 pipeline，reviewer 2026-10-26 问）、结果数对；改过滤文字或 `esc` 后旧扫描的 ctx 被取消。
+- [ ] 单测：在途时树的行里有「搜索中…」、连接和 db 节点在；扫完换回；mutation。
+- [ ] e2e：一个慢的 Redis（e2e 里的 TCP 代理加延迟，或 `DEBUG SLEEP` 前置）上 `/` 输入模式，先看到「搜索中…」，再看到键；连续改模式只有最后一个模式的结果出现。
+
+## F18.12 删除正在用的连接：确认后一起关它的 tab · 状态：passed（b9fbe9d；e2e 7c650b4）
+
+- **依赖**：M8 F8.16
+- **涉及**：`internal/app`（connform、workspace）、`internal/i18n`
+- 用户 2026-10-26 验收时提：连接管理里删 `D`，toast「Close the tabs that use it first」拦住了；不该阻塞，二次确认够了，确认后直接关掉这个连接的全部 tab。
+
+**开发**（§7.8「连接管理」）
+- [ ] a. `deleteConn` 不再因 `connInUse` 拒绝：把它改成数（tab 数、其中有未保存表格修改的数），确认框文字「删除连接 D？它开着的 N 个 tab 会一起关掉」，有未保存修改再加「，其中 M 个有没保存的修改，会丢」；没 tab 时照旧「删除连接 D？」。
+- [ ] b. `y` 后先把它的 query 文字照 §11 落盘、删文件块、钥匙串，失败 toast 且什么都不关（worker 定的顺序，reviewer 2026-10-26 认可）；成功后在每个 session 里关掉它的 tab（data、query（`conn` 或 `want` 是它的）、跑在它上面的结果 tab）：走 `closeTab` 的路（表格修改丢弃），不记进 `closed`（deleteConn 本来就把它的 `closed` 项删了）；空了的 pane 收掉；`s.start` 是它时换成剩下的第一个连接（没有剩下的就 nil，启动时「没有连接」那条路照常）；删 session 里的 `Conn`，并关掉它和各库子连接已连上的 `Main` / `Meta`（同 `closeSession` 的 `closeWorkers`，不在 Update 里同步 Close 等请求结束）。确认框在事务里时多一句 `unlessLost` 的「D 有未提交的事务，会回滚」（看它和各库子连接的 `inTx`），正在跑的查询直接取消。删 `先关掉用它的 tab` 这个 i18n 键。
+
+**验收**
+- [ ] 单测：两个 session、三个 tab 用着它（其中一个表格有未保存修改）时删除：确认框文字带 3 和 1；`y` 后三个 tab 没了、空 pane 收了、文件块没了、别的连接的 tab 不动；它是启动连接时 `start` 换了；mutation。
+- [ ] e2e：开着 `play` 的两个 tab 删 `play`，确认框文字对，`y` 后 tab 关了、树里没有 `play`、connections.toml 里没有它；`n` 什么都不动。
+
+## F18.13 表单拼的 mssql DSN 连不上，错误行被截断 · 状态：passed（b9fbe9d；e2e 7c650b4）
+
+- **依赖**：F18.6 h
+- **涉及**：`internal/app`（connform）、`internal/db/mssql`、`internal/ui`（form）
+- 用户 2026-10-26 在 Windows 上验收时提：新建连接表单选 `mssql`、填 `127.0.0.1` / `51433` / `sa`，「测试」报 `unable to open tcp connection with host 'localhost:1433': dial tcp [...`，填的 host / port 没用上，错误又被截短看不到后半句。决策者看了代码：`composeDSN` 的 scheme 直接用引擎名，拼出 `mssql://sa@127.0.0.1:51433?database=sqlmux`，`msdsn.Parse` 只认 `sqlserver://` 开头是 URL，别的当 ADO 串解析，host 退成 localhost:1433；F18.6 h 的表单只验了字段，没连过。
+
+**开发**（§7.8「新建连接表单」、§8.1「SQL Server」）
+- [ ] a. `composeDSN` 对 `mssql` 用 `sqlserver://`；`mssql.Config` 也认 `mssql://` 开头（`strings.CutPrefix` 换成 `sqlserver://` 一行），手写的 DSN 两种都行。
+- [ ] b. 表单底栏上方的那一行（校验错误、测试结果）不截短：按表单宽度折行（有现成的折行就用它），占几行就几行，框随之变高；窗口放不下时框取窗口高度、只画得下的行。「测试中…」和成功的一行不受影响。
+
+**验收**
+- [ ] 单测：`composeDSN("mssql", "127.0.0.1", "51433", "sa", "sqlmux")` 是 `sqlserver://sa@127.0.0.1:51433?database=sqlmux`，`mssql.Config` 解出 host / port；`mssql://` 开头同样解对；折行的错误占多行、框高跟着变、不带 `…`；mutation。
+- [ ] 集成（`SQLMUX_TEST_MSSQL`）：表单填 host / port / user / password / database 后「测试」成功，结果行带版本。
+- [ ] e2e：表单填一个连不上的 host，错误两行以上全文可见；mssql 的表单在 Mac 上「测试」连 Windows 主机的容器成功。
+
+## F18.14 树上删连接：`dd` 和右键菜单 · 状态：passed（b9fbe9d；e2e 7c650b4）
+
+- **依赖**：F18.12
+- **涉及**：`internal/app`（menu、tree）、`internal/keymap/default.toml`
+- 用户 2026-10-26 验收时提：树里 query 只能右键删（其实 `dd` = `tree.delete` 早就能删 query、表、视图、Redis 键，用户不知道），连接节点右键也没有删除、只能走「管理连接」；要按键 → 确认删除（先提的 `D`，知道有 `dd` 后定：就用 `dd`，不加 `D`）。
+
+**开发**（§7.8「右键菜单」、§6.4 `tree`）
+- [ ] a. `tree.delete` 在连接节点上走 F18.12 的删除（同一个确认框和关 tab 的路，复用 `deleteConn` 那段，不另写一份）；键位不动，仍是 `dd`。
+- [ ] b. 连接节点的右键菜单加「编辑…」（打开连接管理并选中这个连接，同 `conn.manage` 后选中）和「删除…」，排在「选择库… / 选择 schema…」后面；Redis、SQLite 的连接也有；exec 连接不在连接管理里（F17.7），只有「删除…」；命令行开的临时连接两项都没有、`dd` 无事（reviewer 2026-10-26 问）。
+
+**验收**
+- [ ] 单测：连接节点上 `dd` 弹 F18.12 的确认框，`y` 后连接从树和文件里没了；右键菜单的项数和文字；mutation。
+- [ ] e2e：树里光标在 `play` 上 `dd`，确认框文字对，`y` 后树里没有 `play`；右键「编辑…」打开管理连接且选中 `play`。
+
+任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。

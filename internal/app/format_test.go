@@ -1,6 +1,11 @@
 package app
 
 import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +14,29 @@ import (
 	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/sqlkit"
 )
+
+// prgOf is the formatprg config line: the unix program, or its windows
+// equivalent where the line has no sh syntax; a " of the program is
+// escaped, the line sits inside TOML's.
+func prgOf(t *testing.T, unix, windows string) string {
+	t.Helper()
+	prg := unix
+	if runtime.GOOS == "windows" {
+		prg = windows
+	}
+	return `formatprg = "` + strings.ReplaceAll(prg, `"`, `\"`) + `"`
+}
+
+// upperPS is a powershell file uppercasing what is on its stdin byte for
+// byte: windows's tr a-z A-Z.
+func upperPS(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "upper.ps1")
+	if err := os.WriteFile(path, []byte("$t = [Console]::In.ReadToEnd().ToUpper(); [Console]::Out.Write($t)"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return `powershell -NoProfile -ExecutionPolicy Bypass -File "` + filepath.ToSlash(path) + `"` // " quotes: -File does not read '
+}
 
 // gqIn presses keys in query c, the last starting a format, and
 // delivers what the Cmd brings back.
@@ -72,14 +100,14 @@ func TestFormatDropsAndFails(t *testing.T) {
 	if text(c) != "select 'a" || !strings.HasPrefix(a.toast, "格式化失败：Parse error") {
 		t.Errorf("%q, toast %q", text(c), a.toast)
 	}
-	a, c = inQuery(t, `formatprg = "true"`, "")
+	a, c = inQuery(t, prgOf(t, "true", "rem"), "") // no output: the toast says so
 	a.queryDid(c, c.ed.Load("select a from t;"))
 	if gqIn(t, a, "gqq"); text(c) != "select a from t;" || a.toast != "格式化失败：没有输出" {
 		t.Errorf("no output: %q, toast %q", text(c), a.toast)
 	}
 	defer func(d time.Duration) { sqlkit.FormatTimeout = d }(sqlkit.FormatTimeout)
 	sqlkit.FormatTimeout = 200 * time.Millisecond
-	a, c = inQuery(t, `formatprg = "sleep 10; echo x"`, "")
+	a, c = inQuery(t, prgOf(t, "sleep 10; echo x", "ping -n 10 127.0.0.1 >nul & echo x"), "")
 	a.queryDid(c, c.ed.Load("select a from t"))
 	start := time.Now()
 	if gqIn(t, a, "gqq"); text(c) != "select a from t" || a.toast != "格式化超时（200ms）" || time.Since(start) > 2*time.Second {
@@ -87,16 +115,37 @@ func TestFormatDropsAndFails(t *testing.T) {
 	}
 }
 
+// warmPS pays a powershell's first start outside the format's own timeout:
+// loading the CLR, and the runner's scanner going over the exe, can take
+// tens of seconds on a loaded CI runner — a warm start is a fraction of
+// that. If even this does not finish, the format below fails anyway and
+// the log says why.
+func warmPS(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	if err := exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", "exit").Run(); err != nil {
+		t.Logf("powershell warm-up: %v", err)
+	}
+}
+
 // formatprg formats instead: stdin in, stdout out; its stderr's first
-// line when it fails (§9.5).
+// line when it fails (§9.5). The powershell start is paid by warmPS, the
+// timeout itself stays modest.
 func TestFormatPrg(t *testing.T) {
-	a, c := inQuery(t, `formatprg = "tr a-z A-Z"`, "")
+	warmPS(t)
+	defer func(d time.Duration) { sqlkit.FormatTimeout = d }(sqlkit.FormatTimeout)
+	sqlkit.FormatTimeout = 30 * time.Second
+	a, c := inQuery(t, prgOf(t, "tr a-z A-Z", upperPS(t)), "")
 	a.queryDid(c, c.ed.Load("select a from t"))
 	gqIn(t, a, "gqq")
 	if text(c) != "SELECT A FROM T" {
 		t.Errorf("%q", text(c))
 	}
-	a, c = inQuery(t, `formatprg = "echo 'no good' >&2; echo second >&2; exit 3"`, "")
+	a, c = inQuery(t, prgOf(t, "echo 'no good' >&2; echo second >&2; exit 3", "echo no good 1>&2&exit 3"), "")
 	a.queryDid(c, c.ed.Load("select a from t"))
 	gqIn(t, a, "gqq")
 	if text(c) != "select a from t" || a.toast != "格式化失败：no good" {

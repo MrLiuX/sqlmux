@@ -841,3 +841,53 @@ func TestCompleteViewHoldsStill(t *testing.T) {
 		t.Errorf("above the view: top %d, want 3", v.Top)
 	}
 }
+
+// C-r on a table with no history and no favorites opens the list all the same,
+// one dim row saying so; ↵, C-e and C-f do nothing, esc closes it, and typing
+// leaves it there (F18.9).
+func TestWhereHistoryEmpty(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	feed(t, a, "/<C-r>")
+	if tab.hist == nil || !strings.Contains(a.render().String(), "没有历史") {
+		t.Fatalf("C-r on nothing: list %v\n%s", tab.hist != nil, a.render())
+	}
+	if st := styleOf(t, a.render(), "没有历史"); st.Fg != a.theme.Dim {
+		t.Errorf("the row is not dim: %+v", st)
+	}
+	for _, k := range []string{"<CR>", "<C-e>", "<C-f>", "x", "<C-n>"} {
+		if feed(t, a, k); tab.hist == nil || tab.applied != "" || len(a.tableState(tab).Favorites) != 0 {
+			t.Fatalf("%s on the empty list: list %v, applied %q", k, tab.hist != nil, tab.applied)
+		}
+	}
+	if !strings.Contains(a.render().String(), "没有历史") {
+		t.Error("typed into: the row is gone")
+	}
+	if feed(t, a, "<Esc>"); tab.hist != nil {
+		t.Error("esc: still open")
+	}
+}
+
+// The empty history list as it shows (F18.9).
+func TestGoldenWhereHistoryEmpty(t *testing.T) {
+	a, _, _ := withRecorder(t)
+	feed(t, a, "/<C-r>")
+	golden.RequireEqual(t, a.render().String())
+}
+
+// A history the typing filters to nothing is no empty one: no list is drawn, ↵
+// closes the dropdown, and the next ↵ runs what is typed, as it did before the
+// empty list (F18.9).
+func TestWhereHistoryFilteredOut(t *testing.T) {
+	a, tab, _ := withRecorder(t)
+	a.tableState(tab).History = []config.Query{{Where: "id = 1"}}
+	feed(t, a, "/<C-r>zzz")
+	if tab.hist == nil || strings.Contains(a.render().String(), "没有历史") {
+		t.Fatalf("filtered out: list %v, a row saying there is no history", tab.hist != nil)
+	}
+	if feed(t, a, "<CR>"); tab.hist != nil || tab.applied != "" {
+		t.Errorf("↵: list %v, applied %q", tab.hist != nil, tab.applied)
+	}
+	if feed(t, a, "<CR>"); tab.applied != "zzz" {
+		t.Errorf("↵ again: applied %q", tab.applied)
+	}
+}

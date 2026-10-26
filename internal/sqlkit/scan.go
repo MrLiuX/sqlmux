@@ -16,6 +16,7 @@ const (
 	PG Dialect = iota
 	MySQL
 	SQLite // read as PG, but for its $tag$ strings, E'…' and nested comments, and with `…` identifiers too (F14.1)
+	MSSQL  // read as PG, but for its [name] and "name" identifiers and N'…' strings, @x and #x names, and its GO batches (§9.2, F18.6)
 )
 
 // CaseInsensitive is whether names go by any case, `quoted` ones too: MySQL's
@@ -55,6 +56,9 @@ type Token struct {
 //     /*! with the version after it and its */ comments, as the server's
 //     lexer reads it (sql_lex.cc): a /*! in one is another, the first */
 //     ending both.
+//   - MSSQL: doubled quotes in '…' and N'…', [name] (]] for a ]) and "…"
+//     identifiers, -- and /* */ that nest, @x and #x among the names, and
+//     a GO of its own line as a batch's end, which Statements cuts at (§9.2).
 //
 // What is left open runs to the end.
 // ponytail: /*!90000 … */ for a server older than that is code here, a
@@ -85,6 +89,10 @@ func Scan(s string, d Dialect) []Token {
 			kind, i = Comment, blockComment(s, i, d == PG)
 		case r == '\'':
 			kind, i = String, quoted(s, i, d == MySQL)
+		case d == MSSQL && (r == 'N' || r == 'n') && strings.HasPrefix(s[i+1:], "'"): // N'…'
+			kind, i = String, quoted(s, i+1, false)
+		case r == '[' && d == MSSQL: // [name], a ] in it doubled
+			kind, i = Quoted, bracket(s, i)
 		case r == '"' && d != MySQL, r == '`' && d != PG:
 			kind, i = Quoted, quoted(s, i, false)
 		case r == '"':
@@ -98,6 +106,9 @@ func Scan(s string, d Dialect) []Token {
 			} else {
 				i = len(s)
 			}
+		case d == MSSQL && (r == '@' || r == '#'): // @x, @@x, a #temp table
+			i = advance(s, i, func(r rune) bool { return identStart(r) || r == '$' || r == '@' || r == '#' || r >= '0' && r <= '9' })
+			kind = Ident
 		case identStart(r): // before digits and blanks: past ASCII, those are a name's too
 			i = advance(s, i, func(r rune) bool { return identStart(r) || r == '$' || r >= '0' && r <= '9' })
 			kind = Ident
@@ -172,6 +183,20 @@ func quoted(s string, i int, backslash bool) int {
 		case s[i] == q && i+1 < len(s) && s[i+1] == q:
 			i++
 		case s[i] == q:
+			return i + 1
+		}
+	}
+	return len(s)
+}
+
+// bracket is the end of the [name] at i, a ] in it doubled (§9.2).
+func bracket(s string, i int) int {
+	for i++; i < len(s); i++ {
+		if s[i] == ']' {
+			if i+1 < len(s) && s[i+1] == ']' {
+				i++
+				continue
+			}
 			return i + 1
 		}
 	}

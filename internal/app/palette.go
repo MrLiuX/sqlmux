@@ -502,7 +502,7 @@ func (a *App) queryPreview() *ui.PalettePreview {
 	}
 	pv := &ui.PalettePreview{Text: strings.TrimRight(text, "\n"), Top: a.palette.pvTop}
 	if c, schema := a.queryPlace(name, a.palette.conn); c != nil {
-		pv.Dialect = c.eng.Dialect()
+		pv.Dialect = c.dialect()
 		pv.Names, _ = a.sqlNames(c, text, schema, nil)
 	}
 	return a.withEditor(pv)

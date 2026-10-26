@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/db/mssql"
 	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
@@ -94,6 +95,9 @@ func connections() string {
 // into the keychain: connections.toml holds the command that reads it, not
 // the password (§13, F7.3).
 func TestConnFormPassword(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the keychain fakes are /bin/sh scripts")
+	}
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	pw := keychain(t, "ok")
 	a, _ := withSessions()
@@ -121,10 +125,13 @@ func TestConnFormPasswordElsewhere(t *testing.T) {
 	a, _ := withSessions()
 	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<CR>")
 	info, err := os.Stat(filepath.Join(config.Dir(), "connections.toml"))
-	if err != nil || a.form != nil || !strings.Contains(connections(), `password = "secret"`) || info.Mode().Perm() != 0o600 || a.toast != "没有钥匙串工具，密码以明文存进了 connections.toml" {
+	if err != nil || a.form != nil || !strings.Contains(connections(), `password = "secret"`) || (info.Mode().Perm() != 0o600 && runtime.GOOS != "windows") || a.toast != "没有钥匙串工具，密码以明文存进了 connections.toml" { // windows has no group/other bits
 		t.Errorf("no tool: form %v, err %v, toast %q, file:\n%s", a.form, err, a.toast, connections())
 	}
 
+	if runtime.GOOS == "windows" { // the keychain fakes from here on are /bin/sh scripts
+		t.Skip("the keychain flows")
+	}
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	keychain(t, "locked")
 	a, _ = withSessions()
@@ -346,10 +353,15 @@ func TestComposeDSN(t *testing.T) {
 		{"postgres", "localhost", "5432", "u", "d", "postgres://u@localhost:5432/d?sslmode=prefer"},
 		{"mysql", "db.example", "3306", "u", "d", "mysql://u@db.example:3306/d"},
 		{"postgres", "::1", "5432", "p@t:x", "d b", "postgres://p%40t%3Ax@[::1]:5432/d%20b?sslmode=prefer"},
+		{"mssql", "127.0.0.1", "51433", "sa", "sqlmux", "sqlserver://sa@127.0.0.1:51433?database=sqlmux"},
 	} {
 		if got := composeDSN(c.engine, c.host, c.port, c.user, c.db); got != c.want {
 			t.Errorf("%+v: %q", c, got)
 		}
+	}
+	// the driver reads what the form composes as the host and port that were filled in (F18.13)
+	if cfg, err := mssql.Config(composeDSN("mssql", "127.0.0.1", "51433", "sa", "sqlmux"), ""); err != nil || cfg.Host != "127.0.0.1" || cfg.Port != 51433 {
+		t.Errorf("the driver reads: %+v, %v", cfg, err)
 	}
 }
 
@@ -436,7 +448,7 @@ func TestConnFormPlainPasswordMode(t *testing.T) {
 	}
 	a, _ := withSessions()
 	feed(t, a, "<C-p>conn.new<CR>play<Tab><Tab><Tab>h<Tab><Tab>u<Tab>secret<Tab>d<CR>")
-	if info, err := os.Stat(path); err != nil || a.form != nil || info.Mode().Perm() != 0o644 {
+	if info, err := os.Stat(path); err != nil || a.form != nil || (info.Mode().Perm() != 0o644 && runtime.GOOS != "windows") { // windows has no group/other bits
 		t.Errorf("mode %v, %v, form %v", info.Mode(), err, a.form)
 	}
 }
