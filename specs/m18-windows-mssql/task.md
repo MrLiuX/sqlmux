@@ -6,7 +6,7 @@
 - **依赖**：M17 完成（v0.6.1）。
 - **完成标准**：节点全过；Windows 主机上 `go test ./...` 全绿、CI 的 windows job 绿；用户在 Windows Terminal 里用 Releases 的 zip 装一遍、浏览 SQL Server 容器里的一张表并改一格保存；Mac 上完整回归绿（含 SQL Server 的 e2e）。
 - **总则（用户 2026-10-24）**：M18 是加平台和引擎，不是改架构。macOS / Linux 上已发布的 v0.6.1 行为一字不变：非 Windows 的代码路径只允许「换一个等价的共用 helper」这类零行为差异的改动（reviewer 对每个 commit 看 Unix 侧的 diff，能不碰的不碰，碰了的要说明为什么等价）；Windows 专有的实现放 `_windows.go` / `//go:build` 文件或 `runtime.GOOS` 分支，不改包的边界和 §4 的目录；SQL Server 是 §8.1 的第五个引擎，按已有引擎的接口接入，不为它改 `db` 层的接口和共用的分页 / 保存 / 读循环，要改先问决策者。每个节点 tester 在分支头跑 Mac 的全量 e2e 回归，一条清单外失败就退回。节点 1 的反例：F18.2 把 Unix 侧的 `"$1"` 也改成了拼字符串，reviewer 退回。
-- **审查节点**：1 = F18.1–F18.3（Windows 编译、路径与子进程、剪贴板；PR #3 重做后是这一批的第一个 commit）；2 = F18.4 + F18.5（发布与 CI、Windows 的验收方式）；3 = F18.6（SQL Server 引擎）；4 = F18.7（SQL Server 的 e2e、文档）。
+- **审查节点**：1 = F18.1–F18.3（Windows 编译、路径与子进程、剪贴板；PR #3 重做后是这一批的第一个 commit）；2 = F18.4 + F18.5（发布与 CI、Windows 的验收方式）；3 = F18.6（SQL Server 引擎）；4 = F18.7（SQL Server 的 e2e、文档）；5 = F18.8–F18.11（用户 2026-10-26 验收第一轮提的，和 Windows / SQL Server 无关，Mac 的 worker 按固定工作流在 `main` 上做，不经 PR #3）。
 - **不做（留候选）**：`%APPDATA%` 以外的 Windows 惯例（注册表、安装器、scoop / winget 包）；老 conhost；Windows 上跑 e2e（没有 tmux，见 F18.5）；SQL Server 的 Windows 集成认证（`trusted_connection`，纯 Go 驱动在非 Windows 上没有）、Always Encrypted、`DELIMITER` 式的存储过程体；exec 批多条语句、`{db}` 占位符、Redis 第二轮（见 plan.md「M18 候选」余下的）；测试里用 `/bin/sh` 脚本当假工具的那些（`internal/db/exec` 的两个假服务、keychain 失败路径、`FakeSSH`，后者拼 PATH 用 `:` 在 Windows 上也不对）在 Windows 上按包或用例 skip，不改写成跨平台（win-worker 2026-10-24 问；CI 的 windows job 不带集成标签，不受影响）。
 
 ---
@@ -142,5 +142,62 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 
 **验收**
 - [ ] 完整回归绿；用户在 Windows Terminal 里连自己容器的 `sqlmux` 库，开 `t_order`、改一格保存、跑一条带 `GO` 的 query。
+
+## F18.8 命令面板预览 query 时当前连接是 Redis 就崩溃 · 状态：todo
+
+- **依赖**：无（M12 F12.10 的 query 预览、M16 的 Redis 连接）
+- **涉及**：`internal/app`（palette）
+- 用户 2026-10-26 验收时碰到：验收版 `af641a9-m18` 在 Redis 连接上开命令面板、选中一个 query 项，整个程序 panic（`palette.go:505`，`queryPreview` 里 `c.eng.Dialect()` 空指针）。决策者看了代码：`queryPlace` 在 query 记下的连接不在 session 里时退回当前连接，当前连接是 Redis 时 `eng` 为 nil；同一函数里的 `sqlNames` 已经用 `c.sql()` 守住了，只有方言这一处漏了。v0.6.1 就有。
+
+**开发**（§12「query」）
+- [ ] a. `queryPreview` 的方言取 `Conn.dialect()`（§5，Redis 按 PG 的颜色），不直接取 `eng`；顺手 grep `internal/app` 里其他 `.eng.Dialect()` 的调用，凡是连接可能是 Redis 的都换成 `dialect()`，改在共用的那一处。
+
+**验收**
+- [ ] 单测：当前连接是 Redis（`eng == nil`）、有一个记下的连接不在 session 里的 query 文件，面板选中它 `View()` 不 panic、预览有文字；mutation。
+- [ ] e2e：Redis 连接上开面板输入 query 名，预览画出来，程序还在。
+
+## F18.9 WHERE 的 `C-r` 下拉在没有历史和收藏时也要开 · 状态：todo
+
+- **依赖**：M8 F8.14、M9 F9.4
+- **涉及**：`internal/app`（where）、`internal/i18n`
+- 用户 2026-10-26 验收时提：新表上按 `C-r` 什么都不出现，以为坏了；要一个默认界面，空也画「没有历史」。
+
+**开发**（§9.4「WHERE 的 `C-r` 历史 / 收藏下拉」）
+- [ ] a. 历史和收藏都空时下拉照开：列表一行 `dim` 的「没有历史」（i18n），底部提示照画；`↵` / `C-e` / `C-f` 无事，`esc` 关，开始输入后仍是这一行（没有可过滤的）。只改 `histView` 和它的按键守卫，不另做一种浮层。
+
+**验收**
+- [ ] 单测：空历史时 `C-r` 后 `t.hist != nil`、视图有「没有历史」一行，`↵` 不执行、不 panic；mutation。
+- [ ] golden：空历史的下拉。
+- [ ] e2e：新表 `C-r` 出现「没有历史」，`esc` 关；跑过一次 WHERE 后再按列出那一条。
+
+## F18.10 键 tab 的 MATCH 输入框画到了芯片行上 · 状态：todo
+
+- **依赖**：M16 F16.3
+- **涉及**：`internal/ui`（querybar）
+- 用户 2026-10-26 验收时提：Redis 键 tab 里按 `/`，MATCH 后面是空的，光标跑到下一行 ORDER 旁边，看不到输入了什么。决策者看了代码：`QueryBar.Draw` 画完信息行后 `r = q.below(r)`，接着调 `InputRect(r)` 又 `below` 一次，输入框和光标落到芯片行，文字被芯片盖住；`ChipRect` / `ButtonRect` / `where.go` 里的 `InputRect(bodyRect)` 都只偏移一次，所以点击和补全的位置是对的、只有画的不对。v0.5.0 起就有，f16.3b 的 e2e 只查了过滤后的行、没查输入框在哪一行。
+
+**开发**（§8.1「键 tab」：信息行、MATCH 输入框、芯片行三行）
+- [ ] a. `Draw` 里只偏移一次：改在共用的那一处，不在 `InputRect` 和 `Draw` 各打一个补丁；SQL 表（没有 Info 行）一个像素都不变，用 golden 证明。
+
+**验收**
+- [ ] 单测：带 Info 的 `QueryBar.Draw` 把 WHERE 的文字画在第二行、光标也在第二行，`InputRect` 和画出来的位置一致；不带 Info 的和改前逐字节相同；mutation。
+- [ ] golden：键 tab 的三行。
+- [ ] e2e：f16.3b 补一条：`/` 后输入 `e*`，MATCH 那一行有 `e*`、光标在它后面（`cursor_at`），芯片行完整。
+
+## F18.11 Redis 树过滤扫描在途时的提示与取消 · 状态：todo
+
+- **依赖**：M16 F16.2
+- **涉及**：`internal/app`（redistree、tree）、`internal/db/redis`（keys）
+- 用户 2026-10-26 验收时提：树上 `/` 输入 `p:employees` 搜不到自己库里 `p:employees:<邮箱>` 的键，期望拼接的全键或模糊都能搜出来。决策者在同一个库（6 万键、往返 57ms）上用验收版复现：匹配本身是对的（`*p:employees*` 找到 346 条），只是一次过滤要 7–14 秒（62 次 `SCAN COUNT 1000` 加 62 次 `TYPE` pipeline），期间连接和 db 节点整个不画、计数 `0/61072`，看起来就是没搜到；每次改过滤文字又排一次整库扫描。
+
+**开发**（§7.8「Redis 的树」、§8.7「树」）
+- [ ] a. 过滤的 SCAN 用 `COUNT 10000`（`redis.Scan` 加一个 count 参数或只给过滤路径的常量，展开 db 的扫描仍是 1000）；`TYPE` 只对匹配到的键发，本来就是。
+- [ ] b. 扫描在途时连接和 db 节点照画不隐藏，db 节点的尾注换成 `dim` 的「搜索中…」，扫完换回 `DBSIZE`；扫完一个都没有才按空处理（隐藏）。`tree.found` 里记一个「在途」状态就够，不另做一种节点。
+- [ ] c. 过滤文字一变（`filterSeq` 变）就取消在途的扫描：`findKeys` 的 ctx 跟着 `filterSeq`，旧扫描的结果照旧丢弃，但不再排队跑完。
+
+**验收**
+- [ ] 集成：6 万键的私有 db 上过滤 `*p:employees*`，往返次数 ≤ 8（MONITOR 或 pipeline 计数）、结果数对；改过滤文字后旧扫描的 ctx 被取消。
+- [ ] 单测：在途时树的行里有「搜索中…」、连接和 db 节点在；扫完换回；mutation。
+- [ ] e2e：一个慢的 Redis（e2e 里的 TCP 代理加延迟，或 `DEBUG SLEEP` 前置）上 `/` 输入模式，先看到「搜索中…」，再看到键；连续改模式只有最后一个模式的结果出现。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
