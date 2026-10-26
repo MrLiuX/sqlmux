@@ -130,7 +130,7 @@ y=$(nth_row '^[▾▸] +db0( |$)' 1); rclick 14 "$y"
 check "db 节点上右键：只有 刷新" eval '[[ $(menu_items | tr "\n" "/") == "刷新/" ]]' || e2e_plain | sed -n $((y - 1)),$((y + 4))p | cut -c1-70
 key Escape; sleep 0.3
 y=$(nth_row '^[▸▾] +rd( |$)' 1); rclick 14 "$y"
-check "连接节点上右键：没有菜单" eval '[[ -z $(menu_items) ]]'
+check "连接节点上右键：Redis 连接也有 编辑… / 删除…（F18.14，之前没有菜单）" eval '[[ $(menu_items | tr "\n" "/") == "编辑…/删除…/" ]]' || menu_items
 key Escape; sleep 0.3
 quit_app; _e2e_kill
 

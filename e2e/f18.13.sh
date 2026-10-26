@@ -40,6 +40,17 @@ check "错误行折成两行以上，全文可见（connection refused 在里面
 check "表单还开着，没有保存（connections.toml 里没有 bad）" eval 'e2e_plain | grep -q "┌─ 连接" && ! grep -q "bad" "$(ct)" 2>/dev/null'
 key Escape; sleep 0.4; key Escape; sleep 0.4
 
+# ---- 窗口压矮：框取窗口高度，只画得下的行，按钮还在
+e2e_stop
+start -y 17; sleep 1
+open_form
+fill bad 127.0.0.1 1 sa pw master
+e2e_keys C-t; sleep 6
+check "窗口只有 17 行（表单本身 16 行，加上两行错误放不下）：表单框不超出窗口（框底在状态栏之前），按钮行「[ 保存 ] [ 测试 ] [ 取消 ]」还在，程序没崩" eval 'g=($(box)); (( g[1] + g[3] <= 17 )) && frows | grep -qF "[ 保存 ] [ 测试 ] [ 取消 ]" && running || { echo "  box $(box)"; frows; false; }'
+check "矮窗口里错误行画了放得下的第一行（unable to open tcp connection…）" eval 'frows | grep -q "unable to open tcp connection"'
+e2e_stop
+start; sleep 1
+
 # ---- 连得上的（Windows 主机上的容器）：表单填 host / port / user / password / database，测试成功，行里带版本；保存后文件里是 sqlserver://
 open_form
 fill msf "$MS_HOST" "$MS_PORT" "$MS_USER" "$MS_PW" "$MS_DB"
