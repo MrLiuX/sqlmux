@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -273,4 +274,45 @@ func TestGoldenRedisTree(t *testing.T) {
 	a.sess.open[dbNode(c, "0")] = true
 	openAll(a)
 	golden.RequireEqual(t, a.render().String())
+}
+
+// While the filter's scan is out, the connection and the db stay and the db's
+// note says 搜索中…, over what the scan before found; the answer brings the size
+// back, and one with no keys takes the nodes away; a change of the filter cancels
+// the scan out, whose answer then is dropped, with no error (F18.11).
+func TestRedisTreeSearching(t *testing.T) {
+	a, c := redisTree(t, someKeys())
+	c.State = connReady
+	a.sess.open[dbNode(c, "0")] = true
+	a.win().tree.filter = ui.Input{Text: "users", Pos: 5}
+	found := func() *keyScan { return a.win().tree.found[c] }
+	searching := i18n.T("搜索中…")
+	if cmd := a.findKeys(c); cmd == nil || !found().busy {
+		t.Fatalf("asked: %v, found %+v", cmd != nil, found())
+	}
+	if got := outline(a); !slices.Equal(got, []string{"cache", "  db0 " + searching}) {
+		t.Errorf("searching: %q", got)
+	}
+	keys := []redis.KeyInfo{{Name: "app:users:1", Type: "string"}}
+	a.gotFound(foundMsg{win: a.win(), conn: c, pattern: "*users*", scan: &keyScan{keys: keys, total: 11}})
+	if got := outline(a); !slices.Equal(got, []string{"cache", "  db0 11", "    app 1", "      users 1", "        1"}) {
+		t.Errorf("found: %q", got)
+	}
+	a.findKeys(c) // asked again: what it showed stays, searching
+	if got := outline(a); len(got) < 3 || got[1] != "  db0 "+searching || got[len(got)-1] != "        1" {
+		t.Errorf("searching again: %q", got)
+	}
+	ctx := a.findContext()
+	a.filterSeq = 0
+	a.askFilter() // the filter changes
+	if ctx.Err() == nil || a.findContext().Err() != nil {
+		t.Errorf("the change: the old scan %v, the new one %v", ctx.Err(), a.findContext().Err())
+	}
+	if cmd := a.gotFound(foundMsg{win: a.win(), conn: c, pattern: "*users*", err: context.Canceled}); cmd != nil || !found().busy {
+		t.Errorf("a cancelled scan's answer: toast %v, found %+v", cmd != nil, found())
+	}
+	a.gotFound(foundMsg{win: a.win(), conn: c, pattern: "*users*", scan: &keyScan{total: 11}})
+	if got := outline(a); len(got) != 0 {
+		t.Errorf("nothing found: %q", got)
+	}
 }
