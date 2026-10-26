@@ -10,6 +10,8 @@ sqlmux reads four kinds of files from `$XDG_CONFIG_HOME/sqlmux`, which is `~/.co
 | `themes/<name>.toml` | you | your own themes |
 | `layouts/<name>.toml` | you, or *Save layout as…* | named layouts |
 
+On Windows, without `XDG_*` variables, the configuration is in `%APPDATA%\sqlmux` and the state and data below are in `%LOCALAPPDATA%\sqlmux`.
+
 sqlmux writes its own state under `$XDG_STATE_HOME/sqlmux` (`~/.local/state/sqlmux`: recent items, WHERE history and favorites, `last.toml`, the layout you quit from) and `$XDG_DATA_HOME/sqlmux` (`~/.local/share/sqlmux`: `queries/*.sql` and `history.jsonl`).
 
 A key sqlmux does not know (a typo such as `readonly`) is reported in a toast at startup; a bad value stops the start with the file, the key and the values it takes.
@@ -60,7 +62,7 @@ load_all  = 5000                       # hashes, sets and sorted sets up to this
 ```toml
 [[connection]]
 name     = "local"                     # required, unique; no / or \, not starting with .
-engine   = "postgres"                  # postgres | mysql | sqlite | redis
+engine   = "postgres"                  # postgres | mysql | sqlite | mssql | redis
 dsn      = "postgres://me@localhost:5432/app?sslmode=disable"
 password_cmd = "security find-generic-password -s sqlmux-local -w"
 read_only = false                      # refuse writes on this connection
@@ -78,6 +80,7 @@ DSN per engine:
 | `postgres` | `postgres://user@host:5432/db?sslmode=disable` (the tree lists the other databases on the server too) |
 | `mysql` | `user@tcp(host:3306)/db` or `mysql://user@host:3306/db` |
 | `sqlite` | a file path; `~` is expanded, `?mode=ro` and other query parameters pass through; a missing file is not created |
+| `mssql` | `sqlserver://user@host:1433?database=app` (`mssql://` works too); driver options such as `encrypt` pass through. A server with a self-signed certificate, like the official Docker image, needs `&TrustServerCertificate=true` |
 | `redis` | `redis://user@host:6379/0` or `rediss://…`; the number is the database. See [Redis](redis.md) |
 | `exec` | no `dsn`: `dialect` and `command`, see [External commands](#external-commands-engine--exec) |
 

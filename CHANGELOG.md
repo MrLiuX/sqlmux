@@ -6,6 +6,27 @@ All notable changes to sqlmux are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-26
+
+### Added
+
+- **Windows**: native builds for Windows (amd64 and arm64), as zip files on the Releases page and through npm. sqlmux runs in Windows Terminal with PowerShell or cmd. Without `XDG_*` variables the configuration lives in `%APPDATA%\sqlmux` and history, state and layouts in `%LOCALAPPDATA%\sqlmux`. `password_cmd`, the external editor (`notepad` by default) and `formatprg` run through `cmd /c`; the clipboard works both ways through PowerShell; SQLite paths with a drive letter (`sqlmux C:\data\app.db`) open as files. The old console window (conhost) is not supported, and there is no Windows keychain support yet.
+- **SQL Server**: `engine = "mssql"` with a `sqlserver://user@host:1433?database=app` DSN (`mssql://` works too; add `&TrustServerCertificate=true` for a self-signed server). The tree lists databases, schemas, tables, views, functions and sequences; tables page with `OFFSET … FETCH`, edit and save like the other engines; queries split into batches at `GO` lines; formatting uses the T-SQL dialect. The connection form has SQL Server too. Read-only connections are checked by sqlmux only, as SQL Server has no read-only session.
+- Delete a connection from the tree: `dd` on a connection node, or *Delete…* in its right-click menu, which also has *Edit…* to open it in the connection manager.
+
+### Changed
+
+- Deleting a connection that has open tabs no longer refuses: the confirmation says how many tabs (and unsaved edits) go with it, and then closes them in every session.
+- `C-r` in the WHERE input opens even when the table has no history yet, and says "No history".
+- Filtering a Redis tree with `/` scans in bigger batches, shows "Searching…" on the database while it runs, and a new pattern cancels the scan still running.
+- Exported file names replace the characters Windows does not allow (`< > : " / \ | ? *`) with `_`, on every platform: the key `hash:big` exports as `hash_big.csv`.
+
+### Fixed
+
+- The command palette crashed when it previewed a query while the current connection was Redis.
+- The MATCH input of a Redis key tab was drawn over the chips row below it.
+- The connection form's error line wraps instead of being cut off.
+
 ## [0.6.1] - 2026-10-21
 
 ### Added
@@ -208,7 +229,8 @@ Note: `go install github.com/kackerx/sqlmux/...` does not work for this version 
 - Every key can be rebound per pane type in `keymaps.toml` (`SPC` is the leader). `sqlmux keys` lists every action and `sqlmux keys --check` reports conflicts. Key help (`?`), which-key hints and full mouse support are built in, and `vim = false` gives plain editors and arrow-key navigation.
 - Themes, border styles, Nerd Font or ASCII icons, and an English or Chinese UI (`language = "zh"`).
 
-[Unreleased]: https://github.com/kackerx/sqlmux/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/kackerx/sqlmux/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/kackerx/sqlmux/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/kackerx/sqlmux/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/kackerx/sqlmux/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/kackerx/sqlmux/compare/v0.5.0...v0.5.1
