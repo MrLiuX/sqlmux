@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F8.16 连接管理：修改和删除连接（specs/m8-feedback/task.md F8.16；tech-design §7.8「连接管理」、§13「凭据」、§14）
 # connections.toml 的局部改写（只动改过的行，注释和别的块一个字节不动）、钥匙串的搬 / 删、state.json 的改名有单测；这里在真实终端和 PG 上测：
-# 浮层的列表和表单、改 read_only 保存后文件只变一行、删除（确认、树里消失、正在用的被拒绝）、新建追加、改名连带 state.json 和钥匙串、
+# 浮层的列表和表单、改 read_only 保存后文件只变一行、删除（确认、树里消失、正在用的先问再关它的 tab，F18.12）、新建追加、改名连带 state.json 和钥匙串、
 # 文件只读时在存钥匙串之前就拒绝、esc 按进入方式、列表上 C-s 是保存表单（不是全局保存）。钥匙串一律用 lib.sh 的假 security / secret-tool。
 . "$(dirname "$0")/lib.sh"
 e2e_build || exit 1
@@ -91,10 +91,12 @@ key Escape; sleep 0.4
 check "关掉浮层之后树里 seed 消失" eval '[[ -z $(nrow seed) ]]'
 write_conns
 
-# ---- 正在用的：doraemon（启动连接，有 tab）被拒绝
+# ---- 正在用的：doraemon（启动连接，有 tab）不再拒绝（F18.12）：确认框写它开着几个 tab，n 取消什么都不动（y 之后的全过程在 f18.12.sh）
 SOLO= start -C "$D/c" -S "$ST"; open_table t_user; wait_for 8 settled
 cmdp conn.manage; key x; sleep 0.5
-check "删正在用的 doraemon：toast「先关掉用它的 tab」，不弹确认，文件没变" eval 'toast_text | grep -q "先关掉用它的 tab" && ! e2e_plain | grep -q "删除连接" && cmp -s "$(ct)" "$D/orig.toml"'
+check "删正在用的 doraemon（t_user 和 query_1 两个 tab）：确认框「删除连接 doraemon？它开着的 2 个 tab 会一起关掉」，没有「先关掉用它的 tab」的 toast" eval 'e2e_plain | grep -q "删除连接 doraemon？它开着的 2 个 tab 会一起关掉" && ! toast_text | grep -q "先关掉用它的 tab"'
+key n; sleep 0.4
+check "n：取消，文件没变、浮层还在" eval 'cmp -s "$(ct)" "$D/orig.toml" && mgr_open && ! e2e_plain | grep -q "删除连接"'
 key Escape; sleep 0.3
 
 # ---- 新建：从列表走到「新建」进表单，esc 回列表；conn.new 直接进的，esc 直接关
