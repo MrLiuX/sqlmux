@@ -43,4 +43,13 @@ check "esc 关闭下拉" eval '[[ -z $(pop) ]]'
 key Escape; sleep 0.3; key Escape; sleep 0.3
 key /; sleep 0.6
 check "esc 回到表格之后再按 /：进 WHERE 输入框，没有下拉自己弹出" eval '[[ -z $(pop) ]] && mode_is INSERT'
+# ---- 有历史但被输入过滤光了（f24ce3c）：不画列表、不出「没有历史」；↵ 关下拉，再 ↵ 执行输入的条件，和 v0.6.1 一样
+key Escape; sleep 0.3; key Escape; sleep 0.3; key Escape; sleep 0.3
+edit; key C-r; sleep 0.6; typ "id = 1"
+check "有历史（status = 'done'）但被「id = 1」过滤光了：下拉不画（没有列表），也没有「没有历史」" eval '[[ -z $(pop) ]] && ! e2e_plain | grep -q "没有历史" || { items; false; }'
+key Enter; sleep 0.4
+check "↵：下拉关着，没有执行（还在 WHERE 输入框里，INSERT）" eval 'running && [[ -z $(pop) ]] && mode_is INSERT'
+key Enter; wait_for 8 settled; sleep 0.3
+check "再 ↵：执行了输入的条件（离开输入框，WHERE 里是 id = 1）" eval 'running && ! mode_is INSERT && e2e_plain | grep -q "id = 1" || { e2e_plain | head -12; false; }'
+
 e2e_done
