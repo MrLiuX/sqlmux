@@ -12,6 +12,7 @@ type CompleteItem struct {
 	Text string
 	Pos  []int  // match positions in Text
 	Note string // dim, on the right: a column's type, 关键字, 值, a time
+	Dim  bool   // Text in dim: a list with nothing in it says so (F18.9)
 	Sep  bool   // no item: a rule between two groups, in sep, with no region to click (F8.14)
 }
 
@@ -69,6 +70,9 @@ func (c Complete) Draw(f *Frame, box uv.Rectangle, rows int) {
 			st.Bg = th.Row
 		}
 		f.Fill(line, st)
+		if it.Dim {
+			st.Fg = th.Dim
+		}
 		x := x0 + 1
 		if it.Icon.Text != "" {
 			x = f.Text(x, line.Min.Y, x1-1, it.Icon.Text+" ", it.Icon.On(uv.Style{Fg: th.Dim, Bg: st.Bg}))

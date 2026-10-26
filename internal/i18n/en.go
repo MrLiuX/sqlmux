@@ -53,6 +53,7 @@ var en = map[string]string{
 	"切换 schema":  "Switch schema",
 	"不认识的 URL %s://：只有 postgres://、mysql://、redis:// 和 SQLite 的文件": "Unknown URL %s://: only postgres://, mysql://, redis:// and SQLite files",
 	"%s: 不认识的键 %s": "%s: unknown key(s) %s",
+	"没有历史":         "No history",
 	"没有读函数定义的权限：要 SHOW_ROUTINE，或是它的 DEFINER": "No permission to read the function's definition: it takes SHOW_ROUTINE, or being its DEFINER",
 	"没有读视图定义的权限":                             "No permission to read the view's definition",
 	"表已不存在，按 R 刷新":                           "The table no longer exists: R reloads",

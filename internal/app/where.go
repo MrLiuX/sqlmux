@@ -990,6 +990,9 @@ func (a *App) histMove(t *dataTab, d int) {
 // first page.
 func (a *App) histApply(t *dataTab, i int) tea.Cmd {
 	es, _ := a.histEntries(t)
+	if len(es) == 0 { // the "no history" row: ↵ and a click on it do nothing
+		return nil
+	}
 	t.hist = nil
 	if i < 0 || i >= len(es) {
 		return nil
@@ -1121,6 +1124,9 @@ func (a *App) histView(p *Pane, t *dataTab) (ui.Complete, uv.Rectangle, int) {
 	}
 	if sep >= 0 && v.Sel >= sep {
 		v.Sel++
+	}
+	if len(es) == 0 { // nothing to pick: say so, as the list is not drawn without a row (F18.9)
+		v.Sel, v.Items = -1, []ui.CompleteItem{{Text: i18n.T("没有历史"), Dim: true}}
 	}
 	foot := 0
 	if len(v.Foot) > 0 {
