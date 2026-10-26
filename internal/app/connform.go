@@ -384,41 +384,66 @@ func (a *App) keepConnInSight() {
 	f.top = a.managerView().ScrollTop(a.w)
 }
 
-// connInUse is whether a session has a tab on the connection called name, a
-// result of a run on it, or started with it: its tabs would lose it (F8.16).
-func (a *App) connInUse(name string) bool {
+// connTab is a tab of a session on a connection: pane p of window win, its
+// i-th.
+type connTab struct {
+	win *Window
+	p   *Pane
+	i   int
+}
+
+// tabsOn are the tabs of every session that are on the connection called
+// name: a table of it, a query that runs on it or goes to it once connected,
+// the result of a run on it (F18.12).
+func (a *App) tabsOn(name string) (out []connTab) {
 	on := func(c *Conn) bool { return c != nil && c.Spec.Name == name }
 	for _, s := range a.sessions {
-		if on(s.start) {
-			return true
-		}
-		for _, p := range s.panes() {
-			for _, tb := range p.Tabs {
-				switch {
-				case tb.Data != nil && on(tb.Data.conn), tb.Query != nil && (on(tb.Query.conn) || on(tb.Query.want)),
-					tb.Result != nil && tb.Result.run != nil && on(tb.Result.run.conn):
-					return true
+		for _, w := range s.Windows {
+			if w.Root == nil {
+				continue
+			}
+			for _, p := range w.Root.Leaves() {
+				for i, tb := range p.Tabs {
+					switch {
+					case tb.Data != nil && on(tb.Data.conn), tb.Query != nil && (on(tb.Query.conn) || on(tb.Query.want)),
+						tb.Result != nil && tb.Result.run != nil && on(tb.Result.run.conn):
+						out = append(out, connTab{w, p, i})
+					}
 				}
 			}
 		}
 	}
-	return false
+	return out
 }
 
-// deleteConn is x on the list, or the form's delete: asked first; the block
-// goes from connections.toml, its password from the keychain when it is the
-// one this program put there, the connection from every session, with the
-// tabs closed of it and the password kept for it (F8.16).
+// deleteConn is x on the list, or the form's delete: asked first, saying how
+// many tabs close with it; the queries on it are written, the block goes from
+// connections.toml, its password from the keychain when it is the one this
+// program put there, the connection from every session, with the tabs closed
+// of it as closeTab closes them, but not kept for tab.reopen, and the password
+// kept for it (F8.16, F18.12).
 func (a *App) deleteConn() tea.Cmd {
 	f := a.form
 	if f.was == nil {
 		return nil
 	}
 	c := *f.was
-	if a.connInUse(c.Name) {
-		return a.showToast(i18n.T("先关掉用它的 tab"))
+	text := i18n.T("删除连接 %s？", c.Name)
+	if tabs := a.tabsOn(c.Name); len(tabs) > 0 {
+		text = i18n.T("删除连接 %s？它开着的 %d 个 tab 会一起关掉", c.Name, len(tabs))
+		if n := changed(tabs); n > 0 {
+			text += i18n.T("，其中 %d 个有没保存的修改，会丢", n)
+		}
 	}
-	a.confirm = &confirmBox{text: i18n.T("删除连接 %s？", c.Name), yes: i18n.T("删除"), then: func() tea.Cmd {
+	a.confirm = &confirmBox{text: text, yes: i18n.T("删除"), then: func() tea.Cmd {
+		tabs := a.tabsOn(c.Name)
+		for _, t := range tabs {
+			if q := t.p.Tabs[t.i].Query; q != nil { // before anything goes: a query's text is not lost (§11)
+				if err := q.flush(); err != nil {
+					return a.saveFailed(err)
+				}
+			}
+		}
 		if err := config.DeleteConnection(c.Name); err != nil {
 			return a.showToast(err.Error())
 		}
@@ -426,10 +451,29 @@ func (a *App) deleteConn() tea.Cmd {
 		if err := config.DeletePassword(c.PasswordCmd); err != nil {
 			toast = a.showToast(err.Error())
 		}
-		secrets.Delete(c.Name) // a connection of the name made next asks again
+		secrets.Delete(c.Name)                // a connection of the name made next asks again
+		for k := len(tabs) - 1; k >= 0; k-- { // a pane's last tab first: the ones before keep their places
+			t := tabs[k]
+			dropTab(t.p, t.i)
+			if len(t.p.Tabs) == 0 {
+				t.win.removePane(t.p.ID)
+			}
+		}
 		for _, s := range a.sessions {
+			for _, o := range s.conns() {
+				if o.root().Spec.Name == c.Name && o.State == connReady {
+					o.Main.Close()
+					o.Meta.Close()
+				}
+			}
 			s.Conns = slices.DeleteFunc(s.Conns, func(o *Conn) bool { return o.Spec.Name == c.Name })
 			s.closed = slices.DeleteFunc(s.closed, func(t closedTab) bool { return t.conn != nil && t.conn.Spec.Name == c.Name })
+			if s.start != nil && s.start.Spec.Name == c.Name {
+				s.start = nil
+				if len(s.Conns) > 0 {
+					s.start = s.Conns[0]
+				}
+			}
 			if s.last != nil && s.last.Spec.Name == c.Name {
 				s.last = s.start
 			}
@@ -442,6 +486,16 @@ func (a *App) deleteConn() tea.Cmd {
 		return toast
 	}}
 	return nil
+}
+
+// changed is how many of tabs are tables with changes not saved.
+func changed(tabs []connTab) (n int) {
+	for _, t := range tabs {
+		if d := t.p.Tabs[t.i].Data; d != nil && d.changes() > 0 {
+			n++
+		}
+	}
+	return n
 }
 
 // formConn is the connection the form says, checked as saving checks the

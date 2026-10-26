@@ -1253,22 +1253,24 @@ func (a *App) closeTabThen(p *Pane, i int, after func() tea.Cmd) tea.Cmd {
 // the focus, and any zoom ends. The window's last pane besides the result
 // area stays. The result area goes with its tabs, pinned or not, its
 // height kept for the next time (§11).
-func (a *App) removePane(id int) {
-	win := a.win()
-	if win.onlyPane(id) {
+func (a *App) removePane(id int) { a.win().removePane(id) }
+
+// removePane is App.removePane in window w, whichever it is.
+func (w *Window) removePane(id int) {
+	if w.onlyPane(id) {
 		return
 	}
-	if res := win.Result; res != nil && id == res.ID {
+	if res := w.Result; res != nil && id == res.ID {
 		for _, tb := range res.Tabs { // what a run going on took the place of goes too
 			if r := tb.Result.run; r != nil {
 				r.prev = nil
 			}
 		}
-		win.resultRatio, win.Result = win.Root.Ratio, nil // it is the root's lower half
+		w.resultRatio, w.Result = w.Root.Ratio, nil // it is the root's lower half
 	}
-	if root, heir := win.Root.remove(id); root != nil {
-		win.Root, win.Zoom = root, 0
-		win.focus(heir.ID)
+	if root, heir := w.Root.remove(id); root != nil {
+		w.Root, w.Zoom = root, 0
+		w.focus(heir.ID)
 	}
 }
 
