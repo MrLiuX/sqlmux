@@ -229,6 +229,7 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 	if r.Dy() < 1 {
 		return cursor
 	}
+	bar := r // InputRect takes it whole, as it does everywhere else: it moves past the Info row itself
 	if len(q.Info) > 0 {
 		for i, cr := range rowRects(q.Info, r, r.Min.Y) {
 			q.drawChip(f, q.Info[i], cr)
@@ -254,7 +255,7 @@ func (q QueryBar) Draw(f *Frame, r uv.Rectangle) uv.Position {
 		f.Text(hx, r.Min.Y, r.Max.X, h+" ", vst)
 	}
 	f.Text(vx, r.Min.Y, r.Max.X, "▾", vst)
-	if c := q.Where.DrawSQL(f, q.InputRect(r), bg, q.Dialect, q.Names); q.Typing {
+	if c := q.Where.DrawSQL(f, q.InputRect(bar), bg, q.Dialect, q.Names); q.Typing {
 		cursor = c
 	}
 	if r.Dy() < 2 {

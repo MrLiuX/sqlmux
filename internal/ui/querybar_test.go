@@ -135,3 +135,20 @@ func TestQueryBarYieldOrder(t *testing.T) {
 	}
 	t.Error("no width has ORDER and the save group alone")
 }
+
+// With an Info row over it the WHERE is on the second row, its text and its
+// cursor, where InputRect says; the chips are the third, untouched (F18.10).
+func TestQueryBarInfoRowInput(t *testing.T) {
+	r := uv.Rect(0, 0, 60, 3)
+	q := QueryBar{
+		Label: "MATCH", Where: Input{Text: "e*", Pos: 2}, Typing: true,
+		Info:  []Chip{{Label: "type", Value: "hash"}},
+		Chips: []Chip{{Label: "ORDER", Value: "none", Action: "grid.order"}},
+	}
+	f := NewFrame(60, 3, TokyonightStorm)
+	cur := q.Draw(f, r)
+	in, rows := q.InputRect(r), strings.Split(f.String(), "\n")
+	if in.Min.Y != 1 || cur != uv.Pos(in.Min.X+2, 1) || !strings.Contains(rows[1], "MATCH e*") || !strings.Contains(rows[2], "ORDER none") || strings.Contains(rows[2], "e*") {
+		t.Errorf("input %v, cursor %v:\n%s", in, cur, f.String())
+	}
+}

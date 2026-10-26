@@ -63,6 +63,23 @@ func TestGoldenKeyTabs(t *testing.T) {
 				lines = append(lines, ansi.Cut(l, r.Min.X, r.Max.X))
 			}
 			golden.RequireEqual(t, strings.Join(lines, "\n"))
+			if k.typ != "hash" {
+				return
+			}
+			t.Run("typed", func(t *testing.T) {
+				// MATCH typed into: the text and the cursor are on its own row, under the Info row, over the chips (F18.10)
+				feed(t, a, "/e*")
+				f := a.render()
+				row := strings.Split(f.String(), "\n")[r.Min.Y+2]
+				if i := strings.Index(row, "e*"); !strings.Contains(row, "MATCH e*") || f.Cursor == nil || f.Cursor.Y != r.Min.Y+2 || f.Cursor.X != ansi.StringWidth(row[:i])+2 {
+					t.Errorf("MATCH row %q, cursor %v", row, f.Cursor)
+				}
+				var typed []string
+				for _, l := range strings.Split(f.String(), "\n")[r.Min.Y : r.Min.Y+5] {
+					typed = append(typed, ansi.Cut(l, r.Min.X, r.Max.X))
+				}
+				golden.RequireEqual(t, strings.Join(typed, "\n"))
+			})
 		})
 	}
 }
