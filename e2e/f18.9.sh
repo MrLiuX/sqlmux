@@ -33,4 +33,14 @@ check "esc 关闭下拉，WHERE 输入框还在" eval '[[ -z $(pop) ]] && runnin
 run "status = 'done'"
 edit; key C-r; sleep 0.6
 check "跑过 status = 'done' 之后 C-r：列出那一条，没有「没有历史」" eval 'items | grep -q "^status = .done." && ! items | grep -q "没有历史" || { items; false; }'
+
+# ---- F3.39：下拉关掉后再 esc 是 INSERT → NORMAL（还在 WHERE 里）；WHERE 的 NORMAL 下 / 就是 where.history，下拉照设计弹出，esc 关，三个 esc 回到表格后 / 进 WHERE 不带下拉
+key Escape; sleep 0.3; key Escape; sleep 0.3
+key /; sleep 0.6
+check "WHERE 的 NORMAL 下按 /：历史下拉弹出（F3.39），列出那一条" eval '[[ -n $(pop) ]] && items | grep -q "^status = .done."'
+key Escape; sleep 0.3
+check "esc 关闭下拉" eval '[[ -z $(pop) ]]'
+key Escape; sleep 0.3; key Escape; sleep 0.3
+key /; sleep 0.6
+check "esc 回到表格之后再按 /：进 WHERE 输入框，没有下拉自己弹出" eval '[[ -z $(pop) ]] && mode_is INSERT'
 e2e_done
