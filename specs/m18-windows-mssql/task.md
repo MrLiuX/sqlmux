@@ -208,7 +208,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 
 **开发**（§7.8「连接管理」）
 - [ ] a. `deleteConn` 不再因 `connInUse` 拒绝：把它改成数（tab 数、其中有未保存表格修改的数），确认框文字「删除连接 D？它开着的 N 个 tab 会一起关掉」，有未保存修改再加「，其中 M 个有没保存的修改，会丢」；没 tab 时照旧「删除连接 D？」。
-- [ ] b. `y` 后先在每个 session 里关掉它的 tab（data、query（`conn` 或 `want` 是它的）、跑在它上面的结果 tab）：走 `closeTab` 的路（表格修改丢弃、query 照 §11 落盘），不记进 `closed`（deleteConn 本来就把它的 `closed` 项删了）；空了的 pane 收掉；`s.start` 是它时换成剩下的第一个连接（没有剩下的就 nil，启动时「没有连接」那条路照常）；再按原来的顺序删文件块、钥匙串、session 里的 `Conn`。删 `先关掉用它的 tab` 这个 i18n 键。
+- [ ] b. `y` 后先把它的 query 文字照 §11 落盘、删文件块、钥匙串，失败 toast 且什么都不关（worker 定的顺序，reviewer 2026-10-26 认可）；成功后在每个 session 里关掉它的 tab（data、query（`conn` 或 `want` 是它的）、跑在它上面的结果 tab）：走 `closeTab` 的路（表格修改丢弃），不记进 `closed`（deleteConn 本来就把它的 `closed` 项删了）；空了的 pane 收掉；`s.start` 是它时换成剩下的第一个连接（没有剩下的就 nil，启动时「没有连接」那条路照常）；删 session 里的 `Conn`，并关掉它和各库子连接已连上的 `Main` / `Meta`（同 `closeSession` 的 `closeWorkers`，不在 Update 里同步 Close 等请求结束）。确认框在事务里时多一句 `unlessLost` 的「D 有未提交的事务，会回滚」（看它和各库子连接的 `inTx`），正在跑的查询直接取消。删 `先关掉用它的 tab` 这个 i18n 键。
 
 **验收**
 - [ ] 单测：两个 session、三个 tab 用着它（其中一个表格有未保存修改）时删除：确认框文字带 3 和 1；`y` 后三个 tab 没了、空 pane 收了、文件块没了、别的连接的 tab 不动；它是启动连接时 `start` 换了；mutation。
@@ -237,7 +237,7 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 
 **开发**（§7.8「右键菜单」、§6.4 `tree`）
 - [ ] a. `tree.delete` 在连接节点上走 F18.12 的删除（同一个确认框和关 tab 的路，复用 `deleteConn` 那段，不另写一份）；键位不动，仍是 `dd`。
-- [ ] b. 连接节点的右键菜单加「编辑…」（打开连接管理并选中这个连接，同 `conn.manage` 后选中）和「删除…」，排在「选择库… / 选择 schema…」后面；每种引擎都有（Redis、SQLite、exec 的连接也是）。
+- [ ] b. 连接节点的右键菜单加「编辑…」（打开连接管理并选中这个连接，同 `conn.manage` 后选中）和「删除…」，排在「选择库… / 选择 schema…」后面；Redis、SQLite 的连接也有；exec 连接不在连接管理里（F17.7），只有「删除…」；命令行开的临时连接两项都没有、`dd` 无事（reviewer 2026-10-26 问）。
 
 **验收**
 - [ ] 单测：连接节点上 `dd` 弹 F18.12 的确认框，`y` 后连接从树和文件里没了；右键菜单的项数和文字；mutation。

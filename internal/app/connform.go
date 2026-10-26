@@ -442,6 +442,9 @@ func (a *App) deleteConnection(c config.Connection) tea.Cmd {
 			text += i18n.T("，其中 %d 个有没保存的修改，会丢", n)
 		}
 	}
+	if line := rollbackLine(a.connsOf(c.Name, (*Conn).inTx), verbClose); line != "" {
+		text += "\n" + line
+	}
 	a.confirm = &confirmBox{text: text, yes: i18n.T("删除"), then: func() tea.Cmd {
 		tabs := a.tabsOn(c.Name)
 		for _, t := range tabs {
@@ -466,13 +469,11 @@ func (a *App) deleteConnection(c config.Connection) tea.Cmd {
 				t.win.removePane(t.p.ID)
 			}
 		}
+		var ws []*db.Worker // closed in a Cmd: Close waits on what runs
+		for _, o := range a.connsOf(c.Name, func(o *Conn) bool { return o.State == connReady }) {
+			ws = append(ws, o.Main, o.Meta)
+		}
 		for _, s := range a.sessions {
-			for _, o := range s.conns() {
-				if o.root().Spec.Name == c.Name && o.State == connReady {
-					o.Main.Close()
-					o.Meta.Close()
-				}
-			}
 			s.Conns = slices.DeleteFunc(s.Conns, func(o *Conn) bool { return o.Spec.Name == c.Name })
 			s.closed = slices.DeleteFunc(s.closed, func(t closedTab) bool { return t.conn != nil && t.conn.Spec.Name == c.Name })
 			if s.start != nil && s.start.Spec.Name == c.Name {
@@ -491,9 +492,22 @@ func (a *App) deleteConnection(c config.Connection) tea.Cmd {
 			a.selectConn(min(a.form.cur, len(a.managed())))
 			a.form.list = true
 		}
-		return toast
+		return tea.Batch(toast, closeWorkers(ws))
 	}}
 	return nil
+}
+
+// connsOf are the connections called name in every session, and the databases
+// of them made so far, that are what is: a transaction going, connected.
+func (a *App) connsOf(name string, is func(*Conn) bool) (out []*Conn) {
+	for _, s := range a.sessions {
+		for _, o := range s.conns() {
+			if o.root().Spec.Name == name && is(o) {
+				out = append(out, o)
+			}
+		}
+	}
+	return out
 }
 
 // changed is how many of tabs are tables with changes not saved.

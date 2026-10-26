@@ -632,7 +632,11 @@ func TestConnManagerDeleteClosesTabs(t *testing.T) {
 	if a.confirm == nil {
 		t.Fatal("not asked again")
 	}
-	feed(t, a, "y")
+	_, cmd := a.Update(teaKey("y"))
+	if closes != 0 {
+		t.Error("the workers are closed in Update, which waits on what they run")
+	}
+	deliver(a, cmd)
 	if n := len(a.tabsOn("second")); n != 0 || len(a.sess.Conns) != 1 || len(s2.Conns) != 0 {
 		t.Errorf("tabs %d, conns %d and %d", n, len(a.sess.Conns), len(s2.Conns))
 	}
@@ -1047,5 +1051,39 @@ func TestMenuConn(t *testing.T) {
 	rightClickNode(t, a, "second")
 	if got := menuLabels(a); len(got) != 0 {
 		t.Errorf("the command line's: %q", got)
+	}
+}
+
+// A connection with a transaction going, or a database of it, says so in the
+// question, as closing a session does: the delete rolls it back (F18.12).
+func TestConnManagerDeleteSaysTransaction(t *testing.T) {
+	a := managed(t)
+	second := a.sess.Conns[1]
+	a.run("conn.manage", 0)
+	feed(t, a, "jx")
+	if a.confirm == nil || strings.Contains(a.confirm.text, "事务") {
+		t.Fatalf("a transaction said with none going: %+v", a.confirm)
+	}
+	feed(t, a, "n")
+	second.inDB("alpha").tx = 'T'
+	feed(t, a, "x")
+	if a.confirm == nil || a.confirm.text != "删除连接 second？\nsecond/alpha 有未提交的事务，关闭会回滚。" {
+		t.Errorf("asked %+v", a.confirm)
+	}
+}
+
+// Two tabs of the connection in a pane, before another's: only the other's
+// stays, the tabs going last first or their places shift (F18.12).
+func TestConnManagerDeleteTabsOfOnePane(t *testing.T) {
+	a := managed(t)
+	second := a.sess.Conns[1]
+	p := a.win().pane(2)
+	q := p.Tabs[0]
+	p.Tabs = []Tab{{Data: &dataTab{conn: second}}, {Data: &dataTab{conn: second}}, q}
+	p.Cur = 2
+	a.run("conn.manage", 0)
+	feed(t, a, "jxy")
+	if len(p.Tabs) != 1 || p.Tabs[0].Query != q.Query {
+		t.Errorf("left %d tabs, the query kept %v", len(p.Tabs), len(p.Tabs) > 0 && p.Tabs[0].Query == q.Query)
 	}
 }
