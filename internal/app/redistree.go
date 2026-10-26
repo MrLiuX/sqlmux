@@ -285,7 +285,7 @@ func (a *App) findKeys(c *Conn) tea.Cmd {
 		delete(w.tree.found, c)
 		return nil
 	}
-	meta, budget, ctx := c.Meta, a.scanKeys, a.findContext()
+	meta, budget, ctx := c.Meta, a.scanKeys, w.tree.findContext()
 	busy := &keyScan{busy: true}
 	if old := w.tree.found[c]; old != nil { // what it showed stays, searching
 		busy.keys, busy.total = old.keys, old.total
@@ -327,13 +327,22 @@ func (a *App) gotFound(m foundMsg) tea.Cmd {
 	return nil
 }
 
-// findContext is the context of the scans for the filter as it is: a change of
-// it (askFilter) cancels it (F18.11).
-func (a *App) findContext() context.Context {
-	if a.findCtx == nil {
-		a.findCtx, a.findStop = context.WithCancel(context.Background())
+// findContext is the context of the scans for the window's filter as it is: a
+// change of it, esc included, cancels it with stopFind (F18.11).
+func (t *treeState) findContext() context.Context {
+	if t.findCtx == nil {
+		t.findCtx, t.findStop = context.WithCancel(context.Background())
 	}
-	return a.findCtx
+	return t.findCtx
+}
+
+// stopFind cancels the scans out for the filter: the scans of the filter before
+// are not wanted, they stop and do not run out. Another window's go on.
+func (t *treeState) stopFind() {
+	if t.findStop != nil {
+		t.findStop()
+		t.findCtx, t.findStop = nil, nil
+	}
 }
 
 // filterDue is the filter left alone long enough to ask the servers for its
@@ -350,10 +359,7 @@ func (a *App) askFilter() tea.Cmd {
 		return nil
 	}
 	a.filterSeq++
-	if a.findStop != nil { // the scans of the filter before are not wanted: they stop, not run out
-		a.findStop()
-		a.findCtx, a.findStop = nil, nil
-	}
+	a.win().tree.stopFind()
 	seq := a.filterSeq
 	return tea.Tick(filterDelay, func(time.Time) tea.Msg { return filterDue{seq} })
 }

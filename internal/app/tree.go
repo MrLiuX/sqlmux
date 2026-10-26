@@ -27,6 +27,9 @@ type treeState struct {
 	// found is what the server said of the filter's pattern, for each Redis db: the
 	// filter is the window's, so are its keys (F16.2)
 	found map[*Conn]*keyScan
+	// the scans for the filter run in findCtx, cancelled when the filter changes (F18.11)
+	findCtx  context.Context
+	findStop context.CancelFunc
 }
 
 // connected answers connect: c's Main and Meta, or why not.
@@ -874,6 +877,7 @@ func (a *App) filterKey(k keymap.Key) tea.Cmd {
 		a.treeFirstMatch()
 	case keymap.Esc:
 		t.filter, t.filtering = ui.Input{}, false
+		t.stopFind()
 		a.clampTree()
 	default:
 		if editInput(&t.filter, k) {
