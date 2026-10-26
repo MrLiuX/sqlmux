@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 
+	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db"
 	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/ui"
@@ -69,7 +70,7 @@ func (a *App) menuItems(n node) []menuItem {
 		}
 		return a.pickItem(n)
 	case nodeConn:
-		return a.pickItem(n)
+		return append(a.pickItem(n), a.connItems(n.conn)...)
 	case nodeSchema, nodeGroup, nodeColumn, nodeObjects, nodeIndex, nodeKey, nodeFunc, nodeSequence, nodeWorkspace, nodeWindow, nodeTab, nodeQueries, nodeSep, nodeNote: // no menu
 	}
 	return nil
@@ -155,8 +156,8 @@ func (a *App) renameQueryFile() tea.Cmd {
 }
 
 // treeDelete is tree.delete (dd): a query file's deletion, a table's or a
-// view's drop, a Redis key's or a namespace's delete; on any other node it
-// does nothing.
+// view's drop, a Redis key's or a namespace's delete, a connection's; on any
+// other node it does nothing.
 func (a *App) treeDelete() tea.Cmd {
 	n, ok := a.treeNode()
 	switch {
@@ -166,8 +167,37 @@ func (a *App) treeDelete() tea.Cmd {
 		return a.deleteRedisKey(n)
 	case ok && n.kind == nodeNamespace:
 		return a.deleteNamespace(n)
+	case ok && n.kind == nodeConn:
+		return a.treeDeleteConn(n.conn)
 	}
 	return a.deleteQuery()
+}
+
+// connItems are the menu's entries on connection c: the manager on it, its
+// deletion (F18.14). A connection of the command line is in no file: none;
+// the manager does not list an exec one (F17.7).
+func (a *App) connItems(c *Conn) []menuItem {
+	var items []menuItem
+	if !c.Spec.Temp && c.Spec.Engine != "exec" {
+		items = append(items, menuItem{i18n.T("编辑…"), "edit", func() tea.Cmd { a.manage(c); return nil }})
+	}
+	if !c.Spec.Temp {
+		items = append(items, menuItem{i18n.T("删除…"), "trash", func() tea.Cmd { return a.treeDeleteConn(c) }})
+	}
+	return items
+}
+
+// treeDeleteConn is the delete of connection c from the tree: the manager's,
+// of the block connections.toml has now.
+func (a *App) treeDeleteConn(c *Conn) tea.Cmd {
+	if c.Spec.Temp {
+		return nil
+	}
+	spec, err := config.ReadConnection(c.Spec.Name)
+	if err != nil {
+		return a.showToast(err.Error())
+	}
+	return a.deleteConnection(spec)
 }
 
 // dropSQL is the statement that drops t, as its kind is dropped (§7.8「右键菜单」).

@@ -119,10 +119,12 @@ func (a *App) openConnForm() {
 
 // openConnManager is conn.manage: the manager on the connection in use, the
 // list having the keys (F8.16).
-func (a *App) openConnManager() {
+func (a *App) openConnManager() { a.manage(a.conn()) }
+
+// manage opens the manager on connection c.
+func (a *App) manage(c *Conn) {
 	a.form = &connForm{list: true, groupSel: -1}
-	cur := slices.Index(a.managed(), a.conn())
-	a.selectConn(max(cur, 0))
+	a.selectConn(max(slices.Index(a.managed(), c), 0))
 }
 
 // selectConn selects row i of the list and fills the form from it: for a
@@ -423,11 +425,16 @@ func (a *App) tabsOn(name string) (out []connTab) {
 // of it as closeTab closes them, but not kept for tab.reopen, and the password
 // kept for it (F8.16, F18.12).
 func (a *App) deleteConn() tea.Cmd {
-	f := a.form
-	if f.was == nil {
-		return nil
+	if f := a.form; f.was != nil {
+		return a.deleteConnection(*f.was)
 	}
-	c := *f.was
+	return nil
+}
+
+// deleteConnection is deleteConn on c, as connections.toml has it: the
+// manager's, or the tree's, where tree.delete and the menu are on a
+// connection (F18.14).
+func (a *App) deleteConnection(c config.Connection) tea.Cmd {
 	text := i18n.T("删除连接 %s？", c.Name)
 	if tabs := a.tabsOn(c.Name); len(tabs) > 0 {
 		text = i18n.T("删除连接 %s？它开着的 %d 个 tab 会一起关掉", c.Name, len(tabs))
@@ -479,6 +486,7 @@ func (a *App) deleteConn() tea.Cmd {
 			}
 		}
 		a.regroup() // the first of a group gone: the next one is where the group begins
+		a.clampTree()
 		if a.form != nil {
 			a.selectConn(min(a.form.cur, len(a.managed())))
 			a.form.list = true

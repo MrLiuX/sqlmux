@@ -985,3 +985,67 @@ func TestConnManagerButtons(t *testing.T) {
 		t.Errorf("after: %d connections, list focus %v", len(a.sess.Conns), a.form != nil && a.form.list)
 	}
 }
+
+// dd on a connection in the tree deletes it as the manager does: asked with
+// the tabs it closes, then gone from the tree and the file (F18.14).
+func TestTreeDeleteConn(t *testing.T) {
+	a := managed(t)
+	a.win().focus(0)
+	treeTo(t, a, "doraemon")
+	feed(t, a, "dd")
+	if a.confirm == nil || a.confirm.text != "删除连接 doraemon？它开着的 1 个 tab 会一起关掉" {
+		t.Fatalf("asked %+v", a.confirm)
+	}
+	feed(t, a, "n")
+	treeTo(t, a, "second")
+	feed(t, a, "dd")
+	if a.confirm == nil || a.confirm.text != "删除连接 second？" {
+		t.Fatalf("asked %+v", a.confirm)
+	}
+	feed(t, a, "y")
+	if len(a.sess.Conns) != 1 || strings.Contains(connections(), "second") || strings.Contains(treeTexts(a), "second") {
+		t.Errorf("conns %d, tree:\n%s", len(a.sess.Conns), treeTexts(a))
+	}
+	// one of the command line is in no file: nothing to delete
+	a.sess.Conns[0].Spec.Temp = true
+	treeTo(t, a, "doraemon")
+	if feed(t, a, "dd"); a.confirm != nil {
+		t.Error("asked about a connection that is in no file")
+	}
+}
+
+// The menu of a connection node: the pick where there is one, the manager on
+// it, the delete; a connection of the command line has no file to edit or
+// delete from, an exec one is not in the manager (F18.14).
+func TestMenuConn(t *testing.T) {
+	a := managed(t)
+	a.win().focus(0)
+	rightClickNode(t, a, "second")
+	if got := menuLabels(a); !slices.Equal(got, []string{"选择 schema…", "编辑…", "删除…"}) {
+		t.Fatalf("a MySQL one: %q", got)
+	}
+	edit := a.menu.items[1]
+	a.menu = nil
+	edit.run()
+	if a.form == nil || !a.form.list || fieldText(a, fieldName) != "second" {
+		t.Errorf("the manager is not on second: %+v", a.form)
+	}
+	a.form = nil
+	a.sess.Conns[1].Spec.Engine = "sqlite"
+	rightClickNode(t, a, "second")
+	if got := menuLabels(a); !slices.Equal(got, []string{"编辑…", "删除…"}) {
+		t.Errorf("SQLite: %q", got)
+	}
+	a.menu = nil
+	a.sess.Conns[1].Spec.Engine = "exec"
+	rightClickNode(t, a, "second")
+	if got := menuLabels(a); !slices.Equal(got, []string{"删除…"}) {
+		t.Errorf("exec: %q", got)
+	}
+	a.menu = nil
+	a.sess.Conns[1].Spec.Temp = true
+	rightClickNode(t, a, "second")
+	if got := menuLabels(a); len(got) != 0 {
+		t.Errorf("the command line's: %q", got)
+	}
+}

@@ -355,6 +355,7 @@ var en = map[string]string{
 	"删除 %s？":           "Delete %s?",
 	"删除 query 文件、表、视图": "Delete query file, table or view",
 	"删除…":              "Delete…",
+	"编辑…":              "Edit…",
 	"重命名…":             "Rename…",
 	"在新 tab 打开":        "Open in new tab",
 	"删除表…":             "Drop table…",
