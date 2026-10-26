@@ -339,6 +339,9 @@ func (a *App) fail(i int, why string) tea.Cmd {
 // user's and the database's characters escaped; no password in it (§13).
 func composeDSN(engine, host, port, user, database string) string {
 	u := url.URL{Scheme: engine, Host: net.JoinHostPort(host, port)}
+	if engine == "mssql" { // the driver's URL start; any other it reads as keywords (F18.13)
+		u.Scheme = "sqlserver"
+	}
 	if user != "" { // a Redis server may have no user to name
 		u.User = url.User(user)
 	}

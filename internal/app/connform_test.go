@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/kackerx/sqlmux/internal/config"
+	"github.com/kackerx/sqlmux/internal/db/mssql"
 	"github.com/kackerx/sqlmux/internal/i18n"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
@@ -352,10 +353,15 @@ func TestComposeDSN(t *testing.T) {
 		{"postgres", "localhost", "5432", "u", "d", "postgres://u@localhost:5432/d?sslmode=prefer"},
 		{"mysql", "db.example", "3306", "u", "d", "mysql://u@db.example:3306/d"},
 		{"postgres", "::1", "5432", "p@t:x", "d b", "postgres://p%40t%3Ax@[::1]:5432/d%20b?sslmode=prefer"},
+		{"mssql", "127.0.0.1", "51433", "sa", "sqlmux", "sqlserver://sa@127.0.0.1:51433?database=sqlmux"},
 	} {
 		if got := composeDSN(c.engine, c.host, c.port, c.user, c.db); got != c.want {
 			t.Errorf("%+v: %q", c, got)
 		}
+	}
+	// the driver reads what the form composes as the host and port that were filled in (F18.13)
+	if cfg, err := mssql.Config(composeDSN("mssql", "127.0.0.1", "51433", "sa", "sqlmux"), ""); err != nil || cfg.Host != "127.0.0.1" || cfg.Port != 51433 {
+		t.Errorf("the driver reads: %+v, %v", cfg, err)
 	}
 }
 

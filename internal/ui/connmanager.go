@@ -78,6 +78,9 @@ func (m ConnManager) Draw(f *Frame, screen uv.Rectangle) uv.Position {
 	th := f.Theme
 	w, fw := managerWidth(screen.Dx())
 	h := m.Form.heightIn(fw)
+	if h > screen.Dy() && h-len(m.Form.errLines(fw))+1 <= screen.Dy() { // only the error's lines do not fit: the box is the window's
+		h = screen.Dy()
+	}
 	box := uv.Rect(screen.Min.X+(screen.Dx()-w)/2, screen.Min.Y+max(screen.Dy()-h, 0)/2, w, h)
 	f.Dim()
 	f.Region(f.Bounds(), Target{}) // no click goes past it

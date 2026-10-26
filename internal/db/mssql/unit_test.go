@@ -46,9 +46,16 @@ func TestConfigAndWithDatabase(t *testing.T) {
 	if _, err := Config("server=localhost,51433;user id=sa;database=sqlmux", ""); err != nil {
 		t.Errorf("the keyword form: %v", err)
 	}
+	cfg, err = Config("mssql://sa@127.0.0.1:51433?database=sqlmux", "")
+	if err != nil || cfg.Host != "127.0.0.1" || cfg.Port != 51433 || cfg.User != "sa" || cfg.Database != "sqlmux" {
+		t.Errorf("the mssql:// start: %+v, %v", cfg, err)
+	}
 	dsn, err := WithDatabase("sqlserver://sa:pw@localhost:51433?database=sqlmux", "other")
 	if err != nil || dsn != "sqlserver://sa:pw@localhost:51433?database=other" {
 		t.Errorf("with database: %q, %v", dsn, err)
+	}
+	if dsn, err = WithDatabase("mssql://sa@h:1?database=a", "other"); err != nil || dsn != "sqlserver://sa@h:1?database=other" {
+		t.Errorf("with database, the mssql:// start: %q, %v", dsn, err)
 	}
 	if dsn, err = WithDatabase("server=localhost;user id=sa", "other"); err != nil || dsn != "server=localhost;user id=sa;database=other" {
 		t.Errorf("the keyword form: %q, %v", dsn, err)

@@ -91,3 +91,37 @@ func TestFormResultAndExample(t *testing.T) {
 		t.Errorf("the example: %v", got)
 	}
 }
+
+// An error too long for a row wraps to the form's width, every word of it
+// showing and no …; the box is as many rows higher as the lines are more, and
+// in a window too low for all of them it is the window's high with the lines
+// that fit (F18.13).
+func TestFormErrorWraps(t *testing.T) {
+	why := "unable to open tcp connection with host 'localhost:1433': dial tcp [::1]:1433: connectex: No connection could be made because the target machine actively refused it"
+	fm := Form{Save: "s", Test: "t", Cancel: "c", Err: why, Fields: []FormField{{Label: "dsn"}}}
+	m := ConnManager{Title: "t", Rows: []ConnRow{{Name: "a"}}, Form: fm}
+	_, fw := managerWidth(100)
+	lines := fm.errLines(fw)
+	if len(lines) != 3 || fm.heightIn(fw) != 1+4+len(lines) {
+		t.Fatalf("%d lines, height %d", len(lines), fm.heightIn(fw))
+	}
+	draw := func(h int) string {
+		f := NewFrame(100, h, TokyonightStorm)
+		m.Draw(f, f.Bounds())
+		return f.String()
+	}
+	out := draw(20)
+	if strings.Contains(out, "…") {
+		t.Errorf("truncated:\n%s", out)
+	}
+	for _, w := range strings.Fields(why) {
+		if !strings.Contains(out, w) {
+			t.Fatalf("%q is not drawn:\n%s", w, out)
+		}
+	}
+	// three lines of error, a field, the rule, the buttons and the border do not fit in 7 rows: the first lines show, the buttons too
+	out = draw(7)
+	if !strings.Contains(out, "unable") || !strings.Contains(out, "[ s ]") || strings.Contains(out, "refused") {
+		t.Errorf("in a low window:\n%s", out)
+	}
+}

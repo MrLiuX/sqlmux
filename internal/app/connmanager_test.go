@@ -508,8 +508,8 @@ func longList(t *testing.T, width int) {
 	if !hasHit(a, ui.Target{Kind: ui.KindConn, I: 0}) || hasHit(a, ui.Target{Kind: ui.KindConn, I: 25}) {
 		t.Fatal("the first rows show, the last do not")
 	}
-	rows := a.managerView().ListRows(a.w)
 	feed(t, a, strings.Repeat("j", 25))
+	rows := a.managerView().ListRows(a.w) // after: the extra connections are not in the file, which the form says, in as many lines as it takes (F18.13)
 	if !hasHit(a, ui.Target{Kind: ui.KindConn, I: 25}) || hasHit(a, ui.Target{Kind: ui.KindConn, I: 25 - rows}) {
 		t.Errorf("scrolled to the selection: rows %d", rows)
 	}

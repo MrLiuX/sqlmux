@@ -29,10 +29,20 @@ type Conn struct {
 	dead bool // a request found the connection lost: the Worker, told so by Closed, dials before the next
 }
 
+// driverDSN is dsn with a mssql:// start made the sqlserver:// the driver knows:
+// it parses any other start as its keyword form and a URL's host comes out as
+// localhost:1433 (F18.13).
+func driverDSN(dsn string) string {
+	if rest, ok := strings.CutPrefix(dsn, "mssql://"); ok {
+		return "sqlserver://" + rest
+	}
+	return dsn
+}
+
 // Config is dsn as the driver takes it, the sqlserver:// URL it documents
-// or its keyword form; password, when not "", wins (§8.1).
+// (or mssql://) or its keyword form; password, when not "", wins (§8.1).
 func Config(dsn, password string) (msdsn.Config, error) {
-	cfg, err := msdsn.Parse(dsn)
+	cfg, err := msdsn.Parse(driverDSN(dsn))
 	if err != nil {
 		return msdsn.Config{}, err
 	}
@@ -86,6 +96,7 @@ func Connect(ctx context.Context, dsn, password string, _ bool) (*Conn, db.Info,
 // URL's database (or initial catalog) parameter, or the keyword form's
 // (M15 F15.1).
 func WithDatabase(dsn, name string) (string, error) {
+	dsn = driverDSN(dsn)
 	if strings.HasPrefix(dsn, "sqlserver://") {
 		u, err := url.Parse(dsn)
 		if err != nil {
