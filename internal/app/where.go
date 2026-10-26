@@ -976,6 +976,13 @@ func (a *App) histEntries(t *dataTab) (entries []histEntry, pos [][]int) {
 	return entries, pos
 }
 
+// histEmpty is whether t has no history and no favorites at all, not whether
+// what is typed leaves none (F18.9).
+func (a *App) histEmpty(t *dataTab) bool {
+	st := a.tableState(t)
+	return len(st.History)+len(st.Favorites) == 0
+}
+
 // histMove moves the selection by d around the ends; 0 keeps it in the
 // list, which got shorter.
 func (a *App) histMove(t *dataTab, d int) {
@@ -990,7 +997,7 @@ func (a *App) histMove(t *dataTab, d int) {
 // first page.
 func (a *App) histApply(t *dataTab, i int) tea.Cmd {
 	es, _ := a.histEntries(t)
-	if len(es) == 0 { // the "no history" row: ↵ and a click on it do nothing
+	if a.histEmpty(t) { // the "no history" row: ↵ and a click on it do nothing
 		return nil
 	}
 	t.hist = nil
@@ -1125,7 +1132,7 @@ func (a *App) histView(p *Pane, t *dataTab) (ui.Complete, uv.Rectangle, int) {
 	if sep >= 0 && v.Sel >= sep {
 		v.Sel++
 	}
-	if len(es) == 0 { // nothing to pick: say so, as the list is not drawn without a row (F18.9)
+	if a.histEmpty(t) { // nothing to pick: say so, as the list is not drawn without a row; a list the typing filtered empty is not drawn (F18.9)
 		v.Sel, v.Items = -1, []ui.CompleteItem{{Text: i18n.T("没有历史"), Dim: true}}
 	}
 	foot := 0

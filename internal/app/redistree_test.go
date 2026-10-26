@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"image/color"
 	"slices"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/kackerx/sqlmux/internal/config"
 	"github.com/kackerx/sqlmux/internal/db/redis"
 	"github.com/kackerx/sqlmux/internal/i18n"
+	"github.com/kackerx/sqlmux/internal/keymap"
 	"github.com/kackerx/sqlmux/internal/ui"
 )
 
@@ -277,42 +279,85 @@ func TestGoldenRedisTree(t *testing.T) {
 }
 
 // While the filter's scan is out, the connection and the db stay and the db's
-// note says 搜索中…, over what the scan before found; the answer brings the size
-// back, and one with no keys takes the nodes away; a change of the filter cancels
-// the scan out, whose answer then is dropped, with no error (F18.11).
+// note says 搜索中… in dim, over what the scan before found; the answer brings
+// the size back, and one with no keys takes the nodes away; a change of the
+// filter, esc too, cancels the scan out, whose answer then is dropped, with no
+// error; a scan that fails stops the searching (F18.11).
 func TestRedisTreeSearching(t *testing.T) {
 	a, c := redisTree(t, someKeys())
 	c.State = connReady
 	a.sess.open[dbNode(c, "0")] = true
 	a.win().tree.filter = ui.Input{Text: "users", Pos: 5}
 	found := func() *keyScan { return a.win().tree.found[c] }
+	noteFg := func() color.Color {
+		t.Helper()
+		ns, _ := a.treeNodes()
+		for _, n := range ns {
+			if n.kind == nodeDatabase {
+				return n.NoteFg
+			}
+		}
+		t.Fatal("no db node")
+		return nil
+	}
 	searching := i18n.T("搜索中…")
 	if cmd := a.findKeys(c); cmd == nil || !found().busy {
 		t.Fatalf("asked: %v, found %+v", cmd != nil, found())
 	}
-	if got := outline(a); !slices.Equal(got, []string{"cache", "  db0 " + searching}) {
-		t.Errorf("searching: %q", got)
+	if got := outline(a); !slices.Equal(got, []string{"cache", "  db0 " + searching}) || noteFg() != a.theme.Dim {
+		t.Errorf("searching: %q, note %v", got, noteFg())
 	}
 	keys := []redis.KeyInfo{{Name: "app:users:1", Type: "string"}}
 	a.gotFound(foundMsg{win: a.win(), conn: c, pattern: "*users*", scan: &keyScan{keys: keys, total: 11}})
-	if got := outline(a); !slices.Equal(got, []string{"cache", "  db0 11", "    app 1", "      users 1", "        1"}) {
-		t.Errorf("found: %q", got)
+	if got := outline(a); !slices.Equal(got, []string{"cache", "  db0 11", "    app 1", "      users 1", "        1"}) || noteFg() != a.theme.Border {
+		t.Errorf("found: %q, note %v", got, noteFg())
 	}
 	a.findKeys(c) // asked again: what it showed stays, searching
 	if got := outline(a); len(got) < 3 || got[1] != "  db0 "+searching || got[len(got)-1] != "        1" {
 		t.Errorf("searching again: %q", got)
 	}
-	ctx := a.findContext()
+	ctx := a.win().tree.findContext()
 	a.filterSeq = 0
 	a.askFilter() // the filter changes
-	if ctx.Err() == nil || a.findContext().Err() != nil {
-		t.Errorf("the change: the old scan %v, the new one %v", ctx.Err(), a.findContext().Err())
+	if ctx.Err() == nil || a.win().tree.findContext().Err() != nil {
+		t.Errorf("the change: the old scan %v, the new one %v", ctx.Err(), a.win().tree.findContext().Err())
 	}
 	if cmd := a.gotFound(foundMsg{win: a.win(), conn: c, pattern: "*users*", err: context.Canceled}); cmd != nil || !found().busy {
 		t.Errorf("a cancelled scan's answer: toast %v, found %+v", cmd != nil, found())
 	}
+	if cmd := a.gotFound(foundMsg{win: a.win(), conn: c, pattern: "*users*", err: errors.New("x")}); cmd == nil || found() != nil {
+		t.Errorf("a scan that failed: toast %v, found %+v", cmd != nil, found())
+	}
 	a.gotFound(foundMsg{win: a.win(), conn: c, pattern: "*users*", scan: &keyScan{total: 11}})
 	if got := outline(a); len(got) != 0 {
 		t.Errorf("nothing found: %q", got)
+	}
+	a.win().tree.filtering = true // esc clears the filter: its scan stops too
+	ctx = a.win().tree.findContext()
+	a.filterKey(keymap.Esc)
+	if ctx.Err() == nil {
+		t.Error("esc: the scan goes on")
+	}
+}
+
+// A window's filter changing cancels its own scan and no other window's: the
+// other window's answer would be dropped as cancelled and nothing would ask
+// again (F18.11).
+func TestRedisTreeSearchingPerWindow(t *testing.T) {
+	a, c := redisTree(t, someKeys())
+	c.State = connReady
+	a.sess.open[dbNode(c, "0")] = true
+	b := a.win()
+	b.tree.filter = ui.Input{Text: "users", Pos: 5}
+	a.findKeys(c)
+	ctxB := b.tree.findContext()
+	a.run("window.new", 0)
+	if a.win() == b {
+		t.Fatal("no second window")
+	}
+	a.win().tree.filter = ui.Input{Text: "orders", Pos: 6}
+	a.askFilter() // the other window's filter changes
+	if ctxB.Err() != nil {
+		t.Errorf("the first window's scan: %v", ctxB.Err())
 	}
 }
