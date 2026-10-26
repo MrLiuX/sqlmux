@@ -205,7 +205,7 @@ func TestScanOverACommandAsksNoType(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer c.Close()
-	s, err := redis.Scan(ctx, c, "user:*", 100)
+	s, err := redis.Scan(ctx, c, "user:*", 100, redis.ScanCount)
 	if err != nil || len(s.Keys) != 2 || s.Keys[0] != (redis.KeyInfo{Name: "user:1"}) || s.Keys[1].Type != "" {
 		t.Fatalf("scan: %+v %v", s, err)
 	}

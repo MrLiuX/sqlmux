@@ -6,9 +6,13 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	goredis "github.com/redis/go-redis/v9"
 
 	"github.com/kackerx/sqlmux/internal/db"
 )
@@ -36,7 +40,7 @@ func names(ks []KeyInfo) (out []string) {
 func TestScan(t *testing.T) {
 	ctx := context.Background()
 	c := connectTo(t, IntegrationDSN(t))
-	all, err := Scan(ctx, c, "*", 100000)
+	all, err := Scan(ctx, c, "*", 100000, ScanCount)
 	if err != nil || !all.Complete || all.Total < 12000 || int64(len(all.Keys)) != all.Total {
 		t.Fatalf("all: %d keys of %d, complete %v, %v", len(all.Keys), all.Total, all.Complete, err)
 	}
@@ -52,18 +56,18 @@ func TestScan(t *testing.T) {
 			t.Errorf("%s is %q, want %q", name, types[name], want)
 		}
 	}
-	cut, err := Scan(ctx, c, "*", 1500)
+	cut, err := Scan(ctx, c, "*", 1500, ScanCount)
 	if err != nil || cut.Complete || len(cut.Keys) != 1500 || cut.Total != all.Total {
 		t.Errorf("budget: %d keys, complete %v, total %d, %v", len(cut.Keys), cut.Complete, cut.Total, err)
 	}
-	app, err := Scan(ctx, c, "app:*", 100)
+	app, err := Scan(ctx, c, "app:*", 100, ScanCount)
 	if err != nil || !app.Complete || !slices.Equal(names(app.Keys), []string{"app:config", "app:orders:100", "app:orders:101", "app:users:1", "app:users:2", "app:users:3"}) {
 		t.Errorf("app:*: %v %v", names(app.Keys), err)
 	}
-	if one, err := Scan(ctx, c, "app:users:1", 100); err != nil || len(one.Keys) != 1 {
+	if one, err := Scan(ctx, c, "app:users:1", 100, ScanCount); err != nil || len(one.Keys) != 1 {
 		t.Errorf("a pattern with no glob: %v %v", names(one.Keys), err)
 	}
-	if none, err := Scan(ctx, c, "nothing:*", 100); err != nil || !none.Complete || len(none.Keys) != 0 {
+	if none, err := Scan(ctx, c, "nothing:*", 100, ScanCount); err != nil || !none.Complete || len(none.Keys) != 0 {
 		t.Errorf("no match: %v %v", none, err)
 	}
 	// each: every key, no budget
@@ -92,16 +96,16 @@ func TestKeyOperations(t *testing.T) {
 		}
 	}
 	for _, k := range []string{"we*ird", "we?ird", "we[i]rd", `we\ird`} {
-		got, err := Scan(ctx, c, Glob(k), 100)
+		got, err := Scan(ctx, c, Glob(k), 100, ScanCount)
 		if err != nil || !slices.Equal(names(got.Keys), []string{k}) {
 			t.Errorf("Glob(%q): %v %v", k, names(got.Keys), err)
 		}
 	}
 	// a budget under what one SCAN gives cuts the batch, and the scan is not complete (the 7 keys and the one that claims the db)
-	if cut, err := Scan(ctx, c, "*", 3); err != nil || len(cut.Keys) != 3 || cut.Complete {
+	if cut, err := Scan(ctx, c, "*", 3, ScanCount); err != nil || len(cut.Keys) != 3 || cut.Complete {
 		t.Errorf("a budget under one batch: %d keys, complete %v, %v", len(cut.Keys), cut.Complete, err)
 	}
-	if all, err := Scan(ctx, c, "*", 8); err != nil || len(all.Keys) != 8 || !all.Complete {
+	if all, err := Scan(ctx, c, "*", 8, ScanCount); err != nil || len(all.Keys) != 8 || !all.Complete {
 		t.Errorf("a budget that is the size: %d keys, complete %v, %v", len(all.Keys), all.Complete, err)
 	}
 	if exists, err := Rename(ctx, c, "a", "b", false); err != nil || !exists {
@@ -186,5 +190,74 @@ func TestKeyHints(t *testing.T) {
 	}
 	if f, err := HashFields(ctx, c, "no:such", 100); err != nil || len(f) != 0 {
 		t.Errorf("no key: %v %v", f, err)
+	}
+}
+
+// scanHook counts the SCANs a connection sends, and runs onScan after each.
+type scanHook struct {
+	n      atomic.Int32
+	onScan func()
+}
+
+func (h *scanHook) DialHook(next goredis.DialHook) goredis.DialHook { return next }
+func (h *scanHook) ProcessHook(next goredis.ProcessHook) goredis.ProcessHook {
+	return func(ctx context.Context, cmd goredis.Cmder) error {
+		err := next(ctx, cmd)
+		if cmd.Name() == "scan" {
+			h.n.Add(1)
+			if h.onScan != nil {
+				h.onScan()
+			}
+		}
+		return err
+	}
+}
+func (h *scanHook) ProcessPipelineHook(next goredis.ProcessPipelineHook) goredis.ProcessPipelineHook {
+	return next
+}
+
+// The filter's scan of a db of 60000 keys takes at most 8 round trips with
+// FilterCount where ScanCount takes about 60, finds the same keys, and a cancel
+// of its context stops it after the SCAN it is in (F18.11).
+func TestScanFilterRoundTrips(t *testing.T) {
+	ctx := context.Background()
+	c := connectTo(t, OwnDB(t))
+	if err := Use(ctx, c, func(cl *goredis.Client) error {
+		_, err := cl.Pipelined(ctx, func(p goredis.Pipeliner) error {
+			for i := range 60000 {
+				k := "other:" + strconv.Itoa(i)
+				if i%200 == 0 {
+					k = "p:employees:" + strconv.Itoa(i) + "@example.com"
+				}
+				p.Set(ctx, k, "1", 0)
+			}
+			return nil
+		})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	h := &scanHook{}
+	Of(c).c.AddHook(h)
+	count := func(n int) int32 {
+		h.n.Store(0)
+		s, err := Scan(ctx, c, "*p:employees*", 100000, n)
+		if err != nil || !s.Complete || len(s.Keys) != 300 {
+			t.Fatalf("count %d: %d keys, complete %v, %v", n, len(s.Keys), s.Complete, err)
+		}
+		return h.n.Load()
+	}
+	if n := count(FilterCount); n > 8 {
+		t.Errorf("FilterCount: %d SCANs", n)
+	}
+	if n := count(ScanCount); n <= 8 {
+		t.Errorf("ScanCount: %d SCANs, the test says nothing", n)
+	}
+	cctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	h.n.Store(0)
+	h.onScan = cancel
+	if _, err := Scan(cctx, c, "*p:employees*", 100000, FilterCount); err == nil || h.n.Load() > 2 {
+		t.Errorf("cancelled after the first SCAN: %d SCANs, %v", h.n.Load(), err)
 	}
 }

@@ -2,6 +2,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"math/rand/v2"
 	"slices"
@@ -59,6 +60,8 @@ type App struct {
 	redisDelim        string
 	scanKeys, loadAll int
 	filterSeq         int
+	findCtx           context.Context // the scans for the tree's filter run in it, cancelled when the filter changes (F18.11)
+	findStop          context.CancelFunc
 	resultHeight      float64   // the share the result area first takes
 	treeWidth         int       // config [tree] width: the sidebar's default width (§7.8)
 	fullWidth         int       // the grid's columns up to this wide are not squeezed (§7.6)

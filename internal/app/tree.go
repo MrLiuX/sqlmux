@@ -499,7 +499,7 @@ func (a *App) treeNodes() (ns []node, matches int) {
 			cn.TextFg = th.Error
 		}
 		matched := func(d *Conn) bool { // what the filter kept in a db: tables, or the keys the server found
-			return slices.ContainsFunc(d.Tables, func(t db.Table) bool { _, ok := pos[tableNode(d, t)]; return ok }) || a.win().tree.found[d] != nil && len(a.win().tree.found[d].keys) > 0
+			return slices.ContainsFunc(d.Tables, func(t db.Table) bool { _, ok := pos[tableNode(d, t)]; return ok }) || a.win().tree.found[d] != nil && (len(a.win().tree.found[d].keys) > 0 || a.win().tree.found[d].busy)
 		}
 		if filtering && !slices.ContainsFunc(append([]*Conn{c}, slices.Collect(maps.Values(c.dbs))...), matched) {
 			continue
@@ -516,17 +516,20 @@ func (a *App) treeNodes() (ns []node, matches int) {
 			if filtering && !matched(dc) {
 				continue
 			}
-			text, note := name, ""
+			text, note, searching := name, "", false
 			if dc.redis() { // db0, with the size of it (§7.8)
 				text = dbText(name)
 				if dc.scan != nil {
 					note = ui.Magnitude(float64(dc.scan.total))
 				}
+				if f := a.win().tree.found[dc]; filtering && f != nil && f.busy { // the filter's scan is out (F18.11)
+					note, searching = i18n.T("搜索中…"), true
+				}
 			} else {
 				note = pickedNote(len(dc.Schemas), len(dc.all.schemas))
 			}
 			dn := node{id: dbNode(c, name), kind: nodeDatabase, conn: dc, TreeNode: ui.TreeNode{Depth: 1, Branch: true, Open: dc.State == connReady && open(dbNode(c, name), dc == c), Icon: ic.Database, IconFg: th.Info, Text: text, Note: note, NoteFg: th.Border}}
-			if !dc.redis() {
+			if !dc.redis() || searching {
 				dn.NoteFg = th.Dim
 			}
 			switch dc.State {

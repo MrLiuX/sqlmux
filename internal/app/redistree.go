@@ -30,6 +30,7 @@ type keyScan struct {
 	keys  []redis.KeyInfo
 	total int64 // the db's size, DBSIZE
 	more  bool  // the budget stopped the scan: there are keys that were not read
+	busy  bool  // a filter's scan is going on: keys is what the one before found (F18.11)
 }
 
 // delimiter is what splits the names of c's keys into namespaces: the
@@ -219,7 +220,7 @@ func (a *App) loadKeys(c *Conn) tea.Cmd {
 					return err
 				}
 			}
-			s, err = redis.Scan(ctx, conn, "*", budget)
+			s, err = redis.Scan(ctx, conn, "*", budget, redis.ScanCount)
 			return err
 		})
 		m.scan, m.err = &keyScan{keys: s.Keys, total: s.Total, more: !s.Complete}, err
@@ -284,15 +285,28 @@ func (a *App) findKeys(c *Conn) tea.Cmd {
 		delete(w.tree.found, c)
 		return nil
 	}
-	meta, budget := c.Meta, a.scanKeys
+	meta, budget, ctx := c.Meta, a.scanKeys, a.findContext()
+	busy := &keyScan{busy: true}
+	if old := w.tree.found[c]; old != nil { // what it showed stays, searching
+		busy.keys, busy.total = old.keys, old.total
+	}
+	w.setFound(c, busy)
 	return func() tea.Msg {
 		var s redis.Scanned
-		err := meta.RunSafe(context.Background(), func(ctx context.Context, conn db.Conn) (err error) {
-			s, err = redis.Scan(ctx, conn, pattern, budget)
+		err := meta.RunSafe(ctx, func(ctx context.Context, conn db.Conn) (err error) {
+			s, err = redis.Scan(ctx, conn, pattern, budget, redis.FilterCount)
 			return err
 		})
 		return foundMsg{w, c, pattern, &keyScan{keys: s.Keys, total: s.Total, more: !s.Complete}, err}
 	}
+}
+
+// setFound keeps s as what the server said of the window's filter in c's db.
+func (w *Window) setFound(c *Conn, s *keyScan) {
+	if w.tree.found == nil {
+		w.tree.found = map[*Conn]*keyScan{}
+	}
+	w.tree.found[c] = s
 }
 
 // gotFound shows what was found in the window that asked, unless its filter has
@@ -301,15 +315,25 @@ func (a *App) gotFound(m foundMsg) tea.Cmd {
 	if a.sessionOf(m.conn) == nil || m.pattern != filterPattern(m.win.tree.filter.Text) {
 		return nil
 	}
+	if errors.Is(m.err, context.Canceled) { // a newer filter's scan is the one that answers
+		return nil
+	}
 	if m.err != nil {
+		delete(m.win.tree.found, m.conn) // not searching any more
 		return a.showToast(i18n.T("%s：%s", m.conn.label(), m.err))
 	}
-	if m.win.tree.found == nil {
-		m.win.tree.found = map[*Conn]*keyScan{}
-	}
-	m.win.tree.found[m.conn] = m.scan
+	m.win.setFound(m.conn, m.scan)
 	a.clampTree()
 	return nil
+}
+
+// findContext is the context of the scans for the filter as it is: a change of
+// it (askFilter) cancels it (F18.11).
+func (a *App) findContext() context.Context {
+	if a.findCtx == nil {
+		a.findCtx, a.findStop = context.WithCancel(context.Background())
+	}
+	return a.findCtx
 }
 
 // filterDue is the filter left alone long enough to ask the servers for its
@@ -326,6 +350,10 @@ func (a *App) askFilter() tea.Cmd {
 		return nil
 	}
 	a.filterSeq++
+	if a.findStop != nil { // the scans of the filter before are not wanted: they stop, not run out
+		a.findStop()
+		a.findCtx, a.findStop = nil, nil
+	}
 	seq := a.filterSeq
 	return tea.Tick(filterDelay, func(time.Time) tea.Msg { return filterDue{seq} })
 }
