@@ -6,7 +6,7 @@
 - **依赖**：M17 完成（v0.6.1）。
 - **完成标准**：节点全过；Windows 主机上 `go test ./...` 全绿、CI 的 windows job 绿；用户在 Windows Terminal 里用 Releases 的 zip 装一遍、浏览 SQL Server 容器里的一张表并改一格保存；Mac 上完整回归绿（含 SQL Server 的 e2e）。
 - **总则（用户 2026-10-24）**：M18 是加平台和引擎，不是改架构。macOS / Linux 上已发布的 v0.6.1 行为一字不变：非 Windows 的代码路径只允许「换一个等价的共用 helper」这类零行为差异的改动（reviewer 对每个 commit 看 Unix 侧的 diff，能不碰的不碰，碰了的要说明为什么等价）；Windows 专有的实现放 `_windows.go` / `//go:build` 文件或 `runtime.GOOS` 分支，不改包的边界和 §4 的目录；SQL Server 是 §8.1 的第五个引擎，按已有引擎的接口接入，不为它改 `db` 层的接口和共用的分页 / 保存 / 读循环，要改先问决策者。每个节点 tester 在分支头跑 Mac 的全量 e2e 回归，一条清单外失败就退回。节点 1 的反例：F18.2 把 Unix 侧的 `"$1"` 也改成了拼字符串，reviewer 退回。
-- **审查节点**：1 = F18.1–F18.3（Windows 编译、路径与子进程、剪贴板；PR #3 重做后是这一批的第一个 commit）；2 = F18.4 + F18.5（发布与 CI、Windows 的验收方式）；3 = F18.6（SQL Server 引擎）；4 = F18.7（SQL Server 的 e2e、文档）；5 = F18.8–F18.11（用户 2026-10-26 验收第一轮提的，和 Windows / SQL Server 无关，Mac 的 worker 按固定工作流在 `main` 上做，不经 PR #3）；6 = F18.12 + F18.13（第二轮，同样 Mac 的 worker 在 `main` 上做）。
+- **审查节点**：1 = F18.1–F18.3（Windows 编译、路径与子进程、剪贴板；PR #3 重做后是这一批的第一个 commit）；2 = F18.4 + F18.5（发布与 CI、Windows 的验收方式）；3 = F18.6（SQL Server 引擎）；4 = F18.7（SQL Server 的 e2e、文档）；5 = F18.8–F18.11（用户 2026-10-26 验收第一轮提的，和 Windows / SQL Server 无关，Mac 的 worker 按固定工作流在 `main` 上做，不经 PR #3）；6 = F18.12–F18.14（第二轮，同样 Mac 的 worker 在 `main` 上做）。
 - **不做（留候选）**：`%APPDATA%` 以外的 Windows 惯例（注册表、安装器、scoop / winget 包）；老 conhost；Windows 上跑 e2e（没有 tmux，见 F18.5）；SQL Server 的 Windows 集成认证（`trusted_connection`，纯 Go 驱动在非 Windows 上没有）、Always Encrypted、`DELIMITER` 式的存储过程体；exec 批多条语句、`{db}` 占位符、Redis 第二轮（见 plan.md「M18 候选」余下的）；测试里用 `/bin/sh` 脚本当假工具的那些（`internal/db/exec` 的两个假服务、keychain 失败路径、`FakeSSH`，后者拼 PATH 用 `:` 在 Windows 上也不对）在 Windows 上按包或用例 skip，不改写成跨平台（win-worker 2026-10-24 问；CI 的 windows job 不带集成标签，不受影响）。
 
 ---
@@ -228,5 +228,19 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - [ ] 单测：`composeDSN("mssql", "127.0.0.1", "51433", "sa", "sqlmux")` 是 `sqlserver://sa@127.0.0.1:51433?database=sqlmux`，`mssql.Config` 解出 host / port；`mssql://` 开头同样解对；折行的错误占多行、框高跟着变、不带 `…`；mutation。
 - [ ] 集成（`SQLMUX_TEST_MSSQL`）：表单填 host / port / user / password / database 后「测试」成功，结果行带版本。
 - [ ] e2e：表单填一个连不上的 host，错误两行以上全文可见；mssql 的表单在 Mac 上「测试」连 Windows 主机的容器成功。
+
+## F18.14 树上删连接：`dd` / `D` 和右键菜单 · 状态：todo
+
+- **依赖**：F18.12
+- **涉及**：`internal/app`（menu、tree）、`internal/keymap/default.toml`
+- 用户 2026-10-26 验收时提：树里 query 只能右键删（其实 `dd` = `tree.delete` 早就能删 query、表、视图、Redis 键，用户不知道），连接节点右键也没有删除、只能走「管理连接」；要 `D` → 确认删除。
+
+**开发**（§7.8「右键菜单」、§6.4 `tree`）
+- [ ] a. `tree.delete` 在连接节点上走 F18.12 的删除（同一个确认框和关 tab 的路，复用 `deleteConn` 那段，不另写一份）；`[keys.tree]` 加 `"D" = "tree.delete"`，`dd` 保留；which-key 和 `sqlmux keys` 里自然带出来。
+- [ ] b. 连接节点的右键菜单加「编辑…」（打开连接管理并选中这个连接，同 `conn.manage` 后选中）和「删除…」，排在「选择库… / 选择 schema…」后面；每种引擎都有（Redis、SQLite、exec 的连接也是）。
+
+**验收**
+- [ ] 单测：连接节点上 `D` 和 `dd` 都弹 F18.12 的确认框，`y` 后连接从树和文件里没了；右键菜单的项数和文字；mutation。
+- [ ] e2e：树里光标在 `play` 上 `D`，确认框文字对，`y` 后树里没有 `play`；右键「编辑…」打开管理连接且选中 `play`。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
