@@ -6,7 +6,7 @@
 - **依赖**：M17 完成（v0.6.1）。
 - **完成标准**：节点全过；Windows 主机上 `go test ./...` 全绿、CI 的 windows job 绿；用户在 Windows Terminal 里用 Releases 的 zip 装一遍、浏览 SQL Server 容器里的一张表并改一格保存；Mac 上完整回归绿（含 SQL Server 的 e2e）。
 - **总则（用户 2026-10-24）**：M18 是加平台和引擎，不是改架构。macOS / Linux 上已发布的 v0.6.1 行为一字不变：非 Windows 的代码路径只允许「换一个等价的共用 helper」这类零行为差异的改动（reviewer 对每个 commit 看 Unix 侧的 diff，能不碰的不碰，碰了的要说明为什么等价）；Windows 专有的实现放 `_windows.go` / `//go:build` 文件或 `runtime.GOOS` 分支，不改包的边界和 §4 的目录；SQL Server 是 §8.1 的第五个引擎，按已有引擎的接口接入，不为它改 `db` 层的接口和共用的分页 / 保存 / 读循环，要改先问决策者。每个节点 tester 在分支头跑 Mac 的全量 e2e 回归，一条清单外失败就退回。节点 1 的反例：F18.2 把 Unix 侧的 `"$1"` 也改成了拼字符串，reviewer 退回。
-- **审查节点**：1 = F18.1–F18.3（Windows 编译、路径与子进程、剪贴板；PR #3 重做后是这一批的第一个 commit）；2 = F18.4 + F18.5（发布与 CI、Windows 的验收方式）；3 = F18.6（SQL Server 引擎）；4 = F18.7（SQL Server 的 e2e、文档）；5 = F18.8–F18.11（用户 2026-10-26 验收第一轮提的，和 Windows / SQL Server 无关，Mac 的 worker 按固定工作流在 `main` 上做，不经 PR #3）。
+- **审查节点**：1 = F18.1–F18.3（Windows 编译、路径与子进程、剪贴板；PR #3 重做后是这一批的第一个 commit）；2 = F18.4 + F18.5（发布与 CI、Windows 的验收方式）；3 = F18.6（SQL Server 引擎）；4 = F18.7（SQL Server 的 e2e、文档）；5 = F18.8–F18.11（用户 2026-10-26 验收第一轮提的，和 Windows / SQL Server 无关，Mac 的 worker 按固定工作流在 `main` 上做，不经 PR #3）；6 = F18.12 + F18.13（第二轮，同样 Mac 的 worker 在 `main` 上做）。
 - **不做（留候选）**：`%APPDATA%` 以外的 Windows 惯例（注册表、安装器、scoop / winget 包）；老 conhost；Windows 上跑 e2e（没有 tmux，见 F18.5）；SQL Server 的 Windows 集成认证（`trusted_connection`，纯 Go 驱动在非 Windows 上没有）、Always Encrypted、`DELIMITER` 式的存储过程体；exec 批多条语句、`{db}` 占位符、Redis 第二轮（见 plan.md「M18 候选」余下的）；测试里用 `/bin/sh` 脚本当假工具的那些（`internal/db/exec` 的两个假服务、keychain 失败路径、`FakeSSH`，后者拼 PATH 用 `:` 在 Windows 上也不对）在 Windows 上按包或用例 skip，不改写成跨平台（win-worker 2026-10-24 问；CI 的 windows job 不带集成标签，不受影响）。
 
 ---
@@ -199,5 +199,34 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - [ ] 集成：6 万键的私有 db 上过滤 `*p:employees*`，`SCAN` 次数 ≤ 8（实测 6 次；`DBSIZE` 一次和每批一次 `TYPE` pipeline 不计，不把 `TYPE` 并进 SCAN 的 pipeline，reviewer 2026-10-26 问）、结果数对；改过滤文字或 `esc` 后旧扫描的 ctx 被取消。
 - [ ] 单测：在途时树的行里有「搜索中…」、连接和 db 节点在；扫完换回；mutation。
 - [ ] e2e：一个慢的 Redis（e2e 里的 TCP 代理加延迟，或 `DEBUG SLEEP` 前置）上 `/` 输入模式，先看到「搜索中…」，再看到键；连续改模式只有最后一个模式的结果出现。
+
+## F18.12 删除正在用的连接：确认后一起关它的 tab · 状态：todo
+
+- **依赖**：M8 F8.16
+- **涉及**：`internal/app`（connform、workspace）、`internal/i18n`
+- 用户 2026-10-26 验收时提：连接管理里删 `D`，toast「Close the tabs that use it first」拦住了；不该阻塞，二次确认够了，确认后直接关掉这个连接的全部 tab。
+
+**开发**（§7.8「连接管理」）
+- [ ] a. `deleteConn` 不再因 `connInUse` 拒绝：把它改成数（tab 数、其中有未保存表格修改的数），确认框文字「删除连接 D？它开着的 N 个 tab 会一起关掉」，有未保存修改再加「，其中 M 个有没保存的修改，会丢」；没 tab 时照旧「删除连接 D？」。
+- [ ] b. `y` 后先在每个 session 里关掉它的 tab（data、query（`conn` 或 `want` 是它的）、跑在它上面的结果 tab）：走 `closeTab` 的路（表格修改丢弃、query 照 §11 落盘），不记进 `closed`（deleteConn 本来就把它的 `closed` 项删了）；空了的 pane 收掉；`s.start` 是它时换成剩下的第一个连接（没有剩下的就 nil，启动时「没有连接」那条路照常）；再按原来的顺序删文件块、钥匙串、session 里的 `Conn`。删 `先关掉用它的 tab` 这个 i18n 键。
+
+**验收**
+- [ ] 单测：两个 session、三个 tab 用着它（其中一个表格有未保存修改）时删除：确认框文字带 3 和 1；`y` 后三个 tab 没了、空 pane 收了、文件块没了、别的连接的 tab 不动；它是启动连接时 `start` 换了；mutation。
+- [ ] e2e：开着 `play` 的两个 tab 删 `play`，确认框文字对，`y` 后 tab 关了、树里没有 `play`、connections.toml 里没有它；`n` 什么都不动。
+
+## F18.13 表单拼的 mssql DSN 连不上，错误行被截断 · 状态：todo
+
+- **依赖**：F18.6 h
+- **涉及**：`internal/app`（connform）、`internal/db/mssql`、`internal/ui`（form）
+- 用户 2026-10-26 在 Windows 上验收时提：新建连接表单选 `mssql`、填 `127.0.0.1` / `51433` / `sa`，「测试」报 `unable to open tcp connection with host 'localhost:1433': dial tcp [...`，填的 host / port 没用上，错误又被截短看不到后半句。决策者看了代码：`composeDSN` 的 scheme 直接用引擎名，拼出 `mssql://sa@127.0.0.1:51433?database=sqlmux`，`msdsn.Parse` 只认 `sqlserver://` 开头是 URL，别的当 ADO 串解析，host 退成 localhost:1433；F18.6 h 的表单只验了字段，没连过。
+
+**开发**（§7.8「新建连接表单」、§8.1「SQL Server」）
+- [ ] a. `composeDSN` 对 `mssql` 用 `sqlserver://`；`mssql.Config` 也认 `mssql://` 开头（`strings.CutPrefix` 换成 `sqlserver://` 一行），手写的 DSN 两种都行。
+- [ ] b. 表单底栏上方的那一行（校验错误、测试结果）不截短：按表单宽度折行（有现成的折行就用它），占几行就几行，框随之变高；窗口放不下时框取窗口高度、只画得下的行。「测试中…」和成功的一行不受影响。
+
+**验收**
+- [ ] 单测：`composeDSN("mssql", "127.0.0.1", "51433", "sa", "sqlmux")` 是 `sqlserver://sa@127.0.0.1:51433?database=sqlmux`，`mssql.Config` 解出 host / port；`mssql://` 开头同样解对；折行的错误占多行、框高跟着变、不带 `…`；mutation。
+- [ ] 集成（`SQLMUX_TEST_MSSQL`）：表单填 host / port / user / password / database 后「测试」成功，结果行带版本。
+- [ ] e2e：表单填一个连不上的 host，错误两行以上全文可见；mssql 的表单在 Mac 上「测试」连 Windows 主机的容器成功。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
