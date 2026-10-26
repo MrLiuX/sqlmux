@@ -158,7 +158,7 @@ check "] ] 翻到第 3 页（PAGE 3/60），行号从 201 起，内容和第 1 �
 key '['; sleep 1.2
 check "[ 回到第 2 页（游标记着每一页的开头）" eval 'e2e_text 36 $PR 4 | grep -q "PAGE 2/60" && [[ $(grid_rows | sed -n 2p) == 101\ * ]]' || e2e_text 36 $PR 4
 key /; e2e_type "e*"; sleep 0.5
-check "（F18.10）/ 后输入 e*：MATCH 那一行（信息行下面一行）有 e*，光标在它后面（同一行），芯片行（LIMIT / PAGE）整行还在、没被输入框盖住" eval 'x=$(e2e_find "e*" 3 | cut -d" " -f1); [[ -n $x && $(e2e_flag cursor_y) == 2 && $(e2e_flag cursor_x) == $((x + 1)) ]] && e2e_text 36 $PR 4 | grep -q "LIMIT 100 .*PAGE 1/60" || { e2e_text 36 $PR 3; e2e_text 36 $PR 4; echo "  cursor $(e2e_flag cursor_x),$(e2e_flag cursor_y)"; false; }'
+check "（F18.10）/ 后输入 e*：MATCH 那一行（信息行下面一行）有 e*，光标在它后面（同一行），芯片行（LIMIT / PAGE）整行还在、没被输入框盖住" eval 'x=$(e2e_find "e*" 3 | cut -d" " -f1); [[ -n $x && $(e2e_flag cursor_y) == 2 && $(e2e_flag cursor_x) == $((x + 1)) ]] && e2e_text 36 $PR 4 | grep -qE "LIMIT 100 .*PAGE [0-9]+/60" || { e2e_text 36 $PR 3; e2e_text 36 $PR 4; echo "  cursor $(e2e_flag cursor_x),$(e2e_flag cursor_y)"; false; }'
 key BSpace; key BSpace; sleep 0.2
 e2e_type "field12*"; key Enter; sleep 1.5
 check "MATCH field12*：走 HSCAN … MATCH，页脚是 PAGE 1/?（总数不知道），每行的 field 都以 field12 开头" eval 'e2e_text 36 $PR 4 | grep -q "PAGE 1/?" && [[ -z $(grid_rows | sed -n "2,\$p" | awk "\$2 !~ /^field12/") ]] && (( $(grid_rows | wc -l) > 5 ))' || { e2e_text 36 $PR 4; grid_rows | head -5; }

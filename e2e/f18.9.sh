@@ -28,7 +28,6 @@ typ "abc"
 check "开始输入之后仍是这一行（没有可过滤的）" eval 'running && items | grep -q "^没有历史$"'
 key Escape; sleep 0.4
 check "esc 关闭下拉，WHERE 输入框还在" eval '[[ -z $(pop) ]] && running'
-key Escape; sleep 0.3
 
 # ---- 跑过一次 WHERE 之后再按 C-r：列出那一条，不再是「没有历史」
 run "status = 'done'"
