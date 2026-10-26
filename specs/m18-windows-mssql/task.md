@@ -229,18 +229,18 @@ Windows 那半由用户家里 Windows 主机上的 agent 做（下面叫 **win-w
 - [ ] 集成（`SQLMUX_TEST_MSSQL`）：表单填 host / port / user / password / database 后「测试」成功，结果行带版本。
 - [ ] e2e：表单填一个连不上的 host，错误两行以上全文可见；mssql 的表单在 Mac 上「测试」连 Windows 主机的容器成功。
 
-## F18.14 树上删连接：`dd` / `D` 和右键菜单 · 状态：todo
+## F18.14 树上删连接：`dd` 和右键菜单 · 状态：todo
 
 - **依赖**：F18.12
 - **涉及**：`internal/app`（menu、tree）、`internal/keymap/default.toml`
-- 用户 2026-10-26 验收时提：树里 query 只能右键删（其实 `dd` = `tree.delete` 早就能删 query、表、视图、Redis 键，用户不知道），连接节点右键也没有删除、只能走「管理连接」；要 `D` → 确认删除。
+- 用户 2026-10-26 验收时提：树里 query 只能右键删（其实 `dd` = `tree.delete` 早就能删 query、表、视图、Redis 键，用户不知道），连接节点右键也没有删除、只能走「管理连接」；要按键 → 确认删除（先提的 `D`，知道有 `dd` 后定：就用 `dd`，不加 `D`）。
 
 **开发**（§7.8「右键菜单」、§6.4 `tree`）
-- [ ] a. `tree.delete` 在连接节点上走 F18.12 的删除（同一个确认框和关 tab 的路，复用 `deleteConn` 那段，不另写一份）；`[keys.tree]` 加 `"D" = "tree.delete"`，`dd` 保留；which-key 和 `sqlmux keys` 里自然带出来。
+- [ ] a. `tree.delete` 在连接节点上走 F18.12 的删除（同一个确认框和关 tab 的路，复用 `deleteConn` 那段，不另写一份）；键位不动，仍是 `dd`。
 - [ ] b. 连接节点的右键菜单加「编辑…」（打开连接管理并选中这个连接，同 `conn.manage` 后选中）和「删除…」，排在「选择库… / 选择 schema…」后面；每种引擎都有（Redis、SQLite、exec 的连接也是）。
 
 **验收**
-- [ ] 单测：连接节点上 `D` 和 `dd` 都弹 F18.12 的确认框，`y` 后连接从树和文件里没了；右键菜单的项数和文字；mutation。
-- [ ] e2e：树里光标在 `play` 上 `D`，确认框文字对，`y` 后树里没有 `play`；右键「编辑…」打开管理连接且选中 `play`。
+- [ ] 单测：连接节点上 `dd` 弹 F18.12 的确认框，`y` 后连接从树和文件里没了；右键菜单的项数和文字；mutation。
+- [ ] e2e：树里光标在 `play` 上 `dd`，确认框文字对，`y` 后树里没有 `play`；右键「编辑…」打开管理连接且选中 `play`。
 
 任务文件的格式和状态约定见 [`../plan.md`](../plan.md)。
