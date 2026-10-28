@@ -76,6 +76,7 @@ type LayoutTab struct {
 	Limit     int            `toml:"limit,omitempty"`
 	Page      int            `toml:"page,omitempty"`       // from 0
 	Cols      []string       `toml:"cols,omitempty"`       // the columns COLS hides
+	Show      []string       `toml:"show,omitempty"`       // only these columns, in this order (--cols)
 	OrderCols []string       `toml:"order_cols,omitempty"` // the columns in the order COLS puts them (F10.3)
 	ColWidths map[string]int `toml:"col_widths,omitempty"` // the columns set to a width by hand (F17.14)
 	// TransposeWidths is the width of the records set by hand when the table is turned, by

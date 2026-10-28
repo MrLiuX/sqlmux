@@ -89,6 +89,7 @@ type dataTab struct {
 	ed       *editor.Editor   // its vim while typing is "where" (F3.39): where shows its line
 	hidden   map[string]bool  // columns COLS hides
 	colOrder []string         // the columns' names in the order COLS puts them; one it lacks goes after (F10.3)
+	wantShow []string         // --cols: only these columns, in this order, once the catalog is in (§14)
 	pageIn   ui.Input         // PAGE's page number, while typed
 	typing   string           // the input that has the keys: "where", "page", "cell" or ""
 	cell     *cellEdit        // the cell being edited, while typing is "cell" (§10.1)
@@ -141,6 +142,24 @@ const bigTable = 1_000_000
 func newDataTab(c *Conn, t db.Table) *dataTab {
 	r := request{limit: limits[0]}
 	return &dataTab{conn: c, table: t, request: r, shown: r, hidden: map[string]bool{}}
+}
+
+// applyShow hides every column except the ones --cols asked for, in that
+// order, once the columns are known: the first page's. wantShow is consumed,
+// the columns are the user's from here on (§14「sqlmux --table」).
+func (t *dataTab) applyShow() {
+	if t.wantShow == nil {
+		return
+	}
+	keep := make(map[string]bool, len(t.wantShow))
+	for _, name := range t.wantShow {
+		keep[name] = true
+	}
+	for _, c := range t.cols.Cols {
+		t.hidden[c.Name] = !keep[c.Name]
+	}
+	t.colOrder = slices.Clone(t.wantShow)
+	t.wantShow = nil
 }
 
 // setRequest makes r what t asks and shows, its WHERE typed as it is.
@@ -306,6 +325,7 @@ func (a *App) gotPage(m pageMsg) tea.Cmd {
 	}
 	clearBar(&t.bar, "fetch")
 	t.cols, t.page, t.next, t.shown, t.info = m.cols, m.page, m.next, t.request, m.info
+	t.applyShow() // --cols: only these columns, once the page's are known (§14)
 	t.keepCursor(m.cursor)
 	t.deselect()                                                        // the rows are others
 	t.colOrder = slices.DeleteFunc(t.colOrder, func(name string) bool { // a column that is gone (F10.3)

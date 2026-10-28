@@ -85,6 +85,8 @@ func run(args []string) error {
 	flags := flag.NewFlagSet("sqlmux", flag.ContinueOnError)
 	layout := flags.String("layout", "", "open this layout (a name or a path)")
 	showVersion := flags.Bool("version", false, "print the version and exit")
+	tf := &tableFlags{}
+	tf.register(flags)
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -104,27 +106,43 @@ func run(args []string) error {
 	if name != "" && *layout != "" {
 		return errors.New("give a connection name or --layout, not both")
 	}
+	if tf.set() && *layout != "" {
+		return errors.New("give --table or --layout, not both")
+	}
+	if tf.set() {
+		if err := tf.validate(name); err != nil {
+			return err
+		}
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
 	i18n.Set(cfg.Language) // from here on, what is shown follows it (§14)
 	warning := startNotes(cfg)
-	temp, err := tempConnection(name, *layout, os.Getenv("DATABASE_URL"))
-	if err != nil {
-		return err
-	}
 	var l *config.Layout
 	var sess *app.Session
 	var restored *app.Restored
-	if temp != nil { // a file or a URL: its own connection and its own session, kept nowhere
-		sess = app.OpenTemp(*temp)
-	} else {
-		if l, err = startLayout(name, *layout, &warning); err != nil {
+	var save bool // write last.toml as the program ends (§14)
+	if tf.set() { // --table: a throwaway view, its own session, nothing written
+		if sess, restored, err = tf.session(name); err != nil {
 			return err
 		}
-		if sess, restored, err = startSession(name, *layout, l); err != nil {
+	} else {
+		temp, err := tempConnection(name, *layout, os.Getenv("DATABASE_URL"))
+		if err != nil {
 			return err
+		}
+		if temp != nil { // a file or a URL: its own connection and its own session, kept nowhere
+			sess = app.OpenTemp(*temp)
+		} else {
+			save = true
+			if l, err = startLayout(name, *layout, &warning); err != nil {
+				return err
+			}
+			if sess, restored, err = startSession(name, *layout, l); err != nil {
+				return err
+			}
 		}
 	}
 	st, err := config.LoadState()
@@ -136,7 +154,7 @@ func run(args []string) error {
 	if restored != nil {
 		a.Adopt(restored)
 	}
-	if temp == nil {
+	if save {
 		a.SaveLayoutOnExit(config.LastPath())
 	}
 	a.KeyProblems(problems)

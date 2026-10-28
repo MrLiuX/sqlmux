@@ -285,6 +285,7 @@ func (s *Session) restoreTab(lt config.LayoutTab, used map[string]bool) (tb Tab,
 		for _, name := range lt.Cols {
 			d.hidden[name] = true
 		}
+		d.wantShow = slices.Clone(lt.Show) // --cols: only these columns (§14)
 		d.transpose = lt.Transpose
 		d.colOrder = slices.Clone(lt.OrderCols)
 		for no, w := range lt.TransposeWidths {
